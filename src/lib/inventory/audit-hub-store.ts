@@ -97,7 +97,31 @@ function explainHubRefusal(err: unknown): { code: string; message: string } {
         ? String((err as { message: unknown }).message)
         : String(err);
 
+  // Fix Phase 4.1 (migration 0326): the counting RPCs raise "CODE: sentence".
+  // The sentence is already written for the person reading it; pass it on.
+  const coded = /\b((?:INVENTORY_)?AUDIT_[A-Z_]+): ([^\n]+)/.exec(text);
+  if (coded) return { code: coded[1], message: coded[2].trim() };
+  if (
+    /inventory_audit_(claim|record_count|submit|cancel|reassign|save_reason)/.test(text) ||
+    /(claimed_by|claimed_by_name|claimed_at|submitted_at|cancel_reason|books_qty_at_count|books_moved_qty)/.test(text)
+  ) {
+    return {
+      code: "MIGRATION_0326_MISSING",
+      message:
+        "Counting is waiting for a database update. Apply migration 0326 (audit count integrity) in the " +
+        "Supabase SQL editor, then reload. Nothing was changed.",
+    };
+  }
+
   const table: Array<[string, string]> = [
+    [
+      "inventory_audit_sessions_cancel_reason_ck",
+      "A cancelled audit needs a reason. Use Cancel this audit and write one sentence about why.",
+    ],
+    [
+      "inventory_audit_lines_reason_code_ck",
+      "That reason is not on the list. Pick one of the reasons shown.",
+    ],
     [
       "inventory_audit_lines_counted_nonneg_ck",
       "A count cannot be negative. You can have none of something, but you cannot have less than " +
@@ -207,6 +231,13 @@ export const SESSION_COLUMNS = [
   "result_approved_at",
   "posted_at",
   "created_at",
+  // Fix Phase 4.1 (0326): who is counting (D56), when they finished (D55),
+  // and why an audit was cancelled (D54 / D59).
+  "claimed_by",
+  "claimed_by_name",
+  "claimed_at",
+  "submitted_at",
+  "cancel_reason",
 ] as const;
 
 /**
@@ -223,6 +254,10 @@ export const HUB_LINE_COLUMNS = [
   "reason_note",
   "capture_method",
   "counted_at",
+  // Fix Phase 4.2 (G-35, 0326): the books when THIS lot was first counted, and
+  // any movement since. Owner review only; stripped from the count sheet.
+  "books_qty_at_count",
+  "books_moved_qty",
 ] as const;
 
 /**
@@ -250,6 +285,11 @@ type SessionRow = {
   result_approved_at: string | null;
   posted_at: string | null;
   created_at: string;
+  claimed_by?: string | null;
+  claimed_by_name?: string | null;
+  claimed_at?: string | null;
+  submitted_at?: string | null;
+  cancel_reason?: string | null;
 };
 
 type LineRow = {
@@ -261,6 +301,8 @@ type LineRow = {
   reason_note: string | null;
   capture_method: string | null;
   counted_at: string | null;
+  books_qty_at_count?: number | string | null;
+  books_moved_qty?: number | string | null;
 };
 
 export type AuditSessionSummary = {
@@ -276,6 +318,13 @@ export type AuditSessionSummary = {
   resultApprovedAt: string | null;
   postedAt: string | null;
   createdAt: string;
+  /** D56: the one person counting this count (null = nobody yet). */
+  claimedBy: string | null;
+  claimedByName: string | null;
+  claimedAt: string | null;
+  /** D55: when the counter pressed I'm done. */
+  submittedAt: string | null;
+  cancelReason: string | null;
 };
 
 function toSummary(r: SessionRow): AuditSessionSummary {
@@ -295,13 +344,20 @@ function toSummary(r: SessionRow): AuditSessionSummary {
     resultApprovedAt: r.result_approved_at,
     postedAt: r.posted_at,
     createdAt: r.created_at,
+    claimedBy: r.claimed_by ?? null,
+    claimedByName: r.claimed_by_name ?? null,
+    claimedAt: r.claimed_at ?? null,
+    submittedAt: r.submitted_at ?? null,
+    cancelReason: r.cancel_reason ?? null,
   };
 }
 
 function toCountLine(r: LineRow): AuditCountLine {
   return {
     lotId: r.lot_id,
-    systemQty: Number(r.system_qty ?? 0),
+    // G-35 (0326): compare with the books AT THE MOMENT THIS LOT WAS COUNTED,
+    // the number the posting RPC uses. Pre-0326 lines fall back to the freeze.
+    systemQty: Number(r.books_qty_at_count ?? r.system_qty ?? 0),
     // NULL SURVIVES. "Nobody counted this" is not "somebody counted zero", and
     // collapsing the two writes off stock that is sitting on the shelf.
     countedQty: r.counted_qty === null ? null : Number(r.counted_qty),
@@ -613,7 +669,11 @@ export async function createAuditSession(input: {
     // outcome is visible to anyone reading a query log.
     await supabase
       .from("inventory_audit_sessions")
-      .update({ status: "cancelled" })
+      .update({
+        status: "cancelled",
+        // 0326: a cancelled audit must say why (inventory_audit_sessions_cancel_reason_ck).
+        cancel_reason: "Lines could not be saved when the audit was created; cancelled automatically.",
+      })
       .eq("id", sessionId)
       .select("id");
     return refused(lErr);
@@ -765,6 +825,10 @@ export type ReviewLine = {
   reasonCode: string | null;
   reasonNote: string | null;
   captureMethod: string | null;
+  /** G-35: the books captured at first count (null = counted before 0326 or not yet). */
+  booksAtCount: number | null;
+  /** G-35: on-hand movement between the first count and the last entry. */
+  movedQty: number;
   assessment: LineAssessment;
 };
 
@@ -844,16 +908,38 @@ export async function getAuditReview(
       reasonCode: r.reason_code,
       reasonNote: r.reason_note,
       captureMethod: r.capture_method,
+      booksAtCount:
+        r.books_qty_at_count === null || r.books_qty_at_count === undefined ? null : Number(r.books_qty_at_count),
+      movedQty: Number(r.books_moved_qty ?? 0),
       assessment,
     };
   });
+
+  // G-35: stock that moved while a lot was being counted is a blocker here as
+  // well as in the posting RPC (INVENTORY_AUDIT_CUTOFF_MOVED), so the owner is
+  // told before approving rather than refused after.
+  const readiness = readinessOf(lots, domainLines, DEFAULT_MATERIALITY);
+  const moved = lines.filter((l) => l.movedQty !== 0);
+  const withMovement: SessionReadiness =
+    moved.length === 0
+      ? readiness
+      : {
+          ...readiness,
+          canPost: false,
+          blockers: [
+            ...readiness.blockers,
+            `${moved.length} lot${moved.length === 1 ? "" : "s"} had stock move while being counted ` +
+              `(${moved.map((l) => l.lotCode ?? l.lotId).join(", ")}). Send the audit back to counting so ` +
+              `${moved.length === 1 ? "it is" : "they are"} counted again from zero.`,
+          ],
+        };
 
   return {
     ok: true,
     data: {
       session: toSummary(sRow as unknown as SessionRow),
       lines,
-      readiness: readinessOf(lots, domainLines, DEFAULT_MATERIALITY),
+      readiness: withMovement,
     },
   };
 }
@@ -863,26 +949,29 @@ export async function getAuditReview(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Record one counted quantity.
+ * Record one counted quantity (Fix Phase 4.1, migration 0326).
  *
- * `countedBy` and `countedAt` are written together with the number, because
- * migration 0191 has a CHECK that refuses an anonymous count — an unsigned
- * count is not evidence, and WAC 314-55-087(2)(c) expects a trail that says who
- * did what.
+ * Every count goes through `inventory_audit_record_count`, a SECURITY DEFINER
+ * function: 0326 revoked direct UPDATE on `inventory_audit_lines` from browser
+ * sessions, so the stage, the claim (D56) and the counter's name are checked
+ * by the database rather than trusted from here.
  *
- * When the line already has a count, this writes the RECOUNT instead of
- * overwriting. That is the difference between a second, independent count and a
- * retroactive edit of the first one — and only the former is worth anything.
+ *   target  "count"   = the first count;  "recount" = the second count
+ *   mode    "add"     = add qty (each scan adds one, D60)
+ *           "replace" = qty replaces the number there (a typed total)
+ *           "restart" = count this lot again from zero (re-captures the books)
+ *           "third"   = a third count when the two disagree
+ *
+ * A re-scan never silently becomes a second count (F-06-5b): the sheet asks.
  */
 export async function saveCountLine(input: {
   sessionId: string;
   lotId: string;
   qty: number;
-  countedBy: string;
   captureMethod: "scan" | "manual";
-  reasonCode?: string | null;
-  reasonNote?: string | null;
-}): Promise<AuditStoreResult<{ recorded: "count" | "recount" }>> {
+  target: "count" | "recount";
+  mode: "add" | "replace" | "restart" | "third";
+}): Promise<AuditStoreResult<{ recorded: "count" | "recount"; qty: number }>> {
   if (!Number.isFinite(input.qty) || input.qty < 0) {
     return {
       ok: false,
@@ -894,79 +983,98 @@ export async function saveCountLine(input: {
       },
     };
   }
-
   const supabase = await createBooksClient();
-
-  const { data: existing, error: exErr } = await supabase
-    .from("inventory_audit_lines")
-    .select("counted_qty")
-    .eq("session_id", input.sessionId)
-    .eq("lot_id", input.lotId)
-    .maybeSingle();
-  if (exErr) return refused(exErr);
-  if (!existing) {
-    return {
-      ok: false,
-      refusal: {
-        code: "LOT_NOT_IN_SCOPE",
-        message:
-          "That batch is not part of this audit. Scanning something outside the agreed scope is not " +
-          "refused to be awkward — an audit whose scope changes while it runs cannot be relied on " +
-          "afterwards. Finish this one, then start another that includes it.",
-      },
-    };
-  }
-
-  const isRecount = (existing as { counted_qty: number | null }).counted_qty !== null;
-  const now = new Date().toISOString();
-
-  const patch = isRecount
-    ? { recount_qty: input.qty, recount_by: input.countedBy, recount_at: now }
-    : {
-        counted_qty: input.qty,
-        counted_by: input.countedBy,
-        counted_at: now,
-        capture_method: input.captureMethod,
-      };
-
-  const withReason =
-    input.reasonCode === undefined && input.reasonNote === undefined
-      ? patch
-      : { ...patch, reason_code: input.reasonCode ?? null, reason_note: input.reasonNote ?? null };
-
-  const { data: wrote, error } = await supabase
-    .from("inventory_audit_lines")
-    .update(withReason)
-    .eq("session_id", input.sessionId)
-    .eq("lot_id", input.lotId)
-    .select("id");
-  if (error) return refused(error);
-
-  // A count that silently saved nothing is worse than one that failed loudly:
-  // the counter moves on believing the number is recorded.
-  return requireRowsWritten(wrote, "record this count", {
-    recorded: (isRecount ? "recount" : "count") as "recount" | "count",
+  const { data, error } = await supabase.rpc("inventory_audit_record_count", {
+    p_session: input.sessionId,
+    p_lot: input.lotId,
+    p_target: input.target,
+    p_mode: input.mode,
+    p_qty: input.qty,
+    p_capture: input.captureMethod,
   });
+  if (error) return refused(error);
+  const row = (data ?? {}) as { recorded?: string; qty?: number | string };
+  return {
+    ok: true,
+    data: { recorded: row.recorded === "recount" ? "recount" : "count", qty: Number(row.qty ?? input.qty) },
+  };
 }
 
-/** Record WHY a line differs, without touching the quantity. */
+/**
+ * Record or correct WHY a line differs, until approval (G-37). Owner only, in
+ * the database. Returns the old and new reason so the action can audit both.
+ */
 export async function saveLineReason(input: {
   sessionId: string;
   lotId: string;
   reasonCode: string;
   reasonNote: string | null;
-}): Promise<AuditStoreResult<null>> {
+}): Promise<AuditStoreResult<{ before: { reasonCode: string | null; reasonNote: string | null } }>> {
   const supabase = await createBooksClient();
-  const { data: wrote, error } = await supabase
-    .from("inventory_audit_lines")
-    .update({ reason_code: input.reasonCode, reason_note: input.reasonNote })
-    .eq("session_id", input.sessionId)
-    .eq("lot_id", input.lotId)
-    .select("id");
+  const { data, error } = await supabase.rpc("inventory_audit_save_reason", {
+    p_session: input.sessionId,
+    p_lot: input.lotId,
+    p_code: input.reasonCode,
+    p_note: input.reasonNote,
+  });
   if (error) return refused(error);
-  // The reason is the tax position. An unsaved reason that reports success is
-  // how a write-off ends up with no explanation behind it.
-  return requireRowsWritten(wrote, "record this reason", null);
+  const before = ((data ?? {}) as { before?: { reason_code?: string | null; reason_note?: string | null } }).before ?? {};
+  return { ok: true, data: { before: { reasonCode: before.reason_code ?? null, reasonNote: before.reason_note ?? null } } };
+}
+
+/** D56: the first person to press Start counting claims the count. */
+export async function claimCount(sessionId: string): Promise<AuditStoreResult<{ claimedByName: string | null }>> {
+  const supabase = await createBooksClient();
+  const { data, error } = await supabase.rpc("inventory_audit_claim", { p_session: sessionId });
+  if (error) return refused(error);
+  return { ok: true, data: { claimedByName: ((data ?? {}) as { claimed_by_name?: string | null }).claimed_by_name ?? null } };
+}
+
+/** D55: I'm done. Refused by the database while any lot is blank. */
+export async function submitCount(sessionId: string): Promise<AuditStoreResult<{ status: "review" }>> {
+  const supabase = await createBooksClient();
+  const { error } = await supabase.rpc("inventory_audit_submit", { p_session: sessionId });
+  if (error) return refused(error);
+  return { ok: true, data: { status: "review" } };
+}
+
+/** D54 / G-33 req 4: owner cancels with a written reason. */
+export async function cancelAudit(sessionId: string, reason: string): Promise<AuditStoreResult<{ from: string }>> {
+  const supabase = await createBooksClient();
+  const { data, error } = await supabase.rpc("inventory_audit_cancel", { p_session: sessionId, p_reason: reason });
+  if (error) return refused(error);
+  return { ok: true, data: { from: String(((data ?? {}) as { from?: string }).from ?? "") } };
+}
+
+/** D56: owner reassigns the count (staffId null = release the claim). */
+export async function reassignCount(
+  sessionId: string,
+  staffId: string | null,
+): Promise<AuditStoreResult<{ claimedByName: string | null }>> {
+  const supabase = await createBooksClient();
+  const { data, error } = await supabase.rpc("inventory_audit_reassign", { p_session: sessionId, p_staff: staffId });
+  if (error) return refused(error);
+  return { ok: true, data: { claimedByName: ((data ?? {}) as { claimed_by_name?: string | null }).claimed_by_name ?? null } };
+}
+
+/** The people a count can be assigned to: active owner / admin / manager / staff. */
+export async function listCounters(): Promise<AuditStoreResult<Array<{ id: string; name: string }>>> {
+  const supabase = await createBooksClient();
+  const { data, error } = await supabase
+    .from("staff_profiles")
+    .select("id,full_name,email,role,active")
+    .eq("active", true)
+    .in("role", ["owner", "admin", "manager", "staff"])
+    .order("full_name", { ascending: true })
+    .limit(200);
+  if (error) return refused(error);
+  return {
+    ok: true,
+    data: ((data ?? []) as Array<{ id: string; full_name: string | null; email: string }>).map((r) => ({
+      id: r.id,
+      name: (r.full_name ?? "").trim() || r.email,
+    })),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1006,6 +1114,17 @@ export async function moveSessionStatus(input: {
         message:
           `This audit is in a state the system does not recognise ("${current}"), so it will not ` +
           `guess what should happen next. Nothing was changed.`,
+      },
+    };
+  }
+
+  // 0326: a cancel needs a written reason (D54) and runs through cancelAudit.
+  if (input.to === "cancelled") {
+    return {
+      ok: false,
+      refusal: {
+        code: "USE_CANCEL",
+        message: "Use Cancel this audit and write one sentence about why. Nothing was changed.",
       },
     };
   }

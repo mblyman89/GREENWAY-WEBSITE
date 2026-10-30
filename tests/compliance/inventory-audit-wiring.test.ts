@@ -457,10 +457,12 @@ describe("F no update in the audit store can silently affect zero rows", () => {
     const chunks = code(store).split(".update(").slice(1);
     expect(
       chunks.length,
-      "the four writes in this store are saveCountLine, saveLineReason, " +
-        "moveSessionStatus and the cancel cleanup. If this number changed, a write " +
-        "was added or removed and it needs a decision, not a passing test.",
-    ).toBe(4);
+      "the two direct writes in this store are moveSessionStatus and the cancel " +
+        "cleanup. Since Fix Phase 4.1 (migration 0326) saveCountLine and saveLineReason " +
+        "write through SECURITY DEFINER RPCs that raise on refusal, so they are not " +
+        "silent-no-op shaped. If this number changed, a write was added or removed " +
+        "and it needs a decision, not a passing test.",
+    ).toBe(2);
     const unchecked: string[] = [];
     for (const chunk of chunks) {
       const stmt = chunk.slice(0, chunk.indexOf(";") + 1);

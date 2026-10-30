@@ -332,6 +332,9 @@ function reviewLine(
     // database produces a picture that misleads.
     captureMethod: c.countedQty === null ? null : "scan",
     assessment: assessLine(l, c, DEFAULT_MATERIALITY),
+    // 0326: books captured at first count; no movement in this fixture.
+    booksAtCount: c.countedQty === null ? null : c.systemQty,
+    movedQty: 0,
     ...extra,
   };
 }

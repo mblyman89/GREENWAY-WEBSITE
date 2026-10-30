@@ -91,11 +91,14 @@ function lot(over: Partial<AuditLot> = {}): AuditLot {
 }
 
 function line(over: Partial<AuditCountLine> = {}): AuditCountLine {
+  // Phase 4 (G-36): a line needing a second count now blocks posting, so the
+  // plan-arithmetic fixtures model a CONFIRMED count (second count = first).
+  const confirmed = over.countedQty === undefined ? 100 : over.countedQty;
   return {
     lotId: "lot-1",
     systemQty: 100,
     countedQty: 100,
-    recountQty: null,
+    recountQty: confirmed,
     reason: null,
     note: null,
     ...over,

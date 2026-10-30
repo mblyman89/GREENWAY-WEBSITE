@@ -35,6 +35,7 @@ import { AuditCountSheet } from "../../AuditCountSheet";
 import { HubRefusal } from "../../HubRefusal";
 import { WhyBlockedPanel } from "../../WhyBlockedPanel";
 import { BlindCountPanel } from "../../AuditHubExplainer";
+import { countAccess } from "@/lib/inventory/audit-count-flow-core";
 
 export const dynamic = "force-dynamic";
 
@@ -53,20 +54,41 @@ export default async function CountPage({
   // getCountSheet returns CountSheetLine, which carries no cost, no variance and
   // no system quantity. The count is blind because the expected number is not in
   // the object, not because a component chose not to render it.
-  await requirePermission("inventory.count");
+  const auth = await requirePermission("inventory.count");
+  // G-34: the Auditing breadcrumb and "Review and finish" are owner screens; a
+  // counter who follows them only meets "denied". Show them to the owner only.
+  const isOwner = auth.profile.role === "owner";
   const { id } = await params;
   const sp = await searchParams;
 
   const sheet = await getCountSheet(id);
+  const access = sheet.ok
+    ? countAccess(
+        {
+          status: sheet.data.session.status,
+          claimedBy: sheet.data.session.claimedBy,
+          claimedByName: sheet.data.session.claimedByName,
+        },
+        { staffId: auth.profile.id, isOwner },
+      )
+    : null;
 
   return (
     <div className="space-y-6">
       <Breadcrumbs
-        items={[
-          { label: "Inventory", href: "/admin/inventory" },
-          { label: "Auditing", href: "/admin/inventory/audits" },
-          { label: "Counting" },
-        ]}
+        items={
+          isOwner
+            ? [
+                { label: "Inventory", href: "/admin/inventory" },
+                { label: "Auditing", href: "/admin/inventory/audits" },
+                { label: "Counting" },
+              ]
+            : [
+                { label: "Inventory", href: "/admin/inventory" },
+                { label: "Cycle Counts", href: "/admin/inventory/cycle-counts" },
+                { label: "Counting" },
+              ]
+        }
       />
 
       {!sheet.ok ? (
@@ -80,9 +102,11 @@ export default async function CountPage({
             title={sheet.data.session.label}
             subtitle={`${LABELS[sheet.data.session.status]} — count what is on the shelf and enter what you find. You will not be shown what the system expects.`}
             action={
-              <Button href={`/admin/inventory/audits/${id}`} variant="neutral" size="sm">
-                Review and finish
-              </Button>
+              isOwner ? (
+                <Button href={`/admin/inventory/audits/${id}`} variant="neutral" size="sm">
+                  Review and finish
+                </Button>
+              ) : undefined
             }
           />
 
@@ -97,7 +121,9 @@ export default async function CountPage({
             // Counting is only open while the session is in the counting stage.
             // Before that the scope has not been agreed; after it, the numbers
             // are evidence and editing them silently would destroy the trail.
-            readOnly={sheet.data.session.status !== "counting"}
+            // Fix Phase 4.1 (D56): and only for the one person who claimed it.
+            access={access ?? undefined}
+            readOnly={access === null || access.mode !== "count"}
           />
 
           {/* The doctrine sits under the working area so the counter can read

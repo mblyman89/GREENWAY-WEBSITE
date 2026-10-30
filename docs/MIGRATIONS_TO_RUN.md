@@ -3172,3 +3172,49 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0325_ccrs_transfer_last_told.rollback.sql`.
   It drops the function; corrections switch off again.
+
+## Fix 4.1–4.3 — 0326 — Counts you can trust: release, one counter, +1 per scan, I'm done, per-lot cutoff
+
+- [ ] `0326_audit_count_integrity.sql` (Fix Phase 4.1–4.3; G-33, G-34, G-35,
+  G-36, G-37; owner decisions D54–D61). Apply it **after 0325**.
+  - **Sessions** gain who claimed the count, who finished it and when, and the
+    cancel reason, who and when (a cancelled audit must have a reason).
+  - **Lines** gain `books_qty_at_count` / `books_captured_at` (the books are
+    captured when each lot is first counted) and `books_moved_qty` (stock that
+    moved while that lot was being counted).
+  - Signed-in users can no longer UPDATE or DELETE count lines directly. Every
+    count, claim, finish, cancel, reassign and reason goes through a checked
+    function (`inventory_audit_claim`, `inventory_audit_record_count`,
+    `inventory_audit_submit`, `inventory_audit_cancel`,
+    `inventory_audit_reassign`, `inventory_audit_save_reason`).
+  - `inventory_audit_post_session` is re-created: the difference is measured
+    against the per-lot capture, and posting is refused when two counts
+    disagree or stock moved mid-count.
+  - **One-time cleanup (D59, *"be canceled, we are not live yet. It's all test
+    data."*):** every audit that is not posted (including approved but not yet
+    posted) and every open legacy cycle count is **cancelled** with a recorded
+    reason and an audit_logs row. Posted audits are not touched.
+  - Until it is applied, every counting button answers *"Apply migration
+    0326"* and nothing is written.
+
+  Safe to re-run (add column if not exists, create or replace, drop … if exists).
+
+  **Check:**
+
+  ```sql
+  select to_regprocedure('public.inventory_audit_record_count(uuid,uuid,text,text,numeric,text)');  -- not null
+  select column_name from information_schema.columns
+   where table_name = 'inventory_audit_lines' and column_name = 'books_qty_at_count';           -- 1 row
+  select count(*) from public.inventory_audit_sessions
+   where status not in ('cancelled') and posted_at is null;                                     -- 0
+  ```
+
+  **Then:** Accounting → Inventory Auditing → plan a small count → open it →
+  **Release to Cycle Counts**. Sign in as a budtender → Inventory → Cycle
+  Counts → open it → **Start counting** → scan → **I'm done**. The /admin
+  cockpit shows *"Count finished and waiting for your review: …"*.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0326_audit_count_integrity.rollback.sql`.
+  It drops the new functions, checks and columns, gives back direct line
+  writes (the 0191 policy) and restores the 0192 posting function. The D59
+  cancellations are not undone.
