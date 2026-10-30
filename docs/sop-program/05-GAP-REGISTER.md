@@ -478,7 +478,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ### Fix Phase 4b (G-32 items 7–10): publish fails closed, before/after audits, no price on a cost-unknown lot, Partly saved
 
 - **Owner (D49):** *"Q-05b-5- yes, plan on the group of smaller fixes. blocked until the manifest cost is entered."*
-- **Status: BUILT (Phase 4b, #P4B).**
+- **Status: BUILT (Phase 4b, #1564).**
   7. **F-05b-10 FIXED.** `menu-version.ts` `getPublishedVersion({ strict: true })` + `diffVersions(…, { strict: true })` (throws on an incomplete read) + `publish-guard-core.ts` `removalCheckFailedCopy`; audit `menu.publish_refused_check_failed`.
   8. **F-05b-11 FIXED.** Website-category and inventory-type update / deactivate / delete audits carry before / after.
   9. **F-05b-12 FIXED (D49, D38).** `COST_UNKNOWN_PRICE_REFUSAL` in `parsePriceCorrection`; `sharedFloorRefusal` refuses while any sharing lot has no cost; Save greyed out on the lot page.

@@ -682,24 +682,24 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** §2, §4.15–§4.17, §4.21 step 3, §6, §7, §9, form 8.3. Fixed by **G-31**.
 
 ### F-05b-10 · CONFIRMED · HARDEN · S2 — The publish removal check fails open
-- **Status: FIXED (Phase 4b, G-32 item 7, #P4B).** `getPublishedVersion({ strict: true })` + `diffVersions(…, { strict: true })` throws on any incomplete read; the publish action refuses with `removalCheckFailedCopy` and audits `menu.publish_refused_check_failed`.
+- **Status: FIXED (Phase 4b, G-32 item 7, #1564).** `getPublishedVersion({ strict: true })` + `diffVersions(…, { strict: true })` throws on any incomplete read; the publish action refuses with `removalCheckFailedCopy` and audits `menu.publish_refused_check_failed`.
 - **Pin:** `menu-imports/actions.ts` L216–237: if the removal diff throws, the error is only `console.error`-ed and the publish continues.
 - **Effect:** the guard that exists because *"an old 3-item draft silently wiped an 18-item menu"* (L214–218) is skipped exactly when it cannot see.
 - **SOP impact:** §4.14, §6. **G-32**.
 
 ### F-05b-11 · CONFIRMED · HARDEN · S4 — Category rename and delete audits carry no before / after
-- **Status: FIXED (Phase 4b, G-32 item 8, #P4B).** `settings/types/actions.ts` update / deactivate / delete audits carry `before` / `after`.
+- **Status: FIXED (Phase 4b, G-32 item 8, #1564).** `settings/types/actions.ts` update / deactivate / delete audits carry `before` / `after`.
 - **Pin:** `settings/types/actions.ts` L108–114, L148–170.
 - **SOP impact:** §4.15 (form 8.3). **G-32**.
 
 ### F-05b-12 · CONFIRMED · HARDEN · S2 — A cannabis sell price can be saved with no floor when the cost is unknown
-- **Status: FIXED (Phase 4b, G-32 item 9, #P4B; D49).** `parsePriceCorrection` refuses with `COST_UNKNOWN_PRICE_REFUSAL`; `sharedFloorRefusal` refuses while any sharing lot has no cost; the lot page greys out Save.
+- **Status: FIXED (Phase 4b, G-32 item 9, #1564; D49).** `parsePriceCorrection` refuses with `COST_UNKNOWN_PRICE_REFUSAL`; `sharedFloorRefusal` refuses while any sharing lot has no cost; the lot page greys out Save.
 - **Pin:** `afterTaxFloorMinor` returns null without a cost (`price-correction-core.ts` L65); the help says *"Cost is unknown for this lot, so no floor can be enforced."* (`[id]/page.tsx` L1067). Any manager (`inventory.manage`) can save any price above $0.00.
 - **Effect:** a below-cost sale (RCW 69.50.357 / WAC 314-55-155) is possible on exactly the lots whose cost is missing. Tied to D38 (cost only from the CCRS manifest).
 - **SOP impact:** §2, §4.21, form 8.2: **no price save until the manifest cost is entered** (D49). **G-32** (APPROVED, D49).
 
 ### F-05b-13 · CONFIRMED · HARDEN · S3 — A classification lot-row write failure is visible only in the audit row
-- **Status: FIXED (Phase 4b, G-32 item 10, #P4B).** The action redirects `?class_warn=` and the lot page shows **Partly saved.**
+- **Status: FIXED (Phase 4b, G-32 item 10, #1564).** The action redirects `?class_warn=` and the lot page shows **Partly saved.**
 - **Pin:** `inventory/actions.ts` L1105–1145: `lot_row_write_failed` goes into the audit `after`; the user is redirected `?saved=1` (L1156).
 - **Effect:** the worklist (which reads the lot row) can keep showing the product as unclassified while the register enforces the new answer.
 - **SOP impact:** §4.19 step 6. **G-32**.
