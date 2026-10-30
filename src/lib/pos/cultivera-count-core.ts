@@ -110,6 +110,12 @@ export type ParsedCountWorkbook = {
    * changed (the stored value and the shorter barcode it could have been).
    */
   autocompleteRisk: Set<string>;
+  /**
+   * R74 S52: every barcode the workbook's hidden Lots sheet offered (lower-cased) = Cultivera's lot
+   * list when the workbook was made. A lot missing from it arrived in Cultivera after the workbooks
+   * were downloaded (e.g. a 10/31 delivery), so "nobody scanned it" says nothing about the shelf.
+   */
+  listed?: Set<string>;
 };
 
 function cellText(v: unknown): string {
@@ -149,6 +155,8 @@ export function parseCountWorkbook(input: { fileName: string; sha256: string; ce
   };
   const sheets = input.cells.sheets ?? {};
   // R74 S26: every barcode the workbook offered (hidden Lots sheet, column A, row 1 = header).
+  const listedCodes = (sheets[S.lotsSheet] ?? []).slice(1).map((r) => normalizeScan(cellText(r?.[0]))).filter(Boolean);
+  out.listed = new Set(listedCodes.map((c) => c.toLowerCase()));
   const listedPrefixes = prefixBarcodes((sheets[S.lotsSheet] ?? []).slice(1).map((r) => normalizeScan(cellText(r?.[0])))).map((x) => x.prefix);
   const flagAutocomplete = (sheet: string, column: string[], candidates: string[]) => {
     const hits = autocompleteRisks(column, candidates, 2);
@@ -285,6 +293,8 @@ export function mergeCountWorkbooks(books: ParsedCountWorkbook[]): {
   counted: Map<string, { code: string; units: number; byCounter: Record<string, number> }>;
   /** R74 S26: union of every accepted workbook's AutoComplete-risk barcodes (lower-cased). */
   autocompleteRisk: Set<string>;
+  /** R74 S52: union of the accepted workbooks' Lots lists; undefined when any book had none (never guess). */
+  listed?: Set<string>;
 } {
   const accepted: ParsedCountWorkbook[] = [];
   const problems: CountProblem[] = [];
@@ -337,7 +347,15 @@ export function mergeCountWorkbooks(books: ParsedCountWorkbook[]): {
   }
   const autocompleteRisk = new Set<string>();
   for (const b of accepted) for (const k of b.autocompleteRisk ?? []) autocompleteRisk.add(k);
-  return { accepted, problems, counted, autocompleteRisk };
+  let listed: Set<string> | undefined = accepted.length > 0 ? new Set<string>() : undefined;
+  for (const b of accepted) {
+    if (!b.listed || b.listed.size === 0) {
+      listed = undefined;
+      break;
+    }
+    for (const k of b.listed) listed?.add(k);
+  }
+  return { accepted, problems, counted, autocompleteRisk, listed };
 }
 
 // ---------------------------------------------------------------------------
@@ -526,7 +544,8 @@ export type CountException =
   | "unknown_order_status" // a sale line with an OrderStatus we have never measured
   | "uncounted" // an imported lot with stock that nobody scanned
   | "moved_since_import" // on_hand_qty ≠ Cultivera qty + earlier count adjustments
-  | "autocomplete_risk"; // R74 S26: Excel AutoComplete could have moved scans between this and a similar barcode
+  | "autocomplete_risk" // R74 S26
+  | "arrived_after_count"; // R74 S52: not on the workbooks' lot list and nobody scanned it - arrived after they were made; keeps Cultivera's qty: Excel AutoComplete could have moved scans between this and a similar barcode
 
 export type CountPlanLine = {
   lotId: string | null;
@@ -566,6 +585,9 @@ export type CountPlan = {
     unknownStatus: number;
     movedSinceImport: number;
     autocompleteRisk: number;
+    /** R74 S52: lots that arrived in Cultivera after the workbooks were made (kept at Cultivera's qty) */
+    arrivedAfterCount: number;
+    arrivedAfterCountUnits: number;
     uncountedLots: number;
     uncountedUnits: number;
     salesUnitsNet: number;
@@ -589,6 +611,12 @@ export function planCount(input: {
   uncountedPolicy?: UncountedPolicy;
   /** R74 S26: lower-cased barcodes whose count AutoComplete could have changed; left alone. */
   autocompleteRisk?: ReadonlySet<string>;
+  /**
+   * R74 S52: lower-cased barcodes the workbooks listed (their hidden Lots sheet). An imported lot
+   * NOT on it that nobody scanned arrived after the workbooks were made: it is left at Cultivera's
+   * qty (which already has its receipt and its sales) even under the "zero" policy. Omitted = off.
+   */
+  listedBarcodes?: ReadonlySet<string>;
 }): CountPlan {
   const policy = input.uncountedPolicy ?? "leave";
   // R74 S26: a prefix barcode nobody counted while a longer one was: its scans may have been
@@ -646,6 +674,7 @@ export function planCount(input: {
     let exception: CountException | null = null;
     if (lot.currentOnHand !== undefined && lot.currentOnHand !== lot.onHand + prior) exception = "moved_since_import";
     else if (acRisk.has(k)) exception = "autocomplete_risk";
+    else if (!wasCounted && input.listedBarcodes && !input.listedBarcodes.has(k)) exception = "arrived_after_count";
     else if (!wasCounted && policy === "leave") exception = lot.onHand > 0 || netSold !== 0 ? "uncounted" : null;
     else if (s && s.unknownStatus > 0) exception = "unknown_order_status";
     else if (rolled < 0) exception = "negative_rolled";
@@ -691,6 +720,8 @@ export function planCount(input: {
     unknownStatus: ex("unknown_order_status").length,
     movedSinceImport: ex("moved_since_import").length,
     autocompleteRisk: ex("autocomplete_risk").length,
+    arrivedAfterCount: ex("arrived_after_count").length,
+    arrivedAfterCountUnits: ex("arrived_after_count").reduce((a, v) => a + (v.onHand ?? 0), 0),
     uncountedLots: ex("uncounted").length,
     uncountedUnits: ex("uncounted").reduce((a, v) => a + (v.onHand ?? 0), 0),
     salesUnitsNet: [...input.sales.netSold.values()].reduce((a, v) => a + v.units, 0),
@@ -939,6 +970,28 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(!checkSalesSummary(goodSum, "2026-10-31", 3).ok, "line count differs from the crawler's → refused");
   ok(!checkSalesSummary({ ...goodSum, count: 5 }, "2026-10-31", 4).ok, "Cultivera count differs from rows saved → refused");
   ok(!checkSalesSummary(null, "2026-10-31", 0).ok && !checkSalesSummary([], "2026-10-31", 0).ok, "non-object summary refused");
+
+  // ---- R74 S52: a lot that arrived after the workbooks were made is never zeroed ----
+  const listedW = new Set(["a1", "b1"]);
+  const arrived = planCount({
+    lots: [
+      { lotId: "A", lotCode: "A1", productName: "", onHand: 5 },
+      { lotId: "B", lotCode: "B1", productName: "", onHand: 4 },
+      { lotId: "N", lotCode: "N1", productName: "", onHand: 9 },
+    ],
+    counted: new Map([["a1", { code: "A1", units: 5, byCounter: {} }]]),
+    sales: rollupSales([sale(90, "N1", 3, "2026-10-31T12:00:00")], W),
+    problems: [],
+    uncountedPolicy: "zero",
+    listedBarcodes: listedW,
+  });
+  const ln = (c: string) => arrived.lines.find((l) => l.lotCode === c);
+  ok(ln("N1")?.exception === "arrived_after_count" && !ln("N1")?.adjust && arrived.summary.arrivedAfterCount === 1 && arrived.summary.arrivedAfterCountUnits === 9, "lot not on the workbooks' list + unscanned \u2192 kept at Cultivera's qty, even under zero");
+  ok(ln("B1")?.exception === null && arrived.adjustments.some((a) => a.lotCode === "B1" && a.delta === -4), "listed lot nobody scanned is still zeroed under the zero policy");
+  const lb = (code: string): ParsedCountWorkbook => ({ fileName: code, sha256: code, meta: { workbookId: code, counter: code, countDate: "2026-10-30", generatedAt: "", lotsFromImport: "" }, scans: new Map(), hand: new Map(), scanCount: 0, handUnits: 0, problems: [], autocompleteRisk: new Set(), listed: new Set([code]) });
+  const m2 = mergeCountWorkbooks([lb("x1"), lb("y1")]);
+  const m3 = mergeCountWorkbooks([lb("x1"), { ...lb("z1"), listed: new Set() }]);
+  ok(m2.listed?.size === 2 && m3.listed === undefined, "lot lists merge; a book without one switches the check off (never guess)");
 
   return { passed, failed: 0 };
 }

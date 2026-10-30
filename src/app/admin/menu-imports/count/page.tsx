@@ -36,6 +36,7 @@ const EXCEPTION_COPY: Record<string, string> = {
   unknown_order_status: "A sale has a Cultivera order status never seen before. Left alone.",
   uncounted: "Has stock in Cultivera but nobody scanned it. Go and look.",
   moved_since_import: "Changed since the import by something other than this count (a sale, a disposition). Left alone.",
+  arrived_after_count: "Not on the workbooks' lot list and nobody scanned it: it reached Cultivera after the workbooks were made (a late delivery). Kept at Cultivera's quantity, which already has its receipt and its sales.",
   autocomplete_risk: "Excel AutoComplete could have turned a scan of a shorter barcode into this one (or this one into it). Left alone: recount it by hand on the Hand Count sheet.",
 };
 
@@ -137,6 +138,13 @@ export default async function CountPage({
             <li>After closing on 10/31 and before opening on 11/01: on Menu Imports, set the count date to 10/30 and press Fetch. Stage that harvest.</li>
             <li>Pick that import here, upload every workbook at once (step 2), read the preview, then apply.</li>
           </ol>
+          <p className="mt-2 text-xs text-white/50" data-testid="count-sales-window">
+            Which sales come off the count: only those of the day after the count date (10/31). Sales rung on the count day
+            itself (10/30) are never subtracted: anything sold on 10/30 left the shelf before it was counted, so the count
+            already has it. The quantities come from the second fetch (after the 10/31 close), so Cultivera&apos;s numbers
+            already include every 10/30 and 10/31 sale and every delivery up to then. A lot that reached Cultivera after the
+            workbooks were made is kept at Cultivera&apos;s quantity.
+          </p>
         </section>
 
         <section id="checklist" className="space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="count-checklist">
@@ -370,6 +378,7 @@ export default async function CountPage({
                 <dt>Unknown barcodes</dt><dd>{s.unknownBarcodes} ({s.unknownUnits} units)</dd>
                 <dt>Recount (sold &gt; counted)</dt><dd>{s.negativeRolled}</dd>
                 <dt>Changed since import</dt><dd>{s.movedSinceImport}</dd>
+                <dt>Arrived after the workbooks</dt><dd>{s.arrivedAfterCount} lots, {s.arrivedAfterCountUnits} units (kept as Cultivera has them)</dd>
                 <dt>Shared barcode / odd status</dt><dd>{s.ambiguous} / {s.unknownStatus}</dd>
               </dl>
             )}

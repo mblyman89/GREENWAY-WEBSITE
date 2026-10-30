@@ -2599,7 +2599,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 41); // R50 S9: the button — run view, sha verify, import gate
-  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 68); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode (+S11b scanner text)
+  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 71); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode (+S11b scanner text)
   assertRan("scanner-setup-core", __runScannerSetupCoreTests(), 62); // R50 S11b: Tera D5100 + DuraScan D760 setup barcodes, guides, test box; R74 S12: + Alacrity MJ-2020R (QR)
   assertRan("card-alias-core", __runCardAliasCoreTests(), 44); // R50 A1: one-click accept of a Cultivera suggestion (permanent decision, re-verified)
   assertRan("barcode-match-core", __runBarcodeMatchCoreTests(), 34); // R50 A7: barcode-first inputs (shape, reads, own-lot exclusion)
