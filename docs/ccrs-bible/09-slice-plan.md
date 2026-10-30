@@ -1136,6 +1136,23 @@ Steps:
 - U-80: the first real success proves the chain.
 - U-81: confirm the issuer mode.
 
+## W-1 — The hub keeps PREprod; email Apply answers where you look (DONE in code, 2026-10-30)
+
+Branch `ccrs-pipeline-w1` (not pushed).
+
+**Rule.** The env the owner picked on `/admin/compliance/ccrs` is part of every link, form and redirect. No button may drop it, so PREprod testing never jumps back to production. An email's Apply/Answer-all only looks at files of the email's own env first, shows its result inside the email panel, and never times out silently.
+
+**Built.**
+- `ccrs-hub-flow-core.ts` (pure, 17 self-tests): `hubHref` (always writes `env`, keeps a valid `W-YYYY-MM-DD` week, params cannot overwrite week/env, optional anchor), `hubWeekLink`, `flashParams` / `flashFrom`, `echoEnvScope`, `scopeEchoPool`, `mapLimit`.
+- `actions.ts` / `mail-actions.ts`: every redirect goes through `hubHref`; every form carries a hidden `env` / `page_env`. Resolve builds the batch for the page's env. Product-ID assignment stays prod only.
+- Email candidates: one `listCcrsFilesLite` query (no issue paging), pool scoped to the email's env with fallback to all, rows read 4 at a time. `export const maxDuration = 300` on the page covers its server actions.
+- `CcrsMailPanel`: flash inside the panel, `SaveButton` busy labels on every button, browser-required fields instead of silent refusals, a link to the other env when an email belongs there, error picker filtered to the email's env.
+- Page: sticky flash with Dismiss; Step 3 anchor `#ccrs-week`.
+
+**Tests.** `tests/compliance/w1-ccrs-hub-env.test.ts` (14). Mutations **M475–M483** (9) are all killed.
+
+**Remaining.** Page speed (W-2). Duplicate hold-back for every file type (W-3).
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

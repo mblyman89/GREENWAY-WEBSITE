@@ -285,6 +285,12 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
 - No package was added; the cron route did not change.
 - See Part 09 R6-5 for the owner walkthrough.
 
+### A.17 W-1 Hub keeps the chosen env; email Apply works — DONE in code (2026-10-30)
+
+- **Before:** many redirects and links on the CCRS hub dropped `env`, so the page jumped back to production while the owner tested PREprod. Email Apply buttons searched both envs (often "ambiguous"), paged every file's issues, reported results at the top of a long page, and could time out.
+- **Now:** every link, form and redirect carries the env (`hubHref`). Apply is scoped to the email's env, reads candidates in one light query, shows the result in the email panel, and buttons show a busy state.
+- See Part 09 W-1.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.
