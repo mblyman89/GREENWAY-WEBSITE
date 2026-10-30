@@ -15,7 +15,7 @@ import {
 } from "@/lib/pos/menu-version";
 import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
-import { removalRefusedCopy } from "@/lib/pos/publish-guard-core";
+import { removalRefusedCopy, removalCheckFailedCopy } from "@/lib/pos/publish-guard-core";
 import { can } from "@/lib/auth/roles";
 import { parseAcknowledgedCount } from "@/lib/pos/import-commit-core";
 import {
@@ -216,9 +216,10 @@ export async function publishVersion(formData: FormData): Promise<void> {
   // refuse unless the manager explicitly ticked the removal confirmation.
   // (This is what let an old 3-item draft silently wipe an 18-item menu.)
   try {
-    const published = await getPublishedVersion();
+    // Phase 4b (G-32 item 7): strict reads THROW on a failed read (no silent "no menu" / "no changes").
+    const published = await getPublishedVersion({ strict: true });
     if (published && published.id !== versionId) {
-      const diff = await diffVersions(versionId, published.id);
+      const diff = await diffVersions(versionId, published.id, { strict: true });
       const confirmed = String(formData.get("confirm_removals") ?? "") === "yes";
       if (diff.removed.length > 0 && !confirmed) {
         redirect(
@@ -233,7 +234,18 @@ export async function publishVersion(formData: FormData): Promise<void> {
   } catch (err) {
     // redirect() throws NEXT_REDIRECT — rethrow it; only swallow real diff errors.
     if (err && typeof err === "object" && "digest" in err) throw err;
+    // Phase 4b (G-32 item 7, F-05b-10): fail CLOSED. The guard exists because
+    // an old 3-item draft silently wiped an 18-item menu; when it cannot see,
+    // the publish stops instead of going ahead blind.
     console.error("[menu-imports] publish removal guard diff failed:", err);
+    await recordAudit({
+      actorId: session.userId,
+      action: "menu.publish_refused_check_failed",
+      entityType: "menu_version",
+      entityId: versionId,
+      after: { reason: err instanceof Error ? err.message : String(err) },
+    }).catch(() => {});
+    redirect(dest + "?error=" + encodeURIComponent(removalCheckFailedCopy()));
   }
 
   // R14a: "publish now, fix after". The form sends publish_now=yes plus the

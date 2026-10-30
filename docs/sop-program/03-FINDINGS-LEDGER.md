@@ -682,20 +682,24 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** §2, §4.15–§4.17, §4.21 step 3, §6, §7, §9, form 8.3. Fixed by **G-31**.
 
 ### F-05b-10 · CONFIRMED · HARDEN · S2 — The publish removal check fails open
+- **Status: FIXED (Phase 4b, G-32 item 7, #P4B).** `getPublishedVersion({ strict: true })` + `diffVersions(…, { strict: true })` throws on any incomplete read; the publish action refuses with `removalCheckFailedCopy` and audits `menu.publish_refused_check_failed`.
 - **Pin:** `menu-imports/actions.ts` L216–237: if the removal diff throws, the error is only `console.error`-ed and the publish continues.
 - **Effect:** the guard that exists because *"an old 3-item draft silently wiped an 18-item menu"* (L214–218) is skipped exactly when it cannot see.
 - **SOP impact:** §4.14, §6. **G-32**.
 
 ### F-05b-11 · CONFIRMED · HARDEN · S4 — Category rename and delete audits carry no before / after
+- **Status: FIXED (Phase 4b, G-32 item 8, #P4B).** `settings/types/actions.ts` update / deactivate / delete audits carry `before` / `after`.
 - **Pin:** `settings/types/actions.ts` L108–114, L148–170.
 - **SOP impact:** §4.15 (form 8.3). **G-32**.
 
 ### F-05b-12 · CONFIRMED · HARDEN · S2 — A cannabis sell price can be saved with no floor when the cost is unknown
+- **Status: FIXED (Phase 4b, G-32 item 9, #P4B; D49).** `parsePriceCorrection` refuses with `COST_UNKNOWN_PRICE_REFUSAL`; `sharedFloorRefusal` refuses while any sharing lot has no cost; the lot page greys out Save.
 - **Pin:** `afterTaxFloorMinor` returns null without a cost (`price-correction-core.ts` L65); the help says *"Cost is unknown for this lot, so no floor can be enforced."* (`[id]/page.tsx` L1067). Any manager (`inventory.manage`) can save any price above $0.00.
 - **Effect:** a below-cost sale (RCW 69.50.357 / WAC 314-55-155) is possible on exactly the lots whose cost is missing. Tied to D38 (cost only from the CCRS manifest).
 - **SOP impact:** §2, §4.21, form 8.2: **no price save until the manifest cost is entered** (D49). **G-32** (APPROVED, D49).
 
 ### F-05b-13 · CONFIRMED · HARDEN · S3 — A classification lot-row write failure is visible only in the audit row
+- **Status: FIXED (Phase 4b, G-32 item 10, #P4B).** The action redirects `?class_warn=` and the lot page shows **Partly saved.**
 - **Pin:** `inventory/actions.ts` L1105–1145: `lot_row_write_failed` goes into the audit `after`; the user is redirected `?saved=1` (L1156).
 - **Effect:** the worklist (which reads the lot row) can keep showing the product as unclassified while the register enforces the new answer.
 - **SOP impact:** §4.19 step 6. **G-32**.
@@ -1006,7 +1010,7 @@ State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
 | SOP-04 Receiving Intake & Monthly CCRS PRR | **Fix 3.4:** +F-04-24 (S1, FIXED), +F-04-25 (S3, FIXED). **Fix 3.3:** +F-04-22 (S1, FIXED), +F-04-23 (S1, FIXED). **Fix 3.2a:** F-04-4 (S2) FIXED (G-17). **Fix 3.1:** F-04-1 (S1) FIXED (G-16). **Fix 3.1a:** +F-04-21 (S1, FIXED). 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
-| SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | **Fix Phase 4:** F-05b-1, 2, 3, 4, 5, 6, 7, 8, 14, 15 FIXED (G-29, G-30, G-30A, G-32 items 1–6). 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
+| SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | **Fix Phase 4b:** F-05b-10, 11, 12, 13 FIXED (G-32 items 7–10). **Fix Phase 4:** F-05b-1, 2, 3, 4, 5, 6, 7, 8, 14, 15 FIXED (G-29, G-30, G-30A, G-32 items 1–6). 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
 | SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
 | SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4 | 22 | 0 |
 | SOP-08 New Hire Onboarding, System Access & Offboarding | 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |

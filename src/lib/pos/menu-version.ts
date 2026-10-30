@@ -53,7 +53,13 @@ export type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
  */
 const publishedVersionInFlight = cache((): { p: Promise<MenuVersion | null> | null } => ({ p: null }));
 
-export async function getPublishedVersion(): Promise<MenuVersion | null> {
+/**
+ * `strict` (Phase 4b, G-32 item 7, F-05b-10): the publish removal guard asks
+ * for a read that THROWS on a database error instead of reporting "no live
+ * menu", so the guard fails closed. Everyone else keeps the soft read.
+ */
+export async function getPublishedVersion(opts?: { strict?: boolean }): Promise<MenuVersion | null> {
+  if (opts?.strict) return readPublishedVersion(true);
   const box = publishedVersionInFlight();
   if (box.p) return box.p;
   const p = readPublishedVersion();
@@ -65,7 +71,7 @@ export async function getPublishedVersion(): Promise<MenuVersion | null> {
   }
 }
 
-async function readPublishedVersion(): Promise<MenuVersion | null> {
+async function readPublishedVersion(strict = false): Promise<MenuVersion | null> {
   try {
     const admin = createSupabaseAdminClient();
     // USAGE-2: no `summary_json`. This is the most-called version read in the
@@ -81,6 +87,7 @@ async function readPublishedVersion(): Promise<MenuVersion | null> {
       .maybeSingle();
     if (error) {
       console.error("[menu-version] getPublishedVersion error:", error.message);
+      if (strict) throw new Error(`live menu read failed: ${error.message}`);
       return null;
     }
     if (!data) return null;
@@ -89,6 +96,7 @@ async function readPublishedVersion(): Promise<MenuVersion | null> {
     return { ...(data as unknown as Omit<MenuVersion, "summary_json">), summary_json: null };
   } catch (err) {
     console.error("[menu-version] getPublishedVersion exception:", err);
+    if (strict) throw err;
     return null;
   }
 }
@@ -681,7 +689,20 @@ export type MenuDiff = {
  * version). Returns added / removed / price-changed products so a manager can
  * see exactly what publishing this version will do.
  */
-export async function diffVersions(stagedId: string, baseId: string | null): Promise<MenuDiff> {
+export async function diffVersions(
+  stagedId: string,
+  baseId: string | null,
+  opts?: { strict?: boolean },
+): Promise<MenuDiff> {
+  // Phase 4b (G-32 item 7): strict = throw when either item list can't be
+  // read in full, so the publish removal guard fails closed.
+  if (opts?.strict) {
+    const staged = await versionItemIndexChecked(stagedId);
+    if (!staged.complete) throw new Error("the new menu's items could not be read in full");
+    const base = baseId ? await versionItemIndexChecked(baseId) : { index: new Map() as VersionIndex, complete: true };
+    if (!base.complete) throw new Error("the live menu's items could not be read in full");
+    return computeMenuDiff(staged.index, base.index);
+  }
   try {
     return await diffVersionsInner(stagedId, baseId);
   } catch (err) {

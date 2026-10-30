@@ -72,6 +72,15 @@ export function sharedSizeFloor(lots: readonly SizeLot[], category: string | nul
  * ran in parsePriceCorrection; this adds the sibling lots. Null = allowed.
  */
 export function sharedFloorRefusal(afterTaxMinor: number, floor: SharedFloor, sizeLabel: string): string | null {
+  // Phase 4b (G-32 item 9, owner D49: "blocked until the manifest cost is
+  // entered."): a lot that shares this price with no cost on file could be
+  // sold below cost, so the shared price is refused until its cost is entered.
+  if (floor.costUnknown > 0) {
+    return (
+      `Blocked: ${floor.costUnknown} lot(s) that share the ${sizeLabel} price have no cost on file, so the legal minimum can't be checked for them. ` +
+      `Enter their cost from the vendor's CCRS manifest first, then set the price.`
+    );
+  }
   if (floor.floorMinor == null || afterTaxMinor >= floor.floorMinor) return null;
   return (
     `Blocked: ${fmtUsd(afterTaxMinor)} is below the legal minimum of ${fmtUsd(floor.floorMinor)} for the ${sizeLabel} size. ` +
@@ -161,6 +170,8 @@ export function __runLotSizeLinkCoreTests(): { passed: number; failed: number } 
     const msg = sharedFloorRefusal(floor - 1, f, "3.5g");
     ok(msg !== null && msg.includes("3.5g") && msg.includes("GF1") && msg.includes("Blocked"), "below the floor is refused with the size and lot");
     ok(sharedFloorRefusal(1, sharedSizeFloor([], "flower"), "1g") === null, "no floor -> nothing to refuse here");
+    const mixed = sharedSizeFloor([{ id: "a", unit_cost_minor_units: 1000 }, { id: "b", unit_cost_minor_units: null }], "flower");
+    ok(/no cost on file/.test(sharedFloorRefusal(99999, mixed, "1g") ?? ""), "a sharing lot with no cost refuses the price (D49)");
   }
 
   // checkOwnerSizePick
