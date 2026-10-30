@@ -148,7 +148,7 @@ export default async function TillSummaryPage({
               </>
             ) : null}
             {session.tips_minor != null ? (
-              <Row label="Tips at close (employee money — not drawer cash)" value={formatCents(session.tips_minor)} />
+              <Row label="Tips at close: this cashier's own share (employee money — not drawer cash; crew pool split evenly, D89)" value={formatCents(session.tips_minor)} />
             ) : null}
           </tbody>
         </table>

@@ -20,6 +20,9 @@ const BAG_COLUMNS =
   "id, bag_no, business_day, status, amount_minor, night_count_minor, night_counted_by, night_counted_at, expected_minor, night_note, " +
   "morning_count_minor, morning_counted_by, morning_counted_at, variance_reason, sealed_at, sealed_by, seal_journal_id, banked_on, banked_by, bank_note, deposit_confirmed_on";
 
+/** Lists also read night_denoms, only to tell an assembled night bag (D82) from a counted one. */
+const LIST_COLUMNS = `${BAG_COLUMNS}, night_denoms`;
+
 type DbBag = {
   id: string;
   bag_no: string;
@@ -42,6 +45,7 @@ type DbBag = {
   banked_by: string | null;
   bank_note: string | null;
   deposit_confirmed_on: string | null;
+  night_denoms?: unknown;
 };
 
 function toRow(d: DbBag): BagRow {
@@ -67,6 +71,7 @@ function toRow(d: DbBag): BagRow {
     bankedBy: d.banked_by,
     bankNote: d.bank_note,
     depositConfirmedOn: d.deposit_confirmed_on,
+    ...("night_denoms" in d ? { nightAssembled: d.night_count_minor !== null && (d.night_denoms === null || d.night_denoms === undefined) } : {}),
   };
 }
 
@@ -88,7 +93,7 @@ export type BagListResult =
 export async function listBags(opts: { sinceDay: string; untilDay?: string }): Promise<BagListResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, missingSchema: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
-  let q = admin.from("deposit_bags").select(BAG_COLUMNS).or(`banked_on.is.null,business_day.gte.${opts.sinceDay}`);
+  let q = admin.from("deposit_bags").select(LIST_COLUMNS).or(`banked_on.is.null,business_day.gte.${opts.sinceDay}`);
   if (opts.untilDay) q = q.lte("business_day", opts.untilDay);
   const { data, error } = await q.order("business_day", { ascending: false }).order("created_at", { ascending: false });
   if (error) return { ok: false, missingSchema: isMissingBagSchema(error), error: error.message };
@@ -101,7 +106,7 @@ export async function listBagsInRange(fromDay: string, toDay: string): Promise<B
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("deposit_bags")
-    .select(BAG_COLUMNS)
+    .select(LIST_COLUMNS)
     .gte("business_day", fromDay)
     .lte("business_day", toDay)
     .order("business_day", { ascending: true })
@@ -190,6 +195,35 @@ export async function drawersForDay(day: string): Promise<DayDrawers> {
   return { ok: true, expected, sessionIds: sessions.map((s) => s.id) };
 }
 
+/**
+ * Fix Phase 6 (G-66, owner D87): the drawers a bag carries (0212
+ * deposit_bag_sessions) with their status, for the seal's reconcile warning.
+ */
+export async function bagDrawers(
+  bagId: string,
+): Promise<{ ok: true; drawers: { sessionId: string; registerName: string; status: string }[] } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const links = await admin.from("deposit_bag_sessions").select("session_id").eq("bag_id", bagId);
+  if (links.error) return { ok: false, error: links.error.message };
+  const ids = ((links.data as { session_id: string }[] | null) ?? []).map((l) => l.session_id);
+  if (ids.length === 0) return { ok: true, drawers: [] };
+  const [sess, regs] = await Promise.all([
+    admin.from("drawer_sessions").select("id, register_id, status").in("id", ids),
+    admin.from("registers").select("id, name"),
+  ]);
+  if (sess.error) return { ok: false, error: sess.error.message };
+  const names = new Map(((regs.data as { id: string; name: string }[] | null) ?? []).map((r) => [r.id, r.name]));
+  return {
+    ok: true,
+    drawers: ((sess.data as { id: string; register_id: string; status: string }[] | null) ?? []).map((r) => ({
+      sessionId: r.id,
+      registerName: names.get(r.register_id) ?? "Register",
+      status: r.status,
+    })),
+  };
+}
+
 type WriteResult = { ok: true; id: string } | { ok: false; error: string };
 export type NightWriteResult = { ok: true; id: string; linkError: string | null } | { ok: false; error: string };
 
@@ -198,7 +232,11 @@ export async function insertNightCount(input: {
   bagNo: string;
   businessDay: string;
   countMinor: number;
-  denoms: DenomCounts;
+  /**
+   * null = ASSEMBLED and verified against the screen, no denomination count
+   * (Fix Phase 6, G-65, owner D82). The morning blind recount is unchanged.
+   */
+  denoms: DenomCounts | null;
   closerId: string;
   expected: ExpectedDeposit;
   note: string | null;

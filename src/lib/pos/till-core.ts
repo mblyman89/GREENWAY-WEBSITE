@@ -27,6 +27,7 @@
 import { type DenomCounts, EMPTY_DENOMS, denomTotalMinor } from "@/lib/registers/cash";
 import { validateSwapAmount } from "@/lib/registers/safe-core";
 import { checkSwapDenoms } from "@/lib/registers/little-safe-core";
+import { splitTipPool } from "@/lib/registers/shift-end-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,6 +68,14 @@ export type TillCloseRequest = {
   secondPin: string;
   /** The second employee's own count of the same drawer (blind to theirs). */
   secondDenoms: DenomCounts;
+  /**
+   * Fix Phase 6 (G-64, owner D89 / Q-E-10): the crew's pooled tip jar and how
+   * many people share it. When present, the SERVER works out this cashier's
+   * even share (shift-end-core#splitTipPool) and that share is `tipsMinor`;
+   * a tipsMinor sent alongside is ignored, so the screen cannot record a
+   * different figure from the split.
+   */
+  tipPool?: { poolMinor: number; people: number; shareMinor: number; leftoverMinor: number };
 };
 
 /** Refusal when a close arrives without the second person (owner rule D2). */
@@ -198,6 +207,28 @@ export function validateTillRequest(body: unknown): TillValidation {
       return { ok: false, error: "The second employee's count is missing. Have them count the drawer and enter each denomination." };
     }
     const secondDenoms = sanitizeDenoms(b.secondDenoms);
+    // Fix Phase 6 (G-64, owner D89): crew tip pool -> this cashier's share.
+    if (b.tipPool !== undefined && b.tipPool !== null) {
+      const tp = b.tipPool as { poolMinor?: unknown; people?: unknown };
+      const poolMinor = Number(tp.poolMinor);
+      if (Number.isInteger(poolMinor) && poolMinor > MAX_TIPS_MINOR) {
+        return { ok: false, error: "Tip pool amount is implausibly large \u2014 check the number." };
+      }
+      const split = splitTipPool(poolMinor, Number(tp.people));
+      if (!split.ok) return { ok: false, error: split.error };
+      return {
+        ok: true,
+        req: {
+          action,
+          pin,
+          denoms,
+          tipsMinor: split.shareMinor,
+          tipPool: { poolMinor: split.poolMinor, people: split.people, shareMinor: split.shareMinor, leftoverMinor: split.leftoverMinor },
+          secondPin,
+          secondDenoms,
+        },
+      };
+    }
     if (b.tipsMinor !== undefined) {
       const tipsMinor = Number(b.tipsMinor);
       if (!Number.isInteger(tipsMinor) || tipsMinor < 0) {
@@ -342,6 +373,15 @@ export function __runTillCoreTests(): void {
   ok(tipsToMinor("-5") === null, "tipsToMinor: negatives rejected");
   ok(tipsToMinor("12.345") === null, "tipsToMinor: sub-cent precision rejected");
   ok(tipsToMinor("abc") === null, "tipsToMinor: garbage rejected");
+
+  // Fix Phase 6 (G-64, owner D89): crew tip pool, split by the server
+  const pool = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipPool: { poolMinor: 8501, people: 2 }, tipsMinor: 99999 });
+  ok(pool.ok && pool.req.action === "close" && pool.req.tipsMinor === 4250 && pool.req.tipPool?.leftoverMinor === 1,
+    "close: tip pool $85.01 / 2 -> $42.50 share recorded, typed tipsMinor ignored, 1 cent left in the jar");
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipPool: { poolMinor: 100, people: 0 } }).ok,
+    "close: tip pool with zero people refused");
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipPool: { poolMinor: MAX_TIPS_MINOR + 1, people: 2 } }).ok,
+    "close: implausibly large tip pool refused");
 
   // validateTillRequest — close with tips (employee money, separate from drawer)
   const closeTips = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: { twenties: 2 }, denoms: { twenties: 2 }, tipsMinor: 4250 });

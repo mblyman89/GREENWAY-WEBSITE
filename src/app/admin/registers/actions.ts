@@ -22,12 +22,12 @@ import {
   closeDrawerBlind,
   recordDrop,
   reconcileDrawer,
-  verifyTill,
 } from "@/lib/registers/store";
 import { loadDrawerFigure, assignReturnRefund, VOID_REFUND_ASSIGNED_ACTION, voidRefundState } from "@/lib/registers/drawer-figure-store";
 import { figureReady, parsePaidFrom } from "@/lib/registers/drawer-figure-core";
 import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
-import { getSession } from "@/lib/registers/store";
+import { getSession, getRegister } from "@/lib/registers/store";
+import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
 import {
   postDrawerCloseForSession,
   describeDrawerPostOutcome,
@@ -64,15 +64,29 @@ export async function openDrawerAction(formData: FormData): Promise<void> {
   const denoms = parseDenoms((k) => formData.get(k) as string | null);
   const result = await openDrawer({ registerId, employeeId, shiftId, denoms });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
+  // Fix Phase 6 (G-62, owner D85 "Warn please"): saved either way; flagged.
+  const reg = await getRegister(registerId);
+  const fc = floatCheck(denomTotalMinor(denoms), reg?.default_float_minor ?? null);
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "drawer.opened",
     entityType: "drawer_session",
     entityId: result.sessionId,
+    after: { via: "back_office", employeeId, openingMinor: denomTotalMinor(denoms), standardFloatMinor: reg?.default_float_minor ?? null, floatCheck: fc.state, floatDiffMinor: fc.diffMinor },
   });
+  if (fc.state === "over" || fc.state === "short") {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.float_warning",
+      entityType: "drawer_session",
+      entityId: result.sessionId,
+      after: { via: "back_office", employeeId, standardFloatMinor: reg?.default_float_minor ?? null, diffMinor: fc.diffMinor },
+    });
+  }
   revalidatePath(BASE);
-  redirect(`${BASE}?opened=1`);
+  redirect(`${BASE}?opened=1` + (fc.sentence ? `&float_warn=` + encodeURIComponent(fc.sentence) : ""));
 }
 
 /** Record a cash drop. */
@@ -111,7 +125,18 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
   // Tips counted at close (employee money, kept OUT of drawer math).
   // Blank field = not recorded (NULL); a typed "0" = counted-zero jar.
   const tipsRaw = str(formData, "tips");
-  const tipsParsed = tipsRaw ? tipsToMinor(tipsRaw) : null;
+  const tipsParsedRaw = tipsRaw ? tipsToMinor(tipsRaw) : null;
+  // Fix Phase 6 (G-64, owner D89 / Q-E-10): "pooled for the morning crew, and
+  // pooled for the night crew ... evenly distributed to the two employees."
+  // tip_mode=pool -> the typed figure is the crew's pool; this cashier's
+  // share (pool / people, whole cents) is what goes on their close.
+  const tipPoolMode = str(formData, "tip_mode") !== "own";
+  let tipPoolSplit: ReturnType<typeof splitTipPool> | null = null;
+  if (tipPoolMode && tipsRaw && tipsParsedRaw !== null) {
+    tipPoolSplit = splitTipPool(tipsParsedRaw, Number(str(formData, "tip_people") || "2"));
+    if (!tipPoolSplit.ok) redirect(`${BASE}?error=` + encodeURIComponent(tipPoolSplit.error));
+  }
+  const tipsParsed = tipPoolSplit && tipPoolSplit.ok ? tipPoolSplit.shareMinor : tipsParsedRaw;
   // Fix Phase 2.2 (G-01, owner D2): a second employee's own count and PIN.
   const fail = (msg: string) => redirect(`${BASE}?error=` + encodeURIComponent(msg));
   if (!employeeId) fail(CLOSER_REQUIRED_ERROR);
@@ -149,6 +174,10 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
     after: {
       via: "back_office",
       employeeId,
+      ...(tipsRaw && tipsParsed !== null ? { tipsMinor: tipsParsed } : {}),
+      ...(tipPoolSplit && tipPoolSplit.ok
+        ? { tipPool: { poolMinor: tipPoolSplit.poolMinor, people: tipPoolSplit.people, shareMinor: tipPoolSplit.shareMinor, leftoverMinor: tipPoolSplit.leftoverMinor } }
+        : {}),
       secondCountedBy: secondEmp.id,
       secondCountedByName: secondEmp.full_name,
       countsAgree: cmp.state === "match",
@@ -157,7 +186,10 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
     },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?closed=1${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}`);
+  redirect(
+    `${BASE}?closed=1${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}` +
+      (tipPoolSplit && tipPoolSplit.ok ? `&tip_pool=` + encodeURIComponent(tipPoolSentence(tipPoolSplit)) : ""),
+  );
 }
 
 /**
@@ -271,29 +303,30 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
   );
 }
 
-/** Manager till next-morning verify/validate. */
+/**
+ * RETIRED (Fix Phase 6, G-63, owner D83 / Q-E-5: "Yes please do this.").
+ * The morning blind recount of the deposit bag (Deposit bags, SOP-03 §4.10)
+ * is now the official morning verify for every drawer in that bag. The old
+ * step saved $0 and wrote a typed name into an id column (F-00-3, F-00-4) and
+ * could run before reconcile (F-01-12). This action now refuses and writes
+ * nothing, so an old bookmarked form cannot write a till_verifications row.
+ * Old "verified" drawers keep their history and still read as verified.
+ */
 export async function verifyTillAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
-  const sessionId = str(formData, "session_id");
-  if (!sessionId) redirect(`${BASE}?error=` + encodeURIComponent("Missing session."));
-  const denoms = parseDenoms((k) => formData.get(k) as string | null);
-  const result = await verifyTill({
-    sessionId,
-    verifiedBy: str(formData, "verified_by") || null,
-    denoms,
-    agrees: formData.get("agrees") === "on" || formData.get("agrees") === "true",
-    notes: str(formData, "notes") || null,
-  });
-  if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
-    action: "till.verified",
+    action: "till.verify_retired",
     entityType: "drawer_session",
-    entityId: sessionId,
+    entityId: str(formData, "session_id") || null,
   });
-  revalidatePath(BASE);
-  redirect(`${BASE}?verified=${result.varianceMinor ?? 0}`);
+  redirect(
+    `${BASE}?error=` +
+      encodeURIComponent(
+        "Verify till is retired (owner rule D83). The morning recount on Deposit bags is the verify now. Nothing was saved.",
+      ),
+  );
 }
 
 /**

@@ -35,10 +35,12 @@ Audited at commit `54445a68` (main, 2026-10-27).
 - `verified_by` is `uuid references employees(id)` (`supabase/migrations/0038_registers_drawers.sql` L152), but it receives typed text such as "Mike". **Suspected** outcome: the insert fails (Postgres invalid-uuid error) and the action redirects with an error, so the morning verify may never succeed at all. Must be proven in SOP-01 against the live schema.
 - **Owner requirement affected:** *"the morning employee recounts and verifies the amount."*
 
+- **Status: RETIRED (Fix Phase 6, G-63, owner D83: *"Yes please do this."*).** Verify till is removed; the morning blind bag recount on Deposit bags (by denomination, different employee, PIN, audited) is the verify. `verifyTillAction` is a refusing, audited stub (`till.verify_retired`); `verifyTill()` is gone from `src/lib/registers/store.ts`.
 ### F-00-4 · CONFIRMED · BUG · S2 — Same free-text-into-uuid pattern on Reconcile
 - **Pin:** `src/app/admin/registers/page.tsx` L270–273 `name="reconciled_by" placeholder="Manager name"` → `store.ts` L285 `reconciled_by: opts.reconciledBy` → column `uuid references employees(id)` (`0038` L84).
 - **Suspected** effect: reconcile fails whenever a name is typed, and "succeeds" only when the box is left blank, which records no reconciler. The safe count does this correctly with a `<Select>` of employees (`registers/safe/page.tsx` L176 before Phase 2.7a, which replaced it with the counter's PIN), which proves the right pattern already exists in the codebase.
 
+- **Status: verify part RETIRED (Fix Phase 6, G-63, D83)** with Verify till; the reconcile part was FIXED in Phase 2.1 (signed-in manager).
 ### F-00-5 · CONFIRMED · GAP · S1 — No second-person sign-off on a till count
 - **Owner requirement:** *"requires a second person to count the till and sign off on the accuracy of the count."*
 - **Reality:** a second-PIN witness exists **only on mid-shift drops** (`src/lib/pos/till-core.ts` `TillDropRequest.witnessPin`, optional; `/api/pos/till/route.ts` L139–150). **Open** and **close** take one PIN only (`TillOpenRequest`, `TillCloseRequest`). The back-office verify (F-00-3) is not PIN-attested and is not enforced. Nothing stops a till from being closed and reconciled by one person.
@@ -171,10 +173,12 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `store.ts` `verifyTill` L307 accepts `status === "closed"` **or** `"reconciled"`, then sets `status = "verified"` (L332). `reconcileDrawer` L268 requires `status === "closed"`. A drawer verified straight from "closed" can therefore never be reconciled. Its over/short is never computed, and `postDrawerCloseForSession` never runs for it.
 - The UI shows Verify only for reconciled sessions (`oversight.ts` L345–362), so this is reachable only by a crafted form post or by a race with a stale page. It is still a missing state-machine guard.
 
+- **Status: RETIRED (Fix Phase 6, G-63, D83).** There is no verify state change any more, so the missing guard cannot be reached.
 ### F-01-13 · CONFIRMED · GAP · S3 — No standard float target for register drawers
 - **Pin:** `till-core.ts` L13: *"the total IS the float"*. `openDrawer` stores whatever was counted. There is no configured float amount, and nothing warns when a count-in differs from the standard (the safe has `SAFE_TARGET_MINOR`; registers have nothing similar).
 - **Effect:** a short float at open is invisible until reconcile, and then it reads as a drawer shortage that belongs to the wrong person. SOP-01 §4.3 says "tell a manager before ringing".
 
+- **Status: FIXED (Fix Phase 6, G-62, owner D85: *"Warn please"*).** Count-in compares with `registers.default_float_minor` (`shift-end-core.ts` `floatCheck`), warns on the register and the back office, and audits `drawer.float_warning`; never blocks.
 ### F-01-14 · CONFIRMED · BUG · S1 — Medical test mode can complete a real sale with tax removed and no exemption record
 - **Status: FIXED (Phase 0.1, owner D76).** Device: `medicalTestModeSaleBlock` refuses payment when the simulated endorsement (`medical.simulated`) removed tax. Server: `sync-store.ts` refuses (exception) a medical sale with `medicalSavingsMinor > 0` when `getMedTaxSettings().medicallyEndorsed` is false. SOP-01 v1.3.
 - **Pin:** `src/lib/pos/medical-testmode-core.ts` flips `bundle.medical.endorsed = true` on the device only. The register then prices medical lines tax-exempt. At sync, `src/lib/orders/completion-gate.ts` L235–251 builds the exemption plan with the **real** `medSettings.medicallyEndorsed`. With the store unendorsed, `claimedLineCount = 0`, so **no** WAC 314-55-090(2) exempt-sale rows are written (L214), and the gate does **not** refuse. `sync-store.ts` stores the device's `sale.taxMinor` (L866) and does not recompute tax.

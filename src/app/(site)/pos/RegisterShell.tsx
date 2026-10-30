@@ -64,6 +64,7 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
+import { floatCheck, splitTipPool, tipPoolSentence, DEFAULT_TIP_POOL_PEOPLE, MAX_TIP_POOL_PEOPLE } from "@/lib/registers/shift-end-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
@@ -237,6 +238,13 @@ type UnlockedEmployee = {
   clockedIn: boolean;
   /** Slice 6 — SAW username ONLY (shown at the medical-verify step). May be null. */
   sawUsername?: string | null;
+  /**
+   * Fix Phase 6 (G-61, owner D84): open drawers this employee counted in, and
+   * the words to show if they try to clock out. The server refuses the
+   * clock-out too (toggleClock); this only stops a punch that would fail.
+   */
+  openDrawerSessionIds?: string[];
+  clockOutBlockedMessage?: string | null;
 };
 type DrawerInfo = { sessionId: string; openedAt: string | null; businessDay: string } | null;
 
@@ -349,6 +357,9 @@ export function RegisterShell({
   // B21 — register-side till action in progress (count-in / drop / blind close).
   // Slice 31 adds "swap": the manager-approved change trade with the safe.
   const [tillMode, setTillMode] = useState<"open" | "drop" | "close" | "swap" | null>(null);
+  // Fix Phase 6 (G-62, owner D85): this register's standard float (from the
+  // unlock), for the count-in warning. null = unknown, no warning.
+  const [standardFloatMinor, setStandardFloatMinor] = useState<number | null>(null);
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
@@ -1273,9 +1284,10 @@ export function RegisterShell({
         updateReady={!!updateWaiting || isBuildStale(buildVersion, serverVersion)}
         onForceRefresh={forceRefresh}
         onClearBanner={() => setBanner(null)}
-        onUnlocked={(emp, drawerInfo, registerId) => {
+        onUnlocked={(emp, drawerInfo, registerId, defaultFloatMinor) => {
           setEmployee(emp);
           setDrawer(drawerInfo);
+          setStandardFloatMinor(defaultFloatMinor);
           // GW-002 — the server is the source of truth for which register
           // this device is bound to. When an unlock reveals a re-bind, the
           // corrected creds must be PERSISTED (guarded write path), not just
@@ -1321,6 +1333,11 @@ export function RegisterShell({
           }
         }}
         onPunch={(emp) => {
+          // Fix Phase 6 (G-61, owner D84): no clock-out while you own an open drawer.
+          if (emp.clockedIn && emp.clockOutBlockedMessage) {
+            setBanner(`${emp.fullName}: ${emp.clockOutBlockedMessage}`);
+            return;
+          }
           const intent = emp.clockedIn ? "out" : "in";
           enqueue("punch", { intent }, emp.id);
           setBanner(`${emp.fullName}: clock-${intent} recorded${navigator.onLine ? "" : " (offline — will sync)"}.`);
@@ -1929,6 +1946,16 @@ export function RegisterShell({
         onSyncNow={() => void flush()}
         onPunch={() => {
           if (!employee) return;
+          // Fix Phase 6 (G-61, owner D84): no clock-out while you own an open
+          // drawer. The list starts from the unlock and is kept current by
+          // the count-in / close below (TillModal onDone).
+          if (employee.clockedIn && (employee.openDrawerSessionIds ?? []).length > 0) {
+            setBanner(
+              employee.clockOutBlockedMessage ??
+                "You still have an open drawer. Close your drawer first (blind count and second count), then clock out.",
+            );
+            return;
+          }
           const intent = employee.clockedIn ? "out" : "in";
           enqueue("punch", { intent }, employee.id);
           setEmployee({ ...employee, clockedIn: !employee.clockedIn });
@@ -2134,11 +2161,22 @@ export function RegisterShell({
           creds={creds}
           mode={tillMode}
           employeeName={employee.fullName}
+          standardFloatMinor={standardFloatMinor}
           onClose={() => setTillMode(null)}
-          onDone={(mode, drawerInfo, message) => {
+          onDone={(mode, drawerInfo, message, actorEmployeeId) => {
             setTillMode(null);
             if (mode === "open") setDrawer(drawerInfo);
             if (mode === "close") setDrawer(null);
+            // Fix Phase 6 (G-61, owner D84): keep the clock-out guard current.
+            // Count-in under THIS employee's PIN adds the drawer; a close
+            // removes it (whoever closed it). Closing does NOT clock out.
+            const closedId = mode === "close" ? (drawer?.sessionId ?? null) : null;
+            const openedId = mode === "open" && drawerInfo && actorEmployeeId === employee.id ? drawerInfo.sessionId : null;
+            if (closedId || openedId) {
+              const ids = (employee.openDrawerSessionIds ?? []).filter((x) => x !== closedId);
+              if (openedId && !ids.includes(openedId)) ids.push(openedId);
+              setEmployee({ ...employee, openDrawerSessionIds: ids, clockOutBlockedMessage: ids.length > 0 ? employee.clockOutBlockedMessage : null });
+            }
             setBanner(message);
           }}
         />
@@ -2394,7 +2432,7 @@ function LockScreen({
   updateReady: boolean;
   onForceRefresh: () => void;
   onClearBanner: () => void;
-  onUnlocked: (emp: UnlockedEmployee, drawer: DrawerInfo, registerId: string) => void;
+  onUnlocked: (emp: UnlockedEmployee, drawer: DrawerInfo, registerId: string, defaultFloatMinor: number | null) => void;
   onPunch: (emp: UnlockedEmployee) => void;
 }) {
   const [pin, setPin] = useState("");
@@ -2419,7 +2457,7 @@ function LockScreen({
       const body = (await res.json().catch(() => null)) as
         | {
             employee?: UnlockedEmployee;
-            register?: { id: string };
+            register?: { id: string; defaultFloatMinor?: number | null };
             drawer?: DrawerInfo;
             error?: string;
           }
@@ -2435,7 +2473,7 @@ function LockScreen({
         setMode("unlock");
         return;
       }
-      onUnlocked(body.employee, body.drawer ?? null, body.register.id);
+      onUnlocked(body.employee, body.drawer ?? null, body.register.id, body.register.defaultFloatMinor ?? null);
       setPin("");
     } catch {
       setError(
@@ -5612,14 +5650,18 @@ function TillModal({
   creds,
   mode,
   employeeName,
+  standardFloatMinor,
   onClose,
   onDone,
 }: {
   creds: DeviceCreds;
   mode: "open" | "drop" | "close" | "swap";
   employeeName: string;
+  /** Fix Phase 6 (G-62, owner D85): the register's standard float; null = unknown. */
+  standardFloatMinor: number | null;
   onClose: () => void;
-  onDone: (mode: "open" | "drop" | "close" | "swap", drawer: DrawerInfo, message: string) => void;
+  /** actorEmployeeId: whose PIN did it (the server says), for the clock-out guard (G-61). */
+  onDone: (mode: "open" | "drop" | "close" | "swap", drawer: DrawerInfo, message: string, actorEmployeeId: string | null) => void;
 }) {
   const [denoms, setDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
   const [amount, setAmount] = useState("");
@@ -5634,6 +5676,12 @@ function TillModal({
   // money, counted separately and openly — it must never sit in the drawer
   // count or it would show as a false overage at reconcile.
   const [tips, setTips] = useState("");
+  // Fix Phase 6 (G-64, owner D89 / Q-E-10): "The tip jar is pooled for the
+  // morning crew, and pooled for the night crew. At shift change the tips are
+  // counted and evenly distributed to the two employees." The cashier types
+  // the crew pool and how many share it; the server records their share.
+  const [tipMode, setTipMode] = useState<"pool" | "own">("pool");
+  const [tipPeople, setTipPeople] = useState(String(DEFAULT_TIP_POOL_PEOPLE));
   // Safe swap (mode "swap" only): a manager/lead approves with their PIN.
   const [approverPin, setApproverPin] = useState("");
   // Fix Phase 2.7b (F-01-8, owner D3): the bills both ways. Big bills from
@@ -5653,6 +5701,11 @@ function TillModal({
   const swapOutMinor = denomTotalMinor(swapOut);
   const amountMinor = mode === "swap" ? (swapInMinor > 0 ? swapInMinor : null) : dollarsToMinor(amount);
   const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
+  const tipPeopleN = Number(tipPeople);
+  const poolSplit = tipMode === "pool" && tips.trim() && tipsMinor !== null ? splitTipPool(tipsMinor, tipPeopleN) : null;
+  const tipsValid = tipsMinor !== null && (tipMode === "own" || !tips.trim() || (poolSplit !== null && poolSplit.ok));
+  // Fix Phase 6 (G-62, owner D85 "Warn please"): count-in vs the standard float.
+  const floatWarn = mode === "open" && countedMinor > 0 ? floatCheck(countedMinor, standardFloatMinor) : null;
 
   const ready =
     pin.length >= 4 &&
@@ -5662,9 +5715,9 @@ function TillModal({
         ? amountMinor !== null
         : mode === "swap"
           ? amountMinor !== null && swapOutMinor === swapInMinor && approverPin.length >= 4
-          : tipsMinor !== null && closeStep === "second" && secondPin.length >= 4);
+          : tipsValid && closeStep === "second" && secondPin.length >= 4);
   // Step 1 of a close is done when the closer's PIN and tips are valid.
-  const firstStepReady = mode === "close" && closeStep === "first" && pin.length >= 4 && tipsMinor !== null;
+  const firstStepReady = mode === "close" && closeStep === "first" && pin.length >= 4 && tipsValid;
 
   const TITLES = {
     open: "Count in drawer",
@@ -5710,7 +5763,11 @@ function TillModal({
                 // Only send tips when the box was actually filled in: an
                 // untouched field stays "not recorded" (NULL) while a typed
                 // "0" is a real counted-zero jar.
-                ...(tips.trim() && tipsMinor !== null ? { tipsMinor } : {}),
+                ...(tips.trim() && tipsMinor !== null
+                  ? tipMode === "pool"
+                    ? { tipPool: { poolMinor: tipsMinor, people: tipPeopleN } }
+                    : { tipsMinor }
+                  : {}),
                 secondPin,
                 secondDenoms,
               }
@@ -5730,6 +5787,9 @@ function TillModal({
             drawer?: NonNullable<DrawerInfo>;
             error?: string;
             secondCount?: { name: string; agree: boolean; diffMinor: number };
+            employeeId?: string;
+            floatWarning?: string | null;
+            tipPool?: { shareMinor: number; sentence: string };
           }
         | null;
       if (!res.ok || !resBody?.ok) {
@@ -5754,11 +5814,17 @@ function TillModal({
         return;
       }
       if (mode === "open") {
-        onDone("open", resBody.drawer ?? null, `Drawer counted in at ${formatCents(countedMinor)} — ready to ring sales.`);
+        onDone(
+          "open",
+          resBody.drawer ?? null,
+          `Drawer counted in at ${formatCents(countedMinor)} — ready to ring sales.` +
+            (resBody.floatWarning ? ` WARNING: ${resBody.floatWarning}` : ""),
+          resBody.employeeId ?? null,
+        );
       } else if (mode === "drop") {
-        onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`);
+        onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`, null);
       } else if (mode === "swap") {
-        onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`);
+        onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`, null);
       } else {
         const sc = resBody.secondCount;
         const secondNote = !sc
@@ -5769,9 +5835,14 @@ function TillModal({
         onDone(
           "close",
           null,
-          (tips.trim() && tipsMinor !== null
-            ? `Blind count recorded with ${formatCents(tipsMinor)} in tips — a manager reconciles it in the back office.`
-            : "Blind count recorded — a manager reconciles it in the back office.") + secondNote,
+          (resBody.tipPool
+            ? `Blind count recorded. ${resBody.tipPool.sentence} A manager reconciles the drawer in the back office.`
+            : tips.trim() && tipsMinor !== null
+              ? `Blind count recorded with ${formatCents(tipsMinor)} in tips — a manager reconciles it in the back office.`
+              : "Blind count recorded — a manager reconciles it in the back office.") +
+            secondNote +
+            " You are still clocked in: clock out when you are done (owner rule D84).",
+          null,
         );
       }
     } catch {
@@ -5985,10 +6056,36 @@ function TillModal({
             <p className="mt-3 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-right text-base font-bold">
               Counted: {formatCents(countedMinor)}
             </p>
+            {/* Fix Phase 6 (G-62, owner D85): warn, never block. */}
+            {mode === "open" && standardFloatMinor ? (
+              floatWarn && floatWarn.sentence ? (
+                <p className="mt-2 rounded-lg bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]">{floatWarn.sentence}</p>
+              ) : (
+                <p className="mt-1 text-right text-xs text-[var(--pos-text-muted)]">Standard float: {formatCents(standardFloatMinor)}</p>
+              )
+            ) : null}
             {mode === "close" && (
               <>
-                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-                  Tips (counted separately)
+                {/* Fix Phase 6 (G-64, owner D89): the crew pool, split evenly. */}
+                <div className="mt-4 flex gap-2">
+                  {([
+                    ["pool", "Crew tip pool"],
+                    ["own", "My own tips"],
+                  ] as const).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setTipMode(k)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                        tipMode === k ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  {tipMode === "pool" ? "Crew tip pool (the whole jar, counted together)" : "Tips (counted separately)"}
                 </label>
                 <input
                   className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
@@ -6006,10 +6103,28 @@ function TillModal({
                     Enter tips as dollars and cents (like 42.50) or leave it blank.
                   </p>
                 )}
+                {tipMode === "pool" ? (
+                  <>
+                    <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                      People sharing the pool
+                    </label>
+                    <input
+                      className="mt-1 w-24 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-lg"
+                      inputMode="numeric"
+                      value={tipPeople}
+                      onChange={(e) => setTipPeople(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    />
+                    {poolSplit && !poolSplit.ok ? (
+                      <p className="mt-1 text-xs text-[var(--pos-danger)]">{poolSplit.error} (1 to {MAX_TIP_POOL_PEOPLE})</p>
+                    ) : poolSplit && poolSplit.ok ? (
+                      <p className="mt-1 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold">{tipPoolSentence(poolSplit)}</p>
+                    ) : null}
+                  </>
+                ) : null}
                 <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
-                  Count the tip jar by itself — tips are your money, NOT drawer
-                  cash, so keep them out of the count above. Leave blank if there is
-                  no tip jar.
+                  {tipMode === "pool"
+                    ? "Count the crew's tip jar together and split it evenly. Your share goes on YOUR close and your till summary; your crew-mate records the same pool on theirs. Tips are NOT drawer cash, so keep them out of the count above."
+                    : "Count the tip jar by itself \u2014 tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."}
                 </p>
               </>
             )}

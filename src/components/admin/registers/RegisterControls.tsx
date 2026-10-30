@@ -67,7 +67,8 @@ export function RegisterControls({
           <input type="hidden" name="register_id" value={register.registerId} />
           <p className="text-xs text-[var(--admin-text-muted)]">
             Count in the starting float by denomination. Standard float for this register is{" "}
-            {formatCents(register.defaultFloatMinor)}.
+            {formatCents(register.defaultFloatMinor)}. A different count still opens the drawer,
+            with a warning (owner rule D85).
           </p>
           <CountGrid
             expectedMinor={register.defaultFloatMinor}
@@ -140,12 +141,32 @@ export function RegisterControls({
           </p>
           {/* No expected shown on purpose: this is a blind close. */}
           <CountGrid totalLabel="Count-out total" />
-          <label className="block text-xs text-[var(--admin-text-muted)]">
-            Tips counted at close ($) — the tip jar is the employee&apos;s money;
-            count it separately and keep it OUT of the drawer count above. Leave
-            blank if not recorded.
-            <Input name="tips" type="number" step="0.01" min="0" placeholder="0.00" />
-          </label>
+          {/* Fix Phase 6 (G-64, owner D89 / Q-E-10): the crew's pooled tip jar
+              is split evenly at shift change; the closer's share goes on
+              their close. "My own tips" records the figure as typed. */}
+          <div className="grid grid-cols-3 gap-2">
+            <label className="block text-xs text-[var(--admin-text-muted)]">
+              Tips are
+              <Select name="tip_mode" defaultValue="pool">
+                <option value="pool">Crew pool (split evenly)</option>
+                <option value="own">This person&apos;s own tips</option>
+              </Select>
+            </label>
+            <label className="block text-xs text-[var(--admin-text-muted)]">
+              Tips counted ($)
+              <Input name="tips" type="number" step="0.01" min="0" placeholder="0.00" />
+            </label>
+            <label className="block text-xs text-[var(--admin-text-muted)]">
+              People sharing
+              <Input name="tip_people" type="number" step="1" min="1" max="10" defaultValue="2" />
+            </label>
+          </div>
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            The tip jar is employee money; count it separately and keep it OUT of the drawer count
+            above. For a crew pool, type the whole jar: the closer&apos;s share (pool ÷ people,
+            whole cents; odd cents stay in the jar) is recorded on their close. Leave blank if not
+            recorded.
+          </p>
           <EmployeePicker name="employee_id" employees={employees} label="Counted by" required />
           {/* Fix Phase 2.2 (G-01, owner D2): any second employee counts the
               same drawer on their own and enters their PIN. Required. */}

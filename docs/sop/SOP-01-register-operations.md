@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.9 (draft for owner review; Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.10 (draft for owner review; Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -162,6 +162,12 @@ You must be **clocked in** before you can start a sale.
 
 **End of shift:** close your drawer first (4.27), then clock out.
 
+**Clock-out guard (owner rule D84, Fix Phase 6, gap G-61).** The owner said: *"Block. I don't want to clock out on the register change out step. A lot of times they count out early to let the new employee add their till ahead of their shift, so they can finish other tasks if needed before they clock out. Anyone can clock in and out on a locked register so we can use that for now."*
+- **Closing your drawer does not clock you out.** You can close early (so the next cashier can count in their insert), keep working, and clock out later from the lock screen.
+- **You cannot clock out while you still own an open drawer** (a drawer you counted in that is not closed yet). The register says: *"You still have an open drawer on <register>. Close your drawer first (blind count and second count), then clock out. Closing the drawer does not clock you out (owner rule D84)."* The server refuses it too (`src/lib/staffing/store.ts` `toggleClock`), so it holds on every iPad and in the browser.
+- **Offline:** an offline clock-out is queued. If it reaches the server while you still own an open drawer, it is refused and shows on **Register exceptions** as *"Punch replay failed: You still have an open drawer …"*. A manager fixes the punch on the timesheet.
+- A manager's correction of a punch on the timesheet is never blocked.
+
 ### 4.3 Counting in your drawer (opening float)
 
 You cannot ring a sale until a drawer is open on this register.
@@ -176,7 +182,8 @@ Rules:
 - An empty count is refused: *"Count in at least one bill or coin — an empty float cannot open a drawer."*
 - Only one drawer can be open per register: *"This register already has an open drawer. Close it first."*
 - Counting in needs a connection: *"Offline — drawer actions need a connection to verify your PIN and record the cash."*
-- The register does **not** enforce a set float amount. Whatever you count is your opening float. Use the store's standard float. If your count does not match it, tell a manager **before** ringing sales.
+- **Float check (owner rule D85, Fix Phase 6, gap G-62; finding F-01-13 FIXED).** The owner said: *"Warn please"*. The window shows the register's standard float under the grid (*"Standard float: $167.50"*; $300.00 on the Manager Till; set per register on Register Activity). If your count is different, it shows, in gold: *"This count-in is $X over / short of the standard float of $Y (counted $Z). Count it again. If it is right, you can still open: the drawer is measured against what you counted, and a manager sees this warning."*
+- It is a **warning, never a block**. The drawer opens with what you counted, and the warning is saved on the audit log (`drawer.float_warning`) so the difference is never blamed on the next person. Tell the manager on duty **before** ringing sales.
 
 ### 4.4 Reading the home screen
 
@@ -704,15 +711,20 @@ Messages:
 
 ### 4.27 Closing your drawer (blind count)
 
-You close the drawer at the end of your shift, or at end of day. **Do it before you clock out.**
+You close the drawer at the end of your shift, or at end of day. **Do it before you clock out.** Closing does **not** clock you out (owner rule D84); clock out on the lock screen when you are done (4.2).
 
 1. Finish or hold any sale. Make sure the last receipt is printed.
 2. Make your last **cash drop** if one is due (4.25). The drop must be recorded **before** the close.
-3. Take the **tip jar** out and count it **by itself**. Tips are employee money, not drawer cash.
+3. Take the **tip jar** out and count it **by itself**, with your crew-mate (the tip jar is the crew's, owner rule D89). Tips are employee money, not drawer cash.
 4. **MORE ▾ → 🔐 Close drawer (blind count)** (or **Close (blind count)** in the Cash drawer panel).
 5. The window is titled **Close drawer — blind count**: *"Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you. Then a second employee counts it too."*
 6. Count **every** bill and coin in the drawer by denomination and type **how many** of each. Count twice.
-7. **Tips (counted separately)**: enter the tip-jar total, or leave it blank if there is no tip jar. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."* Blank means "not recorded". **0** means "counted, and there were none".
+7. **Tips: crew tip pool (owner rule D89, Fix Phase 6, gap G-64).** The owner said: *"The tip jar is pooled for the morning crew, and pooled for the night crew. At shift change the tips are counted and evenly distributed to the two employees. This is the amount to be reported on everyone's own close till summary report. I want everyone to be completely accountable for their register."*
+   - The window starts on **Crew tip pool** (the other choice is **My own tips**). Enter the **whole jar** under *"Crew tip pool (the whole jar, counted together)"* and **People sharing** (starts at 2; up to 10).
+   - The window works out your share live, for example *"Crew tip pool $85.01 split evenly between 2: your share is $42.50. $0.01 cannot be split evenly; leave it in the jar for the next pool."* The split is in whole cents, rounding down; any leftover cents stay in the jar.
+   - **Your share is what is saved as your tips** and printed on your own till summary (*"Tips at close: this cashier's own share …"*). Your crew-mate enters the same pool at their close and gets the same share. The server does the split again itself; it does not trust the screen.
+   - **My own tips** (no pool, e.g. working alone on a register with your own jar): the old box below.
+   Old box, **My own tips**: enter the tip-jar total, or leave it blank if there is no tip jar. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."* Blank means "not recorded". **0** means "counted, and there were none".
 8. **Enter your PIN** and tap **Next: second count**. (The button stays off until your PIN is typed and the tips box is valid.)
 9. **Second-person count (owner rule D2, built in Phase 2.2, gap G-01).** The owner said: *"Q2- close only, and it can be any second employee. It doesn't need to be a lead or manager."* Hand the iPad to **any other employee**. The window now reads: *"Second count. Hand the iPad to another employee (any employee, not <you>). They count the drawer by themselves and enter their own PIN. <your> count stays hidden."*
    - Your count is **hidden** on this step and the second grid starts **empty**, so the second person counts blind, on their own.
@@ -723,7 +735,7 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
    - Count-in has **no** second count (D2 says close only).
 10. **More than one drawer on this register today?** You no longer need an X report to split the day. Since Phase 2.1 (G-05) every sale carries the drawer it was rung on, and reconcile adds up only this drawer's sales (4.30). An X report is still useful for the paperwork, but it is optional.
 11. The second person taps **Record blind count & close**.
-12. Success: *"Blind count recorded — a manager reconciles it in the back office."* (or *"Blind count recorded with $X in tips — …"*), followed by the second-count result:
+12. Success: *"Blind count recorded — a manager reconciles it in the back office."* (or *"Blind count recorded with $X in tips — …"*; with a crew pool, the pool sentence from step 7), then *"You are still clocked in: clock out when you are done (owner rule D84)."*, followed by the second-count result:
     - *"Second count by <name>: both counts agree."*, or
     - *"WARNING: the second count by <name> differs by $X (they counted more / they counted less). Both counts are saved; tell a manager."*
     A difference is a **warning only**: the drawer is already closed and both counts are saved. The owner has not said a difference should block (gap G-01 requirement 2). **Over / short uses your count** (the closer's), the same as before. If the counts differ, tell the manager on duty. It is good practice to recount together before you walk away, but the system does not ask for it.
@@ -746,6 +758,33 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
 Messages: *"No open drawer on this register."* (already closed, or never opened) · *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* · *"The second employee's PIN must be 4–6 digits."* · *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* (tell the owner) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50) or leave it blank."*
 
 **After closing:** the register shows **No drawer**. You cannot ring another sale on this register until someone counts in again.
+
+### 4.27a Shift change on your own insert (owner rules D81, D90)
+
+*Fix Phase 6. The owner said (Q-E-1): "I have 2 cashiers on shift at all times. 2 in the morning, 2 at night. Sometimes I have a 3rd cashier on busier days. We will have 3 registers with 6 removable inserts. 8am to 4pm and 3pm to 11pm." and (Q-E-3) "option b if not obvious at this point."*
+
+Every cashier has **their own insert** for their shift, and is accountable for it from count-in to close. The 3pm–4pm overlap is the shift change:
+
+1. **Outgoing cashier** (morning crew, around 3pm–4pm): make your last drop, close your drawer (4.27: blind count, crew tip pool, second count by any other employee). **You stay clocked in.** Take your insert out and give it to the manager or lead for the safe / deposit (SOP-03 §4.4).
+2. **Incoming cashier** (night crew): put **your own fresh insert** in the same register and **Count in drawer** (4.3). The float check warns if it is not the standard float.
+3. The register allows **one open drawer at a time**, so the incoming cashier can only count in after the outgoing close is saved (*"This register already has an open drawer. Close it first."*).
+4. The outgoing cashier finishes any other tasks, then clocks out on the lock screen (4.2). The app refuses the clock-out only if they still own an open drawer.
+5. **No solo close or open** (owner rule D86: *"No solo closer or opener."*). The second count at close is always required (D2). **A lead or manager is always on at open and close** (D88: *"There is always a lead or manager at open and close."*).
+
+**Quick card: shift change and close**
+
+```
+SHIFT CHANGE (3-4pm)                         NIGHT CLOSE (11pm)
+Outgoing: last drop -> tips: crew pool       Each cashier: last drop -> close (blind +
+  + people -> blind count -> 2nd person        2nd person, crew tip pool) -> still clocked in
+  counts -> Record. STILL CLOCKED IN.        Manager/lead: Deposit bags -> tick each till
+Incoming: own fresh insert -> Count in         stack against the screen -> Save assembled bag
+  (warns if not $167.50).                      -> bag in safe UNSEALED. Reconcile now or the
+Outgoing: finish tasks -> lock screen ->       morning manager does it before the seal.
+  Clock out (refused while you own an      Everyone: clock out on the lock screen.
+  an open drawer).                         Morning: different employee counts the bag blind
+                                             -> seal (warns if a drawer is unreconciled).
+```
 
 ### 4.28 The X / Z day report
 
@@ -780,21 +819,24 @@ Messages: *"Offline — the day report needs a connection to verify the PIN and 
 
 At close, after the blind count:
 1. **Drawer cash**: follow the store's cash routine in **SOP-02** (master till / safe) and **SOP-03** (end-of-day sheet, deposit bag). **The float stays in the drawer** for tomorrow (**$167.50** in each sales register, **$300.00** in the Manager Till, owner decisions D19/D22; the system closes with `floatStaysInDrawer: true`, `drawer-posting-service.ts` L194). Everything above the float is the takings and goes into the deposit (SOP-03 §4.4–4.5). *(Corrected in v1.1: v1.0 said the float "goes back to the master till / safe", which was wrong, finding F-03-4.)*
-2. **Tips**: per store tip policy. Tips never go into the drawer count or the deposit.
+2. **Tips**: the crew pool is split evenly at each close (D89, 4.27 step 7); each person takes their share. Tips never go into the drawer count or the deposit.
 3. **Close slip (form 8.2)**: hand it to the manager with the void and return receipts and the swap log (form 8.3). The second count is now recorded by the register (Phase 2.2). Fill in the slip's second-count column only when the register could not take it (for example, migration 0314 not applied yet).
 4. **Print the Z report** (4.28) when the last drawer of the day is closed, and put it with the end-of-day paperwork.
 
-> The deposit bag (seal, morning verify, into the safe, to the bank) is **not built in the app yet** (finding F-00-6). Follow SOP-03's paper procedure.
+> The deposit bag is on **Deposit bags** in the back office (SOP-03 §4.5–§4.13; built in Phase 2.6, assembled and verified at night since Fix Phase 6, D82).
 
-### 4.30 Manager: reconcile and verify (back office)
+### 4.30 Manager: reconcile (back office); Verify till retired
 
 *Managers and admins only. Reconcile and verify need `inventory.manage` (owner, admin, manager). Anyone with `orders.manage` (which includes staff) can **see** Register Activity, but only sees "Ask a manager to sign off".*
 
-A drawer moves through four states: **open → closed → reconciled → verified**.
+A drawer moves through three states: **open → closed → reconciled**. (**Verified** is kept only on old drawers: Verify till is retired, owner rule D83, below.)
 
-**Where:** back office → **Register Activity** (`/admin/registers`). The **Needs attention** section (*"Closed drawers awaiting a manager sign-off."*) holds one card per drawer:
-- an orange **Reconcile** card for a closed drawer;
-- a gold **Verify till** card for a reconciled drawer.
+**Who reconciles, and when (owner rule D87, Fix Phase 6, gap G-66).** The owner asked for a professional call: *"I think it can be done by either the night manager or morning manager. But don't build it this way just because I say to. I want your professional opinion … build this one like the big boys would."* The large POS systems close blind at the till and leave the manager review to be done after, with a deadline. So:
+- **Either the night manager or the morning manager** reconciles. Night is best when there is time; otherwise the morning manager does it first thing.
+- **Deadline: before the day's deposit bag is sealed** (SOP-03 §4.11). Sealing a bag that holds an unreconciled drawer is **not** blocked, but it warns: *"Warning: N drawer(s) in this bag have not been reconciled yet (…). The bag is sealed; a manager reconciles it/them on Register Activity today (SOP-03 §4.11). The owner sees this on the audit log."* (audit `deposit_bag.sealed_unreconciled`).
+- The **End-of-day report** reads *"Closed — N drawers awaiting manager reconcile"* until every drawer is reconciled, then *"Final — all drawers closed and reconciled"*.
+
+**Where:** back office → **Register Activity** (`/admin/registers`). The **Needs attention** section holds one orange **Reconcile** card per closed drawer. (The gold **Verify till** card is gone, D83.)
 
 **Reconcile (reveal over/short)**
 
@@ -832,21 +874,11 @@ Since Phase 2.1 (G-05, findings F-01-4 and F-01-3) **you do not type cash sales*
    - **Over / short warnings** (`/admin/registers/over-short`) is the owner's screen: **owner and admin only** (permission `registers.warnings`), reached from the **Over / short warnings** button on Register Activity and from the menu (Employee → **Over / Short Warnings**). It lists every drawer and master till count more than $5.00 off: when, what (register or master till and window), who counted (closer and second counter), who signed it off, how much, and the reason. Ranges 7 / 30 / 90 / 365 days; printable. Managers write the reasons but do not see this list.
    - Paper form 8.5 is no longer needed when migration 0315 is applied. Before it is applied the reconcile still lands, the reason is kept in the Security Log only, and the banner says so; then fill in form 8.5 as before.
 
-> ⚠ **Known problem, "Verified by" (findings F-00-4, F-00-3).** This box is typed text, but the database column only accepts an employee ID. **Typing a name is expected to fail with a database error.** Until this is fixed: **leave the box blank** and write your name and the time on the close slip. The back-office audit log still records which login pressed the button. (Reconcile no longer has a name box: Phase 2.1 records the signed-in manager, F-01-5 reconcile part.)
-
-**Verify till (next morning)**
-1. The gold card reads *"<business day> · reconciled, awaiting manager verify"*.
-2. The morning manager **recounts the closed drawer / bag by hand** and compares it with the close slip.
-3. Tick or untick **Count agrees**. Leave **Verified by** blank (see the warning above). Tap **Verify**.
-4. ⚠ **The screen has no denomination boxes**, so the system records the recount as $0 and the variance as minus the closing count, whatever you tick (finding F-00-3). **The paper close slip, signed by the morning verifier, is the real record until this is fixed.**
-
-> ⚠ **Double-clicks.** Since Phase 2.1 reconcile is safe against a double click (it only changes a drawer that is still **closed**). **Verify** still does not guard against being run twice (finding F-01-2). Click **once** and wait for the green banner.
-
-> ⚠ **Always reconcile before you verify.** The system will accept **Verify** on a drawer that was never reconciled (finding F-01-12). If that happens, the drawer can never be reconciled afterwards, so its over/short is never calculated and never posted to the books. The screen shows the **Verify till** card only after reconcile. Do not try to get around that order.
+**Verify till is retired (owner rule D83, Fix Phase 6, gap G-63; findings F-00-3, F-00-4 verify part, F-01-12 RETIRED).** The owner said: *"Yes please do this."* The morning **blind recount of the deposit bag** by a different employee (SOP-03 §4.10) is the verify now: it is a real count, by denomination, with the counter's PIN. The old card, which saved no recount and took a typed name into an ID column, is removed. A stale page that still posts it is refused with *"Verify till is retired (owner rule D83). The morning recount on Deposit bags is the verify now. Nothing was saved."* and the attempt is audited (`till.verify_retired`). Drawers verified before Fix Phase 6 keep their history.
 
 **Related back-office pages** (Registers menu):
 - **Cash drawer reports** (`/admin/registers/history`): closed, reconciled and verified sessions, each with a printable summary. After a Phase 2.1 reconcile the summary also prints **Cash sales on this drawer (system figure)** and **Refunds paid from this drawer**. Drawers reconciled before Phase 2.1 were typed, so those rows are left off.
-- **End of day** (`/admin/registers/eod`): the whole-store day, marked *"Preliminary — a drawer is still open"* or *"Final — all drawers closed"*. Printable.
+- **End of day** (`/admin/registers/eod`): the whole-store day, marked *"Preliminary — a drawer is still open"*, *"Closed — N drawers awaiting manager reconcile"* (D87) or *"Final — all drawers closed and reconciled"*. Printable.
 - **Store safe** (`/admin/registers/safe`): *"The $1,000 change fund behind the registers."* AM/PM counts → SOP-02.
 - **Over / short warnings** (`/admin/registers/over-short`, owner and admin only): every drawer and master till count more than $5.00 over or short, with who, when, how much and the reason (step 6 above).
 - **Register exceptions** (`/admin/registers/exceptions`) → 4.32.
@@ -1092,6 +1124,9 @@ Since Phase 2.9 (owner message 6: *"The register activity page also, the top but
 | *"Drop amount must be a positive whole number of cents."* / *"Drop amount is implausibly large — check the number."* | BLOCK | Typo guard (max $50,000) | Re-type | — |
 | *"A manager or lead must approve the swap with their PIN."* / *"A swap cannot approve itself — a manager or lead must enter their PIN."* | BLOCK | Control | Manager or lead | Lead / manager |
 | *"Notes must be 500 characters or fewer."* | BLOCK | Length | Shorten | — |
+| *"You still have an open drawer on <register>. Close your drawer first (blind count and second count), then clock out. …"* | BLOCK | Owner rule D84: no clock-out while you own an open drawer | Close your drawer (4.27), then clock out | — |
+| *"This count-in is $X over / short of the standard float of $Y …"* | WARN | Owner rule D85: the count-in is not the standard float. The drawer still opens | Recount; if right, open and tell the manager | Manager |
+| *"The number of people sharing the tips must be between 1 and 10."* / *"The crew tip pool must be zero or more, in dollars and cents."* | BLOCK | Crew tip pool typo guard (D89) | Re-type | — |
 | *"Tips must be zero or a positive whole number of cents."* / *"Tips amount is implausibly large — check the number."* | BLOCK | Typo guard | Re-type | — |
 | *"Offline — drawer actions need a connection to verify your PIN and record the cash."* | BLOCK | Server check | Reconnect | Manager |
 | *"Till action failed — try again."* / *"Could not reach the server — try again."* | BLOCK | Network or server error | Try **once** more. If it fails again, stop and call a manager. Do not tap repeatedly (F-01-2). | Manager |
@@ -1156,7 +1191,7 @@ Print these from this page. Keep completed forms with the day's paperwork (SOP-0
 - [ ] Footer: **MENU** has today's time; **QUEUE all clear**; **SYNC** 0 pending
 - [ ] **No** amber "Medical TEST MODE" banner
 - [ ] Printer is on with paper (the drawer opens only through the printer)
-- [ ] Float counted twice; matches the store's standard float (set by the owner); **Open drawer with $X** done
+- [ ] My **own insert**; float counted twice; if the gold float warning shows, recount and tell the manager (D85); **Open drawer with $X** done
 - [ ] Scanner charged and scanning
 - [ ] I know who the manager/lead on duty is (for PIN approvals)
 
@@ -1236,14 +1271,14 @@ Owner reviewed: ____________________   Date: ________
 
 ### 8.6 Manager end-of-day checklist
 
-- [ ] Every drawer closed blind, with a signed close slip (8.2)
+- [ ] Every drawer closed blind (with the second count and the crew tip pool), with a signed close slip (8.2); everyone clocked out on the lock screen after their close (D84)
 - [ ] Z report printed (REPORTS → manager PIN)
 - [ ] Register Activity: every closed drawer **reconciled** (cash sales worked out on paper, net of this drawer's voids/returns, never blank)
 - [ ] Any over/short > $5 → reason written in the Reconcile card (form 8.5 only before migration 0315)
 - [ ] **Register exceptions** reviewed; **Rejected events on registers** is empty
 - [ ] Swap log (8.3) matches the register's swap records
 - [ ] Cash and deposit handled per SOP-02 / SOP-03
-- [ ] Next morning: **Verify till** against the slip (paper is the record, F-00-3)
+- [ ] Every drawer reconciled by the night manager, or left for the morning manager **before the bag is sealed** (D87). Verify till is retired (D83): the morning bag recount is the verify
 
 ---
 
@@ -1266,7 +1301,7 @@ Owner reviewed: ____________________   Date: ________
 │ VOID = same day only. RETURN = loyalty member, 15 days, original pkg, legible lot.     │
 │ REPRINT = MORE ▸ Reprint last receipt (drawer stays shut). Don't re-tap Print.         │
 │ DROP big bills (afternoon/night) + witness. SWAP = mgr PIN + bills BOTH WAYS on screen. │
-│ CLOSE: drop first → tips apart → blind count → 2nd person count on slip → Record.      │
+│ CLOSE: drop first → crew tip pool → blind count → 2nd person counts → Record. Clock out after.│
 │ OFFLINE: sales OK on open drawer; no PIN steps; never wipe the iPad with SYNC pending. │
 │ STUCK? Read the message. It tells you why and what to do. Then call the manager.        │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
@@ -1307,7 +1342,8 @@ Owner reviewed: ____________________   Date: ________
 | SOP section | Code (read for this SOP) |
 |---|---|
 | 2, 4.1 unlock, PIN rules | `src/app/api/pos/unlock/route.ts`, `approve/route.ts`, `witness/route.ts`, `src/lib/staffing/handbook-ack-core.ts` |
-| 4.2 clock | `src/app/(site)/pos/RegisterShell.tsx` (onPunch) |
+| 4.2 clock | `src/app/(site)/pos/RegisterShell.tsx` (onPunch, clock-out guard), `src/lib/staffing/store.ts` (`toggleClock`, `openDrawersOwnedBy`), `src/lib/registers/shift-end-core.ts` (`clockOutBlocked`), `src/app/api/pos/unlock/route.ts` (`openDrawerSessionIds`, `clockOutBlockedMessage`, `defaultFloatMinor`) |
+| 4.3 float check, 4.27 crew tip pool, 4.27a shift change | `shift-end-core.ts` (`floatCheck`, `splitTipPool`, `tipPoolSentence`), `src/app/api/pos/till/route.ts` (open: `drawer.float_warning`; close: `tipPool`), `src/lib/pos/till-core.ts` (`tipPool`), `src/app/admin/registers/actions.ts` (open/close), `src/components/admin/registers/RegisterControls.tsx` |
 | 4.3, 4.25–4.27 till | `src/app/(site)/pos/RegisterShell.tsx` (TillModal L5611; second-count step L5643, L5660, L5982, L6012), `src/app/api/pos/till/route.ts` (close L243–294), `src/lib/pos/till-core.ts` (`secondPin` L66, `SECOND_COUNT_REQUIRED_ERROR` L72), `src/lib/registers/store.ts` (`closeDrawerBlind` L209, compare-and-swap L255), `src/lib/registers/second-count-core.ts`, `src/app/admin/registers/actions.ts` (`closeDrawerAction` L104), `src/components/admin/registers/RegisterControls.tsx` (L153), `src/lib/registers/cash.ts`, `supabase/migrations/0038_registers_drawers.sql`, `0314_drawer_second_count.sql` |
 | 4.4 home screen, 4.34 MORE | `RegisterShell.tsx` (≈L2550–2915), `src/lib/pos/medical-testmode-core.ts` |
 | 4.5–4.6 ID / medical | `src/lib/pos/id-scan-core.ts`, `src/lib/pos/medical-pos-core.ts`, `SaleFlow.tsx` (ID gate) |
@@ -1318,7 +1354,7 @@ Owner reviewed: ____________________   Date: ________
 | 4.20 pickup | `RegisterShell.tsx` (PickupQueueModal ≈L4350), `src/app/api/pos/pickup/route.ts`, `src/lib/pos/pickup-progress-core.ts`, `pickup-detail-core.ts` |
 | 4.21–4.24 no sale, void, return, reprint | `RegisterShell.tsx` (NoSaleModal ≈L3176, VoidSaleModal ≈L3319, ReturnsModal ≈L3574), `src/lib/pos/void-sale-core.ts`, `returns-core.ts`, `/api/pos/void`, `/api/pos/returns`, `/api/pos/reprint` |
 | 4.28 X/Z | `RegisterShell.tsx` (DayReportModal ≈L5149), `src/lib/pos/day-report-core.ts`, `/api/pos/day-report` |
-| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L548), `actions.ts` (reconcileDrawerAction L170, assignRefundAction L305), `src/lib/registers/store.ts` (reconcileDrawer L326), `over-short-warning-core.ts` (checkOverShortReason L54), `over-short/page.tsx`, `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
+| 4.30 reconcile (verify retired: `actions.ts` `verifyTillAction` stub, `oversight.ts` reconcile only) | `src/app/admin/registers/page.tsx` (ReconcileCard L548), `actions.ts` (reconcileDrawerAction L170, assignRefundAction L305), `src/lib/registers/store.ts` (reconcileDrawer L326), `over-short-warning-core.ts` (checkOverShortReason L54), `over-short/page.tsx`, `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
 | 4.32 sync/exceptions | `src/lib/pos/sync-store.ts`, `sync-core.ts`, `src/lib/orders/completion-gate.ts`, `src/app/admin/registers/exceptions/page.tsx` |
 | 4.35 cashier shift report | `src/app/admin/registers/cashiers/page.tsx` (gate L109), `cashiers/csv/route.ts` (gate L24, 409 on incomplete), `src/lib/registers/cashier-report-core.ts` (`saleDiscounts` L210, `buildCashierReport` L297, `CASHIER_REPORT_MAX_DAYS` L418, `untracedNote` L533), `cashier-report-store.ts` (`loadCashierReport` L57) |
 | 4.36 tip tracker | `src/app/admin/staffing/tips/page.tsx` (gate L40, own-only L58), `tips/actions.ts` (`staffing.manage` L24), `tips/csv/route.ts`, `src/lib/staffing/tips-core.ts` (`buildTipReport` L110, `validateTipCorrection` L240), `tips-store.ts` (`loadTipReport` L39, `correctSessionTips` L145), `src/components/admin/admin-nav-data.ts` L109; tips entered `RegisterShell.tsx` TillModal, stored `drawer_sessions.tips_minor` (0134) |
@@ -1332,10 +1368,12 @@ Owner reviewed: ____________________   Date: ________
 | ~~D2: second-person count at close (any second employee)~~ | **BUILT, Phase 2.2**: the register (and the back-office close) takes a second employee's PIN and own count (4.27). A difference is a warning | Paper slip 8.2/8.4 only if migration 0314 is not applied | G-01 BUILT · F-01-9 FIXED, F-00-5 close part FIXED |
 | ~~D3: log big bills master till → little safe, and which small bills/coin came back~~ | **BUILT, Phase 2.7b**: the change swap takes the bills both ways (4.26); the master till ↔ little safe exchange is on the Store safe page (SOP-02 §4.10) | SOP-02 form 8.3 only for an iPad not yet rebuilt | G-02 BUILT · F-01-8, F-00-7 FIXED |
 | ~~D7: $5 over/short warning screen (admin only: who, when, how much, required reason)~~ | **BUILT, Phase 2.3**: reason required over $5.00 at reconcile (optional at $5.00 or less, D21); **Over / short warnings** screen, owner and admin only, drawers and master till (4.30 step 6) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-01-11 FIXED |
-| Deposit bag (seal → morning verify → safe → bank) | Tables exist, no screen | SOP-03 paper | G-04 · F-00-6 |
+| ~~Deposit bag (seal → morning verify → safe → bank)~~ | **BUILT, Phase 2.6**; night assembled and verified since Fix Phase 6 (D82) | SOP-03 | G-04 · F-00-6 FIXED |
 | ~~Per-shift / per-cashier report~~ | **BUILT, Phase 2.1 (drawer figure) and Phase 2.1b (printable Cashier shift report, §4.35).** The X/Z day report stays per register | None needed; print the Cashier shift report | G-05 BUILT · F-01-10 FIXED |
-| Morning verify with recount and verifier identity | No denominations; name box broken | Paper slip is the record | F-00-3 |
-| Verify name box | Free text into an ID column | Leave blank, sign the slip | F-00-4 (reconcile part of F-01-5 FIXED, Phase 2.1) |
+| ~~Morning verify with recount and verifier identity~~ | **RETIRED, Fix Phase 6 (D83)**: the morning blind bag recount (by denomination, with PIN) is the verify | None needed | F-00-3 RETIRED · G-63 |
+| ~~Verify name box~~ | **Removed with Verify till (D83)** | None needed | F-00-4 RETIRED (reconcile part FIXED, Phase 2.1) |
+| ~~Standard float check at count-in~~ | **BUILT, Fix Phase 6**: warns, never blocks (D85) | None needed | F-01-13 FIXED · G-62 |
+| ~~Clock-out while still owning a drawer~~ | **BUILT, Fix Phase 6**: refused (D84) | None needed | G-61 |
 | ~~Computed cash sales per drawer~~ | **BUILT, Phase 2.1**: the system figure (4.30) | None needed | F-01-4, F-00-13, F-01-3 FIXED |
 
 ## Appendix C: Revision history
@@ -1345,6 +1383,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.10 draft | Fix phase | Fix Phase 6 / Fix E (owner message 8, D81–D90; G-61, G-62, G-63, G-64, G-66 BUILT; F-01-13 FIXED; F-00-3, F-00-4 verify part, F-01-12 RETIRED). §4.2 clock-out guard (D84: blocked while you own an open drawer; closing never clocks out); §4.3 float warning (D85); §4.27 steps 3, 7, 12 crew tip pool (D89) and the still-clocked-in line; new §4.27a shift change on your own insert with the quick card (D81, D86, D88, D90); §4.29 notes; §4.30 reconcile by either manager before the seal (D87), Verify till retired (D83); §5.8 three rows; forms 8.1 and 8.6; quick card; Appendix A and B. No migration. The iPad app must be rebuilt for the register changes. | Fix program |
 | 1.9 draft | Fix phase | Phase 2.1b, 2.1c, 2.9 (owner message 6: *"please completely finish G-05 (2.1), the per cashier print out. I want to add to this an employee tip tracker with a new page in the employee drop down menu to track tips and give stats on them … The register activity page also, the top button bar, is cutoff."*). G-05 BUILT, F-01-10 FIXED: new §4.35 **Cashier shift report** (per cashier and shift; sales, voids, no-sales, discounts by kind, cart adjustments; sign-off line; print and CSV). New §4.36 **Tip Tracker** (Employee menu; own tips for everyone, all for managers; totals, averages, highest, weekday, per hour; manager correction with a reason, audited). New §4.37: the Register Activity buttons wrap so none is cut off. No migration. Appendix A and B updated. | Fix program |
 | 1.8 draft | Fix phase | Phase 2.7b (plan row 2.7: *"Master till items"*; owner D3, D14). G-02 BUILT, F-01-8 FIXED: §4.26 change swap now takes **Big bills to the safe** and **Change back** by denomination and refuses unequal sides; new messages listed; the D3 note says the iPad must be rebuilt. Form 8.3 retitled and pointed to SOP-02 form 8.3 (F-02-8 FIXED). Quick card and Appendix B updated. | Fix program |
 | 1.7 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT, F-01-11 FIXED: the Reconcile card has a reason box; more than $5.00 over or short needs a reason, checked by the server against its own figure (blank → refused, audited); $5.00 or less optional; the reason is saved on the drawer (migration 0315) and printed on the till summary; every warning is audited; new owner/admin screen **Over / short warnings** (drawers and master till; who, when, how much, reason), linked from Register Activity and the menu. Warnings never block. §4.30 step 6 and related pages, §6 row, form 8.5 note, checklist 8.6 and Appendix B updated. | Fix program |

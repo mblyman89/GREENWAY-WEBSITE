@@ -27,7 +27,7 @@ import {
   type BagStage,
 } from "@/lib/registers/deposit-bag-flow-core";
 import { drawersForDay, listBags, listBagsInRange, staffNames } from "@/lib/registers/deposit-bag-store";
-import { nightCountAction, morningRecountAction, sealBagAction, retrySealPostAction, bankRunAction } from "./actions";
+import { nightAssembleAction, nightCountAction, morningRecountAction, sealBagAction, retrySealPostAction, bankRunAction } from "./actions";
 
 /**
  * /admin/registers/deposit-bags — Fix Phase 2.6 (G-04, G-14; findings F-00-6,
@@ -166,9 +166,10 @@ export default async function DepositBagsPage({
           help={
             <HelpPanel id="registers-deposit-bags" title="How deposit bags work (SOP-03)">
               <p>
-                <strong>Night (one person, D24).</strong> After every drawer is closed, the closer pulls each till&apos;s takings
-                (closing count minus its float; the float stays in the drawer), adds the day&apos;s drops from the safe, counts it
-                all by denomination, and records it here with the number printed on the bag and their PIN. The bag goes into the
+                <strong>Night (one person, D24, D82).</strong> After every drawer is closed, the closer pulls each till&apos;s takings
+                (closing count minus its float; the float stays in the drawer), adds the day&apos;s drops from the safe, checks each
+                stack against its line on this screen, ticks it, and saves the bag with the number printed on the bag and their PIN
+                (assembled and verified). Only if a stack does not match do they count the bag by denomination instead. The bag goes into the
                 store safe <strong>unsealed</strong> overnight (D23).
               </p>
               <p>
@@ -216,7 +217,7 @@ export default async function DepositBagsPage({
         </div>
 
         {/* ── Night count ───────────────────────────────────────────── */}
-        <Panel title={`Night: count the deposit for ${nightDay}`} className="print:hidden">
+        <Panel title={`Night: assemble and verify the deposit for ${nightDay}`} className="print:hidden">
           <form method="get" action={HERE} className="mt-2 flex flex-wrap items-end gap-2">
             <label className="block text-xs text-[var(--admin-text-muted)]">
               Business day
@@ -276,6 +277,49 @@ export default async function DepositBagsPage({
           {nightBagExists ? (
             <p className="mt-3 text-sm text-[var(--admin-text-muted)]">A bag is already recorded for {nightDay}. One day, one bag (SOP-03 §4.14). It is listed below.</p>
           ) : (
+            <>
+            {exp && exp.expectedMinor !== null && exp.lines.some((l) => l.toBagMinor > 0) ? (
+              <form action={nightAssembleAction} className="mt-4 space-y-3 rounded-lg border border-[var(--admin-accent)]/30 p-3">
+                <input type="hidden" name="business_day" value={nightDay} />
+                <p className="text-sm font-semibold text-[var(--admin-text)]">Assemble and verify the deposit (the normal way, owner rule D82)</p>
+                <p className="text-xs text-[var(--admin-text-muted)]">
+                  Pull each till&apos;s takings and its drops, check each stack against the line above, and tick it. The bag total is the
+                  expected deposit. No denomination count at night: the morning employee counts the bag blind (D24).
+                </p>
+                <ul className="space-y-1">
+                  {exp.lines
+                    .filter((l) => l.toBagMinor > 0)
+                    .map((l) => (
+                      <li key={l.sessionId}>
+                        <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
+                          <input type="checkbox" name="confirm_session" value={l.sessionId} required />
+                          {l.registerName}: {formatCents(l.toBagMinor)} is in my hand and goes in the bag
+                        </label>
+                      </li>
+                    ))}
+                </ul>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">Bag total: {formatCents(exp.expectedMinor)}</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="block text-xs text-[var(--admin-text-muted)]">
+                    Bag # (printed on the bag)
+                    <Input name="bag_no" required maxLength={BAG_NO_MAX_LEN} placeholder="e.g. 1041" autoComplete="off" />
+                  </label>
+                  <label className="block grow text-xs text-[var(--admin-text-muted)]">
+                    Note (optional)
+                    <Input name="night_note" maxLength={BAG_NOTE_MAX_LEN} placeholder="e.g. drawer 2 stack checked twice" />
+                  </label>
+                  <PinField name="assemble_pin" label="Your PIN (the closer)" />
+                  <Button type="submit" variant="primary" size="sm">
+                    Save assembled bag
+                  </Button>
+                </div>
+                <p className="text-xs text-[var(--admin-text-faint)]">
+                  A stack that does not match its line: do not tick it. Count the whole bag by denomination below instead, and write what you found.
+                </p>
+              </form>
+            ) : null}
+            <details className="mt-4" open={!(exp && exp.expectedMinor !== null && exp.lines.some((l) => l.toBagMinor > 0))}>
+              <summary className="cursor-pointer text-sm font-semibold text-[var(--admin-text)]">Count by denomination instead (when a stack does not match, or the expected deposit cannot be worked out)</summary>
             <form action={nightCountAction} className="mt-4 space-y-3">
               <input type="hidden" name="business_day" value={nightDay} />
               <CountGrid namePrefix="night_" expectedMinor={exp?.expectedMinor ?? null} expectedLabel="Expected deposit" totalLabel="Counted into the bag" />
@@ -297,6 +341,8 @@ export default async function DepositBagsPage({
                 Then put the cash and the night sheet in the bag, <strong>unsealed</strong>, in the store safe&apos;s &quot;TO VERIFY&quot; slot (SOP-03 §4.6).
               </p>
             </form>
+            </details>
+            </>
           )}
         </Panel>
 
@@ -310,7 +356,7 @@ export default async function DepositBagsPage({
                 <form key={b.id} action={morningRecountAction} className="space-y-3 rounded-lg border border-[var(--admin-border)] p-3">
                   <input type="hidden" name="bag_id" value={b.id} />
                   <p className="text-sm text-[var(--admin-text)]">
-                    Bag <strong>{b.bagNo}</strong> · business day {b.businessDay} · counted at night by {nameOf(b.nightCountedBy)} at {fmtTime(b.nightCountedAt)}.{" "}
+                    Bag <strong>{b.bagNo}</strong> · business day {b.businessDay} · {b.nightAssembled ? "assembled and verified" : "counted"} at night by {nameOf(b.nightCountedBy)} at {fmtTime(b.nightCountedAt)}.{" "}
                     <span className="text-[var(--admin-text-muted)]">Count it without looking at last night&apos;s figure (SOP-03 §4.10); the screen shows it after you save.</span>
                   </p>
                   <CountGrid namePrefix="morning_" totalLabel="Morning recount" />
@@ -496,7 +542,7 @@ export default async function DepositBagsPage({
                         <td className="py-2 pr-2 text-right tabular-nums">{b.expectedMinor === null ? "—" : formatCents(b.expectedMinor)}</td>
                         <td className="py-2 pr-2 text-right tabular-nums">
                           {shown ? formatCents(b.nightCountMinor) : "hidden until recount"}
-                          <div className="text-[var(--admin-text-faint)] print:text-black/60">{nameOf(b.nightCountedBy)}</div>
+                          <div className="text-[var(--admin-text-faint)] print:text-black/60">{nameOf(b.nightCountedBy)}{b.nightAssembled ? " · assembled" : ""}</div>
                         </td>
                         <td className="py-2 pr-2 text-right tabular-nums">
                           {b.morningCountMinor === null ? "—" : formatCents(b.morningCountMinor)}

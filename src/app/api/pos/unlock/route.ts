@@ -16,8 +16,9 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { getEmployeeByPin, openWorkPunch } from "@/lib/staffing/store";
-import { openSessionForRegister } from "@/lib/registers/store";
+import { getEmployeeByPin, openWorkPunch, openDrawersOwnedBy } from "@/lib/staffing/store";
+import { clockOutBlockedMessage } from "@/lib/registers/shift-end-core";
+import { openSessionForRegister, getRegister } from "@/lib/registers/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { registerGateForEmployee } from "@/lib/staffing/handbook-ack-store";
@@ -95,9 +96,15 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: handbookGate.reason }, { status: 403 });
   }
 
-  const [openPunch, drawerSession] = await Promise.all([
+  const [openPunch, drawerSession, ownedDrawers, registerRow] = await Promise.all([
     openWorkPunch(employee.id),
     openSessionForRegister(auth.device.register_id),
+    // Fix Phase 6 (G-61, owner D84): the open drawers this employee counted
+    // in, so the register can refuse a clock-out before it is queued. The
+    // server refuses it again in toggleClock (the real guard).
+    openDrawersOwnedBy(employee.id),
+    // Fix Phase 6 (G-62, owner D85): the standard float, for the count-in warning.
+    getRegister(auth.device.register_id),
   ]);
 
   await recordAudit({
@@ -118,8 +125,11 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       // Slice 6: username ONLY, so the register can show the right SAW login at
       // the medical-verification step. Never a password.
       sawUsername: employee.saw_username ?? null,
+      // Fix Phase 6 (G-61, owner D84): open drawers this employee still owns.
+      openDrawerSessionIds: ownedDrawers.map((d) => d.sessionId),
+      clockOutBlockedMessage: clockOutBlockedMessage(ownedDrawers),
     },
-    register: { id: auth.device.register_id },
+    register: { id: auth.device.register_id, defaultFloatMinor: registerRow?.default_float_minor ?? null },
     drawer: drawerSession
       ? { sessionId: drawerSession.id, openedAt: drawerSession.opened_at, businessDay: drawerSession.business_day }
       : null,
