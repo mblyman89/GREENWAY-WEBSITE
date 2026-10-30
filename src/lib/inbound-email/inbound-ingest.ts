@@ -41,7 +41,11 @@ export type IngestOutcome = {
 };
 
 export function intakeMailbox(): string {
-  return (process.env.VENDOR_INTAKE_MAILBOX ?? "vendor_intake").trim();
+  // Fix 3.5 (owner: "It should only target vendor_intake@ and none of my other
+  // @greenwaymarijuana.com addresses."): the env may only name vendor_intake
+  // (bare or on a domain); anything else falls back to vendor_intake.
+  const v = (process.env.VENDOR_INTAKE_MAILBOX ?? "vendor_intake").trim().toLowerCase();
+  return v.split("@")[0] === "vendor_intake" ? v : "vendor_intake";
 }
 
 // SLICE 37: second mailbox — forwarded LCB bulletins for Regulatory Watch.

@@ -247,6 +247,17 @@ function placeholderEmail(s: SourceEmail): NormalizedInboundEmail {
 }
 
 /**
+ * Fix 3.5 (owner: "It should only target vendor_intake@ and none of my other
+ * @greenwaymarijuana.com addresses."): a message in the box that was sent to
+ * another of our addresses is logged ignored - not staged, not routed to the
+ * menu / regulatory readers, not retried, never on Needs attention.
+ */
+async function logNotIntake(email: NormalizedInboundEmail, note: string, logId: string | null, ingestSource: IngestSource): Promise<IngestOutcome> {
+  await logInboundEmail({ email, signatureOk: null, toIntake: false, disposition: "ignored", manifestId: null, logId, ingestSource, note });
+  return { kind: "ignored", disposition: "ignored", staged: 0, manifestIds: [], logId, body: { ok: true, ignored: "not-intake-mailbox" } };
+}
+
+/**
  * The email was listed in (or logged from) the intake mailbox, so it IS an
  * intake email even when a failed fetch left its recipients empty. Without
  * this a failed re-fetch would be logged "not addressed to the intake mailbox"
@@ -280,6 +291,11 @@ export async function pullSourceEmail(s: SourceEmail, ingestSource: IngestSource
       return { ok: true, outcome: await routeAndStage(keepIntakeIdentity(email, s), null, note, logId, ingestSource), skipped: null };
     }
     const g = await fetchGmailInboundById(s.ref, gmailToken);
+    if (!g.ok && g.notIntake) {
+      // Fix 3.5: sent to another of our addresses - logged as ignored (never
+      // staged, never retried, not on Needs attention).
+      return { ok: true, outcome: await logNotIntake(g.email, g.error, logId, ingestSource), skipped: null };
+    }
     if (!g.ok) {
       // Record it as a fetch failure (temporary): the next check retries it.
       await logInboundEmail({
@@ -364,6 +380,12 @@ export async function retryInboundEmail(logId: string, actorId: string | null, i
       ({ email, fetchNote } = await fetchResendInboundById(ref.id));
     } else {
       const g = await fetchGmailInboundById(ref.id);
+      if (!g.ok && g.notIntake) {
+        // Fix 3.5: this row came from another of our addresses: it is closed as
+        // ignored (off Needs attention), never staged.
+        const out = await logNotIntake(g.email, `${g.error} (fetch ${n + 1})`, row.id, ingestSource);
+        return { ok: true, disposition: out.disposition, staged: 0, manifestIds: [], note: g.error.slice(0, 400) };
+      }
       if (!g.ok) {
         await logInboundEmail({
           email: { ...placeholderEmail(source), to: [intakeMailbox()] },
@@ -427,17 +449,17 @@ export type ReconcileRun = ReconcileRunSummary & {
   migrationApplied: boolean;
 };
 
-type Listed = { state: SourceState; items: SourceEmail[]; token: string | null; mailbox: string };
+type Listed = { state: SourceState; items: SourceEmail[]; token: string | null; mailbox: string; notIntake: number };
 
 async function listSources(nowMs: number, days: number): Promise<{ resend: Listed; gmail: Listed }> {
   const sinceIso = new Date(nowMs - days * 86_400_000).toISOString();
   const intake = intakeMailbox();
-  const resend: Listed = { state: { configured: Boolean(process.env.RESEND_API_KEY), ok: false, listed: 0, error: null }, items: [], token: null, mailbox: intake };
+  const resend: Listed = { state: { configured: Boolean(process.env.RESEND_API_KEY), ok: false, listed: 0, error: null }, items: [], token: null, mailbox: intake, notIntake: 0 };
   const gconf = gmailIntakeConfig();
-  const gmail: Listed = { state: { configured: gconf.configured, ok: false, listed: 0, error: null }, items: [], token: null, mailbox: gconf.mailbox ?? "" };
+  const gmail: Listed = { state: { configured: gconf.configured, ok: false, listed: 0, error: null }, items: [], token: null, mailbox: gconf.mailbox ?? "", notIntake: 0 };
   const [r, g] = await Promise.all([
     resend.state.configured ? listResendReceived(sinceIso) : Promise.resolve(null),
-    gconf.configured ? listGmailIntake(buildReconcileQuery(nowMs, days)) : Promise.resolve(null),
+    gconf.configured ? listGmailIntake(buildReconcileQuery(nowMs, days, gconf.mailbox)) : Promise.resolve(null),
   ]);
   if (r) {
     if (r.ok) {
@@ -450,6 +472,7 @@ async function listSources(nowMs: number, days: number): Promise<{ resend: Liste
     if (g.ok) {
       gmail.items = g.items;
       gmail.token = g.token;
+      gmail.notIntake = g.notIntake;
       gmail.state = { configured: true, ok: true, listed: g.items.length, error: g.truncated ? "Gmail list cut at 200 emails" : null };
     } else gmail.state = { configured: g.configured, ok: false, listed: 0, error: g.error };
   } else if (!gconf.configured) gmail.state.error = gconf.problem;
@@ -490,6 +513,7 @@ export async function runReconcile(opts: { trigger: "cron" | "manual"; days?: nu
   // 1. Compare the sources with the table and pull in what is missing.
   const { resend, gmail } = await listSources(nowMs, days);
   out.configured = resend.state.configured || gmail.state.configured;
+  out.notIntake = gmail.notIntake;
   if (resend.state.configured && !resend.state.ok && resend.state.error) out.errors.push(resend.state.error);
   if (gmail.state.configured && !gmail.state.ok && gmail.state.error) out.errors.push(gmail.state.error);
   if (resend.state.ok || gmail.state.ok) {
@@ -597,7 +621,7 @@ const FIND_MAX_PULL = 5;
 export async function findAndIngest(text: unknown, daysIn: unknown, actorId: string | null, nowMs: number = Date.now()): Promise<FindResult> {
   const daysNum = Number(daysIn);
   const days = Number.isFinite(daysNum) ? Math.max(1, Math.min(MAX_FIND_DAYS, Math.floor(daysNum))) : 30;
-  const fq = buildFindQuery(text, nowMs, days);
+  const fq = buildFindQuery(text, nowMs, days, gmailIntakeConfig().mailbox);
   if (!fq.ok) return { ok: false, error: fq.error };
   if (!isSupabaseServiceConfigured) return { ok: false, error: "The database is not configured." };
   const admin = createSupabaseAdminClient();

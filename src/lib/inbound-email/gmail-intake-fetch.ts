@@ -28,7 +28,9 @@ import { getAttachmentBytes, getGmailAccessToken, getMessage, listMessageIds } f
 import {
   gmailHeader,
   gmailRecipients,
+  gmailIntakeVerdict,
   gmailToSource,
+  gmailWrittenRecipients,
   normalizeMessageId,
   reconcileMailbox,
   walkGmailForIntake,
@@ -36,7 +38,7 @@ import {
   type SourceEmail,
 } from "./inbound-reconcile-core";
 import { bytesToAttachment, completeInboundEmail, type EnrichResult } from "./resend-receiving-fetch";
-import type { NormalizedAttachment } from "./inbound-normalize-core";
+import type { NormalizedAttachment, NormalizedInboundEmail } from "./inbound-normalize-core";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users";
 const META_TIMEOUT_MS = 15_000;
@@ -73,7 +75,7 @@ async function getMessageMetadata(token: string, mailbox: string, id: string): P
 }
 
 export type GmailListResult =
-  | { ok: true; mailbox: string; items: SourceEmail[]; truncated: boolean; token: string }
+  | { ok: true; mailbox: string; items: SourceEmail[]; truncated: boolean; token: string; /** Fix 3.5: listed but sent to another of our addresses (not read). */ notIntake: number }
   | { ok: false; mailbox: string | null; configured: boolean; error: string };
 
 /**
@@ -89,12 +91,21 @@ export async function listGmailIntake(q: string, maxItems = 200): Promise<GmailL
     const listed = await listMessageIds(token, conf.mailbox, q);
     const ids = listed.ids.slice(0, maxItems);
     const items: SourceEmail[] = [];
+    let notIntake = 0;
     // Small parallel batches: fast, and well under Gmail's per-user rate.
     for (let i = 0; i < ids.length; i += 10) {
       const batch = await Promise.all(
         ids.slice(i, i + 10).map(async (id) => {
           try {
-            return gmailToSource(await getMessageMetadata(token, conf.mailbox, id));
+            const meta = await getMessageMetadata(token, conf.mailbox, id);
+            // Fix 3.5 (owner: "It should only target vendor_intake@ and none of
+            // my other @greenwaymarijuana.com addresses."): mail that reached
+            // the box through another of our addresses is never pulled in.
+            if (!gmailIntakeVerdict(meta.payload).ok) {
+              notIntake += 1;
+              return null;
+            }
+            return gmailToSource(meta);
           } catch {
             // An unreadable header read still counts: it is listed with no
             // identity beyond its id, so it is pulled in (and read in full) rather
@@ -105,11 +116,17 @@ export async function listGmailIntake(q: string, maxItems = 200): Promise<GmailL
       );
       for (const s of batch) if (s) items.push(s);
     }
-    return { ok: true, mailbox: conf.mailbox, items, truncated: listed.truncated || listed.ids.length > ids.length, token };
+    return { ok: true, mailbox: conf.mailbox, items, truncated: listed.truncated || listed.ids.length > ids.length, token, notIntake };
   } catch (err) {
     return { ok: false, mailbox: conf.mailbox, configured: true, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export type GmailFetchResult =
+  | { ok: true; result: EnrichResult }
+  | { ok: false; error: string; notIntake?: undefined }
+  /** Fix 3.5: the message was sent to another of our addresses: not read, never staged. */
+  | { ok: false; error: string; notIntake: true; email: NormalizedInboundEmail };
 
 /**
  * Read one Gmail message in full and hand it to the shared intake fetch.
@@ -119,13 +136,32 @@ export async function listGmailIntake(q: string, maxItems = 200): Promise<GmailL
 export async function fetchGmailInboundById(
   gmailId: string,
   token?: string | null,
-): Promise<{ ok: true; result: EnrichResult } | { ok: false; error: string }> {
+): Promise<GmailFetchResult> {
   const conf = gmailIntakeConfig();
   if (!conf.configured) return { ok: false, error: conf.problem };
   try {
     const tok = token || (await getGmailAccessToken(conf.cfg));
     const msg = await getMessage(tok, conf.mailbox, gmailId);
     const payload = msg.payload as GmailPartLike | undefined;
+    const verdict = gmailIntakeVerdict(payload);
+    if (!verdict.ok) {
+      const ms0 = Number(msg.internalDate);
+      return {
+        ok: false,
+        notIntake: true,
+        error: `not read: ${verdict.reason} (Receiving only reads mail sent to vendor_intake@)`,
+        email: {
+          provider: "gmail",
+          from: gmailHeader(payload, "from") ?? "",
+          to: gmailWrittenRecipients(payload),
+          subject: gmailHeader(payload, "subject") ?? "",
+          receivedAt: Number.isFinite(ms0) && ms0 > 0 ? new Date(ms0).toISOString() : new Date().toISOString(),
+          attachments: [],
+          messageId: normalizeMessageId(gmailHeader(payload, "message-id")),
+          sourceRef: gmailId,
+        },
+      };
+    }
     const walked = walkGmailForIntake(payload);
     const notes: string[] = [`read from Gmail ${conf.mailbox} (message ${gmailId})`];
     if (walked.skippedImages > 0) notes.push(`${walked.skippedImages} inline image(s) skipped`);
@@ -149,8 +185,8 @@ export async function fetchGmailInboundById(
     const result = await completeInboundEmail({
       provider: "gmail",
       from: gmailHeader(payload, "from") ?? "",
-      // The message sits IN the intake mailbox, so it was delivered to it even
-      // when its To: names an alias or a list: say so, so it routes to intake.
+      // Fix 3.5: intakeVerdict passed (To/Cc name vendor_intake@, or a Bcc
+      // delivered to it with none of our other addresses on To/Cc), so it routes to intake.
       to: [...new Set([...gmailRecipients(payload), conf.mailbox])],
       subject: gmailHeader(payload, "subject") ?? "",
       receivedAt: Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : new Date().toISOString(),

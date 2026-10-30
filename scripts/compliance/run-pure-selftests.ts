@@ -2624,7 +2624,7 @@ __runLiquidVolumeTests();
   assertRan("refund-cogs-core", __runRefundCogsCoreTests(), 30); // Fix Phase 2.8b: cost of returned units back to inventory
   assertRan("tips-core", __runTipsCoreTests(), 30); // Fix Phase 2.1c: tip tracker - per-employee stats, not recorded vs $0, corrections
   assertRan("intake-count-core", __runIntakeCountCoreTests(), 36); // Fix Phase 3.1 (G-16): dock count "18 of 20" - overage refused, 0 = refuse, reason, partial
-  assertRan("inbound-reconcile-core", __runInboundReconcileCoreTests(), 111); // Fix Phase 3.2a (G-17 / F-04-4): mailbox check - match by key / Message-ID / fingerprint, temporary vs permanent, backoff, alerts once, heartbeat
+  assertRan("inbound-reconcile-core", __runInboundReconcileCoreTests(), 126); // Fix Phase 3.2a (G-17 / F-04-4): mailbox check - match by key / Message-ID / fingerprint, temporary vs permanent, backoff, alerts once, heartbeat
   assertRan("pdf-growflow-invoice-core", __runGrowFlowInvoiceTests(), 11); // Fix Phase 3.3 (F-04-22): GrowFlow invoice -> unit prices by lot (split ids rejoined, qty x unit = total checked)
   assertRan("nc-pos-catalog-core", { passed: __runNcPosCatalogTests(), failed: 0 }, 40); // Phase 4 (G-29/G-30/G-32): Other Inventory on the register - nc- keys, menu cards, barcode merge (cannabis wins), COGS by line, moving-average cost, direction by reason, price/cost edit rules, sales summary, website in-store cards
   assertRan("invoice-adjustments-core", __runInvoiceAdjustmentsTests(), 25); // Fix Phase 3.4 (F-04-24): credits / discounts / negative lines read off the invoice; manual credits validated; invoice amount = lines + credits
