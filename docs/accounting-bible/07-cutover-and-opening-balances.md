@@ -101,7 +101,7 @@ left join public.gl_periods p on p.entity_id = e.id
 group by e.code order by e.code;
 ```
 
-**If any entity shows 0 periods** (the factory reset deletes them; 0209:556), the fix is the same seed 0175 used: a plain idempotent INSERT, because `gl_open_fiscal_year` refuses in the SQL editor (`auth.uid()` is null → `is_admin()` false; 0175:556-565 explains this). Michael runs this; I do not:
+**If any entity shows 0 periods** (the factory reset deletes them; 0209:556), the fix is the same seed 0175 used: a plain idempotent INSERT, because `gl_open_fiscal_year` refuses in the SQL editor (`auth.uid()` is null, so the guard fails; 0175:556-565 explains this. 0185 later re-gated it from `is_admin()` to `is_owner()`, which changes nothing here). Michael runs this; I do not:
 
 ```sql
 -- WRITES. Idempotent (ON CONFLICT DO NOTHING). Mirrors 0175:567-576 exactly.
