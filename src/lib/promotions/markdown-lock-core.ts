@@ -99,6 +99,20 @@ export function isMarkdownRule(rule: MarkdownRuleLike): boolean {
   return rule.config?.markdownOnly === true;
 }
 
+/**
+ * Fix Phase 4.5a (F-06-17): read the lock off a STORED promotion config (the
+ * promotions.config jsonb). Strictly `=== true`, the same rule as
+ * parseEngineConfig, so a stray truthy value never locks a product out of
+ * every daily deal. Used by the back office to show the badge and to keep
+ * the checkbox ticked when a markdown is edited.
+ */
+export function isMarkdownConfig(config: Record<string, unknown> | null | undefined): boolean {
+  return !!config && config.markdownOnly === true;
+}
+
+/** Fix Phase 4.5a: the one sentence every back-office screen uses for the lock. */
+export const MARKDOWN_LOCK_LABEL = "Clearance markdown \u2014 no other deal applies";
+
 export type MarkdownLock = {
   /** Lines that carry a markdown and are therefore out of all other deals. */
   lockedLineIds: ReadonlySet<string>;

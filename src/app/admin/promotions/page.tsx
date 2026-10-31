@@ -28,6 +28,7 @@ import {
 } from "@/lib/promotions/promotions-store";
 import { auditPublishedPromotions } from "@/lib/promotions/promo-guard";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
+import { isMarkdownConfig, MARKDOWN_LOCK_LABEL } from "@/lib/promotions/markdown-lock-core";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
 import type { PromotionRow, Weekday, DiscountType } from "@/lib/promotions/types";
@@ -602,6 +603,10 @@ export default async function PromotionsAdminPage({
                         {p.promo_key}
                       </span>
                     )}
+                    {/* Fix Phase 4.5a (F-06-17): the markdown lock, visible in the list. */}
+                    {isMarkdownConfig(p.config) ? (
+                      <span className="mt-1 block text-xs font-semibold text-amber-300">{MARKDOWN_LOCK_LABEL}</span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                     {p.weekday !== null

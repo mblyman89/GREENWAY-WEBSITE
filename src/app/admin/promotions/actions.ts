@@ -342,6 +342,12 @@ function buildConfig(formData: FormData, discountType: DiscountType): Record<str
     }
   }
 
+  // Fix Phase 4.5a (F-06-17): the clearance / vendor-day lock. Independent of
+  // the discount type, and written on EVERY save from the checkbox, so editing
+  // a markdown keeps it a markdown (before this, no screen could set it and a
+  // save would have dropped it). The engine reads it strictly (=== true).
+  if (formData.get("cfg_markdown_only") === "on") config.markdownOnly = true;
+
   return config;
 }
 
