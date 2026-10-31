@@ -1347,7 +1347,8 @@ describe("D-65 — the connections survive the reset", () => {
     // recall_event_weekly (0311; the recall log).
     // Fix Phase 2.7b (G-02): +1 KEEP little_safe_exchanges (0317).
     // Fix Phase 2.7c (G-11): +1 KEEP supply_runs (0318).
-    expect(plan.keep.length).toBe(184);
+    // Fix Phase 4.4b (G-38): +3 KEEP checklist_tasks, checklist_runs, checklist_ticks (0327).
+    expect(plan.keep.length).toBe(187);
     expect(plan.wipe.length).toBe(139);
   });
 

@@ -64,7 +64,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-35 | Count cutoff: per-lot capture at first count; sales during the count reconciled; counting in open hours | **D58, D61** | F-06-7 (**S1**) | SOP-06 §4.11 (outside selling hours) | **BUILT** (Phase 4.2, #1573) |
 | G-36 | Count-sheet integrity: one counter per count (claim), +1 per scan, recount blocks, stage checks | **D56, D60** | F-06-5, F-06-5b (**S1**), F-06-6, F-06-13 (**S1**), F-06-15 | SOP-06 §2, §4.10, §4.12 | **BUILT** (Phase 4.1, #1573) |
 | G-37 | Reasons editable before approval, validated, owner decisions enforced | (procedure need) | F-06-14 | SOP-06 §4.15, form 8.3 | **BUILT** (Phase 4.1, #1573) |
-| G-38 | Daily checklists in the app with the full task catalog | **D57** | F-06-12, F-00-9, F-06-17 | SOP-06 §4.23, forms 8.5–8.8 | **APPROVED** |
+| G-38 | Daily checklists in the app with the full task catalog | **D57** | F-06-12, F-00-9, F-06-17 | SOP-06 §4.23, forms 8.5–8.8 | **BUILT** |
 | G-39 | Counting housekeeping: one schedule, legacy sessions cancelled, Pacific times | **D58, D59** | F-06-8…F-06-11 | SOP-06 §4.20, §4.22 | **BUILT** |
 | G-40 | Intelligent cycle counts: vendor of the day with chunking, ABC, exceptions, expiring, Cultivera, overdue | **D58** | F-06-8 | SOP-06 §4.24 | **APPROVED** |
 | G-41 | Annual year-end full count (no cap, sections, one review) | **D58** | — | SOP-06 §4.24 | **APPROVED** |
@@ -637,12 +637,13 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Interim:** SOP-06 §4.15 (form 8.3 first; new audit if saved wrong).
 - **Built (Fix Phase 4.1, #1573, migration 0326):** **Change the reason** until approval (`AuditVarianceReview.tsx`), audited with before and after; `saveReasonAction` refuses a code not in `VARIANCE_REASONS`, and `inventory_audit_save_reason` refuses it too, only in review and only for the owner; posting refuses lines with an owner decision outstanding (NEEDS_OWNER_DECISION, `inventory-audit-store.ts`).
 
-## G-38 · Daily checklists in the app, for every employee, with the full task catalog (APPROVED, D57, SOP-06)
+## G-38 · Daily checklists in the app, for every employee, with the full task catalog (BUILT, D57, SOP-06)
 - **Today:** none (F-06-12, F-00-9).
 - **Owner requirement:** *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature."* (catalog SOP-06); *"the cycle counts and daily checklists are for all employees, admin, manger, sales."* (D51).
 - **Owner decision D57:** cleaning, organizing, stocking, marketing content (website banners, flyers, newsletters, blog posts, social media posts, in-store content, yard banners), product enrichment, heavy discounts before expiry, plus expert additions. Seed list: SOP-06 forms 8.5–8.8.
 - **Requirements:** opening / mid-shift / closing / weekly / monthly checklists seeded from forms 8.5–8.8, owner-editable, each task linking to its SOP section; initials and time per task; a live "counts waiting on Cycle Counts" line; manager sign-off; history kept five years (WAC 314-55-087); visible to `inventory.count` roles.
 - **Interim:** SOP-06 forms 8.5–8.7.
+- **Built (Fix Phase 4.4b, migration 0327):** **Inventory → Daily Checklists** (`/admin/inventory/checklists`, `inventory.count`): six lists (opening, during the shift, closing, weekly, monthly, year end) seeded from forms 8.5–8.8 (61 tasks); one sheet per Pacific day / week / month / year; initials, Pacific time and optional note per task, permanent; links to the SOP library anchor or the screen; live "counts waiting on Cycle Counts" line; manager sign-off (note required when tasks are left); owner edits, retires and adds tasks (audited); sheets never deleted (WAC 314-55-087). SOP-06 v1.4. Test `fix-p4-4b-daily-checklists`. The expiring-soon markdown link waits for the clearance screen (F-06-17).
 
 ## G-39 · Counting housekeeping (BUILT, D58, D59, SOP-06)
 - **Today:** F-06-8, F-06-9, F-06-10, F-06-11.

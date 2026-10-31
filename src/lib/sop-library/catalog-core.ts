@@ -133,7 +133,7 @@ export const SOP_CATALOG: readonly SopMeta[] = [
     shortTitle: "Counts, Audits & Daily Checklists",
     audience: ["Everyone (counts & checklists)", "Owner (audits)"],
     summary:
-      "The owner's inventory audits, the blind cycle counts every employee does, and the paper daily checklists.",
+      "The owner's inventory audits, the blind cycle counts every employee does, and the daily checklists.",
     keywords: ["cycle count", "audit", "blind count", "shrink", "variance", "checklist", "daily", "opening", "closing"],
   },
   {
