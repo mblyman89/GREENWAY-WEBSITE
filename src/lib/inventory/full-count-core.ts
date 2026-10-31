@@ -306,6 +306,31 @@ export function fullCountReminder(input: { todayPacific: string; hasCountForYear
   return `Year-end full count for ${year} is not planned yet. Plan it at Inventory Audits \u2192 Year-end full count.`;
 }
 
+/**
+ * Fix Phase 4.5d: the December reminder, checkable in any month. Runs the SAME
+ * fullCountReminder the cockpit runs, on December 1 of this calendar year (or
+ * today, when it is December), so the planner shows word for word what the
+ * cockpit will say then, or that it will stay quiet. The year checked is the
+ * December's year, the same year the cockpit passes to hasFullCountForYear,
+ * and the same year the planner proposes from July on (fullCountYear).
+ */
+export type ReminderPreview = {
+  /** The year of the December the cockpit checks. */
+  year: number;
+  /** True when today is in December (the reminder is live, not a preview). */
+  live: boolean;
+  /** The exact cockpit text, or null when it will not show. */
+  text: string | null;
+};
+
+export function fullCountReminderPreview(input: { todayPacific: string; hasCountForDecemberYear: boolean }): ReminderPreview {
+  const y = Number(input.todayPacific.slice(0, 4));
+  const year = Number.isInteger(y) ? y : new Date().getUTCFullYear();
+  const live = input.todayPacific.slice(5, 7) === "12";
+  const day = live ? input.todayPacific : `${year}-12-01`;
+  return { year, live, text: fullCountReminder({ todayPacific: day, hasCountForYear: input.hasCountForDecemberYear }) };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SELF-TEST
 // ═══════════════════════════════════════════════════════════════════════════
@@ -416,6 +441,13 @@ export function __runFullCountCoreTests(): number {
   ok(fullCountReminder({ todayPacific: "2026-12-05", hasCountForYear: false })!.includes("2026"), "December reminder");
   ok(fullCountReminder({ todayPacific: "2026-12-05", hasCountForYear: true }) === null, "no reminder once planned");
   ok(fullCountReminder({ todayPacific: "2026-11-05", hasCountForYear: false }) === null, "no reminder outside December");
+  // Fix Phase 4.5d: the preview, any month.
+  const pv = fullCountReminderPreview({ todayPacific: "2026-10-30", hasCountForDecemberYear: false });
+  ok(pv.year === 2026 && !pv.live && pv.text === fullCountReminder({ todayPacific: "2026-12-01", hasCountForYear: false }), "October previews December's exact text");
+  ok(fullCountReminderPreview({ todayPacific: "2026-10-30", hasCountForDecemberYear: true }).text === null, "planned: December stays quiet");
+  const lv = fullCountReminderPreview({ todayPacific: "2026-12-09", hasCountForDecemberYear: false });
+  ok(lv.live && lv.text !== null && lv.text.includes("2026"), "in December it is live");
+  ok(fullCountReminderPreview({ todayPacific: "2027-01-10", hasCountForDecemberYear: false }).year === 2027, "January previews the coming December");
 
   return n;
 }
