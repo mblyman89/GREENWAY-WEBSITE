@@ -1,5 +1,8 @@
 import { vendorOfDayReminder } from "@/lib/inventory/count-generators-core";
 import { vendorCountPlannedToday } from "@/lib/inventory/count-generators-store";
+import { fullCountReminder } from "@/lib/inventory/full-count-core";
+import { hasFullCountForYear } from "@/lib/inventory/full-count-store";
+import { pacificToday } from "@/lib/reports/timezone";
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/roles";
@@ -92,7 +95,11 @@ export default async function AdminDashboardPage({
   // Fix Phase 4.1 (D55): finished counts waiting for the owner. Fetched only
   // for the owner (inventory.audit), the same idiom as canSeeCompliance.
   const canReviewAudits = can(session.profile.role, "inventory.audit");
-  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday] = await Promise.all([
+  // Fix Phase 4.4d (G-41): in December only, remind the owner if this year's
+  // full count is not planned. Looked up only in December, owner only.
+  const todayPacific = pacificToday();
+  const wantsFullCountCheck = canReviewAudits && todayPacific.slice(5, 7) === "12";
+  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday, fullCountPlanned] = await Promise.all([
     getCockpitSnapshot(sp.basis),
     getSetupStatus(),
     canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
@@ -100,7 +107,12 @@ export default async function AdminDashboardPage({
     canReviewAudits ? listAuditSessions({ statuses: ["review"], limit: 20 }) : Promise.resolve(null),
     // Fix Phase 4.4c (G-40): the vendor-of-the-day reminder, owner only.
     canReviewAudits ? vendorCountPlannedToday().catch(() => null) : Promise.resolve(null),
+    wantsFullCountCheck
+      ? hasFullCountForYear(Number(todayPacific.slice(0, 4))).catch(() => null)
+      : Promise.resolve(null),
   ]);
+  const yearEndReminder =
+    fullCountPlanned === null ? null : fullCountReminder({ todayPacific, hasCountForYear: fullCountPlanned });
   const vendorReminder = vendorToday
     ? vendorOfDayReminder({ started: vendorToday.started, plannedToday: vendorToday.planned })
     : null;
@@ -137,6 +149,9 @@ export default async function AdminDashboardPage({
     ...workQueueAttentionFlags(intakeInputs),
     ...(vendorReminder
       ? [{ severity: "info" as const, text: vendorReminder, href: "/admin/inventory/audits/new?gen=vendor" }]
+      : []),
+    ...(yearEndReminder
+      ? [{ severity: "info" as const, text: yearEndReminder, href: "/admin/inventory/audits/full-count" }]
       : []),
   ];
 

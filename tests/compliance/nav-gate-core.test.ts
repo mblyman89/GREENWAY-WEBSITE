@@ -268,6 +268,10 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
       // IS in the menu. Giving "start a new audit" its own top-level link would
       // put the rarest action in the most prominent place.
       "/admin/inventory/audits/new",
+      // Fix Phase 4.4d (G-41): the year-end full count. Owner-only, once a year;
+      // reached from the "Year-end full count" button on the audit hub (in the
+      // menu), from Plan a count, and from the December cockpit reminder.
+      "/admin/inventory/audits/full-count",
       /*
        * books-58: the W-2 shown as one large sheet and nothing else, where
        * clicking a box opens the whole lesson in place.

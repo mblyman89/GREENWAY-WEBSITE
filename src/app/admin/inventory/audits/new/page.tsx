@@ -382,6 +382,14 @@ function PlanBody({
               Show every active lot
             </Button>
           </div>
+          {/* Fix Phase 4.4d (G-41): the year-end count of everything has its own planner. */}
+          <p className={`mt-3 ${P}`}>
+            For the once-a-year count of everything, use{" "}
+            <Link href="/admin/inventory/audits/full-count" className="underline">
+              Year-end full count
+            </Link>
+            : it splits every active lot into sections by vendor so several people can count at once.
+          </p>
         </section>
       ) : (
         <form action={createAuditAction} className="space-y-5">

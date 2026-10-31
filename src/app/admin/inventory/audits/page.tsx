@@ -133,9 +133,15 @@ export default async function AuditHubPage() {
         title="Inventory audits"
         subtitle="Count the shelf, explain every difference, and post the correction with the reasoning attached."
         action={
-          <Button href="/admin/inventory/audits/new" variant="primary">
-            Plan a new audit
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Fix Phase 4.4d (G-41, D58): the once-a-year count of everything, in sections. */}
+            <Button href="/admin/inventory/audits/full-count" variant="neutral">
+              Year-end full count
+            </Button>
+            <Button href="/admin/inventory/audits/new" variant="primary">
+              Plan a new audit
+            </Button>
+          </div>
         }
       />
 
