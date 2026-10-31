@@ -129,6 +129,17 @@ OD-03 lets an admin pay vendors. The payment journal (S-15) posts Dr 30000 / Cr 
 
 ---
 
+### Q-15: Should a posting template restrict which accounts it may touch?
+
+`gl_posting_templates` (0174) checks entity, kind, active/approved, window, ceiling and tolerance, but **not accounts**. A `TPL-TILL-CLOSE` template would, today, autopost a bank-kind journal to any leaf account under its ceiling.
+Options: (a) leave the account discipline in the pure builders plus tests (current state; cheaper); (b) add a `gl_posting_template_accounts` allow-list checked inside `gl_submit_journal` (stronger, closer to a NetSuite "memorized transaction" or SAP posting-key control).
+**My recommendation: (b), in S-01, as a small additive migration**, because a template is meant to be a standing approval of a *shape*, and a shape without accounts is only a size limit. Waits on the owner.
+
+### Q-16: Expected-cents source for template tolerance
+
+Tolerance only fires if the caller passes `p_expected_cents` (0174:548-556). For till close, should the expected figure be the POS-computed expected cash (so a short drawer over tolerance refuses autopost and goes to review), or the counted figure (always passes)?
+**Recommendation: the POS expected cash**, with the template tolerance set to the owner's over/short alert threshold. Waits on the owner.
+
 ## 5.3 How to record a new decision
 
 1. Add a row to §5.1 with the next OD-number, the date, the exact quote and where you stored it in the repo (migration header, core comment, or DEFECTS UPDATE block).
