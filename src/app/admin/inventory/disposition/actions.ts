@@ -18,7 +18,7 @@ import {
   updateVendorReturnTransport,
   cancelVendorReturn,
   getVendorReturn,
-  findReturnableOrderLines,
+  searchReturnableOrderLines,
   dispositionSummary,
   listDestructionEvents,
   listVendorReturns,
@@ -76,17 +76,17 @@ function posNum(v: string): number | null {
 // ── Customer returns (Task Q) ────────────────────────────────────────────────
 
 export type FindReturnableResult =
-  | { ok: true; lines: ReturnableOrderLine[] }
+  | { ok: true; lines: ReturnableOrderLine[]; emptyMessage: string | null }
   | { ok: false; error: string };
 
-/** Client-callable search for the return wizard (completed orders only). */
+/** Client-callable search for the return wizard (completed orders only): receipt #, fun name, order #, member, name, phone. */
 export async function findReturnableLinesAction(search: string): Promise<FindReturnableResult> {
   await requirePermission("inventory.manage");
   const q = (search ?? "").trim();
   if (q.length < 2) return { ok: false, error: "Type at least 2 characters." };
   try {
-    const lines = await findReturnableOrderLines(q, 8);
-    return { ok: true, lines };
+    const { lines, emptyMessage } = await searchReturnableOrderLines(q, 8);
+    return { ok: true, lines, emptyMessage };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Search failed." };
   }

@@ -17,7 +17,7 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import { dbErrorForStaff, isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
 import { ncIdFromKey } from "@/lib/noncannabis/pos-catalog-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 
@@ -99,7 +99,7 @@ export async function createNonCannabisReturn(
     if (isMissingDbFunctionError(error)) {
       return { ok: false, error: "Database update 0323 is not applied yet, so Other Inventory returns can't be saved. Ask the owner to run it (Nothing was changed)." };
     }
-    return { ok: false, error: `The return was not saved and nothing was changed: ${error.message}` };
+    return { ok: false, error: `The return was not saved and nothing was changed: ${dbErrorForStaff(error)}` };
   }
   const id = ((data ?? {}) as { return_id?: string }).return_id;
   if (!id) return { ok: false, error: "The return could not be saved (no id came back). Nothing was changed." };

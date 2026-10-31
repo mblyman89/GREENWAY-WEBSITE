@@ -3325,3 +3325,59 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0329_medical_endorsement_switch.rollback.sql`.
   It drops the two columns and the constraint and restores the staff write
   policy. It leaves the endorsement OFF on purpose (it never turns tax off).
+
+## R-RET — 0330 — Service-role grants (Supabase 2026-10-30 change)
+
+- [ ] `0330_service_role_grants.sql` (customer-returns repair, owner message 10, D97–D99). Apply it
+  **after 0329**. It changes grants only (no tables, no data), so it can be run straight away,
+  before the code that goes with it is deployed.
+  - **Why:** on 2026-10-30 Supabase stopped giving new objects in `public` automatic
+    grants to `anon`, `authenticated` and `service_role` (Supabase discussion #45329).
+    The server uses `service_role`. It skips RLS but **not** grants, so a missing grant
+    fails with `42501 permission denied`. Migration 0308 revokes EXECUTE on
+    `record_customer_return` (and the hold functions) from everyone and never granted it
+    back to `service_role`. Before the change the default privilege covered that gap;
+    after it, every return fails with *"permission denied for function record_customer_return"*.
+  - **Step 1:** grants EXECUTE to `service_role` (only) on each function that a
+    migration revoked: 0308 (customer return, hold consume/release), 0309 (vendor return
+    reserve/depart/release), 0323 (non-cannabis delta/invoice/return), 0326 (audit
+    counter check), 0129 (lot/variant delta), the books `gl_*` functions and the
+    announcer queue functions. A function that is not there is skipped with a NOTICE.
+  - **Step 2:** a catch-up sweep. Anything in `public` that `service_role` cannot reach
+    gets the server grant: functions (EXECUTE), tables (select, insert, update, delete),
+    views (select), sequences (usage, select). The append-only ledgers (`audit_logs`,
+    the ACH and OFAC records) only ever get `select, insert`, so their
+    no-update/no-delete protection is kept. **Nothing is granted to `anon` or
+    `authenticated`.**
+  - **Step 3:** default privileges for objects that later migrations create, so the
+    server can reach them (service_role only).
+  - **Step 4:** `notify pgrst, 'reload schema'`.
+
+  Safe to re-run (every grant is idempotent; the sweep only touches what is missing).
+
+  **Check:**
+
+  ```sql
+  select has_function_privilege('service_role',
+    'public.record_customer_return(uuid,numeric,text,uuid,boolean,jsonb,jsonb)',
+    'EXECUTE');                                           -- true
+  select has_function_privilege('anon',
+    'public.record_customer_return(uuid,numeric,text,uuid,boolean,jsonb,jsonb)',
+    'EXECUTE');                                           -- false (unchanged)
+  select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype
+     and not has_function_privilege('service_role', p.oid, 'EXECUTE')
+     and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e');
+                                                          -- 0
+  ```
+
+  The NOTICE lines in the SQL editor's output list how many objects the sweep fixed.
+
+  **Then:** retry the customer return on the register (Return an item). In the back
+  office, Inventory → Returns & Destruction → Customer return, search by the
+  **8-character receipt number** on the receipt (or the fun name, the GWY- order number,
+  or the member's name or phone).
+
+  **Rollback (only if needed):** `supabase/rollbacks/0330_service_role_grants.rollback.sql`.
+  It removes only the default privileges. It deliberately keeps the object grants,
+  because removing them would break returns again.

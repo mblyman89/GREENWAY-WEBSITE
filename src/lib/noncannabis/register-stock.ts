@@ -14,7 +14,7 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { isMissingDbFunctionError, isUniqueViolation } from "@/lib/db/rpc-fallback-core";
+import { dbErrorForStaff, isMissingDbFunctionError, isUniqueViolation } from "@/lib/db/rpc-fallback-core";
 import { splitNcLines, summarizeNcSales, type NcCatalogRow, type NcItemSales, type NcSoldLine } from "@/lib/noncannabis/pos-catalog-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -61,7 +61,7 @@ export async function applyNcDelta(
   if (isUniqueViolation(error)) {
     return { ok: true, newQty: 0, applied: false, duplicate: true, usedFallback: false };
   }
-  if (!isMissingDbFunctionError(error)) return { ok: false, error: error.message };
+  if (!isMissingDbFunctionError(error)) return { ok: false, error: dbErrorForStaff(error) };
 
   // ── Before 0323: the old two-step write (ledger, then quantity). ──────────
   const { data: row } = await admin.from("noncannabis_products").select("qty_on_hand").eq("id", p.productId).maybeSingle();
