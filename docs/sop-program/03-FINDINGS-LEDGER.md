@@ -967,6 +967,18 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Effect:** the owner requires every destruction on camera (D64), and WAC 314-55-083(3)(a) requires cameras where waste is destroyed. Without a camera and time on the record, the footage (kept 45 days) is hard to find for an inspector.
 - **SOP impact:** SOP-15 v1.1 §4.17–§4.18, form 8.3. **G-43**.
 
+### F-15-22 · CONFIRMED · BUG · S1 — Every customer return is refused: "permission denied for function record_customer_return"
+- **Status: FIXED (R-RET, G-69; owner message 10, D97). Migration 0330 (manual) grants EXECUTE to `service_role` only.**
+- **Pin:** `supabase/migrations/0308_customer_return_hold.sql` revokes EXECUTE on `record_customer_return`, `consume_lot_hold` and `release_lot_hold` from public, anon and authenticated and never grants it to `service_role` (0309, 0323 and 0326 follow the same pattern). Supabase stopped giving new objects in `public` automatic grants on 2026-10-30 (discussion #45329). `service_role` bypasses RLS but not grants, so `createCustomerReturn` (`disposition.ts`) gets 42501 and stops.
+- **Effect:** no return could be saved on the register, the Returns desk or the back office from 2026-10-30. The register and the hold/vendor-return/non-cannabis paths showed the raw database text with no next step. Reproduced on PostgreSQL 15 with the post-change defaults (`scripts/recon/service-role-grants-0330-pg-check.sql`).
+- **SOP impact:** SOP-15 v1.14 §5.1. **G-69**.
+
+### F-15-23 · CONFIRMED · BUG · S2 — The back-office return search cannot find a register sale by anything printed on the receipt
+- **Status: FIXED (R-RET, G-70; owner message 10, D98).**
+- **Pin:** `findReturnableOrderLines` (`disposition.ts`) searched only `order_number`, `customer_first_name`, `customer_last_name` and `customer_phone`. A register sale is saved as "Walk-in" with a GWY- number the receipt does not print; the receipt prints the 8-character receipt number (the end of the sale's client id) and the fun name (`orders.display_name`); a member's name lives on `customers`.
+- **Effect:** *"No completed sales matched. Only completed orders can be returned."* for a sale rung minutes earlier, with no hint of what to type.
+- **SOP impact:** SOP-15 v1.14 §4.6 step 1, §5.1. **G-70**.
+
 ## SOP-08 · New Hire Onboarding, System Access & Offboarding (verified at `main@bad718b4`)
 
 State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-55-087(1)(e). Owner basis: books-87 (users are separate from employees, quoted verbatim in migration 0210 L4–12) and D69.
@@ -1042,5 +1054,5 @@ State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
 | SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | **Fix Phase 4b:** F-05b-10, 11, 12, 13 FIXED (G-32 items 7–10). **Fix Phase 4:** F-05b-1, 2, 3, 4, 5, 6, 7, 8, 14, 15 FIXED (G-29, G-30, G-30A, G-32 items 1–6). 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
 | SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
-| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4 | 22 | 0 |
+| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4. **R-RET:** +F-15-22 (S1, FIXED), +F-15-23 (S2, FIXED) → 24 | 24 | 0 |
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |

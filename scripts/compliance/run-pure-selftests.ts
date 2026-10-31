@@ -567,6 +567,7 @@ import { __runNotifyOutcomeCoreTests } from "../../src/lib/orders/notify-outcome
 import { __runEmailReadinessTests } from "../../src/lib/orders/email-readiness-core";
 import { __runStatusCasCoreTests } from "../../src/lib/orders/status-cas-core";
 import { __runRpcFallbackCoreTests } from "../../src/lib/db/rpc-fallback-core";
+import { __runReturnSearchCoreTests } from "../../src/lib/inventory/return-search-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
 import { __runRegisterPolishCoreTests } from "../../src/lib/pos/register-polish-core";
 import { __runHeldStockCoreTests } from "../../src/lib/pos/held-stock-core";
@@ -2661,6 +2662,7 @@ __runLiquidVolumeTests();
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
   assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt
+  assertRan("return-search-core", __runReturnSearchCoreTests(), 37); // R-RET (owner message 10): back-office return search finds register sales by printed receipt #, fun name, GWY- order #, loyalty member name/phone; empty result says what to type
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -3,7 +3,8 @@
 /**
  * CustomerReturnWizard (Task Q) — guided, compliant customer-return intake.
  *
- * Flow: search a COMPLETED sale (order # / customer name / phone) → pick the
+ * Flow: search a COMPLETED sale (receipt # / fun receipt name / order # /
+ * loyalty member / customer name / phone) → pick the
  * exact sale line → attest to WAC 314-55-079(12) conditions (original
  * packaging + legible lot ID) → choose restock vs destroy → submit.
  *
@@ -39,13 +40,14 @@ export function CustomerReturnWizard() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<ReturnableOrderLine[] | null>(null);
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReturnableOrderLine | null>(null);
   const [pending, startTransition] = useTransition();
 
   function runSearch() {
     const q = search.trim();
     if (q.length < 2) {
-      toast({ tone: "error", message: "Type at least 2 characters (order #, name, or phone)." });
+      toast({ tone: "error", message: "Type at least 2 characters (receipt #, fun name, order #, name, or phone)." });
       return;
     }
     setSelected(null);
@@ -56,8 +58,9 @@ export function CustomerReturnWizard() {
         return;
       }
       setResults(res.lines);
+      setEmptyMessage(res.lines.length === 0 ? (res.emptyMessage ?? "No completed sale matched.") : null);
       if (res.lines.length === 0) {
-        toast({ tone: "error", message: "No completed sales matched. Only completed orders can be returned." });
+        toast({ tone: "error", message: res.emptyMessage ?? "No completed sale matched." });
       }
     });
   }
@@ -83,16 +86,22 @@ export function CustomerReturnWizard() {
                 runSearch();
               }
             }}
-            placeholder="Order #, customer name, or phone…"
+            placeholder="Receipt # (8 characters), fun name, order #, member name, or phone…"
           />
           <Button type="button" onClick={runSearch} disabled={pending}>
             {pending ? "Searching…" : "Search"}
           </Button>
         </div>
         <p className="mt-1.5 text-xs text-white/40">
-          Only completed sales are returnable. The receipt&apos;s order number is the fastest lookup.
+          Only completed sales are returnable. The fastest lookup is the 8-character receipt number printed on the receipt (or scan its QR code).
         </p>
       </div>
+
+      {results && results.length === 0 && emptyMessage && (
+        <p role="status" className="rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-100/90">
+          {emptyMessage}
+        </p>
+      )}
 
       {/* Step 2 — pick the line */}
       {results && results.length > 0 && (

@@ -23,7 +23,7 @@ import {
   createNonCannabisProduct,
   mintSkusForNewItems,
 } from "@/lib/noncannabis/store";
-import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import { dbErrorForStaff, isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
 import type { PaymentMethod } from "@/lib/payments/vendor-payables-store";
 
 /** A saved invoice header row (DB shape). */
@@ -240,7 +240,7 @@ async function createInvoiceViaRpc(
   });
   if (error) {
     if (isMissingDbFunctionError(error)) return "rpc-missing";
-    const msg = error.message ?? "save failed";
+    const msg = dbErrorForStaff(error, "save failed");
     if (/duplicate key|unique/i.test(msg) && /invoice/i.test(msg)) {
       return { ok: false, error: `Invoice #${h.invoiceNumber} from ${h.vendorName} is already entered. Each paper invoice is entered once. Nothing was saved.` };
     }

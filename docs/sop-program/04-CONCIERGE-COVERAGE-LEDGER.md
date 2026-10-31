@@ -697,3 +697,5 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 ### SOP-06 v1.7 (Fix Phase 4.5)
 
 F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and long-sitting stock is marked down on **Promotions → Clearance markdowns** (one draft markdown, no other deal applies, publish to go live; expired edibles and never-discount products are refused with the reason); counts can be sized in minutes at the store's pace; the full-count page previews the December reminder in any month.
+
+**R-RET update to the SOP-15 row (G-69, G-70 BUILT; owner message 10, D97–D99).** `concierge-kb.ts` inventory topic gains **Customer return → finding the sale and permission errors**: search by the 8-character receipt number, fun name, GWY- order number or member; a "permission denied" means migration 0330 is not applied (nothing saved; owner runs it). Grounded on SOP-15 v1.14 §4.6 step 1 and §5.1.

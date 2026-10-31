@@ -95,6 +95,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-66 | **Reconcile timing**: either manager, before the seal; seal warns and audits unreconciled drawers; EOD "awaiting manager reconcile" | D87 (Q-E-8) | — | SOP-01 §4.30, SOP-03 §4.7, §4.11 | **BUILT** (Fix Phase 6, #1567) |
 | G-67 | **Return policy: anyone may return by default, "Loyalty members only" toggle, return window setting (default 7 days, 1–60)**; receipt + original packaging stay mandatory | D93, D94, D96 (owner message 9) | — | SOP-15 §4.3, SOP-01 §4.23 | **BUILT** (Fix Phase 6F, #1568) |
 | G-68 | **Returnable product types setting**: unticked categories refused at the register and the returns desk with the reason on screen | D95 (owner message 9) | — | SOP-15 §4.3 | **BUILT** (Fix Phase 6F, #1568) |
+| G-69 | **Server grants after the Supabase 2026-10-30 change**: `service_role` EXECUTE on every revoked function (customer return first), catch-up sweep, default privileges, plain permission-denied message, guard test | D97, D99 (owner message 10) | F-15-22 | SOP-15 §5.1 | **BUILT** (R-RET, migration 0330, not pushed yet) |
+| G-70 | **Back-office return search by what is on the receipt**: 8-character receipt number, fun name, GWY- order number, member name or phone; a no-match message that says what was searched | D98 (owner message 10) | F-15-23 | SOP-15 §4.6 | **BUILT** (R-RET, not pushed yet) |
 
 ---
 
@@ -487,6 +489,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. **(SOP-15 extension)** **Cancel** requires a written reason and the owner (or a permission the owner holds); a customer-return destruction cancel never touches the lot status (F-15-9).
   7. **(SOP-15 extension)** After a partial destruction the lot returns to its status before scheduling, not left in Quarantine (F-15-11).
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C); SOP-15 §4.19–§4.22, form 8.5.
+
+### R-RET (G-69, G-70; owner message 10, D97–D99): customer returns working again
+
+- **Owner:** *"the front register says, "the return was not saved and nothing was changed: permission denied for function record_customer_return.""*; *"the back office keeps saying "⚠ No completed sales matched. Only completed orders can be returned.""*
+- **Status: BUILT (R-RET, branch only until the owner says it is safe to push).** Migration `0330_service_role_grants.sql` (manual; rollback; PG check `scripts/recon/service-role-grants-0330-pg-check.sql` wired into `verify-migrations-execute.ts`). `rpc-fallback-core.ts` `isPermissionDeniedError` / `explainPermissionDenied` / `dbErrorForStaff` (30 self-tests) on the return, hold, vendor-return and non-cannabis paths. New `src/lib/inventory/return-search-core.ts` (pure, 37 self-tests) + `searchReturnableOrderLines` (receipt number via `pos_sale_events`, exact order number, fun name, names/phone, member via `customers`). Wizard placeholder, hint and an on-screen no-match message. Test `tests/compliance/r-ret-service-role-grants.test.ts` (also guards later migrations).
 
 ### Fix Phase 6F (G-67, G-68; owner message 9, D91–D96): return policy settings and tip accountability
 
@@ -881,3 +888,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ## G-68 · Returnable product types (BUILT, Fix Phase 6F, D95, SOP-15) — S2
 - **Owner basis:** owner message 9: *"as well as the types of products we allow to be returned."*
 - **Built:** `excludedCategories` (category slugs from the category registry); `lineNotReturnableReason` names the type; lookup lines carry the reason and are not selectable; `processCounterReturn` refuses server-side. Lines with no category on record are not blocked.
+
+## G-69 · Server grants after the Supabase 2026-10-30 change (BUILT, R-RET, D97/D99, SOP-15) — S1
+- **Owner basis:** owner message 10: *"the return was not saved and nothing was changed: permission denied for function record_customer_return."*
+- **Built:** migration 0330 grants `service_role` (only) EXECUTE on each revoked function, sweeps `public` for anything else the server cannot reach (append-only ledgers get select + insert only), sets default privileges for later objects, reloads PostgREST. Permission errors now name the object and say "run 0330". The guard test fails if a later migration revokes a function without granting `service_role` or creates a table without a server grant.
+
+## G-70 · Back-office return search by what is on the receipt (BUILT, R-RET, D98, SOP-15) — S2
+- **Owner basis:** owner message 10: *"the back office keeps saying "⚠ No completed sales matched. Only completed orders can be returned.""*
+- **Built:** `planReturnSearch` reads the box as a receipt number, an order number, a member name and a phone; `searchReturnableOrderLines` looks each one up and keeps completed sales only; the no-match message lists what was searched and what to type, and a receipt found but not completed says so.
+
