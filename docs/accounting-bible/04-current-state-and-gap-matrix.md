@@ -80,7 +80,7 @@ The **"line"** column is the census-data line of the row, so you can read the ev
 | 36 | periodic_and_other.loan_activity | :2269 | PART | M | PART | M | M | M | related-party-loan-core unreachable (DC-07); D-44/D-59/D-60. S-26. |
 | 37 | periodic_and_other.crypto_activity | :2332 | M | M | M | M | M | ? | D-45: deliberately deferred. Part 10. |
 | 38 | periodic_and_other.period_close | :2374 | M | M | M | M | M | n/a | `gl_close_period` exists (0172:891), no caller. period-close-core unreachable. S-11. |
-| 39 | periodic_and_other.reversal | :2412 | M | M | M | M | M | n/a | **Stale.** approval-service.ts:58 documents `gl_reverse_journal`; verify whether a UI calls it (`grep -rn reverseJournal src/app`). U-12. |
+| 39 | periodic_and_other.reversal | :2412 | M | M | M | M | M | n/a | **Confirmed MISSING.** `grep -rn "reverseJournal\|gl_reverse_journal" src` finds only the comment at approval-service.ts:58. No posted entry can be undone from the app. S-10. |
 | 40 | periodic_and_other.opening_balance | :2453 | PART | M | ? | M | M | n/a | **D-47. URGENT.** Part 07. |
 
 **Tally (my reading):**
