@@ -124,7 +124,9 @@ describe("Slice A-06 (OD-40): the owner's switch hides register test mode", () =
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/app/(site)/pos/RegisterShell.tsx", "utf8");
     expect(src).toMatch(/\{medicalTestModeAvailable \? \(\s*<button[\s\S]{0,400}onToggleMedicalTestMode\(\)/);
-    expect(src).toMatch(/medicalTestModeMustTurnOff\(menuBundle, medicalTestMode\)\) setMedicalTestMode\(false\)/);
+    // On every fresh menu download, and on boot from the cached menu.
+    expect(src).toMatch(/setMenuBundle\(bundle\);[\s\S]{0,500}if \(medicalTestModeMustTurnOff\(bundle, true\)\) setMedicalTestMode\(false\)/);
+    expect(src).toMatch(/setMenuBundle\(cached\);[\s\S]{0,500}if \(medicalTestModeMustTurnOff\(cached, true\)\) setMedicalTestMode\(false\)/);
   });
   it("the menu route ships the owner switch, fail closed", async () => {
     const { readFileSync } = await import("node:fs");
