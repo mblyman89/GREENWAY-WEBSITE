@@ -524,6 +524,10 @@ G-33, G-34, G-35, G-36 and G-37 are built (migration 0326). The concierge's `inv
 
 G-39 is built. The concierge `inventory` topic gained one fact: one count schedule (A 30 / B 60 / C 90) shared by Plan a count, the Issues reminder and the intelligence panel; the overdue row opens **Plan a count** for the owner and tells everyone else to tell the owner; older cycle counts are read only (open and export, never change). Still interim: daily checklists (G-38), generators (G-40), the year-end full count (G-41).
 
+#### SOP-06 v1.4 (Fix Phase 4.4b, G-38)
+
+G-38 is built (migration 0327). The concierge `inventory` topic gained one fact: **Inventory → Daily Checklists** has six lists seeded from forms 8.5–8.8; everyone who counts initials the daily lists, a manager, admin or the owner initials weekly / monthly / year end and signs a sheet off (a note is required when tasks are left); the owner edits the tasks; sheets are kept and never deleted; before 0327 use the paper forms. Still interim: generators (G-40), the year-end full count (G-41).
+
 ### SOP-15 Returns to Vendor, Customer-Return Disposition & Product Destruction (`docs/sop/SOP-15-returns-vendor-destruction.md`, verified at `b8101abb`; v1.1 in slice SOP-08 at `bad718b4`)
 
 The concierge code is **unchanged** (record-only). Today it has two generic lines: `concierge-kb.ts` L66 (menu list) and L176 (*"Returns & Destruction handles vendor returns and compliant destruction with a quarantine hold, plus sample-pricing rules."*), and the help centre answer at `help-content.ts` L465–467 (*"Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires."*). Neither covers a single step, guard or interim rule (F-15-C). The L176 phrase "plus sample-pricing rules" implies protection that does not exist (F-15-16) and must be reworded at integration.

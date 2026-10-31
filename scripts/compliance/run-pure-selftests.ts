@@ -531,6 +531,8 @@ import { __runInventoryAuditCoreTests } from "../../src/lib/inventory/inventory-
 import { __runAuditHubAuthoritiesTests } from "../../src/lib/inventory/audit-hub-authorities";
 import { __runAuditHubGuidanceCoreTests } from "../../src/lib/inventory/audit-hub-guidance-core";
 import { __runAuditCountFlowTests } from "../../src/lib/inventory/audit-count-flow-core";
+// Fix Phase 4.4b (G-38): daily checklists -- periods, who initials / signs off / edits, initials, sign-off note, SOP links, live Cycle Counts line.
+import { __runDailyChecklistCoreTests } from "../../src/lib/inventory/daily-checklist-core";
 // Slice books-11: THE STORE LAYER. The pure half of "post an approved count
 // to the shelf and to the books" -- the gate that decides whether a session may
 // be posted at all, the plan of shelf moves and journal lines it would produce,
@@ -2642,6 +2644,7 @@ __runLiquidVolumeTests();
   assertRan("invoice-adjustments-core", __runInvoiceAdjustmentsTests(), 25); // Fix Phase 3.4 (F-04-24): credits / discounts / negative lines read off the invoice; manual credits validated; invoice amount = lines + credits
   assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
   assertRan("audit-count-flow-core", { passed: __runAuditCountFlowTests(), failed: 0 }, 29); // Fix Phase 4.1-4.3 (G-33/G-34/G-36): one counter, +1 per scan, ask on re-scan, third count, I'm done, owner stage buttons, movement note; 4.4a (G-39): Pacific default name + hub date
+  assertRan("daily-checklist-core", { passed: __runDailyChecklistCoreTests(), failed: 0 }, 32); // Fix Phase 4.4b (G-38, D51, D57): sheet per day / week / month / year, staff initial daily lists, manager weekly + sign-off, owner edits, SOP links, live counts line
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
   assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt

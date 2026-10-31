@@ -87,6 +87,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.count", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard — books-23: the counting FLOOR, staff included, so inventory.count not inventory.manage
+  { label: "Daily Checklists", href: "/admin/inventory/checklists", permission: "inventory.count", icon: "\u2705", group: "Inventory" }, // ✅ Fix Phase 4.4b (G-38, D51): opening / during / closing / weekly / monthly sheets, every floor role like Cycle Counts
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" }, // ♻️ disposition
   { label: "Recalls", href: "/admin/inventory/recalls", permission: "inventory.manage", icon: "\ud83d\udea8", group: "Inventory" }, // Fix Phase 1.6c (G-25): recall and market-withdrawal log
 

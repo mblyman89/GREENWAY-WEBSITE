@@ -195,7 +195,10 @@ describe("guard: every table the rehearsal code WRITES is wiped, or deliberately
     // (0311) are KEEP (the recall log), written by recall-event-store.
     // Fix Phase 1.7a (G-43 req 7): destruction_evidence (0312) is KEEP (the
     // five-year destruction record), written by destruction-evidence-store.
-    "audit_logs", "brands", "destruction_evidence", "disposition_settings", "employee_product_loans", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
+    // Fix Phase 4.4b (G-38): checklist_tasks / checklist_runs / checklist_ticks
+    // (0327) are KEEP (the owner's task catalog and the five-year daily
+    // checklist record), written by daily-checklist-store.
+    "audit_logs", "brands", "checklist_runs", "checklist_tasks", "checklist_ticks", "destruction_evidence", "disposition_settings", "employee_product_loans", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
     "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_cart_adjustments", "pos_devices", "product_classification_overrides", "recall_event_lots", "recall_event_weekly", "recall_events", "site_settings",
     "testing_labs", "vendor_aliases", "vendors", "website_category_types",
   ];

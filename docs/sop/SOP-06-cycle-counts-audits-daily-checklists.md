@@ -2,20 +2,20 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (Fix Phase 4.1–4.3 built: G-33, G-34, G-35, G-36, G-37; needs migration 0326. Fix Phase 4.4a built: G-39 housekeeping, no migration) |
+| **Version** | 1.3 (Fix Phase 4.1–4.3 built: G-33, G-34, G-35, G-36, G-37; needs migration 0326. Fix Phase 4.4a built: G-39 housekeeping, no migration. Fix Phase 4.4b built: G-38 daily checklists; needs migration 0327) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory Audits** (planning a count, approving its scope and pushing it to the floor, reviewing, approving, posting, the work paper): **the owner only** (D50). **Cycle Counts** (the blind count) and the **daily checklists** (§8): **every employee**: admin, manager and budtender ("sales") (D51). |
-| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. **v1.2** was written against branch `fix/p4-1-count-integrity` (Fix Phase 4.1–4.3) and migration `0326_audit_count_integrity.sql`; **v1.3** against branch `fix/p4-4a-count-housekeeping` (G-39). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
+| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. **v1.2** was written against branch `fix/p4-1-count-integrity` (Fix Phase 4.1–4.3) and migration `0326_audit_count_integrity.sql`; **v1.3** against branch `fix/p4-4a-count-housekeeping` (G-39); **v1.4** against branch `fix/p4-4b-daily-checklists` (G-38) and migration `0327_daily_checklists.sql`. Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
 | **Program records** | Findings `F-06-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-33`…`G-41` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D41 (living SOPs), D42 (concierge covers every feature), D50–D52 (this SOP), **D54–D61 (owner answers to Q-06-1…Q-06-8)** in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner source letter `docs/MICHAEL-books-23.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-06) |
 
 > **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap named here (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
-> **How to use this document.** Part 1 (§4.1–§4.3) explains the two screens and the life of one count. Part 2 (§4.4–§4.7) is the **owner's set-up**: planning the count and pushing it to the Cycle Counts page. Part 3 (§4.8–§4.12) is the **blind count** that every employee does. Part 4 (§4.13–§4.18) is the **owner's review, approval, posting and journal approval**. Part 5 (§4.19–§4.22) covers the work paper, the old cycle-count sessions, the "Stock needing recount" list and the Issues reminder. Part 6 (§4.23) is the **daily checklists**. Section 5 lists every message. Section 8 holds the paper forms. Section 9 is two one-page cards (owner and counter). Words in **bold** are the exact labels you will see on the screen.
+> **How to use this document.** Part 1 (§4.1–§4.3) explains the two screens and the life of one count. Part 2 (§4.4–§4.7) is the **owner's set-up**: planning the count and pushing it to the Cycle Counts page. Part 3 (§4.8–§4.12) is the **blind count** that every employee does. Part 4 (§4.13–§4.18) is the **owner's review, approval, posting and journal approval**. Part 5 (§4.19–§4.22) covers the work paper, the old cycle-count sessions, the "Stock needing recount" list and the Issues reminder. Part 6 (§4.23) is the **daily checklists**. Section 5 lists every message. Section 8 holds the paper forms (the daily ones, 8.5–8.8, are the fallback since v1.4; the app list is the record). Section 9 is two one-page cards (owner and counter). Words in **bold** are the exact labels you will see on the screen.
 
 > **The one thing to know before anything else (v1.2).** **Migration 0326 must be applied first** (`supabase/migrations/0326_audit_count_integrity.sql`, in the Supabase SQL editor, after 0325). Until it is, every counting button answers *"Apply migration 0326"* and nothing is written. Once it is applied, the whole life of a count works on screen: **Create this count** (being planned) → **Release to Cycle Counts** (owner, signed) → an employee presses **Start counting** (one counter, D56) → each scan adds one package (D60) → **I'm done** (locks the count, sends it to the owner's review and puts a notice on the /admin cockpit, D55) → **Approve this result** → **Post**. The books quantity for each lot is captured **when that lot is first counted** (D58, D61), so counting during open hours is safe, and a sale between creating the audit and counting is no longer subtracted twice (F-06-7 FIXED). Two counts that disagree now **block** approval and posting until a third count settles them (F-06-13 FIXED). The owner can **Send back**, **Reassign** and **Cancel** (with a reason) on the audit page.
 
-> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). **Built in v1.2 (Fix Phase 4.1–4.3):** D54, D55, D56, D58 (per-lot capture), D60, D61, and the D59 cleanup of held audits and open legacy sessions (done by migration 0326). **Still to build:** the daily checklists in the app (G-38), the intelligent generators and vendor of the day (G-40), the year-end full count (G-41). **Built in v1.3 (Fix Phase 4.4a, G-39):** one count schedule, the Issues reminder opens **Plan a count** for the owner, old cycle counts truly read-only, Pacific default name. Until each is built, the interim rules for it in this SOP stay in force.
+> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). **Built in v1.2 (Fix Phase 4.1–4.3):** D54, D55, D56, D58 (per-lot capture), D60, D61, and the D59 cleanup of held audits and open legacy sessions (done by migration 0326). **Still to build:** the intelligent generators and vendor of the day (G-40), the year-end full count (G-41). **Built in v1.3 (Fix Phase 4.4a, G-39):** one count schedule, the Issues reminder opens **Plan a count** for the owner, old cycle counts truly read-only, Pacific default name. **Built in v1.4 (Fix Phase 4.4b, G-38):** the daily checklists in the app at **Inventory → Daily Checklists** (needs migration 0327; §4.23). Until each is built, the interim rules for it in this SOP stay in force.
 
 ---
 
@@ -59,7 +59,7 @@
    - 4.22 The "overdue for a cycle count" Issues row
 
    **Part 6: Daily checklists (every employee)**
-   - 4.23 The daily checklists (paper, until built)
+   - 4.23 The daily checklists (Inventory → Daily Checklists)
    - 4.24 The counting programme: one full count a year, a small count every day, intelligent counts
 
 5. Messages: "If you see this message"
@@ -390,9 +390,23 @@ Inventory → Issues may show *"{n} lots are overdue for a cycle count"*, meanin
 
 ### Part 6: Daily checklists (every employee)
 
-### 4.23 The daily checklists (paper, until built)
+### 4.23 The daily checklists (Inventory → Daily Checklists)
 
-The owner asked for *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature"* and said they are *"for all employees, admin, manger, sales"* (D51). **The app has no daily checklist feature** (F-06-12, re-verifying F-00-9). Until gap G-38 (**APPROVED**, D57) is built, the checklists are **paper**: form 8.5 (opening), form 8.6 (during the shift), form 8.7 (closing) and form 8.8 (weekly and monthly), one set per day, on the clipboard by the back-office door, initialled task by task and filed by month. Keep them five years with the store's other records (WAC 314-55-087).
+The owner asked for *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature"* and said they are *"for all employees, admin, manger, sales"* (D51). Since v1.4 (Fix Phase 4.4b, G-38; F-06-12 and F-00-9 FIXED) they are in the app: **Inventory → Daily Checklists** (`/admin/inventory/checklists`, `src/app/admin/inventory/checklists/page.tsx`). Every employee who can count (`inventory.count`: admin, manager, budtender and the owner) sees it.
+
+**Migration 0327 must be applied first** (`supabase/migrations/0327_daily_checklists.sql`, after 0326). Until it is, the page shows *"CHECKLIST_MIGRATION_PENDING: apply migration 0327_daily_checklists.sql in the Supabase SQL editor (after 0326). Until then use paper forms 8.5-8.8 (SOP-06 §4.23). Nothing was saved."* and the paper forms in §8 stay the record.
+
+**The six lists.** Tabs across the top: **Opening**, **During the shift**, **Closing**, **Weekly**, **Monthly** and **Year end**. Each list is one sheet per period: one per day for the three daily lists, one per week (starting Monday) for weekly, one per month and one per year (`checklistPeriodKey`, `daily-checklist-core.ts`). The period is always today in the store's time zone, worked out by the server, never by the browser. The sheet header says which paper form it replaces (*"Replaces paper form 8.5 (SOP-06 §8). N of M done."*). Migration 0327 seeds the lists from forms 8.5–8.8 word for word: 61 tasks (opening 19, during the shift 15, closing 11, weekly 10, monthly 5, year end 1).
+
+**Initial a task as you do it.** Each task shows its wording and, under it, links to where the procedure lives: an SOP section opens the SOP library at that heading (for example *SOP-05a §4.16*); a bare *§4.x* opens this SOP; a screen name (for example *Marketing & Advertising*, *Blog & Newsletter*, *Product Enrichment*) opens that screen; an SOP that is not written yet shows *"(SOP not written yet)"*. Your initials are filled in from your name; change them if needed (1 to 4 letters), add a note if useful, and press **Initial**. The row is struck through and shows your initials and the Pacific time. A task cannot be initialled twice on the same sheet (*"CHECKLIST_ALREADY_DONE: that task is already initialled on this sheet. Nothing was saved."*), and an initial cannot be changed or removed. Anyone with Cycle Counts initials the three daily lists; **weekly, monthly and year end are initialled by a manager, admin or the owner** (form 8.8; *"Only a manager, admin or the owner initials the weekly, monthly and year-end tasks (form 8.8). Nothing was saved."*).
+
+**The live Cycle Counts line.** The tasks that begin *"Cycle Counts page checked"* show a gold line read live from the count queue, for example *"2 counts waiting on Cycle Counts: 1 not started, 1 being counted by Ana."* or *"No counts waiting on Cycle Counts right now."*, with an **Open Cycle Counts** link. Counting itself is still §4.8–§4.12.
+
+**Sign-off (manager, admin or owner).** Once the first task is initialled, **Sign off this sheet** appears. If every task is done, sign off with an optional note. If tasks were left, the note is **required** (at least 3 characters): say why (*"Why tasks were left (required)"*). The server counts what is open; the form cannot. After sign-off the sheet is locked (*"CHECKLIST_SIGNED_OFF: this sheet is already signed off. Nothing was saved."*) and shows *"Signed off by {name} · {time}"*.
+
+**The owner edits the tasks (D57).** The owner presses **Edit the tasks** to reword a task, move it to another section, change its SOP reference or order, **retire** it (untick Active), or add a new one to any list. A retired task leaves the list but stays on old sheets exactly as it was worded then (each initial keeps a copy of the wording). Every edit is recorded in the audit log with the before and after. Re-applying migration 0327 never overwrites the owner's edits.
+
+**Records.** **Recent sheets** lists the last sheets with who signed them off. Sheets, initials and tasks can never be deleted (database guards in 0327); keep them five years with the store's other records (WAC 314-55-087). If the app is down, use paper forms 8.5–8.8 and file them by month as before.
 
 **What the owner asked to be on them (D57).** *"Tasks should include cleaning, organizing, stocking, marketing content like website banners, flyers, newsletters, blog posts, social media posts, in store content, yard banners, inventory management like product enrichment, making sure products get heavily discounted before expiring. Plus any other small retail business daily duties that you think ought to be included as well. Use your professional expert judgement when adding value there."*
 
@@ -526,7 +540,7 @@ Each generator only **proposes**. The owner still names it, writes why, creates 
 
 ## 8. Checklists & forms
 
-Print on letter paper. Initials in every box. File by month in the inventory binder for five years (WAC 314-55-087).
+Since v1.4 the daily, weekly, monthly and year-end checklists (forms 8.5–8.8) are kept in the app at **Inventory → Daily Checklists** (§4.23); the printed forms below are the fallback when the app is down or migration 0327 is not applied yet, and the master copy of the task wording the app was seeded from. Print on letter paper. Initials in every box. File by month in the inventory binder for five years (WAC 314-55-087).
 
 ### 8.1 Audit planning and sign-off record (owner, one per audit)
 
@@ -599,7 +613,7 @@ INVENTORY
 [ ] Expiring-within-30-days list read; units fronted; list given to owner for markdown (§4.23) ____
 [ ] Cycle Counts page checked; today's count claimed and done, or handed over ____
     Count name: __________  Counter (one person, D56): __________
-[ ] If an audit count is planned before opening: finished before doors open (§4.11) ____
+[ ] Anyone counting today knows the rule: count each lot in one go (§4.11) ____
 SALES FLOOR (cleaning, organizing, stocking)
 [ ] Display cases and counters wiped, glass cleaned (owner-directed D57; SOP-07) ____
 [ ] Shelves faced and stocked from back stock; gaps filled or 86'd (SOP-05a §4.12) ____
@@ -617,7 +631,7 @@ ORDERS
 Date: ________  Shift lead: ______________            Initials / time
 [ ] Cycle Counts page checked at mid-shift                                 ____
 [ ] Any product on "Stock needing recount" told to the manager (§4.21)     ____
-[ ] Until G-35: no count on products selling right now (§4.11)             ____
+[ ] No package sold from a lot while that lot is being counted (§4.11)    ____
 [ ] Online Orders checked (every hour)                                     ____
 [ ] Shelves re-faced and restocked after the lunch rush                    ____
 [ ] Counters, scale and door handles wiped (owner-directed D57; SOP-07)    ____
@@ -641,7 +655,7 @@ Date: ________  Closer(s): ______________             Initials / time
 [ ] SOP-01 drawers closed (blind count), SOP-03 night sheet and bag        ____
 [ ] SOP-02 PM master till count                                            ____
 [ ] Cycle Counts page checked; today's count done, or handed over          ____
-[ ] If an audit count is planned after closing: no sales after the audit was created (§4.11) ____
+[ ] A count started today is finished (I'm done) or the owner told to reassign it (§4.13) ____
 [ ] All count sheets / slips (forms 8.2, 8.4) handed to the owner          ____
 [ ] Online Orders: no unfulfilled pickups left without a note              ____
 [ ] Shelves faced and restocked for the morning (owner-directed D57)       ____
@@ -702,6 +716,7 @@ YEAR END
 7. Never look up expected numbers. Never press **Review and finish**.
 8. Done → **tell the owner** (the count does not leave the page by itself).
 9. Product in scope needs to be sold mid-count → stop, tell the manager.
+10. **Inventory → Daily Checklists** → your list → **Initial** each task as you do it (§4.23).
 
 ## 10. Glossary
 
@@ -761,7 +776,7 @@ YEAR END
 | **G-35** | Cutoff: post the difference against the **live** quantity at count time (or freeze at count, not at creation) and warn when sales landed between freeze and count; correct the work paper and explainer | F-06-7 (**S1**) | Create right before counting, outside selling hours; never post if anything sold (§4.11) | §4.3, §4.11, §4.17, §4.19, §7 | **BUILT** (v1.2, Fix Phase 4.2, migration 0326): per-lot capture, movement shown and refused, work paper and explainer corrected |
 | **G-36** | Count-sheet integrity: per-package scans add up; a scan of a counted lot warns instead of becoming the second count; hand entry for second counts; a disagreeing second count **blocks** approval and posting; status check on every line write (code and database) | F-06-5, F-06-5b, F-06-6, F-06-13 (**S1**) | §4.10 step 4, §4.12, §4.14 owner rule, store rule 4 | §2, §4.10, §4.12, §4.14, §4.16, §5.2 | **BUILT** (v1.2, Fix Phase 4.1, migration 0326): +1 per scan, ask on a re-scan, third count, disagreement blocks, Start counting claim, database stage and claimer checks |
 | **G-37** | Reasons: edit reason and note until approval (audited); validate the reason against the list; enforce `readyToPost` at posting | F-06-14 | Form 8.3 first; new audit if saved wrong (§4.15) | §4.15, §5.3 | **BUILT** (v1.2, Fix Phase 4.1): Change the reason (audited), reason validated in app and database, posting refuses disagreeing counts |
-| **G-38** | Daily checklists in the app, for every employee (D51), with sign-off and a Cycle Counts line | F-06-12 (F-00-9) | Paper forms 8.5–8.8 (§4.23) | §4.23, §8, §9 | **APPROVED** (D57: task catalog) |
+| **G-38** | Daily checklists in the app, for every employee (D51), with sign-off and a Cycle Counts line | F-06-12 (F-00-9) | Paper forms 8.5–8.8 (§4.23) | §4.23, §8, §9 | **BUILT** (v1.4, Fix Phase 4.4b, migration 0327: six lists seeded from forms 8.5–8.8, initials per task, live Cycle Counts line, manager sign-off with a required note when tasks are left, owner edits the catalog, sheets kept and never deleted) |
 | **G-40** | Intelligent cycle counts: **Vendor of the day** with chunking, ABC, exceptions, expiring soon, Cultivera flags, never counted; one open count per lot | F-06-8 | Plan by hand from **Show every active lot** (§4.24) | §4.5, §4.22, §4.24, §9 | **APPROVED** (D58) |
 | **G-41** | Annual year-end full count: every lot, no 400 cap, sections, one release, one review, one work paper | — | Several audits the same day, outside selling hours (§4.24) | §4.5, §4.24, §8.8 | **APPROVED** (D58) |
 | **G-39** | Housekeeping: one count schedule everywhere; Issues fix links to the planner (owner) or tells staff to tell the owner; legacy sessions truly read-only; render the built-in counting checklist on the sheet; Pacific times; one approved colour | F-06-8, F-06-9, F-06-10, F-06-11 | — | §4.5, §4.20, §4.22 | **BUILT** (v1.2 checklist, colour, Cycle Counts times, D59 cleanup in 0326; v1.3 Fix Phase 4.4a: one schedule, Issues → Plan a count / tell the owner, old sessions read-only with the writers deleted, Pacific default name and hub dates) |
@@ -787,6 +802,7 @@ No new questions in v1.1.
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.4 | 2026-10-30 | Fix Phase 4.4b built (G-38, migration 0327): **Inventory → Daily Checklists** with six lists (opening, during the shift, closing, weekly, monthly, year end) seeded from forms 8.5–8.8 (61 tasks), initials and Pacific time per task, SOP and screen links, the live Cycle Counts line, manager sign-off (note required when tasks are left), the owner edits the tasks (D57), sheets permanent. Rewrote §4.23; updated the one-thing-to-know, §8 intro, §9.2, Appendix B; forms 8.5–8.7 lines that pointed at G-35 now state the built rule. Findings F-06-12, F-00-9 FIXED | SOP program |
 | 1.3 | 2026-10-30 | Fix Phase 4.4a built (G-39): one count schedule A 30 / B 60 / C 90 for the planner, the Issues row and the intelligence panel; the overdue row opens **Plan a count** for the owner and tells everyone else to tell the owner; old cycle-count sessions truly read only (Cancel, scanner, import and Enter count removed, their server actions deleted, library writers refuse CYCLE_COUNT_READ_ONLY); Pacific default audit name and hub dates. Updated the one-thing-to-know, §4.5, §4.6, §4.20, §4.21, §4.22, Appendix B. Findings F-06-8, F-06-9, F-06-10, F-06-11 FIXED | SOP program |
 | 1.2 | 2026-10-30 | Fix Phase 4.1–4.3 built (G-33, G-34, G-35, G-36, G-37; migration 0326): **Release to Cycle Counts**, **Start counting** claim, +1 per scan with the already-counted question, third count, **I'm done** and the cockpit notice, **Send back**, **Reassign**, **Cancel** with a reason, per-lot books capture at first count, mid-count movement shown and refused, disagreeing counts block, reasons editable and validated. Rewrote the one-thing-to-know, §4.2, §4.3, §4.7–§4.13, §4.14 rule, §4.15–§4.17, Appendix B. Findings F-06-1–7, F-06-13–16 FIXED | SOP program |
 | 1.1 | 2026-10-28 | Owner answers Q-06-1…Q-06-8 applied as D54–D61: release button (§4.7), I'm done + cockpit notice (§4.8), one counter and the same-counter recount (§2, §4.12), +1 per scan (§4.10), counting in open hours once G-35 is built (§4.11), the counting programme (new §4.24), the full daily task catalog (§4.23, forms 8.5–8.8 including new 8.8), legacy sessions cancelled (§4.20). Gaps G-33…G-36, G-38, G-39 APPROVED; new G-40, G-41; new findings F-06-15…F-06-17. Research: Oracle NetSuite Inventory Count and Lightspeed R-Series inventory counts, quoted | SOP program |

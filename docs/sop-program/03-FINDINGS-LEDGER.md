@@ -70,6 +70,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 - Cycle counts **do** exist as an owner-initiated queue (`/admin/inventory/cycle-counts`, books-23: owner creates the audit, staff do the blind count). A *daily task checklist* that surfaces them does not.
 - The SOP can ship as paper first (a printable checklist). A digital sign-off checklist is a build decision.
 - **Re-verified in SOP-06 (`main@c976c7e4`):** still no feature. Recorded as F-06-12; paper forms in SOP-06 §8.5–§8.7; gap **G-38**.
+- **Status: FIXED (Fix Phase 4.4b, G-38, migration 0327).** **Inventory → Daily Checklists** (`src/app/admin/inventory/checklists/page.tsx`, `requirePermission("inventory.count")`) holds opening, during-the-shift, closing, weekly, monthly and year-end lists seeded from SOP-06 forms 8.5–8.8, with cleaning tasks included (D57). See F-06-12.
 
 ### F-00-10 · CONFIRMED · UX · S2 — Staff cannot open the SOP or Handbook pages they are meant to read
 - `/admin/staffing/handbook` → `requirePermission("staffing.manage")` = owner/admin/manager only (`roles.ts`). A budtender (`staff`) cannot open the handbook page they must sign (the acknowledgment gate screen is a separate path, `HandbookGateScreen.tsx`).
@@ -801,6 +802,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Pin:** no checklist model, page or nav entry outside HR lifecycle (`employee-lifecycle-core.ts`); re-checked at `c976c7e4`.
 - **Effect:** the owner's *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature"* and D51 (all employees) are paper only.
 - **SOP impact:** §4.23, forms 8.5–8.7. **G-38**. Q-06-4.
+- **Status: FIXED (Fix Phase 4.4b, G-38, migration 0327).** Tables `checklist_tasks`, `checklist_runs`, `checklist_ticks` (no delete, initials permanent, sign-off once, no initial after sign-off); pure rules `src/lib/inventory/daily-checklist-core.ts`; actions `src/app/admin/inventory/checklists/actions.ts` (initial: `inventory.count`, weekly/monthly/year end need `inventory.manage`; sign-off: `inventory.manage`, open tasks counted on the server, note required when any are left; catalog edits: `inventory.audit`, audited before/after). Live Cycle Counts line on the "Cycle Counts page checked" tasks. SOP-06 v1.4 §4.23. Test `fix-p4-4b-daily-checklists`.
 
 ### F-06-13 · CONFIRMED · GAP · S1 — A second count that disagrees with the first does not block approval, and posting uses the second count
 - **Pin:** `assessLine` sets `blocksPosting: true` for `recount_disagrees` (`inventory-audit-core.ts` L800–980), but `readinessOf` (L1109–1210) adds blockers only for uncounted, needs-recount, merge pattern and undocumented material/unvalued lines; `gateSessionForPosting` (`inventory-audit-post-core.ts` L256–316) does not check per-line `blocksPosting`. **Proved by probe** (sys 10, count 5, recount 7, cost $20): `blocksPosting=true`, `canPost=true`, `blockers=[]`. 0192 L292 posts `coalesce(recount, counted)`.

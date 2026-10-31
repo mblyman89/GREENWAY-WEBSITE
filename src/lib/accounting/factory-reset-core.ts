@@ -446,6 +446,12 @@ export const TABLE_RULES: readonly TableRule[] = [
   // little_safe_exchanges: a cash-custody record (who took how much from the
   // master till, who approved, what came back). Links only to employees
   // (KEEP); the journal ids are plain uuids with no FK to gl_journals (WIPE).
+  // Fix Phase 4.4b (G-38, owner D57): the daily checklists (0327). KEEP: a
+  // five-year store record (WAC 314-55-087), no delete. Links only to
+  // staff_profiles (KEEP) and to each other.
+  { table: "checklist_tasks", disposition: "KEEP", because: "The daily / weekly / monthly checklist tasks (Fix Phase 4.4b, G-38) \u2014 the owner's task catalog. Configuration you wrote; retired, never deleted." },
+  { table: "checklist_runs", disposition: "KEEP", because: "Each checklist sheet and its manager sign-off (Fix Phase 4.4b, G-38) \u2014 kept five years (WAC 314-55-087); it cannot be deleted." },
+  { table: "checklist_ticks", disposition: "KEEP", because: "Each initialled checklist task \u2014 who, initials, time (Fix Phase 4.4b, G-38). Kept with its sheet five years; append-only." },
   { table: "supply_runs", disposition: "KEEP", because: "The supply-run log (Fix Phase 2.7c, G-11) \u2014 cash taken from the master till for supplies, who took it, who approved it, and the receipt and change that came back. A cash-custody record kept like the little safe log; it cannot be deleted." },
   { table: "little_safe_exchanges", disposition: "KEEP", because: "The little safe exchange log (Fix Phase 2.7b, G-02) \u2014 which bills moved between the master till and the little safe, who did it and when. An append-only cash-custody record kept like the audit log." },
   { table: "pos_cart_adjustments", disposition: "KEEP", because: "The register minus / remove / cancel trail (who reduced which cart, when) — an anti-abuse audit record kept like the audit log." },

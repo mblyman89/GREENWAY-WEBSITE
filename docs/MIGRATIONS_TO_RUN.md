@@ -3218,3 +3218,39 @@ in Vercel.
   It drops the new functions, checks and columns, gives back direct line
   writes (the 0191 policy) and restores the 0192 posting function. The D59
   cancellations are not undone.
+
+## Fix 4.4b — 0327 — Daily checklists in the app (G-38)
+
+- [ ] `0327_daily_checklists.sql` (Fix Phase 4.4b; G-38; owner decisions D51,
+  D57). Apply it **after 0326**.
+  - New tables `checklist_tasks` (the catalog), `checklist_runs` (one sheet
+    per list per Pacific day / week / month / year, with the sign-off) and
+    `checklist_ticks` (one initial per task per sheet).
+  - Seeds 61 tasks from SOP-06 forms 8.5–8.8 (opening 19, during the shift
+    15, closing 11, weekly 10, monthly 5, year end 1). Re-running never
+    overwrites the owner's edits (`on conflict (seed_key) do nothing`).
+  - Guards: nothing can be deleted; an initial cannot be changed; a sheet is
+    signed off once; nothing can be initialled after sign-off; a sign-off with
+    tasks left needs a note. Staff can read; all writes go through the server.
+  - Until it is applied, **Inventory → Daily Checklists** answers
+    *"CHECKLIST_MIGRATION_PENDING: apply migration 0327…"* and the paper forms
+    stay the record.
+
+  Safe to re-run (create … if not exists, create or replace, drop trigger if exists).
+
+  **Check:**
+
+  ```sql
+  select kind, count(*) from public.checklist_tasks group by kind order by kind;
+  -- closing 11, during 15, monthly 5, opening 19, weekly 10, yearly 1
+  select count(*) from public.checklist_tasks where live_line = 'cycle_counts';  -- 3
+  ```
+
+  **Then:** sign in as a budtender → Inventory → Daily Checklists →
+  **Opening** → **Initial** a task. Sign in as a manager → **Sign off this
+  sheet** (a note is required while tasks are open). As the owner → **Edit the
+  tasks** → reword one and **Save**.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0327_daily_checklists.rollback.sql`.
+  It drops the three tables, so **every sheet and initial is deleted**. Export
+  or print the Recent sheets first.
