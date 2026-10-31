@@ -1,0 +1,33 @@
+# 12 — Unverified Register (what I have NOT proven, and how to prove it)
+
+> **Audience: me.** Rule: *never guess*. Any statement in this bible that depends on the **live database** or on an **owner fact** is listed here until proven.
+> Proving is done by a read-only query Michael runs, or by an owner answer. I never connect to production.
+> Status: OPEN / RESOLVED (with proof) / WITHDRAWN.
+
+| ID | Question | Why it matters | How to prove (read-only) | Status |
+|---|---|---|---|---|
+| U-01 | Do any rows exist in `gl_posting_templates` live? | If none, N-01 is live today (every cash autopost refused). No migration inserts any (grep verified). | `select code, source_kind, is_active, approved_at from public.gl_posting_templates;` Expected: **0 rows**. | OPEN (code says 0) |
+| U-02 | Do `gl_periods` rows cover 2026-11-01 for each entity? | N-02. If the factory reset ran after periods were opened, every non-OB post raises GL_NO_PERIOD. | Part 06 §4.1 U-02 query. Expected: 12 periods × years 2026 (and 2027) per entity, all `open`. If 0 → run part 07 §7.3 insert. | OPEN, **check 11/01 before first sale** |
+| U-03 | Was migration 0211 applied (allow_self_approval on every policy row)? | If not, N-05 is not latent: drafts over $5k would refuse owner self-approval. | `select count(*) filter (where allow_self_approval), count(*) from public.gl_approval_policy;` Expected: equal counts. | OPEN |
+| U-04 | Was the full migration set through 0328 applied live, in order? | Every pin assumes it. | `select max(version) from supabase_migrations.schema_migrations;` (if the owner applies via the editor this table may not track it; then spot-check a 03xx object exists). | OPEN |
+| U-05 | Which entity codes have activity? | Part 07 per-entity OB expectations. | `select e.code, count(j.*) from gl_entities e left join gl_journals j on j.entity_id=e.id group by 1;` | OPEN |
+| U-06 | Are there drafts already sitting from pre-cutover testing? | They would pollute the November queue/TB. | `select source_kind, status, min(journal_date), count(*) from gl_journals group by 1,2;` | OPEN |
+| U-07 | Is the Cultivera 10/31 roll-off fully applied (count apply 11/01 06:50)? | Lot snapshot correctness (part 07). | Count-plan audit rows for 11/01; lot snapshot rollup | OPEN (time-bound) |
+| U-08 | Does the medical exemption record carry **both** flags per line, and is it joinable to order_lines? | S-03b design. | **Schema RESOLVED** (0040, `medical_exempt_sales`): columns order_id, sale_date, product_sku, sales_price_minor, **sales_tax_exempt**, **excise_tax_exempt**, excise_amount_exempt_minor. Both flags exist. **Join caveat:** the key is (order_id, product_sku), **not** order_line_id, so two lines of the same SKU in one order are ambiguous. S-03b must match by (order_id, sku) with quantity/price allocation, or add an order_line_id column (migration). Live rows still to sample. | PARTLY RESOLVED |
+| U-09 | Does Plaid sync handle pending→posted and `removed`? | Double-match risk (S-17). | **RESOLVED by code:** plaid-core.ts `planTransactionMerge` (header :17-19) handles added/modified/removed including pending→posted; sync-server.ts:141/171/186 passes removals; bank-match-core.ts:948 refuses pending; :1368 skips pending in suggestions. | RESOLVED |
+| U-10 | Does gapless numbering exist? | Audit expectation. | **RESOLVED:** gl_journal_sequences 0172:240-252; journal_no null for drafts 0172:319. | RESOLVED |
+| U-11 | Is loyalty a liability in the books? | ASC 606 deferral vs tax-basis discount. | **RESOLVED (design):** no loyalty-liability account in the 193-code COA (03c). The census describes redemptions as reducing what is collected (ledger-census-data.ts:224), and revenue is booked on the paid amount (sale-posting-service.ts:222 `paidCents`). Under OD-02's accrual tax book this is acceptable; a GAAP layer would defer (part 10 F-06). | RESOLVED (deferred F-06) |
+| U-12 | Does any caller reverse journals? | Reversal availability. | **RESOLVED:** gl_reverse_journal has no caller (comment only, approval-service.ts:58). → S-10 | RESOLVED |
+| U-13 | Monthly volume of medical-exempt sales? | Size of N-09 over-accrual. | `select date_trunc('month', sale_date) m, count(*), sum(sales_price_minor) price, sum(excise_amount_exempt_minor) excise_exempt, count(*) filter (where sales_tax_exempt) rst_exempt_lines from public.medical_exempt_sales group by 1 order by 1;` (columns verified from 0040) | OPEN |
+| U-14 | Does the intercompany wrapper have a caller? | D-41. | **RESOLVED:** posting-service.ts:468 wrapper; no caller (grep). → S-23 | RESOLVED |
+| U-15 | Does the inventory audit autopost (and get refused as GL_AUTOPOST_NOT_ELIGIBLE)? | Hidden refusal like N-01. | **RESOLVED, no defect:** inventory-audit-store.ts never passes autoPost (comment at its submit ~:496 "`autoPost` IS DELIBERATELY NOT PASSED"; self-test ~:788-793). | RESOLVED |
+| U-16 | Is `gl_open_fiscal_year` refused in the SQL editor (auth.uid() null)? | Why part 07 gives a plain INSERT. | scripts/accounting/sql-editor-context-tests.sql in PG15 | OPEN (prove in S-02) |
+| U-17 | Does the excise-return builder already emit the (2)(c) medical exemption line? | T-03. | **RESOLVED:** excise-return-core.ts:11 (exemption entered as a negative, valid 6/6/2024–6/30/2029) and :39-40 `exemptMedicalSalesMinor`. Its caller joins medical_exempt_sales (:83-84). So the **return** already honours the exemption and only the **GL** does not (N-09). After S-03b the two must agree: C-TAX-1. | RESOLVED |
+| U-18 | Which bank account receives deposits after 11/01, 10200 operating or 10300 ATM (OD-10)? | Deposit template accounts. | Owner answer | OPEN |
+| U-19 | Owner's over/short alert threshold | Q-16 tolerance. | Owner answer | OPEN |
+| U-20 | Did the owner already enter any opening-balance worksheet rows? | S-07 starting state. | `select e.code, ob.status, count(*), sum(ob.amount_cents) from public.gl_opening_balances ob join public.gl_entities e on e.id=ob.entity_id group by 1,2 order by 1,2;` (columns verified from 0176: entity_id, account_code, amount_cents, evidence_kind, evidence_ref, status, journal_id) | OPEN |
+
+## Rules for this register
+1. A RESOLVED row cites the proof (file:line or query result pasted by Michael, with date).
+2. A query I hand to Michael has its table and column names verified from the migration first. Rows marked "confirm column names" must be checked against 03b before sending.
+3. If a proof contradicts a finding, the finding is marked WITHDRAWN in part 04 with the proof (part 04 §2 rule).
