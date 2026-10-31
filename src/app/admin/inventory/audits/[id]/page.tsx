@@ -41,6 +41,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Badge, Button } from "@/components/admin/ui";
 import { formatCents } from "@/lib/accounting/books-view-core";
 import { getAuditReview, listCounters } from "@/lib/inventory/audit-hub-store";
+import { fullCountOfSession } from "@/lib/inventory/full-count-store";
 import { ownerStageControls } from "@/lib/inventory/audit-count-flow-core";
 import { formatDateTime } from "@/lib/pos/format";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -117,6 +118,8 @@ export default async function AuditDetailPage({
   // Fix Phase 4.3 (D54/D56): the owner's stage buttons, and who can be assigned.
   const controls = ownerStageControls(session.status, session.postedAt !== null);
   const counters = controls.includes("reassign") ? await listCounters() : null;
+  // Fix Phase 4.4d (G-41): a section of a year-end full count links back to it.
+  const fullCount = await fullCountOfSession(id);
   const isCounting = session.status === "counting";
   const isReview = session.status === "review";
   const isApproved = session.status === "approved";
@@ -150,6 +153,15 @@ export default async function AuditDetailPage({
             <Button href={`/admin/inventory/audits/${id}/export`} variant="neutral" size="sm">
               Work paper
             </Button>
+            {fullCount ? (
+              <Button
+                href={`/admin/inventory/audits/full-count/${fullCount.fullCountId}`}
+                variant="neutral"
+                size="sm"
+              >
+                {`Full count ${fullCount.year} \u00b7 section ${fullCount.sectionNo} of ${fullCount.sectionCount}`}
+              </Button>
+            ) : null}
           </div>
         }
       />

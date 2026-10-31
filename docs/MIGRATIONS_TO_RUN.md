@@ -3254,3 +3254,34 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0327_daily_checklists.rollback.sql`.
   It drops the three tables, so **every sheet and initial is deleted**. Export
   or print the Recent sheets first.
+
+## Fix 4.4d — 0328 — Year-end full count (G-41)
+
+- [ ] `0328_full_count.sql` (Fix Phase 4.4d; G-41; owner decision D58). Apply it
+  **after 0327**.
+  - Adds four columns to `inventory_audit_sessions`: `full_count_id`,
+    `full_count_year`, `section_no`, `section_count` (all null for an ordinary
+    audit, all set for a section of a full count). No new table; RLS unchanged.
+  - Guards: one section number per full count (unique index); a section cannot
+    be moved to another count, year or number (FULL_COUNT_FIXED); one full
+    count per year unless the earlier one is cancelled (FULL_COUNT_ONE_PER_YEAR).
+    Factory reset passes through (audit tables are WIPE).
+  - Until it is applied, **Year-end full count** answers that migration 0328
+    is needed, and the interim is several audits from **Show every active lot**.
+
+  Safe to re-run (add column if not exists, create or replace, drop … if exists).
+
+  **Check:**
+
+  ```sql
+  select column_name from information_schema.columns
+   where table_name = 'inventory_audit_sessions'
+     and column_name in ('full_count_id','full_count_year','section_no','section_count');  -- 4 rows
+  select tgname from pg_trigger where tgname = 'inventory_audit_sessions_full_count_guard';  -- 1 row
+  ```
+
+  **Then:** as the owner → Inventory audits → **Year-end full count** → check
+  the sections → **Create the {year} full count** → **Release all sections**.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0328_full_count.rollback.sql`.
+  It drops the four columns, so sections become ordinary audits (their counts are kept).

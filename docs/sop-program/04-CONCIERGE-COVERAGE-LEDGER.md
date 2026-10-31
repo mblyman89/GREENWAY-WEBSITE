@@ -532,6 +532,10 @@ G-38 is built (migration 0327). The concierge `inventory` topic gained one fact:
 
 G-40 is built (no migration). The concierge `inventory` topic gained one fact: **Plan a count** has tabs **Vendor of the day**, **High value (A lots)**, **Exceptions** and **Expiring soon** beside the default overdue list; each lot says why it was picked; the vendor rotation splits a big vendor into parts of the owner's size, moves on when the count is created or skipped, and the cockpit reminds the owner; a lot can be on only one open count. Still interim: the year-end full count (G-41).
 
+#### SOP-06 v1.6 (Fix Phase 4.4d, G-41)
+
+G-41 is built (migration 0328). The concierge `inventory` topic gained one fact: **Inventory audits → Year-end full count** (owner only) splits every active lot, with no cap, into vendor sections; one press releases them all, each section is counted by one employee, the owner approves and posts the ready sections together, and one combined work paper prints the whole count; one full count a year; the cockpit reminds the owner in December. The row *"Do we do a full count?"* above now answers: year end, with the Year-end full count screen. The four SOP-06 build gaps G-38, G-39, G-40 and G-41 are now all built.
+
 ### SOP-15 Returns to Vendor, Customer-Return Disposition & Product Destruction (`docs/sop/SOP-15-returns-vendor-destruction.md`, verified at `b8101abb`; v1.1 in slice SOP-08 at `bad718b4`)
 
 The concierge code is **unchanged** (record-only). Today it has two generic lines: `concierge-kb.ts` L66 (menu list) and L176 (*"Returns & Destruction handles vendor returns and compliant destruction with a quarantine hold, plus sample-pricing rules."*), and the help centre answer at `help-content.ts` L465–467 (*"Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires."*). Neither covers a single step, guard or interim rule (F-15-C). The L176 phrase "plus sample-pricing rules" implies protection that does not exist (F-15-16) and must be reworded at integration.
