@@ -233,6 +233,13 @@ export default async function PromotionsAdminPage({
               Bad product queue
             </Link>
             <Link
+              href="/admin/promotions/clearance"
+              data-testid="promo-clearance-link"
+              className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+            >
+              Clearance markdowns
+            </Link>
+            <Link
               href="/admin/promotions/never-discount"
               className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
             >

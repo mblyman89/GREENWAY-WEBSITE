@@ -115,6 +115,15 @@ export function GeneratorBody({
             ? ` ${picked.deferredProducts} more product${picked.deferredProducts === 1 ? "" : "s"} qualified but did not fit; they stay for next time.`
             : ""}
         </p>
+        {gen === "expiring" ? (
+          <p className={`mt-2 ${P}`} data-testid="expiring-clearance-link">
+            Once the shelf is confirmed, mark these down on{" "}
+            <Link href="/admin/promotions/clearance" className="text-[var(--admin-accent)] hover:underline">
+              Promotions &rarr; Clearance markdowns
+            </Link>{" "}
+            (one draft markdown, excluded from every other deal).
+          </p>
+        ) : null}
         {unread.length > 0 ? (
           <p className="mt-2 rounded-lg border border-[var(--admin-gold)]/35 bg-[var(--admin-gold)]/[0.06] px-3 py-2 text-xs text-white/85">
             Could not read: {unread.join(", ")}. The list below may be shorter than it should be.

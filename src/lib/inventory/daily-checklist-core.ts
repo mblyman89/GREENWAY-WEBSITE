@@ -176,6 +176,9 @@ export const CHECKLIST_SCREENS: Record<string, string> = {
   "Cycle Counts": "/admin/inventory/cycle-counts",
 };
 
+/** Fix Phase 4.5b: the clearance markdown screen (F-06-17). */
+export const CLEARANCE_SCREEN = "/admin/promotions/clearance";
+
 export type RefLink = { text: string; href: string | null; note?: string };
 
 /**
@@ -235,6 +238,9 @@ export function referenceLinks(label: string, sopRef: string | null, index: SopI
     }
     push({ text: part, href: null });
   }
+  // Fix Phase 4.5b (F-06-17, G-38): a task about markdowns opens the
+  // Clearance screen. It needs promotions.manage, so the note says who.
+  if (/markdown/i.test(label)) push({ text: "Clearance markdowns", href: CLEARANCE_SCREEN, note: "owner or manager" });
   return out;
 }
 
@@ -315,6 +321,8 @@ export function __runDailyChecklistCoreTests(): number {
   const e = referenceLinks("SOP-01 form 8.1 shift-open checklist done (each register)", null, idx);
   ok(e.length === 1 && e[0]!.href === "/admin/staffing/sop-library/sop-01", "SOP named in the label");
   ok(referenceLinks("Lights on", "owner-directed D57", idx)[0]!.href === null, "owner-directed stays text");
+  const md = referenceLinks("Expiring-within-30-days list read; units fronted; list given to owner for markdown", "\u00a74.23", idx);
+  ok(md.some((l) => l.href === CLEARANCE_SCREEN && l.note === "owner or manager"), "markdown task opens the Clearance screen (F-06-17)");
 
   ok(describeCountsLine([]) === "No counts waiting on Cycle Counts right now.", "no counts");
   ok(
