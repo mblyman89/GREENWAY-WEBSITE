@@ -24,6 +24,16 @@ import {
   fullCountYear,
 } from "@/lib/inventory/full-count-core";
 import { listFullCounts, previewFullCount } from "@/lib/inventory/full-count-store";
+import {
+  MAX_SESSION_MINUTES,
+  MIN_SESSION_MINUTES,
+  checkSessionMinutes,
+  formatMinutes,
+  lotsForMinutes,
+  minutesForLots,
+  paceSentence,
+} from "@/lib/inventory/count-time-core";
+import { getCountPace } from "@/lib/inventory/count-time-store";
 import { WhyBlockedPanel } from "../WhyBlockedPanel";
 import { createFullCountAction } from "./actions";
 
@@ -35,7 +45,7 @@ const P = "text-xs leading-relaxed text-[var(--admin-text-muted)]";
 export default async function FullCountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ size?: string; refusal?: string; notice?: string }>;
+  searchParams: Promise<{ size?: string; minutes?: string; refusal?: string; notice?: string }>;
 }) {
   await requirePermission("inventory.audit");
   const sp = await searchParams;
@@ -46,7 +56,13 @@ export default async function FullCountPage({
 
   const today = pacificToday();
   const year = fullCountYear(today);
-  const sizeCheck = checkSectionLots(sp.size ?? DEFAULT_SECTION_LOTS);
+  // Fix Phase 4.5c: a section can be sized in MINUTES of counting time
+  // (?minutes=), turned into lots at the store's pace; lots stay the unit.
+  const pace = await getCountPace();
+  const minutesCheck = sp.minutes ? checkSessionMinutes(sp.minutes) : null;
+  const sizeCheck = minutesCheck?.ok
+    ? checkSectionLots(lotsForMinutes(minutesCheck.value, pace, MIN_SECTION_LOTS, MAX_SECTION_LOTS))
+    : checkSectionLots(sp.size ?? DEFAULT_SECTION_LOTS);
   const size = sizeCheck.ok ? sizeCheck.value : DEFAULT_SECTION_LOTS;
 
   const [list, preview] = await Promise.all([listFullCounts(), previewFullCount(size)]);
@@ -128,6 +144,14 @@ export default async function FullCountPage({
               {preview.data.plan.sections.length} sections of up to {size} lots. A vendor stays together where it fits;
               a product&apos;s lots are never split between two counters. There is no 400-lot limit here.
             </p>
+            <p className={`mt-1 ${P}`} data-testid="full-count-minutes">
+              Each section is {formatMinutes(minutesForLots(size, pace))} of counting; the whole store is{" "}
+              {formatMinutes(minutesForLots(preview.data.plan.lotCount, pace))} of counting time, shared between the counters.
+              Pace: {paceSentence(pace)}
+            </p>
+            {minutesCheck && !minutesCheck.ok ? (
+              <p className="mt-1 text-xs text-red-200">{minutesCheck.message} The default size is shown.</p>
+            ) : null}
 
             <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
               <label className="text-xs text-[var(--admin-text-muted)]">
@@ -143,6 +167,22 @@ export default async function FullCountPage({
               </label>
               <Button type="submit" variant="neutral" size="sm">
                 Re-plan
+              </Button>
+            </form>
+            <form method="get" className="mt-2 flex flex-wrap items-end gap-2" data-testid="full-count-minutes-form">
+              <label className="text-xs text-[var(--admin-text-muted)]">
+                Or minutes per section ({MIN_SESSION_MINUTES}&ndash;{MAX_SESSION_MINUTES})
+                <input
+                  name="minutes"
+                  type="number"
+                  min={MIN_SESSION_MINUTES}
+                  max={MAX_SESSION_MINUTES}
+                  defaultValue={minutesForLots(size, pace)}
+                  className="ml-2 w-24 rounded-lg border border-white/15 bg-black/30 px-2 py-1 text-sm text-white"
+                />
+              </label>
+              <Button type="submit" variant="neutral" size="sm">
+                Re-plan by time
               </Button>
             </form>
 
@@ -164,6 +204,7 @@ export default async function FullCountPage({
                   <tr className="text-[10px] uppercase tracking-wide text-[var(--admin-text-muted)]">
                     <th className="px-2 py-1.5">Section</th>
                     <th className="px-2 py-1.5 text-right">Lots</th>
+                    <th className="px-2 py-1.5 text-right">Counting time</th>
                     <th className="px-2 py-1.5">Vendors</th>
                   </tr>
                 </thead>
@@ -172,6 +213,7 @@ export default async function FullCountPage({
                     <tr key={s.no} className="border-t border-white/5 align-top">
                       <td className="px-2 py-1.5 font-semibold text-white">{s.no}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{s.lotIds.length}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatMinutes(minutesForLots(s.lotIds.length, pace))}</td>
                       <td className="px-2 py-1.5 text-white/80">{s.vendors.join(", ")}</td>
                     </tr>
                   ))}

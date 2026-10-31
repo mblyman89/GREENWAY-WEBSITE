@@ -21,6 +21,7 @@ import { __runPoReceiveCoreTests } from "../../src/lib/inventory/po-receive-core
 // day's deal was silently overridden. Pure: no I/O.
 import { __runMarkdownLockTests } from "../../src/lib/promotions/markdown-lock-core";
 import { __runClearanceTests } from "../../src/lib/promotions/clearance-core";
+import { __runCountTimeTests } from "../../src/lib/inventory/count-time-core";
 import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engine-core";
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runPromotionSelectorTests } from "../../src/lib/promotions/promotion-selector-core";
@@ -1306,6 +1307,8 @@ async function main() {
   { const r = __runMarkdownLockTests(); if (r.passed < 1) throw new Error("markdown-lock-core: no assertions ran"); console.log(`markdown-lock-core: ${r.passed} assertions passed`); }
   // Fix Phase 4.5b (F-06-17): the Clearance screen's rules.
   { const r = __runClearanceTests(); if (r.failed > 0) throw new Error(`clearance-core: ${r.failed} failed`); if (r.passed < 20) throw new Error("clearance-core: fewer than 20 assertions ran"); console.log(`clearance-core: ${r.passed} assertions passed`); }
+  // Fix Phase 4.5c (G-40/G-41): counts sized in minutes of counting time.
+  { const r = __runCountTimeTests(); if (r.failed > 0) throw new Error(`count-time-core: ${r.failed} failed`); if (r.passed < 18) throw new Error("count-time-core: fewer than 18 assertions ran"); console.log(`count-time-core: ${r.passed} assertions passed`); }
   // Rule 11: receiving intake is the REAL pipeline. Its brand resolver shares
   // brandKey() with promotions, so it runs right beside brand-match-core.
   { const r = __runBrandResolveCoreTests(); if (r.passed < 1) throw new Error("brand-resolve-core: no assertions ran"); console.log(`brand-resolve-core: ${r.passed} assertions passed`); }

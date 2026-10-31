@@ -69,6 +69,7 @@ import {
   type Picked,
 } from "@/lib/inventory/count-generators-core";
 import { getRotation, loadActiveAuditLots, loadExceptionInputs, loadOpenCountHolds } from "@/lib/inventory/count-generators-store";
+import { getCountPace } from "@/lib/inventory/count-time-store";
 import { GeneratorBody, GeneratorTabs } from "./CountGenerators";
 
 export const dynamic = "force-dynamic";
@@ -220,7 +221,7 @@ export default async function NewAuditPage({
 
 /** G-40: load the lots once and run the chosen generator (pure core). */
 async function GeneratorSection({ gen }: { gen: Exclude<CountGenerator, "due"> }) {
-  const [lotsRes, holds, rotation] = await Promise.all([loadActiveAuditLots(), loadOpenCountHolds(), getRotation()]);
+  const [lotsRes, holds, rotation, pace] = await Promise.all([loadActiveAuditLots(), loadOpenCountHolds(), getRotation(), getCountPace()]);
   if (!lotsRes.ok) return <HubRefusal refusal={lotsRes.refusal} context="the proposed scope" />;
   if (!holds.ok) return <HubRefusal refusal={holds.refusal} context="the lots already on an open count" />;
   const lots = lotsRes.data;
@@ -257,6 +258,7 @@ async function GeneratorSection({ gen }: { gen: Exclude<CountGenerator, "due"> }
       rationale={generatorRationale(gen, vendor) ?? ""}
       vendor={vendor}
       rotation={rotation}
+      pace={pace}
       unread={unread}
     />
   );

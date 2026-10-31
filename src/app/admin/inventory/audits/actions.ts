@@ -56,8 +56,10 @@ import { postAuditSession } from "@/lib/inventory/inventory-audit-store";
 import { inventoryAccountByCategory } from "@/lib/inventory/audit-posting-accounts";
 import type { AuditSessionStatus } from "@/lib/inventory/inventory-audit-post-core";
 import { isImportId } from "@/lib/inventory/flagged-count-scope-core";
-import { checkChunkLots, isCountGenerator, rotationFromSetting, type RotationState } from "@/lib/inventory/count-generators-core";
+import { MAX_CHUNK_LOTS, MIN_CHUNK_LOTS, checkChunkLots, isCountGenerator, rotationFromSetting, type RotationState } from "@/lib/inventory/count-generators-core";
 import { getRotation, saveRotation } from "@/lib/inventory/count-generators-store";
+import { checkMinutesPerLot, checkSessionMinutes, lotsForMinutes } from "@/lib/inventory/count-time-core";
+import { getCountPace, getOwnerMinutesPerLot, saveOwnerMinutesPerLot } from "@/lib/inventory/count-time-store";
 import { pacificToday } from "@/lib/reports/timezone";
 
 const HUB = "/admin/inventory/audits";
@@ -180,7 +182,20 @@ async function advanceRotation(
 export async function saveRotationSettingsAction(form: FormData): Promise<void> {
   const session = await requirePermission("inventory.audit");
   const back = `${HUB}/new?gen=vendor`;
-  const checked = checkChunkLots(form.get("chunkLots"));
+  // Fix Phase 4.5c: the size can be given in MINUTES of counting time; it is
+  // turned into lots at the pace the planner shows (count-time-core), and
+  // lots stay the stored unit.
+  const minutesRaw = String(form.get("chunkMinutes") ?? "").trim();
+  let fromMinutes: number | null = null;
+  if (minutesRaw) {
+    const m = checkSessionMinutes(minutesRaw);
+    if (!m.ok) refuse(back, "CHUNK_MINUTES_INVALID", `${m.message} Nothing was saved.`);
+    fromMinutes = m.value;
+  }
+  const pace = fromMinutes === null ? null : await getCountPace();
+  const checked = fromMinutes !== null && pace
+    ? checkChunkLots(lotsForMinutes(fromMinutes, pace, MIN_CHUNK_LOTS, MAX_CHUNK_LOTS))
+    : checkChunkLots(form.get("chunkLots"));
   if (!checked.ok) refuse(back, "CHUNK_LOTS_INVALID", checked.message);
   const current = await getRotation();
   // A new size re-cuts the chunks, so the vendor restarts at its first part.
@@ -193,9 +208,34 @@ export async function saveRotationSettingsAction(form: FormData): Promise<void> 
     entityType: "site_settings",
     entityId: "count_vendor_rotation",
     before: { chunkLots: current.chunkLots },
-    after: { chunkLots: checked.value },
+    after: fromMinutes !== null && pace
+      ? { chunkLots: checked.value, fromMinutes, minutesPerLot: pace.minutesPerLot, paceSource: pace.source }
+      : { chunkLots: checked.value },
   });
   revalidatePath(`${HUB}/new`);
+  redirect(back);
+}
+
+/** Fix Phase 4.5c: the owner's minutes-per-lot, used until counts are measured. */
+export async function saveCountPaceAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.audit");
+  const back = `${HUB}/new?gen=vendor`;
+  const checked = checkMinutesPerLot(form.get("minutesPerLot"));
+  if (!checked.ok) refuse(back, "PACE_INVALID", checked.message);
+  const before = await getOwnerMinutesPerLot();
+  const saved = await saveOwnerMinutesPerLot(checked.value, session.profile.id);
+  if (!saved.ok) refuse(back, "PACE_SAVE_FAILED", `The pace was not saved: ${saved.error}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.count_pace",
+    entityType: "site_settings",
+    entityId: "count_pace",
+    before: { minutesPerLot: before },
+    after: { minutesPerLot: checked.value },
+  });
+  revalidatePath(`${HUB}/new`);
+  revalidatePath(`${HUB}/full-count`);
   redirect(back);
 }
 
