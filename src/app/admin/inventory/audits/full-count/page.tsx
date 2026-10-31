@@ -21,9 +21,10 @@ import {
   MAX_SECTION_LOTS,
   MIN_SECTION_LOTS,
   checkSectionLots,
+  fullCountReminderPreview,
   fullCountYear,
 } from "@/lib/inventory/full-count-core";
-import { listFullCounts, previewFullCount } from "@/lib/inventory/full-count-store";
+import { hasFullCountForYear, listFullCounts, previewFullCount } from "@/lib/inventory/full-count-store";
 import {
   MAX_SESSION_MINUTES,
   MIN_SESSION_MINUTES,
@@ -65,7 +66,18 @@ export default async function FullCountPage({
     : checkSectionLots(sp.size ?? DEFAULT_SECTION_LOTS);
   const size = sizeCheck.ok ? sizeCheck.value : DEFAULT_SECTION_LOTS;
 
-  const [list, preview] = await Promise.all([listFullCounts(), previewFullCount(size)]);
+  // Fix Phase 4.5d: the December cockpit reminder, checkable in any month.
+  // Same function and same year the cockpit uses; a failed read shows nothing.
+  const reminderYear = Number(today.slice(0, 4));
+  const [list, preview, decemberPlanned] = await Promise.all([
+    listFullCounts(),
+    previewFullCount(size),
+    hasFullCountForYear(reminderYear).catch(() => null),
+  ]);
+  const reminder =
+    decemberPlanned === null
+      ? null
+      : fullCountReminderPreview({ todayPacific: today, hasCountForDecemberYear: decemberPlanned });
   const counts = list.ok ? list.data : [];
   const thisYear = counts.find((c) => c.year === year && c.rollup.stage !== "cancelled");
 
@@ -124,6 +136,27 @@ export default async function FullCountPage({
               ))}
             </tbody>
           </table>
+        )}
+      </section>
+
+      {/* ── Fix Phase 4.5d: the December reminder, previewed ── */}
+      <section className={CARD} data-testid="full-count-reminder-preview">
+        <h2 className="text-sm font-bold text-white">
+          December cockpit reminder {reminder?.live ? <Badge tone="gold">Live now</Badge> : <Badge tone="neutral">Preview</Badge>}
+        </h2>
+        {reminder === null ? (
+          <p className={`mt-1 ${P}`}>Could not check whether the {reminderYear} full count is planned. Try again later.</p>
+        ) : reminder.text ? (
+          <p className={`mt-1 ${P}`} data-testid="full-count-reminder-text">
+            {reminder.live ? "The owner cockpit is saying today:" : `On December 1, ${reminder.year} the owner cockpit will say:`}{" "}
+            <span className="font-semibold text-white">&ldquo;{reminder.text}&rdquo;</span> It links back to this page, and
+            it stops as soon as the {reminder.year} full count is planned.
+          </p>
+        ) : (
+          <p className={`mt-1 ${P}`} data-testid="full-count-reminder-quiet">
+            {reminder.live ? "The owner cockpit is quiet" : "In December the owner cockpit will stay quiet"} because the{" "}
+            {reminder.year} full count is already planned.
+          </p>
         )}
       </section>
 
