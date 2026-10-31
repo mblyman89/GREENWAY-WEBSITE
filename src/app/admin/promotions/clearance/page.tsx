@@ -77,7 +77,7 @@ export default async function ClearancePage({ searchParams }: { searchParams: SP
             This page lists products expiring within {CLEARANCE_EXPIRING_DAYS} days (the same window as Plan a count &rarr; Expiring
             soon), products already expired that the register only warns on, and products on the shelf {sittingDays} days or more.
             Tick what to clear and press <strong>Create draft markdown</strong>. The draft is a {percent}% off promotion on those
-            products with <strong>Clearance markdown &mdash; no other deal applies</strong> turned on. Open it, check the products, and
+            products with <strong>This is a markdown</strong> ticked (the form&apos;s <strong>Clearance or vendor-day markdown</strong> box). Open it, check the products, and
             press Publish: the below-cost check runs then, like every promotion.
           </p>
           <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
