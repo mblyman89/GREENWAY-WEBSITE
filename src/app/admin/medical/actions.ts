@@ -15,6 +15,9 @@ import { upsertMedicalRegistryEntry, removeMedicalRegistryEntry } from "@/lib/me
 import { isDohCategory } from "@/lib/medical/medical-sale-core";
 import { checkIntakeDates, checkCardNumber } from "@/lib/medical/medical-intake-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import { isOwnerRole } from "@/lib/auth/roles";
+import { getEndorsementState, saveEndorsementWrite } from "@/lib/medical/store";
+import { validateEndorsementChange, type EndorsementChange } from "@/lib/medical/endorsement-switch-core";
 
 function bool(form: FormData, key: string): boolean {
   return String(form.get(key) ?? "") === "on" || String(form.get(key) ?? "") === "true";
@@ -284,4 +287,67 @@ export async function removeDohProductAction(form: FormData): Promise<void> {
     });
   }
   revalidatePath("/admin/medical");
+}
+
+/**
+ * Slice A-06 (owner OD-40) — the store medical endorsement switch and the
+ * register medical test-mode switch on /admin/medical. OWNER ONLY: these
+ * decide whether tax comes off a sale, so medical.manage (which managers hold
+ * to issue cards) is not enough. Every change is validated by the pure core
+ * (validateEndorsementChange), written once, mirrored to tax_settings, and
+ * recorded in the audit log with before/after.
+ */
+export async function saveEndorsementSwitchAction(form: FormData): Promise<void> {
+  const session = await requirePermission("medical.manage");
+  const back = (key: "switch_ok" | "switch_error", msg: string) =>
+    redirect(`/admin/medical?${key}=${encodeURIComponent(msg)}#endorsement`);
+  if (!isOwnerRole(session.profile.role)) {
+    back("switch_error", "Only the owner can change the medical endorsement or register test mode.");
+  }
+
+  const kind = str(form, "switch_kind");
+  const on = str(form, "on") === "1";
+  let change: EndorsementChange;
+  if (kind === "test_mode") {
+    change = { kind: "test_mode", on };
+  } else if (kind === "endorsement") {
+    change = {
+      kind: "endorsement",
+      on,
+      endorsementNumber: str(form, "endorsement_number"),
+      effectiveOn: str(form, "effective_on"),
+      confirmWord: str(form, "confirm_word"),
+      acknowledged: bool(form, "acknowledged"),
+    };
+  } else {
+    back("switch_error", "Unknown switch.");
+    return;
+  }
+
+  const before = await getEndorsementState();
+  const verdict = validateEndorsementChange(change, before, pacificToday());
+  if (!verdict.ok) {
+    back("switch_error", verdict.error);
+    return;
+  }
+  const res = await saveEndorsementWrite(verdict.write, session.userId);
+  if (!res.ok) {
+    back("switch_error", `Could not save: ${res.error}`);
+    return;
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: kind === "test_mode" ? "medical.register_test_mode.set" : "medical.endorsement.set",
+    entityType: "medical_endorsement_config",
+    before: {
+      is_medically_endorsed: before.switchOn,
+      endorsement_number: before.endorsementNumber,
+      endorsed_effective_on: before.effectiveOn,
+      register_test_mode_allowed: before.testModeSwitchOn,
+    },
+    after: verdict.write,
+  });
+  revalidatePath("/admin/medical");
+  back("switch_ok", verdict.summary);
 }

@@ -16,6 +16,12 @@ import {
 } from "@/lib/medical/tax";
 import { validateAuthorizationIssuance } from "@/lib/medical/medical-authorization-core";
 import { verifyExemptSaleRecord } from "@/lib/medical/exempt-sale-record-core";
+import {
+  resolveEndorsement,
+  type EndorsementState,
+  type EndorsementWrite,
+  type RawEndorsementRow,
+} from "@/lib/medical/endorsement-switch-core";
 import { pacificToday } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
@@ -63,42 +69,95 @@ export type ExemptSaleRow = {
 };
 
 // ---------------------------------------------------------------------------
-// Endorsement config
+// Endorsement config — slice A-06: ONE switch, fail-closed, dated.
+//
+// Every reader goes through resolveEndorsement (endorsement-switch-core.ts):
+// endorsed only when the switch is ON, an endorsement number is on file and the
+// effective date has arrived (Pacific). No row, a read error, or a pre-0329 row
+// all mean NOT endorsed, so missing data can never take tax off (OD-27).
 // ---------------------------------------------------------------------------
+async function readEndorsementRow(): Promise<RawEndorsementRow> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("medical_endorsement_config")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return (data as RawEndorsementRow) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The resolved endorsement + register test-mode state (never null). */
+export async function getEndorsementState(): Promise<EndorsementState> {
+  return resolveEndorsement(await readEndorsementRow(), pacificToday());
+}
+
 export async function getMedTaxSettings(): Promise<MedTaxSettings> {
-  if (!isSupabaseServiceConfigured) return DEFAULT_MED_TAX_SETTINGS;
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("medical_endorsement_config")
-    .select("is_medically_endorsed")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return {
-    ...DEFAULT_MED_TAX_SETTINGS,
-    medicallyEndorsed: data ? Boolean(data.is_medically_endorsed) : DEFAULT_MED_TAX_SETTINGS.medicallyEndorsed,
-  };
+  const state = await getEndorsementState();
+  return { ...DEFAULT_MED_TAX_SETTINGS, medicallyEndorsed: state.isMedicallyEndorsed };
 }
 
 export async function getEndorsementConfig(): Promise<{
   isMedicallyEndorsed: boolean;
   endorsementNumber: string | null;
   exciseExemptionUntil: string;
+  effectiveOn: string | null;
+  registerTestModeAllowed: boolean;
 } | null> {
   if (!isSupabaseServiceConfigured) return null;
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("medical_endorsement_config")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!data) return null;
+  const state = await getEndorsementState();
   return {
-    isMedicallyEndorsed: Boolean(data.is_medically_endorsed),
-    endorsementNumber: (data.endorsement_number as string | null) ?? null,
-    exciseExemptionUntil: String(data.excise_exemption_until),
+    isMedicallyEndorsed: state.isMedicallyEndorsed,
+    endorsementNumber: state.endorsementNumber,
+    exciseExemptionUntil: state.exciseExemptionUntil,
+    effectiveOn: state.effectiveOn,
+    registerTestModeAllowed: state.testModeAllowed,
   };
+}
+
+/**
+ * Write an already-validated change (validateEndorsementChange) to the single
+ * config row, and mirror the endorsement into tax_settings.medical_endorsement
+ * so the tax reports read the same answer (A-06: one authority).
+ */
+export async function saveEndorsementWrite(
+  write: EndorsementWrite,
+  actorId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database is not configured." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data: row, error: readErr } = await admin
+      .from("medical_endorsement_config")
+      .select("id")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (readErr) return { ok: false, error: readErr.message };
+    const payload = { ...write, updated_by: actorId, updated_at: new Date().toISOString() };
+    const res = row
+      ? await admin.from("medical_endorsement_config").update(payload).eq("id", (row as { id: string }).id)
+      : await admin.from("medical_endorsement_config").insert(payload);
+    if (res.error) return { ok: false, error: res.error.message };
+
+    if (typeof write.is_medically_endorsed === "boolean") {
+      // Mirror: reports and the Sage export read tax_settings. Best effort on
+      // the mirror only; the config row above is the authority.
+      await admin
+        .from("tax_settings")
+        .update({ medical_endorsement: write.is_medically_endorsed })
+        .eq("id", true);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Save failed." };
+  }
 }
 
 // ---------------------------------------------------------------------------
