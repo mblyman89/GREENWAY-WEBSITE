@@ -84,7 +84,7 @@ alter table public.inventory_audit_sessions
   );
 
 drop index if exists public.inventory_audit_sessions_full_count_section_uq;
-create unique index inventory_audit_sessions_full_count_section_uq
+create unique index if not exists inventory_audit_sessions_full_count_section_uq
   on public.inventory_audit_sessions (full_count_id, section_no)
   where full_count_id is not null;
 
