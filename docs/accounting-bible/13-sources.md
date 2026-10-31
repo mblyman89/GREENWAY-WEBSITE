@@ -68,3 +68,19 @@
 | Cut-over one-pager | CUTOVER_WEEKEND_ONE_PAGE.md (generated from src/lib/pos/cutover-weekend-core.ts) |
 | Census | src/lib/accounting/ledger-census-data.ts |
 | GL migrations | supabase/migrations/0172–0178, 0185–0192, 0205–0213, 0238, 0240, 0316, 0318 |
+
+## R2. Round 2 sources (2026-10-31; used in parts 14 and 15)
+
+| Source | URL | Used for |
+|---|---|---|
+| Federal Register 2026-08176 (DEA final rule, published 4/28/2026): FDA-approved and state-licensed medical marijuana → Schedule III | https://www.federalregister.gov/documents/2026/04/28/2026-08176/schedules-of-controlled-substances-rescheduling-of-food-and-drug-administration-approved-products | 14 Q-09 regime status; 15 H-05 |
+| Federal Register 2026-08177: new hearing on broader marijuana rescheduling | https://www.federalregister.gov/documents/2026/04/28/2026-08177/schedules-of-controlled-substances-rescheduling-of-marijuana | Adult-use still Schedule I |
+| Duane Morris, "Relief, Finally? DEA Issues Order Expediting Cannabis Rescheduling to Schedule III" (4/2026) | https://www.duanemorris.com/alerts/relief_finally_dea_issues_order_expediting_cannabis_rescheduling_schedule_iii_0426.html | Effective date 2026-04-22; scope = medical under state licence |
+| Foley Hoag, "Section 280E and Cannabis Tax Planning: Recent Developments" (9/2026) | https://foleyhoag.com/news-and-insights/blogs/cannabis-and-the-law/2026/september/section-280e-and-cannabis-tax-planning-recent-developments-and-practical-considerations | Tax-year application; IRS posture; need for a CPA opinion |
+| Morgan Lewis, "High Time for a Change? Post-DEA Hearing, Broader Marijuana Rescheduling Questions Remain" (9/2026) | https://www.morganlewis.com/pubs/2026/09/high-time-for-a-change-post-dea-hearing-broader-marijuana-rescheduling-questions-remain | Hearing 6/29–7/15/2026; decision pending |
+| 26 CFR 1.471-2 (valuation of inventories: (c) subnormal goods, 30-day rule; (d) physical count; (f)(1) no reserves) | https://www.law.cornell.edu/cfr/text/26/1.471-2 | 14 Q-04, Q-10; 15 D-03, D-04 |
+| 26 CFR 1.1361-1(l)(2) (one class of stock; governing provisions; distributions) | https://bradfordtaxinstitute.com/Endnotes/Reg_1_1361-1l2.pdf | 14 Q-09; 15 H-02 |
+| Sage Intacct, "About GAAP and tax adjustments" | https://preview.intacct.com/ia/docs/en_GB/help_action/General_Ledger/Adjusting_entries/GAAP_and_Tax_adjustments/about-gaap-and-tax-adjustments.htm | 14 Q-12; 15 A-08, G-08 |
+| Sage Intacct API, user-defined books | https://developer.sage.com/intacct/apis/intacct/1/intacct-openapi/groups/general-ledger/groups/books-and-journals/tags/general_ledger_user-defined-books | `book` dimension design |
+| Sage 50 Help 2026, Year-End Wizard: Internal Accounting Review | https://help-sage50.na.sage.com/en-us/2026/Content/YEAREND/Year_End_Wizard_Internal_Accounting_Review.htm | 15 G-04, G-06 |
+| Woogsoft, Sage 50 Quantum accounting features overview | https://www.woogsoft.com/sage-50-quantum-accounting-features-overview | Parity list (14 §0; 15 block G) |

@@ -6,17 +6,19 @@
 
 ## 1. Blocked on the owner (decision or documents)
 
+> **2026-10-31 round 2:** every B-row below was answered (part 05 OD-22…OD-39). Status is prefixed in bold; rows are kept as history. F-02 (GAAP layer) is **un-deferred** by OD-34 → 15 G-08; F-04 (1099) is un-deferred for tax year 2027 → 15 E-05; F-08 (budgets) → 15 G-09.
+
 | ID | Item | Blocked by | Trigger to unblock | Evidence pin |
 |---|---|---|---|---|
-| B-01 | Cut-over inventory journal (S-06) | **OD-08** "we are not ready to migrate inventory over yet." | Michael releases OD-08 in writing | DEFECTS.md:2439; ledger-census-data.ts:444-446 |
-| B-02 | Opening-balance bless (S-07) | **D-47** Sage spreadsheets/evidence (Q-02) | Sage 10/31 TB + bank statements + loan statements received | DEFECTS.md:2105 |
-| B-03 | Daily POS summary (S-03) | **Q-07** (it reverses books-82's per-order design) | Owner answer | 04 §N-03 |
-| B-04 | Template rows (S-01) values | **Q-01, Q-16** ceilings/tolerances | Owner answer; until then rows ship `is_active=false` | 0174 template table |
-| B-05 | Intercompany payments from the ATM account (S-15/S-16 variants) | **Q-09**, OD-10, OD-12 | Owner confirms the loan vs. capital vs. due-to treatment | DEFECTS.md:2551, :3084 |
-| B-06 | 280E position choice (S-20) | **Q-06** | Owner + CPA choose; the report can show all positions meanwhile | cogs-position-core (DC-03) |
-| B-07 | 12300 Excise Receivable use | **Q-08** | Owner/CPA | 04 §5 |
-| B-08 | Inventory write-down method (S-21 tail) | **Q-10** | Owner/CPA | 26 CFR 1.471-2/-4 |
-| B-09 | Template account allow-list (S-01c) | **Q-15** | Owner answer | 08 §4.2 |
+| B-01 | **RETIRED 2026-10-31** by OD-22/OD-26: the 11/01 inventory journal is replaced by the year-end count (15 D-03 + I-03). Cut-over inventory journal (S-06) | **OD-08** "we are not ready to migrate inventory over yet." | Michael releases OD-08 in writing | DEFECTS.md:2439; ledger-census-data.ts:444-446 |
+| B-02 | **RE-SCOPED** by OD-24: evidence is now Sage's 12/31/2026 TB (15 I-02). Opening-balance bless (S-07) | **D-47** Sage spreadsheets/evidence (Q-02) | Sage 10/31 TB + bank statements + loan statements received | DEFECTS.md:2105 |
+| B-03 | **UNBLOCKED** by OD-29 (Q-07 b) → 15 B-01. Daily POS summary (S-03) | **Q-07** (it reverses books-82's per-order design) | Owner answer | 04 §N-03 |
+| B-04 | **UNBLOCKED** by OD-23/OD-38; U-19 threshold default $5.00 → 15 A-03/C-02. Template rows (S-01) values | **Q-01, Q-16** ceilings/tolerances | Owner answer; until then rows ship `is_active=false` | 0174 template table |
+| B-05 | **UNBLOCKED** by OD-31 (hybrid, part 14 Q-09) → 15 H-03. Intercompany payments from the ATM account (S-15/S-16 variants) | **Q-09**, OD-10, OD-12 | Owner confirms the loan vs. capital vs. due-to treatment | DEFECTS.md:2551, :3084 |
+| B-06 | **DECIDED** by OD-28 (aggressive, warn not block) → 15 D-06/D-07. 280E position choice (S-20) | **Q-06** | Owner + CPA choose; the report can show all positions meanwhile | cogs-position-core (DC-03) |
+| B-07 | **STILL DEFERRED** by OD-30. 12300 Excise Receivable use | **Q-08** | Owner/CPA | 04 §5 |
+| B-08 | **DECIDED** by OD-32 → 15 D-04/D-05. Inventory write-down method (S-21 tail) | **Q-10** | Owner/CPA | 26 CFR 1.471-2/-4 |
+| B-09 | **UNBLOCKED** by OD-37 → 15 A-04. Template account allow-list (S-01c) | **Q-15** | Owner answer | 08 §4.2 |
 
 ## 2. Deferred by design (owner or law says "not now")
 
