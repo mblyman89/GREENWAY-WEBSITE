@@ -17,7 +17,7 @@ was **tested, not assumed**, and it is **correct**. The audit found a very stron
 (gapless numbering, immutability, idempotency, approval policy, 280E cost classes, opening-balance
 worksheet, bank matching, period table, reversal function) and a large number of **unwired doors**:
 writer RPCs with zero callers, pure cores imported only by their own tests (rule 50), and — most
-dangerously — several wires that *are* connected but **cannot succeed at runtime** (N-01, N-03; N-05 is a latent parity gap neutralised by 0211).
+dangerously — several wires that *are* connected but **cannot succeed at runtime** (N-01, N-02, N-03, N-09; N-05 is a latent parity gap neutralised by 0211).
 
 ---
 
@@ -42,28 +42,46 @@ explicit strategy: *capture tonight's evidence perfectly; post it when the door 
 
 ## 0.3 Reading order
 
-| Part | File | What it is for | Approx lines |
+| Part | File | What it is for |
+|---|---|---|
+| 00 | `00-INDEX.md` | This page. The request, the five fires, the map, the findings index. |
+| 01 | `01-standing-rules-and-handoff.md` | Digest of AGENTS.md rules and the todo.md bookkeeping rules that govern this branch; session-start and recovery commands. |
+| 02 | `02-authoritative-spec.md` | The law and standards (280E, 1.471-3, Harborside, RCW 69.50.535 incl. (2) medical, WAC 314-55-092, DOR B&O and due dates, Pub 15, 1099, FinCEN, 1120-S/7203, ASC, COSO, Plaid, NetSuite close). Each gives what it says → what it forces → Greenway pin. Accounting basis = **ACCRUAL** (cutover-core.ts:91-99). |
+| 03 | `03-code-anchor-atlas.md` | **Generated** (build_atlas.py). Every accounting file, export, RPC and caller with file:line. 6,048 lines. |
+| 03b | `03b-schema-atlas.md` | **Generated.** Every `gl_*` table, function and trigger with migration:line. |
+| 03c | `03c-chart-of-accounts.md` | The full 193-code COA from every migration. **Use it before writing any account code.** (10100 = vault, 10200 = operating bank, 12100 = employee advances, inventory = 200xx.) |
+| 04 | `04-current-state-and-gap-matrix.md` | 40-event census × 6 layers; findings N-01…N-13; dead cores DC-01…DC-11; uncalled writer RPCs; trust-liability flow map; DEFECTS cross-reference D-30…D-82; docs drift. |
+| 05 | `05-owner-decisions-and-open-questions.md` | OD-01…OD-21 verbatim with pins; open questions Q-01…Q-16 with recommendations. |
+| 06 | `06-verification-protocol.md` | Five gates; the existing PG15 verifiers and their coverage gaps; invariants INV-01…12; read-only query rules; reachability; exit criteria. |
+| 07 | `07-cutover-and-opening-balances.md` | **URGENT.** 10/31–11/01 books runbook: evidence, 07:30 read-only lot snapshot, periods check/insert, OB mechanics, N-13, backfill, parallel run. |
+| 08 | `08-target-architecture.md` | The finished system: principles, entities, flow map, posting contract, source_kind table, templates (verified columns; no account restriction, Q-15), daily rhythm, close calendar (20th/25th), controls, reports, scope guardrails. |
+| 09 | `09-slice-plan.md` | **The work queue.** Waves W0–W6, slices S-00…S-40 with pins, RED/GREEN proofs and "waits on". |
+| 10 | `10-deferred-and-blocked.md` | Blocked on the owner (B-xx), deferred by design (F-xx), accepted risks (R-xx). |
+| 11 | `11-enterprise-capability-checklist.md` | HAVE/PART/GAP scorecard, COSO control matrix (C-TAX-1, C-CASH-1, C-EQ-2 …), the 15-step computed month-end checklist. |
+| 12 | `12-unverified-register.md` | U-01…U-20: what I have not proven, with the exact read-only query or owner question. |
+| 13 | `13-sources.md` | Every authority URL, grouped, with what it was used for. |
+
+Supporting scripts (committed, read-only): `scripts/accounting-bible/build_atlas.py`, `census_matrix.py`, `probe_autopost.sh` (probe P-01), `reachability.py` (baseline 91/111 reachable).
+
+## 0.3a Findings index (N-series; numbering is permanent)
+
+| ID | One line | Severity | Slice |
 |---|---|---|---|
-| 00 | `00-INDEX.md` | This page. The request, the five fires, the map. | — |
-| 01 | `01-standing-rules-and-handoff.md` | Digest of AGENTS.md rules 1–14 + todo.md bookkeeping rules 1–142 that govern this branch; session-start and recovery commands. | |
-| 02 | `02-authoritative-spec.md` | The law and standards: 280E, Reg 1.471-3, Harborside, RCW 69.50.535, WAC 314-55-092, DOR B&O, Pub 15, 1099, FinCEN, S-corp (1120-S/K-1/7203), ASC topics, COSO, Plaid, NetSuite close. Each with what it forces in our code. | |
-| 03 | `03-code-anchor-atlas.md` | **Generated** (scripts/accounting-bible/build_atlas.py). Every accounting file, export, RPC, caller with file:line. | 6,048 |
-| 03b | `03b-schema-atlas.md` | **Generated.** Every `gl_*` table/function/trigger with migration:line. | 309 |
-| 04 | `04-current-state-and-gap-matrix.md` | The 40-event census × 6 layers, the defect cross-reference, the new findings N-01…N-09 in full, docs drift. | |
-| 05 | `05-owner-decisions-log.md` | Every owner decision/fact that constrains the books, verbatim where recorded, and the open questions Q-01…Q-12. | |
-| 06 | `06-verification-protocol.md` | How to prove each slice: PG15 harness, probes, mutation, census flips, live-application checklist. | |
-| 07 | `07-cutover-and-opening-balances.md` | **URGENT.** Tonight/tomorrow runbook for the books side of cut-over; opening-balance design; Sage parallel run. | |
-| 08 | `08-target-architecture.md` | The finished enterprise system, tailored to Greenway: subledgers, posting engine, close, tax, reporting, controls. | |
-| 09 | `09-slice-plan.md` | Ordered slices S-00…S-40 with file:line targets, acceptance criteria and gates. **The work queue.** | |
-| 10 | `10-deferred-and-blocked.md` | What waits on Michael, on documents, or on law. | |
-| 11 | `11-enterprise-capability-checklist.md` | "Power of the big boys" — every capability NetSuite/Intacct/QBO-Advanced has, mapped to Greenway status. | |
-| 12 | `12-unverified-register.md` | Everything I believe but have not proven, with the probe that would prove it. | |
-| 13 | `13-sources.md` | Every URL consulted, with date read. | |
+| N-01 | Cash autoposts carry no template and are refused (GL_AUTOPOST_NO_TEMPLATE, 0174:504-511); PG15-proven | CRITICAL | S-01 (+S-01b backfill) |
+| N-02 | Factory reset wipes gl_periods; nothing reseeds; GL_NO_PERIOD (0172:789) | CRITICAL | S-02 |
+| N-03 | Every sale = 2 drafts (~400/day) | HIGH | S-03 |
+| N-04 | Census conflates approval-exempt with autopost-eligible | MEDIUM | S-00 |
+| N-05 | TS approval parity with 0177, neutralised by 0211 | HIGH (latent) | S-04 |
+| N-06 | OB bless plugs to 40400 (tension with rule 27) | MEDIUM | S-07 |
+| N-07 | B&O service tiers above $1M not modelled | LOW | deferred F-05 |
+| N-08 | Sales tax rate has no effective date | MEDIUM | S-03c |
+| N-09 | GL ignores medical exemptions (sale-journal-core.ts:239-243; refund :292/:305); the **return** honours them (excise-return-core.ts:39-40) | HIGH | S-03b |
+| N-10 | 20 of 111 accounting modules unreachable | MEDIUM | per DC slice |
+| N-11 | Excise/sales-tax payment writes no journal except via a manual vendor bill | MEDIUM | S-12 |
+| N-12 | Non-current liabilities shown as current | LOW | accepted R-03 |
+| N-13 | EXPECTED_OPENING_ACCOUNTS mislabels 10100/12100 (cutover-core.ts:247-265) | MEDIUM | S-07a |
 
-Supporting scripts (committed): `scripts/accounting-bible/build_atlas.py`, `census_matrix.py`,
-`probe_autopost.sh`.
-
----
+Resolved during recon: U-09 (Plaid pending handled), U-10 (gapless numbering), U-11 (loyalty = discount), U-12/U-14 (no callers), U-15 (inventory audit never autoposts), U-17 (return already has the exemption line).
 
 ## 0.4 One-paragraph mental model of the ledger (so I do not have to re-derive it)
 
