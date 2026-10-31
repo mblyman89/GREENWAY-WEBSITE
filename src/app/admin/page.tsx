@@ -1,3 +1,5 @@
+import { vendorOfDayReminder } from "@/lib/inventory/count-generators-core";
+import { vendorCountPlannedToday } from "@/lib/inventory/count-generators-store";
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/roles";
@@ -90,13 +92,18 @@ export default async function AdminDashboardPage({
   // Fix Phase 4.1 (D55): finished counts waiting for the owner. Fetched only
   // for the owner (inventory.audit), the same idiom as canSeeCompliance.
   const canReviewAudits = can(session.profile.role, "inventory.audit");
-  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview] = await Promise.all([
+  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday] = await Promise.all([
     getCockpitSnapshot(sp.basis),
     getSetupStatus(),
     canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
     canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
     canReviewAudits ? listAuditSessions({ statuses: ["review"], limit: 20 }) : Promise.resolve(null),
+    // Fix Phase 4.4c (G-40): the vendor-of-the-day reminder, owner only.
+    canReviewAudits ? vendorCountPlannedToday().catch(() => null) : Promise.resolve(null),
   ]);
+  const vendorReminder = vendorToday
+    ? vendorOfDayReminder({ started: vendorToday.started, plannedToday: vendorToday.planned })
+    : null;
   const setupComplete = setup.completed >= setup.total;
 
   // S-9: surface unset webhook secrets loudly. In production those endpoints
@@ -128,6 +135,9 @@ export default async function AdminDashboardPage({
           : [],
     }),
     ...workQueueAttentionFlags(intakeInputs),
+    ...(vendorReminder
+      ? [{ severity: "info" as const, text: vendorReminder, href: "/admin/inventory/audits/new?gen=vendor" }]
+      : []),
   ];
 
   const peak = peakHour(snap.today.byHour);
