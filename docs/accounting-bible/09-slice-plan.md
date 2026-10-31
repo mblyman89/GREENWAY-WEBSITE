@@ -87,7 +87,9 @@
   - Do **not** recompute the exemption in the GL. Read the register's decision (stored exemption record) so there is one authority (rule 25).
 - **RED:** a golden ticket with one exempt line shows non-zero excise. **GREEN:** 0.
 - **Invariants:** INV-04, INV-05.
-- **Waits on:** **Q-05** (confirm the exemption record carries both flags per line; U-08/U-13 volumes). The fix itself is not owner-discretionary: the register already decided the tax, so the GL must agree with it.
+- **Join caveat (U-08):** medical_exempt_sales (0040) keys on (order_id, product_sku), not order_line_id. Either allocate by SKU within an order, or add `order_line_id` in a migration (preferred: exact, single authority).
+- **Agreement test:** after S-03b, the month's Σ credits to 32000 must equal the excise due on the LIQ-1295 return, which already nets the medical exemption line (`exemptMedicalSalesMinor`, excise-return-core.ts:39-40). That test is C-TAX-1.
+- **Waits on:** **Q-05** (confirm the exemption record carries both flags per line, now schema-verified; U-08/U-13 volumes). The fix itself is not owner-discretionary: the register already decided the tax, so the GL must agree with it.
 
 ---
 
