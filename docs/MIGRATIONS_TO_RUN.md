@@ -3285,3 +3285,43 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0328_full_count.rollback.sql`.
   It drops the four columns, so sections become ordinary audits (their counts are kept).
+
+## A-06 — 0329 — Medical endorsement switch + register test-mode switch (OD-40)
+
+- [ ] `0329_medical_endorsement_switch.sql` (slice A-06; owner decisions OD-27, OD-40). Apply it
+  **after 0328**.
+  - `medical_endorsement_config` gains `endorsed_effective_on` (date) and
+    `register_test_mode_allowed` (boolean, default **false** = test mode hidden
+    on every register). `is_medically_endorsed` now defaults to **false**.
+  - The 0040 seed row said TRUE with no endorsement number. Greenway is not
+    endorsed yet (OD-27), so any TRUE row without a number and an effective date
+    is switched **OFF** and noted. `tax_settings.medical_endorsement` (the mirror
+    the tax reports read) is switched OFF with it. A real, dated endorsement is
+    never touched.
+  - Check constraint `medical_endorsement_config_on_needs_facts`: ON needs a
+    number and an effective date.
+  - RLS: staff still read; only the **owner** can write (was: any staff).
+  - Until it is applied, the **Medical** page shows "migration 0329 needed" and
+    both switches refuse to save. Everything stays fail-closed (not endorsed).
+
+  Safe to re-run (add column if not exists, guarded constraint, drop/create policy).
+
+  **Check:**
+
+  ```sql
+  select is_medically_endorsed, endorsement_number, endorsed_effective_on,
+         register_test_mode_allowed, notes
+    from public.medical_endorsement_config;            -- 1 row: false, …, false
+  select medical_endorsement from public.tax_settings; -- false
+  select conname from pg_constraint
+   where conname = 'medical_endorsement_config_on_needs_facts';  -- 1 row
+  select polname from pg_policy
+   where polrelid = 'public.medical_endorsement_config'::regclass;  -- staff_read + owner_write
+  ```
+
+  **Then:** Back office → **Medical** → "Store medical endorsement" card shows
+  **Not endorsed**, "Register medical test mode" shows **HIDDEN**.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0329_medical_endorsement_switch.rollback.sql`.
+  It drops the two columns and the constraint and restores the staff write
+  policy. It leaves the endorsement OFF on purpose (it never turns tax off).

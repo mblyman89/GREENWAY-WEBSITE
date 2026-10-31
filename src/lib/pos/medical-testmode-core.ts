@@ -6,10 +6,21 @@
  * The medical tax exemptions (sales tax + the 37% excise) only come off the
  * price when the STORE holds a valid LCB medical endorsement — in the code that
  * is `bundle.medical.endorsed`, which the server sets from the durable
- * `medical_endorsement_config.is_medically_endorsed` DB row (src/lib/medical/
- * store.ts → getMedTaxSettings). Greenway is NOT medically endorsed yet, so on
- * a real device nothing comes off the price and the owner cannot SEE the medical
- * flow work end to end.
+ * `medical_endorsement_config` DB row, resolved fail-closed by
+ * src/lib/medical/endorsement-switch-core.ts (slice A-06: switch on + number +
+ * effective date ≤ today Pacific) and read through store.ts → getMedTaxSettings.
+ * Until the owner turns the endorsement on in /admin/medical, nothing comes off
+ * the price on a real device and the owner cannot SEE the medical flow work end
+ * to end.
+ *
+ * SLICE A-06 (OD-40) — THE OWNER CONTROLS WHETHER THIS EXISTS AT ALL. The
+ * server ships `bundle.medical.testModeAllowed` from the owner's "Register
+ * medical test mode" switch on /admin/medical. Unless it is exactly `true`,
+ * the register hides the menu item (medicalTestModeOffered), the override does
+ * nothing (applyMedicalTestMode), no banner shows, and RegisterShell switches a
+ * device's stored flag OFF on the next menu refresh. Owner's words: "so the
+ * register can hide that ability, so that real sales cant be rung in as a test
+ * medical sale."
  *
  * This core provides a PER-DEVICE, fully-reversible, migration-free way to
  * SIMULATE the endorsement so the owner can rehearse a medical sale (scan the
@@ -88,6 +99,8 @@ export function medicalTestModeToggleLabel(on: boolean): string {
 export function applyMedicalTestMode(bundle: PosMenuBundle, on: boolean): PosMenuBundle {
   if (!on) return bundle;
   if (!bundle.medical) return bundle;
+  // A-06: the owner's switch. Not exactly true ⇒ no simulation, ever.
+  if (bundle.medical.testModeAllowed !== true) return bundle;
   if (bundle.medical.endorsed === true) return bundle;
   return {
     ...bundle,
@@ -118,7 +131,31 @@ export function medicalTestModeSaleBlock(
  * is no medical block, the toggle is inert and a banner would just confuse.
  */
 export function medicalTestModeBannerActive(bundle: PosMenuBundle | null, on: boolean): boolean {
-  return on === true && !!bundle && !!bundle.medical;
+  return on === true && medicalTestModeOffered(bundle);
+}
+
+/**
+ * Slice A-06 (OD-40): may this register OFFER medical test mode at all? Only
+ * when the server-shipped bundle carries a medical block whose
+ * `testModeAllowed` is exactly `true` (the owner's /admin/medical switch).
+ * No bundle yet, no medical block, a missing flag (older server) or `false`
+ * ⇒ hidden. RegisterShell uses this to hide the MORE-menu item and to switch
+ * a device's stored flag OFF when the owner hides it.
+ */
+export function medicalTestModeOffered(bundle: Pick<PosMenuBundle, "medical"> | null): boolean {
+  return !!bundle && !!bundle.medical && bundle.medical.testModeAllowed === true;
+}
+
+/**
+ * Slice A-06: should the device's stored test-mode flag be forced OFF now?
+ * True when the flag is on but a menu bundle has arrived that does not offer
+ * test mode. Before any bundle has loaded (null) we keep the flag — nothing
+ * can be priced without a bundle, and the first bundle decides.
+ */
+export function medicalTestModeMustTurnOff(bundle: Pick<PosMenuBundle, "medical"> | null, on: boolean): boolean {
+  if (on !== true) return false;
+  if (!bundle) return false;
+  return !medicalTestModeOffered(bundle);
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +208,15 @@ export function __runMedicalTestModeCoreTests(): void {
   // applyMedicalTestMode — the safety-critical part.
   const bundleEndorsedFalse = {
     products: [],
+    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: { p1: "general" }, testModeAllowed: true },
+  } as unknown as PosMenuBundle;
+  // A-06: the same bundle when the owner has test mode HIDDEN (flag false / missing).
+  const bundleHidden = {
+    products: [],
+    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: { p1: "general" }, testModeAllowed: false },
+  } as unknown as PosMenuBundle;
+  const bundleOldServer = {
+    products: [],
     medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: { p1: "general" } },
   } as unknown as PosMenuBundle;
   const bundleNoMedical = { products: [] } as unknown as PosMenuBundle;
@@ -214,6 +260,22 @@ export function __runMedicalTestModeCoreTests(): void {
   ok(medicalTestModeBannerActive(bundleEndorsedFalse, false) === false, "banner OFF when toggle off");
   ok(medicalTestModeBannerActive(bundleNoMedical, true) === false, "banner OFF when no medical block (toggle inert)");
   ok(medicalTestModeBannerActive(null, true) === false, "banner OFF when no bundle yet");
+
+  // A-06 (OD-40): the owner's switch gates everything.
+  ok(applyMedicalTestMode(bundleHidden, true) === bundleHidden, "A-06: hidden ⇒ ON does nothing (same reference)");
+  ok(applyMedicalTestMode(bundleHidden, true).medical?.endorsed === false, "A-06: hidden ⇒ tax stays on");
+  ok(applyMedicalTestMode(bundleOldServer, true) === bundleOldServer, "A-06: missing flag (older server) ⇒ fail closed");
+  ok(medicalTestModeOffered(bundleEndorsedFalse) === true, "A-06: offered when allowed");
+  ok(medicalTestModeOffered(bundleHidden) === false, "A-06: not offered when hidden");
+  ok(medicalTestModeOffered(bundleOldServer) === false, "A-06: not offered when flag missing");
+  ok(medicalTestModeOffered(bundleNoMedical) === false, "A-06: not offered with no medical block");
+  ok(medicalTestModeOffered(null) === false, "A-06: not offered before a bundle loads");
+  ok(medicalTestModeBannerActive(bundleHidden, true) === false, "A-06: no banner when hidden");
+  ok(medicalTestModeMustTurnOff(bundleHidden, true) === true, "A-06: hidden bundle forces a stored ON flag off");
+  ok(medicalTestModeMustTurnOff(bundleOldServer, true) === true, "A-06: missing flag forces it off");
+  ok(medicalTestModeMustTurnOff(bundleEndorsedFalse, true) === false, "A-06: allowed bundle keeps it");
+  ok(medicalTestModeMustTurnOff(bundleHidden, false) === false, "A-06: already off ⇒ nothing to do");
+  ok(medicalTestModeMustTurnOff(null, true) === false, "A-06: no bundle yet ⇒ wait for the first one");
 
   console.log(`medical-testmode-core: ${passed} passed, ${failed} failed`);
   if (failed > 0) {

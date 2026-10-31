@@ -115,6 +115,7 @@ Each slice lists:
   - Fix the 0040 seed comment drift and the contradiction in medical-testmode-core.ts:10.
   - An audit event per flip.
 - **Depends:** — (**B-02 must ship before you ever turn it ON**) · **Done when:** with the row deleted the register shows no medical discount; the flip is logged. · **You:** after the merge, open /admin/medical and confirm "Not endorsed".
+- **Status:** BUILT (OD-40). Migration 0329 + `endorsement-switch-core.ts` + owner panel on /admin/medical. The same slice adds the owner request in OD-40: a **register medical test mode** switch (default HIDDEN) that removes the test-mode item from every register's MORE menu and switches it off on the next menu refresh. Owner applies 0329 manually. The 0040 seed comment drift is handled by 0329 (default false, legacy TRUE-without-number row switched OFF); medical-testmode-core.ts header corrected.
 
 ### A-07 Exceptions inbox: refused and parked postings (R-04)
 - **Why:** today a refused autopost is visible only in `audit_log`. Enterprise systems show an **exceptions queue**.

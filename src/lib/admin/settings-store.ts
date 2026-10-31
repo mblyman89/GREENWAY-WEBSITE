@@ -46,7 +46,10 @@ export async function saveTaxSettings(s: TaxSettings): Promise<SaveResult> {
       excise_rate_bps: Math.max(0, Math.round(s.exciseRateBps)),
       state_sales_rate_bps: Math.max(0, Math.round(s.stateSalesRateBps)),
       local_sales_rate_bps: Math.max(0, Math.round(s.localSalesRateBps)),
-      medical_endorsement: !!s.medicalEndorsement,
+      // Slice A-06 (OD-40): medical_endorsement is NOT written here. It is a
+      // mirror owned by the /admin/medical owner switch (medical/store.ts
+      // saveEndorsementWrite); a tax-rate save must never move it. A brand
+      // new row takes the column default (false = not endorsed).
     };
     // tax_base_mode is added by a later migration; only write it if the caller
     // provided a recognized value (upsert tolerates the column being absent

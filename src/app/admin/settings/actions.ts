@@ -89,7 +89,13 @@ export async function saveTaxSettingsAction(fd: FormData): Promise<ActionResult>
     exciseRateBps: pctToBps(fd, "excisePct", before?.exciseRateBps ?? 3700),
     stateSalesRateBps: pctToBps(fd, "stateSalesPct", before?.stateSalesRateBps ?? 650),
     localSalesRateBps: pctToBps(fd, "localSalesPct", before?.localSalesRateBps ?? 280),
-    medicalEndorsement: fd.get("medicalEndorsement") === "on",
+    // Slice A-06 (OD-40): the endorsement has ONE authority, the owner switch
+    // on /admin/medical (medical_endorsement_config), which mirrors
+    // tax_settings.medical_endorsement. The tax form only SHOWS it; the form is
+    // never read for it, and saveTaxSettings does not write that column, so a
+    // tax-rate save can never flip the endorsement. (This value is only used
+    // for the audit row below.)
+    medicalEndorsement: before?.medicalEndorsement === true,
     taxBaseMode,
   };
 

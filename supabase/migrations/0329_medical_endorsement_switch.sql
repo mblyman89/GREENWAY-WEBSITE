@@ -82,6 +82,14 @@ comment on column public.medical_endorsement_config.endorsed_effective_on is
 comment on column public.medical_endorsement_config.register_test_mode_allowed is
   'A-06 / OD-40: may registers OFFER medical test mode. False hides it on every register.';
 
+-- One authority: tax_settings.medical_endorsement mirrors the config switch.
+-- If the config row is OFF (always true right after the step above unless a
+-- real, dated endorsement is on file), the mirror is OFF too. Never turns it ON.
+update public.tax_settings
+   set medical_endorsement = false
+ where medical_endorsement
+   and not exists (select 1 from public.medical_endorsement_config where is_medically_endorsed);
+
 -- RLS: staff read (unchanged), owner-only write.
 alter table public.medical_endorsement_config enable row level security;
 drop policy if exists medical_endorsement_config_staff_write on public.medical_endorsement_config;

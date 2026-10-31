@@ -19,6 +19,8 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { resolveEndorsement, type RawEndorsementRow } from "@/lib/medical/endorsement-switch-core";
+import { pacificToday } from "@/lib/reports/timezone";
 import {
   CANNABIS_EXCISE_TAX_BPS,
   STATE_SALES_TAX_BPS,
@@ -257,11 +259,28 @@ export async function getTaxSettings(): Promise<TaxSettings> {
       rawMode === "tax_inclusive" || rawMode === "auto" || rawMode === "pre_tax"
         ? (rawMode as TaxBaseMode)
         : DEFAULT_TAX_SETTINGS.taxBaseMode;
+    // Slice A-06 (OD-40): tax_settings.medical_endorsement is only a MIRROR of
+    // the owner switch on /admin/medical. The exemption follows the RESOLVED
+    // endorsement (switch on + number + effective date ≤ today Pacific), so a
+    // future-dated endorsement or a stale mirror can never exempt early. Both
+    // must agree; any read failure ⇒ not endorsed (fail closed).
+    let resolvedEndorsed = false;
+    try {
+      const { data: cfg } = await admin
+        .from("medical_endorsement_config")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      resolvedEndorsed = resolveEndorsement(cfg as RawEndorsementRow, pacificToday()).isMedicallyEndorsed;
+    } catch {
+      resolvedEndorsed = false;
+    }
     return {
       exciseRateBps: data.excise_rate_bps ?? DEFAULT_TAX_SETTINGS.exciseRateBps,
       stateSalesRateBps: data.state_sales_rate_bps ?? DEFAULT_TAX_SETTINGS.stateSalesRateBps,
       localSalesRateBps: data.local_sales_rate_bps ?? DEFAULT_TAX_SETTINGS.localSalesRateBps,
-      medicalEndorsement: !!data.medical_endorsement,
+      medicalEndorsement: !!data.medical_endorsement && resolvedEndorsed,
       taxBaseMode: mode,
     };
   } catch {
