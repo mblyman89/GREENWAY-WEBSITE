@@ -8,6 +8,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { resolveEndorsement, type RawEndorsementRow } from "@/lib/medical/endorsement-switch-core";
 
 // ---------------------------------------------------------------------------
 // Loyalty & discount report
@@ -688,7 +689,8 @@ export async function getMedicalReport(fromDate: string, toDate: string): Promis
         .lte("sale_date", toDate),
       admin
         .from("medical_endorsement_config")
-        .select("is_medically_endorsed, endorsement_number, excise_exemption_until")
+        .select("*")
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
     ]);
@@ -791,11 +793,9 @@ export async function getMedicalReport(fromDate: string, toDate: string): Promis
   cardValidityIssues.sort((a, b) => b.saleDate.localeCompare(a.saleDate));
 
   // --- Endorsement / compliance ---------------------------------------------
-  const cfg =
-    (endorsement as
-      | { is_medically_endorsed: boolean; endorsement_number: string | null; excise_exemption_until: string | null }
-      | null) ?? null;
-  const exemptionUntil = cfg?.excise_exemption_until ?? null;
+  // A-06: the same fail-closed, dated resolver every money path uses.
+  const cfg = endorsement ? resolveEndorsement(endorsement as RawEndorsementRow, pacificDayKey(today)) : null;
+  const exemptionUntil = cfg?.exciseExemptionUntil ?? null;
   const daysUntilExemptionEnds = exemptionUntil
     ? Math.round((new Date(exemptionUntil).getTime() - today.getTime()) / 86_400_000)
     : null;
@@ -804,8 +804,8 @@ export async function getMedicalReport(fromDate: string, toDate: string): Promis
     patients: patients ?? 0,
     activeCards,
     expiringSoon,
-    isEndorsed: cfg?.is_medically_endorsed ?? false,
-    endorsementNumber: cfg?.endorsement_number ?? null,
+    isEndorsed: cfg?.isMedicallyEndorsed ?? false,
+    endorsementNumber: cfg?.endorsementNumber ?? null,
     exemptionUntil,
     daysUntilExemptionEnds,
     authByStatus,

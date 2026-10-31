@@ -5,9 +5,12 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge, Button } from "@/components/admin/ui";
-import { getEndorsementConfig, medicalSummary, listExemptSales, listRecentAuthorizations } from "@/lib/medical/store";
+import { getEndorsementState, medicalSummary, listExemptSales, listRecentAuthorizations } from "@/lib/medical/store";
 import { DohProductRegistry } from "@/components/admin/medical/DohProductRegistry";
 import { GuidedIntakeWizard } from "@/components/admin/medical/GuidedIntakeWizard";
+import { EndorsementSwitchPanel } from "@/components/admin/medical/EndorsementSwitchPanel";
+import { isOwnerRole } from "@/lib/auth/roles";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +29,11 @@ export default async function MedicalOverviewPage({
     intake_error?: string;
     intake_ok?: string;
     scan_error?: string;
+    switch_ok?: string;
+    switch_error?: string;
   }>;
 }) {
-  await requirePermission("medical.manage");
+  const session = await requirePermission("medical.manage");
   const sp = searchParams ? await searchParams : {};
   const productQuery = typeof sp.prodq === "string" ? sp.prodq : "";
   const registryError = typeof sp.reg_error === "string" ? sp.reg_error : null;
@@ -37,6 +42,8 @@ export default async function MedicalOverviewPage({
   const intakeError = typeof sp.intake_error === "string" ? sp.intake_error : null;
   const intakeOk = typeof sp.intake_ok === "string" ? sp.intake_ok : null;
   const scanError = typeof sp.scan_error === "string" ? sp.scan_error : null;
+  const switchOk = typeof sp.switch_ok === "string" ? sp.switch_ok : null;
+  const switchError = typeof sp.switch_error === "string" ? sp.switch_error : null;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -48,8 +55,8 @@ export default async function MedicalOverviewPage({
     );
   }
 
-  const [config, summary, exempt, recent] = await Promise.all([
-    getEndorsementConfig(),
+  const [endorsement, summary, exempt, recent] = await Promise.all([
+    getEndorsementState(),
     medicalSummary(),
     listExemptSales({ limit: 50 }),
     listRecentAuthorizations(15),
@@ -86,22 +93,14 @@ export default async function MedicalOverviewPage({
         }
       />
 
-      {/* Endorsement status */}
-      <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-white">Store medical endorsement</h2>
-          {config?.isMedicallyEndorsed ? (
-            <Badge tone="green">Endorsed</Badge>
-          ) : (
-            <Badge tone="danger">Not endorsed — exemptions disabled</Badge>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-white/50">
-          {config?.endorsementNumber ? `Endorsement ${config.endorsementNumber}. ` : ""}
-          37% excise exemption effective through {config?.exciseExemptionUntil ?? "2029-06-30"} (WAC
-          314-55-090(6)).
-        </p>
-      </section>
+      {/* Slice A-06 (OD-40): owner switches — store endorsement + register test mode */}
+      <EndorsementSwitchPanel
+        state={endorsement}
+        isOwner={isOwnerRole(session.profile.role)}
+        today={pacificToday()}
+        okMessage={switchOk}
+        errorMessage={switchError}
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Medical patients" value={summary.patients.toLocaleString("en-US")} accent="gold" />

@@ -33,7 +33,10 @@ export const DEFAULT_MED_TAX_SETTINGS: MedTaxSettings = {
   exciseRateBps: 3700,
   stateSalesRateBps: 650,
   localSalesRateBps: 280,
-  medicallyEndorsed: true,
+  // A-06 / OD-27: fail CLOSED. Without a resolved endorsement the store is
+  // NOT endorsed, so a missing setting can never take tax off. Callers that
+  // need the real value read getMedTaxSettings() (endorsement-switch-core).
+  medicallyEndorsed: false,
 };
 
 export function combinedSalesBps(s: MedTaxSettings): number {
@@ -228,8 +231,14 @@ export const RECREATIONAL_PURCHASE_LIMITS = {
 // ---------------------------------------------------------------------------
 // Inline tests
 // ---------------------------------------------------------------------------
+function ok0(c: boolean, m: string): void {
+  if (!c) throw new Error(`Test failed: ${m}`);
+}
+
 export function __runMedTaxTests(): void {
-  const s = DEFAULT_MED_TAX_SETTINGS;
+  ok0(DEFAULT_MED_TAX_SETTINGS.medicallyEndorsed === false, "A-06: default is NOT endorsed (fail closed)");
+  // The exemption arithmetic below is tested for an ENDORSED store.
+  const s: MedTaxSettings = { ...DEFAULT_MED_TAX_SETTINGS, medicallyEndorsed: true };
   let n = 0;
   const ok = (c: boolean, m: string) => {
     n++;

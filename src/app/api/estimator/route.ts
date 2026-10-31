@@ -60,7 +60,8 @@ export async function POST(request: Request) {
         minRedeemPoints: loyaltyCfg.minRedeemPoints,
       },
       medical: {
-        endorsed: endorsement?.isMedicallyEndorsed ?? true,
+        // A-06: fail closed — no resolved endorsement means not endorsed.
+        endorsed: endorsement?.isMedicallyEndorsed ?? false,
         // WAC 314-55-090(6): the excise exemption sunsets — compare store-local dates.
         exciseActive: pacificToday() <= exciseExemptionUntil,
       },
