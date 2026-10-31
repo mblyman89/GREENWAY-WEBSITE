@@ -544,6 +544,10 @@ export function RegisterShell({
         if (cached && Array.isArray(cached.products)) {
           setMenuBundle(cached);
           menuBundleRef.current = cached;
+          // Slice A-06 (OD-40): the owner hid register test mode on
+          // /admin/medical ⇒ a stored ON flag is switched OFF (the persist
+          // effect then stores "off"). No cached bundle ⇒ the first download decides.
+          if (medicalTestModeMustTurnOff(cached, true)) setMedicalTestMode(false);
         }
       }
     } catch {
@@ -598,16 +602,6 @@ export function RegisterShell({
       // Best-effort — a full disk just means the choice doesn't survive restart.
     }
   }, [medicalTestMode, screen]);
-
-  // ── Slice A-06 (OD-40): the owner hid test mode → switch it OFF here ──
-  // When a menu bundle arrives that does not offer test mode (owner switched
-  // it to HIDDEN on /admin/medical, or the store is now really endorsed), a
-  // device that still had it ON turns it OFF; the persist effect above then
-  // stores "off". Owner: "so that real sales cant be rung in as a test
-  // medical sale."
-  useEffect(() => {
-    if (medicalTestModeMustTurnOff(menuBundle, medicalTestMode)) setMedicalTestMode(false);
-  }, [menuBundle, medicalTestMode]);
 
   // ── AN-1: lock-screen update pump ──
   // The owner's real pain: an installed iPad register NEVER picked up a new
@@ -931,6 +925,11 @@ export function RegisterShell({
       }
       setMenuBundle(bundle);
       menuBundleRef.current = bundle;
+      // Slice A-06 (OD-40): every fresh menu carries the owner's switch. If
+      // test mode is hidden (or the store is now really endorsed), a register
+      // that had it ON switches it OFF here; the persist effect stores "off".
+      // Owner: "so that real sales cant be rung in as a test medical sale."
+      if (medicalTestModeMustTurnOff(bundle, true)) setMedicalTestMode(false);
       try {
         posStorageSet(LS_MENU, JSON.stringify(bundle));
       } catch {
