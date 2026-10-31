@@ -76,6 +76,8 @@ import {
   medicalTestModeToggleLabel,
   applyMedicalTestMode,
   medicalTestModeBannerActive,
+  medicalTestModeOffered,
+  medicalTestModeMustTurnOff,
 } from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 // Register rotation slice — when the back office revokes or re-keys this iPad,
@@ -596,6 +598,16 @@ export function RegisterShell({
       // Best-effort — a full disk just means the choice doesn't survive restart.
     }
   }, [medicalTestMode, screen]);
+
+  // ── Slice A-06 (OD-40): the owner hid test mode → switch it OFF here ──
+  // When a menu bundle arrives that does not offer test mode (owner switched
+  // it to HIDDEN on /admin/medical, or the store is now really endorsed), a
+  // device that still had it ON turns it OFF; the persist effect above then
+  // stores "off". Owner: "so that real sales cant be rung in as a test
+  // medical sale."
+  useEffect(() => {
+    if (medicalTestModeMustTurnOff(menuBundle, medicalTestMode)) setMedicalTestMode(false);
+  }, [menuBundle, medicalTestMode]);
 
   // ── AN-1: lock-screen update pump ──
   // The owner's real pain: an installed iPad register NEVER picked up a new
@@ -1222,6 +1234,9 @@ export function RegisterShell({
   // override never fabricates a medical config that the server didn't ship.
   const effectiveBundle = menuBundle ? applyMedicalTestMode(menuBundle, medicalTestMode) : null;
   const medicalTestModeBanner = medicalTestModeBannerActive(menuBundle, medicalTestMode);
+  // Slice A-06 (OD-40): the owner's /admin/medical switch decides whether this
+  // register may offer test mode at all (bundle.medical.testModeAllowed).
+  const medicalTestModeAvailable = medicalTestModeOffered(menuBundle);
 
   if (screen === "loading") {
     return (
@@ -1933,6 +1948,7 @@ export function RegisterShell({
         medicalTestMode={medicalTestMode}
         medicalTestModeLabel={medicalTestModeToggleLabel(medicalTestMode)}
         medicalTestModeBanner={medicalTestModeBanner}
+        medicalTestModeAvailable={medicalTestModeAvailable}
         onToggleMedicalTestMode={() => setMedicalTestMode((m) => toggleMedicalTestMode(m))}
         buildVersion={buildVersion ?? null}
         onApplyUpdate={
@@ -2621,6 +2637,7 @@ function HomeScreen({
   medicalTestMode,
   medicalTestModeLabel,
   medicalTestModeBanner,
+  medicalTestModeAvailable,
   onToggleMedicalTestMode,
   buildVersion,
   onApplyUpdate,
@@ -2690,6 +2707,8 @@ function HomeScreen({
   medicalTestModeLabel: string;
   /** Slice 5 — whether the loud "TEST MODE" banner should show. */
   medicalTestModeBanner: boolean;
+  /** Slice A-06 — the owner allows test mode on registers (/admin/medical). False ⇒ the menu item is hidden. */
+  medicalTestModeAvailable: boolean;
   /** Slice 5 — flip this device's medical test mode (persists per device). */
   onToggleMedicalTestMode: () => void;
   /** AN-0 — the running build's version (short commit SHA; "dev" locally). */
@@ -2893,18 +2912,21 @@ function HomeScreen({
                 >
                   {themeLabel === "Light mode" ? "☀️" : "🌙"} {themeLabel}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onToggleMedicalTestMode();
-                  }}
-                  title="TEST ONLY — simulates a DOH medical endorsement on THIS device so you can rehearse a tax-free medical sale. Turn OFF for real sales until the store is actually endorsed."
-                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
-                >
-                  {medicalTestMode ? "🧪 " : "⚕️ "}
-                  {medicalTestModeLabel}
-                </button>
+                {/* Slice A-06 (OD-40): shown ONLY when the owner allows it on /admin/medical. */}
+                {medicalTestModeAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onToggleMedicalTestMode();
+                    }}
+                    title="TEST ONLY — simulates a DOH medical endorsement on THIS device so you can rehearse a tax-free medical sale. Turn OFF for real sales until the store is actually endorsed."
+                    className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                  >
+                    {medicalTestMode ? "🧪 " : "⚕️ "}
+                    {medicalTestModeLabel}
+                  </button>
+                ) : null}
                 <div className="my-1 border-t border-[var(--pos-border)]" />
                 <button
                   type="button"

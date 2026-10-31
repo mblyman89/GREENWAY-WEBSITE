@@ -38,9 +38,12 @@ end $$;
 delete from public.medical_endorsement_config;
 insert into public.medical_endorsement_config (is_medically_endorsed, notes)
 values (true, 'Greenway holds an LCB medical endorsement.');
+insert into public.tax_settings (id, medical_endorsement) values (true, true)
+  on conflict (id) do update set medical_endorsement = true;
 \i supabase/migrations/0329_medical_endorsement_switch.sql
 \i supabase/migrations/0329_medical_endorsement_switch.sql
 do $$ begin
+  assert (select not medical_endorsement from public.tax_settings where id), 'tax_settings mirror switched OFF';
   assert (select count(*) from public.medical_endorsement_config) = 1, 'still one row';
   assert (select bool_and(not is_medically_endorsed) from public.medical_endorsement_config), 'legacy seed switched OFF';
   assert (select bool_and(not register_test_mode_allowed) from public.medical_endorsement_config), 'test mode hidden by default';
@@ -58,9 +61,11 @@ end $$;
 -- 3. A real endorsement survives a re-run ON.
 update public.medical_endorsement_config
    set is_medically_endorsed = true, endorsement_number = 'ME-1', endorsed_effective_on = date '2027-03-01';
+update public.tax_settings set medical_endorsement = true where id;
 \i supabase/migrations/0329_medical_endorsement_switch.sql
 do $$ begin
   assert (select bool_and(is_medically_endorsed) from public.medical_endorsement_config), 'real endorsement kept ON';
+  assert (select medical_endorsement from public.tax_settings where id), 'mirror of a real endorsement kept ON';
 end $$;
 
 -- 4. The check: ON needs a number and a date.

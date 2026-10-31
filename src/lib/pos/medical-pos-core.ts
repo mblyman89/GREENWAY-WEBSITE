@@ -68,6 +68,13 @@ export type PosMedicalConfig = {
    * simulated endorsement must never complete (see medicalTestModeSaleBlock).
    */
   simulated?: boolean;
+  /**
+   * Slice A-06 (OD-40): the owner's /admin/medical switch "Register medical
+   * test mode". Sent by the server (GET /api/pos/menu). The register offers
+   * medical test mode ONLY when this is exactly `true`; missing or false hides
+   * it and switches it off on the device (fail closed).
+   */
+  testModeAllowed?: boolean;
 };
 
 // ---------------------------------------------------------------------------

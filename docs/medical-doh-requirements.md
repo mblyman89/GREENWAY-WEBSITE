@@ -94,3 +94,22 @@ The 37% excise exemption is effective **until June 30, 2029** (WAC 314-55-090(6)
 - WAC 314-55-090, *Medical cannabis patient excise tax exemption* (eff. 2024-10-12).
 - RCW 69.51A.230 (unique patient identifier / recognition card).
 - RCW 69.50.535 (excise tax + exemption sunset 2029-06-30).
+
+
+## Store endorsement switch and register test mode (slice A-06, OD-40)
+
+The store's medical endorsement is ONE owner-only switch on **Back office → Medical**
+(`medical_endorsement_config`, migration 0329). The store counts as endorsed only when the
+switch is ON, an endorsement number is on file, and the effective date has arrived (Pacific
+day). Anything missing means **not endorsed**, so no exemption is ever taken without the
+endorsement (RCW 69.50.375; WAC 314-55-090; RCW 82.08.9998 requires a medically endorsed
+store). Turning it ON needs the number, the effective date, a ticked checklist and the
+typed word `ENDORSED`; turning it OFF is one click. Every flip is written to the audit log.
+`tax_settings.medical_endorsement` is a mirror for the tax reports and cannot be edited on
+the tax settings page.
+
+The same card holds **Register medical test mode** (default HIDDEN). While hidden, no
+register shows the test-mode menu item, and a register that had it on switches it off the
+next time it refreshes its menu. Turning the real endorsement on hides it automatically.
+Before going live: B-02 (medical-exempt lines in the general ledger) must ship, and CCRS
+`IsMedical` stays FALSE until CCRS slice S-10 (CCRS bible D-03).

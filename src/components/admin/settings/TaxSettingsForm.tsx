@@ -123,18 +123,25 @@ export function TaxSettingsForm({
                 <option value="auto">Auto-detect (legacy)</option>
               </Select>
             </Field>
-            <label className="flex items-center gap-2 text-sm text-[var(--admin-text)] sm:col-span-2">
+            {/* Slice A-06 (OD-40): read-only here. The one switch lives on /admin/medical. */}
+            <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--admin-text)] sm:col-span-2">
               <input
                 type="checkbox"
-                name="medicalEndorsement"
-                defaultChecked={settings.medicalEndorsement}
+                checked={settings.medicalEndorsement}
+                disabled
+                readOnly
+                aria-label="Store holds a DOH medical endorsement (read-only)"
                 className="accent-[var(--admin-accent)]"
               />
               <span>
-                Store holds a DOH <strong>medical endorsement</strong> (enables the medical
-                sales/excise exemption path)
+                Store holds a DOH <strong>medical endorsement</strong>:{" "}
+                <strong>{settings.medicalEndorsement ? "Yes" : "No"}</strong>. Set it on the{" "}
+                <a href="/admin/medical#endorsement" className="underline">
+                  Medical page
+                </a>{" "}
+                (owner only).
               </span>
-            </label>
+            </div>
           </div>
           <div className="flex items-center justify-between border-t border-[var(--admin-border)] px-5 py-3">
             <p className="text-xs text-[var(--admin-text-faint)]">

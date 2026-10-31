@@ -18,6 +18,8 @@ import {
   applyMedicalTestMode,
   medicalTestModeBannerActive,
   medicalTestModeSaleBlock,
+  medicalTestModeOffered,
+  medicalTestModeMustTurnOff,
 } from "@/lib/pos/medical-testmode-core";
 
 describe("medical-testmode-core self-tests", () => {
@@ -29,7 +31,7 @@ describe("medical-testmode-core self-tests", () => {
 describe("medical test-mode override", () => {
   const unendorsed = {
     products: [],
-    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: { p1: "general" } },
+    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: { p1: "general" }, testModeAllowed: true },
   } as unknown as PosMenuBundle;
   const noMedical = { products: [] } as unknown as PosMenuBundle;
 
@@ -70,7 +72,7 @@ describe("medical test-mode override", () => {
 describe("Phase 0.1 (F-01-14): no real payment on simulated tax removal", () => {
   const real = {
     products: [],
-    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: {} },
+    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: {}, testModeAllowed: true },
   } as unknown as PosMenuBundle;
   it("test mode marks the bundle as simulated", () => {
     expect(applyMedicalTestMode(real, true).medical?.simulated).toBe(true);
@@ -86,5 +88,47 @@ describe("Phase 0.1 (F-01-14): no real payment on simulated tax removal", () => 
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/lib/pos/sync-store.ts", "utf8");
     expect(src).toMatch(/medicalSavingsMinor > 0[\s\S]{0,200}getMedTaxSettings\(\)/);
+  });
+});
+
+describe("Slice A-06 (OD-40): the owner's switch hides register test mode", () => {
+  const mk = (testModeAllowed?: boolean) =>
+    ({
+      products: [],
+      medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: { p1: "general" }, ...(testModeAllowed === undefined ? {} : { testModeAllowed }) },
+    }) as unknown as PosMenuBundle;
+  it("hidden (false) ⇒ the override does nothing and tax stays on", () => {
+    const b = mk(false);
+    expect(applyMedicalTestMode(b, true)).toBe(b);
+    expect(applyMedicalTestMode(b, true).medical?.endorsed).toBe(false);
+    expect(medicalTestModeBannerActive(b, true)).toBe(false);
+    expect(medicalTestModeOffered(b)).toBe(false);
+  });
+  it("missing flag (older server) ⇒ fail closed", () => {
+    const b = mk(undefined);
+    expect(applyMedicalTestMode(b, true)).toBe(b);
+    expect(medicalTestModeOffered(b)).toBe(false);
+  });
+  it("allowed (true) ⇒ offered and simulates", () => {
+    const b = mk(true);
+    expect(medicalTestModeOffered(b)).toBe(true);
+    expect(applyMedicalTestMode(b, true).medical?.simulated).toBe(true);
+  });
+  it("a device left ON is switched OFF once a hiding bundle arrives", () => {
+    expect(medicalTestModeMustTurnOff(mk(false), true)).toBe(true);
+    expect(medicalTestModeMustTurnOff(mk(true), true)).toBe(false);
+    expect(medicalTestModeMustTurnOff(null, true)).toBe(false);
+    expect(medicalTestModeMustTurnOff(mk(false), false)).toBe(false);
+  });
+  it("RegisterShell hides the MORE-menu item and forces the flag off", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/app/(site)/pos/RegisterShell.tsx", "utf8");
+    expect(src).toMatch(/\{medicalTestModeAvailable \? \(\s*<button[\s\S]{0,400}onToggleMedicalTestMode\(\)/);
+    expect(src).toMatch(/medicalTestModeMustTurnOff\(menuBundle, medicalTestMode\)\) setMedicalTestMode\(false\)/);
+  });
+  it("the menu route ships the owner switch, fail closed", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/app/api/pos/menu/route.ts", "utf8");
+    expect(src).toMatch(/testModeAllowed: endorsement\?\.registerTestModeAllowed === true/);
   });
 });

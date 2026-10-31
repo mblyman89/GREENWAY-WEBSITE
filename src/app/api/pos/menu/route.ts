@@ -149,6 +149,10 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     // Same fallback the completion gate uses (WAC 314-55-090(6) statutory sunset).
     exciseExemptionUntil: endorsement?.exciseExemptionUntil ?? "2029-06-30",
     registry,
+    // Slice A-06 (OD-40): the owner's "register medical test mode" switch on
+    // /admin/medical. Fail closed: no config / pre-0329 row / endorsed store
+    // ⇒ false, and the register hides test mode.
+    testModeAllowed: endorsement?.registerTestModeAllowed === true,
   };
 
   // ═══ SLICE 16 — LIVE LOT TRUTH ═══════════════════════════════════════════
