@@ -25,7 +25,18 @@ import {
   type RotationState,
   type VendorProposal,
 } from "@/lib/inventory/count-generators-core";
-import { createAuditAction, saveRotationSettingsAction, skipVendorAction } from "../actions";
+import {
+  MAX_MINUTES_PER_LOT,
+  MAX_SESSION_MINUTES,
+  MIN_MEASURED_COUNTS,
+  MIN_MINUTES_PER_LOT,
+  MIN_SESSION_MINUTES,
+  formatMinutes,
+  minutesForLots,
+  paceSentence,
+  type CountPace,
+} from "@/lib/inventory/count-time-core";
+import { createAuditAction, saveCountPaceAction, saveRotationSettingsAction, skipVendorAction } from "../actions";
 
 const CARD = "rounded-2xl border border-white/10 bg-white/[0.02] p-5";
 const P = "text-sm leading-relaxed text-[var(--admin-text-muted)]";
@@ -79,6 +90,7 @@ export function GeneratorBody({
   vendor,
   rotation,
   unread,
+  pace,
 }: {
   gen: Exclude<CountGenerator, "due">;
   lots: readonly AuditLot[];
@@ -89,6 +101,8 @@ export function GeneratorBody({
   rotation: RotationState;
   /** Exception sources that could not be read (the list may be short). */
   unread: string[];
+  /** Fix Phase 4.5c: minutes of counting time per lot. */
+  pace: CountPace;
 }) {
   const byId = new Map(lots.map((l) => [l.lotId, l]));
   const chosen = picked.lotIds.map((id) => byId.get(id)).filter((l): l is AuditLot => !!l);
@@ -107,7 +121,8 @@ export function GeneratorBody({
         <p className={`mt-1 ${P}`}>{GENERATOR_HELP[gen]}</p>
         <p className={`mt-2 ${P}`}>
           {chosen.length} lot{chosen.length === 1 ? "" : "s"} across {groups.length} product{groups.length === 1 ? "" : "s"}
-          {value === null ? "" : `, ${formatCents(value)} at cost`}.
+          {value === null ? "" : `, ${formatCents(value)} at cost`}
+          {chosen.length > 0 ? `, ${formatMinutes(minutesForLots(chosen.length, pace))} of counting` : ""}.
           {picked.skippedOpen > 0
             ? ` ${picked.skippedOpen} lot${picked.skippedOpen === 1 ? " is" : "s are"} left out because ${picked.skippedOpen === 1 ? "it is" : "they are"} already on an open count (a lot is on one open count at a time).`
             : ""}
@@ -131,7 +146,7 @@ export function GeneratorBody({
         ) : null}
       </section>
 
-      {gen === "vendor" ? <VendorPanel vendor={vendor} rotation={rotation} /> : null}
+      {gen === "vendor" ? <VendorPanel vendor={vendor} rotation={rotation} pace={pace} /> : null}
 
       {chosen.length === 0 ? (
         <section className={CARD}>
@@ -206,7 +221,7 @@ export function GeneratorBody({
   );
 }
 
-function VendorPanel({ vendor, rotation }: { vendor: VendorProposal | null; rotation: RotationState }) {
+function VendorPanel({ vendor, rotation, pace }: { vendor: VendorProposal | null; rotation: RotationState; pace: CountPace }) {
   return (
     <section className={CARD} data-testid="vendor-rotation">
       <h2 className={H2}>The rotation</h2>
@@ -219,6 +234,9 @@ function VendorPanel({ vendor, rotation }: { vendor: VendorProposal | null; rota
       ) : (
         <p className={`mt-1 ${P}`}>No vendor to propose.</p>
       )}
+      <p className={`mt-1 ${P}`} data-testid="count-pace">
+        Counting pace: {paceSentence(pace)}
+      </p>
       {rotation.lastPlannedOn ? (
         <p className={`mt-1 ${P}`}>
           Last vendor count planned {rotation.lastPlannedOn}
@@ -239,8 +257,24 @@ function VendorPanel({ vendor, rotation }: { vendor: VendorProposal | null; rota
       ) : null}
       <div className="mt-4 flex flex-wrap items-end gap-4">
         <form action={saveRotationSettingsAction} className="flex items-end gap-2" data-testid="vendor-chunk-form">
-          <Field label="Lots per vendor count" htmlFor="chunk-lots" help={`${MIN_CHUNK_LOTS} to ${MAX_CHUNK_LOTS}. A big vendor is split into counts of about this size.`}>
+          <Field label="Lots per vendor count" htmlFor="chunk-lots" help={`${MIN_CHUNK_LOTS} to ${MAX_CHUNK_LOTS}. A big vendor is split into counts of about this size (${formatMinutes(minutesForLots(rotation.chunkLots, pace))} each).`}>
             <Input id="chunk-lots" name="chunkLots" type="number" min={MIN_CHUNK_LOTS} max={MAX_CHUNK_LOTS} step={1} defaultValue={String(rotation.chunkLots)} />
+          </Field>
+          <Button type="submit" variant="neutral" size="sm">
+            Save
+          </Button>
+        </form>
+        <form action={saveRotationSettingsAction} className="flex items-end gap-2" data-testid="vendor-chunk-minutes-form">
+          <Field label="Or: minutes per vendor count" htmlFor="chunk-minutes" help={`${MIN_SESSION_MINUTES} to ${MAX_SESSION_MINUTES}. Turned into lots at the pace below.`}>
+            <Input id="chunk-minutes" name="chunkMinutes" type="number" min={MIN_SESSION_MINUTES} max={MAX_SESSION_MINUTES} step={1} defaultValue={String(minutesForLots(rotation.chunkLots, pace))} />
+          </Field>
+          <Button type="submit" variant="neutral" size="sm">
+            Save
+          </Button>
+        </form>
+        <form action={saveCountPaceAction} className="flex items-end gap-2" data-testid="count-pace-form">
+          <Field label="Minutes per lot (your setting)" htmlFor="pace" help={`${MIN_MINUTES_PER_LOT} to ${MAX_MINUTES_PER_LOT}. Used until ${MIN_MEASURED_COUNTS} counts are finished; then your measured pace takes over.`}>
+            <Input id="pace" name="minutesPerLot" type="number" min={MIN_MINUTES_PER_LOT} max={MAX_MINUTES_PER_LOT} step={0.1} defaultValue={String(pace.minutesPerLot)} />
           </Field>
           <Button type="submit" variant="neutral" size="sm">
             Save
