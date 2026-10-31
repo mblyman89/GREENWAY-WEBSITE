@@ -473,3 +473,14 @@ Fix Phase 6F (gaps G-67, G-68): a new settings page at `/admin/registers/return-
 ### Applied
 
 R-RET (gaps G-69, G-70; findings F-15-22, F-15-23): migration `0330_service_role_grants.sql` (manual, rollback shipped, PG check `scripts/recon/service-role-grants-0330-pg-check.sql`), `rpc-fallback-core.ts` permission-denied explanation, `return-search-core.ts` (pure) + `searchReturnableOrderLines` in `disposition.ts`, the wizard's search box and message, test `tests/compliance/r-ret-service-role-grants.test.ts`. Docs: MIGRATIONS_TO_RUN, SOP-15 v1.14, concierge KB, ledgers 03/04/05/06. Not pushed until the owner says it is safe (*"do not push or merge to the repo until i tell you it is safe to do so"*).
+
+## Owner message 11 (recorded verbatim, R-RET merge and platform-change monitoring)
+
+> thank you. please push and merge the slice so I can inspect and test the new update. I am guessing this has raised a good gap that we should monitor. should we be monitoring supabase and vercel for issues like this that could cause real issues due to us not knowing about it until we run into the problem in production. how does an enterprise grade solution make certain that things like this cant or wont cause disruptions to business. please merge, then let me know your professional expert opinion on how we can stay ahead of these things in the future. follow the standing rules. thank you.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D100 | **R-RET is cleared to push and rebase-merge.** | *"please push and merge the slice so I can inspect and test the new update"* |
+| D101 | **Platform-change monitoring is an open gap (G-71, PROPOSED, not built).** The owner asked for an expert opinion first; the recommendation (vendor changelog watch, a daily database-grants health check, a production smoke test of the money paths, version pinning and a pre-deadline review) is given in the reply to this message. Nothing is built until the owner picks from it. | *"should we be monitoring supabase and vercel for issues like this … let me know your professional expert opinion on how we can stay ahead of these things in the future"* |

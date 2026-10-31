@@ -97,6 +97,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-68 | **Returnable product types setting**: unticked categories refused at the register and the returns desk with the reason on screen | D95 (owner message 9) | — | SOP-15 §4.3 | **BUILT** (Fix Phase 6F, #1568) |
 | G-69 | **Server grants after the Supabase 2026-10-30 change**: `service_role` EXECUTE on every revoked function (customer return first), catch-up sweep, default privileges, plain permission-denied message, guard test | D97, D99 (owner message 10) | F-15-22 | SOP-15 §5.1 | **BUILT** (R-RET, migration 0330, not pushed yet) |
 | G-70 | **Back-office return search by what is on the receipt**: 8-character receipt number, fun name, GWY- order number, member name or phone; a no-match message that says what was searched | D98 (owner message 10) | F-15-23 | SOP-15 §4.6 | **BUILT** (R-RET, not pushed yet) |
+| G-71 | **Platform-change early warning** (Supabase, Vercel, Next.js): vendor changelog watch, daily grants/health check, production smoke test of the money paths, pre-deadline review | D101 (owner message 11) | F-15-22 | — | **PROPOSED** (awaiting owner choice) |
 
 ---
 
