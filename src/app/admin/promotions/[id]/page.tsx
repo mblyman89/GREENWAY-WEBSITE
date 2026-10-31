@@ -30,6 +30,7 @@ import {
   lotForPriceFix,
 } from "@/lib/promotions/promo-blocker-fix-core";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
+import { isMarkdownConfig, MARKDOWN_LOCK_LABEL } from "@/lib/promotions/markdown-lock-core";
 import { guardSkipNote, MAX_HIDE_PER_PRESS } from "@/lib/promotions/promo-fix-core";
 import {
   buildPromoPreview,
@@ -107,7 +108,9 @@ export default async function EditPromotionPage({
     <div>
       <AdminPageHeader
         title={promotion.title}
-        subtitle={`Status: ${promotion.status} · ${affected.length} product(s) affected in the live menu`}
+        subtitle={`Status: ${promotion.status} · ${affected.length} product(s) affected in the live menu${
+          isMarkdownConfig(promotion.config) ? ` \u00b7 ${MARKDOWN_LOCK_LABEL}` : ""
+        }`}
       />
       <div className="px-5 py-6 sm:px-8">
         {error && (

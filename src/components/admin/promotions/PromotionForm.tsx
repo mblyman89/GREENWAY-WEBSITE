@@ -35,6 +35,7 @@ import { PromotionRuleBuilder } from "@/components/admin/promotions/PromotionRul
 import { PromotionSmartSelector } from "@/components/admin/promotions/PromotionSmartSelector";
 import type { MenuProductOption, SavedAudience } from "@/lib/promotions/promotions-store";
 import { Button } from "@/components/admin/ui";
+import { isMarkdownConfig } from "@/lib/promotions/markdown-lock-core";
 import { StickyActionBar } from "@/components/admin/ux";
 
 type Props = {
@@ -121,6 +122,8 @@ export function PromotionForm({
   const eitherOr = readObj(cfg, "eitherOr");
   const eitherOrBundle = readObj(eitherOr, "bundle");
   const basketMode = Object.keys(basketTopItem).length > 0 ? "top_item" : "n_for_m";
+  // Fix Phase 4.5a (F-06-17): the clearance / vendor-day lock.
+  const markdownOnly = isMarkdownConfig(cfg);
 
   const inputCls =
     "w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]";
@@ -259,6 +262,32 @@ export function PromotionForm({
             </span>
           </label>
         </div>
+      </section>
+
+      {/* Fix Phase 4.5a (F-06-17): clearance / vendor-day markdown lock. */}
+      <section className="space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">
+          Clearance or vendor-day markdown
+        </h2>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            name="cfg_markdown_only"
+            defaultChecked={markdownOnly}
+            className="mt-0.5 h-4 w-4 accent-[var(--admin-accent)]"
+          />
+          <span className="text-sm text-white">
+            This is a markdown: the items it covers keep THIS price and are left out of every other sale
+            and daily deal
+            <span className="mt-1 block text-xs text-white/40">
+              Owner rule: clearance (&ldquo;products we have been sitting on for too long and things about to
+              expire&rdquo;) and vendor-day items &ldquo;are excluded from any and all other sales/ daily
+              deals&rdquo;. A marked-down item keeps its markdown even when the day&apos;s deal is bigger. Not
+              the same as the never-discount list, which charges full price. The register still never sells
+              below cost.
+            </span>
+          </span>
+        </label>
       </section>
 
       {/* Mechanics (structured config) */}
