@@ -55,6 +55,21 @@ import { createAuditAction } from "../actions";
 import { HubRefusal } from "../HubRefusal";
 import { WhyBlockedPanel } from "../WhyBlockedPanel";
 import { AuditMethodPanel } from "../AuditHubExplainer";
+import { pacificToday } from "@/lib/reports/timezone";
+import {
+  generatorLabel,
+  generatorRationale,
+  isCountGenerator,
+  pickAbc,
+  pickExceptions,
+  pickExpiring,
+  proposeVendorOfDay,
+  vendorWhy,
+  type CountGenerator,
+  type Picked,
+} from "@/lib/inventory/count-generators-core";
+import { getRotation, loadActiveAuditLots, loadExceptionInputs, loadOpenCountHolds } from "@/lib/inventory/count-generators-store";
+import { GeneratorBody, GeneratorTabs } from "./CountGenerators";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +85,7 @@ function defaultLabel(): string {
 export default async function NewAuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ refusal?: string; refusalCode?: string; all?: string; fromImport?: string }>;
+  searchParams: Promise<{ refusal?: string; refusalCode?: string; all?: string; fromImport?: string; gen?: string }>;
 }) {
   // books-23: owner only. Choosing what to count is the owner's decision.
   await requirePermission("inventory.audit");
@@ -85,6 +100,33 @@ export default async function NewAuditPage({
   // products" fix. It preloads EVERY active lot of the cards that import
   // flagged as mixed-size (proposeFlaggedScope), instead of the risk ranking.
   const fromImport = isImportId(sp.fromImport) ? sp.fromImport.trim() : null;
+  // G-40 (D58): `?gen=vendor|abc|exceptions|expiring` picks a generator tab.
+  const gen: CountGenerator = !fromImport && isCountGenerator(sp.gen) ? sp.gen : "due";
+  if (gen !== "due") {
+    return (
+      <div className="space-y-6">
+        <Breadcrumbs
+          items={[
+            { label: "Inventory", href: "/admin/inventory" },
+            { label: "Auditing", href: "/admin/inventory/audits" },
+            { label: "Plan a count" },
+          ]}
+        />
+        <AdminPageHeader
+          title="Plan a count"
+          subtitle="Pick how the system chooses. It proposes and says why for every lot; you name it, write why, create it and release it."
+          action={
+            <Button href="/admin/inventory/audits" variant="neutral" size="sm">
+              Back to the hub
+            </Button>
+          }
+        />
+        {sp.refusal ? <WhyBlockedPanel blockers={[sp.refusal]} title="This could not be saved yet" /> : null}
+        <GeneratorTabs active={gen} />
+        <GeneratorSection gen={gen} />
+      </div>
+    );
+  }
   const flagged = fromImport ? await proposeFlaggedScope(fromImport) : null;
   const proposed = flagged ?? (await proposeScope({
     maxLots: wantsAll ? 400 : 40,
@@ -116,6 +158,8 @@ export default async function NewAuditPage({
       {sp.refusal ? (
         <WhyBlockedPanel blockers={[sp.refusal]} title="This could not be saved yet" />
       ) : null}
+
+      <GeneratorTabs active={fromImport ? "import" : "due"} />
 
       {flagged && flagged.ok && fromImport ? (
         <section className={CARD} data-testid="flagged-scope-banner">
@@ -171,6 +215,50 @@ export default async function NewAuditPage({
           should reach the form first and the lesson second. */}
       <AuditMethodPanel />
     </div>
+  );
+}
+
+/** G-40: load the lots once and run the chosen generator (pure core). */
+async function GeneratorSection({ gen }: { gen: Exclude<CountGenerator, "due"> }) {
+  const [lotsRes, holds, rotation] = await Promise.all([loadActiveAuditLots(), loadOpenCountHolds(), getRotation()]);
+  if (!lotsRes.ok) return <HubRefusal refusal={lotsRes.refusal} context="the proposed scope" />;
+  if (!holds.ok) return <HubRefusal refusal={holds.refusal} context="the lots already on an open count" />;
+  const lots = lotsRes.data;
+  const open = new Set(holds.data.map((h) => h.lotId));
+  const day = pacificToday();
+  let picked: Picked;
+  let unread: string[] = [];
+  let vendor = null as ReturnType<typeof proposeVendorOfDay>;
+  if (gen === "vendor") {
+    vendor = proposeVendorOfDay(lots, rotation, open);
+    const lotIds = vendor?.lotIds ?? [];
+    const why = vendor ? vendorWhy(vendor) : "";
+    picked = {
+      lotIds,
+      why: Object.fromEntries(lotIds.map((id) => [id, [why]])),
+      skippedOpen: lots.filter((l) => open.has(l.lotId)).length,
+      deferredProducts: 0,
+    };
+  } else if (gen === "abc") {
+    picked = pickAbc(lots, open);
+  } else if (gen === "expiring") {
+    picked = pickExpiring(lots, open, day);
+  } else {
+    const ex = await loadExceptionInputs();
+    unread = ex.unread;
+    picked = pickExceptions(lots, open, ex.inputs);
+  }
+  return (
+    <GeneratorBody
+      gen={gen}
+      lots={lots}
+      picked={picked}
+      label={generatorLabel(gen, day, vendor)}
+      rationale={generatorRationale(gen, vendor) ?? ""}
+      vendor={vendor}
+      rotation={rotation}
+      unread={unread}
+    />
   );
 }
 

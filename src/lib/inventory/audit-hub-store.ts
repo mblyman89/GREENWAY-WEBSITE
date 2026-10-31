@@ -77,6 +77,8 @@ import {
   type AuditSessionStatus,
 } from "./inventory-audit-post-core";
 import type { AuditStoreResult } from "./inventory-audit-store";
+import { openCountRefusal } from "./count-generators-core";
+import { loadOpenCountHolds } from "./count-generators-store";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SHARED HELPERS
@@ -463,7 +465,10 @@ export async function proposeScope(
     .eq("status", "active");
   if (error) return refused(error);
 
-  const lots = await enrichAuditLots((data ?? []) as unknown as AuditLotRow[], asLotFetcher(supabase));
+  const allLots = await enrichAuditLots((data ?? []) as unknown as AuditLotRow[], asLotFetcher(supabase));
+  // G-40: one open count per lot. Lots already on an open count are left out
+  // of the proposal (coverage still reports on every lot).
+  const lots = await withoutOpenCountLots(allLots);
   const asOf = new Date();
   return {
     ok: true,
@@ -472,9 +477,21 @@ export async function proposeScope(
         maxLots: opts.maxLots ?? 40,
         includeOnlyDue: opts.includeOnlyDue,
       }),
-      coverage: buildCoverageReport(lots, asOf),
+      coverage: buildCoverageReport(allLots, asOf),
     },
   };
+}
+
+/**
+ * G-40: drop lots that are already on an open count. Best-effort for a
+ * PROPOSAL only: if the read fails the list is unfiltered, and
+ * createAuditSession's own check (which fails closed) still refuses.
+ */
+async function withoutOpenCountLots<L extends { lotId: string }>(lots: L[]): Promise<L[]> {
+  const holds = await loadOpenCountHolds().catch(() => null);
+  if (!holds || !holds.ok || holds.data.length === 0) return lots;
+  const held = new Set(holds.data.map((h) => h.lotId));
+  return lots.filter((l) => !held.has(l.lotId));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -537,7 +554,7 @@ export async function proposeFlaggedScope(importId: string): Promise<AuditStoreR
   // A failed page must not become a silently smaller count.
   if (failure) return refused(failure);
 
-  const lots = await enrichAuditLots(rows, asLotFetcher(supabase));
+  const lots = await withoutOpenCountLots(await enrichAuditLots(rows, asLotFetcher(supabase)));
   const asOf = new Date();
   const scope = scopeFromProductKeys(keys, lots);
   return {
@@ -631,6 +648,24 @@ export async function createAuditSession(input: {
           `${missing.length} of the ${input.lotIds.length} batches you selected could not be found — ` +
           `they may have been archived while you were choosing. Nothing was created. Go back and ` +
           `build the scope again so the audit covers what you actually meant.`,
+      },
+    };
+  }
+
+  // G-40 (Fix Phase 4.4c): ONE OPEN COUNT PER LOT (NetSuite). A lot already on
+  // a draft / released / counting / review / approved-not-posted count is
+  // refused, naming that count. Two open counts of one lot would freeze two
+  // different "books" numbers and post the same shrink twice. A failed read
+  // FAILS CLOSED (nothing is created).
+  const holds = await loadOpenCountHolds(input.lotIds);
+  if (!holds.ok) return holds;
+  if (holds.data.length > 0) {
+    const codeOf = new Map(lots.map((l) => [l.lotId, l.lotCode]));
+    return {
+      ok: false,
+      refusal: {
+        code: "LOT_ON_OPEN_COUNT",
+        message: openCountRefusal(holds.data.map((h) => ({ lotCode: codeOf.get(h.lotId) ?? null, label: h.label }))),
       },
     };
   }

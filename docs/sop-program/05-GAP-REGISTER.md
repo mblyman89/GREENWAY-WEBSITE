@@ -66,7 +66,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-37 | Reasons editable before approval, validated, owner decisions enforced | (procedure need) | F-06-14 | SOP-06 §4.15, form 8.3 | **BUILT** (Phase 4.1, #1573) |
 | G-38 | Daily checklists in the app with the full task catalog | **D57** | F-06-12, F-00-9, F-06-17 | SOP-06 §4.23, forms 8.5–8.8 | **BUILT** |
 | G-39 | Counting housekeeping: one schedule, legacy sessions cancelled, Pacific times | **D58, D59** | F-06-8…F-06-11 | SOP-06 §4.20, §4.22 | **BUILT** |
-| G-40 | Intelligent cycle counts: vendor of the day with chunking, ABC, exceptions, expiring, Cultivera, overdue | **D58** | F-06-8 | SOP-06 §4.24 | **APPROVED** |
+| G-40 | Intelligent cycle counts: vendor of the day with chunking, ABC, exceptions, expiring, Cultivera, overdue | **D58** | F-06-8 | SOP-06 §4.24 | **BUILT** |
 | G-41 | Annual year-end full count (no cap, sections, one review) | **D58** | — | SOP-06 §4.24 | **APPROVED** |
 | G-42 | State-exact vendor return: Greenway files the CCRS manifest as origin (outgoing Manifest.CSV builder); reserve at logging, reduce and post CCRS Other at departure; RMA, manifest, license, detail required; no 48–72 h / Mon-Wed-Fri text; server-checked steps with actor; Pacific times | D63 (compliance: WAC 314-55-079(11), -085; CCRS Manifest User Guide) | F-15-1 (**S1**), F-15-2, F-15-3, F-15-19 | SOP-15 §4.9–§4.13, form 8.2 | **BUILT** (Phase 1.5; packet Phase 1.7b) |
 | G-43 | Hardened destruction record: witness required (anyone, not the performer), camera reference, approval reference for Other method, on-hand checked at scheduling, Pacific times, printable destruction log | D64 (WAC 314-55-097, -083(3)(a)) | F-15-4, F-15-5, F-15-12, F-15-21 | SOP-15 §4.17–§4.18, form 8.3 | **BUILT** (Phase 1.6a; req 7 photo + video and the per-event print in Phase 1.7a) |
@@ -651,7 +651,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Interim:** SOP-06 §4.20, §4.22.
 - **Built (Fix Phase 4.1–4.3 #1573 and 4.4a):** checklist on the count sheet, one approved colour, Pacific times on Cycle Counts and D59 cancellation of every open legacy session (migration 0326); one schedule A30/B60/C90 for planner, Issues row and intelligence panel; overdue row → **Plan a count** (owner) or "Tell the owner"; legacy writer actions deleted and library writers refuse (CYCLE_COUNT_READ_ONLY), detail page read-only with export kept; Pacific default audit name and hub dates. SOP-06 v1.3. Test `fix-p4-4a-count-housekeeping`.
 
-## G-40 · Intelligent cycle counts: vendor of the day and other generators (APPROVED, D58, SOP-06)
+## G-40 · Intelligent cycle counts: vendor of the day and other generators (BUILT, D58, SOP-06)
 - **Owner requirement:** *"My plan for cycle counts is to issue small counts the employees can do everyday to keep inventory accurate. Something like a vendor per day, broken into chunks if a large vendor, or if small enough, to do on their own."* · *"I also want options for initiating intelligent cycle counts."*
 - **Today:** Plan a count proposes by risk and due date only; vendor shows per group (`audits/new/page.tsx` L388) but cannot be filtered.
 - **Requirements:**
@@ -661,6 +661,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. One open count per lot at a time (NetSuite rule).
   5. Optional daily schedule: the proposal is waiting for the owner each morning.
 - **Interim:** SOP-06 §4.24 (plan by hand from **Show every active lot**).
+- **Built (Fix Phase 4.4c, no migration):** req 1: **Plan a count → Vendor of the day** rotates every vendor with open lots by name (no vendor last), splits a vendor into whole-product parts of an owner-set **Lots per vendor count** (5–200, default 25; lots only, not minutes), remembers the next part in site setting `count_vendor_rotation`, **Skip to the next one**, **Coming up** list (`proposeVendorOfDay`, `count-generators-core.ts`). Req 2: tabs **High value (A lots)**, **Exceptions** (oversold, non-routine adjustments in 30 days, 86'd with stock, zero on hand still open), **Expiring soon** (30 days), plus the existing Cultivera and overdue lists; a reason per lot. Req 3: proposals only; the owner names, writes why, creates, releases. Req 4: `createAuditSession` refuses LOT_ON_OPEN_COUNT (fails closed), and every proposal leaves those lots out. Req 5: owner cockpit reminder once the rotation has started. SOP-06 v1.5. Test `fix-p4-4c-count-generators`, self-test `count-generators-core`.
 
 ## G-41 · Annual year-end full count (APPROVED, D58, SOP-06)
 - **Owner requirement:** *"we do a full inventory audit once per year at the end of the year."*

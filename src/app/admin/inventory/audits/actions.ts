@@ -56,6 +56,9 @@ import { postAuditSession } from "@/lib/inventory/inventory-audit-store";
 import { inventoryAccountByCategory } from "@/lib/inventory/audit-posting-accounts";
 import type { AuditSessionStatus } from "@/lib/inventory/inventory-audit-post-core";
 import { isImportId } from "@/lib/inventory/flagged-count-scope-core";
+import { checkChunkLots, isCountGenerator, rotationFromSetting, type RotationState } from "@/lib/inventory/count-generators-core";
+import { getRotation, saveRotation } from "@/lib/inventory/count-generators-store";
+import { pacificToday } from "@/lib/reports/timezone";
 
 const HUB = "/admin/inventory/audits";
 
@@ -107,7 +110,14 @@ export async function createAuditAction(form: FormData): Promise<void> {
   // refusal back to the same flagged scope. Validated as a UUID first, so the
   // value can never smuggle another path or query into the redirect.
   const fromImportRaw = form.get("fromImport");
-  const newPath = isImportId(fromImportRaw) ? `${HUB}/new?fromImport=${fromImportRaw.trim()}` : `${HUB}/new`;
+  // G-40: a generator tab bounces a refusal back to the same tab (allow-listed name only).
+  const genRaw = form.get("gen");
+  const gen = isCountGenerator(genRaw) && genRaw !== "due" ? genRaw : null;
+  const newPath = isImportId(fromImportRaw)
+    ? `${HUB}/new?fromImport=${fromImportRaw.trim()}`
+    : gen
+      ? `${HUB}/new?gen=${gen}`
+      : `${HUB}/new`;
 
   if (scopeRationale.length < 10) {
     refuse(
@@ -130,11 +140,83 @@ export async function createAuditAction(form: FormData): Promise<void> {
     action: "inventory_audit.create",
     entityType: "inventory_audit_sessions",
     entityId: result.data.sessionId,
-    after: { label, lots: lotIds.length, scopeRationale },
+    after: { label, lots: lotIds.length, scopeRationale, ...(gen ? { generator: gen } : {}) },
   });
+
+  // G-40: a vendor-of-the-day count moves the rotation on to the next chunk /
+  // vendor and records today, so the cockpit stops reminding. Best-effort: the
+  // count exists either way, and a failed save only means the same vendor is
+  // proposed again tomorrow (it can never lose a count).
+  if (gen === "vendor") {
+    await advanceRotation(form, session.profile.id, { lastPlannedOn: pacificToday(), lastPlannedLabel: label.slice(0, 200) });
+  }
 
   revalidatePath(HUB);
   redirect(`${HUB}/${result.data.sessionId}`);
+}
+
+/** Read the next pointer the planner proposed (hidden fields) and save it, sanitised. */
+async function advanceRotation(
+  form: FormData,
+  byId: string,
+  extra: Partial<Pick<RotationState, "lastPlannedOn" | "lastPlannedLabel">> = {},
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const current = await getRotation();
+  const next = rotationFromSetting({
+    ...current,
+    vendorId: requiredField(form, "nextVendorId"),
+    vendorKey: requiredField(form, "nextVendorKey"),
+    vendorName: requiredField(form, "nextVendorName"),
+    chunk: Number(requiredField(form, "nextChunk")),
+    ...extra,
+  });
+  return saveRotation(next, byId);
+}
+
+/**
+ * G-40: the owner sets how many lots a vendor-of-the-day count holds. A big
+ * vendor is split into counts of about this size (whole products only).
+ */
+export async function saveRotationSettingsAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.audit");
+  const back = `${HUB}/new?gen=vendor`;
+  const checked = checkChunkLots(form.get("chunkLots"));
+  if (!checked.ok) refuse(back, "CHUNK_LOTS_INVALID", checked.message);
+  const current = await getRotation();
+  // A new size re-cuts the chunks, so the vendor restarts at its first part.
+  const saved = await saveRotation({ ...current, chunkLots: checked.value, chunk: 0 }, session.profile.id);
+  if (!saved.ok) refuse(back, "ROTATION_SAVE_FAILED", `The size was not saved: ${saved.error}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.rotation_chunk_size",
+    entityType: "site_settings",
+    entityId: "count_vendor_rotation",
+    before: { chunkLots: current.chunkLots },
+    after: { chunkLots: checked.value },
+  });
+  revalidatePath(`${HUB}/new`);
+  redirect(back);
+}
+
+/** G-40: skip today's vendor (or chunk) without creating a count. */
+export async function skipVendorAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.audit");
+  const back = `${HUB}/new?gen=vendor`;
+  const before = await getRotation();
+  const saved = await advanceRotation(form, session.profile.id);
+  if (!saved.ok) refuse(back, "ROTATION_SAVE_FAILED", `The rotation did not move: ${saved.error}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.rotation_skip",
+    entityType: "site_settings",
+    entityId: "count_vendor_rotation",
+    before: { vendorName: before.vendorName, chunk: before.chunk },
+    after: { vendorName: requiredField(form, "nextVendorName"), chunk: Number(requiredField(form, "nextChunk")) },
+  });
+  revalidatePath(`${HUB}/new`);
+  redirect(back);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
