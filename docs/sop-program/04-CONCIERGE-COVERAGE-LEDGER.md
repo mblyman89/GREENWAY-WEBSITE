@@ -511,7 +511,7 @@ The owner, again: *"make sure the ai concierge is taught all the things we will 
 | What should I count today? | The owner's vendor-of-the-day count (§4.24) | Generators propose: vendor of the day (chunked), ABC, exceptions, expiring, Cultivera, overdue (G-40) |
 | Do we do a full count? | Year end; several audits the same day, outside hours (§4.24) | One annual full-count audit, sections, one review (G-41) |
 | What's on today's checklist? | Forms 8.5–8.8 (§4.23) | In-app checklists seeded from 8.5–8.8 (G-38) |
-| How do I mark down expiring stock? | List it for the owner; the owner sets the markdown (§4.23, F-06-17) | Expiring-soon list on the checklist with a markdown link (G-38) |
+| How do I mark down expiring stock? | Front it; the owner or a manager opens **Promotions → Clearance markdowns**, ticks the products and creates a draft markdown, then publishes it (§4.23; F-06-17 FIXED, #1579) | Built (Fix Phase 4.5b) |
 | Old cycle counts? | Read only; never use their buttons (§4.20) | All cancelled (D59) |
 
 **Additional caveats (v1.1):** never tell anyone that counting in open hours is safe until G-35 ships; never say a second person must recount (D56 withdrew it); a count item on the cockpit does not exist yet (F-06-16).
@@ -693,3 +693,7 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 **Fix Phase 6 / Fix E update to the SOP-01 and SOP-03 rows (G-61..G-66 BUILT; owner message 8, D81–D90).** `concierge-kb.ts` registers topic gains seven facts (**Clocking out with an open drawer**, **Float check at count-in**, **Crew tip pool**, **Shift change**, **Night deposit, assembled and verified**, **Verify till is retired**, **Who reconciles, and when**), each quoting the owner; the **Deposit bags** fact now says *Save assembled bag* (denomination count as fallback) and **Where tips come from** names the crew pool. Grounded on SOP-01 v1.10 §4.2, §4.3, §4.27, §4.27a, §4.30 and SOP-03 v1.8 §4.5, §4.7, §4.11, §4.12. The SOP-03 caveat that Verify till records $0 is superseded (D83).
 
 **Fix Phase 6F update to the SOP-01 and SOP-15 rows (G-67, G-68 BUILT; owner message 9, D91–D96).** `concierge-kb.ts` registers topic gains two facts (**Tips box is required**, **Return policy settings**), each quoting the owner; **Where tips come from** notes that blank is back-office only. Grounded on SOP-01 v1.11 §4.23, §4.27 and SOP-15 v1.13 §4.4. Customer-facing: the FAQ and the AI KB seed now say 7 days, original receipt and packaging, no loyalty membership needed.
+
+### SOP-06 v1.7 (Fix Phase 4.5)
+
+F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and long-sitting stock is marked down on **Promotions → Clearance markdowns** (one draft markdown, no other deal applies, publish to go live; expired edibles and never-discount products are refused with the reason); counts can be sized in minutes at the store's pace; the full-count page previews the December reminder in any month.
