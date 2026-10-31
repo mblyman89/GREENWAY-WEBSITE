@@ -175,6 +175,9 @@ describe("the write path re-gates", () => {
       finishCountAction: "inventory.count",
       cancelAuditAction: "inventory.audit",
       reassignAction: "inventory.audit",
+      // Fix Phase 4.4c (G-40, D58): the vendor rotation decides what is counted next.
+      saveRotationSettingsAction: "inventory.audit",
+      skipVendorAction: "inventory.audit",
     };
 
     const names = [...actions.matchAll(/export async function (\w+)/g)].map((m) => m[1]);
