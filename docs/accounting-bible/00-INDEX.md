@@ -21,6 +21,10 @@ dangerously — several wires that *are* connected but **cannot succeed at runti
 
 ---
 
+## 0.1b Round 2 (2026-10-31): the owner's answers
+
+Michael answered all 16 questions and moved the books' go-live to **2027-01-01** (Sage stays the book through 2026). His full message is quoted in part 05 (OD-22…OD-39). **Start from part 15** (master plan) and part 14 (resolutions). The N-series fires below are still real, but they now burn in **rehearsal**, not on the official books, which buys time to fix them properly. **The exception is Q-05 (medical endorsement row), which affects live register sales from 11/01** (part 14 Q-05).
+
 ## 0.2 The five things that will bite first (read before anything else)
 
 | # | Finding | Severity | Where it is pinned | Fix part |
@@ -51,7 +55,7 @@ explicit strategy: *capture tonight's evidence perfectly; post it when the door 
 | 03b | `03b-schema-atlas.md` | **Generated.** Every `gl_*` table, function and trigger with migration:line. |
 | 03c | `03c-chart-of-accounts.md` | The full 193-code COA from every migration. **Use it before writing any account code.** (10100 = vault, 10200 = operating bank, 12100 = employee advances, inventory = 200xx.) |
 | 04 | `04-current-state-and-gap-matrix.md` | 40-event census × 6 layers; findings N-01…N-13; dead cores DC-01…DC-11; uncalled writer RPCs; trust-liability flow map; DEFECTS cross-reference D-30…D-82; docs drift. |
-| 05 | `05-owner-decisions-and-open-questions.md` | OD-01…OD-21 verbatim with pins; open questions Q-01…Q-16 with recommendations. |
+| 05 | `05-owner-decisions-and-open-questions.md` | OD-01…OD-39 verbatim with pins; Q-01…Q-16 all **ANSWERED** (2026-10-31). |
 | 06 | `06-verification-protocol.md` | Five gates; the existing PG15 verifiers and their coverage gaps; invariants INV-01…12; read-only query rules; reachability; exit criteria. |
 | 07 | `07-cutover-and-opening-balances.md` | **URGENT.** 10/31–11/01 books runbook: evidence, 07:30 read-only lot snapshot, periods check/insert, OB mechanics, N-13, backfill, parallel run. |
 | 08 | `08-target-architecture.md` | The finished system: principles, entities, flow map, posting contract, source_kind table, templates (verified columns; no account restriction, Q-15), daily rhythm, close calendar (20th/25th), controls, reports, scope guardrails. |
@@ -59,7 +63,9 @@ explicit strategy: *capture tonight's evidence perfectly; post it when the door 
 | 10 | `10-deferred-and-blocked.md` | Blocked on the owner (B-xx), deferred by design (F-xx), accepted risks (R-xx). |
 | 11 | `11-enterprise-capability-checklist.md` | HAVE/PART/GAP scorecard, COSO control matrix (C-TAX-1, C-CASH-1, C-EQ-2 …), the 15-step computed month-end checklist. |
 | 12 | `12-unverified-register.md` | U-01…U-20: what I have not proven, with the exact read-only query or owner question. |
-| 13 | `13-sources.md` | Every authority URL, grouped, with what it was used for. |
+| 13 | `13-sources.md` | Every authority URL, grouped, with what it was used for (§R2 = round 2). |
+| 14 | `14-owner-answers-and-expert-resolutions.md` | **Round 2.** Plain-English answer + expert resolution for every Q; the URGENT medical-endorsement SQL (Q-05). |
+| 15 | `15-master-plan.md` | **THE ROADMAP OF RECORD.** 70 slices in 10 blocks (A Foundations … J Teaching), timeline Nov 2026 → Feb 2027, old→new ID map. Supersedes 09's order. |
 
 Supporting scripts (committed, read-only): `scripts/accounting-bible/build_atlas.py`, `census_matrix.py`, `probe_autopost.sh` (probe P-01), `reachability.py` (baseline 91/111 reachable).
 
@@ -113,15 +119,19 @@ entity; `gl_close_period` (0172:891) / `gl_reopen_period` (:929) — **uncalled*
 
 Shareholders of `greenway`: Michael 85 %, Nicholas C Mullan 5 %, James H Becker 5 %, Theresa L Becker 5 %.
 
-## 0.6 Dates that govern everything
+## 0.6 Dates that govern everything (REVISED 2026-10-31 by OD-22/OD-24)
 
 | Fact | Value | Pinned at |
 |---|---|---|
 | Line in the sand (schema) | 2026-01-01 | 0172:309-314, todo.md rule 10 |
-| Opening balance date | **2026-10-31** | 0186 `gl_conversion_config`, cutover-core.ts:73 |
-| Cut-over / first platform day | **2026-11-01** | cutover-core.ts:66 |
-| Parallel run with Sage | 2026-11-01 → 2026-12-31 | cutover-core.ts:76-77 |
-| Superseded opening date (do not use) | 2025-12-31 | cutover-core.ts:84 |
+| Store / POS go-live (sub-ledgers only) | 2026-11-01 | OD-22 |
+| Book of record Nov–Dec 2026 | **Sage 50** (exports via sage-exports-core.ts) | OD-24 |
+| Rehearsal posting window (config unchanged until I-01) | 2026-11-01 → 2026-12-31 | 0186 row as seeded; 15 §0 |
+| **Opening balance date (target)** | **2026-12-31** | OD-24; set by 15 I-01 (config UPDATE) |
+| **Books go-live / cut-over (target)** | **2027-01-01** | OD-22; 15 I-01 |
+| Parallel proof with Sage | January 2027 (light) or none | 14 Q-02; 15 I-06 |
+| First live close | January 2027, by ~2/25 | 15 §1 |
+| Old dates (superseded, do not use) | OB 2026-10-31 / cut-over 2026-11-01 (cutover-core.ts:66,:73); 2025-12-31 (cutover-core.ts:84, ledger-core.ts:166) | A-01 removes the literals |
 | Business clock | America/Los_Angeles | AGENTS.md rule 9 |
 
 ## 0.7 How to resume (copy-paste)

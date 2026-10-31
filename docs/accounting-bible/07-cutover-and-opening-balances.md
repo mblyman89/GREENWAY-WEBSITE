@@ -13,6 +13,8 @@
 > I write nothing to production. Every SQL statement in this part is **for Michael to run, or for a
 > future slice to wrap in an action**. Read-only statements are marked READ-ONLY.
 
+
+> ⚠ **SUPERSEDED DATES (2026-10-31, OD-22/OD-24).** The books now go live **2027-01-01**, with an OB date of **2026-12-31**; Sage 50 is the book of record through 2026. The 11/01 *store* runbook steps (evidence capture, lot snapshot) remain useful as records. The *books* steps here (periods, OB, backfill, Nov–Dec parallel) are replaced by part 15 blocks A and I (I-01 rehearsal wipe + date flip, I-02 Sage TB import, I-03 count-valued inventory, I-05 bless). Read this part as mechanics reference only.
 ---
 
 ## 7.1 Timeline: what happens, and what the books need from each step

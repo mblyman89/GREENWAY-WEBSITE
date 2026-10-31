@@ -5,6 +5,8 @@
 > AGENTS.md rule 5 is to ship up to 6 slices at a time, each its own branch → PR → **rebase-merge** (`gh pr merge <n> --rebase --delete-branch --admin`, never squash) → sync main.
 > Pins were verified at `1f3e258a`. Re-grep before editing (rule 4).
 
+
+> ⚠ **ORDER SUPERSEDED (2026-10-31, OD-39).** The roadmap of record is **part 15 (master plan)**. Its §Y maps every S-xx here to its new block ID. The slice texts below stay valid as RED/GREEN detail and pins. The waves/dates do not (go-live is now 2027-01-01, OD-22). All "Waits on Q-nn" lines are answered in part 05 (OD-23…OD-38).
 ---
 
 ## 0. The order at a glance
