@@ -1233,6 +1233,7 @@ import { __runBatchUnstickTests } from "../../src/lib/ai/batch-unstick-core";
 import { __runCountRosterTests } from "../../src/lib/pos/count-roster-core";
 import { __runCountAuditStatsTests } from "../../src/lib/pos/count-audit-stats-core";
 import { __runIntakeHardenTests } from "../../src/lib/inbound-email/intake-harden-core";
+import { __runDbContractCoreTests } from "../../src/lib/platform/db-contract-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2663,6 +2664,7 @@ __runLiquidVolumeTests();
   assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt
   assertRan("return-search-core", __runReturnSearchCoreTests(), 37); // R-RET (owner message 10): back-office return search finds register sales by printed receipt #, fun name, GWY- order #, loyalty member name/phone; empty result says what to type
+  assertRan("db-contract-core", __runDbContractCoreTests(), 30); // G-71a (owner message 12): daily DB health check: contract parse, unreachable = FAIL (run 0330), missing = WARN, call errors explained, one alert per Pacific day, escaped email
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

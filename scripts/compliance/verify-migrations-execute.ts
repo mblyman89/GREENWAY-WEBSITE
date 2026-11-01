@@ -163,6 +163,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/full-count-0328-pg-check.sql", mustPrint: "FULL COUNT 0328 CHECK PASSED" },
   { file: "scripts/recon/medical-endorsement-0329-pg-check.sql", mustPrint: "MEDICAL 0329 CHECK PASSED" },
   { file: "scripts/recon/service-role-grants-0330-pg-check.sql", mustPrint: "GRANTS 0330 CHECK PASSED" },
+  { file: "scripts/recon/platform-health-0331-pg-check.sql", mustPrint: "PLATFORM HEALTH 0331 CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */

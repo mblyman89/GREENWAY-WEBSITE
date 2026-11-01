@@ -293,7 +293,7 @@ describe("R74 S20 wiring", () => {
     expect(s).toContain("if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run)) {");
     expect(s).toContain('runMailReadBg({ budgetMs: MAIL_READ_BG_BUDGET_MS, trigger: "worker" })');
     const v = JSON.parse(read("vercel.json")) as { crons: unknown[] };
-    expect(v.crons).toHaveLength(17); // 17 since Fix Phase 3.2a (G-17) added /api/cron/inbound-reconcile; this worker still added none
+    expect(v.crons).toHaveLength(18); // 18 since G-71a added /api/cron/platform-health (17 since Fix Phase 3.2a added /api/cron/inbound-reconcile); this worker still added none
     expect(core.MAIL_READ_BG_BUDGET_MS + core.MAIL_READ_BG_LEASE_SLACK_MS).toBe(800_000);
   });
   it("the actions require menu.import and never read process.env themselves", () => {

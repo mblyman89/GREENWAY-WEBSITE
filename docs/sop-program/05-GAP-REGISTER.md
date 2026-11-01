@@ -97,7 +97,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-68 | **Returnable product types setting**: unticked categories refused at the register and the returns desk with the reason on screen | D95 (owner message 9) | — | SOP-15 §4.3 | **BUILT** (Fix Phase 6F, #1568) |
 | G-69 | **Server grants after the Supabase 2026-10-30 change**: `service_role` EXECUTE on every revoked function (customer return first), catch-up sweep, default privileges, plain permission-denied message, guard test | D97, D99 (owner message 10) | F-15-22 | SOP-15 §5.1 | **BUILT** (R-RET, migration 0330, not pushed yet) |
 | G-70 | **Back-office return search by what is on the receipt**: 8-character receipt number, fun name, GWY- order number, member name or phone; a no-match message that says what was searched | D98 (owner message 10) | F-15-23 | SOP-15 §4.6 | **BUILT** (R-RET, not pushed yet) |
-| G-71 | **Platform-change early warning** (Supabase, Vercel, Next.js): vendor changelog watch, daily grants/health check, production smoke test of the money paths, pre-deadline review | D101 (owner message 11) | F-15-22 | — | **PROPOSED** (awaiting owner choice) |
+| G-71 | **Platform-change early warning** (Supabase, Vercel, Next.js): vendor changelog watch, daily grants/health check, production smoke test of the money paths, pre-deadline review | D101 (owner message 11), D102–D104 (owner message 12) | F-15-22 | — | **IN PROGRESS**: G-71a daily DB health check BUILT; G-71b platform register + monthly review, G-71c money-path smoke test, G-71d error alerting to follow |
 
 ---
 
@@ -898,3 +898,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Owner basis:** owner message 10: *"the back office keeps saying "⚠ No completed sales matched. Only completed orders can be returned.""*
 - **Built:** `planReturnSearch` reads the box as a receipt number, an order number, a member name and a phone; `searchReturnableOrderLines` looks each one up and keeps completed sales only; the no-match message lists what was searched and what to type, and a receipt found but not completed says so.
 
+
+## G-71a · Daily database health check (BUILT, owner message 12, D102/D104) — S1
+- **Owner basis:** owner message 12: *"Let’s build 1-4 first."* Item 1 of the owner message 11 recommendation.
+- **Why:** the R-RET outage (F-15-22) was silent: a Supabase platform change removed the server's access and nobody knew until a customer return failed.
+- **Built:** the code's DB contract (every `.from()` / `.rpc()` / `*_TABLE` / `*_RPC` name in `src/`, generated, CI-checked for staleness and that each name is created by a migration); `platform_db_contract_check` (0331, read-only, service_role only) reports missing, unreachable, other unreachable public objects and the default privileges; daily cron at 14:25 UTC records a run in `platform_health_runs` (append-only) and emails once per Pacific day (claimed in `compliance_reminder_log`), push only when not OK; Admin → Platform health shows the latest problems with the fix and the last 30 runs; Run check now (audited).

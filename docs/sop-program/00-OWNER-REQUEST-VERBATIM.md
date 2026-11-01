@@ -484,3 +484,19 @@ R-RET (gaps G-69, G-70; findings F-15-22, F-15-23): migration `0330_service_role
 |---|---|---|
 | D100 | **R-RET is cleared to push and rebase-merge.** | *"please push and merge the slice so I can inspect and test the new update"* |
 | D101 | **Platform-change monitoring is an open gap (G-71, PROPOSED, not built).** The owner asked for an expert opinion first; the recommendation (vendor changelog watch, a daily database-grants health check, a production smoke test of the money paths, version pinning and a pre-deadline review) is given in the reply to this message. Nothing is built until the owner picks from it. | *"should we be monitoring supabase and vercel for issues like this … let me know your professional expert opinion on how we can stay ahead of these things in the future"* |
+
+## Owner message 12 (recorded verbatim, build the platform early-warning items 1-4)
+
+> Thank you. Let’s build 1-4 first. I see real value in all of them. Let’s do two rounds of building, two slices each round. Push and merge each slice individually. Update the standing rules so we don’t rely on the database to do things for us and we are more deliberate about how we communicate with the database. Follow the standing rules. Thank you!
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D102 | **G-71 is approved and split into four slices built in two rounds.** Round 1: G-71a daily database health check (item 1) and G-71b platform-changes register with a monthly review (item 2). Round 2: G-71c daily money-path smoke test (item 3) and G-71d error alerting (item 4). Item 5 (version pinning) is not in scope yet. | *"Let’s build 1-4 first. I see real value in all of them. Let’s do two rounds of building, two slices each round."* |
+| D103 | **Each slice is its own PR, pushed and rebase-merged on its own** once CI is green, then production is verified. | *"Push and merge each slice individually."* |
+| D104 | **New standing rule: the code never relies on database defaults.** Every migration writes out its grants (service_role yes, anon/authenticated only when meant), every table and function the code uses is listed in a generated contract that CI checks against the migrations, and every database call reads and explains its error. Written as AGENTS.md rule 15 in G-71b. | *"Update the standing rules so we don’t rely on the database to do things for us and we are more deliberate about how we communicate with the database."* |
+
+### Applied
+
+G-71a (D102, D104): generated DB contract (`src/lib/platform/db-contract.generated.json`, built by `scripts/platform/build-db-contract.ts`, checked by `tests/compliance/g71a-db-contract.test.ts`), pure `db-contract-core.ts` (34 self-tests), migration `0331_platform_health.sql` (manual; rollback; PG check `scripts/recon/platform-health-0331-pg-check.sql`), daily cron `/api/cron/platform-health`, page Admin → Platform health. Found while building: 0330's default privileges would have given the server UPDATE/DELETE on the new append-only log; 0331 takes them back explicitly (the D104 lesson).

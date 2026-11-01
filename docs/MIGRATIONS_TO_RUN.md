@@ -3381,3 +3381,42 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0330_service_role_grants.rollback.sql`.
   It removes only the default privileges. It deliberately keeps the object grants,
   because removing them would break returns again.
+
+## G-71a — 0331 — Platform health check (owner message 12)
+
+- [ ] `0331_platform_health.sql` (daily database health check, owner message 12, D102). Apply it
+  **after 0330**. It adds one small log table and one read-only function. No data changes.
+  - **Why:** in R-RET a Supabase platform change silently removed the server's access to
+    `record_customer_return`, and nobody knew until a return failed at the counter. This
+    migration lets the server ask the database every morning: *"can I still reach every
+    table and function the app uses?"*
+  - **`public.platform_health_runs`:** one row per check (status ok / warn / fail, a
+    one-line summary, the full report). Append-only: the server may read and add rows,
+    never change or delete them. Browsers (anon / authenticated) get nothing. RLS on.
+  - **`public.platform_db_contract_check(tables, functions)`:** read-only. Given the list
+    the code uses (`src/lib/platform/db-contract.generated.json`), it answers which are
+    missing, which exist but the server cannot reach, anything else in `public` the server
+    cannot reach, and whether 0330's default privileges are still in place. Only
+    `service_role` may call it.
+  - **Grants are written out on purpose (standing rule 15):** 0330's default privileges
+    would have given the server UPDATE and DELETE on the new log table. 0331 takes those
+    back explicitly so the log stays append-only.
+
+  Safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select public.platform_db_contract_check(array['orders'], array['record_customer_return']);
+  -- (run as postgres in the SQL editor) -> {"missing_tables": [], "unreachable_tables": [], ...}
+  select has_table_privilege('service_role', 'public.platform_health_runs', 'INSERT');  -- true
+  select has_table_privilege('service_role', 'public.platform_health_runs', 'UPDATE');  -- false
+  select has_table_privilege('anon', 'public.platform_health_runs', 'SELECT');          -- false
+  ```
+
+  **Then:** Back office → **Admin → Platform health** → **Run check now**. It should say
+  *All clear*. From then on staff get one email each morning (about 6:25am Pacific): an
+  all clear, or what is wrong and the exact fix.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0331_platform_health.rollback.sql`.
+  It drops the function and the log table. Nothing else depends on them.

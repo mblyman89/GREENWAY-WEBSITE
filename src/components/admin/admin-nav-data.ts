@@ -167,6 +167,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "\ud83d\udc64", group: "Admin" }, // 👤 user
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" }, // 🔌 integrations
   { label: "Banking", href: "/admin/settings/banking", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Admin" }, // bank / ACH origination
+  { label: "Platform health", href: "/admin/settings/platform-health", permission: "settings.manage", icon: "\ud83e\ude7a", group: "Admin" }, // G-71a: daily database health check
   { label: "Bank Feeds", href: "/admin/plaid", permission: "finances.view", icon: "\ud83d\udd17", group: "Lyman" }, // 🔗 Plaid: read-only bank/credit feeds for automatic bookkeeping (P2)
   { label: "Loans", href: "/admin/loans", permission: "finances.view", icon: "🏠", group: "Lyman" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
   { label: "Crypto Portfolio", href: "/admin/crypto", permission: "finances.view", icon: "\u20bf", group: "Lyman" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
