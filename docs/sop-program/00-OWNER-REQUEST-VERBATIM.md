@@ -656,5 +656,5 @@ Follow-up (merge approval, verbatim):
 
 ### Applied
 
-R-DRAWER-1: see the R-DRAWER-1 section of `05-GAP-REGISTER.md`, the R-DRAWER-1 row of `06-FIX-PHASE-PLAN.md`, F-01-6 and F-01-7 in `03-FINDINGS-LEDGER.md`, and SOP-01 v1.13 (§4.16).
+R-DRAWER-1: merged as #1628; see the R-DRAWER-1 section of `05-GAP-REGISTER.md`, the R-DRAWER-1 row of `06-FIX-PHASE-PLAN.md`, F-01-6 and F-01-7 in `03-FINDINGS-LEDGER.md`, and SOP-01 v1.13 (§4.16).
 
