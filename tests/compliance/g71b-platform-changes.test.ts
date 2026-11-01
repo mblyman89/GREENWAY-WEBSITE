@@ -41,8 +41,8 @@ describe("G-71b platform changes register", () => {
 
   it("nothing open is already overdue on the review day (no stray overdue email)", () => {
     const overdue = PLATFORM_CHANGES.filter((e) => deadlineStage(e, REGISTER_REVIEWED_ON) === "overdue").map((e) => e.id);
-    // supabase-js-node20 is open and past its date on purpose: CI still runs Node 20 (item 5).
-    expect(overdue).toEqual(["supabase-js-node20"]);
+    // Was ["supabase-js-node20"] until G-71e moved CI to Node 24 (owner message 14).
+    expect(overdue).toEqual([]);
   });
 
   it("docs/PLATFORM-CHANGES.md mirrors the register", () => {
