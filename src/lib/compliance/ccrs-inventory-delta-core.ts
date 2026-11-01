@@ -32,7 +32,7 @@
  * Update with both filled; Part 17 §B).
  */
 import { CCRS_COLUMNS } from "./ccrs-batch-core";
-import { LEDGER_STATES, type LedgerEnv, type LedgerState } from "./ccrs-ledger-core";
+import { LEDGER_STATES, updatedDateFor, type LedgerEnv, type LedgerState } from "./ccrs-ledger-core";
 import { isMissingDbFunctionError, type RpcErrorLike } from "@/lib/db/rpc-fallback-core";
 
 export const INVENTORY_TOLD_RPC = "ccrs_inventory_last_told";
@@ -110,18 +110,8 @@ export function changedColumns(row: readonly string[], told: Readonly<Record<str
   return COMPARED_COLUMNS.filter((c) => !sameCell(c, row[C(c)] ?? "", told[c]));
 }
 
-function dayNumber(mmddyyyy: string): number | null {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(mmddyyyy);
-  return m ? Number(`${m[3]}${m[1]}${m[2]}`) : null;
-}
-
-/** UpdatedDate never precedes CreatedDate [G L0242]. */
-export function updatedDateFor(createdDate: string, batchDay: string): string {
-  const c = dayNumber(createdDate);
-  const b = dayNumber(batchDay);
-  if (b === null) throw new Error(`R6-3: batch day "${batchDay}" is not MM/DD/YYYY`);
-  return c !== null && c > b ? createdDate : batchDay;
-}
+/** UpdatedDate never precedes CreatedDate [G L0242]. Lives in ledger-core (Product Updates use it too). */
+export { updatedDateFor };
 
 export type SkipReason = "unchanged";
 export type SendReason = "insert" | "no-told-answer" | "never-accepted" | "in-flight" | "named-by-event" | "changed";

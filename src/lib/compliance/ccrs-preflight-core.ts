@@ -91,6 +91,8 @@ export const CCRS_ISSUE_CODES = [
   "E61_IN_FLIGHT_HELD",
   "E62_ADJUSTMENT_LEDGER",
   "E63_TRANSFER_CORRECTION_PENDING",
+  "E64_INVENTORY_NO_STRAIN",
+  "E65_INVENTORY_STRAIN_FROM_CCRS",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -498,6 +500,15 @@ const PINS: Record<CcrsIssueCode, string> = {
   // \"Update\" operation" (the issue-code contract takes G/FAQ pins only); the
   // examiner confirmed it for transfers [EXAM2 L0058].
   E63_TRANSFER_CORRECTION_PENDING: "[FAQ L0058-L0059]",
+  // P-F (ccrs-strain-fill-core): an Inventory row never goes with a blank
+  // Strain ("Required on which operations: Insert, Update and Delete ...
+  // Strain is required"). Filled from what CCRS accepted for the lot, else
+  // held back (owed) until the product has a strain.
+  E64_INVENTORY_NO_STRAIN: "[G L0551-L0554]",
+  // P-F: advisory. The lot was sent with the strain CCRS last accepted for it
+  // (examiner Brian 4d, [EXAM2 L0034-L0035]); the rule it satisfies is the
+  // guide's "Strain is required".
+  E65_INVENTORY_STRAIN_FROM_CCRS: "[G L0551-L0554]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

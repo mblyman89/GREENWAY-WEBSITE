@@ -325,6 +325,20 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - A changed transfer CCRS accepted shows as E63 with **Approve correction**; once approved it is sent as an Update with the same id [EXAM2 L0058] [G L0247]. This needs migration 0325.
 - See Part 09 C1.
 
+### A.21 P-F PREprod final: Product Update stamped, Inventory strain filled or held, Area counted when held — DONE in code (2026-10-31)
+
+- **Before:**
+  - Product Update rows went out with blank UpdatedBy/UpdatedDate. CCRS refused them [G L0234-L0242].
+  - Inventory rows for products without a strain went out with a blank Strain. CCRS refused them [G L0551-L0554].
+  - Those CCRS messages were unknown to the hub, so the scoreboard said "answer unclear".
+  - Area failed even though CCRS held Sales Floor.
+- **Now:**
+  - Updates are stamped and verified.
+  - A blank Strain is filled from CCRS's last accepted value (E65), else held as E64.
+  - The four messages are known and plain-worded.
+  - Area passes when CCRS holds it.
+- See Part 09 P-F.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.
@@ -424,6 +438,10 @@ fixtures rather than inferred.
 | 10 | `Inventory Adjustment Details missing` | InventoryAdjustment | E13 | confirmed |
 | 11 | `Only Medical Sales Excise tax can be 0` | Sale | E12 | **differs from prediction**; names *Excise* explicitly → `OtherTax` **is** the 37% excise and 0.00 is legal only when medical |
 | 12 | `Operation is invalid must be Insert, Update or Delete` | Product | **E42** | observed P20261005A: the symptom of a comma inside a value — CCRS split the row, the Operation column received a shifted blank. Not an Operation bug |
+| 13 | `UpdatedBy is required for Update or Delete Operations` | Product | verify | observed 2026-10-31 PREprod; fixed by P-F stamp `[G L0234-L0236]` |
+| 14 | `UpdatedDate is required for Update or Delete Operations` | Product | verify | observed 2026-10-31 PREprod `[G L0237-L0242]` |
+| 15 | `UpdatedDate must be a date for Update and Delete operations` | Product | verify | observed 2026-10-31 PREprod `[G L0237-L0239]` |
+| 16 | `Strain is required` | Inventory | **E64** | observed 2026-10-31 PREprod `[G L0551-L0554]`; filled from CCRS's last accepted strain or held |
 
 ### Coverage against the 14 real rejections
 

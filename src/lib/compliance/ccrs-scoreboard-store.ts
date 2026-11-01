@@ -2,7 +2,11 @@
  * src/lib/compliance/ccrs-scoreboard-store.ts  (R74 S48, Round 29). I/O.
  *
  * Reads the evidence for the CCRS test scoreboard (ccrs-scoreboard-core.ts)
- * from the hub's own record: `ccrs_file_rows` joined to `ccrs_files`. Two
+ * from the hub's own record: `ccrs_file_rows` joined to `ccrs_files`, plus
+ * (P-F) the row's CCRS message (`ccrs_file_issues`, else the file's
+ * `error_messages`) and the state of the record it names
+ * (`ccrs_filed_entities`), so a refusal is explained in CCRS's words and an
+ * Area CCRS already holds counts as passed. Two
  * small, bounded reads per test (never .limit(>=1000)):
  *   1. the newest rows of this kind CCRS ACCEPTED (file answered, row
  *      submitted/confirmed), so an old pass is never hidden by new traffic;
@@ -23,15 +27,25 @@ type Raw = {
   state: string;
   operation: string | null;
   payload: Record<string, unknown> | null;
-  ccrs_files: { file_name: string; state: string; success_email_at: string | null; error_email_at: string | null } | null;
+  ccrs_files: { file_name: string; state: string; success_email_at: string | null; error_email_at: string | null; error_messages: string[] | null } | null;
+  ccrs_filed_entities: { state: string } | null;
+  ccrs_file_issues: { code: string; message: string }[] | null;
 };
+
+/** CCRS's words for the row: its own CCRS_ROW_* issue, else the file's distinct messages. */
+function messagesOf(r: Raw): string[] {
+  const own = (r.ccrs_file_issues ?? []).filter((i) => i.code.startsWith("CCRS_ROW_")).map((i) => i.message);
+  return own.length > 0 ? own : (r.ccrs_files?.error_messages ?? []).filter(Boolean);
+}
 
 const ANSWERED = ["succeeded", "errored", "reconciling", "closed"];
 
 async function readOne(admin: Admin, env: LedgerEnv, t: ScoreTest, acceptedOnly: boolean): Promise<ScoreRow[]> {
   let q = admin
     .from("ccrs_file_rows")
-    .select("state, operation, payload, ccrs_files!inner(file_name, file_type, env, state, success_email_at, error_email_at)")
+    .select(
+      "state, operation, payload, ccrs_files!inner(file_name, file_type, env, state, success_email_at, error_email_at, error_messages), ccrs_filed_entities(state), ccrs_file_issues(code, message)",
+    )
     .eq("ccrs_files.env", env)
     .eq("ccrs_files.file_type", t.query.fileType);
   if (t.query.operation) q = q.eq("operation", t.query.operation);
@@ -47,6 +61,8 @@ async function readOne(admin: Admin, env: LedgerEnv, t: ScoreTest, acceptedOnly:
     operation: r.operation,
     payload: r.payload ?? {},
     answeredAt: r.ccrs_files?.success_email_at ?? r.ccrs_files?.error_email_at ?? null,
+    messages: messagesOf(r),
+    entityState: r.ccrs_filed_entities?.state ?? null,
   }));
 }
 

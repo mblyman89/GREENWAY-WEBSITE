@@ -165,6 +165,10 @@ W2_TESTS = "tests/compliance/w2-ccrs-hub-speed.test.ts"
 INFLIGHT_CORE = "src/lib/compliance/ccrs-inflight-hold-core.ts"
 W3_TESTS = "tests/compliance/w3-inflight-hold.test.ts"
 C1_TESTS = "tests/compliance/c1-transfer-id-and-corrections.test.tsx"
+PF_TESTS = "tests/compliance/preprod-final-2026-10-31.test.ts"
+STRAIN_FILL = "src/lib/compliance/ccrs-strain-fill-core.ts"
+SCORE_CORE = "src/lib/compliance/ccrs-scoreboard-core.ts"
+OUTCOME_CORE_PF = "src/lib/compliance/ccrs-outcome-core.ts"
 INTAKE_ID_CORE = "src/lib/compliance/ccrs-intake-id-core.ts"
 ISSUE_LIST = "src/components/admin/compliance/CcrsIssueList.tsx"
 RETCORR_CORE = "src/lib/compliance/ccrs-return-corrections-core.ts"
@@ -3584,7 +3588,7 @@ MUTATIONS = [
     ),
     (
         'M440-r63-clamp',
-        DELTA,
+        LEDGER,  # P-F: updatedDateFor moved from inventory-delta-core to ledger-core
         '  return c !== null && c > b ? createdDate : batchDay;',
         '  return batchDay;',
         R63_TESTS,
@@ -4207,6 +4211,70 @@ MUTATIONS = [
         '{false ? (',
         C1_TESTS,
         'Every E63 row offers Approve correction.',
+    ),
+    (
+        'M518-pf-stamp-updatedby',
+        LEDGER,
+        '    if (!(row[iBy] ?? "").trim()) row[iBy] = by;',
+        '    if (false) row[iBy] = by;',
+        PF_TESTS,
+        'Every Product Update/Delete carries UpdatedBy [G L0234-L0236].',
+    ),
+    (
+        'M519-pf-stamp-updateddate',
+        LEDGER,
+        '    if (!(row[iDate] ?? "").trim()) row[iDate] = updatedDateFor(row[iCreated] ?? "", stamp.batchDay);',
+        '    if (false) row[iDate] = updatedDateFor(row[iCreated] ?? "", stamp.batchDay);',
+        PF_TESTS,
+        'Every Product Update/Delete carries UpdatedDate [G L0237-L0242].',
+    ),
+    (
+        'M520-pf-verify-updatedby',
+        CORE,
+        '        if (!(cells[updByIdx] ?? "").trim()) err(',
+        '        if (false) err(',
+        PF_TESTS,
+        'The last check refuses an Update with blank UpdatedBy.',
+    ),
+    (
+        'M521-pf-verify-strain',
+        CORE,
+        '      err(`Data row ${rowNo}: Strain is required on every Inventory row [G L0551-L0554].`);',
+        '      void 0;',
+        PF_TESTS,
+        'The last check refuses an Inventory row with blank Strain [G L0551-L0554].',
+    ),
+    (
+        'M522-pf-fill-held',
+        STRAIN_FILL,
+        '    held.push({ id, label, reason: NO_STRAIN_REASON });',
+        '    out.push([...r]);',
+        PF_TESTS,
+        'A lot with no strain anywhere is held back (E64), never sent blank.',
+    ),
+    (
+        'M523-pf-held-counts',
+        SCORE_CORE,
+        '  const held = test.heldCounts ? mine.filter(',
+        '  const held = false ? mine.filter(',
+        PF_TESTS,
+        'The Area test passes when CCRS already holds Sales Floor.',
+    ),
+    (
+        'M524-pf-failure-quotes-ccrs',
+        SCORE_CORE,
+        '  const hit = known.find((k) => msg.includes(k));',
+        '  const hit = undefined as string | undefined;',
+        PF_TESTS,
+        'A failure quotes CCRS and gives the next step.',
+    ),
+    (
+        'M525-pf-known-strain',
+        OUTCOME_CORE_PF,
+        '  { text: "Strain is required", cls: "row",',
+        '  { text: "Strain is required (never)", cls: "row",',
+        PF_TESTS,
+        '"Strain is required" is a known CCRS row error (no more "unclear").',
     ),
 ]
 

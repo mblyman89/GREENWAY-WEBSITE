@@ -66,6 +66,10 @@ export const CCRS_KNOWN_MESSAGES: readonly { text: string; cls: CcrsMessageClass
   { text: "Only Medical Sales Excise tax can be 0", cls: "row", source: "2026-09-17 T-42" },
   { text: "Operation is invalid must be Insert, Update or Delete", cls: "row", source: "2026-10-06 P20261005A (3 of 8 rows; the rest filed)" },
   { text: "Duplicate Sale for Licensee", cls: "row-contradicts-ledger", source: "2026-10-25 PREprod re-upload of the 2026-10-20 Sale file (7 of 7 rows; U-07 answered)" },
+  { text: "UpdatedBy is required for Update or Delete Operations", cls: "row", source: "2026-10-31 PREprod Product_413541_20261031141036.csv (8 of 8 Update rows sent with UpdatedBy/UpdatedDate blank)" },
+  { text: "UpdatedDate is required for Update or Delete Operations", cls: "row", source: "2026-10-31 PREprod Product_413541_20261031141036.csv (same 8 rows, same line)" },
+  { text: "UpdatedDate must be a date for Update and Delete operations", cls: "row", source: "2026-10-31 PREprod Product_413541_20261031141036.csv (same 8 rows, same line)" },
+  { text: "Strain is required", cls: "row", source: "2026-10-31 PREprod Inventory_413541_20261031142647.csv (6 of 6 Update rows sent with a blank Strain)" },
   { text: "Invalid InventoryExternalIdentifier", cls: "row", source: "2026-10-25 PREprod week 10/25-11/01 (4 of 4 Sale rows: their lots were in an Inventory file whose Product file CCRS refused whole)" },
 ];
 
@@ -198,7 +202,7 @@ export function classifyEcho(type: CcrsRetailerFileType, rows: readonly OurRow[]
       messages,
       rejected: [],
       lines: out,
-      why: `${bits.join("; ")}. Nobody can say which rows landed, so every row is uncertain until a Service Desk copy is compared (LAW 4).`,
+      why: `${bits.join("; ")}. The hub cannot tie each refusal to a row, so it marks every row of this file uncertain (held out of exports) until it is settled (LAW 4): in PREprod export again and upload the new file; in production compare a Service Desk copy.`,
     };
   }
   const rejected: RejectedRow[] = out

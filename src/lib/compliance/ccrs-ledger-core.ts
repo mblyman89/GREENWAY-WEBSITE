@@ -471,6 +471,51 @@ export function applyProductPlan(
   return { rows: out, skipped, withheld };
 }
 
+function dayNumber(mmddyyyy: string): number | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(mmddyyyy);
+  return m ? Number(`${m[3]}${m[1]}${m[2]}`) : null;
+}
+
+/** UpdatedDate never precedes CreatedDate [G L0242]. */
+export function updatedDateFor(createdDate: string, batchDay: string): string {
+  const c = dayNumber(createdDate);
+  const b = dayNumber(batchDay);
+  if (b === null) throw new Error(`R6-3: batch day "${batchDay}" is not MM/DD/YYYY`);
+  return c !== null && c > b ? createdDate : batchDay;
+}
+
+/**
+ * P-F (2026-10-31): every Product Update row carries UpdatedBy and UpdatedDate.
+ * "UpdatedBy ... the user who subsequently updated a file", "UpdatedDate ...
+ * the date that the file was modified", "Updated Date cannot be prior to
+ * Created Date" [G L0234-L0242]. Before this, applyProductPlan turned rows into
+ * Updates with both cells blank, and CCRS refused all 8 rows of
+ * Product_413541_20261031141036.csv with "UpdatedBy is required for Update or
+ * Delete Operations: UpdatedDate is required for Update or Delete Operations".
+ * Insert rows are returned unchanged. A filled cell is kept.
+ */
+export function stampProductUpdates(
+  rows: readonly (readonly string[])[],
+  stamp: { updatedBy: string; batchDay: string },
+): string[][] {
+  const C = CCRS_COLUMNS.Product;
+  const iOp = C.indexOf("Operation");
+  const iBy = C.indexOf("UpdatedBy");
+  const iDate = C.indexOf("UpdatedDate");
+  const iCreated = C.indexOf("CreatedDate");
+  if (iOp < 0 || iBy < 0 || iDate < 0 || iCreated < 0) throw new Error("stampProductUpdates: Product columns changed");
+  const by = stamp.updatedBy.trim();
+  if (!by) throw new Error("stampProductUpdates: UpdatedBy is blank");
+  return rows.map((r) => {
+    const row = [...r];
+    const op = (row[iOp] ?? "").trim().toLowerCase();
+    if (op !== "update" && op !== "delete") return row;
+    if (!(row[iBy] ?? "").trim()) row[iBy] = by;
+    if (!(row[iDate] ?? "").trim()) row[iDate] = updatedDateFor(row[iCreated] ?? "", stamp.batchDay);
+    return row;
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * Embedded pure self-tests (registered in run-pure-selftests.ts).
  * ------------------------------------------------------------------ */
@@ -492,4 +537,11 @@ export function __runCcrsLedgerCoreTests(): void {
   ok(s.kind === "case-variant" && s.value === "Dutch Treat", "ledger casing wins");
   const p = resolveProductName(view, "I1", "Our Name");
   ok(p.kind === "filed" && p.name === "Filed Name" && p.differs, "filed name wins");
+  // P-F: the owner's 2026-10-31 Product Update row (UpdatedBy/UpdatedDate blank).
+  const upd = ["413541", "EndProduct", "Usable Marijuana", "X", "", "1", "P20261025A-GWP-000405", "Greenway", "10/31/2026", "", "", "Update"];
+  const ins = [...upd.slice(0, 11), "Insert"];
+  const [u, i] = stampProductUpdates([upd, ins], { updatedBy: "Greenway", batchDay: "10/31/2026" });
+  ok(u[9] === "Greenway" && u[10] === "10/31/2026", "Update row gets UpdatedBy + UpdatedDate");
+  ok(i[9] === "" && i[10] === "", "Insert row untouched");
+  ok(stampProductUpdates([upd], { updatedBy: "G", batchDay: "10/30/2026" })[0][10] === "10/31/2026", "UpdatedDate clamped to CreatedDate");
 }

@@ -84,7 +84,8 @@ import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/conven
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
-import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerState, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
+import { fillBlankStrains, pickLotStrain } from "@/lib/compliance/ccrs-strain-fill-core";
+import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, stampProductUpdates, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerState, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
 import { ccrsUnitWeightCell, fitUtf8Bytes, plainPunctuation } from "@/lib/compliance/ccrs-whole-file-core";
 import {
@@ -251,7 +252,7 @@ async function getPublishedVersionId(admin: Admin): Promise<string | null> {
 }
 
 const LOT_COLUMNS =
-  "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample, notes, manifest_id";
+  "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample, notes, manifest_id, strain_name";
 
 /**
  * R6-2: every ACCEPTED lot of a delivery received on or before `toDay` (live
@@ -607,6 +608,8 @@ function jsonToCompounds(json: unknown): Cannabinoid[] {
 
 type LotRow = {
   id: string;
+  /** P-F: the lot's own strain (migration 0024, from the transfer); a fallback when the product has none. */
+  strain_name?: string | null;
   lot_code: string | null;
   pos_product_key: string | null;
   product_name: string | null;
@@ -1402,6 +1405,7 @@ export async function buildCcrsBatch(
     isCultivera: lotFlaggedCultivera(l, migrationManifestIds),
   }));
   const identityHeld = cultiveraLotsToHold({ env, view: ledger, lots: identityLots });
+  const menuStrains = new Set(items.map((it) => (it.strain_name ?? "").trim()).filter(Boolean));
   const rawPlan = planLedgerBatch({
     view: ledger,
     lots: lots
@@ -1415,7 +1419,9 @@ export async function buildCcrsBatch(
           label: l.lot_code ?? ext,
           inventoryExternalId: ext,
           productKey: key,
-          strain: ((key ? itemsByKey.get(key) : undefined)?.strain_name ?? "").trim(),
+          // P-F: never a blank Strain [G L0551-L0554]: the product's strain,
+          // else the lot's own strain when CCRS holds it or this batch files it.
+          strain: pickLotStrain({ productStrain: (key ? itemsByKey.get(key) : undefined)?.strain_name, lotStrain: l.strain_name, menuStrains, view: ledger }),
         };
       }),
     products: productBuild.keys.map((key, i) => ({
@@ -1519,7 +1525,9 @@ export async function buildCcrsBatch(
   syncIssues.push(...identityIssues(identity, slice.kind === "loaded" ? null : slice.reason));
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
   const area = buildAreaFile(env, license.licenseNumber, createdBy, createdDate, ledger);
-  const product = { ...productBuild, ...applyProductPlan(productBuild.rows, productBuild.keys, plan) };
+  const productPlanned = applyProductPlan(productBuild.rows, productBuild.keys, plan);
+  // P-F: a Product Update carries UpdatedBy + UpdatedDate [G L0234-L0242].
+  const product = { ...productBuild, ...productPlanned, rows: stampProductUpdates(productPlanned.rows, { updatedBy: submittedBy, batchDay: createdDate }) };
   // S-17b: keys of every visible published item that has a product plan. A
   // lot whose key is not here names a product Product.csv cannot carry. Only
   // the lots the PLANNER withheld for that reason are spoken about (a filed lot
@@ -1947,7 +1955,42 @@ export async function buildCcrsBatch(
     ...eventLotRefs([{ type: "InventoryAdjustment", csv: adj.csv }]),
     ...lotsNamedByEventRows({ adjustment: [], sale: saleRows, transfer: transferRows }),
   ]);
-  const delta = planInventoryDelta({ rows: inventory.rows, told, namedByEvents, updatedBy: submittedBy, batchDay: createdDate });
+  // P-F: a row still without a Strain takes the strain CCRS last accepted for
+  // the lot ("use the same strain name that was already provided" [EXAM2
+  // L0034-L0035]); with none it is held back (E64), never sent blank.
+  const strainFill = fillBlankStrains(inventory.rows, (id) => (told.kind === "loaded" ? told.byId.get(id)?.told?.Strain : null));
+  if (strainFill.held.length > 0) {
+    // The row names the PRODUCT key (fix link to the product page); the label says which lot.
+    const lotByExt = new Map(lots.flatMap((l) => {
+      const ext = assignedInventoryExternalId(l);
+      return ext ? [[ext, l] as const] : [];
+    }));
+    syncIssues.push({
+      severity: "error",
+      file: "Inventory",
+      code: "E64_INVENTORY_NO_STRAIN",
+      specPin: specPinFor("E64_INVENTORY_NO_STRAIN"),
+      count: strainFill.held.length,
+      rows: strainFill.held.map((h) => {
+        const lot = lotByExt.get(h.id);
+        const key = (lot?.pos_product_key ?? "").trim();
+        return { id: key || h.id, label: `${h.label} (lot ${h.id})`, detail: h.reason };
+      }),
+      message: `${strainFill.held.length} lot(s) have no strain anywhere (not on the product, not on the lot, never accepted by CCRS), so they were held back from Inventory.csv. CCRS refuses an Inventory row without a Strain ("Strain is required" [G L0551-L0554]). HELD BACK, not blocking. Fix: open the product, set its strain (the strain of the flower it was made from), publish, and rebuild.`,
+    });
+  }
+  if (strainFill.filled.length > 0) {
+    syncIssues.push({
+      severity: "warning",
+      file: "Inventory",
+      code: "E65_INVENTORY_STRAIN_FROM_CCRS",
+      specPin: specPinFor("E65_INVENTORY_STRAIN_FROM_CCRS"),
+      count: strainFill.filled.length,
+      rows: strainFill.filled.map((f) => ({ id: f.id, label: f.label, detail: `sent with "${f.strain}", the strain CCRS last accepted for this lot` })),
+      message: `${strainFill.filled.length} lot(s) have no strain on the product, so each was sent with the strain CCRS already accepted for it, as the examiner said to ("use the same strain name that was already provided for the product"). Nothing to do now; set the strain on the product so future batches use it.`,
+    });
+  }
+  const delta = planInventoryDelta({ rows: strainFill.rows, told, namedByEvents, updatedBy: submittedBy, batchDay: createdDate });
   if (delta.unchanged.length > 0) {
     syncIssues.push({
       severity: "warning",

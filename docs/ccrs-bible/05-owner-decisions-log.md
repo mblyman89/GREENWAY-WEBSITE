@@ -325,3 +325,15 @@ Recorded:
 3. **A transfer CCRS accepted is corrected only by an Update with the same id** [EXAM2 L0058], and only after the owner presses **Approve correction** for exactly the values shown. Nothing is corrected on a guess. This needs migration 0325, which the owner applies by hand.
 4. Still open from report A-4: whether to re-point strain names (Part 17 §E.3) remains the owner's decision. C1 does not change strains.
 
+## D-25 — The final PREprod tests: no "unknown" answers, Area explained (2026-10-31, slice P-F)
+
+(Appended after D-24; this log is append-only.)
+
+Owner, verbatim (2026-10-31, `evidence/2026-10-31-preprod/owner-request-verbatim.md`): *"the system keeps telling me we dont know the answer to these issues, but we have every answer from brian… nothing is unknown at this point… we have two areas/ rooms or so right? and if they are already set up, how do I pass that test?"*
+
+Recorded:
+1. **The hub never says "unclear" for a message we have seen.** Every CCRS message received so far is in the known list with its fix. A truly new message is shown in CCRS's own words, with an examiner draft offered.
+2. **PREprod has one Area, Sales Floor (`GWA-SALES-FLOOR`).** CCRS has held it since the 10/20 success. "Duplicate External Identifier" on a later Area row means CCRS already has it, which passes the test. The production rooms (Sales Floor, Incoming Orders and the others) are a production matter (Part 16) and need no PREprod test.
+3. **Strain on Inventory is never guessed.** It is the product's strain, else what CCRS last accepted for the lot [EXAM2 L0034-L0035], else the row is held (E64) until the product has a strain.
+4. No push or merge until the owner says so. The work is delivered as a bundle and patches in `/workspace/ccrs-work`.
+

@@ -12,7 +12,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 describe("R74 S48 pure cores", () => {
   it("answer core", () => expect(__runCcrsAnswerTests()).toEqual({ passed: 16, failed: 0 }));
   it("scoreboard core", () => {
-    expect(__runCcrsScoreboardTests()).toEqual({ passed: 14, failed: 0 });
+    expect(__runCcrsScoreboardTests()).toEqual({ passed: 21, failed: 0 });
     expect(SCORE_TESTS.filter((t) => t.required).length).toBe(13);
   });
 });

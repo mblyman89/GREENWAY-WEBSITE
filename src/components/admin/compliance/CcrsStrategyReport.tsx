@@ -11,7 +11,7 @@ const SCOPE_LABEL: Record<CcrsStrategy["files"][number]["scope"], string> = {
   none: "nothing to fix",
   "listed-rows": "re-send only the listed rows",
   "whole-file": "whole file refused: re-send it",
-  unknown: "never seen before: ask the examiner",
+  unknown: "a CCRS message the hub has not met yet: read CCRS's words below; an examiner draft is ready if you want one",
 };
 
 export function CcrsStrategyReport({ strategy }: { strategy: CcrsStrategy }) {

@@ -47,6 +47,15 @@ export const SOURCE_QUOTES = {
     203: "Note: This number must match the number of records or the file will fail to process.",
     220: "The external identifier is an alpha-numeric identification assigned by the licensee (or integrator).",
     221: "This must be unique for each row.",
+    234: "UpdatedBy",
+    235: "Each record provides an UpdatedBy field to enter the user who subsequently updated a file.",
+    236: "Data Field Type (character limit): Text (35)",
+    237: "UpdatedDate",
+    238: "Each record provides an UpdatedDate field to enter the date that the file was modified.",
+    239: "Data Field Type: Date (MM/DD/YYYY)",
+    240: "Error Messages:",
+    241: "Created Date cannot be a date past submission date for Insert.",
+    242: "Updated Date cannot be prior to Created Date.",
     243: "Operation",
     244: "This field indicates the nature of the entry the database will make for the file.",
     245: "Valid Values:",
@@ -57,6 +66,10 @@ export const SOURCE_QUOTES = {
     326: "action to take for correction.",
     358: "Strain name is invalid, cannot be Unknown, THC, or Other.",
     434: "If Useable Cannabis is selected, Unit Weight Gram cannot be 0",
+    551: "o Required on which operations: Insert, Update and Delete",
+    552: "o Valid Values: Strain.Strain",
+    553: "o Error Messages:",
+    554: "Strain is required",
     529: "File Dependencies: The inventory file is dependent on existing data records in Strain, Area and",
     530: "Product. Referenced files must be submitted prior to this submission by at least 10 minutes.",
     579: "Invalid Product",
@@ -253,6 +266,51 @@ export const STRATEGY_PLAYBOOK: Record<string, PlaybookEntry> = {
       RESEND_ROWS,
     ],
     seen: "2026-10-25 PREprod week 10/25-11/01",
+  },
+  // P-F (2026-10-31): CCRS answered all 8 rows of a Product Update file with
+  // these three texts on ONE line ("...Operations: UpdatedDate is required...").
+  // Each line matches the longest known text; all three share one fix.
+  "UpdatedBy is required for Update or Delete Operations": {
+    cls: "row",
+    action: "fix-resend",
+    meaning:
+      "The row was an Update, but its UpdatedBy and UpdatedDate cells were blank. CCRS needs both on every Update or Delete: who changed the record and on what day. This was an exporter fault (fixed 2026-10-31, slice P-F), not your data.",
+    cite: ["[G L0234-L0242]"],
+    fix: [
+      "Nothing to fix in the product. Since 2026-10-31 every Product Update carries UpdatedBy (the submitter) and UpdatedDate (the export day, never before CreatedDate), and the last check refuses any Update row with either blank.",
+      "Apply the error file (the hub now knows this message, so it records the rows as refused, not unclear).",
+      RESEND_ROWS,
+    ],
+    seen: "2026-10-31 PREprod Product Update",
+  },
+  "UpdatedDate is required for Update or Delete Operations": {
+    cls: "row",
+    action: "fix-resend",
+    meaning: "The row was an Update with a blank UpdatedDate. CCRS needs the day the record was changed, and it may not be before the CreatedDate.",
+    cite: ["[G L0237-L0242]"],
+    fix: ["Nothing to fix in the product: the exporter now fills UpdatedDate on every Update (slice P-F).", "Apply the error file.", RESEND_ROWS],
+    seen: "2026-10-31 PREprod Product Update",
+  },
+  "UpdatedDate must be a date for Update and Delete operations": {
+    cls: "row",
+    action: "fix-resend",
+    meaning: "The row was an Update whose UpdatedDate was not a date (it was blank). It must be MM/DD/YYYY.",
+    cite: ["[G L0237-L0239]"],
+    fix: ["Nothing to fix in the product: the exporter now writes UpdatedDate as MM/DD/YYYY on every Update (slice P-F).", "Apply the error file.", RESEND_ROWS],
+    seen: "2026-10-31 PREprod Product Update",
+  },
+  "Strain is required": {
+    cls: "row",
+    action: "fix-resend",
+    meaning:
+      "An inventory row was sent with a blank Strain. CCRS needs a strain on every Inventory row, Insert, Update or Delete, and it must be a strain CCRS already holds. The lots were products with no strain set (for example infused pre-rolls).",
+    cite: ["[G L0551-L0554]"],
+    fix: [
+      "Open each listed product and set its strain (the strain of the flower it was made from), then publish the menu.",
+      "Export again. Since 2026-10-31 a lot whose product has no strain uses the lot's own strain, else the strain CCRS already accepted for that lot (the examiner: use the same strain name already provided); with none it is held back with code E64 and a link to the product, never sent blank.",
+      "If the strain is new, the Strain file goes first; upload Inventory at least 10 minutes after Strain and Product.",
+    ],
+    seen: "2026-10-31 PREprod Inventory Update",
   },
   "Duplicate Sale for Licensee": {
     cls: "row-contradicts-ledger",
