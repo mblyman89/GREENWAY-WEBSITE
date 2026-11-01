@@ -1235,6 +1235,7 @@ import { __runCountAuditStatsTests } from "../../src/lib/pos/count-audit-stats-c
 import { __runIntakeHardenTests } from "../../src/lib/inbound-email/intake-harden-core";
 import { __runDbContractCoreTests } from "../../src/lib/platform/db-contract-core";
 import { __runPlatformChangesTests } from "../../src/lib/platform/platform-changes";
+import { __runMoneySmokeCoreTests } from "../../src/lib/platform/money-smoke-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2667,6 +2668,7 @@ __runLiquidVolumeTests();
   assertRan("return-search-core", __runReturnSearchCoreTests(), 37); // R-RET (owner message 10): back-office return search finds register sales by printed receipt #, fun name, GWY- order #, loyalty member name/phone; empty result says what to type
   assertRan("db-contract-core", __runDbContractCoreTests(), 30); // G-71a (owner message 12): daily DB health check: contract parse, unreachable = FAIL (run 0330), missing = WARN, call errors explained, one alert per Pacific day, escaped email
   assertRan("platform-changes", __runPlatformChangesTests(), 30); // G-71b (owner message 12): platform changes register valid, deadline warnings 30/7/1/overdue once each, monthly review once per month, stale register flagged, escaped email
+  assertRan("money-smoke-core", __runMoneySmokeCoreTests(), 30); // G-71c (owner message 12): daily sale/return/till test: parse (ok must match 13 steps), failure explained per step and SQLSTATE (42501 -> 0330), not installed = warn, worse status wins, one daily report
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

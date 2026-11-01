@@ -35,6 +35,7 @@ import {
   shouldSend,
   type HealthReport,
 } from "./db-contract-core";
+import { MONEY_SMOKE_RPC, mergeSmokeIntoReport, parseSmokeResult } from "./money-smoke-core";
 
 export const PLATFORM_HEALTH_PAGE = "/admin/settings/platform-health";
 const RUNS_TABLE = "platform_health_runs";
@@ -84,6 +85,21 @@ async function runCheck(admin: Admin): Promise<HealthReport> {
   }
 }
 
+/**
+ * G-71c: the daily money-path test (0332). A till, a sale, a return and a
+ * cash drop run as the server and are rolled back inside the database. Its
+ * result is folded into the same report, so there is still one email a day.
+ */
+async function runSmoke(admin: Admin, db: HealthReport): Promise<HealthReport> {
+  try {
+    const { data, error } = await admin.rpc(MONEY_SMOKE_RPC);
+    if (error) return mergeSmokeIntoReport(db, null, { code: error.code, message: error.message });
+    return mergeSmokeIntoReport(db, parseSmokeResult(data), null);
+  } catch (e) {
+    return mergeSmokeIntoReport(db, null, { code: null, message: e instanceof Error ? e.message : String(e) });
+  }
+}
+
 async function claimDaily(admin: Admin, key: string, subject: string): Promise<"claimed" | "taken" | "error"> {
   try {
     const { error } = await admin.from("compliance_reminder_log").insert({
@@ -116,7 +132,7 @@ export async function runPlatformHealthCheck(opts: { source: "cron" | "manual"; 
     };
   }
   const admin = createSupabaseAdminClient();
-  const report = await runCheck(admin);
+  const report = await runSmoke(admin, await runCheck(admin));
 
   let saved = false;
   try {

@@ -3420,3 +3420,38 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0331_platform_health.rollback.sql`.
   It drops the function and the log table. Nothing else depends on them.
+
+## G-71c — 0332 — Daily money-path test (owner message 12)
+
+- [ ] `0332_money_path_smoke_test.sql` (daily test of a sale, a return and the till, owner
+  message 12, D102). Apply it **after 0331**. It adds one function. No tables, no data changes.
+  - **Why:** 0331 checks that the server is *allowed* to use every table and function. This
+    checks that it can actually *do* the work: every morning the server opens a test till,
+    rings up a test sale, takes it out of stock, writes it to the books as a draft, takes a
+    customer return, drops cash and closes the till, then **undoes all of it inside the
+    database**. Nothing is left: no order, no stock change, no journal, no journal number.
+  - **`public.platform_money_smoke_test()`:** runs as the caller (`security invoker`), so it
+    tests the server's real permissions; time limits 20s / 5s locks; only `service_role` may
+    run it. It answers which of the 13 steps passed and, if one failed, which step, the
+    database error code and the message. The morning email turns that into plain words, for
+    example *"Money-path test failed: take a customer return … run 0330"*.
+  - **Grants are written out on purpose (standing rule 15).**
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor; it leaves nothing behind):
+
+  ```sql
+  set role service_role;
+  select public.platform_money_smoke_test();
+  -- -> {"ok": true, "passed": ["register", ..., "verify"], "failed": null, "rolled_back": true, ...}
+  reset role;
+  select count(*) from public.orders where staff_note like '__smoke__%';  -- 0
+  ```
+
+  **Then:** Back office → **Admin → Platform health** → **Run check now**. The summary should
+  end *"A test sale, return and till ran end to end and were undone (13 steps)."* Until 0332
+  is applied the check shows a warning *"The daily money-path test is not installed"*.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0332_money_path_smoke_test.rollback.sql`.
+  It drops the function. Nothing else depends on it.
