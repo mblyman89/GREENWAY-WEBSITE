@@ -199,6 +199,10 @@ class Settings(BaseSettings):
     cultivera_pos_pace_seconds: float = Field(default=0.6, alias="CULTIVERA_POS_PACE_SECONDS")
     # Phase A time budget (bible §3b.7: ~10 min measured; 30 min is the go/no-go ceiling).
     cultivera_pos_budget_seconds: float = Field(default=1800.0, alias="CULTIVERA_POS_BUDGET_SECONDS")
+    # CVB-2: the full-history ARCHIVE harvest (crawler/app/cultivera_archive.py) uses the same login.
+    # ~750 data-api calls measured 2026-11-01 (the biggest pages take 5-25 s each); 3 h per attempt, and
+    # a paused run resumes where it stopped, so the budget only bounds one attempt, never the archive.
+    cultivera_archive_budget_seconds: float = Field(default=10_800.0, alias="CULTIVERA_ARCHIVE_BUDGET_SECONDS")
 
     # --- GrowFlow (second wholesale marketplace) ------------------------------
     # The owner is ALSO an authenticated GrowFlow BUYER (Greenway Marijuana,

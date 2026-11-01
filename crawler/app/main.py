@@ -34,6 +34,7 @@ from .growflow_auth import GrowflowAuthError
 from .leaflink_api import LeaflinkApiError, LeaflinkApiResult, LeaflinkClient
 from .leaflink_auth import LeaflinkAuthError
 from . import cultivera_pos_jobs as pos_jobs
+from . import cultivera_archive_jobs as archive_jobs
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
@@ -867,6 +868,69 @@ def cultivera_pos_cancel(run_id: str, x_crawler_secret: str | None = Header(defa
 def cultivera_pos_file(run_id: str, name: str, x_crawler_secret: str | None = Header(default=None)):
     _require_secret(x_crawler_secret)
     p = pos_jobs.file_path(_pos_run_id(run_id), name)
+    if p is None:
+        raise HTTPException(status_code=404, detail="No such file in this run.")
+    return FileResponse(p, filename=name)
+
+
+# ---------------------------------------------------------------------------
+# CVB-2 - the Cultivera ARCHIVE: every dataset the back office will give us, all history.
+# READ-ONLY against Cultivera (the same PosClient guard as the cutover harvest).
+# ---------------------------------------------------------------------------
+
+
+class CultiveraArchiveStartRequest(BaseModel):
+    fresh: bool = Field(default=False, description="Ignore an unfinished archive run and start a new one.")
+    date_to: str | None = Field(
+        default=None, alias="dateTo", pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Last Pacific day to archive (YYYY-MM-DD). Default: today, Pacific. Fixed on the first attempt.")
+
+
+@app.post("/cultivera-archive/runs", status_code=202)
+def cultivera_archive_start(
+    req: CultiveraArchiveStartRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> dict:
+    """Start the archive harvest, or resume the newest unfinished run. 202 + run id; poll GET."""
+    _require_secret(x_crawler_secret)
+    try:
+        out = archive_jobs.start_or_resume(fresh=req.fresh, date_to=req.date_to)
+    except RuntimeError as exc:
+        if str(exc) == "busy":
+            raise HTTPException(status_code=409, detail="A Cultivera harvest is already running.") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera archive disabled (set CULTIVERA_POS_USERNAME / CULTIVERA_POS_PASSWORD).",
+        ) from exc
+    log.info("cultivera-archive run %s %s", out["runId"], "resumed" if out["resumed"] else "started")
+    return {"ok": True, **out}
+
+
+@app.get("/cultivera-archive/runs")
+def cultivera_archive_list(x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "runs": archive_jobs.list_runs()[:20]}
+
+
+@app.get("/cultivera-archive/runs/{run_id}")
+def cultivera_archive_status(run_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    st = archive_jobs.read_state(_pos_run_id(run_id))
+    if st is None:
+        raise HTTPException(status_code=404, detail="Unknown run id.")
+    return {"ok": True, **st}
+
+
+@app.post("/cultivera-archive/runs/{run_id}/cancel")
+def cultivera_archive_cancel(run_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "cancelRequested": archive_jobs.request_cancel(_pos_run_id(run_id))}
+
+
+@app.get("/cultivera-archive/runs/{run_id}/files/{name}")
+def cultivera_archive_file(run_id: str, name: str, x_crawler_secret: str | None = Header(default=None)):
+    _require_secret(x_crawler_secret)
+    p = archive_jobs.file_path(_pos_run_id(run_id), name)
     if p is None:
         raise HTTPException(status_code=404, detail="No such file in this run.")
     return FileResponse(p, filename=name)
