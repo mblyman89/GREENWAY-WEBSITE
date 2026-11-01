@@ -15,11 +15,16 @@
  * ${CRON_SECRET}`. Same fail-closed auth as /api/cron/regulatory-watch. Safe
  * to call twice: the daily email is claimed in compliance_reminder_log
  * (UNIQUE dedupe_key), so a second call records a run but sends nothing.
+ *
+ * G-71b: the same run also sends the monthly platform review (once per
+ * Pacific month, standing rule 16) and the 30/7/1-day and overdue warnings
+ * for open items in the platform changes register. No extra cron.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runPlatformHealthCheck } from "@/lib/platform/platform-health-store";
+import { runPlatformReview } from "@/lib/platform/platform-review-store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -52,6 +57,11 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   const out = await runPlatformHealthCheck({ source: "cron" });
+  const review = await runPlatformReview().catch((e: unknown) => ({
+    review: "failed" as const,
+    deadlines: [],
+    notes: [e instanceof Error ? e.message : String(e)],
+  }));
   return NextResponse.json({
     ok: true,
     status: out.report.status,
@@ -60,6 +70,7 @@ export async function GET(req: NextRequest) {
     saved: out.saved,
     alert: out.alert,
     notes: out.notes,
+    review,
   });
 }
 
