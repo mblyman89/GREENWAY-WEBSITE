@@ -1,4 +1,10 @@
 # S-14 (GAP M-11) — compliance test harness on every PR and push to main.
+#
+# G-71e (item 5, locked versions): every action below is pinned to a full
+# commit SHA with its release tag in a comment, and Node is read from
+# package.json (engines.node). Dependabot (.github/dependabot.yml) proposes
+# upgrades as pull requests; tests/compliance/g71e-version-pins.test.ts fails
+# if a floating tag, a node-version literal or a ^range comes back.
 # Pure-module tests only: no database, no browser, no secrets. This is the
 # WAC 314-55-509 mitigation evidence — statute-encoding modules cannot drift
 # without a red X on the PR.
@@ -14,15 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # fetch-depth 0 (full history) is required by the commit authorship
           # check below. The default shallow checkout has no merge base, so the
           # check could only ever see HEAD. See the comment on that step.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          # G-71e: the Node version comes from package.json engines.node, the
+          # same field Vercel reads, so CI and production run one Node major.
+          node-version-file: package.json
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -181,10 +189,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          # G-71e: the Node version comes from package.json engines.node, the
+          # same field Vercel reads, so CI and production run one Node major.
+          node-version-file: package.json
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -266,10 +276,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          # G-71e: the Node version comes from package.json engines.node, the
+          # same field Vercel reads, so CI and production run one Node major.
+          node-version-file: package.json
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
