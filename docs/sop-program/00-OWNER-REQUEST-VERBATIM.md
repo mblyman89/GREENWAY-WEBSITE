@@ -675,3 +675,19 @@ R-DRAWER-1: merged as #1628; see the R-DRAWER-1 section of `05-GAP-REGISTER.md`,
 ### Applied
 
 CVL (CVL-D1–D3): merged as #1630. Migration 0336 is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`).
+
+## Owner request, 2026-11-01 (recorded verbatim, CVB: Cultivera benchmark)
+
+The full request is quoted in `docs/roadmap/CVB-CULTIVERA-BENCHMARK.md` section 1 (the login line is redacted from the repository). The follow-up:
+
+> please continue working on the remaining tasks. please complete 2 more slices before stopping and reporting back with a summary report. I have another agent working on the repo and will be merging soon. it is working on inventory issues that are causing us to not be able to ring them up. so please complete all work, commit it out of the sandbox, use the shared root workspace folder to keep work safe. follow the standing rules. thank you.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| CVB-D1 | **The payback ledger starts at the two stated figures.** Build cost $40,000.00, and $5,500.00 saved on 2026-11-01, seeded once. Every later credit is its own append-only row with its basis; nothing is edited. | "Total build was 40k"; "We just now today from switching saved 5500" |
+| CVB-D2 | **Outperformance is measured, never assumed.** A period is credited only for the positive amount by which our pre-tax figure beat Cultivera's own figure for the comparable period, once per period and metric. | "a total build cost amount that goes down as our system outperforms theirs" |
+| CVB-D3 | **The history is kept byte for byte in a private bucket**, with sha256 provenance per file and append-only run records. These are KEPT by the factory reset. | "retain Cultivera historical data safely in our system" |
+| CVB-D4 | **Owner-only**: permission `cultivera.benchmark: ["owner"]`, and every table is service_role only. | "This will be owner only access" |
+| CVB-D5 | **Pushed, never merged by this agent.** Each slice is a branch with an open PR, with patches copied to `/workspace/cvb-safe/`. | "do not merge them until I tell you it is safe"; "use the shared root workspace folder to keep work safe" |

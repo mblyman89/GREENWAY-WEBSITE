@@ -169,6 +169,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/destruction-hold-0334-pg-check.sql", mustPrint: "DESTRUCTION HOLD 0334 CHECK PASSED" },
   { file: "scripts/recon/customer-search-0335-pg-check.sql", mustPrint: "CUSTOMER SEARCH 0335 CHECK PASSED" },
   { file: "scripts/recon/cultivera-loyalty-0336-pg-check.sql", mustPrint: "CULTIVERA LOYALTY 0336 CHECK PASSED" },
+  { file: "scripts/recon/cultivera-benchmark-0337-pg-check.sql", mustPrint: "CULTIVERA BENCHMARK 0337 CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */
