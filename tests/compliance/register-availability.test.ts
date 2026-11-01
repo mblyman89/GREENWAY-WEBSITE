@@ -256,7 +256,25 @@ describe("SLICE 16 — the owner's defect, end to end through the real route", (
 
     const bundle = await getBundle();
 
-    expect(bundle.products[0]?.unitsLeft).toBeNull();
+    // register-sell-all-back-office-stock: the size's units now come from the
+    // LIVE lot (the same 12 the back office shows), never the stale 0.
+    expect(bundle.products[0]?.unitsLeft).toBe(12);
+  });
+
+  it("ships UNKNOWN (null), never a guessed count, when a stocked lot cannot be pinned to one size", async () => {
+    menuItems = [
+      item({
+        variants: [
+          { id: "v-small", label: "1g", priceMinorUnits: 1500, inventoryLevel: 0, medical: false },
+          { id: "v-big", label: "3.5g", priceMinorUnits: 4000, inventoryLevel: 0, medical: false },
+        ],
+      }),
+    ];
+    lotRows = [lotRow({ on_hand_qty: 12 })];
+
+    const bundle = await getBundle();
+
+    expect(bundle.products.map((p) => p.unitsLeft)).toEqual([null, null]);
   });
 
   it("THE SCAN NOW WORKS: the restored product's barcode resolves to the cart", async () => {
@@ -391,9 +409,12 @@ describe("SLICE 16 — the one-way invariant: this can only ADD availability", (
     }
   });
 
-  it("leaves an already-sellable card's real unit counts intact", async () => {
-    // Only RESTORED cards get null units. An untouched card must keep the
-    // honest count it already had, or every low-stock badge would disappear.
+  it("gives an already-sellable card the LIVE unit count the back office shows", async () => {
+    // register-sell-all-back-office-stock: the cached menu_variants level (7)
+    // only moves on sales/voids; the lot (12) is what the back office shows
+    // and what the shelf holds after a count. Live truth wins, so the
+    // low-stock badge and the stock ceiling stop disagreeing with the
+    // inventory table.
     menuItems = [
       item({
         inventoryStatus: "in-stock",
@@ -403,6 +424,25 @@ describe("SLICE 16 — the one-way invariant: this can only ADD availability", (
       }),
     ];
     lotRows = [lotRow()];
+
+    const bundle = await getBundle();
+
+    expect(bundle.products[0]?.unitsLeft).toBe(12);
+  });
+
+  it("keeps an already-sellable card's cached count when the lot read fails", async () => {
+    // No live truth = the previous behaviour exactly: the honest cached count,
+    // so no low-stock badge disappears because of a database hiccup.
+    menuItems = [
+      item({
+        inventoryStatus: "in-stock",
+        variants: [
+          { id: "v1", label: "3.5g", priceMinorUnits: 4000, inventoryLevel: 7, medical: false },
+        ],
+      }),
+    ];
+    lotRows = [lotRow()];
+    lotReadFails = true;
 
     const bundle = await getBundle();
 

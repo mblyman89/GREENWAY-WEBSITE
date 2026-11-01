@@ -149,6 +149,12 @@ export type PosMenuProduct = {
    */
   unitsLeft?: number | null;
   /**
+   * register-sell-all-back-office-stock - extra words the search matches:
+   * the back office lot product names (Cultivera names) and the strain,
+   * minus what the card name already says. Search only; never displayed.
+   */
+  searchText?: string;
+  /**
    * B42 — product-info facts for the on-demand detail card. SENSORY/
    * descriptive only (no effects/medical claims — website posture). ALL
    * optional so bundles cached before B42 still parse; missing facts are
@@ -364,7 +370,7 @@ export function searchProducts(products: PosMenuProduct[], query: string): PosMe
     const classification = classificationSearchText(p);
     const hay = `${p.name} ${p.brand ?? ""} ${p.category} ${p.variantLabel ?? ""}${
       classification ? ` ${classification}` : ""
-    }`.toLowerCase();
+    }${p.searchText ? ` ${p.searchText}` : ""}`.toLowerCase();
     return tokens.every((t) => hay.includes(t));
   });
 }

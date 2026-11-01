@@ -66,6 +66,17 @@ import {
   type LiveLotFact,
   type SnapshotCard,
 } from "@/lib/pos/register-availability-core";
+// register-sell-all-back-office-stock: importer-hidden cards with live stock,
+// live per-size units, and back-office names in the register's search.
+import {
+  attributeLotsToVariants,
+  classifyHiddenCard,
+  lotsByProductKey,
+  registerSearchText,
+  variantUnitsLeft,
+  type CoverageLot,
+} from "@/lib/pos/register-coverage-core";
+import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
 
 /**
  * SLICE 5C — memory ceiling for the barcode-index lot scan. NOT a row cap:
@@ -194,20 +205,33 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         product_name: string | null;
         is_sample: boolean | null;
         held_qty?: number | string | null;
+        /** Migration 0294: the menu size this lot sells as. */
+        menu_source_variant_id?: string | null;
       };
       const LOT_COLS = "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, is_sample";
       // Before migration 0308 there is no held_qty column: retry without it
       // (nothing is held then, so on hand is the register stock as before).
       let withHeld = true;
+      // register-sell-all-back-office-stock: the lot's size link (0294) lets
+      // live units be pinned to the right size. Before 0294, retry without it
+      // (attribution then falls back to the onboarded / single-size rules).
+      let withSize = true;
+      const cols = () =>
+        [LOT_COLS, withHeld ? "held_qty" : null, withSize ? "menu_source_variant_id" : null].filter(Boolean).join(", ");
       const readPage = (from: number, to: number) =>
         admin
           .from("inventory_lots")
-          .select(withHeld ? `${LOT_COLS}, held_qty` : LOT_COLS)
+          .select(cols())
           // Stable UNIQUE ordering — REQUIRED for deterministic paging.
           .order("id", { ascending: true })
           .range(from, to);
-      const probe = await readPage(0, 0);
-      if (probe.error && isMissingHeldQtyColumnError(probe.error)) withHeld = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const probe = await readPage(0, 0);
+        if (!probe.error) break;
+        if (withHeld && isMissingHeldQtyColumnError(probe.error)) withHeld = false;
+        else if (withSize && isMissingSizeLinkColumnError(probe.error)) withSize = false;
+        else break;
+      }
       const { rows, verdict } = await pagedAllChecked<LotRow>(
         async (from, to) => {
           const { data, error } = await readPage(from, to);
@@ -232,7 +256,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         lotCode: l.lot_code,
         // Carried for the barcode index below (not part of LiveLotFact).
         ccrsExternalId: deriveInventoryExternalId(l),
-      })) as (LiveLotFact & { ccrsExternalId: string | null })[];
+        // Carried for live per-size units (register-coverage-core).
+        sizeId: l.menu_source_variant_id ?? null,
+      })) as (LiveLotFact & { ccrsExternalId: string | null; sizeId: string | null })[];
     } catch {
       liveLots = [];
       liveLotsComplete = false;
@@ -243,11 +269,45 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   // EVERY lot key it can sell under (its own key plus each variant's encoded
   // `${lotKey}-onboarded` key — a mastered card's lots carry the LOT's key,
   // not the card's, so both must be considered).
+  //
+  // register-sell-all-back-office-stock — the owner: "all the items in my
+  // back office inventory table are sellable on the register". A card the
+  // Cultivera IMPORTER hid from the website (no Products-workbook master, or
+  // no inventory at import time) is not a person's "do not sell". When it is
+  // a mapped cannabis category with a real price AND live active stock, the
+  // register rings it up (it stays off the website). Human hides,
+  // needs-category holds, non-cannabis / unmapped categories and unpriced
+  // cards stay off. Recall, lot status, expiry, samples and held units are
+  // all still enforced below exactly as before.
+  const lotsByKey = lotsByProductKey(liveLots as (LiveLotFact & CoverageLot)[]);
+  const liveActiveUnits = (keys: readonly string[]): number => {
+    let units = 0;
+    for (const k of new Set(keys.map((x) => x.trim()))) {
+      for (const l of lotsByKey.get(k) ?? []) {
+        if ((l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS) units += Math.max(0, toQty(l.onHandQty));
+      }
+    }
+    return units;
+  };
+  const registerOnly = new Set<string>();
   const snapshotCards: SnapshotCard[] = menu.map((item) => {
     const lotKeys = [item.id];
     for (const v of item.variants) {
       const k = lotKeyFromVariantId(v.id);
       if (k) lotKeys.push(k);
+    }
+    const hidden = item.hidden === true;
+    let registerEligible = false;
+    if (hidden) {
+      const cls = classifyHiddenCard({
+        hidden,
+        hiddenReason: item.hiddenReason ?? null,
+        category: String(item.category ?? ""),
+        posInventoryCategory: item.posInventoryCategory ?? null,
+        variantPrices: item.variants.length > 0 ? item.variants.map((v) => v.priceMinorUnits) : [item.priceMinorUnits],
+      });
+      registerEligible = cls.kind === "register_eligible" && liveActiveUnits(lotKeys) > 0;
+      if (registerEligible) registerOnly.add(item.id);
     }
     return {
       productId: item.id,
@@ -256,7 +316,8 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       // `hidden` is optional on GreenwayMenuItem. The gate this replaces was
       // `if (item.hidden) continue`, so undefined means NOT hidden — keep that
       // exactly, or every card lacking the field would vanish.
-      hidden: item.hidden === true,
+      hidden,
+      ...(registerEligible ? { registerEligible: true } : {}),
       // AN-7 — CARD-level recall only, exactly as the gate this replaces did
       // (`if (recalled.has(item.id)) continue`). A recalled LOT must remove
       // only ITS OWN SIZE, and that is still enforced per-variant in the loop
@@ -269,7 +330,13 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   });
 
   const availability = reconcileRegisterAvailability({ cards: snapshotCards, lots: liveLots });
+  if (registerOnly.size > 0) {
+    console.info(
+      `[pos/menu] ${registerOnly.size} product(s) hidden from the website by the Cultivera import are on the register from live stock (fix their product so the website and CCRS report them too)`,
+    );
+  }
   const availabilityByProduct = new Map(availability.cards.map((c) => [c.productId, c]));
+  const lotKeysByProduct = new Map(snapshotCards.map((c) => [c.productId, c.lotKeys]));
   if (availability.restoredCount > 0) {
     console.info(
       `[pos/menu] restored ${availability.restoredCount} product(s) to the register from live lot stock (stale published inventory_status)`,
@@ -325,7 +392,22 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
             medical: false,
           },
         ];
+    // register-sell-all-back-office-stock — LIVE per-size units. The cached
+    // `menu_variants.inventory_level` only moves on sales/voids, so a cycle
+    // count or intake adjustment could leave a stocked size at a stale 0:
+    // the tile greyed out and a scan was silently refused. When the lot read
+    // is COMPLETE, a size's units come from its live lots (size link ->
+    // onboarded key -> single size); anything ambiguous is unknown (null).
+    // A failed or truncated read keeps the previous behaviour exactly.
+    const cardLotKeys = lotKeysByProduct.get(item.id) ?? [item.id];
+    const attribution = liveLotsComplete
+      ? attributeLotsToVariants(cardLotKeys, variants, lotsByKey as Map<string, CoverageLot[]>)
+      : null;
+    const searchText = registerSearchText(item.name, attribution?.lotNames ?? [], item.strainName ?? null);
+    const isRegisterOnly = registerOnly.has(item.id);
     for (const variant of variants) {
+      // An importer-hidden card is sold only at a real, positive price.
+      if (isRegisterOnly && !(Number.isSafeInteger(variant.priceMinorUnits) && variant.priceMinorUnits > 0)) continue;
       // Mastering Slice 1: a variant that encodes its own lot key resolves
       // recall + cost against THAT lot (single-lot cards: key = item.id, so
       // both lookups behave exactly as before).
@@ -388,7 +470,22 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         // them would paint a "0 left" badge on a product with real stock.
         // null = unknown, which B32 already handles by falling back to the
         // item-level status. Never invent a per-variant count we cannot prove.
-        unitsLeft: verdict.restored ? null : hasRealVariants ? variant.inventoryLevel : null,
+        unitsLeft: attribution
+          ? variantUnitsLeft(
+              attribution,
+              variant.id,
+              // Only a real, non-restored size's cache may confirm a 0.
+              verdict.restored || !hasRealVariants ? null : variant.inventoryLevel,
+            )
+          : verdict.restored
+            ? null
+            : hasRealVariants
+              ? variant.inventoryLevel
+              : null,
+        // register-sell-all-back-office-stock — the lot names the back office
+        // shows (and the strain) so typing what is on the inventory table
+        // finds the product even when the card was renamed / rolled up.
+        ...(searchText ? { searchText } : {}),
         // B42 — product-info facts for the on-demand detail card (sensory/
         // descriptive only). Descriptions trimmed so the device cache stays
         // small; missing facts ship as absent, and the card omits them.

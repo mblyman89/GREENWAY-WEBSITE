@@ -178,6 +178,15 @@ export type SnapshotCard = {
   inventoryStatus: InventoryStatusSlug;
   /** menu_items.hidden. */
   hidden: boolean;
+  /**
+   * register-sell-all-back-office-stock: true ONLY when `hidden` is the
+   * Cultivera importer's own website hide (no_product_master / no_inventory)
+   * on a mapped, priced cannabis card that has live active stock - decided by
+   * register-coverage-core `classifyHiddenCard` + the caller's live-stock
+   * check. Such a card is rung up at the register (never shown on the
+   * website). A PERSON's hide never sets this. Absent = false.
+   */
+  registerEligible?: boolean;
   /** True when an AN-7 recall hold covers this card or one of its lots. */
   recalled: boolean;
 };
@@ -346,7 +355,8 @@ export function reconcileRegisterAvailability(inputs: {
     }
 
     // A human took this card off the menu. Say so out loud; never override it.
-    if (card.hidden) {
+    // (An importer-only website hide proven safe upstream is NOT a human hide.)
+    if (card.hidden && card.registerEligible !== true) {
       cards.push({
         productId: card.productId,
         sellable: false,
@@ -542,7 +552,7 @@ export function diagnoseLot(
     };
   }
 
-  if (card.hidden) {
+  if (card.hidden && card.registerEligible !== true) {
     return {
       lotId: lot.id,
       label,
@@ -646,6 +656,7 @@ export function __runRegisterAvailabilityCoreTests(): void {
     inventoryStatus: over.inventoryStatus ?? "unavailable",
     hidden: over.hidden ?? false,
     recalled: over.recalled ?? false,
+    ...(over.registerEligible !== undefined ? { registerEligible: over.registerEligible } : {}),
   });
 
   // ── statusForUnits mirrors the pipeline thresholds exactly ──────────────
@@ -721,6 +732,30 @@ export function __runRegisterAvailabilityCoreTests(): void {
       lots: [lot()],
     });
     ok(r.cards[0].reason === "recall_hold", "recall outranks hidden in reporting");
+  }
+  {
+    // register-sell-all-back-office-stock: an importer-only website hide that
+    // was proven safe upstream is sold; the snapshot/restore rules still apply.
+    const r = reconcileRegisterAvailability({
+      cards: [card({ hidden: true, registerEligible: true, inventoryStatus: "unavailable" })],
+      lots: [lot({ onHandQty: 4 })],
+    });
+    ok(r.cards[0].sellable, "register-eligible importer-hidden card with stock is sellable");
+    ok(r.cards[0].reason === "restored_from_live_stock", "register-eligible card goes through live-stock restore");
+    const r2 = reconcileRegisterAvailability({
+      cards: [card({ hidden: true, registerEligible: true, recalled: true })],
+      lots: [lot({ onHandQty: 4 })],
+    });
+    ok(!r2.cards[0].sellable && r2.cards[0].reason === "recall_hold", "recall still beats register-eligible");
+    const r3 = reconcileRegisterAvailability({
+      cards: [card({ hidden: true, registerEligible: false, inventoryStatus: "in-stock" })],
+      lots: [lot({ onHandQty: 4 })],
+    });
+    ok(r3.cards[0].reason === "hidden_card", "registerEligible=false is still a hidden card");
+    ok(
+      diagnoseLot(lot(), new Map([["KEY-A", card({ hidden: true, registerEligible: true })]])).sellable,
+      "register-eligible hidden card's lot diagnoses sellable",
+    );
   }
 
   // ── Non-active / empty lots are not stock ───────────────────────────────
