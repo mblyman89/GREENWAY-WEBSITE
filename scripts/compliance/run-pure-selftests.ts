@@ -685,6 +685,7 @@ import { __runSaleGridCoreTests } from "../../src/lib/pos/sale-grid-core";
 import { __runCustomSaleCoreTests } from "../../src/lib/pos/custom-sale-core";
 import { __runFavoritesCoreTests } from "../../src/lib/pos/favorites-core";
 import { __runScanRequiredCoreTests } from "../../src/lib/pos/scan-required-core";
+import { __runDrawerOnSaleCoreTests } from "../../src/lib/pos/drawer-on-sale-core";
 import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 import { __runStockFlagCoreTests } from "../../src/lib/pos/stock-flag-core";
 import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
@@ -1755,6 +1756,7 @@ __runLiquidVolumeTests();
   __runCustomSaleCoreTests();
   __runFavoritesCoreTests();
   __runScanRequiredCoreTests();
+  assertRan("drawer-on-sale-core", __runDrawerOnSaleCoreTests(), 33); // R-DRAWER-1: drawer with or without a printed receipt
   __runProductInfoCoreTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();

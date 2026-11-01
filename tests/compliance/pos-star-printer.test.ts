@@ -157,8 +157,15 @@ describe("cash-drawer rules", () => {
     //
     // Asserting the surviving call site is strictly stronger, because that
     // is the one every cash sale in the building actually goes through.
-    expect(saleFlow).toContain('openDrawer: true');
-    expect(saleFlow).toContain('jobKind: "sale"');
+    //
+    // R-DRAWER-1: the sale print no longer hard-codes openDrawer: true. It
+    // opens the drawer only on the first print of a cash sale (F-01-6), and
+    // in "without a receipt" mode the drawer opens with a drawer-only job.
+    expect(saleFlow).toContain(
+      "const openDrawer = printShouldOpenDrawer({ cashSale, drawerAlreadyOpened: drawerOpened })",
+    );
+    expect(saleFlow).toContain('{ html, openDrawer, jobKind: "sale" }');
+    expect(saleFlow).toContain("openCashDrawer(getPairedPrinterIdentifier())");
   });
 });
 

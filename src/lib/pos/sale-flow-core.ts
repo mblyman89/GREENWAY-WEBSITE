@@ -50,6 +50,7 @@ import type { PosReturnPolicyConfig } from "./return-policy-core";
 import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
 // Type-only (erased at compile time) — no runtime cycle with scan-required-core.
 import type { PosScanRequiredConfig } from "./scan-required-core";
+import type { PosDrawerOnSaleConfig } from "./drawer-on-sale-core";
 // Type-only — special-discount-core is pure (SLICE 28); the settings ride the
 // bundle so the register offers the programs OFFLINE with the saved rates.
 import type { SpecialDiscountSetting } from "@/lib/discounts/special-discount-core";
@@ -273,6 +274,12 @@ export type PosMenuBundle = {
    * missing block means OFF.
    */
   scanRequired?: PosScanRequiredConfig;
+  /**
+   * R-DRAWER-1: how the cash drawer opens after a cash sale (with a printed
+   * receipt, or without one). Optional so older cached bundles still parse;
+   * missing means "with a printed receipt".
+   */
+  drawerOnSale?: PosDrawerOnSaleConfig;
   /**
    * Special-discount program settings (SLICE 28): the owner's saved
    * employee/industry/veteran rates + on/off switches, shipped with the

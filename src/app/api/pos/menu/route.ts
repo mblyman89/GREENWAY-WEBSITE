@@ -31,6 +31,7 @@ import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
+import { getPosDrawerOnSaleConfig } from "@/lib/pos/drawer-on-sale-store";
 import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
 import { trimDescription } from "@/lib/pos/product-info-core";
 import { isRatioLedCategory, resolvePackageMg } from "@/lib/menu/cannabinoid-profile-core";
@@ -122,7 +123,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy] =
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy, drawerOnSale] =
     await Promise.all([
       loadLiveMenuAll(),
       loadActiveRules(),
@@ -136,6 +137,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       getPosCashRoundingConfig(),
       getPosScanRequiredConfig(),
       getPosReturnPolicy(),
+      getPosDrawerOnSaleConfig(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
   // SLICE 28 — ship ALL three program rows (enabled or not); the device
@@ -669,6 +671,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     // bundle so the receipt's printed policy and the More-menu label match
     // Register Activity → Return policy, even OFFLINE.
     returnPolicy,
+    // R-DRAWER-1 — with or without a printed receipt; rides the bundle so
+    // OFFLINE registers keep the owner's choice.
+    drawerOnSale,
     // SLICE 28 — special-discount program settings (employee/industry/
     // veteran rates + switches) so the register offers them OFFLINE.
     specialDiscounts,
