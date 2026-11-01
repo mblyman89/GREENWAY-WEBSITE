@@ -882,6 +882,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.7 steps 3–4 and last paragraph. **G-44**.
 
 ### F-15-8 · CONFIRMED · GAP · S2 — The back-office Customer return wizard skips the store return policy, takes a typed refund, defaults to Destroy and has no lot picker
+- **Status: FIXED (Fix Phase 7.1, G-45, D66).** `CustomerReturnWizard.tsx`, `return-search-core.ts`, `createCustomerReturnAction`, `findReturnableLinesAction` and `searchReturnableOrderLines` removed; the page shows a **Customer return** box linking to the Returns desk (`customer-return-paths`). Test `tests/compliance/fix-p7-1-returns-destruction.test.ts`.
 - **Pin:** `createCustomerReturnAction` (`actions.ts` L68–105) calls `createCustomerReturn` directly; the 15-day window and loyalty checks live only in `returns-core.ts` (L153, L192) used by the Returns desk and register (`returns-store.ts` L252–360). **Refund ($)** defaults to `0.00` and is typed (`CustomerReturnWizard.tsx` L173–174; capped at what was paid, `disposition-core.ts` L139–140); **What happens to it** lists Destroy first (L185–188). The store falls back to the newest non-quarantine lot (`disposition.ts` L613) and otherwise says *"…pick the lot manually…"* (L617), but the wizard has no lot field.
 - **Effect:** a manager can refund outside the owner's policy, with a mistyped amount counted in the day's refunds (`refunds-store.ts` L49); the add-back may land on the wrong lot.
 - **SOP impact:** SOP-15 §2 rule 1, §4.4, §4.6. **G-45**.
@@ -893,6 +894,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §2 rule 3, §4.19, form 8.5. **G-28** (extended).
 
 ### F-15-10 · CONFIRMED · HARDEN · S2 — "Download Sale correction CSV" marks returns exported without the ledger check the weekly batch performs
+- **Status: FIXED (Fix Phase 7.1, G-45).** `sale-correction-export/route.ts` asks `readCorrectionRoute` (`disposition.ts`; pure rule `correctionRouteFromSeedRead` in `disposition-messages-core.ts`) before any read or mark: a closed production seed plus 0283 means the weekly batch sends them and the download refuses (409, nothing marked); unknown refuses too; only while the ledger is not loaded does it run. Non-cannabis returns are skipped. The page links the download only in that case.
 - **Pin:** route header: *"Prefer the weekly batch once the ledger is loaded: it checks each line is held by CCRS and records the file in the outbox. This download does not."* (`sale-correction-export/route.ts` L18–19); limit 500 (L62); marks exported and audits (L104). The page's banner and the success message tell staff to download it (`page.tsx` L151–166, L62–63).
 - **Effect:** a download nobody uploads leaves the returns marked exported, so the weekly batch's pending filter (`ccrs-batch.ts` L445) relies only on its date window to pick them up; a stray file can be uploaded twice.
 - **SOP impact:** SOP-15 §4.8 (do not download unless uploading by hand that day), form 8.6. **G-45**.
@@ -910,6 +912,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.15 step 4, §4.18. **G-43**.
 
 ### F-15-13 · CONFIRMED · UX · S4 — Missing fields show the bare words "qty" or "reason"
+- **Status: FIXED (Fix Phase 7.1, G-46).** `scheduleDestructionAction` sends `destroy_qty` / `destroy_reason`; the page shows `dispositionErrorMessage(sp.error)` (sentences; free text decoded safely).
 - **Pin:** `redirect(\`${BASE}?error=qty\`)` and `?error=reason` (`actions.ts` L83–84, L126–127, L179–180); the page prints `decodeURIComponent(sp.error)` as is (`page.tsx` L124–127).
 - **Effect:** staff see a single word with no instruction.
 - **SOP impact:** SOP-15 §4.15, §5.3. **G-46**.
@@ -934,6 +937,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.26. **G-47**.
 
 ### F-15-17 · CONFIRMED · DOC · S4 — Stale comments: the migration still calls the 72-hour hold a WSLCB rule; the reasons header says detail is always required
+- **Status: FIXED (Fix Phase 7.1, G-49/G-50).** Migration 0334 replaces the 0042 column meanings with accurate `COMMENT ON` text; `disposition-reasons.ts` header corrected; `disposition-core.ts` / `disposition.ts` comments say default 0.
 - **Pin:** `supabase/migrations/0042_*.sql` L44 (*"WSLCB requires a quarantine + notice period before destruction."*) and L55 (*"WSLCB notice/quarantine: 72h hold before destruction is permitted."*), contradicted by the compliance doc §5.1 and the page (L511–531); `disposition-reasons.ts` L9–10.
 - **Effect:** a future developer may re-assert a removed rule.
 - **SOP impact:** SOP-15 §4.27. **G-49**.
@@ -945,6 +949,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 
 
 ### F-15-18 · CONFIRMED · DOC · S3 — The "Returned to seller → Other" CCRS mapping is cited from the wrong table
+- **Status: FIXED (Fix Phase 7.1, G-49).** `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` §3 item 4 and the `disposition-reasons.ts` header now cite Table 4 DestructionReason (PlantDestruction) and say `Other` + detail is best fit, not LCB-confirmed (U-72).
 - **Pin:** `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L120–124 (*"The Upload User Guide's own mapping table for destruction reasons lists "Returned to seller → Other", confirming `Other` + detail is the LCB-expected encoding"*) and SOP-15 v1.0 §7. In the CCRS Upload User Guide (2-26) that row is in **Table 4, DestructionReason**, under the **PlantDestruction** file (producers' plants). The InventoryAdjustment reasons (Destruction, Reconciliation, Lost, Seizure, Theft, Other) and **Table 5** have **no** return-to-vendor row.
 - **Effect:** the encoding (**Other** + detail) is still the best fit, but the document claims an LCB confirmation that does not exist. The open examiner question is U-72 (`docs/ccrs-bible/12-unverified-register.md` L74).
 - **SOP impact:** SOP-15 v1.1 §4.13, §7. Correct the compliance doc when G-42 is built (docs only).
@@ -1061,5 +1066,5 @@ State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
 | SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | **Fix Phase 4b:** F-05b-10, 11, 12, 13 FIXED (G-32 items 7–10). **Fix Phase 4:** F-05b-1, 2, 3, 4, 5, 6, 7, 8, 14, 15 FIXED (G-29, G-30, G-30A, G-32 items 1–6). 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
 | SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
-| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4. **R-RET:** +F-15-22 (S1, FIXED), +F-15-23 (S2, FIXED) → 24 | 24 | 0 |
+| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4. **R-RET:** +F-15-22 (S1, FIXED), +F-15-23 (S2, FIXED) → 24. **Fix Phase 7.1:** F-15-8, F-15-10, F-15-13, F-15-17, F-15-18 FIXED | 24 | 0 |
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |

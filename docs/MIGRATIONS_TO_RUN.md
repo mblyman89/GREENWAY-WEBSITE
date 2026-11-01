@@ -3491,3 +3491,35 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0333_platform_error_events.rollback.sql`.
   It drops the table; the app keeps working and simply stops recording errors.
+
+## Fix Phase 7.1 — 0334 — Destruction hold at the legal minimum (D67)
+
+- [ ] `0334_destruction_hold_legal_minimum.sql` (Fix Phase 7.1, G-50 / G-49, owner D67). Apply it
+  **after 0333**. No new tables, no grant changes.
+  - **Why:** the owner said *"Q5- reduce it to the minimum required by law. Look it up in CCRS
+    please."* Current rule has no waiting period before destruction (WAC 314-55-097; the old
+    72-hour WSLCB notice was removed by WSR 22-14-111). Migration 0115 saved a hold of 72 hours,
+    so changing the app's default alone would not change the store.
+  - **What it does:** the hold default becomes 0; the saved hold moves from 72 to 0 **only if it
+    is still 72** (a value someone chose on screen is left alone); and two old column comments
+    that said WSLCB requires a 72-hour hold are corrected.
+  - Scheduling a destruction still quarantines the lot and records the event, and CCRS still
+    receives the Destruction adjustment in that week's file. You can still set any hold from 0
+    to 336 hours on **Inventory → Returns & Destruction**.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select hold_hours from public.disposition_settings where id = true;   -- 0 (unless you chose another value)
+  select column_default from information_schema.columns
+   where table_schema = 'public' and table_name = 'disposition_settings'
+     and column_name = 'hold_hours';                                     -- 0
+  ```
+
+  **Then:** Back office → **Inventory → Returns & Destruction**. The schedule button reads
+  **Schedule** (no hold), and the hold panel says the law sets no waiting period.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0334_destruction_hold_legal_minimum.rollback.sql`.
+  It puts the default back to 72; to restore a 72-hour hold, set **Hold (hours)** to 72 on screen.

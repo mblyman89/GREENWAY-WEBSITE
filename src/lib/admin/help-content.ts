@@ -463,7 +463,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I record a return or destroy product lawfully?",
-        a: "Returns & Destruction handles customer returns, vendor returns (logging reserves the units; on-hand comes off only at departure; Download Manifest.CSV for CCRS), samples, and lawful destruction with the documentation WA compliance requires.",
+        a: "Returns & Destruction handles vendor returns (logging reserves the units; on-hand comes off only at departure; Download Manifest.CSV for CCRS), samples, and lawful destruction with the documentation WA compliance requires (hold 0 hours by default: the law sets no waiting period). Customer returns go through the register's Return an item or the Returns desk.",
         href: "/admin/inventory/disposition",
       },
       {

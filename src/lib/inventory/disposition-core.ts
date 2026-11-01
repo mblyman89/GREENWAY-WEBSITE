@@ -20,7 +20,8 @@
  *    enforcement officer.
  *  • Hold policy — the old 72-hour WSLCB destruction notice was REMOVED from
  *    current rule (WSR 22-14-111). A pre-destruction hold is retained as a
- *    configurable STORE POLICY (default 72h, 0–336h), not asserted as law.
+ *    configurable STORE POLICY (default 0h = the legal minimum per D67 /
+ *    Fix Phase 7.1 G-50; 0–336h), not asserted as law.
  *
  * Money is MINOR UNITS (cents) everywhere.
  */
@@ -31,7 +32,7 @@ import { holdNotElapsedMessage } from "@/lib/inventory/destruction-record-core";
 // Hold policy (store policy — see header; NOT a current-rule mandate)
 // ---------------------------------------------------------------------------
 
-export const HOLD_HOURS_DEFAULT = 72;
+export const HOLD_HOURS_DEFAULT = 0; // D67: legal minimum (no waiting period in WAC 314-55-097)
 export const HOLD_HOURS_MIN = 0;
 export const HOLD_HOURS_MAX = 336; // 14 days
 

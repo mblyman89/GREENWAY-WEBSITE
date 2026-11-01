@@ -7,8 +7,13 @@
  * compatibility.
  *
  * Grounded in docs/RETURNS_DESTRUCTION_COMPLIANCE.md:
- * - Vendor returns ("Returned to seller") map to CCRS adjustment reason
- *   "Other" (CCRS Upload User Guide Table 3) and always require detail.
+ * - Vendor returns map to CCRS InventoryAdjustment reason "Other" with a
+ *   detail naming the return. The vendor-return core refuses a log without a
+ *   detail sentence of at least 5 characters (vendor-return-core.ts). The
+ *   CCRS Upload User Guide has NO return-to-vendor row for InventoryAdjustment;
+ *   its "Returned to seller" row is in Table 4 DestructionReason for the
+ *   PlantDestruction file (producers' plants), so "Other" + detail is our
+ *   best-fit encoding, not an LCB-confirmed one (F-15-18; examiner question U-72).
  *   Since Phase 1.5 (G-42) that Other adjustment posts at DEPARTURE, not at
  *   logging; logging only reserves the units (vendor-return-core.ts).
  * - Destruction reasons map to CCRS "Destruction"; recall destructions are

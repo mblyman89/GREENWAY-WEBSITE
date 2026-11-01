@@ -582,4 +582,4 @@ G-73 (D112–D114): see the G-73 section of `05-GAP-REGISTER.md` and the G-73 ro
 
 ### Applied
 
-G-74 (D115, D116): see the G-74 section of `05-GAP-REGISTER.md` and the G-74 row of `06-FIX-PHASE-PLAN.md`. Phase 7.1 (D117): the 7.1 row of `06-FIX-PHASE-PLAN.md`.
+G-74 (D115, D116): merged as #1620; see the G-74 section of `05-GAP-REGISTER.md` and the G-74 row of `06-FIX-PHASE-PLAN.md`. Phase 7.1 (D117): the 7.1 row of `06-FIX-PHASE-PLAN.md`; G-45, G-46, G-49, G-50 BUILT in `05-GAP-REGISTER.md`; F-15-8, F-15-10, F-15-13, F-15-17, F-15-18 FIXED in `03-FINDINGS-LEDGER.md`; SOP-15 v1.16. Migration 0334 (destruction hold 72 → 0) is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`). G-70 (back-office receipt search) is superseded by D66 and went with the wizard.
