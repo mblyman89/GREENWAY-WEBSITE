@@ -244,6 +244,21 @@ export type PosMenuBundle = {
    */
   barcodes?: Record<string, string>;
   /**
+   * register-scan-exact-size: normalized package barcode -> the variant id(s)
+   * that package IS, proven server-side from its own lot (0294 size link,
+   * receiving `-onboarded` variant, or package weight). One id = add that
+   * size with no pick. Built from the same stocked lots as `barcodes`.
+   * Optional so older cached bundles still parse (they keep the size pick).
+   */
+  barcodeSizes?: Record<string, string[]>;
+  /**
+   * register-scan-exact-size: normalized package barcode -> why it is
+   * refused. The package's own size is proven but not on the register
+   * (recalled, expired, unpriced or removed); nothing is added and the other
+   * sizes are NEVER offered in its place.
+   */
+  barcodeRefusals?: Record<string, string>;
+  /**
    * Cash-rounding policy (POS B33): the owner's penny-elimination choice
    * (off / nearest / up / down), shipped with the bundle so OFFLINE sales
    * round the amount due exactly like online ones. Optional so pre-B33
