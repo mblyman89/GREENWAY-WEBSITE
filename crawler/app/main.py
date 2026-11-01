@@ -34,6 +34,7 @@ from .growflow_auth import GrowflowAuthError
 from .leaflink_api import LeaflinkApiError, LeaflinkApiResult, LeaflinkClient
 from .leaflink_auth import LeaflinkAuthError
 from . import cultivera_pos_jobs as pos_jobs
+from . import cultivera_loyalty_jobs as loyalty_jobs
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
@@ -867,6 +868,66 @@ def cultivera_pos_cancel(run_id: str, x_crawler_secret: str | None = Header(defa
 def cultivera_pos_file(run_id: str, name: str, x_crawler_secret: str | None = Header(default=None)):
     _require_secret(x_crawler_secret)
     p = pos_jobs.file_path(_pos_run_id(run_id), name)
+    if p is None:
+        raise HTTPException(status_code=404, detail="No such file in this run.")
+    return FileResponse(p, filename=name)
+
+
+# ---------------------------------------------------------------------------
+# CVL - the slow per-customer LOYALTY crawl (crawler/app/cultivera_loyalty.py). READ-ONLY against
+# Cultivera; only loyalty numbers and Cultivera customer ids reach disk.
+# ---------------------------------------------------------------------------
+
+
+class CultiveraLoyaltyStartRequest(BaseModel):
+    fresh: bool = Field(default=False, description="Ignore an unfinished run and start a new crawl.")
+
+
+@app.post("/cultivera-loyalty/runs", status_code=202)
+def cultivera_loyalty_start(
+    req: CultiveraLoyaltyStartRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> dict:
+    """Start the loyalty crawl, or resume the newest unfinished one. 202 + run id; poll GET."""
+    _require_secret(x_crawler_secret)
+    try:
+        out = loyalty_jobs.start_or_resume(fresh=req.fresh)
+    except RuntimeError as exc:
+        if str(exc) == "busy":
+            raise HTTPException(status_code=409, detail="A Cultivera crawl is already running.") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera loyalty crawl disabled (set CULTIVERA_POS_USERNAME / CULTIVERA_POS_PASSWORD).",
+        ) from exc
+    log.info("cultivera-loyalty run %s %s", out["runId"], "resumed" if out["resumed"] else "started")
+    return {"ok": True, **out}
+
+
+@app.get("/cultivera-loyalty/runs")
+def cultivera_loyalty_list(x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "runs": loyalty_jobs.list_runs()[:20]}
+
+
+@app.get("/cultivera-loyalty/runs/{run_id}")
+def cultivera_loyalty_status(run_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    st = loyalty_jobs.read_state(_pos_run_id(run_id))
+    if st is None:
+        raise HTTPException(status_code=404, detail="Unknown run id.")
+    return {"ok": True, **st}
+
+
+@app.post("/cultivera-loyalty/runs/{run_id}/cancel")
+def cultivera_loyalty_cancel(run_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "cancelRequested": loyalty_jobs.request_cancel(_pos_run_id(run_id))}
+
+
+@app.get("/cultivera-loyalty/runs/{run_id}/files/{name}")
+def cultivera_loyalty_file(run_id: str, name: str, x_crawler_secret: str | None = Header(default=None)):
+    _require_secret(x_crawler_secret)
+    p = loyalty_jobs.file_path(_pos_run_id(run_id), name)
     if p is None:
         raise HTTPException(status_code=404, detail="No such file in this run.")
     return FileResponse(p, filename=name)
