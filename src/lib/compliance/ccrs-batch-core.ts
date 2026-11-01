@@ -1095,6 +1095,10 @@ export function verifyCcrsFile(
   const saleDateIdx = expected.indexOf("SaleDate");
   const extIdIdx = expected.indexOf("ExternalIdentifier");
   const invExtIdIdx = expected.indexOf("InventoryExternalIdentifier");
+  const opIdx = expected.indexOf("Operation");
+  const updByIdx = expected.indexOf("UpdatedBy");
+  const updDateIdx = expected.indexOf("UpdatedDate");
+  const strainIdx = expected.indexOf("Strain");
   // Accumulators for cross-row integrity checks (evaluated after the row loop).
   const saleLines: {
     saleExternalId: string;
@@ -1118,6 +1122,22 @@ export function verifyCcrsFile(
       if (v && !MMDDYYYY_RE.test(v)) {
         err(`Data row ${rowNo}: ${expected[c]} "${v}" is not MM/DD/YYYY.`);
       }
+    }
+    // P-F (2026-10-31): an Update or Delete row must name who changed it and
+    // when: "UpdatedBy is required for Update or Delete Operations",
+    // "UpdatedDate is required for Update or Delete Operations" (the CCRS
+    // answer to Product_413541_20261031141036.csv; [G L0234-L0242]).
+    if (opIdx >= 0 && updByIdx >= 0 && updDateIdx >= 0) {
+      const op = (cells[opIdx] ?? "").trim().toLowerCase();
+      if (op === "update" || op === "delete") {
+        if (!(cells[updByIdx] ?? "").trim()) err(`Data row ${rowNo}: UpdatedBy is required for an ${cells[opIdx].trim()} row [G L0234-L0236].`);
+        if (!(cells[updDateIdx] ?? "").trim()) err(`Data row ${rowNo}: UpdatedDate is required for an ${cells[opIdx].trim()} row [G L0237-L0242].`);
+      }
+    }
+    // P-F: Inventory Strain is "Required on which operations: Insert, Update
+    // and Delete" ("Strain is required" [G L0551-L0554]).
+    if (type === "Inventory" && strainIdx >= 0 && !(cells[strainIdx] ?? "").trim()) {
+      err(`Data row ${rowNo}: Strain is required on every Inventory row [G L0551-L0554].`);
     }
     // Product classification cross-check (drafts-only: flag, never fix).
     if (type === "Product" && catIdx >= 0 && typeIdx >= 0) {

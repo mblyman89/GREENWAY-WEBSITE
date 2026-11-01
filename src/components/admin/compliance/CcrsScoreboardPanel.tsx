@@ -38,7 +38,8 @@ function Row({ r }: { r: TestResult }) {
       </div>
       {r.status === "passed" && r.lastPass ? (
         <p className="mt-1 text-xs text-emerald-200/80">
-          Accepted by CCRS in {r.lastPass.fileName}
+          {r.lastPass.how === "held" ? "CCRS already holds it (shown by its answer to" : "Accepted by CCRS in"} {r.lastPass.fileName}
+          {r.lastPass.how === "held" ? ")" : ""}
           {r.lastPass.at ? ` (${when(r.lastPass.at)})` : ""}
           {r.passedCount > 1 ? ` · ${r.passedCount} accepted rows seen` : ""}
         </p>

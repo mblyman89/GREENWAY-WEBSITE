@@ -216,7 +216,9 @@ describe("batch wiring (ccrs-batch.ts)", () => {
   });
   it("only reads 0286 with a ledger, and uses the batch day and SubmittedBy", () => {
     expect(BATCH).toContain("const told = ledger && updateIds.length > 0 ? await loadInventoryTold(admin, env, updateIds) : ({ kind: \"absent\" } as const);");
-    expect(BATCH).toContain("planInventoryDelta({ rows: inventory.rows, told, namedByEvents, updatedBy: submittedBy, batchDay: createdDate })");
+    // P-F: the rows pass through the strain fill (blank Strain never sent) first.
+    expect(BATCH).toContain("const strainFill = fillBlankStrains(inventory.rows,");
+    expect(BATCH).toContain("planInventoryDelta({ rows: strainFill.rows, told, namedByEvents, updatedBy: submittedBy, batchDay: createdDate })");
   });
   it("reports left-out lots as advisory E51, every row listed", () => {
     expect(BATCH).toMatch(/severity: "warning",\s+file: "Inventory",\s+code: "E51_INVENTORY_UNCHANGED_NOT_SENT"/);

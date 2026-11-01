@@ -1276,6 +1276,30 @@ Branch `ccrs-pipeline-c1`. Grounded on the examiner's 2026-10-29 answers, saved 
 - C1-6: the PREprod rehearsal (dotted vendor id → Inventory Insert → no-prefix Transfer → Sale → Inventory Update) is a hand upload by the owner.
 - `next build` runs on CI.
 
+## P-F — PREprod final tests: Product Update, Inventory Update, Area (DONE in code, 2026-10-31)
+
+Branch `ccrs-preprod-final`. Owner request saved verbatim as `evidence/2026-10-31-preprod/owner-request-verbatim.md`. CCRS's two error files and the two files we sent are in `evidence/2026-10-31-preprod/errors/` and `sent/`.
+
+**What CCRS said and why.**
+- `Product_413541_20261031141036`: all 8 Update rows came back "UpdatedBy is required for Update or Delete Operations", "UpdatedDate is required for Update or Delete Operations" and "UpdatedDate must be a date for Update and Delete operations". Cause: `applyProductPlan` turned a held product into an Update but left UpdatedBy/UpdatedDate blank. The guide requires both on Update and Delete [G L0234-L0242].
+- `Inventory_413541_20261031142647`: every row came back "Strain is required". Cause: the lots' products carry no strain, so the Strain cell was blank. Strain is required on Insert, Update and Delete [G L0551-L0554]. The examiner said to use the same strain name already provided for the product [EXAM2 L0034-L0035].
+- Neither message was in the hub's known list, so applying the error file left the rows "uncertain" and the scoreboard said "answer unclear".
+
+**Fixes.**
+- F1: `stampProductUpdates` (ledger-core) fills UpdatedBy (the submitter) and UpdatedDate (the batch day, never before CreatedDate) on every Product Update/Delete row [G L0234-L0242]. `updatedDateFor` moved from inventory-delta-core to ledger-core so both share it.
+- F2: new pure `ccrs-strain-fill-core.ts`. The lot strain is the product strain, else the lot's own strain when it is on the menu or already filed. A blank Strain on an Inventory row is filled with the strain CCRS last ACCEPTED for that lot (advisory **E65**), else the row is held back as **E64_INVENTORY_NO_STRAIN** with a link to fix the product [G L0551-L0554]. It never guesses a strain.
+- F3: `verifyCcrsFile` refuses an Update/Delete row with blank UpdatedBy or UpdatedDate, and an Inventory row with blank Strain, before the file can be downloaded.
+- F4: the four CCRS messages are in `CCRS_KNOWN_MESSAGES` and the strategy playbook (fix and re-send). The scoreboard and strategy wording no longer says "unclear" or "nobody can say": it quotes CCRS and gives the next step.
+- F5: the scoreboard now reads each row's entity state and CCRS's message. The **Area** test passes when CCRS holds Sales Floor, either from a success or from CCRS answering "Duplicate External Identifier" (which proves CCRS already has it). PREprod needs one Area only, `GWA-SALES-FLOOR`.
+
+**Tests.**
+- `tests/compliance/preprod-final-2026-10-31.test.ts` replays the owner's real files.
+- r6-3, r74-s48 (21 scoreboard self-tests), s18b (19 error files) and s12c (corpus) were updated.
+- The full compliance suite passed: 1044 files, 26191 tests.
+- Mutations from **M518** target the new rules.
+
+**Remaining (owner, after merge).** New PREprod export → upload Product → apply the email. Upload Inventory for a lot whose product has a strain → apply the email. Area shows green on reload. Old error files cannot be re-applied (they are already answered).
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

@@ -12,9 +12,19 @@
  *   PASSED   a row of this kind went in a file CCRS answered, and the row was
  *            not refused (row state submitted / confirmed, file answered).
  *   WAITING  sent, but CCRS's answer is not recorded yet (file emitted/uploaded).
- *   FAILED   CCRS refused it (row rejected) or the answer is unclear (uncertain,
- *            e.g. "Duplicate External Identifier"), and no attempt passed yet.
+ *   FAILED   CCRS refused it (row rejected or uncertain) and no attempt
+ *            passed yet. P-F (2026-10-31): the reason shown is CCRS's own
+ *            message for the row (or its file) with the next step from the
+ *            playbook. Every message CCRS has sent us is known, so the board
+ *            never says "unclear".
  *   NOT TESTED  this system never sent one.
+ *
+ * P-F: the Area test asks one thing, "does CCRS hold our Sales Floor?". It
+ * passes when CCRS accepted an Area row, OR the Area record is on file in the
+ * ledger (filed / confirmed / seed, e.g. after Settle PREprod duplicates), OR
+ * CCRS answered "Duplicate External Identifier" to our Area Insert: an Insert
+ * creates "a new record with a unique external identifier" [G L0246], so that
+ * refusal says CCRS already holds it (the same proof 0284 uses).
  *
  * The list is every kind of event this system files for a retailer: the
  * master files (Strain, Area, Product, Inventory), the Sale file (sales,
@@ -33,6 +43,10 @@ export type ScoreRow = {
   payload: Record<string, unknown>;
   /** when CCRS answered the file (success or error email) */
   answeredAt: string | null;
+  /** P-F: CCRS's message(s) for this row (row issue, else the file's distinct messages). */
+  messages?: readonly string[];
+  /** P-F: ledger state of the record the row names (ccrs_filed_entities), when linked. */
+  entityState?: string | null;
 };
 
 /** How the store finds the rows of one test (PostgREST filters on the payload). */
@@ -55,6 +69,8 @@ export type ScoreTest = {
   match?: (p: Record<string, unknown>) => boolean;
   /** how to make one happen, in plain English */
   howTo: string;
+  /** P-F: the test passes when CCRS HOLDS the record (Area: the Sales Floor), however it got there. */
+  heldCounts?: boolean;
 };
 
 const num = (v: unknown) => {
@@ -77,7 +93,9 @@ export const SCORE_TESTS: readonly ScoreTest[] = [
     title: "Area (Sales Floor) accepted",
     required: true,
     query: { fileType: "Area" },
-    howTo: "The first PREprod export carries the Sales Floor Area. Upload it with the Strain and Product files; once CCRS holds it, it is not sent again.",
+    heldCounts: true,
+    howTo:
+      "An Area is a room the stock sits in. PREprod uses one: \"Sales Floor\" (id GWA-SALES-FLOOR); production keeps the rooms CCRS already holds. The test only proves CCRS holds the Sales Floor. It has since 10/20, so a \"Duplicate External Identifier\" answer to an Area Insert counts as a pass. If this is still not green: answer the Area file's CCRS email (or press Settle PREprod duplicates), and the board turns green. Nothing new needs to be set up.",
   },
   {
     id: "product-new",
@@ -93,7 +111,8 @@ export const SCORE_TESTS: readonly ScoreTest[] = [
     title: "Product changed (Product Update)",
     required: true,
     query: { fileType: "Product", operation: "Update" },
-    howTo: "After CCRS holds a product, change its name or weight in the catalog, export PREprod again and upload the Product file.",
+    howTo:
+      "Export PREprod: every product CCRS already holds goes as an Update (since 10/31 with UpdatedBy and UpdatedDate filled, which CCRS requires). Upload the Product file, wait for the email, apply it. Changing a product's name or weight first is not needed.",
   },
   {
     id: "lot-new",
@@ -109,7 +128,8 @@ export const SCORE_TESTS: readonly ScoreTest[] = [
     title: "Lot quantity changed (Inventory Update)",
     required: true,
     query: { fileType: "Inventory", operation: "Update" },
-    howTo: "After CCRS holds a lot (run Settle PREprod duplicates if it said Duplicate), sell from it or adjust it, export PREprod again and upload Inventory.",
+    howTo:
+      "Pick a lot CCRS holds whose product has a strain, sell one or adjust it, export PREprod and upload Inventory at least 10 minutes after Strain and Product. Every Inventory row needs a Strain [G L0551-L0554]: a lot with none anywhere is held back (E64) with a link to its product; set the strain there.",
   },
   {
     id: "lot-zero",
@@ -214,12 +234,53 @@ const ANSWERED_FILE = new Set(["succeeded", "errored", "reconciling", "closed"])
 const OK_ROW = new Set(["submitted", "confirmed"]);
 const WAITING_FILE = new Set(["emitted", "uploaded"]);
 
+/** Ledger states meaning CCRS holds the record (same set as routing's PRESENT). */
+const HELD_ENTITY = new Set(["seed", "filed", "confirmed"]);
+const DUPLICATE_ID = "Duplicate External Identifier";
+
+/**
+ * P-F: the next step for each CCRS message, in plain words. Keyed by the
+ * exact CCRS text (a subset of CCRS_KNOWN_MESSAGES; the test checks it).
+ */
+export const SCOREBOARD_NEXT_STEP: Readonly<Record<string, string>> = {
+  [DUPLICATE_ID]: "CCRS already holds this id from an earlier PREprod test. Press Settle PREprod duplicates, then export PREprod again: it goes as an Update",
+  "UpdatedBy is required for Update or Delete Operations": "the exporter left UpdatedBy/UpdatedDate blank on Updates (fixed 10/31). Export PREprod again and upload the new file",
+  "UpdatedDate is required for Update or Delete Operations": "the exporter left UpdatedDate blank on Updates (fixed 10/31). Export PREprod again and upload the new file",
+  "UpdatedDate must be a date for Update and Delete operations": "the exporter left UpdatedDate blank on Updates (fixed 10/31). Export PREprod again and upload the new file",
+  "Strain is required": "the lot's product has no strain. Set the strain on the product (or test with a lot whose product has one), export PREprod again and upload Inventory",
+  "Invalid Product": "the Product file naming this product must be accepted first. Upload Inventory at least 10 minutes after an accepted Product file",
+  "Invalid InventoryExternalIdentifier": "the lot must be accepted in an Inventory file first. Upload Sale / Adjustment after that Inventory file is accepted",
+  "Duplicate Sale for Licensee": "CCRS already holds this sale (the file was uploaded twice). Nothing to fix; ring up a new sale to test again",
+};
+
+/** The CCRS message of a failed row with the next step; never "unclear". */
+export function failureWhy(r: ScoreRow): string {
+  const msgs = (r.messages ?? []).map((m) => m.replace(/^row \d+ \([^)]*\): /, "").trim()).filter(Boolean);
+  if (msgs.length === 0) {
+    return r.rowState === "uncertain"
+      ? "CCRS's answer was not recorded for this file (no email, or the email was set aside). Export PREprod again and upload the new file"
+      : "CCRS refused this row. Export PREprod again and upload the new file";
+  }
+  const known = Object.keys(SCOREBOARD_NEXT_STEP).sort((a, b) => b.length - a.length);
+  const msg = msgs[0];
+  const hit = known.find((k) => msg.includes(k));
+  const quote = msg.length > 160 ? `${msg.slice(0, 157)}...` : msg;
+  return hit ? `CCRS answered "${quote}": ${SCOREBOARD_NEXT_STEP[hit]}` : `CCRS answered "${quote}". Open the file's strategy report in the CCRS mail panel for the fix`;
+}
+
+/** P-F: CCRS holds the record this row names (for `heldCounts` tests). */
+export function rowProvesHeld(r: ScoreRow): boolean {
+  if (r.entityState && HELD_ENTITY.has(r.entityState)) return true;
+  return (r.operation ?? "Insert") === "Insert" && (r.messages ?? []).some((m) => m.includes(DUPLICATE_ID));
+}
+
 export type TestResult = {
   test: ScoreTest;
   status: ScoreStatus;
   /** passed: how many accepted rows of this kind were seen (in the sample read) */
   passedCount: number;
-  lastPass: { fileName: string; at: string | null } | null;
+  /** how: accepted = CCRS accepted a row; held = CCRS already holds the record (heldCounts tests). */
+  lastPass: { fileName: string; at: string | null; how?: "accepted" | "held" } | null;
   waitingFile: string | null;
   failure: { fileName: string; why: string } | null;
 };
@@ -233,7 +294,9 @@ export function rowVerdict(r: ScoreRow): "pass" | "wait" | "fail" | "other" {
 
 export function scoreTest(test: ScoreTest, rows: readonly ScoreRow[]): TestResult {
   const mine = rows.filter((r) => (!test.match || test.match(r.payload)));
-  const passes = mine.filter((r) => rowVerdict(r) === "pass");
+  const accepted = mine.filter((r) => rowVerdict(r) === "pass");
+  const held = test.heldCounts ? mine.filter((r) => rowVerdict(r) !== "pass" && rowVerdict(r) !== "wait" && rowProvesHeld(r)) : [];
+  const passes = [...accepted, ...held];
   const waits = mine.filter((r) => rowVerdict(r) === "wait");
   const fails = mine.filter((r) => rowVerdict(r) === "fail");
   const newest = (xs: ScoreRow[]) => [...xs].sort((a, b) => ((a.answeredAt ?? "") < (b.answeredAt ?? "") ? 1 : -1))[0];
@@ -244,9 +307,9 @@ export function scoreTest(test: ScoreTest, rows: readonly ScoreRow[]): TestResul
     test,
     status,
     passedCount: passes.length,
-    lastPass: p ? { fileName: p.fileName, at: p.answeredAt } : null,
+    lastPass: p ? { fileName: p.fileName, at: p.answeredAt, how: accepted.includes(p) ? "accepted" : "held" } : null,
     waitingFile: waits[0]?.fileName ?? null,
-    failure: f ? { fileName: f.fileName, why: f.rowState === "uncertain" ? "CCRS's answer is unclear (often \"Duplicate External Identifier\": run Settle PREprod duplicates, then test again)" : "CCRS refused this row; open the file in the files list for the message" } : null,
+    failure: f ? { fileName: f.fileName, why: failureWhy(f) } : null,
   };
 }
 
@@ -326,5 +389,20 @@ export function __runCcrsScoreboardTests(): { passed: number; failed: number } {
   const reqOnly = new Map(SCORE_TESTS.filter((t) => t.required).map((t) => [t.id, [row({ payload: { Quantity: "2", Discount: "1" } })]]));
   const r2 = buildScoreboard(reqOnly);
   ok(r2.allRequiredPassed && !r2.allPassed && nextTests(r2).every((x) => !x.test.required), "required done, optional next");
+  // P-F: the owner's Area file of 10/27, answered "Duplicate External Identifier" (row uncertain).
+  const area = SCORE_TESTS.find((t) => t.id === "area")!;
+  const dup = row({ rowState: "uncertain", fileState: "reconciling", fileName: "Area_413541_20261027101136.csv", messages: ["row 1 (GWA-SALES-FLOOR): Duplicate External Identifier"] });
+  const a1 = scoreTest(area, [dup]);
+  ok(a1.status === "passed" && a1.lastPass?.how === "held", "Area: Duplicate on our Insert = CCRS holds it = passed");
+  ok(scoreTest(area, [row({ rowState: "uncertain", fileState: "closed", entityState: "filed" })]).status === "passed", "Area: settled (entity filed) = passed");
+  ok(scoreTest(area, [row({ rowState: "rejected", messages: ["Something else"] })]).status === "failed", "Area: another refusal is not a pass");
+  ok(scoreTest(SCORE_TESTS.find((t) => t.id === "lot-new")!, [dup]).status === "failed", "only heldCounts tests count a duplicate");
+  // P-F: the failure text quotes CCRS and never says "unclear".
+  const pu = scoreTest(SCORE_TESTS.find((t) => t.id === "product-update")!, [
+    row({ rowState: "uncertain", fileState: "reconciling", operation: "Update", messages: ["UpdatedBy is required for Update or Delete Operations: UpdatedDate is required for Update or Delete Operations: UpdatedDate must be a date for Update and Delete operations"] }),
+  ]);
+  ok(pu.status === "failed" && /CCRS answered "UpdatedBy is required/.test(pu.failure!.why) && /fixed 10\/31/.test(pu.failure!.why), "Product Update failure names CCRS's words and the fix");
+  ok(!/unclear/i.test(failureWhy(row({ rowState: "uncertain" }))) && !/unclear/i.test(pu.failure!.why), "never 'unclear'");
+  ok(SCORE_TESTS.every((t) => !/unclear/i.test(t.howTo)), "no howTo says unclear");
   return { passed, failed };
 }

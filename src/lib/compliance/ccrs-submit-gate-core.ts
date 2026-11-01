@@ -118,6 +118,8 @@ export const HELD_BACK_CODES: ReadonlySet<string> = new Set([
   // C1: a transfer correction waiting for the owner's approval is left out of
   // InventoryTransfer.csv (CCRS keeps the accepted values) and owed.
   "E63_TRANSFER_CORRECTION_PENDING",
+  // P-F: a lot with no strain anywhere is left out of Inventory.csv and owed.
+  "E64_INVENTORY_NO_STRAIN",
 ]);
 
 /** True when an error-severity issue only describes rows left out of the files. */

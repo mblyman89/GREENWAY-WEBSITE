@@ -56,3 +56,13 @@ Written 2026-10-07. Everything below runs on **PREprod only** (`https://precanna
 - an Area id `AREA-SALES-FLOOR` or `AREA-QUARANTINE`;
 - "Sold item cannot be in Quarantine";
 - "Invalid Area".
+
+---
+
+## Part 4 — The "Area (Sales Floor) accepted" test, in plain words (added 2026-10-31)
+
+- **How many areas does PREprod have?** One: **Sales Floor**, id `GWA-SALES-FLOOR`. The rooms you use in the store (Sales Floor, Incoming Orders, POS Returns, Vendor Returns, Default Inventory Room) are production records. They are not part of this test.
+- **Is it already set up?** Yes. CCRS accepted it on 10/20. That is why later Area files came back "Duplicate External Identifier": CCRS was saying "I already have this one".
+- **How do I pass the test?** You don't need to upload anything. Once P-F is merged, open the CCRS page → PREprod tab and reload. The scoreboard reads that answer, and the test turns green with the line "CCRS already holds it". Pressing **Settle PREprod duplicates** also works, but is optional.
+- **Will the hub send Area again?** No. Once CCRS holds it, no Area file is made.
+

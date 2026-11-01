@@ -151,6 +151,8 @@ const PRODUCT_ROW_CODES = new Set([
   "E11_STRAIN_NAME_RESERVED",
   "E57_PRODUCT_TYPE_UNKNOWN",
   "E58_PRODUCT_ON_CLEANUP_LIST",
+  // P-F: the fix for a lot with no strain is the product's strain.
+  "E64_INVENTORY_NO_STRAIN",
 ]);
 
 /** The product key a row names, or null when the row is not a product. */
