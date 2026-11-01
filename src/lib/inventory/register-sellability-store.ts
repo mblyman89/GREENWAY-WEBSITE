@@ -36,6 +36,10 @@ import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY, ADMIN_PAGED_CONCURRENCY } f
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+// register-sell-all-back-office-stock: the SAME hidden-card rule /api/pos/menu
+// uses, so the banner never calls an importer-hidden lot "blocked" while the
+// register is selling it.
+import { classifyHiddenCard } from "@/lib/pos/register-coverage-core";
 // Fix Phase 1.4 (G-44): units held for a customer-return destruction are not live stock.
 import { isMissingHeldQtyColumnError, sellableQty } from "@/lib/inventory/held-stock-core";
 import {
@@ -118,9 +122,14 @@ type ItemRow = {
   hidden: boolean;
   /** SLICE 18 - shown on the restore button so the manager knows what it is. */
   name: string | null;
+  /** register-sell-all-back-office-stock: who/what hid the card. */
+  hidden_reason?: string | null;
+  category?: string | null;
+  pos_inventory_category?: string | null;
+  price_minor_units?: number | null;
 };
 
-type VariantRow = { menu_item_id: string; source_variant_id: string };
+type VariantRow = { menu_item_id: string; source_variant_id: string; price_minor_units?: number | null };
 
 const EMPTY: RegisterSellabilityReport = { summary: null, blocked: [], restorable: [] };
 
@@ -145,7 +154,7 @@ async function loadPublishedCards(): Promise<{ byKey: Map<string, SnapshotCard>;
   const items = await pagedAll<ItemRow & { id: string }>(async (from, to) => {
     const { data, error } = await admin
       .from("menu_items")
-      .select("id, source_item_id, inventory_status, hidden, name")
+      .select("id, source_item_id, inventory_status, hidden, name, hidden_reason, category, pos_inventory_category, price_minor_units")
       .eq("menu_version_id", version.id)
       .order("id", { ascending: true })
       .range(from, to);
@@ -175,7 +184,7 @@ async function loadPublishedCards(): Promise<{ byKey: Map<string, SnapshotCard>;
     async (chunk, from, to) => {
       const { data, error } = await admin
         .from("menu_variants")
-        .select("menu_item_id, source_variant_id")
+        .select("menu_item_id, source_variant_id, price_minor_units")
         .in("menu_item_id", chunk)
         .order("id", { ascending: true })
         .range(from, to);
@@ -191,13 +200,35 @@ async function loadPublishedCards(): Promise<{ byKey: Map<string, SnapshotCard>;
 
   const recalled = await recalledProductKeys();
 
+  // Variant prices per card row, for the hidden-card price check.
+  const pricesByRow = new Map<string, number[]>();
+  for (const v of variants) {
+    const arr = pricesByRow.get(v.menu_item_id) ?? [];
+    arr.push(Number(v.price_minor_units ?? 0));
+    pricesByRow.set(v.menu_item_id, arr);
+  }
+
   const byKey = new Map<string, SnapshotCard>();
   for (const it of items) {
+    // register-sell-all-back-office-stock: an importer-only website hide on a
+    // mapped, priced cannabis card is rung up at the register. Only STOCKED
+    // active lots are diagnosed below, which is the register's live-stock test.
+    const hidden = it.hidden === true;
+    const eligible =
+      hidden &&
+      classifyHiddenCard({
+        hidden,
+        hiddenReason: it.hidden_reason ?? null,
+        category: it.category ?? null,
+        posInventoryCategory: it.pos_inventory_category ?? null,
+        variantPrices: pricesByRow.get(it.id) ?? [Number(it.price_minor_units ?? 0)],
+      }).kind === "register_eligible";
     const card: SnapshotCard = {
       productId: it.source_item_id,
       lotKeys: [it.source_item_id],
       inventoryStatus: it.inventory_status as InventoryStatusSlug,
-      hidden: it.hidden === true,
+      hidden,
+      ...(eligible ? { registerEligible: true } : {}),
       // CARD-level recall only — identical to /api/pos/menu. A recalled LOT
       // removes only its own size and is not a property of the whole card.
       recalled: recalled.has(it.source_item_id),

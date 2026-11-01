@@ -2822,6 +2822,30 @@ function CartScreen({
     setCart(addToCart(cart, p, stockOverride));
   };
 
+  /**
+   * register-sell-all-back-office-stock — every SCAN add (search-box Enter,
+   * global wedge scan, both size-pick rows) funnels through this. Before, a
+   * scan called addToCart without a stock check: when the size's count said
+   * 0, addToCart clamped the add to nothing while the screen still flashed
+   * "Scanned", so a product sitting in the back office looked unsellable
+   * with no explanation. Now the scan gets the SAME refusal-with-"Sell
+   * anyway" the tiles get (any staff member, this sale only - owner decision
+   * Q2), and honours an override already taken. Returns false when refused.
+   */
+  const scanAdd = useCallback(
+    (p: PosMenuProduct): boolean => {
+      const inCart = cart.find((e) => e.product.variantId === p.variantId)?.quantity ?? 0;
+      if (!canAddOne(inCart, p.unitsLeft, stockOverride)) {
+        const label = p.variantLabel ? `${p.name} (${p.variantLabel})` : p.name;
+        setStockOverrideOffer(stockRefusalMessage(label, p.unitsLeft));
+        return false;
+      }
+      setCart(addToCart(cart, p, stockOverride));
+      return true;
+    },
+    [cart, setCart, stockOverride],
+  );
+
   // B36 — category chips from the cached menu (busiest categories first).
   const chips = useMemo(() => menuCategoryChips(bundle.products), [bundle.products]);
   // B36 — search + chip combine; tile grids breathe better than lists, so the
@@ -2874,7 +2898,12 @@ function CartScreen({
   const tryScan = () => {
     const resolved = resolveScan(bundle.products, bundle.barcodes, query);
     if (resolved.status === "add") {
-      setCart(addToCart(cart, resolved.product));
+      if (!scanAdd(resolved.product)) {
+        setScanFlash(null);
+        setScanMiss(null);
+        setQuery("");
+        return;
+      }
       setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
       setLastScannedId(resolved.product.variantId);
       setScanMiss(null);
@@ -2899,7 +2928,12 @@ function CartScreen({
     (code: string) => {
       const resolved = resolveScan(bundle.products, bundle.barcodes, code);
       if (resolved.status === "add") {
-        setCart(addToCart(cart, resolved.product));
+        if (!scanAdd(resolved.product)) {
+          setScanFlash(null);
+          setScanMiss(null);
+          setBrowseOpen(false);
+          return;
+        }
         setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
         setLastScannedId(resolved.product.variantId);
         setScanMiss(null);
@@ -2915,7 +2949,7 @@ function CartScreen({
       }
       setScanMiss(`Barcode "${code}" matched nothing on the menu — check the label or search by name.`);
     },
-    [bundle.products, bundle.barcodes, cart, setCart],
+    [bundle.products, bundle.barcodes, scanAdd],
   );
 
   // AM-A — document-level wedge capture: fast keystroke bursts ending in
@@ -3226,7 +3260,10 @@ function CartScreen({
                     key={p.variantId}
                     type="button"
                     onClick={() => {
-                      setCart(addToCart(cart, p));
+                      if (!scanAdd(p)) {
+                        setScanPick(null);
+                        return;
+                      }
                       setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
                       setLastScannedId(p.variantId);
                       setScanPick(null);
@@ -4039,7 +4076,10 @@ function CartScreen({
                     key={p.variantId}
                     type="button"
                     onClick={() => {
-                      setCart(addToCart(cart, p));
+                      if (!scanAdd(p)) {
+                        setScanPick(null);
+                        return;
+                      }
                       setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
                       setLastScannedId(p.variantId);
                       setScanPick(null);

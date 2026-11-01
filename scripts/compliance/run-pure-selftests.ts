@@ -798,6 +798,7 @@ import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
 import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
 // SLICE 16 — full back-office inventory sellable at the register.
 import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-availability-core";
+import { __runRegisterCoverageCoreTests } from "../../src/lib/pos/register-coverage-core";
 import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
 import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
 import { __runTransactionHistoryCoreTests } from "../../src/lib/pos/transaction-history-core";
@@ -2683,6 +2684,7 @@ __runLiquidVolumeTests();
   assertRan("disposition-messages-core", __runDispositionMessagesTests(), 46); // Fix Phase 7.1 (G-46, G-49, G-50, G-45; D66/D67): readable Returns & Destruction errors, the hold at the legal minimum (0, "Schedule"), both CCRS files named, the Sale correction download only while the weekly batch cannot send it
   assertRan("customer-import-core", __runCustomerImportCoreTests(), 75); // G-73 (owner message 15): drag-and-drop Cultivera customer import: .xlsx/.csv read in the browser, repeats merged, fragment phones/bad emails/placeholder birthdays blanked and counted, Customer ID first and phone/email only for unclaimed customers, updates never blank stored values, spend to imported_spend only
   assertRan("customer-search-core", __runCustomerSearchCoreTests(), 65); // G-75 (owner message 17): one shared customer search for the register and back office: partial first/last name in either order, phone digits, email, Customer ID; ranked best match first; typo search only when nothing matches; register hit shows phone last 4, last purchase, total spent (Greenway + old POS)
+  assertRan("register-coverage-core", __runRegisterCoverageCoreTests(), 45); // register-sell-all-back-office-stock (owner: "all the items in my back office inventory table are sellable on the register"): importer-hidden cards (no Cultivera product master / zero snapshot stock) with live active lots, a mapped cannabis category and a real price are rung up; human hides, needs-category, paraphernalia, unmapped and unpriced stay off; per-size units left come from live lots
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
