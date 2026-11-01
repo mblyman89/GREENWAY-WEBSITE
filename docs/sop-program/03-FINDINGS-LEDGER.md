@@ -144,10 +144,12 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 ### F-01-6 · CONFIRMED · HARDEN · S2 — Done-screen "Print receipt" opens the drawer on every tap, with no audit
 - **Pin:** `src/app/(site)/pos/SaleFlow.tsx` L1583 `{ html, openDrawer: true, jobKind: "sale" }`. The button stays live (*"Tap again to reprint"*, L1634). By contrast, MORE → Reprint last receipt and the history reprint never kick the drawer.
 - **Effect:** after a sale, any number of extra drawer openings are possible without a No-sale record, a reason or a manager PIN. This bypasses the No-sale control (§4.21).
+- **Status: FIXED (R-DRAWER-1).** The drawer opens at most once per sale (`drawer-on-sale-core.ts` `printShouldOpenDrawer`); a second tap on Print receipt only reprints. A pay-later sale never opens it. Needs the iPad app rebuilt.
 
 ### F-01-7 · CONFIRMED · UX · S3 — The drawer opens only by printing a receipt
 - **Pin:** same as F-01-6. There is no "open drawer without printing" path for a completed sale except No sale (manager PIN). A customer who declines a receipt still gets one printed. If the printer is down, the drawer cannot open (*"… The drawer did not open — use No Sale if you need it."*), and No sale also prints, so it fails too.
 - Paper waste plus a printer-down dead end. The SOP covers it with "print anyway / drawer key".
+- **Status: FIXED (R-DRAWER-1, owner request).** Register Activity → **Cash drawer & receipt** → *Open the drawer without a receipt*: a cash sale opens the drawer by itself with a drawer-only Star job and prints nothing; **Open drawer** retries; Print receipt stays for customers who ask. Default stays *with a printed receipt*. Needs the iPad app rebuilt.
 
 ### F-01-8 · CONFIRMED · GAP · S2 — Change swaps record value only, not denominations (owner D3)
 - **Pin:** `src/lib/pos/till-core.ts` `TillSwapRequest` (L61–74) and its validator (L210–232) carry `amountMinor`, `approverPin` and `notes`. There are no denomination fields. The owner (D3): *"I just want to know when big bills leave the master till and go into the little safe. And what the small bills and coin are that came out of the little safe."*

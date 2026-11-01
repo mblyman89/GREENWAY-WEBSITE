@@ -636,3 +636,25 @@ R-CART-1: see the R-CART-1 section of `05-GAP-REGISTER.md` and the R-CART-1 row 
 
 G-75 (D118–D120): merged as #1624; see the G-75 section of `05-GAP-REGISTER.md` and the G-75 row of `06-FIX-PHASE-PLAN.md`. Migration 0335 is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`), then re-drop the customer file.
 
+## Owner request R-DRAWER-1 (recorded verbatim: open the cash drawer with or without a printed receipt)
+
+> "i need your help modifying a behavior on the front register. i want to build a setting in the register activity page of the back office that gives me the option of popping the cash drawer with a receipt or with out the receipt printed. most of my customers do not want a receipt and this new method should make for a more efficient process. please clone the repo, read agents.md, the standing rules, then proceed with the enhancement. i have another agent working, so please complete all tasks and prepare the work to be merged when i say it is safe to do so. do not push to git yet, just get all tasks done. report back with a summary report of what was done and what i should expect to see. if i need to rebuild the front registers, let me know. thank you."
+
+Follow-up (merge approval, verbatim):
+
+> "is this pr still open? do we need to merge this slice? please check, if so, please merge now."
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| R-DRAWER-1a | **A setting with two choices, on Register Activity.** New page Register Activity → **Cash drawer & receipt** (`/admin/registers/cash-drawer`, settings.manage, audited `pos.drawer_on_sale_saved`). *Open the drawer with a printed receipt* (today's behaviour, the default) or *Open the drawer without a receipt*. Stored as the `site_settings` row `pos_drawer_on_sale`; no migration. | *"a setting in the register activity page of the back office that gives me the option of popping the cash drawer with a receipt or with out the receipt printed"* |
+| R-DRAWER-1b | **Without a receipt, the drawer opens by itself on a cash sale.** When Sale complete appears for a sale with cash, the register sends a drawer-only job to the paired Star printer (the native `openDrawer` No sale already uses on the iPad); nothing prints. **Print receipt** stays for a customer who asks and then prints without opening the drawer again. If the drawer does not answer, an **Open drawer** button retries, and Print receipt opens it as before. | *"most of my customers do not want a receipt and this new method should make for a more efficient process"* |
+| R-DRAWER-1c | **The drawer opens at most once per sale, in both modes.** Tapping Print receipt again only reprints (closes F-01-6: extra drawer openings went around No sale). A sale put all on the employee pay-later tab never opens the drawer. No sale (manager PIN) is unchanged. | Standing rule: harden the control while building |
+| R-DRAWER-1d | **Not printing is lawful.** RCW 69.50.535(1)(a) governs what the receipt shows when one is given (the 37% excise itemised); WAC 314-55 has no duty to hand every buyer a printed receipt; tax stays separately stated on the record (RCW 82.08.050). The sale is recorded and reported exactly as before; MORE → Reprint last receipt and Email receipt still work. | Grounding (rule: verified fact) |
+| R-DRAWER-1e | **Held, then merged on the owner's word.** Built while another agent worked; merged only after the owner said *"please merge now"*. | *"do not push to git yet"*; *"if so, please merge now"* |
+
+### Applied
+
+R-DRAWER-1: see the R-DRAWER-1 section of `05-GAP-REGISTER.md`, the R-DRAWER-1 row of `06-FIX-PHASE-PLAN.md`, F-01-6 and F-01-7 in `03-FINDINGS-LEDGER.md`, and SOP-01 v1.13 (§4.16).
+
