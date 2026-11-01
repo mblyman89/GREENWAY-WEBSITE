@@ -7,6 +7,10 @@
  *
  * Shows the latest run (what is wrong and the exact fix) and the last 30
  * runs. "Run check now" records a run without sending the daily email.
+ *
+ * G-71b adds the platform changes register (item 2): vendor changes that could
+ * affect Greenway, their deadlines, what to do, and when the register was last
+ * reviewed (standing rule 16).
  */
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -17,6 +21,15 @@ import { RunHealthCheckButton } from "@/components/admin/platform/RunHealthCheck
 import { listRecentHealthRuns, type HealthRunRow } from "@/lib/platform/platform-health-store";
 import { DB_CONTRACT_FUNCTIONS, DB_CONTRACT_TABLES } from "@/lib/platform/db-contract";
 import type { HealthProblem } from "@/lib/platform/db-contract-core";
+import {
+  PLATFORM_CHANGES,
+  PLATFORM_SOURCES,
+  REGISTER_REVIEWED_ON,
+  daysUntil,
+  reviewDigest,
+  type PlatformChange,
+} from "@/lib/platform/platform-changes";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +43,14 @@ function label(s: HealthRunRow["status"]): string {
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", dateStyle: "medium", timeStyle: "short" });
+}
+
+function changeTone(s: PlatformChange["status"]): "danger" | "gold" | "green" | "neutral" {
+  return s === "action-needed" ? "danger" : s === "watch" ? "gold" : s === "done" ? "green" : "neutral";
+}
+
+function changeLabel(s: PlatformChange["status"]): string {
+  return s === "action-needed" ? "Action needed" : s === "watch" ? "Watch" : s === "done" ? "Done" : "Not affected";
 }
 
 function problemsOf(row: HealthRunRow): HealthProblem[] {
@@ -51,6 +72,10 @@ export default async function PlatformHealthPage() {
 
   const { rows, error } = await listRecentHealthRuns(30);
   const latest = rows[0] ?? null;
+  const today = pacificToday();
+  const digest = reviewDigest(PLATFORM_CHANGES, today);
+  const order: Record<PlatformChange["status"], number> = { "action-needed": 0, watch: 1, done: 2, "not-affected": 3 };
+  const changes = [...PLATFORM_CHANGES].sort((a, b) => order[a.status] - order[b.status]);
 
   return (
     <div>
@@ -135,6 +160,53 @@ export default async function PlatformHealthPage() {
             </table>
           </Card>
         ) : null}
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Platform changes register</h2>
+          <p className="mb-3 text-sm text-[var(--admin-text-muted)]">
+            Vendor changes (Supabase, Vercel, Next.js, GitHub, Node.js) that could affect Greenway. Last reviewed {REGISTER_REVIEWED_ON} ({digest.ageDays} day(s) ago)
+            {digest.stale ? <strong className="text-[var(--admin-danger)]"> &mdash; a monthly review was missed</strong> : null}. {digest.open.length} open item(s). Staff get a
+            review email on the first run of each month and a warning 30, 7 and 1 day before each open deadline.
+          </p>
+          <ul className="space-y-3">
+            {changes.map((c) => (
+              <li key={c.id} className="rounded-[var(--admin-radius-sm)] bg-[var(--admin-surface-2)] p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={changeTone(c.status)}>{changeLabel(c.status)}</Badge>
+                  <strong>{c.title}</strong>
+                  {c.deadline ? (
+                    <span className="text-[var(--admin-text-muted)]">
+                      {c.deadline}
+                      {c.status === "action-needed" || c.status === "watch"
+                        ? daysUntil(c.deadline, today) < 0
+                          ? ` (${-daysUntil(c.deadline, today)} day(s) ago)`
+                          : ` (in ${daysUntil(c.deadline, today)} day(s))`
+                        : ""}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-[var(--admin-text-muted)]">{c.impact}</p>
+                {c.action ? (
+                  <p className="mt-1">
+                    <strong>Do:</strong> {c.action}
+                  </p>
+                ) : null}
+                <a className="mt-1 inline-block underline" href={c.source} target="_blank" rel="noreferrer">
+                  Vendor notice
+                </a>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-sm text-[var(--admin-text-muted)]">Monthly review sources:</p>
+          <ul className="mt-1 list-disc pl-5 text-sm">
+            {PLATFORM_SOURCES.map((s) => (
+              <li key={s.url}>
+                <a className="underline" href={s.url} target="_blank" rel="noreferrer">
+                  {s.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Card>
       </div>
     </div>
   );

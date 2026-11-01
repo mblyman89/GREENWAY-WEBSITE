@@ -701,3 +701,5 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 **R-RET update to the SOP-15 row (G-69, G-70 BUILT; owner message 10, D97–D99).** `concierge-kb.ts` inventory topic gains **Customer return → finding the sale and permission errors**: search by the 8-character receipt number, fun name, GWY- order number or member; a "permission denied" means migration 0330 is not applied (nothing saved; owner runs it). Grounded on SOP-15 v1.14 §4.6 step 1 and §5.1.
 
 **G-71a (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Admin → Platform health**: what the morning check does, the once-a-day email, push only on problems, Run check now, migration 0331.
+
+**G-71b (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Platform health → platform changes register**: what the register shows, the monthly review email, the 30/7/1-day and overdue warnings, the 45-day stale flag, standing rule 16; no migration.
