@@ -215,19 +215,29 @@ describe("importer-hidden back-office stock is sellable at the register", () => 
     expect(bundle.products).toEqual([]);
   });
 
-  it("keeps every PERSON's hide and every unsafe hidden card off the register", async () => {
+  it("sells EVERY hidden card with live stock - person hides and category holds included (owner: no exceptions)", async () => {
     const cases: Partial<GreenwayMenuItem>[] = [
       { hiddenReason: "owner" },
+      { hiddenReason: "owner_override_hide:" },
       { hiddenReason: "owner_override_hide:2024-01-01" },
       { hiddenReason: "reviewer_rejected" },
       { hiddenReason: undefined },
       { hiddenReason: "needs_category" },
-      // A masked needs_category hold under the placeholder category.
-      { category: "paraphernalia" as GreenwayMenuItem["category"], posInventoryCategory: "Flower" },
-      // Unmapped Cultivera category: the card's category may be a placeholder.
       { posInventoryCategory: "Mystery Stuff" },
       { posInventoryCategory: undefined },
-      // Nothing verified to charge.
+    ];
+    for (const over of cases) {
+      menuItems = [importerHidden(over)];
+      lotRows = [lotRow({ on_hand_qty: 20 })];
+      const bundle = await getBundle();
+      expect(bundle.products.map((p) => p.productId), JSON.stringify(over)).toEqual(["KEY-A"]);
+      expect(Object.values(bundle.barcodes), JSON.stringify(over)).toContain("KEY-A");
+    }
+  });
+
+  it("still keeps a hidden card off when the sale itself would be wrong (non-cannabis category, no price)", async () => {
+    const cases: Partial<GreenwayMenuItem>[] = [
+      { category: "paraphernalia" as GreenwayMenuItem["category"], posInventoryCategory: "Flower" },
       { priceMinorUnits: 0, priceLabel: "" },
     ];
     for (const over of cases) {
@@ -235,7 +245,6 @@ describe("importer-hidden back-office stock is sellable at the register", () => 
       lotRows = [lotRow({ on_hand_qty: 20 })];
       const bundle = await getBundle();
       expect(bundle.products, JSON.stringify(over)).toEqual([]);
-      expect(Object.keys(bundle.barcodes), JSON.stringify(over)).toEqual([]);
     }
   });
 
@@ -344,7 +353,7 @@ describe("back-office banner agrees with the register", () => {
 });
 
 describe("GUARDRAIL: every sellable back-office lot reaches the register", () => {
-  it("serves every active, stocked, non-sample, non-recalled lot whose card is visible or importer-hidden-safe", async () => {
+  it("serves every active, stocked, non-sample, non-recalled lot whose card is visible or hidden (any reason)", async () => {
     const keys = ["K1", "K2", "K3", "K4", "K5", "K6"];
     menuItems = [
       item({ id: "K1", inventoryStatus: "in-stock" }),
@@ -357,13 +366,13 @@ describe("GUARDRAIL: every sellable back-office lot reaches the register", () =>
     lotRows = keys.map((k, i) => lotRow({ id: `lot-${i}`, pos_product_key: k, lot_code: `CODE-${k}`, on_hand_qty: 4 }));
     const bundle = await getBundle();
     const served = new Set(bundle.products.map((p) => p.productId));
-    for (const k of ["K1", "K2", "K3", "K4", "K5"]) expect(served.has(k), k).toBe(true);
-    expect(served.has("K6")).toBe(false);
+    // register-sell-hidden-and-held-stock: a person's website hide no longer
+    // keeps stocked product off the register (owner: "no exceptions").
+    for (const k of keys) expect(served.has(k), k).toBe(true);
     for (const p of bundle.products) expect(p.unitsLeft === null || p.unitsLeft > 0, p.productId).toBe(true);
-    for (const k of ["K1", "K2", "K3", "K4", "K5"]) {
+    for (const k of keys) {
       const r = resolveScan(bundle.products as unknown as PosMenuProduct[], bundle.barcodes, `CODE-${k}`);
       expect(r.status, k).toBe("add");
     }
-    expect(resolveScan(bundle.products as unknown as PosMenuProduct[], bundle.barcodes, "CODE-K6").status).toBe("none");
   });
 });

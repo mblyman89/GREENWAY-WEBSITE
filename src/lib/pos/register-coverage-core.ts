@@ -37,7 +37,11 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  *  - classifyHiddenCard: may a HIDDEN card be rung up at the register (never
- *    the website)? Only when the hide is the importer's own
+ *    the website)? SUPERSEDED by register-sell-hidden-and-held-stock (owner:
+ *    "its in the inventory list, it needs to scan on the registers, no
+ *    exceptions"): ANY hide reason now sells when the card's category is a
+ *    cannabis limit category and a size is priced. Original rule, for the
+ *    record: only when the hide is the importer's own
  *    (no_product_master / no_inventory) AND the card sits on a real cannabis
  *    category (one that has a WAC 314-55-095 limit bucket) AND its Cultivera
  *    category is an explicitly mapped one (so a `needs_category` hold that an
@@ -140,48 +144,36 @@ export function isSellableCannabisCategory(category: string | null | undefined):
 export function classifyHiddenCard(card: CoverageCardFacts): HiddenVerdict {
   if (!card.hidden) return { kind: "visible" };
   const reason = squash(card.hiddenReason);
-  if (!IMPORTER_HIDE_REASONS.has(reason)) {
-    if (reason === "needs_category") {
-      return {
-        kind: "held",
-        code: "needs_category",
-        message: "Held until someone picks its category - Cultivera's category gives no product form, so taxes and purchase limits are unknown.",
-      };
-    }
-    return {
-      kind: "held",
-      code: "human_hide",
-      message: "A person hid this product, so the register respects that. Un-hide it on the product page to sell it.",
-    };
-  }
+  // register-sell-hidden-and-held-stock - the owner, verbatim: "its in the
+  // inventory list, it needs to scan on the registers, no exceptions."
+  // A website hide (a person's, the importer's, or a category hold) no longer
+  // keeps stocked product off the REGISTER. Only two facts still do, because
+  // without them the sale itself would be wrong, not just unlisted:
+  //   - non-cannabis category: it would ring with no excise and no purchase
+  //     limit (an under-taxed cannabis sale);
+  //   - no priced size: there is nothing to charge (RCW 69.50.357, never free).
   if (!isSellableCannabisCategory(card.category)) {
     return {
       kind: "held",
       code: "non_cannabis_category",
-      message: "Hidden by the import and its category is not a cannabis category with a purchase limit, so it cannot be rung as cannabis. Pick its category.",
-    };
-  }
-  if (!isMappedCultiveraCategory(card.posInventoryCategory)) {
-    return {
-      kind: "held",
-      code: "unmapped_category",
-      message: "Hidden by the import and its Cultivera category is not mapped, so its category may be a placeholder. Pick its category.",
+      message: "Hidden, and its category is not a cannabis category with a purchase limit, so it cannot be rung as cannabis. Pick its category.",
     };
   }
   if (!card.variantPrices.some((p) => Number.isSafeInteger(p) && p > 0)) {
     return {
       kind: "held",
       code: "no_price",
-      message: "Hidden by the import and no size has a price, so there is nothing verified to charge. Set a price.",
+      message: "Hidden, and no size has a price, so there is nothing to charge. Set a price.",
     };
   }
   return {
     kind: "register_eligible",
     reason,
-    message:
-      reason === "no_product_master"
-        ? "Sold at the register from its imported Cultivera price. It stays off the website because Cultivera had no Products row for it - fix the product so the website and CCRS report it too."
-        : "Sold at the register from its imported price. It stays off the website because the import saw no inventory for it - fix the product so the website and CCRS report it too.",
+    message: IMPORTER_HIDE_REASONS.has(reason)
+      ? "Sold at the register from its imported price. It stays off the website because the import hid it - fix the product so the website shows it too."
+      : reason === "needs_category"
+        ? "Sold at the register under its current category. It stays off the website until someone confirms its category."
+        : "Sold at the register. It stays off the website because it was hidden there - un-hide it on the product page to list it online too.",
   };
 }
 
@@ -352,28 +344,20 @@ export function __runRegisterCoverageCoreTests(): { passed: number; failed: numb
   ok(classifyHiddenCard(facts()).kind === "register_eligible", "importer no_product_master flower is register-eligible");
   ok(classifyHiddenCard(facts({ hiddenReason: "no_inventory" })).kind === "register_eligible", "no_inventory eligible");
   ok(classifyHiddenCard(facts({ hiddenReason: "  no_product_master " })).kind === "register_eligible", "reason trimmed");
-  for (const r of ["owner", "reviewer_rejected", "owner_override_hide:no_product_master", "owner_override_hide:", "", null, "something_new"]) {
+  for (const r of ["owner", "reviewer_rejected", "owner_override_hide:no_product_master", "owner_override_hide:", "", null, "something_new", "needs_category"]) {
     const v = classifyHiddenCard(facts({ hiddenReason: r }));
-    ok(v.kind === "held" && v.code === "human_hide", `reason ${String(r)} stays hidden (person / unknown)`);
-  }
-  {
-    const v = classifyHiddenCard(facts({ hiddenReason: "needs_category" }));
-    ok(v.kind === "held" && v.code === "needs_category", "needs_category stays held");
+    ok(v.kind === "register_eligible", `reason ${String(r)}: stocked + priced cannabis sells at the register`);
   }
   for (const c of ["paraphernalia", "accessories", "merch", "accessory", "", "unknown-thing"]) {
     const v = classifyHiddenCard(facts({ category: c }));
     ok(v.kind === "held" && v.code === "non_cannabis_category", `category ${c} never rung as cannabis`);
   }
   {
-    // A no_product_master card the importer ALSO held for a category keeps the
-    // first reason (holdForCategory) - its unmapped Cultivera category is the tell.
-    const v = classifyHiddenCard(facts({ posInventoryCategory: "Mystery Stuff" }));
-    ok(v.kind === "held" && v.code === "unmapped_category", "masked needs_category caught by unmapped Cultivera category");
-    const blank = classifyHiddenCard(facts({ posInventoryCategory: "" }));
-    ok(blank.kind === "held" && blank.code === "unmapped_category", "blank Cultivera category held");
-    const nc = classifyHiddenCard(facts({ posInventoryCategory: "Paraphernalia" }));
-    ok(nc.kind === "held", "non-cannabis Cultivera category held");
-    ok(classifyHiddenCard(facts({ posInventoryCategory: " Live  Resin " })).kind === "register_eligible", "whitespace-normalized mapped category");
+    // Cultivera category no longer gates the register (owner: "no exceptions");
+    // the CARD's category still decides excise + limits.
+    ok(classifyHiddenCard(facts({ posInventoryCategory: "Mystery Stuff" })).kind === "register_eligible", "unmapped Cultivera category sells");
+    ok(classifyHiddenCard(facts({ posInventoryCategory: "" })).kind === "register_eligible", "blank Cultivera category sells");
+    ok(classifyHiddenCard(facts({ hiddenReason: "owner_override_hide:", category: "accessories" })).kind === "held", "non-cannabis card category still held");
   }
   {
     const v = classifyHiddenCard(facts({ variantPrices: [0] }));
