@@ -89,7 +89,8 @@ function triggerFunctions(): Set<string> {
 
 describe("R-RET: the server (service_role) can call what migrations lock down", () => {
   it("0330 exists with a rollback and a PG scenario check wired into the execution gate", () => {
-    expect(migrations[migrations.length - 1]).toBe(MIG_0330);
+    expect(migrations).toContain(MIG_0330);
+    expect(migrations[migrations.length - 1] >= MIG_0330).toBe(true);
     expect(existsSync(join(ROOT, "supabase/rollbacks/0330_service_role_grants.rollback.sql"))).toBe(true);
     expect(src("scripts/compliance/verify-migrations-execute.ts")).toMatch(
       /service-role-grants-0330-pg-check\.sql", mustPrint: "GRANTS 0330 CHECK PASSED"/,

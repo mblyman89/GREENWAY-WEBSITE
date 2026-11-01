@@ -479,6 +479,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Equipment & integrations: Equipment (hardware hub), Receipt printer, and Integrations (Leafly/WeedMaps).",
       "Team & security: Users & roles, Activity log, and Security & passkeys (Face ID / Touch ID sign-in).",
       "Data & lifecycle: Reset operational data — clears test sales/inventory/imports/customers before going live, while keeping your settings and knowledge base.",
+      "Admin \u2192 Platform health (G-71a, owner message 12): every morning at about 6:25am Pacific the system asks the database whether the server can still read and call every table and function the app uses (the list is rebuilt from the code). Staff get one email a day: All clear, Warning or ACTION NEEDED with the exact fix, usually a migration to run in the Supabase SQL editor. Phones get a push only when something is wrong. Run check now records a run without emailing. This is the check that would have caught the October 30, 2026 Supabase change that broke customer returns. It needs migration 0331_platform_health.sql; until then the page says to run it.",
     ],
   },
   {
