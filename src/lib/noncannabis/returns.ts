@@ -20,6 +20,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { dbErrorForStaff, isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
 import { ncIdFromKey } from "@/lib/noncannabis/pos-catalog-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { refundCeilingMinor, refundTooHighMessage } from "@/lib/inventory/disposition-core";
 
 export async function createNonCannabisReturn(
   input: {
@@ -42,16 +43,16 @@ export async function createNonCannabisReturn(
       .eq("id", input.orderLineId)
       .maybeSingle(),
   ]);
-  if (!order) return { ok: false, error: "Order not found." };
+  if (!order) return { ok: false, error: "That sale couldn't be found. Search for the sale again and pick it from the list." };
   const o = order as { id: string; order_number: string; status: string; placed_at: string; completed_at: string | null };
-  if (o.status !== "completed") return { ok: false, error: "Only COMPLETED sales can be returned." };
+  if (o.status !== "completed") return { ok: false, error: "This sale can't be returned because it was never finished. Only completed sales can be returned." };
   const l = line as { id: string; order_id: string; product_id: string | null; product_name: string; quantity: number; price_minor_units: number; regular_price_minor_units: number | null } | null;
-  if (!l || l.order_id !== o.id) return { ok: false, error: "Order line not found on this order." };
+  if (!l || l.order_id !== o.id) return { ok: false, error: "That item isn't on this sale. Search for the sale again and pick the item from the list." };
   const ncId = ncIdFromKey(l.product_id);
   if (!ncId) return { ok: false, error: "That line is not an Other Inventory item." };
 
   const qty = Math.floor(Number(input.quantity) || 0);
-  if (qty <= 0) return { ok: false, error: "Return quantity must be greater than zero." };
+  if (qty <= 0) return { ok: false, error: "Enter how many the customer is bringing back (1 or more)." };
   const { data: prior } = await admin.from("customer_returns").select("quantity, refund_minor_units").eq("order_line_id", l.id);
   let returned = 0;
   let refunded = 0;
@@ -60,10 +61,29 @@ export async function createNonCannabisReturn(
     refunded += Number(r.refund_minor_units) || 0;
   }
   const remaining = (Number(l.quantity) || 0) - returned;
-  if (qty > remaining) return { ok: false, error: `Only ${remaining} of this line can still be returned.` };
-  const maxRefund = Math.max(0, (Number(l.price_minor_units) || 0) * qty - Math.max(0, refunded - 0));
-  if (!Number.isInteger(input.refundMinor) || input.refundMinor < 0 || input.refundMinor > Math.max(maxRefund, 0)) {
-    return { ok: false, error: "The refund is more than the customer paid for these units." };
+  if (remaining <= 0) {
+    return { ok: false, error: "Everything on this line of the sale has already been returned, so there is nothing left to return." };
+  }
+  if (qty > remaining) {
+    return {
+      ok: false,
+      error: `You're returning ${qty}, but only ${remaining} of this item can still be returned on this sale. Lower the quantity to ${remaining} or less.`,
+    };
+  }
+  // R-RET-2 (owner message 13): same ceiling as cannabis returns. The old
+  // "this return minus every earlier refund" form capped the second unit of a
+  // 2-unit line at $0.00.
+  const maxRefund = refundCeilingMinor({
+    unitPriceMinor: Number(l.price_minor_units) || 0,
+    lineQuantity: Number(l.quantity) || 0,
+    returnQuantity: qty,
+    alreadyRefundedMinor: refunded,
+  });
+  if (!Number.isInteger(input.refundMinor) || input.refundMinor < 0) {
+    return { ok: false, error: "The refund amount isn't a valid dollar amount. Enter it like 18.70." };
+  }
+  if (input.refundMinor > maxRefund) {
+    return { ok: false, error: refundTooHighMessage(input.refundMinor, maxRefund) };
   }
 
   const saleExternalId = o.order_number || o.id;
@@ -97,11 +117,11 @@ export async function createNonCannabisReturn(
   });
   if (error) {
     if (isMissingDbFunctionError(error)) {
-      return { ok: false, error: "Database update 0323 is not applied yet, so Other Inventory returns can't be saved. Ask the owner to run it (Nothing was changed)." };
+      return { ok: false, error: "Returns of Other Inventory (non-cannabis) items aren't switched on yet: the owner needs to run database update 0323. Nothing was changed." };
     }
     return { ok: false, error: `The return was not saved and nothing was changed: ${dbErrorForStaff(error)}` };
   }
   const id = ((data ?? {}) as { return_id?: string }).return_id;
-  if (!id) return { ok: false, error: "The return could not be saved (no id came back). Nothing was changed." };
+  if (!id) return { ok: false, error: "The return didn't save (the database didn't confirm it). Nothing was changed, so it's safe to try again." };
   return { ok: true, id };
 }

@@ -88,15 +88,64 @@ export function explainPermissionDenied(error: RpcErrorLike | null | undefined):
   );
   const what = m ? `${m[1].toLowerCase() === "relation" ? "table" : m[1].toLowerCase()} ${m[2]}` : "a database object";
   return (
-    `The database refused the server access to ${what} (permission denied). ` +
-    `Since Supabase's October 30, 2026 change, new database objects need an explicit grant. ` +
-    `Run migration ${SERVICE_ROLE_GRANTS_MIGRATION} in the Supabase SQL editor, then try again.`
+    `The system isn't allowed to use ${what} yet (a database permission is missing), so nothing was saved. ` +
+    `This is a setup step, not something staff did wrong: since Supabase's October 30, 2026 change, new database parts need permission granted on purpose. ` +
+    `The owner needs to run migration ${SERVICE_ROLE_GRANTS_MIGRATION} in the Supabase SQL editor, then try again.`
   );
+}
+
+/**
+ * R-RET-2 (owner message 13: "please make the errors be more plain english").
+ * Turn the database's technical wording into a sentence staff can act on.
+ * Known Postgres / PostgREST codes get a plain explanation; a message our own
+ * SQL functions raised ("record_customer_return: lot ... not found") keeps its
+ * meaning but loses the internal function-name prefix. Null when there is no
+ * better wording than the original.
+ */
+export function plainDbError(error: RpcErrorLike | null | undefined): string | null {
+  if (!error) return null;
+  const code = (error.code ?? "").trim();
+  const message = (error.message ?? "").trim();
+  const lower = message.toLowerCase();
+  if (code === UNIQUE_VIOLATION_CODE || lower.includes("duplicate key value")) {
+    return "This was already saved once (the system found a duplicate). Refresh the page to see it before trying again.";
+  }
+  if (code === "23503" || lower.includes("violates foreign key constraint")) {
+    return "Something this depends on is missing or was just removed (for example the sale, product or lot). Refresh the page and try again.";
+  }
+  if (code === "23514" || lower.includes("violates check constraint")) {
+    return "One of the values isn't allowed (for example a negative amount or a quantity of zero). Check the numbers and try again.";
+  }
+  if (code === "23502" || lower.includes("violates not-null constraint")) {
+    return "A required piece of information was left blank. Fill in every field and try again.";
+  }
+  if (code === "22P02" || code === "22003" || lower.includes("invalid input syntax")) {
+    return "One of the values is in the wrong format (for example letters where a number belongs). Check what you typed and try again.";
+  }
+  if (code === "40001" || code === "40P01" || lower.includes("deadlock detected") || lower.includes("could not serialize")) {
+    return "Someone else was changing the same thing at the same moment. Wait a second and try again.";
+  }
+  if (code === "57014" || lower.includes("statement timeout") || lower.includes("canceling statement")) {
+    return "The database took too long to answer. Wait a moment and try again.";
+  }
+  if (code === "PGRST116") {
+    return "The record couldn't be found. It may have been changed or removed; refresh the page and try again.";
+  }
+  if (lower.includes("fetch failed") || lower.includes("network") || lower.includes("econnreset") || lower.includes("etimedout")) {
+    return "The system couldn't reach the database (a network hiccup). Check the internet connection and try again.";
+  }
+  // A message raised by one of our SQL functions: "<function>: <reason>".
+  const raised = /^([a-z][a-z0-9_]*):\s+(.+)$/.exec(message);
+  if (raised && raised[1].includes("_")) {
+    const reason = raised[2].trim();
+    return reason.charAt(0).toUpperCase() + reason.slice(1) + (/[.!?]$/.test(reason) ? "" : ".");
+  }
+  return null;
 }
 
 /** The message staff should see for a failed database call. */
 export function dbErrorForStaff(error: RpcErrorLike | null | undefined, fallback = "The database call failed."): string {
-  return explainPermissionDenied(error) ?? ((error?.message ?? "").trim() || fallback);
+  return explainPermissionDenied(error) ?? plainDbError(error) ?? ((error?.message ?? "").trim() || fallback);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +216,25 @@ export function __runRpcFallbackCoreTests(): void {
   ok(dbErrorForStaff({ message: "lot not found" }) === "lot not found", "other errors pass through");
   ok(dbErrorForStaff({ message: "  " }, "fallback") === "fallback", "blank -> fallback");
   ok(dbErrorForStaff(null, "fb") === "fb", "null -> fallback");
+
+  // R-RET-2: plain-English translations.
+  ok((plainDbError({ code: "23505", message: "duplicate key value violates unique constraint x" }) ?? "").includes("already saved"), "23505 plain");
+  ok((plainDbError({ code: "23503", message: "" }) ?? "").includes("missing"), "23503 plain");
+  ok((plainDbError({ code: "23514", message: "" }) ?? "").includes("isn't allowed"), "23514 plain");
+  ok((plainDbError({ code: "23502", message: "" }) ?? "").includes("left blank"), "23502 plain");
+  ok((plainDbError({ code: "22P02", message: "" }) ?? "").includes("wrong format"), "22P02 plain");
+  ok((plainDbError({ code: "40P01", message: "" }) ?? "").includes("same moment"), "deadlock plain");
+  ok((plainDbError({ code: "57014", message: "" }) ?? "").includes("too long"), "timeout plain");
+  ok((plainDbError({ message: "TypeError: fetch failed" }) ?? "").includes("couldn't reach"), "network plain");
+  ok(
+    plainDbError({ code: "P0001", message: "record_customer_return: quantity must be greater than zero" }) ===
+      "Quantity must be greater than zero.",
+    "our SQL function prefix stripped",
+  );
+  ok(plainDbError({ message: "lot not found" }) === null, "no better wording -> null");
+  ok(plainDbError(null) === null, "null -> null");
+  ok(!dbErrorForStaff({ code: "23505", message: "duplicate key value violates unique constraint" }).includes("constraint"), "staff never see 'constraint'");
+  ok(!(explainPermissionDenied(owner) ?? "").includes("refused the server"), "permission message is plain");
 
   console.log(`rpc-fallback-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`rpc-fallback-core self-tests: ${fail} failure(s)`);

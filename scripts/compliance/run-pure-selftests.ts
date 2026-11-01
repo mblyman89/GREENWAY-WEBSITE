@@ -582,6 +582,7 @@ import { __runReceiptDiscountCoreTests } from "../../src/lib/pos/receipt-discoun
 import { __runReceiptTaxCoreTests } from "../../src/lib/pos/receipt-tax-core";
 import { __runReceiptLogoCoreTests } from "../../src/lib/pos/receipt-logo-core";
 import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
+import { __runDispositionCoreTests } from "../../src/lib/inventory/disposition-core";
 import { __runReturnPolicyCoreTests } from "../../src/lib/pos/return-policy-core";
 import { __runSaleDecrementCoreTests, __runSaleSizeDrawTests } from "../../src/lib/inventory/sale-decrement-core";
 import { __runTillCoreTests } from "../../src/lib/pos/till-core";
@@ -2673,6 +2674,7 @@ __runLiquidVolumeTests();
   assertRan("platform-changes", __runPlatformChangesTests(), 30); // G-71b (owner message 12): platform changes register valid, deadline warnings 30/7/1/overdue once each, monthly review once per month, stale register flagged, escaped email
   assertRan("money-smoke-core", __runMoneySmokeCoreTests(), 30); // G-71c (owner message 12): daily sale/return/till test: parse (ok must match 13 steps), failure explained per step and SQLSTATE (42501 -> 0330), not installed = warn, worse status wins, one daily report
   assertRan("platform-errors-core", __runPlatformErrorsCoreTests(), 40); // G-71d (owner message 12): error alerting: 42501 alerts on the first, missing at 3, crashes at 5 in 10 min; redirect/notFound ignored; messages scrubbed (tokens, emails, numbers); routes without query strings; per-instance throttle; one alert per kind per hour; 24h digest merged into the daily report
+  assertRan("disposition-core", __runDispositionCoreTests(), 50); // R-RET-2 (owner message 13): every unit of a sale line refundable one return at a time (owner's OG Kush $18.70 x2 case), never more than was paid, plain-English return messages with dollar amounts
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

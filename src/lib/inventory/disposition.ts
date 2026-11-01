@@ -27,6 +27,7 @@ import {
   clampHoldHours,
   computeEarliestDestroyAt,
   validateCustomerReturn,
+  refundCeilingMinor,
   buildCustomerReturnAdjustmentNote,
   validateDestructionCompletion,
   buildDestructionAdjustmentNote,
@@ -728,12 +729,12 @@ export async function createCustomerReturn(
       .eq("id", input.orderLineId)
       .maybeSingle(),
   ]);
-  if (!order) return { ok: false, error: "Order not found." };
+  if (!order) return { ok: false, error: "That sale couldn't be found. Search for the sale again and pick it from the list." };
   if ((order as { status: string }).status !== "completed") {
-    return { ok: false, error: "Only COMPLETED sales can be returned." };
+    return { ok: false, error: "This sale can't be returned because it was never finished. Only completed sales can be returned." };
   }
   if (!line || (line as { order_id: string }).order_id !== input.orderId) {
-    return { ok: false, error: "Order line not found on this order." };
+    return { ok: false, error: "That item isn't on this sale. Search for the sale again and pick the item from the list." };
   }
   const o = order as { id: string; order_number: string; placed_at: string; completed_at: string | null };
   const l = line as {
@@ -769,11 +770,17 @@ export async function createCustomerReturn(
   const remainingReturnable = (Number(l.quantity) || 0) - alreadyReturned;
 
   // F-1 refund ceiling. price_minor_units is the tax-INCLUSIVE out-the-door
-  // unit price (what actually left the customer's wallet per unit). The most
-  // this return may pay out is that unit price \u00d7 the quantity being returned,
-  // minus whatever was already refunded on the line \u2014 never below zero.
-  const outTheDoorUnit = Number(l.price_minor_units) || 0;
-  const maxRefundMinor = Math.max(0, outTheDoorUnit * input.quantity - alreadyRefundedMinor);
+  // unit price (what actually left the customer's wallet per unit).
+  // R-RET-2 (owner message 13): the ceiling is the SMALLER of what the
+  // customer paid for the units coming back now and what is still unrefunded
+  // on the whole line. The old "this return minus every earlier refund" form
+  // capped the second unit of a 2-unit line at $0.00.
+  const maxRefundMinor = refundCeilingMinor({
+    unitPriceMinor: Number(l.price_minor_units) || 0,
+    lineQuantity: Number(l.quantity) || 0,
+    returnQuantity: input.quantity,
+    alreadyRefundedMinor,
+  });
 
   // ── Pure validation (WAC 314-55-079(12) + quantities + money) ─────────────
   const verdict = validateCustomerReturn({
@@ -808,7 +815,7 @@ export async function createCustomerReturn(
       .eq("id", lotId)
       .maybeSingle();
     lotRow = (data as typeof lotRow) ?? null;
-    if (!lotRow) return { ok: false, error: "Selected lot not found." };
+    if (!lotRow) return { ok: false, error: "The lot you picked couldn't be found. It may have been removed; pick the lot again." };
   } else if (lineLotKey) {
     const { data } = await admin
       .from("inventory_lots")
@@ -833,7 +840,7 @@ export async function createCustomerReturn(
     return {
       ok: false,
       error:
-        "No inventory lot matches this product — pick the lot manually so the add-back lands on the correct CCRS inventory identifier.",
+        "The system couldn't tell which inventory lot this product came from. Pick the lot by hand (the lot number is printed on the package) so the returned item goes back to the right lot.",
     };
   }
 
@@ -976,7 +983,7 @@ export async function createCustomerReturn(
   });
   if (!rpcErr) {
     const r = (rpcData ?? {}) as { return_id?: string | null };
-    if (!r.return_id) return { ok: false, error: "The return could not be saved (no id came back). Nothing was changed." };
+    if (!r.return_id) return { ok: false, error: "The return didn't save (the database didn't confirm it). Nothing was changed, so it's safe to try again." };
     // A Restock unit goes back on the menu; a held Destroy unit never does.
     if (!isDestroy) await syncLotMenuStock(admin, lotId, Math.abs(input.quantity));
     return { ok: true, id: r.return_id, held: isDestroy };

@@ -642,8 +642,8 @@ Steps:
 1. **MORE ▾ → Return an item** (online only).
 2. Find the sale. Either type the **receipt number** (8 characters), or search recent sales (**Search name, receipt, item or staff**) and tap the sale.
 3. If the sale fails policy, every reason is shown. For example:
-   - *"Outside the 7-day return window — this sale was N days ago (store policy). Refuse the return."* (the number is the owner's window)
-   - *"No loyalty member is attached to this sale — store policy requires … Refuse the return."* (only when **Loyalty members only** is on)
+   - *"This sale was N days ago, and our store policy only allows returns within 7 days (the 7-day return window). Please politely refuse the return."* (the number is the owner's window)
+   - *"This sale has no loyalty member on it, and our store policy only allows returns on loyalty purchases. Please politely refuse the return."* (only when **Loyalty members only** is on)
 4. Pick the **line** and the **quantity** (it shows "N of M returnable").
 5. Pick the **reason**: **Defective / Wrong item / Adverse reaction / Quality issue / Mislabeled / Other**. A detail note is optional, but give context for **Other**. An **adverse reaction** also needs a manager to follow the product-complaint process.
 6. Choose **Restock** (sellable) or **Destroy** (the product goes to the quarantine bin for destruction, SOP-15). Since Phase 1.4 (G-44) the app holds a Destroy unit: it is counted on hand but never sold or shown as stock until it is destroyed (SOP-15 §4.7).
@@ -651,7 +651,7 @@ Steps:
 8. A manager or lead enters their PIN and taps **Process return & refund $X**.
 9. *"Return processed — hand back $X cash; N points reversed."* (plus *"Product goes to the quarantine bin."* when destroying). Hand back the cash from the drawer.
 
-The refund is the exact price the customer paid.
+The refund is the exact price the customer paid. Each item on a sale can be returned on its own, in any order: return one now and another later, and each still gets back exactly what was paid for it (R-RET-2, owner message 13: before, the second item of a two-item line was refused with *"max 0.00"*).
 
 > **Drawer effect (Phase 2.1, G-05):** a return processed on the register is tied to the drawer that is open on this register at that moment (`src/app/api/pos/returns/route.ts` L169). Reconcile subtracts it automatically (4.30). If no drawer was open, the return is left **not tied to a drawer** and a manager ties it before reconcile. A return processed at the back-office **Returns desk** asks **Cash paid from** (an open drawer, or **Store safe**) and will not process until one is picked (SOP-15). The server also queues the state-reporting (CCRS) correction and claws back loyalty points in proportion to the refund.
 
@@ -1095,16 +1095,16 @@ Since Phase 2.9 (owner message 6: *"The register activity page also, the top but
 |---|---|---|---|---|
 | *"Voids are same-day only (Pacific business day). For an earlier sale, use the returns desk — it handles the return policy, restock/destroy, and CCRS corrections."* | BLOCK | Same-day control | Use **Return an item** | Manager |
 | *"This sale has already been voided."* | BLOCK | Only once | — | — |
-| *"Only COMPLETED sales can be voided (this order is "…")."* / *"Only COMPLETED sales can be returned …"* | BLOCK | The sale is not finished (still syncing, or an exception) | Wait for sync, or check exceptions | Manager |
+| *"Only COMPLETED sales can be voided (this order is "…")."* / *"This sale can't be returned because it was never finished …"* | BLOCK | The sale is not finished (still syncing, or an exception) | Wait for sync, or check exceptions | Manager |
 | *"Part of this sale was already returned at the returns desk — voiding now would refund the same items twice. Process the rest as a return instead."* | BLOCK | Prevents a double refund | Use **Return an item** | Manager |
 | *"The sale has no completion timestamp — void it from the back office instead."* | BLOCK | Data problem | Back office | Manager |
 | *"Give a reason (at least 3 characters) — it is logged to the audit trail."* / *"Keep the reason under 500 characters."* | BLOCK | Audit | Write a reason | — |
 | *"A manager or lead must approve the void (PIN)."* | BLOCK | Control | Manager PIN | Lead / manager |
-| *"Outside the N-day return window (the owner's setting, default 7) — this sale was N days ago (store policy). Refuse the return."* | BLOCK (policy) | Store policy | Refuse | Owner for exceptions |
-| *"No loyalty member is attached to this sale — store policy requires the product to have been purchased by a loyalty customer. Refuse the return."* | BLOCK (policy) | Store policy | Refuse | — |
-| *"This sale is timestamped in the future — check the register clock before processing a return."* | BLOCK | iPad clock problem | Check the iPad's date/time | Manager |
-| *"Nothing left to return on this line — it has already been fully returned."* / *"Return quantity (N) exceeds what is still returnable on this line (M)."* | BLOCK | Prevents a double refund | Fix the quantity | — |
-| *"Pick the line item being returned."* / *"Pick a valid return reason."* / *"Pick restock or destroy."* / *"Select at least one line to return."* | BLOCK | Required fields | Fill them in | — |
+| *"This sale was N days ago, and our store policy only allows returns within N days (the N-day return window). Please politely refuse the return."* (the owner's setting, default 7) | BLOCK (policy) | Store policy | Refuse | Owner for exceptions |
+| *"This sale has no loyalty member on it, and our store policy only allows returns on loyalty purchases. Please politely refuse the return."* | BLOCK (policy) | Store policy | Refuse | — |
+| *"This sale's date is in the future, which usually means the register's clock is wrong. Check the date and time on the register, then try the return again."* | BLOCK | iPad clock problem | Check the iPad's date/time | Manager |
+| *"Everything on this line of the sale has already been returned, so there is nothing left to return."* / *"You're returning N, but only M of this item can still be returned on this sale. Lower the quantity to M or less."* | BLOCK | Prevents a double refund | Fix the quantity | — |
+| *"Pick the line item being returned."* / *"Pick a valid return reason."* / *"Pick restock or destroy."* / *"Tap the item the customer is returning first."* | BLOCK | Required fields | Fill them in | — |
 | *"Enter the receipt number."* | BLOCK | Required | Type the 8-character number | — |
 | *"Offline — manager approval needs a connection to verify the PIN."* | BLOCK | Server check | Reconnect | — |
 

@@ -106,49 +106,101 @@ export function validateCustomerReturn(d: CustomerReturnDraft): CustomerReturnVa
     return {
       ok: false,
       error:
-        "Cannot accept: product must be in its ORIGINAL packaging (WAC 314-55-079(12)). Refuse the return.",
+        "This return can't be accepted: the product has to be in its original packaging. " +
+        "Washington law (WAC 314-55-079(12)) only allows returns in the original package, so please politely refuse it.",
     };
   }
   if (!d.lotIdLegible) {
     return {
       ok: false,
       error:
-        "Cannot accept: the lot/batch/inventory ID on the package must be FULLY LEGIBLE (WAC 314-55-079(12)). Refuse the return.",
+        "This return can't be accepted: the lot / batch number on the package has to be easy to read. " +
+        "Washington law (WAC 314-55-079(12)) requires it, so please politely refuse it.",
     };
   }
   if (!(Number.isFinite(d.quantity) && d.quantity > 0)) {
-    return { ok: false, error: "Return quantity must be greater than zero." };
+    return { ok: false, error: "Enter how many the customer is bringing back (1 or more)." };
   }
   if (!(Number.isFinite(d.originalQuantity) && d.originalQuantity > 0)) {
-    return { ok: false, error: "Original sale quantity is missing or invalid." };
+    return {
+      ok: false,
+      error: "Everything on this line of the sale has already been returned, so there is nothing left to return.",
+    };
   }
   if (d.quantity > d.originalQuantity) {
     return {
       ok: false,
-      error: `Return quantity (${d.quantity}) exceeds the quantity sold on this line (${d.originalQuantity}).`,
+      error:
+        `You're returning ${d.quantity}, but only ${d.originalQuantity} of this item can still be returned on this sale. ` +
+        `Lower the quantity to ${d.originalQuantity} or less.`,
     };
   }
   if (!Number.isInteger(d.refundMinor) || d.refundMinor < 0) {
-    return { ok: false, error: "Refund must be a non-negative whole number of cents." };
+    return { ok: false, error: "The refund amount isn't a valid dollar amount. Enter it like 18.70." };
   }
   // F-1: never refund more than the customer actually paid for the returned
-  // quantity (less any refund already given on this line). The server supplies
-  // the ceiling; a tampered/typo'd form cannot push the payout above it.
+  // units (and never more than is still unrefunded on the line). The server
+  // supplies the ceiling (refundCeilingMinor); a tampered/typo'd form cannot
+  // push the payout above it.
   if (d.maxRefundMinor !== undefined && d.refundMinor > d.maxRefundMinor) {
-    return {
-      ok: false,
-      error:
-        `Refund exceeds what the customer paid for the returned quantity ` +
-        `(max ${(d.maxRefundMinor / 100).toFixed(2)}). Reduce the refund.`,
-    };
+    return { ok: false, error: refundTooHighMessage(d.refundMinor, d.maxRefundMinor) };
   }
   if (d.disposition !== "restock" && d.disposition !== "destroy") {
-    return { ok: false, error: "Disposition must be restock or destroy." };
+    return { ok: false, error: "Pick what happens to the product: Restock (put it back on the shelf) or Destroy (quarantine it)." };
   }
   if (!(CUSTOMER_RETURN_REASONS as readonly string[]).includes(d.reason)) {
-    return { ok: false, error: "Unknown return reason." };
+    return { ok: false, error: "Pick a reason for the return (for example Defective or Wrong item)." };
   }
   return { ok: true, correctionOperation: d.quantity >= d.originalQuantity ? "Delete" : "Update" };
+}
+
+/** Dollars for a staff message, e.g. 1870 -> "$18.70". */
+export function dollars(minor: number): string {
+  return `$${(Math.max(0, minor) / 100).toFixed(2)}`;
+}
+
+/** The plain-English "refund is too high" message (F-1 ceiling). */
+export function refundTooHighMessage(refundMinor: number, maxRefundMinor: number): string {
+  if (maxRefundMinor <= 0) {
+    return (
+      `The refund of ${dollars(refundMinor)} can't be given: the customer has already been refunded ` +
+      `everything they paid for this item on this sale. Set the refund to $0.00, or check the earlier returns.`
+    );
+  }
+  return (
+    `The refund of ${dollars(refundMinor)} is more than the customer paid for what they're returning. ` +
+    `The most you can refund for this return is ${dollars(maxRefundMinor)}. Lower the refund and try again.`
+  );
+}
+
+/**
+ * R-RET-2 (owner message 13): the most a return may pay out, MINOR UNITS.
+ *
+ * It is the SMALLER of:
+ *   (a) what the customer paid for the units coming back NOW
+ *       (unit price x returned quantity), and
+ *   (b) what is still unrefunded on the whole sale line
+ *       (unit price x line quantity - everything already refunded on it).
+ *
+ * The old ceiling was (a) minus everything already refunded, which charged
+ * earlier returns against the units being returned now: a 2-unit line at
+ * $18.70 refunded $18.70 for unit 1, then capped unit 2 at $0.00
+ * ("max 0.00") even though the customer still had $18.70 coming.
+ * Never below zero.
+ */
+export function refundCeilingMinor(input: {
+  unitPriceMinor: number;
+  lineQuantity: number;
+  returnQuantity: number;
+  alreadyRefundedMinor: number;
+}): number {
+  const unit = Math.max(0, Math.round(Number(input.unitPriceMinor) || 0));
+  const lineQty = Math.max(0, Number(input.lineQuantity) || 0);
+  const qty = Math.max(0, Number(input.returnQuantity) || 0);
+  const refunded = Math.max(0, Math.round(Number(input.alreadyRefundedMinor) || 0));
+  const forTheseUnits = Math.round(unit * qty);
+  const leftOnLine = Math.round(unit * lineQty) - refunded;
+  return Math.max(0, Math.min(forTheseUnits, leftOnLine));
 }
 
 /**
@@ -428,6 +480,62 @@ export function __runDispositionCoreTests(): { passed: number; failed: number } 
     validateCustomerReturn({ ...base, refundMinor: 999999 }).ok,
     "omitted ceiling \u21d2 no cap (legacy)",
   );
+
+  // R-RET-2 (owner message 13): the owner's exact case. A 2-unit line at
+  // $18.70; unit 1 returned for $18.70; unit 2 must still allow $18.70.
+  eq(
+    refundCeilingMinor({ unitPriceMinor: 1870, lineQuantity: 2, returnQuantity: 1, alreadyRefundedMinor: 1870 }),
+    1870,
+    "second unit of a 2-unit line still refundable after the first",
+  );
+  eq(
+    refundCeilingMinor({ unitPriceMinor: 1870, lineQuantity: 2, returnQuantity: 1, alreadyRefundedMinor: 0 }),
+    1870,
+    "first unit: ceiling is that unit's price",
+  );
+  eq(
+    refundCeilingMinor({ unitPriceMinor: 1870, lineQuantity: 2, returnQuantity: 2, alreadyRefundedMinor: 0 }),
+    3740,
+    "whole line at once: ceiling is the whole line",
+  );
+  eq(
+    refundCeilingMinor({ unitPriceMinor: 1870, lineQuantity: 2, returnQuantity: 1, alreadyRefundedMinor: 3740 }),
+    0,
+    "line already fully refunded: ceiling 0",
+  );
+  eq(
+    refundCeilingMinor({ unitPriceMinor: 1000, lineQuantity: 3, returnQuantity: 2, alreadyRefundedMinor: 1500 }),
+    1500,
+    "over-refund earlier (1.5 units) leaves only the unrefunded remainder",
+  );
+  eq(
+    refundCeilingMinor({ unitPriceMinor: 1000, lineQuantity: 3, returnQuantity: 1, alreadyRefundedMinor: 500 }),
+    1000,
+    "a partial earlier refund never shrinks a later unit below its price while money remains",
+  );
+  eq(
+    refundCeilingMinor({ unitPriceMinor: -5, lineQuantity: 2, returnQuantity: 1, alreadyRefundedMinor: 0 }),
+    0,
+    "bad price never yields a negative ceiling",
+  );
+  ok(
+    validateCustomerReturn({
+      ...base,
+      originalQuantity: 1,
+      refundMinor: 1870,
+      maxRefundMinor: refundCeilingMinor({ unitPriceMinor: 1870, lineQuantity: 2, returnQuantity: 1, alreadyRefundedMinor: 1870 }),
+    }).ok,
+    "owner's second-unit return validates end to end",
+  );
+  // Plain-English messages: no jargon, say what to do.
+  const tooHigh = validateCustomerReturn({ ...base, refundMinor: 2000, maxRefundMinor: 1870 });
+  ok(!tooHigh.ok && tooHigh.error.includes("$18.70") && tooHigh.error.includes("$20.00"), "too-high names both amounts in dollars");
+  ok(!tooHigh.ok && !/max \d/.test(tooHigh.error), "too-high no longer says 'max 0.00'");
+  const fully = validateCustomerReturn({ ...base, refundMinor: 100, maxRefundMinor: 0 });
+  ok(!fully.ok && fully.error.includes("already been refunded"), "fully-refunded line explained");
+  const pk = validateCustomerReturn({ ...base, originalPackaging: false });
+  ok(!pk.ok && pk.error.includes("original packaging"), "packaging refusal is plain");
+  ok(dollars(1870) === "$18.70" && dollars(-3) === "$0.00", "dollars() formatting");
 
   const note = buildCustomerReturnAdjustmentNote({
     quantity: 1,
