@@ -1,278 +1,44 @@
 /**
  * src/lib/customers/import.ts
  *
- * POS Slice 11 — import the Cultivera customer export (CSV) into our customers
- * table. Dedupes by external Customer ID, then phone, then email. We bring in
- * what's there; going forward, deals require phone + email so the data improves.
+ * POS Slice 11, rebuilt in G-73 (owner message 15): write one batch of
+ * Cultivera customers. The browser reads the file and cleans the rows
+ * (customer-import-core.ts); this file only looks up who already exists and
+ * writes the batch.
+ *
+ * Why the old paste importer failed on the real export:
+ *  - Copying a spreadsheet pastes TAB-separated text, and the old parser only
+ *    split on commas, so no column was found and every row was skipped.
+ *  - It made up to four database calls per row, one row at a time: about
+ *    60,000 calls for the 16,586-row file, far past the request time limit.
+ *  - A failed write was still counted as imported.
+ * Now: about four lookups and two writes per 400 customers, and every error
+ * is reported.
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import {
+  EXISTING_COLUMNS,
+  chunk,
+  parseCsv as parseCsvCore,
+  planImportBatch,
+  type CustomerImportRow,
+  type ExistingCustomer,
+} from "@/lib/customers/customer-import-core";
 
-export type CustomerImportRow = {
-  external_id: string | null;
-  first_name: string;
-  last_name: string | null;
-  phone: string | null;
-  phone_normalized: string | null;
-  email: string | null;
-  email_normalized: string | null;
-  birthdate: string | null;
-  is_medical_patient: boolean;
-  lifetime_spend_minor_units: number;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  last_purchase_at: string | null;
-};
+/** Kept for src/lib/vendors/import.ts, which shares this CSV reader. */
+export const parseCsv = parseCsvCore;
 
-export type ParsedCustomerImport = {
-  rows: CustomerImportRow[];
-  /** Rows skipped because they had no usable identity (no name + no contact). */
-  skipped: number;
-  warnings: string[];
-};
-
-function normPhone(s: string | null): string | null {
-  if (!s) return null;
-  const d = s.replace(/\D/g, "");
-  return d.length >= 7 ? d : null;
-}
-
-function normEmail(s: string | null): string | null {
-  if (!s) return null;
-  const t = s.trim().toLowerCase();
-  return t.includes("@") ? t : null;
-}
-
-function parseMoneyToMinor(s: string | null): number {
-  if (!s) return 0;
-  const n = Number(String(s).replace(/[$,]/g, "").trim());
-  if (Number.isNaN(n) || n <= 0) return 0;
-  return Math.round(n * 100);
-}
-
-/** Parse common US date strings to ISO yyyy-mm-dd (birthdate) or full ISO. */
-function parseDateLoose(s: string | null, full = false): string | null {
-  if (!s) return null;
-  const t = String(s).trim();
-  if (!t) return null;
-  const d = new Date(t);
-  if (Number.isNaN(d.getTime())) return null;
-  return full ? d.toISOString() : d.toISOString().slice(0, 10);
-}
-
-/**
- * Minimal RFC-4180-ish CSV parser (handles quoted fields + commas + newlines).
- */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ",") {
-      row.push(field);
-      field = "";
-    } else if (c === "\n") {
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = "";
-    } else if (c === "\r") {
-      // ignore; handled by \n
-    } else {
-      field += c;
-    }
-  }
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-  return rows;
-}
-
-/** Map a parsed CSV (with header) into customer import rows. */
-export function mapCustomerCsv(text: string): ParsedCustomerImport {
-  const grid = parseCsv(text).filter((r) => r.some((c) => c.trim() !== ""));
-  if (grid.length === 0) {
-    return { rows: [], skipped: 0, warnings: ["The CSV was empty."] };
-  }
-  const header = grid[0].map((h) => h.trim().toLowerCase());
-  const col = (name: string) => header.indexOf(name.toLowerCase());
-
-  // Tolerant column resolution (Cultivera export headers, lowercased).
-  const cId = col("customer id");
-  const cFirst = col("first name");
-  const cLast = col("last name");
-  const cPhone = col("phone number");
-  const cSpent = col("total spent");
-  const cDob = col("date of birth");
-  const cMed = col("is medical");
-  const cCity = col("city");
-  const cState = col("state");
-  const cZip = col("zip");
-  const cEmail = col("email");
-  const cLastPurch = col("last purchase date");
-
-  const warnings: string[] = [];
-  if (cFirst === -1) warnings.push("No 'First Name' column found — names may be blank.");
-
-  const get = (r: string[], i: number) => (i >= 0 && i < r.length ? r[i].trim() : "");
-
-  const rows: CustomerImportRow[] = [];
-  let skipped = 0;
-  for (let i = 1; i < grid.length; i++) {
-    const r = grid[i];
-    const first = get(r, cFirst);
-    const last = get(r, cLast);
-    const phone = get(r, cPhone) || null;
-    const email = get(r, cEmail) || null;
-    const ext = get(r, cId) || null;
-
-    // Skip truly empty rows (no name and no contact and no external id).
-    if (!first && !last && !phone && !email && !ext) {
-      skipped++;
-      continue;
-    }
-
-    rows.push({
-      external_id: ext,
-      first_name: first || "(unknown)",
-      last_name: last || null,
-      phone,
-      phone_normalized: normPhone(phone),
-      email,
-      email_normalized: normEmail(email),
-      birthdate: parseDateLoose(get(r, cDob) || null, false),
-      is_medical_patient: get(r, cMed).toUpperCase() === "Y",
-      lifetime_spend_minor_units: parseMoneyToMinor(get(r, cSpent) || null),
-      city: get(r, cCity) || null,
-      state: get(r, cState) || null,
-      zip: get(r, cZip) || null,
-      last_purchase_at: parseDateLoose(get(r, cLastPurch) || null, true),
-    });
-  }
-
-  return { rows, skipped, warnings };
-}
-
-export type ImportResult = {
+export type BatchResult = {
   ok: boolean;
   inserted: number;
   updated: number;
-  skipped: number;
+  rejected: number;
   error?: string;
 };
 
-/**
- * Persist parsed rows. Dedupe priority: external_id, then phone, then email.
- * Existing rows are updated (spend/last-purchase/contact filled in), new rows
- * inserted. Done in batches for the 16k-row file.
- */
-export async function importCustomers(
-  parsed: ParsedCustomerImport,
-  actorId: string | null,
-): Promise<ImportResult> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, inserted: 0, updated: 0, skipped: parsed.skipped, error: "Supabase not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-
-  let inserted = 0;
-  let updated = 0;
-
-  for (const row of parsed.rows) {
-    // Find an existing customer by external id -> phone -> email.
-    let existingId: string | null = null;
-    if (row.external_id) {
-      const { data } = await admin
-        .from("customers")
-        .select("id")
-        .eq("external_id", row.external_id)
-        .maybeSingle();
-      existingId = (data as { id: string } | null)?.id ?? null;
-    }
-    if (!existingId && row.phone_normalized) {
-      const { data } = await admin
-        .from("customers")
-        .select("id")
-        .eq("phone_normalized", row.phone_normalized)
-        .limit(1)
-        .maybeSingle();
-      existingId = (data as { id: string } | null)?.id ?? null;
-    }
-    if (!existingId && row.email_normalized) {
-      const { data } = await admin
-        .from("customers")
-        .select("id")
-        .eq("email_normalized", row.email_normalized)
-        .limit(1)
-        .maybeSingle();
-      existingId = (data as { id: string } | null)?.id ?? null;
-    }
-
-    const payload = {
-      external_id: row.external_id,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      phone: row.phone,
-      phone_normalized: row.phone_normalized,
-      email: row.email,
-      email_normalized: row.email_normalized,
-      birthdate: row.birthdate,
-      is_medical_patient: row.is_medical_patient,
-      // 0232: the old POS's lifetime total is history, kept in its own
-      // column. lifetime_spend_minor_units is LIVE (maintained by the
-      // customer_rollup trigger from our completed orders) and must never be
-      // overwritten by an import.
-      imported_spend_minor_units: row.lifetime_spend_minor_units,
-      city: row.city,
-      state: row.state,
-      zip: row.zip,
-      last_purchase_at: row.last_purchase_at,
-      import_source: "cultivera-export",
-      updated_by: actorId,
-    };
-
-    // Before migration 0232 is applied the imported_spend column does not
-    // exist; fall back to the legacy column so an import still works (the
-    // migration then moves that value into imported_spend on first run).
-    const legacyPayload = (() => {
-      const { imported_spend_minor_units, ...rest } = payload;
-      return { ...rest, lifetime_spend_minor_units: imported_spend_minor_units };
-    })();
-    if (existingId) {
-      const res = await admin.from("customers").update(payload).eq("id", existingId);
-      if (res.error && isMissingImportedSpendColumn(res.error)) {
-        await admin.from("customers").update(legacyPayload).eq("id", existingId);
-      }
-      updated++;
-    } else {
-      const res = await admin.from("customers").insert({ ...payload, created_by: actorId });
-      if (res.error && isMissingImportedSpendColumn(res.error)) {
-        await admin.from("customers").insert({ ...legacyPayload, created_by: actorId });
-      }
-      inserted++;
-    }
-  }
-
-  return { ok: true, inserted, updated, skipped: parsed.skipped };
-}
+const LOOKUP_CHUNK = 100;
 
 /** True when a write failed only because migration 0232 has not added
  *  customers.imported_spend_minor_units yet (PostgREST PGRST204 / PG 42703). */
@@ -280,4 +46,68 @@ export function isMissingImportedSpendColumn(err: { code?: string; message?: str
   if (!err) return false;
   const msg = String(err.message ?? "");
   return (err.code === "PGRST204" || err.code === "42703") && msg.includes("imported_spend_minor_units");
+}
+
+/** Before 0232 the old-POS figure lived in lifetime_spend_minor_units. */
+function toLegacy<T extends { imported_spend_minor_units: number }>(row: T) {
+  const { imported_spend_minor_units, ...rest } = row;
+  return { ...rest, lifetime_spend_minor_units: imported_spend_minor_units };
+}
+
+export async function importCustomerBatch(rows: CustomerImportRow[], actorId: string | null): Promise<BatchResult> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, inserted: 0, updated: 0, rejected: 0, error: "The database is not connected." };
+  }
+  if (rows.length === 0) return { ok: true, inserted: 0, updated: 0, rejected: 0 };
+  const admin = createSupabaseAdminClient();
+
+  // 1. Everyone already stored who could be one of these customers.
+  const found = new Map<string, ExistingCustomer>();
+  const lookups: { column: string; values: string[]; unclaimedOnly: boolean }[] = [
+    { column: "external_id", values: rows.map((r) => r.external_id), unclaimedOnly: false },
+    { column: "phone_normalized", values: rows.map((r) => r.phone_normalized).filter((v): v is string => !!v), unclaimedOnly: true },
+    { column: "email_normalized", values: rows.map((r) => r.email_normalized).filter((v): v is string => !!v), unclaimedOnly: true },
+  ];
+  for (const l of lookups) {
+    for (const part of chunk([...new Set(l.values)], LOOKUP_CHUNK)) {
+      let q = admin.from("customers").select(EXISTING_COLUMNS).in(l.column, part);
+      if (l.unclaimedOnly) q = q.is("external_id", null);
+      const { data, error } = await q;
+      if (error) {
+        return { ok: false, inserted: 0, updated: 0, rejected: 0, error: `Could not look up existing customers (${error.message}).` };
+      }
+      for (const c of (data ?? []) as unknown as ExistingCustomer[]) found.set(c.id, c);
+    }
+  }
+
+  // 2. Decide, in pure code, who is updated and who is new.
+  const plan = planImportBatch(rows, [...found.values()]);
+
+  // 3. Write. One statement each, so a batch is all-or-nothing per kind and
+  //    can be sent again safely.
+  let updated = 0;
+  if (plan.updates.length > 0) {
+    const payload = plan.updates.map((u) => ({ ...u, updated_by: actorId }));
+    let res = await admin.from("customers").upsert(payload, { onConflict: "id" });
+    if (res.error && isMissingImportedSpendColumn(res.error)) {
+      res = await admin.from("customers").upsert(payload.map(toLegacy), { onConflict: "id" });
+    }
+    if (res.error) {
+      return { ok: false, inserted: 0, updated: 0, rejected: 0, error: `Could not update existing customers (${res.error.message}).` };
+    }
+    updated = plan.updates.length;
+  }
+  let inserted = 0;
+  if (plan.inserts.length > 0) {
+    const payload = plan.inserts.map((i) => ({ ...i, created_by: actorId, updated_by: actorId }));
+    let res = await admin.from("customers").insert(payload);
+    if (res.error && isMissingImportedSpendColumn(res.error)) {
+      res = await admin.from("customers").insert(payload.map(toLegacy));
+    }
+    if (res.error) {
+      return { ok: false, inserted: 0, updated, rejected: 0, error: `Updated ${updated}, but could not add new customers (${res.error.message}).` };
+    }
+    inserted = plan.inserts.length;
+  }
+  return { ok: true, inserted, updated, rejected: 0 };
 }

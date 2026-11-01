@@ -111,6 +111,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     facts: [
       "CRM → Customers is where you build customer and patient profiles — the foundation for loyalty, purchase history, and (later) purchase-limit enforcement at the register.",
       "You can add a customer manually, or import a list under Customers → Import.",
+      "Customer import (G-73): Customers → Import, drag the Cultivera customer export (.xlsx or .csv) onto the box. It previews first: repeats merged, half-typed phones, invalid emails and placeholder birthdays (like 11/11/1999) left blank, and rows with no name or contact left out by Customer ID. Customers are matched by Customer ID, so re-importing updates and never duplicates; if it stops, press Continue.",
       "New public loyalty signups arrive in CRM → Loyalty Signups; marking one as entered automatically creates (or links) its customer record here and enrolls it in the loyalty program.",
     ],
   },

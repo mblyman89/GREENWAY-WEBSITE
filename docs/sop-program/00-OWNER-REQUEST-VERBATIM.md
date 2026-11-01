@@ -549,3 +549,21 @@ R-RET-2 (D105–D107; gap G-72, finding F-15-24): `refundCeilingMinor`, `refundT
 ### Applied
 
 G-71e (D108–D111; gap G-71, item 5): exact versions in `package.json` and `merch-site/package.json` (27 + 8 ranges removed: each now names the version the lockfile already installed, except `@types/node` ^20 → 24.19.2; the only lockfile changes are `@types/node` and its `undici-types`, plus merch-site optional wasm entries npm 11 records), `engines.node` `24.x`, `.npmrc` `save-exact=true` (both dirs); `.github/workflows/compliance-tests.yml` on actions/checkout v7.0.1 and actions/setup-node v7.1.0 by SHA with `node-version-file: package.json` (3 jobs); `.github/dependabot.yml`; pure `src/lib/platform/version-pins-core.ts` (self-tests registered at floor 50) and `tests/compliance/g71e-version-pins.test.ts` run against the real files; platform register: `supabase-js-node20`, `vercel-node20`, `github-actions-node20` → done, new `npm-12-install-scripts` and `nodejs-24-eol` (watch); AGENTS.md **standing rule 17**. Verified locally on Node 24.22.2 / npm 11.19.1: lockfile refresh moved only @types/node and undici-types; merch-site `npm ci`, tsc, self-test and `next build` pass. No migration, no iPad rebuild.
+
+## Owner message 15 (recorded verbatim, G-73: Dependabot pull requests failing on author; drag-and-drop customer import from Cultivera)
+
+> thank you. I have enabled dependabot in github. 8 of my pull requests fail because of the author. can you fix that now that the dependabot is enabled? I also need you to help me extract the data from this customers csv file taken from cultivera to upload to our new system. the upload process in place currently does not work, and I would much rather just drag and drop the file in then paste the spreadsheet into the box. follow the standing rules. thank you.
+
+(Attached: `82BB4F__November-01-2026_Customers.xlsx`, the Cultivera customer export, 16,586 rows, 26 columns; and a screenshot of 8 open Dependabot PRs, #1595–#1602. By the time work began Dependabot had opened 22, #1595–#1617; one, #1605, it had already closed itself.)
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D112 | **Dependabot PRs are taken by standing rule 17, not by loosening the author check.** Each one is re-authored as Greenway Dev on top of main, passes the whole CI gate, is rebase-merged and checked in production. A PR whose changes are already on main is closed with that reason. A PR CI fails for a real reason (a major version that breaks the build or tests) is not merged; it stays open for its own slice. | *"8 of my pull requests fail because of the author. can you fix that"*, *"follow the standing rules"* |
+| D113 | **The customer import is a drop zone, not a paste box.** Drop the Cultivera export exactly as exported (.xlsx, or .csv); it is read in the browser, previewed in plain English, and saved only when Import is pressed, in batches with a progress bar and a Continue button. Re-importing updates by Customer ID and never duplicates. | *"I would much rather just drag and drop the file in then paste the spreadsheet into the box"* |
+| D114 | **Bad source data is blanked and counted, never stored as if true (rule 3).** Exact repeat rows merge; phones that are not 10 digits, emails with no valid address, birthdays shared by 10+ customers (11/11/1999 ×414) or impossible ones are left blank and counted in the preview; rows with no name, phone or email are left out and listed by Customer ID. Two Cultivera customers who share a phone stay two customers. | *"help me extract the data from this customers csv file … to upload to our new system"*, *"the upload process in place currently does not work"* |
+
+### Applied
+
+G-73 (D112–D114): see the G-73 section of `05-GAP-REGISTER.md` and the G-73 row of `06-FIX-PHASE-PLAN.md`.
