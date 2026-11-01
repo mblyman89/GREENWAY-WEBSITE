@@ -626,6 +626,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "loyalty_config", disposition: "KEEP", because: "How your loyalty programme works — settings." },
   { table: "loyalty_tiers", disposition: "KEEP", because: "Your loyalty tier definitions." },
   { table: "loyalty_promotions", disposition: "KEEP", because: "Loyalty promotions you authored." },
+  { table: "customer_cultivera_loyalty", disposition: "KEEP", because: "Each customer's loyalty as Cultivera recorded it (CVL, 0336): the old system's balance, points spent and dollars spent, keyed by the Cultivera Customer ID. A copy of the old system's record, not test data; after a reset, applying it again re-credits the re-imported customers once." },
 
   // ── Payroll, time and people ──────────────────────────────────────────────
   { table: "time_punches", disposition: "WIPE", because: "Test clock-ins and clock-outs." },

@@ -658,3 +658,20 @@ Follow-up (merge approval, verbatim):
 
 R-DRAWER-1: merged as #1628; see the R-DRAWER-1 section of `05-GAP-REGISTER.md`, the R-DRAWER-1 row of `06-FIX-PHASE-PLAN.md`, F-01-6 and F-01-7 in `03-FINDINGS-LEDGER.md`, and SOP-01 v1.13 (§4.16).
 
+## Owner interrupt, 2026-11-01 (recorded verbatim, CVL: Cultivera loyalty earned / spent / current per customer)
+
+> sorry to stop you. I dont normally do this, but I need you to add to the fetcher to specifically target the customer page and click through every single customer. cultivera, naturally, does not provide the total loyalty earned, spent, or current amount in the downloadable spreadsheet. which means I need you to add to this fetcher the ability to slowly crawl through each customer record and pull out this info and automatically apply the data to the customers in our back office. I have uploaded the spreadsheet from cultivera, now we just need the detail. please continue. follow the standing rules. thank you.
+
+> here is a copy of the customers spreadsheet. the url for finding customer details in cultiveras back office is, https://wa.cultiverapos.com/cbo/#/crm/customers/2322/1/detail please continue.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| CVL-D1 | **Current balance comes from each customer's Cultivera record**, never from adding up history. Measured: the history does not reconcile (customer 2322: history 577.23, record 509.13), so a derived number would be a guess. Differences are shown on the preview, never "fixed". | "pull out this info" |
+| CVL-D2 | **Slow on purpose:** one customer record per second (configurable), resumable, read-only, and never at the same time as the other Cultivera fetches. | "slowly crawl through each customer record" |
+| CVL-D3 | **Applied automatically after a preview** (standing rule: crawler output is a draft). The balance enters our loyalty ledger once per customer as an opening adjustment (nearest whole point, no signup bonus); exact decimals, earned and spent are stored beside it. Matching is by Customer ID (= Cultivera's internal id). | "automatically apply the data to the customers in our back office" |
+
+### Applied
+
+CVL (CVL-D1–D3): merged as #1630. Migration 0336 is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`).

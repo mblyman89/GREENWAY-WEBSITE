@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 326 tables across 327 migrations at the time of writing.
+ * Measured 329 tables across 336 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -98,6 +98,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "cultivera_mail_docs",
   "cultivera_menu_items",
   "cultivera_menu_snapshots",
+  "customer_cultivera_loyalty",
   "customer_returns",
   "customers",
   "cycle_count_lines",

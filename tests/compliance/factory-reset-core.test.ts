@@ -1350,7 +1350,8 @@ describe("D-65 — the connections survive the reset", () => {
     // Fix Phase 4.4b (G-38): +3 KEEP checklist_tasks, checklist_runs, checklist_ticks (0327).
     // G-71a: +1 KEEP platform_health_runs (0331; append-only health-check log).
     // G-71d: +1 KEEP platform_error_events (0333; append-only error log).
-    expect(plan.keep.length).toBe(189);
+    // CVL: +1 KEEP customer_cultivera_loyalty (0336; the old system's loyalty record, no FK into a wiped table).
+    expect(plan.keep.length).toBe(190);
     expect(plan.wipe.length).toBe(139);
   });
 

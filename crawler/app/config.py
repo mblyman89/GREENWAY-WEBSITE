@@ -199,6 +199,12 @@ class Settings(BaseSettings):
     cultivera_pos_pace_seconds: float = Field(default=0.6, alias="CULTIVERA_POS_PACE_SECONDS")
     # Phase A time budget (bible §3b.7: ~10 min measured; 30 min is the go/no-go ceiling).
     cultivera_pos_budget_seconds: float = Field(default=1800.0, alias="CULTIVERA_POS_BUDGET_SECONDS")
+    # CVL: the per-customer LOYALTY crawl (crawler/app/cultivera_loyalty.py) uses the same login. The owner
+    # asked for it to go "slowly": one customer record at a time with this delay after each request (each
+    # record measured ~1.6-2 s to answer; 16,588 customers is roughly 12-13 hours at 1.0 s). One attempt
+    # stops as "paused" after the budget; the next start resumes after the last saved customer.
+    cultivera_loyalty_pace_seconds: float = Field(default=1.0, alias="CULTIVERA_LOYALTY_PACE_SECONDS")
+    cultivera_loyalty_budget_seconds: float = Field(default=8 * 3600.0, alias="CULTIVERA_LOYALTY_BUDGET_SECONDS")
     # CVB-2: the full-history ARCHIVE harvest (crawler/app/cultivera_archive.py) uses the same login.
     # ~750 data-api calls measured 2026-11-01 (the biggest pages take 5-25 s each); 3 h per attempt, and
     # a paused run resumes where it stopped, so the budget only bounds one attempt, never the archive.

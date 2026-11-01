@@ -3560,3 +3560,38 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0335_customer_search.rollback.sql`.
   It removes the typo search and the indexes and keeps the two columns (they hold imported
   data); the statements to drop them are in the file, commented out.
+
+## CVL — 0336 — Cultivera loyalty earned / spent / current, crawled per customer
+
+- [ ] `0336_cultivera_loyalty_import.sql` (CVL, owner interrupt 2026-11-01). Apply it **after 0335**.
+  - **Why:** the owner said *"cultivera, naturally, does not provide the total loyalty earned,
+    spent, or current amount in the downloadable spreadsheet. which means I need you to add to
+    this fetcher the ability to slowly crawl through each customer record and pull out this info
+    and automatically apply the data to the customers in our back office."*
+  - **What it does:** adds `customer_cultivera_loyalty` (one row per Cultivera Customer ID:
+    current balance, points spent, dollars spent, and the accrual history sums; RLS on;
+    service_role select / insert / update only; never deleted; KEPT by the factory reset), adds
+    `loyalty_ledger.import_key` with a partial unique index, and adds `apply_cultivera_loyalty`
+    (service_role only). Applying credits each customer's **current Cultivera balance once** as
+    one `adjust` ledger row (rounded to the nearest whole point; key
+    `cultivera-opening:<customer id>`), with no signup bonus, then recomputes balance, lifetime
+    and tier from the ledger. Re-applying refreshes the history and never credits again.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) from information_schema.tables
+   where table_schema = 'public' and table_name = 'customer_cultivera_loyalty';      -- 1
+  select count(*) from pg_proc where proname = 'apply_cultivera_loyalty';            -- 1
+  ```
+
+  **Then:** Back office → **Customers → ⭐ Cultivera loyalty** → **Start reading Cultivera**.
+  The crawl reads one customer at a time with a 1-second pause between (each record takes
+  about 1.6-2 s to answer, so about 16,600 customers is roughly 12-13 hours). It pauses after
+  8 hours; press **Continue** and it picks up where it stopped. When it says Finished, review the
+  preview, tick the box, and press **Apply**.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0336_cultivera_loyalty_import.rollback.sql`.
+  It removes the apply function. Credited points stay (they are real balances).

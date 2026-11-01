@@ -101,6 +101,10 @@ def start_or_resume(*, fresh: bool = False, settings: Settings | None = None,
     with _lock:
         if _active["run_id"] is not None:
             raise RuntimeError("busy")
+        from . import cultivera_loyalty_jobs  # CVL: one Cultivera crawl at a time (lazy: no import cycle)
+
+        if cultivera_loyalty_jobs._active["run_id"] is not None:
+            raise RuntimeError("busy")
         rid = None if fresh else resumable_run(s)
         resumed = rid is not None
         rid = rid or new_run_id()
