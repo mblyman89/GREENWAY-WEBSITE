@@ -583,3 +583,40 @@ G-73 (D112–D114): see the G-73 section of `05-GAP-REGISTER.md` and the G-73 ro
 ### Applied
 
 G-74 (D115, D116): merged as #1620; see the G-74 section of `05-GAP-REGISTER.md` and the G-74 row of `06-FIX-PHASE-PLAN.md`. Phase 7.1 (D117): the 7.1 row of `06-FIX-PHASE-PLAN.md`; G-45, G-46, G-49, G-50 BUILT in `05-GAP-REGISTER.md`; F-15-8, F-15-10, F-15-13, F-15-17, F-15-18 FIXED in `03-FINDINGS-LEDGER.md`; SOP-15 v1.16. Migration 0334 (destruction hold 72 → 0) is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`). G-70 (back-office receipt search) is superseded by D66 and went with the wizard.
+
+## Owner report R-CART-1 (recorded verbatim, 2026-11-01, first trading day: "variantId must be a UUID" register exceptions)
+
+> "i need your help looking into something i am not sure is an issue and we need to fix it, or if its fine. today is the first day we are using this new software platform. in the employee drop down in the back office, the exceptions page, there is several of these messages. what should we do about it. i have another agent working on the repo, so please complete all task, ready them for merging, then stop and wait for me to tell you when it is safe to merge to git. clone the repo, read agents.md, the standing rules, then proceed with the fix. here is the back office message, 
+> "Open exceptions
+> 31 open
+> cart adjustment
+> 11/1/2026 8:01 AM PT · Sales Register 1 · Zachary Smith
+> 9189126a-429c-445d-b94f-cdbc1495953c
+> Invalid cart adjustment: variantId must be a UUID.
+>
+> Inspect payload
+> Resolution note (what you did, at least 5 characters)
+> e.g. Intook UPID WA-1234 in Medical, customer re-rang at Register 1
+>
+> Resolve
+> cart adjustment
+> 11/1/2026 8:03 AM PT · Sales Register 1 · Zachary Smith
+> cac8db46-80eb-4dae-9833-5c78ec8e8060
+> Invalid cart adjustment: variantId must be a UUID.
+>
+> Inspect payload
+> Resolution note (what you did, at least 5 characters)
+> e.g. Intook UPID WA-1234 in Medical, customer re-rang at Register 1"
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| R-CART-1a | **It is a bug, and only in the minus / remove tracker.** The register sends the item's MENU variant id (`menu_variants.source_variant_id`, text: `<lot>-onboarded`, `<item>-default`, `pos-custom-<uid>`, the Cultivera `<item>-<hash>`), never a UUID, so the S3 tracker refused every minus (−) and remove (✕) with an item. Sales, payments, inventory and CCRS were never affected (`order_items.variant_id` is text and the sale validator has no such check). The tracker now accepts any real menu id. | *"i am not sure is an issue and we need to fix it, or if its fine"* |
+| R-CART-1b | **The stranded rows are recorded, not just closed.** The owner asked for the tracker (Register round S3) so minus / remove use cannot be abused unseen; resolving the 31 rows by hand would leave a hole in the first day. One button on Register exceptions records every row that failed for exactly this reason into Reports → Register Adjustments and resolves it with a fixed note; anything else stays open for a person. | *"what should we do about it"* |
+| R-CART-1c | **Ready, not merged.** Another agent is working on the repo; the PR is left green and open until the owner says it is safe to merge. | *"complete all task, ready them for merging, then stop and wait for me to tell you when it is safe to merge to git"* |
+
+### Applied
+
+R-CART-1: see the R-CART-1 section of `05-GAP-REGISTER.md` and the R-CART-1 row of `06-FIX-PHASE-PLAN.md`.
+

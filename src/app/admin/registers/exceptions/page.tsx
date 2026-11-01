@@ -22,7 +22,8 @@ import {
 import { listRegisters } from "@/lib/registers/store";
 import { listEmployees } from "@/lib/staffing/store";
 import { pacificParts } from "@/lib/reports/timezone";
-import { resolvePosExceptionAction } from "./actions";
+import { STRANDED_UUID_REASON } from "@/lib/pos/cart-adjust-core";
+import { recordStrandedCartAdjustmentsAction, resolvePosExceptionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ function eventBadge(eventType: string) {
 export default async function PosExceptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; resolved?: string; back?: string }>;
+  searchParams: Promise<{ error?: string; resolved?: string; replayed?: string; back?: string }>;
 }) {
   await requirePermission("staffing.manage");
   const sp = await searchParams;
@@ -71,6 +72,9 @@ export default async function PosExceptionsPage({
     listRegisters({ includeInactive: true }),
     listEmployees({ includeInactive: true }),
   ]);
+  const stranded = open.filter(
+    (r) => r.event_type === "cart_adjustment" && (r.exception_reason ?? "").trim() === STRANDED_UUID_REASON,
+  ).length;
   const registerName = new Map(registers.map((r) => [r.id, r.name]));
   const employeeName = new Map(employees.map((e) => [e.id, e.full_name]));
 
@@ -115,6 +119,34 @@ export default async function PosExceptionsPage({
         {sp.resolved ? (
           <Card>
             <p className="text-sm text-emerald-300">Exception resolved and recorded.</p>
+          </Card>
+        ) : null}
+
+        {sp.replayed ? (
+          <Card>
+            <p className="text-sm text-emerald-300">
+              Recorded {sp.replayed} cart adjustment{sp.replayed === "1" ? "" : "s"} in the tracker and resolved them.
+            </p>
+          </Card>
+        ) : null}
+
+        {stranded > 0 ? (
+          <Card>
+            <h2 className="text-base font-semibold text-white">
+              {stranded} cart adjustment{stranded === 1 ? "" : "s"} waiting to be recorded
+            </h2>
+            <p className="mt-2 text-sm text-[var(--admin-text-dim)]">
+              These say <span className="font-mono">variantId must be a UUID</span>. That was a bug in the
+              minus / remove tracker, now fixed: the register sends the item&apos;s menu id, which is not a
+              UUID. No sale, payment, inventory or CCRS record was affected, and nothing needs to be re-rung.
+              Press the button to put them in Reports &rarr; Register Adjustments (who, when, which item) and
+              resolve them with a note. Safe to press twice.
+            </p>
+            <form action={recordStrandedCartAdjustmentsAction} className="mt-3">
+              <Button type="submit" size="sm">
+                Record {stranded} cart adjustment{stranded === 1 ? "" : "s"} and resolve
+              </Button>
+            </form>
           </Card>
         ) : null}
 

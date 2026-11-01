@@ -10,6 +10,24 @@
  * PURE. Validates the `cart_adjustment` register event and rolls the ledger
  * (pos_cart_adjustments, migration 0301) + voids up per employee and per
  * Pacific day. Money in cents.
+ *
+ * R-CART-1 (owner, first trading day 2026-11-01): the exceptions queue filled
+ * with "Invalid cart adjustment: variantId must be a UUID." for every minus /
+ * remove at Register 1. Root cause, read from the code, not guessed: the
+ * register's `variantId` is the MENU variant id (`menu_variants.
+ * source_variant_id`, a TEXT column, migration 0002), shipped to the device
+ * by api/pos/menu via pos/live-menu `toVariant`. Real ids look like
+ * `<lot key>-onboarded` (receiving intake, variant-lot-core),
+ * `<item id>-default` (single-price items, api/pos/menu), the Cultivera
+ * `<item id>-<hash>` scheme, or `pos-custom-<uid>` (custom-sale-core). None
+ * is a UUID, so the S3 check refused EVERY minus / remove that had an item.
+ * Sales were never affected: order_items.variant_id is TEXT (0007) and the
+ * sale validator has no UUID check on it. The tracker now accepts any real
+ * menu variant id (trimmed, 1..200 chars, no control characters); the
+ * ledger keeps it in pos_sale_events.payload, and the uuid column
+ * pos_cart_adjustments.variant_id keeps null for non-UUID ids as before.
+ * `planCartAdjustReplay` picks which already-stranded exceptions can now be
+ * recorded, so the tracker the owner asked for has no first-day hole.
  */
 
 export const CART_ADJUST_ACTIONS = ["qty_decrease", "line_remove", "cart_cancel"] as const;
@@ -34,7 +52,23 @@ export type CartAdjustPayload = {
   lineCount?: number;
 };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Longest menu variant id the tracker accepts (real ids are well under 100). */
+export const MAX_VARIANT_ID_LENGTH = 200;
+
+// Any C0 control character or DEL: never part of a real menu id.
+const CONTROL_RE = /[\u0000-\u001f\u007f]/;
+
+/**
+ * Is this a menu variant id the register could really have sent? It is the
+ * register's `PosMenuProduct.variantId` = `menu_variants.source_variant_id`
+ * (TEXT). Shape is deliberately NOT checked beyond sanity: the id comes from
+ * our own menu, and the ledger keeps the full payload for review.
+ */
+export function isMenuVariantId(v: unknown): v is string {
+  if (typeof v !== "string") return false;
+  const t = v.trim();
+  return t.length > 0 && t.length <= MAX_VARIANT_ID_LENGTH && !CONTROL_RE.test(t);
+}
 
 export function validateCartAdjustPayload(
   p: Partial<CartAdjustPayload>,
@@ -49,12 +83,70 @@ export function validateCartAdjustPayload(
   if (!Number.isInteger(p.valueMinor) || (p.valueMinor as number) < 0) {
     errors.push("valueMinor must be whole cents ≥ 0.");
   }
-  if (p.action && p.action !== "cart_cancel" && p.variantId != null && !UUID_RE.test(String(p.variantId))) {
-    errors.push("variantId must be a UUID.");
+  if (p.action && p.action !== "cart_cancel" && p.variantId != null && !isMenuVariantId(p.variantId)) {
+    errors.push(`variantId must be the item's menu id (text, 1-${MAX_VARIANT_ID_LENGTH} characters).`);
   }
   if (p.productName != null && String(p.productName).length > 300) errors.push("productName too long.");
   return errors.length ? { ok: false, errors } : { ok: true };
 }
+
+/** The exact reason the pre-R-CART-1 validator wrote on a stranded row. */
+export const STRANDED_UUID_REASON = "Invalid cart adjustment: variantId must be a UUID.";
+
+/** An open exception row as the replay reads it from pos_sale_events. */
+export type CartAdjustExceptionRow = {
+  id: string;
+  clientUuid: string;
+  eventType: string;
+  status: string;
+  resolvedAt: string | null;
+  exceptionReason: string | null;
+  payload: unknown;
+};
+
+export type CartAdjustReplayPlan = {
+  /** Rows to record in pos_cart_adjustments, then resolve with a note. */
+  record: { id: string; clientUuid: string; payload: CartAdjustPayload }[];
+  /** Rows left for a person, each with the plain reason. */
+  leave: { id: string; clientUuid: string; why: string }[];
+};
+
+/**
+ * Which open exceptions can now be recorded automatically. ONLY rows that
+ * (1) are cart_adjustment events, (2) are still open (status exception,
+ * not resolved), (3) were stranded by EXACTLY the old UUID rule, and
+ * (4) pass today's validator in full. Anything else is left for a manager
+ * with the reason; nothing is guessed (rule 3).
+ */
+export function planCartAdjustReplay(rows: CartAdjustExceptionRow[]): CartAdjustReplayPlan {
+  const plan: CartAdjustReplayPlan = { record: [], leave: [] };
+  for (const r of rows) {
+    if (r.eventType !== "cart_adjustment") continue;
+    if (r.status !== "exception" || r.resolvedAt != null) continue;
+    if ((r.exceptionReason ?? "").trim() !== STRANDED_UUID_REASON) {
+      plan.leave.push({ id: r.id, clientUuid: r.clientUuid, why: "Different reason; review it by hand." });
+      continue;
+    }
+    const payload = r.payload && typeof r.payload === "object"
+      ? (r.payload as Partial<CartAdjustPayload>)
+      : null;
+    if (!payload) {
+      plan.leave.push({ id: r.id, clientUuid: r.clientUuid, why: "The register sent no readable details." });
+      continue;
+    }
+    const check = validateCartAdjustPayload(payload);
+    if (!check.ok) {
+      plan.leave.push({ id: r.id, clientUuid: r.clientUuid, why: check.errors.join(" ") });
+      continue;
+    }
+    plan.record.push({ id: r.id, clientUuid: r.clientUuid, payload: payload as CartAdjustPayload });
+  }
+  return plan;
+}
+
+/** The resolution note written on each row the replay records. */
+export const REPLAY_RESOLUTION_NOTE =
+  "Recorded in the cart-adjustment tracker after fix R-CART-1 (the register's item id is a menu id, not a UUID). Nothing to re-ring: the sale itself was never affected.";
 
 /** One ledger row as read for reporting. */
 export type CartAdjustRow = {
@@ -154,6 +246,42 @@ export function __runCartAdjustTests(): void {
   eq(validateCartAdjustPayload({ action: "cart_cancel", unitsRemoved: 3, valueMinor: 9000, lineCount: 2 }).ok, true, "cancel ok");
   eq(validateCartAdjustPayload({ action: "qty_decrease", unitsRemoved: 0, valueMinor: 0 }).ok, false, "zero units refused");
   eq(validateCartAdjustPayload({ action: "nope" as CartAdjustAction, unitsRemoved: 1, valueMinor: 0 }).ok, false, "bad action refused");
+  // R-CART-1: every real register variant id shape is accepted.
+  for (const id of ["LOT-A-onboarded", "pos-1234-default", "pos-cult-x1a2b3", "pos-custom-9f8e", V]) {
+    eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: id, unitsRemoved: 1, valueMinor: 100 }).ok, true, `menu id ${id} ok`);
+    eq(validateCartAdjustPayload({ action: "line_remove", variantId: id, unitsRemoved: 2, valueMinor: 200 }).ok, true, `remove ${id} ok`);
+  }
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: null, unitsRemoved: 1, valueMinor: 0 }).ok, true, "null id ok");
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: "", unitsRemoved: 1, valueMinor: 0 }).ok, false, "empty id refused");
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: "   ", unitsRemoved: 1, valueMinor: 0 }).ok, false, "blank id refused");
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: "a\nb", unitsRemoved: 1, valueMinor: 0 }).ok, false, "control char refused");
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: 42 as unknown as string, unitsRemoved: 1, valueMinor: 0 }).ok, false, "number id refused");
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: "x".repeat(MAX_VARIANT_ID_LENGTH), unitsRemoved: 1, valueMinor: 0 }).ok, true, "200 chars ok");
+  eq(validateCartAdjustPayload({ action: "qty_decrease", variantId: "x".repeat(MAX_VARIANT_ID_LENGTH + 1), unitsRemoved: 1, valueMinor: 0 }).ok, false, "201 chars refused");
+  const bad = validateCartAdjustPayload({ action: "qty_decrease", variantId: "", unitsRemoved: 1, valueMinor: 0 });
+  eq(!bad.ok && bad.errors.some((e) => /UUID/.test(e)), false, "message never says UUID again");
+  // R-CART-1: the replay planner.
+  const row = (over: Partial<CartAdjustExceptionRow>): CartAdjustExceptionRow => ({
+    id: "r1", clientUuid: "c1", eventType: "cart_adjustment", status: "exception", resolvedAt: null,
+    exceptionReason: STRANDED_UUID_REASON,
+    payload: { action: "qty_decrease", variantId: "LOT-A-onboarded", productName: "Blue Dream (3.5g)", unitsRemoved: 1, valueMinor: 2500 },
+    ...over,
+  });
+  const plan = planCartAdjustReplay([
+    row({}),
+    row({ id: "r2", clientUuid: "c2", eventType: "sale" }),
+    row({ id: "r3", clientUuid: "c3", resolvedAt: "2026-11-01T17:00:00Z" }),
+    row({ id: "r4", clientUuid: "c4", status: "processed" }),
+    row({ id: "r5", clientUuid: "c5", exceptionReason: "Cart adjustment not recorded: boom" }),
+    row({ id: "r6", clientUuid: "c6", payload: { action: "qty_decrease", variantId: "LOT-B-onboarded", unitsRemoved: 0, valueMinor: 0 } }),
+    row({ id: "r7", clientUuid: "c7", payload: null }),
+    row({ id: "r8", clientUuid: "c8", payload: [1, 2] }),
+    row({ id: "r9", clientUuid: "c9", exceptionReason: `  ${STRANDED_UUID_REASON}  ` }),
+  ]);
+  eq(plan.record.map((r) => r.id), ["r1", "r9"], "only stranded, open, now-valid rows are recorded");
+  eq(plan.leave.map((r) => r.id), ["r5", "r6", "r7", "r8"], "other open cart rows are left for a person");
+  eq(plan.record[0].payload.variantId, "LOT-A-onboarded", "payload carried verbatim");
+  eq(planCartAdjustReplay([]).record.length, 0, "empty in, empty out");
   const s = summarizeAdjustments(
     [
       { employeeId: "a", action: "qty_decrease", unitsRemoved: 1, valueMinor: 100, occurredAt: "2026-01-02T20:00:00Z" },
