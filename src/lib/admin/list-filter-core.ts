@@ -57,10 +57,16 @@ export const LOT_SORTS: SortOption[] = [
 ];
 
 export const CUSTOMER_SORTS: SortOption[] = [
-  { key: "recent", label: "Recent visit first", columns: [{ column: "last_visit_at", ascending: false, nullsFirst: false }, { column: "created_at", ascending: false }] },
+  // G-75: the default ranks a search best match first (customer-search-core);
+  // without a search it lists the most recent visit, then the most recent
+  // old-POS purchase.
+  { key: "recent", label: "Best match / recent visit", columns: [{ column: "last_visit_at", ascending: false, nullsFirst: false }, { column: "last_purchase_at", ascending: false, nullsFirst: false }, { column: "created_at", ascending: false }] },
   { key: "newest", label: "Newest record first", columns: [{ column: "created_at", ascending: false }] },
   { key: "name", label: "Name A → Z", columns: [{ column: "first_name", ascending: true }, { column: "last_name", ascending: true, nullsFirst: false }] },
-  { key: "spend_high", label: "Lifetime spend: high → low", columns: [{ column: "lifetime_spend_minor_units", ascending: false }] },
+  { key: "last_name", label: "Last name A → Z", columns: [{ column: "last_name", ascending: true, nullsFirst: false }, { column: "first_name", ascending: true }] },
+  { key: "spend_high", label: "Spend at Greenway: high → low", columns: [{ column: "lifetime_spend_minor_units", ascending: false }] },
+  { key: "old_spend_high", label: "Old POS spend: high → low", columns: [{ column: "imported_spend_minor_units", ascending: false }] },
+  { key: "old_last_purchase", label: "Old POS last purchase: newest", columns: [{ column: "last_purchase_at", ascending: false, nullsFirst: false }] },
   { key: "visits_high", label: "Visits: high → low", columns: [{ column: "visit_count", ascending: false }] },
 ];
 

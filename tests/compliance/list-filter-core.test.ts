@@ -49,7 +49,10 @@ describe("list-filter-core", () => {
       "recent",
       "newest",
       "name",
+      "last_name",
       "spend_high",
+      "old_spend_high",
+      "old_last_purchase",
       "visits_high",
     ]);
   });

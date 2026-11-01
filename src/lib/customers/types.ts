@@ -25,6 +25,10 @@ export type Customer = {
   last_purchase_at?: string | null;
   external_id?: string | null;
   email_normalized?: string | null;
+  /** 0335: "Date Created" from the old POS export (when the customer was added there). */
+  imported_created_at?: string | null;
+  /** 0335: "Tax Designations" from the old POS export (e.g. "Veteran"). */
+  tax_designations?: string | null;
   staff_note: string | null;
   created_by: string | null;
   updated_by: string | null;

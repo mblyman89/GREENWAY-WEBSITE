@@ -12,6 +12,7 @@ import { LoyaltyPanel } from "@/components/admin/loyalty/LoyaltyPanel";
 import { MedicalPanel } from "@/components/admin/medical/MedicalPanel";
 import { loadCustomerProfile } from "@/lib/customers/customer-insights-server";
 import { money } from "@/lib/customers/customer-insights-core";
+import { customerFigures } from "@/lib/customers/customer-search-core";
 import { CustomerMonthlyChart, CustomerHabitCharts, SpendShareDonut } from "@/components/admin/customers/CustomerCharts";
 import {
   Banner,
@@ -105,6 +106,16 @@ export default async function CustomerDetailPage({
         ? customer.lifetime_spend_minor_units
         : 0;
 
+  // Owner message 17 (D119): one honest all-time picture = spend here + old POS
+  // spend, and the latest purchase from either system (with its source).
+  const all = customerFigures(
+    { ...customer, imported_spend_minor_units: importedSpend },
+    ins ? { spendMinor: ins.netSpendMinor, lastVisitAt: ins.lastVisitAt } : undefined,
+  );
+  const oldPosFacts = Boolean(
+    customer.external_id || importedSpend > 0 || customer.last_purchase_at || customer.imported_created_at || customer.tax_designations,
+  );
+
   const name = `${customer.first_name} ${customer.last_name ?? ""}`.trim();
   const linkedCount = linked ? Number.parseInt(linked, 10) : NaN;
 
@@ -138,6 +149,48 @@ export default async function CustomerDetailPage({
           </Banner>
         )}
 
+        {/* ── All-time picture (Greenway + old POS import) — owner message 17 ── */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Total spent (all time)"
+            value={money(all.totalSpendMinor)}
+            hint={
+              all.oldPosSpendMinor > 0
+                ? `${money(all.liveSpendMinor)} at Greenway + ${money(all.oldPosSpendMinor)} in the old POS`
+                : "Everything they have spent at Greenway"
+            }
+            accent="green"
+          />
+          <StatCard
+            label="Last purchase"
+            value={all.lastPurchaseAt ? fmtDate(all.lastPurchaseAt) : "None on file"}
+            hint={all.lastPurchaseSource === "old_pos" ? "From the old POS (before this system)" : all.lastPurchaseSource === "greenway" ? "At Greenway" : undefined}
+            accent="muted"
+          />
+          <StatCard
+            label="Customer ID"
+            value={customer.external_id ? `#${customer.external_id}` : "—"}
+            hint={customer.external_id ? "From the old POS — type it in any customer search" : "Not imported from the old POS"}
+            accent="muted"
+          />
+          <StatCard
+            label="Customer since"
+            value={fmtDate(customer.imported_created_at ?? customer.created_at)}
+            hint={customer.imported_created_at ? "Date Created in the old POS" : "Date added to this system"}
+            accent="muted"
+          />
+        </div>
+        {oldPosFacts && (
+          <p className="text-xs text-[var(--admin-text-faint)]">
+            Old POS (Cultivera) record:
+            {customer.external_id ? ` Customer ID #${customer.external_id}.` : ""}
+            {importedSpend > 0 ? ` Total spent ${money(importedSpend)}.` : ""}
+            {customer.last_purchase_at ? ` Last purchase ${fmtDate(customer.last_purchase_at)}.` : ""}
+            {customer.imported_created_at ? ` Created ${fmtDate(customer.imported_created_at)}.` : ""}
+            {customer.tax_designations ? ` Tax designation: ${customer.tax_designations}.` : ""}
+          </p>
+        )}
+
         {!profile || !ins ? (
           <Banner tone="info">Purchase insights are unavailable (the database is not configured in this environment).</Banner>
         ) : (
@@ -151,7 +204,7 @@ export default async function CustomerDetailPage({
                 accent="muted"
               />
               <StatCard
-                label="Net spend"
+                label="Spend at Greenway"
                 value={money(ins.netSpendMinor)}
                 hint={ins.refundsMinor > 0 ? `${money(ins.grossSpendMinor)} paid, ${money(ins.refundsMinor)} refunded` : "What they paid, less refunds"}
                 accent="green"
@@ -186,12 +239,7 @@ export default async function CustomerDetailPage({
               ) : (
                 <Badge tone="neutral">No marketing consent</Badge>
               )}
-              {importedSpend > 0 && (
-                <span className="text-xs text-[var(--admin-text-faint)]">
-                  Old POS (Cultivera) lifetime spend: <strong className="text-[var(--admin-text-muted)]">{money(importedSpend)}</strong> — kept for
-                  reference, not counted above.
-                </span>
-              )}
+              {customer.tax_designations && <Badge tone="gold">{customer.tax_designations}</Badge>}
             </div>
             {profile.segment && profile.segment.key !== "none" && (
               <p className="text-sm text-[var(--admin-text-muted)]">

@@ -237,7 +237,15 @@ export type PosMemberHit = {
   label: string;
   points: number;
   tierName: string | null;
+  /** G-75: full name + one identifying line, shown in the results only. */
+  fullName?: string;
+  detail?: string;
 };
+
+/** G-75: the register's customer search (online only, see RegisterShell). */
+export type MemberLookupFn = (
+  q: string,
+) => Promise<{ ok: true; members: PosMemberHit[]; note?: string | null } | { ok: false; error: string }>;
 
 export type SaleFlowProps = {
   bundle: PosMenuBundle;
@@ -339,7 +347,7 @@ export type SaleFlowProps = {
    * Loyalty member lookup (B14) — ONLINE-ONLY by design (no customer book is
    * ever cached on the iPad). Returns matches or an error message.
    */
-  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  onMemberLookup?: MemberLookupFn;
   /**
    * AO-3 — auto-attach after a PASSING scan: the parsed name + DOB go to the
    * server-side match endpoint; an unambiguous single match comes back as
@@ -2650,7 +2658,7 @@ function CartScreen({
   verdict: Extract<IdGateVerdict, { allowed: true }>;
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
-  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  onMemberLookup?: MemberLookupFn;
   /** B29 — history for the ATTACHED member (ONLINE-ONLY via the shell). */
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   /** B24 — manager PIN verify (ONLINE-ONLY; /api/pos/approve via the shell). */
@@ -5357,7 +5365,7 @@ function CustomerBand({
 }: {
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
-  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  onMemberLookup?: MemberLookupFn;
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   verdict: Extract<IdGateVerdict, { allowed: true }>;
   medicalCard: PosCardCapture | null;
@@ -5554,7 +5562,7 @@ function MemberPanel({
 }: {
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
-  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  onMemberLookup?: MemberLookupFn;
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
 }) {
   const [open, setOpen] = useState(false);
@@ -5562,6 +5570,37 @@ function MemberPanel({
   const [busy, setBusy] = useState(false);
   const [hits, setHits] = useState<PosMemberHit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // G-75: results appear as you type (after a short pause); the newest
+  // search always wins, an older answer arriving late is ignored.
+  const [note, setNote] = useState<string | null>(null);
+  const searchTicket = useRef(0);
+  const runSearch = useCallback(
+    async (raw: string) => {
+      const term = raw.trim();
+      if (term.length < 2 || !onMemberLookup) return;
+      const ticket = ++searchTicket.current;
+      setBusy(true);
+      setError(null);
+      const res = await onMemberLookup(term);
+      if (ticket !== searchTicket.current) return; // a newer search is on its way
+      setBusy(false);
+      if (res.ok) {
+        setHits(res.members);
+        setNote(res.note ?? null);
+        if (res.members.length === 0) setError("No customer matches. Try the last name, part of the phone, or the Customer ID.");
+      } else {
+        setHits(null);
+        setNote(null);
+        setError(res.error);
+      }
+    },
+    [onMemberLookup],
+  );
+  useEffect(() => {
+    if (!open || member || q.trim().length < 2) return;
+    const t = setTimeout(() => void runSearch(q), 350);
+    return () => clearTimeout(t);
+  }, [q, open, member, runSearch]);
   // B29 — "the usual?": history for the attached member, fetched on demand,
   // held only while the panel shows it (nothing cached beyond this sale).
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -5664,26 +5703,12 @@ function MemberPanel({
         onClick={() => setOpen(true)}
         className="mt-3 flex min-h-11 w-full items-center gap-2 rounded-xl border border-dashed border-[var(--pos-border-strong)] px-4 py-2.5 text-left text-sm text-[var(--pos-text-muted)] active:bg-[var(--pos-surface-hover)]"
       >
-        <span aria-hidden>👤</span> Attach customer — name, phone, or email (optional)
+        <span aria-hidden>👤</span> Attach customer — name, phone, email or Customer ID (optional)
       </button>
     );
   }
 
-  const search = async () => {
-    const term = q.trim();
-    if (term.length < 2 || !onMemberLookup) return;
-    setBusy(true);
-    setError(null);
-    const res = await onMemberLookup(term);
-    setBusy(false);
-    if (res.ok) {
-      setHits(res.members);
-      if (res.members.length === 0) setError("No members match — sign them up in the back office.");
-    } else {
-      setHits(null);
-      setError(res.error);
-    }
-  };
+  const search = () => runSearch(q);
 
   return (
     <div className="mt-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-3">
@@ -5694,7 +5719,8 @@ function MemberPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter") void search();
           }}
-          placeholder="Member name, phone, or email…"
+          autoFocus
+          placeholder="Part of a name, last name, phone, email or Customer ID…"
           className="flex-1 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-2.5 text-sm"
         />
         <button
@@ -5710,6 +5736,7 @@ function MemberPanel({
           onClick={() => {
             setOpen(false);
             setHits(null);
+            setNote(null);
             setError(null);
             setQ("");
           }}
@@ -5720,22 +5747,27 @@ function MemberPanel({
       </div>
       {error ? <p className="mt-2 text-xs text-[var(--pos-warn)]">{error}</p> : null}
       {hits && hits.length > 0 ? (
-        <ul className="mt-2 space-y-1.5">
+        <ul className="mt-2 max-h-80 space-y-1.5 overflow-y-auto">
           {hits.map((h) => (
             <li key={h.customerId}>
               <button
                 type="button"
                 onClick={() => {
-                  setMember(h);
+                  // Only what the sale needs is kept; the detail line is display only.
+                  setMember({ customerId: h.customerId, label: h.label, points: h.points, tierName: h.tierName });
                   setOpen(false);
                   setHits(null);
+                  setNote(null);
                   setQ("");
                   setError(null);
                 }}
-                className="flex w-full items-center justify-between rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-left active:bg-[var(--pos-surface-hover)]"
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-left active:bg-[var(--pos-surface-hover)]"
               >
-                <span className="text-sm font-semibold">{h.label}</span>
-                <span className="text-xs text-[var(--pos-text-muted)]">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{h.fullName || h.label}</span>
+                  {h.detail ? <span className="block truncate text-xs text-[var(--pos-text-muted)]">{h.detail}</span> : null}
+                </span>
+                <span className="shrink-0 text-xs text-[var(--pos-text-muted)]">
                   {h.points.toLocaleString()} pts{h.tierName ? ` · ${h.tierName}` : ""}
                 </span>
               </button>
@@ -5743,6 +5775,7 @@ function MemberPanel({
           ))}
         </ul>
       ) : null}
+      {note ? <p className="mt-2 text-xs text-[var(--pos-text-muted)]">{note}</p> : null}
     </div>
   );
 }

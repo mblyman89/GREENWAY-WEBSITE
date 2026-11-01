@@ -11,6 +11,7 @@ import { CUSTOMER_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { Badge } from "@/components/admin/ui";
 import { loadSegmentMap } from "@/lib/customers/customer-insights-server";
+import { customerFigures } from "@/lib/customers/customer-search-core";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,8 @@ export default async function CustomersPage({
   // GW-033: fetch the requested page window plus the exact total. If the
   // requested page is past the end (stale link), clamp and refetch the real
   // last page so the screen is never empty while rows exist.
-  const queryFilter = { q, sort: sort.columns, isMedical, marketingConsent, doNotContact };
+  // G-75: the default sort ranks a search best match first.
+  const queryFilter = { q, sort: sort.columns, bestMatch: sort.key === CUSTOMER_SORTS[0].key, isMedical, marketingConsent, doNotContact };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, counts, segMap] = await Promise.all([
     listCustomersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
@@ -76,13 +78,28 @@ export default async function CustomersPage({
   // the trigger-maintained columns after migration 0232, or computed from
   // orders before it (the old columns were never maintained).
   const computedMode = segMap?.source === "computed";
-  const figuresFor = (c: { id: string; visit_count: number; lifetime_spend_minor_units: number; last_visit_at: string | null }) => {
+  // G-75 (owner message 17): spend and last purchase include the old POS
+  // (Cultivera "Total Spent" and "Last Purchase Date", saved by the import),
+  // so an imported customer no longer shows $0.00 and "—".
+  const figuresFor = (c: {
+    id: string;
+    visit_count: number;
+    lifetime_spend_minor_units: number;
+    last_visit_at: string | null;
+    imported_spend_minor_units?: number | null;
+    last_purchase_at?: string | null;
+  }) => {
     const r = segMap?.rollups.get(c.id);
-    if (r) return { visits: r.visits, spend: r.netSpendMinor, last: r.lastVisitAt };
-    if (computedMode) return { visits: 0, spend: 0, last: null };
-    return { visits: c.visit_count, spend: c.lifetime_spend_minor_units, last: c.last_visit_at };
+    const live = r
+      ? { visits: r.visits, spendMinor: r.netSpendMinor, lastVisitAt: r.lastVisitAt }
+      : computedMode
+        ? { visits: 0, spendMinor: 0, lastVisitAt: null }
+        : { visits: c.visit_count, spendMinor: c.lifetime_spend_minor_units, lastVisitAt: c.last_visit_at };
+    const f = customerFigures(c, { spendMinor: live.spendMinor, lastVisitAt: live.lastVisitAt });
+    return { visits: live.visits, ...f };
   };
   let { rows: customers, total } = firstPage;
+  const fuzzy = firstPage.fuzzy === true;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
     ({ rows: customers, total } = await listCustomersPaged({
@@ -135,6 +152,8 @@ export default async function CustomersPage({
             steps={[
               "Loyalty signups you mark as entered become customer records here automatically.",
               "Add walk-ins with “New customer,” or import your old POS list under Customers → Import.",
+              "Search finds anyone: any part of the first or last name in any order (“bill mcc”), any part of the phone (“3778”), email, or the old Customer ID. A misspelling shows the closest names.",
+              "Total spent and Last purchase include the old POS (Cultivera) figures from the import; the small grey line shows the split.",
               "Mark medical patients and capture their authorization on the profile.",
               "Respect marketing consent / do-not-contact flags.",
             ]}
@@ -174,7 +193,7 @@ export default async function CustomersPage({
             <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
               Search
             </label>
-            <Input name="q" defaultValue={q ?? ""} placeholder="Name, email, or phone…" />
+            <Input name="q" defaultValue={q ?? ""} placeholder="First or last name (any part), phone, email or Customer ID…" />
           </div>
           <div>
             <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
@@ -231,6 +250,10 @@ export default async function CustomersPage({
           )}
         </form>
 
+        {fuzzy && customers.length > 0 && (
+          <p className="text-sm text-[var(--admin-text-muted)]">No exact match for “{q}”, so these are the closest spellings.</p>
+        )}
+
         {/* GW-033: exact result count + pager (server-side pagination). */}
         <ListPager window={win} total={total} noun="customer" makeHref={pageHref} />
 
@@ -252,8 +275,8 @@ export default async function CustomersPage({
                   <th className="px-4 py-3 text-center">Medical</th>
                   <th className="px-4 py-3">Group</th>
                   <th className="px-4 py-3 text-right">Visits</th>
-                  <th className="px-4 py-3 text-right">Net spend</th>
-                  <th className="px-4 py-3 text-right">Last visit</th>
+                  <th className="px-4 py-3 text-right">Total spent</th>
+                  <th className="px-4 py-3 text-right">Last purchase</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-border)]">
@@ -269,6 +292,7 @@ export default async function CustomersPage({
                       >
                         {c.first_name} {c.last_name ?? ""}
                       </Link>
+                      {c.external_id && <span className="ml-2 text-[10px] text-[var(--admin-text-faint)]">#{c.external_id}</span>}
                     </td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                       {c.email || c.phone || "—"}
@@ -281,8 +305,21 @@ export default async function CustomersPage({
                     <td className="px-4 py-3 text-center">{c.is_medical_patient ? "🩺" : "—"}</td>
                     <td className="px-4 py-3">{seg ? <Badge tone={seg.tone}>{seg.label}</Badge> : <span className="text-[var(--admin-text-faint)]">—</span>}</td>
                     <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{f.visits}</td>
-                    <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">{fmtMoney(f.spend)}</td>
-                    <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtDay(f.last)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">
+                      {fmtMoney(f.totalSpendMinor)}
+                      {f.oldPosSpendMinor > 0 && (
+                        <span className="block text-[10px] font-normal text-[var(--admin-text-faint)]">
+                          {f.liveSpendMinor > 0 ? `${fmtMoney(f.liveSpendMinor)} here + ` : ""}
+                          {fmtMoney(f.oldPosSpendMinor)} old POS
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                      {fmtDay(f.lastPurchaseAt)}
+                      {f.lastPurchaseSource === "old_pos" && (
+                        <span className="block text-[10px] text-[var(--admin-text-faint)]">old POS</span>
+                      )}
+                    </td>
                   </tr>
                   );
                 })}

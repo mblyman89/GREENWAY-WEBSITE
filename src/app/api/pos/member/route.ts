@@ -1,9 +1,13 @@
 /**
  * GET /api/pos/member?q=...  (POS Slice B14)
  *
- * Register-side loyalty member lookup. An authenticated POS device searches
- * customers by name / phone / email (the same matching listCustomers uses in
- * the back office) and gets back the MINIMUM the register needs:
+ * Register-side customer lookup. An authenticated POS device searches
+ * customers with THE customer search (G-75, owner message 17: searchCustomers,
+ * exactly what the back office uses): every word of a name in any order and
+ * any part, phone digits anywhere, email, Cultivera Customer ID, and the
+ * closest spellings when nothing matches exactly. Up to 25 hits, best match
+ * first, plus the total so the register can say there are more. It gets back
+ * the MINIMUM the register needs:
  *
  *   customerId  — customers.id, attached to the sale payload; at sync the
  *                 server re-verifies it exists and writes orders.customer_id,
@@ -14,7 +18,12 @@
  *                 completion auto-enrolls, matching website behavior).
  *   tierName    — current tier, display only.
  *
- * Deliberately NOT returned: birthdate, full contact details, notes — the
+ *   fullName / detail — G-75: the full name and one line (last 4 phone
+ *                 digits, last purchase, total spent incl. the old POS,
+ *                 medical, Customer ID) so two customers with the same first
+ *                 name can be told apart. Display only, never stored.
+ *
+ * Deliberately NOT returned: birthdate, full phone, email, notes — the
  * register never needs them and the response may sit in device memory.
  *
  * Lookup is ONLINE-ONLY by design: attaching a member offline would mean
@@ -25,8 +34,9 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { listCustomers } from "@/lib/customers/store";
-import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
+import { searchCustomers } from "@/lib/customers/store";
+import { getAccountsByCustomers, listTiers } from "@/lib/loyalty/loyalty-store";
+import { MIN_SEARCH_CHARS, memberLabel, registerHitDetail, registerResultNote } from "@/lib/customers/customer-search-core";
 import { tierForPoints } from "@/lib/loyalty/engine";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
@@ -38,14 +48,13 @@ export type PosMemberHit = {
   label: string;
   points: number;
   tierName: string | null;
+  /** G-75: display only (not frozen into the sale). */
+  fullName?: string;
+  detail?: string;
 };
 
-/** Privacy-lean display label: first name + last initial. */
-function memberLabel(firstName: string, lastName: string | null): string {
-  const first = firstName.trim();
-  const lastInitial = (lastName ?? "").trim().charAt(0);
-  return lastInitial ? `${first} ${lastInitial}.` : first;
-}
+/** G-75: how many hits the register shows at most. */
+const REGISTER_HIT_LIMIT = 25;
 
 async function handleGet(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
@@ -57,26 +66,28 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   }
 
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
-  if (q.length < 2) {
-    return NextResponse.json({ error: "Type at least 2 characters (name, phone, or email)." }, { status: 400 });
+  if (q.length < MIN_SEARCH_CHARS) {
+    return NextResponse.json({ error: "Type at least 2 characters (name, phone, email or Customer ID)." }, { status: 400 });
   }
 
-  const [customers, tiers] = await Promise.all([listCustomers({ q, limit: 8 }), listTiers()]);
+  const [found, tiers] = await Promise.all([searchCustomers(q, { limit: REGISTER_HIT_LIMIT }), listTiers()]);
+  const accounts = await getAccountsByCustomers(found.rows.map((c) => c.id));
 
-  const members: PosMemberHit[] = await Promise.all(
-    customers.map(async (c) => {
-      const account = await getAccountByCustomer(c.id);
-      const points = account?.balance_points ?? 0;
-      return {
-        customerId: c.id,
-        label: memberLabel(c.first_name, c.last_name),
-        points,
-        tierName: tierForPoints(account?.lifetime_points ?? 0, tiers)?.name ?? null,
-      };
-    }),
-  );
+  const members: PosMemberHit[] = found.rows.map((c) => {
+    const account = accounts.get(c.id) ?? null;
+    const { fullName, detail } = registerHitDetail(c);
+    return {
+      customerId: c.id,
+      label: memberLabel(c.first_name, c.last_name),
+      points: account?.balance_points ?? 0,
+      tierName: tierForPoints(account?.lifetime_points ?? 0, tiers)?.name ?? null,
+      fullName,
+      detail,
+    };
+  });
+  const note = registerResultNote(members.length, found.total, found.fuzzy);
 
-  return NextResponse.json({ members });
+  return NextResponse.json({ members, total: found.total, note });
 }
 
 /**

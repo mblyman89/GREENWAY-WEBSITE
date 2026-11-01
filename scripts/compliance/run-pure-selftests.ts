@@ -1240,6 +1240,7 @@ import { __runPlatformChangesTests } from "../../src/lib/platform/platform-chang
 import { __runVersionPinsTests } from "../../src/lib/platform/version-pins-core";
 import { __runUpgradePlanTests } from "../../src/lib/platform/upgrade-plan-core";
 import { __runCustomerImportCoreTests } from "../../src/lib/customers/customer-import-core";
+import { __runCustomerSearchCoreTests } from "../../src/lib/customers/customer-search-core";
 import { __runMoneySmokeCoreTests } from "../../src/lib/platform/money-smoke-core";
 import { __runPlatformErrorsCoreTests } from "../../src/lib/platform/platform-errors-core";
 
@@ -2680,7 +2681,8 @@ __runLiquidVolumeTests();
   assertRan("version-pins-core", __runVersionPinsTests(), 50); // G-71e (owner message 14, item 5): exact versions only, package.json = lockfile, engines.node 24.x on a Vercel major, CI reads Node from package.json, actions pinned to SHAs, no Dependabot config (G-74)
   assertRan("upgrade-plan-core", __runUpgradePlanTests(), 50); // G-74 (owner message 16, D115/D116): upgrades found by scripts/platform/upgrade-plan.ts (patch/minor together after 7 days, majors alone, @types/node held to the Node major, lockstep groups) and opened as Greenway Dev PRs
   assertRan("disposition-messages-core", __runDispositionMessagesTests(), 46); // Fix Phase 7.1 (G-46, G-49, G-50, G-45; D66/D67): readable Returns & Destruction errors, the hold at the legal minimum (0, "Schedule"), both CCRS files named, the Sale correction download only while the weekly batch cannot send it
-  assertRan("customer-import-core", __runCustomerImportCoreTests(), 60); // G-73 (owner message 15): drag-and-drop Cultivera customer import: .xlsx/.csv read in the browser, repeats merged, fragment phones/bad emails/placeholder birthdays blanked and counted, Customer ID first and phone/email only for unclaimed customers, updates never blank stored values, spend to imported_spend only
+  assertRan("customer-import-core", __runCustomerImportCoreTests(), 75); // G-73 (owner message 15): drag-and-drop Cultivera customer import: .xlsx/.csv read in the browser, repeats merged, fragment phones/bad emails/placeholder birthdays blanked and counted, Customer ID first and phone/email only for unclaimed customers, updates never blank stored values, spend to imported_spend only
+  assertRan("customer-search-core", __runCustomerSearchCoreTests(), 65); // G-75 (owner message 17): one shared customer search for the register and back office: partial first/last name in either order, phone digits, email, Customer ID; ranked best match first; typo search only when nothing matches; register hit shows phone last 4, last purchase, total spent (Greenway + old POS)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
