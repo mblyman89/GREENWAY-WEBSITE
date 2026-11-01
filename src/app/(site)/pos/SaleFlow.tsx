@@ -43,7 +43,7 @@ import {
   type PricedSaleLine,
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
-import { resolveScan } from "@/lib/pos/scan-to-cart-core";
+import { resolveScan, scanPickPrompt, type ScanPickReason } from "@/lib/pos/scan-to-cart-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import {
@@ -2753,6 +2753,10 @@ function CartScreen({
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
+  // register-scan-exact-size — WHY the open pick is asking (a package whose
+  // lot is not linked to a size, a weight that fits two sizes, or a typed
+  // card key). Shown above the sizes so a pick is never mistaken for normal.
+  const [scanPickReason, setScanPickReason] = useState<ScanPickReason | undefined>(undefined);
   const [scanFlash, setScanFlash] = useState<string | null>(null);
   // AO-4 — the variant the LAST scan added, so its check row can wear the
   // mockup's "JUST SCANNED" tag until the next scan replaces it.
@@ -2895,8 +2899,16 @@ function CartScreen({
    * (keyboard-wedge scanners type the code and press Enter). A hit adds to
    * cart (or opens the size pick); a miss leaves the text as a search query.
    */
+  // register-scan-exact-size — the package's OWN size (and the refusals),
+  // shipped by /api/pos/menu. Absent on older cached bundles: resolveScan
+  // then behaves exactly as before (the size pick).
+  const sizeIndex = useMemo(
+    () => ({ sizes: bundle.barcodeSizes ?? null, refusals: bundle.barcodeRefusals ?? null }),
+    [bundle.barcodeSizes, bundle.barcodeRefusals],
+  );
+
   const tryScan = () => {
-    const resolved = resolveScan(bundle.products, bundle.barcodes, query);
+    const resolved = resolveScan(bundle.products, bundle.barcodes, query, sizeIndex);
     if (resolved.status === "add") {
       if (!scanAdd(resolved.product)) {
         setScanFlash(null);
@@ -2910,8 +2922,18 @@ function CartScreen({
       setQuery("");
       return;
     }
+    if (resolved.status === "refused") {
+      // register-scan-exact-size: the package's own size is not on the
+      // register. Nothing is added and NO other size is offered.
+      setScanPick(null);
+      setScanFlash(null);
+      setScanMiss(resolved.message);
+      setQuery("");
+      return;
+    }
     if (resolved.status === "pick") {
       setScanPick(resolved.candidates);
+      setScanPickReason(resolved.reason);
       setScanFlash(null);
       setScanMiss(null);
       setQuery("");
@@ -2926,7 +2948,7 @@ function CartScreen({
    */
   const handleGlobalScan = useCallback(
     (code: string) => {
-      const resolved = resolveScan(bundle.products, bundle.barcodes, code);
+      const resolved = resolveScan(bundle.products, bundle.barcodes, code, sizeIndex);
       if (resolved.status === "add") {
         if (!scanAdd(resolved.product)) {
           setScanFlash(null);
@@ -2940,8 +2962,16 @@ function CartScreen({
         setBrowseOpen(false);
         return;
       }
+      if (resolved.status === "refused") {
+        setScanPick(null);
+        setScanFlash(null);
+        setScanMiss(resolved.message);
+        setBrowseOpen(false);
+        return;
+      }
       if (resolved.status === "pick") {
         setScanPick(resolved.candidates);
+        setScanPickReason(resolved.reason);
         setScanFlash(null);
         setScanMiss(null);
         setBrowseOpen(false);
@@ -2949,7 +2979,7 @@ function CartScreen({
       }
       setScanMiss(`Barcode "${code}" matched nothing on the menu — check the label or search by name.`);
     },
-    [bundle.products, bundle.barcodes, scanAdd],
+    [bundle.products, bundle.barcodes, scanAdd, sizeIndex],
   );
 
   // AM-A — document-level wedge capture: fast keystroke bursts ending in
@@ -3252,7 +3282,7 @@ function CartScreen({
           {scanPick ? (
             <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
               <p className="text-xs font-semibold text-[var(--pos-info)]">
-                Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
+                {scanPickPrompt(scanPick[0]?.name ?? "This product", scanPickReason)}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {scanPick.map((p) => (
@@ -4065,10 +4095,15 @@ function CartScreen({
               {scanFlash} — added to cart
             </p>
           ) : null}
+          {scanMiss ? (
+            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              {scanMiss}
+            </p>
+          ) : null}
           {scanPick ? (
             <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
               <p className="text-xs font-semibold text-[var(--pos-info)]">
-                Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
+                {scanPickPrompt(scanPick[0]?.name ?? "This product", scanPickReason)}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {scanPick.map((p) => (
