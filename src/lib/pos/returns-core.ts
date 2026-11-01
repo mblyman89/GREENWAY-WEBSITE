@@ -158,14 +158,14 @@ export function returnWindowVerdict(
     return {
       ok: false,
       daysSincePurchase: days,
-      error: "This sale is timestamped in the future — check the register clock before processing a return.",
+      error: "This sale's date is in the future, which usually means the register's clock is wrong. Check the date and time on the register, then try the return again.",
     };
   }
   if (days > windowDays) {
     return {
       ok: false,
       daysSincePurchase: days,
-      error: `Outside the ${windowDays}-day return window — this sale was ${days} days ago (store policy). Refuse the return.`,
+      error: `This sale was ${days} days ago, and our store policy only allows returns within ${windowDays} days (the ${windowDays}-day return window). Please politely refuse the return.`,
     };
   }
   return { ok: true, daysSincePurchase: days, daysRemaining: windowDays - days };
@@ -205,17 +205,17 @@ export function evaluateReturnEligibility(input: ReturnEligibilityInput): Return
   const errors: string[] = [];
 
   if (input.orderStatus !== "completed") {
-    errors.push(`Only COMPLETED sales can be returned (this sale is "${input.orderStatus}").`);
+    errors.push(`This sale can't be returned because it was never finished (its status is "${input.orderStatus}"). Only completed sales can be returned.`);
   }
   const policy = input.policy ?? DEFAULT_POS_RETURN_POLICY;
   // Fix Phase 6F (owner message 9): loyalty-only is a toggle, default OFF.
   if (policy.loyaltyRequired && (!input.orderCustomerId || !input.orderCustomerId.trim())) {
     errors.push(
-      "No loyalty member is attached to this sale — store policy requires the product to have been purchased by a loyalty customer. Refuse the return.",
+      "This sale has no loyalty member on it, and our store policy only allows returns on loyalty purchases. Please politely refuse the return.",
     );
   }
   if (!input.purchasedAtIso) {
-    errors.push("This sale has no purchase timestamp — cannot verify the return window.");
+    errors.push("This sale has no purchase date and timestamp on record, so the system can't check whether it is still inside the return window. Ask a manager to look at the sale.");
     return { ok: false, errors };
   }
 
@@ -250,18 +250,18 @@ export type RefundLineVerdict = { ok: true; refundMinor: number } | { ok: false;
  */
 export function refundForLine(input: RefundLineInput): RefundLineVerdict {
   if (!Number.isInteger(input.unitPriceMinor) || input.unitPriceMinor < 0) {
-    return { ok: false, error: "Stored unit price is invalid (must be non-negative integer cents)." };
+    return { ok: false, error: "The price saved on this sale looks wrong, so the refund can't be worked out. Ask a manager to check the sale." };
   }
   if (!Number.isInteger(input.quantity) || input.quantity < 1) {
-    return { ok: false, error: "Return quantity must be a positive whole number." };
+    return { ok: false, error: "Enter how many the customer is bringing back as a whole number (1, 2, 3 ...)." };
   }
   if (!Number.isInteger(input.remainingReturnable) || input.remainingReturnable < 1) {
-    return { ok: false, error: "Nothing left to return on this line — it has already been fully returned." };
+    return { ok: false, error: "Everything on this line of the sale has already been returned, so there is nothing left to return." };
   }
   if (input.quantity > input.remainingReturnable) {
     return {
       ok: false,
-      error: `Return quantity (${input.quantity}) exceeds what is still returnable on this line (${input.remainingReturnable}).`,
+      error: `You're returning ${input.quantity}, but only ${input.remainingReturnable} of this item can still be returned on this sale. Lower the quantity to ${input.remainingReturnable} or less.`,
     };
   }
   return { ok: true, refundMinor: input.unitPriceMinor * input.quantity };
@@ -269,7 +269,7 @@ export function refundForLine(input: RefundLineInput): RefundLineVerdict {
 
 /** Sum multiple line refunds; any invalid line fails the whole computation. */
 export function refundForLines(lines: RefundLineInput[]): RefundLineVerdict {
-  if (lines.length === 0) return { ok: false, error: "Select at least one line to return." };
+  if (lines.length === 0) return { ok: false, error: "Tap the item the customer is returning first." };
   let total = 0;
   for (const line of lines) {
     const v = refundForLine(line);

@@ -174,7 +174,7 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
     completed_at: string | null;
     total_minor_units: number;
   } | null;
-  if (!order) return { ok: false, errors: ["The order behind this receipt no longer exists."] };
+  if (!order) return { ok: false, errors: ["The receipt was found, but the sale it belongs to is no longer in the system. Ask a manager to look into it."] };
 
   const purchasedAtIso = order.completed_at ?? order.placed_at;
   const verdict = evaluateReturnEligibility({
@@ -233,7 +233,7 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
       remainingReturnable: Math.max(0, (Number(l.quantity) || 0) - already),
     };
   });
-  if (saleLines.length === 0) return { ok: false, errors: ["This sale has no line items on record."] };
+  if (saleLines.length === 0) return { ok: false, errors: ["This sale has no items saved on it, so there is nothing to return."] };
 
   return {
     ok: true,
@@ -307,7 +307,7 @@ export async function processCounterReturn(
   const sale = lookup.sale;
 
   const line = sale.lines.find((l) => l.lineId === input.orderLineId);
-  if (!line) return { ok: false, error: "That line item isn't on this receipt." };
+  if (!line) return { ok: false, error: "That item isn't on this receipt. Look the receipt up again and pick the item from the list." };
   // Fix Phase 6F (G-68): the owner's returnable product types, server-side.
   if (line.notReturnableReason) return { ok: false, error: line.notReturnableReason };
 

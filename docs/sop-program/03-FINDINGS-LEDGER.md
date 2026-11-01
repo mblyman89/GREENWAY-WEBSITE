@@ -979,6 +979,13 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Effect:** *"No completed sales matched. Only completed orders can be returned."* for a sale rung minutes earlier, with no hint of what to type.
 - **SOP impact:** SOP-15 v1.14 §4.6 step 1, §5.1. **G-70**.
 
+### F-15-24 · CONFIRMED · BUG · S1 — The second unit of a sale line cannot be refunded: "(max 0.00)"
+- **Status: FIXED (R-RET-2, G-72; owner message 13, D106).**
+- **Pin:** `createCustomerReturn` (`src/lib/inventory/disposition.ts`) set the refund limit to `price_minor_units × quantity returned now − every refund already given on the line`. `createNonCannabisReturn` (`src/lib/noncannabis/returns.ts`) did the same. The register always asks for exactly `price × quantity` (`refundForLine`), so after one unit of a 2-unit line was refunded, the limit for the second unit was 0 and the return was refused.
+- **Effect:** the owner's test: OG Kush (1g) ×2 at $18.70; the first unit returned, the second was refused with *"Refund exceeds what the customer paid for the returned quantity (max 0.00). Reduce the refund."* Every multi-unit line could only ever be returned all at once. The message gave no hint why.
+- **Fix:** the limit is the smaller of (price × units coming back) and (price × line quantity − already refunded), so it still never pays out more than was paid. Messages rewritten in plain English (D107).
+- **SOP impact:** SOP-15 v1.15 §5.1; SOP-01 §4.23. **G-72**.
+
 ## SOP-08 · New Hire Onboarding, System Access & Offboarding (verified at `main@bad718b4`)
 
 State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-55-087(1)(e). Owner basis: books-87 (users are separate from employees, quoted verbatim in migration 0210 L4–12) and D69.
