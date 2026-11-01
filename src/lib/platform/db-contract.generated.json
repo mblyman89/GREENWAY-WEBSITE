@@ -373,6 +373,7 @@
     "ofac_record_run",
     "orders_board_snapshot",
     "platform_db_contract_check",
+    "platform_money_smoke_test",
     "publish_menu_version",
     "record_customer_return",
     "record_noncannabis_invoice",

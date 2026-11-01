@@ -435,6 +435,8 @@ Answers, written under the questions in the strategy paper (verbatim):
 
 Fix Phase 6 / Fix E (gaps G-61 to G-66): SOP-01 v1.10 and SOP-03 v1.6, the concierge KB, and the ledgers 03/04/05/06. No migration.
 
+G-71c (D102, D104): migration `0332_money_path_smoke_test.sql` (manual; rollback; PG check `scripts/recon/money-smoke-0332-pg-check.sql` proves the grants, that nothing is left, and reproduces R-RET failing at the return step with 42501) adds `platform_money_smoke_test()`: as the server, a test till open, register sale, stock decrement, draft ledger entry, customer return, cash drop and till close, always rolled back. Pure `money-smoke-core.ts` (33 self-tests) explains a failed step in staff words with the fix; folded into the same daily platform-health report and email (no new cron).
+
 ### Numbering note
 
 Owner messages 6 and 7 are cited throughout the SOPs and ledgers (Phase 2.1b/2.8b/2.9 and the receiving work) but were never copied into this file. This message is therefore recorded as **owner message 8**, so that no existing citation changes meaning.

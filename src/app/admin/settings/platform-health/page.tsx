@@ -93,6 +93,7 @@ export default async function PlatformHealthPage() {
             `The app's code uses ${DB_CONTRACT_TABLES.length} tables and views and ${DB_CONTRACT_FUNCTIONS.length} database functions. The list is rebuilt from the code on every change.`,
             "Each morning (about 6:25am Pacific) the database is asked whether the server can still read and call each one. This is the check that would have caught the October 2026 Supabase change that broke customer returns.",
             "Staff get one email a day: an all clear, or what is wrong and the exact fix (usually a migration to run in the Supabase SQL editor). Phones get a push only when something is wrong.",
+            "The same morning run also rings up a test sale, takes it out of stock, writes it to the books, takes a customer return, drops cash and closes a test till, all as the server, then undoes every bit of it inside the database. If any step fails, the email names the step, what it breaks at the counter and the fix (migration 0332).",
             "Run check now records a run here but does not send the email.",
           ]}
         />
