@@ -6,10 +6,10 @@
  * Fit inside this slice the node.js fixes too please."
  *
  * This test feeds the REAL package files, lockfiles, workflows and
- * dependabot.yml to src/lib/platform/version-pins-core.ts. Any ^range, any
+ * .github file list to src/lib/platform/version-pins-core.ts. Any ^range, any
  * package.json/lockfile disagreement, a missing or wrong engines.node, a
- * node-version literal in CI, a floating action tag, or a package directory
- * without Dependabot fails the PR.
+ * node-version literal in CI, a floating action tag, or a Dependabot config
+ * coming back (G-74, owner message 16) fails the PR.
  */
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
@@ -19,7 +19,6 @@ import {
   VERCEL_NODE_MAJORS,
   __runVersionPinsTests,
   auditVersionPins,
-  parseDependabotUpdates,
 } from "@/lib/platform/version-pins-core";
 import { PLATFORM_CHANGES } from "@/lib/platform/platform-changes";
 
@@ -37,6 +36,20 @@ function packageDirs(): string[] {
   return dirs;
 }
 
+/** Every file under .github/, as repo-relative paths. */
+function listGithub(): string[] {
+  const out: string[] = [];
+  const walk = (d: string) => {
+    for (const n of fs.readdirSync(path.join(ROOT, d))) {
+      const p = `${d}/${n}`;
+      if (fs.statSync(path.join(ROOT, p)).isDirectory()) walk(p);
+      else out.push(p);
+    }
+  };
+  walk(".github");
+  return out;
+}
+
 const rel = (dir: string, f: string) => (dir === "/" ? f : `${dir.slice(1)}/${f}`);
 
 describe("G-71e locked versions", () => {
@@ -51,7 +64,7 @@ describe("G-71e locked versions", () => {
     expect(packageDirs().sort()).toEqual(["/", "/merch-site"]);
   });
 
-  it("every package, lockfile, workflow and the Dependabot config pass the audit", () => {
+  it("every package, lockfile and workflow pass the audit, and there is no Dependabot config", () => {
     const dirs = packageDirs();
     const workflows = fs
       .readdirSync(path.join(ROOT, ".github/workflows"))
@@ -60,7 +73,7 @@ describe("G-71e locked versions", () => {
     const findings = auditVersionPins({
       packages: dirs.map((d) => ({ dir: d, pkgText: read(rel(d, "package.json")), lockText: read(rel(d, "package-lock.json")) })),
       workflows,
-      dependabot: read(".github/dependabot.yml"),
+      githubFiles: listGithub(),
       npmrc: dirs.map((d) => read(rel(d, ".npmrc"))),
     });
     expect(findings).toEqual([]);
@@ -78,18 +91,13 @@ describe("G-71e locked versions", () => {
     expect(wf).not.toMatch(/actions\/(checkout|setup-node)@v\d/);
   });
 
-  it("Dependabot proposes upgrades as PRs and the agent re-authors them (rule 17)", () => {
-    const dep = read(".github/dependabot.yml");
-    const ups = parseDependabotUpdates(dep);
-    expect(ups).toContainEqual({ ecosystem: "npm", directory: "/" });
-    expect(ups).toContainEqual({ ecosystem: "npm", directory: "/merch-site" });
-    expect(ups).toContainEqual({ ecosystem: "github-actions", directory: "/" });
-    expect(dep).toMatch(/versioning-strategy:\s*"increase"/);
-    expect(dep).toMatch(/cooldown:/);
-    expect(dep).toContain("--reset-author");
+  it("upgrades are Greenway Dev PRs found by the upgrade plan, not Dependabot (G-74, rule 17)", () => {
+    expect(fs.existsSync(path.join(ROOT, ".github/dependabot.yml"))).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, ".github/dependabot.yaml"))).toBe(false);
     const agents = read("AGENTS.md");
     expect(agents).toMatch(/17\. \*\*Locked versions; upgrades only by pull request/);
-    expect(agents).toContain("--reset-author");
+    expect(agents).toContain("scripts/platform/upgrade-plan.ts");
+    expect(agents).not.toContain("--reset-author");
   });
 
   it("the Node.js 20 entries on the platform register are closed", () => {

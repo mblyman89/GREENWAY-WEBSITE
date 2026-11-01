@@ -567,3 +567,19 @@ G-71e (D108–D111; gap G-71, item 5): exact versions in `package.json` and `mer
 ### Applied
 
 G-73 (D112–D114): see the G-73 section of `05-GAP-REGISTER.md` and the G-73 row of `06-FIX-PHASE-PLAN.md`.
+
+## Owner message 16 (recorded verbatim, G-74: back to Greenway Dev pull requests for upgrades; Phase 7.1 Returns & Destruction)
+
+> Let’s start fixing the issues. I don’t understand why our pull requests have to be merged by the dependabot. The previous 1600 pr’s didn’t need the bot. The only reason we needed it was to modify the one file you didn’t have access to modify. That’s done now though. Can we go back to the old way of merging pr’s? Please proceed with two slices of the most important areas. Follow the standing rules. Thank you.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D115 | **Dependabot is removed; upgrades go back to the old way.** `.github/dependabot.yml` is deleted, so Dependabot opens no more version pull requests and nothing has to be re-authored. Every pull request, upgrades included, is opened by the agent as Greenway Dev, passes the full CI gate, is rebase-merged and checked in production (rules 6, 7, 13). The locked versions of G-71e stay. | *"Can we go back to the old way of merging pr’s?"*, *"The only reason we needed it was to modify the one file you didn’t have access to modify. That’s done now though."* |
+| D116 | **Upgrades are found by a script, not a bot.** `scripts/deps/upgrade-plan.ts` reads both package files and the npm registry and prints which pinned packages have a newer patch, minor or major release; the monthly platform review (rule 16) runs it and takes patch and minor upgrades as one Greenway Dev PR, each major in its own slice. A test fails the PR if a Dependabot config file comes back. The 6 open Dependabot PRs (#1596, #1597, #1599–#1602) are closed with the reason; their majors are listed in the plan for their own slices. | *"I don’t understand why our pull requests have to be merged by the dependabot."* |
+| D117 | **The second slice is Fix Phase 7.1, the next step in the agreed plan:** Returns & Destruction readable errors, housekeeping, the destruction hold at the legal minimum and the removal of the back-office customer-return wizard (G-46, G-49, G-50, G-45; D66, D67 already approved). It goes first because the wizard is the only remaining way to refund a customer that skips the store return policy and takes a typed refund amount (F-15-8, S2). | *"Please proceed with two slices of the most important areas."* |
+
+### Applied
+
+G-74 (D115, D116): see the G-74 section of `05-GAP-REGISTER.md` and the G-74 row of `06-FIX-PHASE-PLAN.md`. Phase 7.1 (D117): the 7.1 row of `06-FIX-PHASE-PLAN.md`.
