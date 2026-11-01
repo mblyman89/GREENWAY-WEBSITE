@@ -36,6 +36,8 @@ import {
   type HealthReport,
 } from "./db-contract-core";
 import { MONEY_SMOKE_RPC, mergeSmokeIntoReport, parseSmokeResult } from "./money-smoke-core";
+import { mergeErrorDigest } from "./platform-errors-core";
+import { countErrorsSince } from "./platform-error-store";
 
 export const PLATFORM_HEALTH_PAGE = "/admin/settings/platform-health";
 const RUNS_TABLE = "platform_health_runs";
@@ -100,6 +102,16 @@ async function runSmoke(admin: Admin, db: HealthReport): Promise<HealthReport> {
   }
 }
 
+/**
+ * G-71d: the last 24 hours of server errors and database refusals
+ * (platform_error_events, 0333) folded into the same daily report.
+ */
+async function addErrorDigest(report: HealthReport): Promise<HealthReport> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { counts, error } = await countErrorsSince(since);
+  return mergeErrorDigest(report, counts, error);
+}
+
 async function claimDaily(admin: Admin, key: string, subject: string): Promise<"claimed" | "taken" | "error"> {
   try {
     const { error } = await admin.from("compliance_reminder_log").insert({
@@ -132,7 +144,7 @@ export async function runPlatformHealthCheck(opts: { source: "cron" | "manual"; 
     };
   }
   const admin = createSupabaseAdminClient();
-  const report = await runSmoke(admin, await runCheck(admin));
+  const report = await addErrorDigest(await runSmoke(admin, await runCheck(admin)));
 
   let saved = false;
   try {

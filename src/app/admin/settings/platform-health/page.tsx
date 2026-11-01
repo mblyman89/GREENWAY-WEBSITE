@@ -11,6 +11,9 @@
  * G-71b adds the platform changes register (item 2): vendor changes that could
  * affect Greenway, their deadlines, what to do, and when the register was last
  * reviewed (standing rule 16).
+ *
+ * G-71d adds Recent errors (item 4): server errors and database refusals of
+ * the server role, recorded as they happen and emailed when they spike.
  */
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -30,6 +33,8 @@ import {
   type PlatformChange,
 } from "@/lib/platform/platform-changes";
 import { pacificToday } from "@/lib/reports/timezone";
+import { listRecentErrors, type ErrorEventListRow } from "@/lib/platform/platform-error-store";
+import { ALERT_THRESHOLD, ALERT_WINDOW_MINUTES, KIND_LABEL } from "@/lib/platform/platform-errors-core";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +58,10 @@ function changeLabel(s: PlatformChange["status"]): string {
   return s === "action-needed" ? "Action needed" : s === "watch" ? "Watch" : s === "done" ? "Done" : "Not affected";
 }
 
+function errorTone(k: ErrorEventListRow["kind"]): "danger" | "gold" {
+  return k === "server_error" ? "gold" : "danger";
+}
+
 function problemsOf(row: HealthRunRow): HealthProblem[] {
   const r = row.report as { problems?: unknown } | null;
   return Array.isArray(r?.problems) ? (r.problems as HealthProblem[]) : [];
@@ -70,7 +79,7 @@ export default async function PlatformHealthPage() {
     );
   }
 
-  const { rows, error } = await listRecentHealthRuns(30);
+  const [{ rows, error }, errs] = await Promise.all([listRecentHealthRuns(30), listRecentErrors(50)]);
   const latest = rows[0] ?? null;
   const today = pacificToday();
   const digest = reviewDigest(PLATFORM_CHANGES, today);
@@ -94,6 +103,7 @@ export default async function PlatformHealthPage() {
             "Each morning (about 6:25am Pacific) the database is asked whether the server can still read and call each one. This is the check that would have caught the October 2026 Supabase change that broke customer returns.",
             "Staff get one email a day: an all clear, or what is wrong and the exact fix (usually a migration to run in the Supabase SQL editor). Phones get a push only when something is wrong.",
             "The same morning run also rings up a test sale, takes it out of stock, writes it to the books, takes a customer return, drops cash and closes a test till, all as the server, then undoes every bit of it inside the database. If any step fails, the email names the step, what it breaks at the counter and the fix (migration 0332).",
+            `Errors are watched all day, not just in the morning. A page or action that crashes, or the database refusing the server, is recorded under Recent errors. Staff are emailed (and pushed) as soon as the database refuses the server once, a table or function is missing ${ALERT_THRESHOLD.db_missing} times, or ${ALERT_THRESHOLD.server_error} crashes happen within ${ALERT_WINDOW_MINUTES} minutes: at most one email per kind per hour (missing: per day). The morning email adds the last 24 hours (migration 0333).`,
             "Run check now records a run here but does not send the email.",
           ]}
         />
@@ -161,6 +171,47 @@ export default async function PlatformHealthPage() {
             </table>
           </Card>
         ) : null}
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Recent errors</h2>
+          <p className="mb-3 text-sm text-[var(--admin-text-muted)]">
+            Server errors and database refusals, newest first. Messages are stored without tokens, emails or long numbers.
+          </p>
+          {errs.error ? (
+            <p className="text-sm text-[var(--admin-danger)]">{errs.error}</p>
+          ) : errs.rows.length === 0 ? (
+            <p className="text-sm">No errors recorded.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-[var(--admin-text-muted)]">
+                  <th className="py-1 pr-3">When</th>
+                  <th className="py-1 pr-3">Kind</th>
+                  <th className="py-1 pr-3">Where</th>
+                  <th className="py-1">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {errs.rows.map((e) => (
+                  <tr key={e.id} className="border-t border-[var(--admin-border)] align-top">
+                    <td className="py-1 pr-3 whitespace-nowrap">{when(e.occurred_at)}</td>
+                    <td className="py-1 pr-3">
+                      <Badge tone={errorTone(e.kind)}>{KIND_LABEL[e.kind] ?? e.kind}</Badge>
+                    </td>
+                    <td className="py-1 pr-3">
+                      {e.method ? `${e.method} ` : ""}
+                      {e.route}
+                      {e.code ? ` (${e.code})` : ""}
+                    </td>
+                    <td className="py-1">
+                      {e.message || "\u2014"}
+                      {e.digest ? <span className="text-[var(--admin-text-muted)]"> digest {e.digest}</span> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
         <Card>
           <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Platform changes register</h2>
           <p className="mb-3 text-sm text-[var(--admin-text-muted)]">

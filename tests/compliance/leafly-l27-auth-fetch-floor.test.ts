@@ -199,6 +199,16 @@ describe("L-27 — every Supabase factory installs the floor", () => {
   for (const rel of factories) {
     it(`${rel} passes global: SUPABASE_GLOBAL_OPTIONS`, () => {
       const src = read(rel);
+      if (rel === "src/lib/supabase/admin.ts") {
+        // G-71d (owner message 12): the service-role client passes
+        // ADMIN_GLOBAL_OPTIONS = the same bounded fetch, wrapped by the
+        // database-refusal tap. The floor must still be underneath.
+        expect(src).toMatch(/global:\s*ADMIN_GLOBAL_OPTIONS/);
+        const tap = read("src/lib/supabase/db-error-tap.ts");
+        expect(tap).toMatch(/\.\.\.SUPABASE_GLOBAL_OPTIONS/);
+        expect(tap).toMatch(/tapDbErrors\(SUPABASE_GLOBAL_OPTIONS\.fetch\)/);
+        return;
+      }
       expect(src).toContain("SUPABASE_GLOBAL_OPTIONS");
       expect(src).toMatch(/global:\s*SUPABASE_GLOBAL_OPTIONS/);
     });

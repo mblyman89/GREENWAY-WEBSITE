@@ -705,3 +705,5 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 **G-71b (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Platform health → platform changes register**: what the register shows, the monthly review email, the 30/7/1-day and overdue warnings, the 45-day stale flag, standing rule 16; no migration.
 
 **G-71c (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Platform health → daily money-path test**: the test sale, return and till that are undone, what a failed step means at the counter, migration 0332.
+
+**G-71d (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Platform health → error alerts**: what is recorded, when staff are emailed (first permission refusal, 3rd missing object, 5th crash in 10 minutes, once per kind per hour), Recent errors, migration 0333.

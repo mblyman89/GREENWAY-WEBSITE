@@ -266,6 +266,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "plaid_mortgages",
   "plaid_transactions",
   "plaid_webhook_events",
+  "platform_error_events",
   "platform_health_runs",
   "pos_cart_adjustments",
   "pos_devices",

@@ -1236,6 +1236,7 @@ import { __runIntakeHardenTests } from "../../src/lib/inbound-email/intake-harde
 import { __runDbContractCoreTests } from "../../src/lib/platform/db-contract-core";
 import { __runPlatformChangesTests } from "../../src/lib/platform/platform-changes";
 import { __runMoneySmokeCoreTests } from "../../src/lib/platform/money-smoke-core";
+import { __runPlatformErrorsCoreTests } from "../../src/lib/platform/platform-errors-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2669,6 +2670,7 @@ __runLiquidVolumeTests();
   assertRan("db-contract-core", __runDbContractCoreTests(), 30); // G-71a (owner message 12): daily DB health check: contract parse, unreachable = FAIL (run 0330), missing = WARN, call errors explained, one alert per Pacific day, escaped email
   assertRan("platform-changes", __runPlatformChangesTests(), 30); // G-71b (owner message 12): platform changes register valid, deadline warnings 30/7/1/overdue once each, monthly review once per month, stale register flagged, escaped email
   assertRan("money-smoke-core", __runMoneySmokeCoreTests(), 30); // G-71c (owner message 12): daily sale/return/till test: parse (ok must match 13 steps), failure explained per step and SQLSTATE (42501 -> 0330), not installed = warn, worse status wins, one daily report
+  assertRan("platform-errors-core", __runPlatformErrorsCoreTests(), 40); // G-71d (owner message 12): error alerting: 42501 alerts on the first, missing at 3, crashes at 5 in 10 min; redirect/notFound ignored; messages scrubbed (tokens, emails, numbers); routes without query strings; per-instance throttle; one alert per kind per hour; 24h digest merged into the daily report
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

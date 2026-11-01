@@ -75,7 +75,8 @@ describe("G-71c money-path smoke test", () => {
 
   it("runs inside the one daily platform-health run (no new cron, one email)", () => {
     const store = src("src/lib/platform/platform-health-store.ts");
-    expect(store).toMatch(/const report = await runSmoke\(admin, await runCheck\(admin\)\);/);
+    // G-71d wraps the same chain with the 24-hour error digest (still one report).
+    expect(store).toMatch(/const report = await addErrorDigest\(await runSmoke\(admin, await runCheck\(admin\)\)\);/);
     expect(store).toContain("mergeSmokeIntoReport");
     const crons = JSON.parse(src("vercel.json")).crons as { path: string }[];
     expect(crons.filter((c) => c.path.startsWith("/api/cron/platform-")).length).toBe(1);

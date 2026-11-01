@@ -5,7 +5,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./env";
 import { SUPABASE_DB_OPTIONS } from "./db-floor";
-import { SUPABASE_GLOBAL_OPTIONS } from "./fetch-floor";
+import { ADMIN_GLOBAL_OPTIONS } from "./db-error-tap";
 
 export function createSupabaseAdminClient() {
   if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -42,6 +42,11 @@ export function createSupabaseAdminClient() {
     // `global.fetch` is the one seam every sub-client shares, so bounding it
     // bounds auth, storage and functions too. The tighter PostgREST deadlines
     // still win, which is intended — this is the outermost backstop.
-    global: SUPABASE_GLOBAL_OPTIONS,
+    //
+    // G-71d — ADMIN_GLOBAL_OPTIONS is SUPABASE_GLOBAL_OPTIONS with the same
+    // bounded fetch wrapped by the database-refusal tap (db-error-tap.ts): a
+    // 42501 / missing-object answer to the SERVER role is recorded and
+    // alerted even when the calling code handles it (the R-RET lesson).
+    global: ADMIN_GLOBAL_OPTIONS,
   });
 }
