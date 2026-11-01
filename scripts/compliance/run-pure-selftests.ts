@@ -685,6 +685,7 @@ import { __runSaleGridCoreTests } from "../../src/lib/pos/sale-grid-core";
 import { __runCustomSaleCoreTests } from "../../src/lib/pos/custom-sale-core";
 import { __runFavoritesCoreTests } from "../../src/lib/pos/favorites-core";
 import { __runScanRequiredCoreTests } from "../../src/lib/pos/scan-required-core";
+import { __runDrawerOnSaleCoreTests } from "../../src/lib/pos/drawer-on-sale-core";
 import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 import { __runStockFlagCoreTests } from "../../src/lib/pos/stock-flag-core";
 import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
@@ -799,6 +800,7 @@ import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilie
 // SLICE 16 — full back-office inventory sellable at the register.
 import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-availability-core";
 import { __runRegisterCoverageCoreTests } from "../../src/lib/pos/register-coverage-core";
+import { __runScanExactSizeCoreTests } from "../../src/lib/pos/scan-exact-size-core";
 import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
 import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
 import { __runTransactionHistoryCoreTests } from "../../src/lib/pos/transaction-history-core";
@@ -1755,6 +1757,7 @@ __runLiquidVolumeTests();
   __runCustomSaleCoreTests();
   __runFavoritesCoreTests();
   __runScanRequiredCoreTests();
+  assertRan("drawer-on-sale-core", __runDrawerOnSaleCoreTests(), 33); // R-DRAWER-1: drawer with or without a printed receipt
   __runProductInfoCoreTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();
@@ -2687,6 +2690,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-loyalty-core", __runCultiveraLoyaltyCoreTests(), 26); // CVL (owner interrupt 2026-11-01): crawled Cultivera loyalty -> apply rows matched by Customer ID; balance always from the record (never derived), opening credit = nearest whole point, earned = orders + initial, history mismatches shown, batches of 500, cents at the boundary
   assertRan("customer-search-core", __runCustomerSearchCoreTests(), 65); // G-75 (owner message 17): one shared customer search for the register and back office: partial first/last name in either order, phone digits, email, Customer ID; ranked best match first; typo search only when nothing matches; register hit shows phone last 4, last purchase, total spent (Greenway + old POS)
   assertRan("register-coverage-core", __runRegisterCoverageCoreTests(), 45); // register-sell-all-back-office-stock (owner: "all the items in my back office inventory table are sellable on the register"): importer-hidden cards (no Cultivera product master / zero snapshot stock) with live active lots, a mapped cannabis category and a real price are rung up; human hides, needs-category, paraphernalia, unmapped and unpriced stay off; per-size units left come from live lots
+  assertRan("scan-exact-size-core", __runScanExactSizeCoreTests(), 32); // register-scan-exact-size (owner: "if I scan something, and it knows what it is I just scanned, that product alone needs to be added to the cart with out needing to select a variant size"): a package barcode adds ITS OWN size from the lot's 0294 size link, receiving variant or package weight; a proven size off the register is refused; no evidence keeps the pick (never guessed)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

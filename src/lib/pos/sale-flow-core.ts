@@ -50,6 +50,7 @@ import type { PosReturnPolicyConfig } from "./return-policy-core";
 import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
 // Type-only (erased at compile time) — no runtime cycle with scan-required-core.
 import type { PosScanRequiredConfig } from "./scan-required-core";
+import type { PosDrawerOnSaleConfig } from "./drawer-on-sale-core";
 // Type-only — special-discount-core is pure (SLICE 28); the settings ride the
 // bundle so the register offers the programs OFFLINE with the saved rates.
 import type { SpecialDiscountSetting } from "@/lib/discounts/special-discount-core";
@@ -244,6 +245,21 @@ export type PosMenuBundle = {
    */
   barcodes?: Record<string, string>;
   /**
+   * register-scan-exact-size: normalized package barcode -> the variant id(s)
+   * that package IS, proven server-side from its own lot (0294 size link,
+   * receiving `-onboarded` variant, or package weight). One id = add that
+   * size with no pick. Built from the same stocked lots as `barcodes`.
+   * Optional so older cached bundles still parse (they keep the size pick).
+   */
+  barcodeSizes?: Record<string, string[]>;
+  /**
+   * register-scan-exact-size: normalized package barcode -> why it is
+   * refused. The package's own size is proven but not on the register
+   * (recalled, expired, unpriced or removed); nothing is added and the other
+   * sizes are NEVER offered in its place.
+   */
+  barcodeRefusals?: Record<string, string>;
+  /**
    * Cash-rounding policy (POS B33): the owner's penny-elimination choice
    * (off / nearest / up / down), shipped with the bundle so OFFLINE sales
    * round the amount due exactly like online ones. Optional so pre-B33
@@ -258,6 +274,12 @@ export type PosMenuBundle = {
    * missing block means OFF.
    */
   scanRequired?: PosScanRequiredConfig;
+  /**
+   * R-DRAWER-1: how the cash drawer opens after a cash sale (with a printed
+   * receipt, or without one). Optional so older cached bundles still parse;
+   * missing means "with a printed receipt".
+   */
+  drawerOnSale?: PosDrawerOnSaleConfig;
   /**
    * Special-discount program settings (SLICE 28): the owner's saved
    * employee/industry/veteran rates + on/off switches, shipped with the

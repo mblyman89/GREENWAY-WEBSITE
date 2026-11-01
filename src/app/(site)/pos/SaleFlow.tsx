@@ -43,7 +43,7 @@ import {
   type PricedSaleLine,
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
-import { resolveScan } from "@/lib/pos/scan-to-cart-core";
+import { resolveScan, scanPickPrompt, type ScanPickReason } from "@/lib/pos/scan-to-cart-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import {
@@ -176,7 +176,15 @@ import {
   shouldRequestName,
   type PrefetchFailure,
 } from "@/lib/pos/order-name-prefetch-core";
-import { getPairedPrinterIdentifier, printReceipt } from "@/lib/pos/star-printer";
+import { getPairedPrinterIdentifier, openCashDrawer, printReceipt } from "@/lib/pos/star-printer";
+import {
+  isCashSale,
+  printShouldOpenDrawer,
+  receiptButtonsHint,
+  shouldAutoOpenDrawer,
+  showOpenDrawerRetry,
+  type PosDrawerOnSaleConfig,
+} from "@/lib/pos/drawer-on-sale-core";
 import {
   normalizePosReceiptConfig,
   receiptAddressLines,
@@ -1424,6 +1432,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
       {receipt ? (
         <ReceiptButtons
           receipt={receipt}
+          drawerOnSale={bundle.drawerOnSale}
           onPrinted={() => {
             // Latch the snapshot the instant anything is sent to a printer.
             // After this, a late fun name is refused (canFillLateName), so a
@@ -1579,18 +1588,59 @@ function EmailReceiptPanel({
  */
 function ReceiptButtons({
   receipt,
+  drawerOnSale,
   onPrinted,
 }: {
   receipt: PosReceiptInput;
+  /** R-DRAWER-1 — the owner's "with or without a printed receipt" setting. */
+  drawerOnSale?: PosDrawerOnSaleConfig;
   /** SLICE 24 — fired the moment a print is attempted, so the fun-name
    *  snapshot can be latched and a late name can no longer change it. */
   onPrinted?: () => void;
 }) {
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  // R-DRAWER-1 — the drawer opens at most once per sale (F-01-6), and a sale
+  // with no cash (all on the employee pay-later tab) never opens it.
+  const cashSale = isCashSale(receipt);
+  const [drawerOpened, setDrawerOpened] = useState(false);
+  // Decided once, when Sale complete appears: open the drawer by itself?
+  const [autoAttempted] = useState(() =>
+    shouldAutoOpenDrawer({
+      config: drawerOnSale,
+      cashSale,
+      drawerAlreadyOpened: false,
+      autoOpenAlreadyAttempted: false,
+    }),
+  );
+  const [opening, setOpening] = useState(autoAttempted);
+  const autoStartedRef = useRef(false);
+
+  const kickDrawer = useCallback(async () => {
+    const res = await openCashDrawer(getPairedPrinterIdentifier());
+    if (res.ok) {
+      setDrawerOpened(true);
+      setFallbackNote(null);
+    } else {
+      setFallbackNote(`${res.message} Tap \u201cOpen drawer\u201d to try again, or \u201cPrint receipt\u201d.`);
+    }
+    setOpening(false);
+  }, []);
+
+  useEffect(() => {
+    if (!autoAttempted || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    void kickDrawer();
+  }, [autoAttempted, kickDrawer]);
+
+  const retryDrawer = () => {
+    if (opening || drawerOpened) return;
+    setOpening(true);
+    void kickDrawer();
+  };
 
   const printStar = async () => {
-    if (printing) return;
+    if (printing || opening) return;
     setPrinting(true);
     setFallbackNote(null);
     // Latch BEFORE the HTML is built: from here the receipt is committed to
@@ -1598,18 +1648,22 @@ function ReceiptButtons({
     onPrinted?.();
     try {
       const html = buildPosReceiptHtml(receipt);
+      // R-DRAWER-1 — the first print of a cash sale opens the drawer (when it
+      // has not opened yet); every reprint only prints (F-01-6).
+      const openDrawer = printShouldOpenDrawer({ cashSale, drawerAlreadyOpened: drawerOpened });
       const outcome = await printReceipt(
-        { html, openDrawer: true, jobKind: "sale" },
+        { html, openDrawer, jobKind: "sale" },
         getPairedPrinterIdentifier(),
       );
       // Success still gets a note when a fallback was used, so an app switch is
       // never silent. The sale is already saved either way.
       if (outcome.ok) {
+        if (openDrawer && outcome.transport !== "browser") setDrawerOpened(true);
         setFallbackNote(outcome.usedFallback ? outcome.message : null);
       } else {
         setFallbackNote(
-          outcome.drawerMayBeShut
-            ? `${outcome.message} The drawer did not open — use No Sale if you need it.`
+          openDrawer && outcome.drawerMayBeShut
+            ? `${outcome.message} The drawer did not open \u2014 use No Sale if you need it.`
             : outcome.message,
         );
       }
@@ -1623,7 +1677,7 @@ function ReceiptButtons({
     const html = buildPosReceiptHtml(receipt);
     const w = window.open("", "_blank", "width=400,height=640");
     if (!w) {
-      setFallbackNote("Pop-up blocked — allow pop-ups for this site to use browser printing.");
+      setFallbackNote("Pop-up blocked \u2014 allow pop-ups for this site to use browser printing.");
       return;
     }
     w.document.write(html);
@@ -1632,16 +1686,39 @@ function ReceiptButtons({
     w.print();
   };
 
+  const retryVisible =
+    !opening &&
+    showOpenDrawerRetry({
+      config: drawerOnSale,
+      cashSale,
+      drawerAlreadyOpened: drawerOpened,
+      autoOpenAlreadyAttempted: autoAttempted,
+    });
+
   return (
     <div className="mt-6 flex flex-col items-center gap-3">
+      {drawerOpened ? (
+        <p className="rounded-full bg-[var(--pos-surface-2)] px-4 py-1 text-sm font-semibold text-[var(--pos-text)]">
+          Drawer open
+        </p>
+      ) : null}
       <div className="flex flex-wrap justify-center gap-3">
+        {retryVisible ? (
+          <button
+            type="button"
+            onClick={retryDrawer}
+            className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-8 py-4 text-lg font-bold text-[var(--pos-accent-ink)]"
+          >
+            Open drawer
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={printStar}
-          disabled={printing}
+          disabled={printing || opening}
           className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-8 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-60"
         >
-          {printing ? "Printing…" : "Print receipt"}
+          {opening ? "Opening drawer\u2026" : printing ? "Printing\u2026" : "Print receipt"}
         </button>
         <button
           type="button"
@@ -1652,9 +1729,7 @@ function ReceiptButtons({
         </button>
       </div>
       <p className="max-w-md text-center text-xs text-[var(--pos-text-faint)]">
-        “Print receipt” prints on the counter printer and pops the drawer without leaving this
-        screen. Tap again to reprint. Use “Browser print” on a laptop, or if the counter printer
-        is unavailable — the sale is already saved either way.
+        {receiptButtonsHint({ config: drawerOnSale, cashSale, drawerAlreadyOpened: drawerOpened })}
       </p>
       {fallbackNote ? <p className="text-xs text-[var(--pos-warn)]">{fallbackNote}</p> : null}
     </div>
@@ -2753,6 +2828,10 @@ function CartScreen({
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
+  // register-scan-exact-size — WHY the open pick is asking (a package whose
+  // lot is not linked to a size, a weight that fits two sizes, or a typed
+  // card key). Shown above the sizes so a pick is never mistaken for normal.
+  const [scanPickReason, setScanPickReason] = useState<ScanPickReason | undefined>(undefined);
   const [scanFlash, setScanFlash] = useState<string | null>(null);
   // AO-4 — the variant the LAST scan added, so its check row can wear the
   // mockup's "JUST SCANNED" tag until the next scan replaces it.
@@ -2895,8 +2974,16 @@ function CartScreen({
    * (keyboard-wedge scanners type the code and press Enter). A hit adds to
    * cart (or opens the size pick); a miss leaves the text as a search query.
    */
+  // register-scan-exact-size — the package's OWN size (and the refusals),
+  // shipped by /api/pos/menu. Absent on older cached bundles: resolveScan
+  // then behaves exactly as before (the size pick).
+  const sizeIndex = useMemo(
+    () => ({ sizes: bundle.barcodeSizes ?? null, refusals: bundle.barcodeRefusals ?? null }),
+    [bundle.barcodeSizes, bundle.barcodeRefusals],
+  );
+
   const tryScan = () => {
-    const resolved = resolveScan(bundle.products, bundle.barcodes, query);
+    const resolved = resolveScan(bundle.products, bundle.barcodes, query, sizeIndex);
     if (resolved.status === "add") {
       if (!scanAdd(resolved.product)) {
         setScanFlash(null);
@@ -2910,8 +2997,18 @@ function CartScreen({
       setQuery("");
       return;
     }
+    if (resolved.status === "refused") {
+      // register-scan-exact-size: the package's own size is not on the
+      // register. Nothing is added and NO other size is offered.
+      setScanPick(null);
+      setScanFlash(null);
+      setScanMiss(resolved.message);
+      setQuery("");
+      return;
+    }
     if (resolved.status === "pick") {
       setScanPick(resolved.candidates);
+      setScanPickReason(resolved.reason);
       setScanFlash(null);
       setScanMiss(null);
       setQuery("");
@@ -2926,7 +3023,7 @@ function CartScreen({
    */
   const handleGlobalScan = useCallback(
     (code: string) => {
-      const resolved = resolveScan(bundle.products, bundle.barcodes, code);
+      const resolved = resolveScan(bundle.products, bundle.barcodes, code, sizeIndex);
       if (resolved.status === "add") {
         if (!scanAdd(resolved.product)) {
           setScanFlash(null);
@@ -2940,8 +3037,16 @@ function CartScreen({
         setBrowseOpen(false);
         return;
       }
+      if (resolved.status === "refused") {
+        setScanPick(null);
+        setScanFlash(null);
+        setScanMiss(resolved.message);
+        setBrowseOpen(false);
+        return;
+      }
       if (resolved.status === "pick") {
         setScanPick(resolved.candidates);
+        setScanPickReason(resolved.reason);
         setScanFlash(null);
         setScanMiss(null);
         setBrowseOpen(false);
@@ -2949,7 +3054,7 @@ function CartScreen({
       }
       setScanMiss(`Barcode "${code}" matched nothing on the menu — check the label or search by name.`);
     },
-    [bundle.products, bundle.barcodes, scanAdd],
+    [bundle.products, bundle.barcodes, scanAdd, sizeIndex],
   );
 
   // AM-A — document-level wedge capture: fast keystroke bursts ending in
@@ -3252,7 +3357,7 @@ function CartScreen({
           {scanPick ? (
             <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
               <p className="text-xs font-semibold text-[var(--pos-info)]">
-                Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
+                {scanPickPrompt(scanPick[0]?.name ?? "This product", scanPickReason)}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {scanPick.map((p) => (
@@ -4065,10 +4170,15 @@ function CartScreen({
               {scanFlash} — added to cart
             </p>
           ) : null}
+          {scanMiss ? (
+            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              {scanMiss}
+            </p>
+          ) : null}
           {scanPick ? (
             <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
               <p className="text-xs font-semibold text-[var(--pos-info)]">
-                Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
+                {scanPickPrompt(scanPick[0]?.name ?? "This product", scanPickReason)}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {scanPick.map((p) => (

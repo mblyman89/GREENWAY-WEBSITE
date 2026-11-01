@@ -31,6 +31,7 @@ import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
+import { getPosDrawerOnSaleConfig } from "@/lib/pos/drawer-on-sale-store";
 import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
 import { trimDescription } from "@/lib/pos/product-info-core";
 import { isRatioLedCategory, resolvePackageMg } from "@/lib/menu/cannabinoid-profile-core";
@@ -48,6 +49,7 @@ import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import { buildBarcodeIndex, normalizeBarcode, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+import { buildBarcodeSizeIndex, sizeIndexSummary, type SizeLotSource } from "@/lib/pos/scan-exact-size-core";
 import { mergeNcBarcodes, toPosMenuProduct } from "@/lib/noncannabis/pos-catalog-core";
 import { readNcCatalogForRegister } from "@/lib/noncannabis/register-stock";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
@@ -83,6 +85,15 @@ import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-stor
  * reaching it is REPORTED as an incomplete read, never silently accepted.
  */
 const BARCODE_SCAN_MAX_ROWS = 100_000;
+
+/** Lot facts carried past LiveLotFact for the barcode + exact-size indexes. */
+type ExtraLotFacts = {
+  ccrsExternalId: string | null;
+  sizeId: string | null;
+  unitWeight: number | string | null;
+  unitWeightUom: string | null;
+  isMedical: boolean | null;
+};
 // Mastering Slice 1: intake variants encode their own lot key (`${key}-onboarded`).
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 import { costForLine } from "@/lib/promotions/size-cost-core";
@@ -112,7 +123,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy] =
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy, drawerOnSale] =
     await Promise.all([
       loadLiveMenuAll(),
       loadActiveRules(),
@@ -126,6 +137,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       getPosCashRoundingConfig(),
       getPosScanRequiredConfig(),
       getPosReturnPolicy(),
+      getPosDrawerOnSaleConfig(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
   // SLICE 28 — ship ALL three program rows (enabled or not); the device
@@ -207,8 +219,16 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         held_qty?: number | string | null;
         /** Migration 0294: the menu size this lot sells as. */
         menu_source_variant_id?: string | null;
+        /** Migration 0024: the package size (register-scan-exact-size). */
+        unit_weight: number | string | null;
+        unit_weight_uom: string | null;
+        is_medical: boolean | null;
       };
-      const LOT_COLS = "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, is_sample";
+      // register-scan-exact-size: unit_weight / unit_weight_uom / is_medical
+      // (migration 0024) let a scan prove a package's size when the lot has
+      // no 0294 size link. Same table, same read; no new grant needed.
+      const LOT_COLS =
+        "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, unit_weight, unit_weight_uom, is_medical, is_sample";
       // Before migration 0308 there is no held_qty column: retry without it
       // (nothing is held then, so on hand is the register stock as before).
       let withHeld = true;
@@ -258,7 +278,11 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         ccrsExternalId: deriveInventoryExternalId(l),
         // Carried for live per-size units (register-coverage-core).
         sizeId: l.menu_source_variant_id ?? null,
-      })) as (LiveLotFact & { ccrsExternalId: string | null; sizeId: string | null })[];
+        // Carried for the exact-size scan index (scan-exact-size-core).
+        unitWeight: l.unit_weight ?? null,
+        unitWeightUom: l.unit_weight_uom ?? null,
+        isMedical: typeof l.is_medical === "boolean" ? l.is_medical : null,
+      })) as (LiveLotFact & ExtraLotFacts)[];
     } catch {
       liveLots = [];
       liveLotsComplete = false;
@@ -524,6 +548,14 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   // `liveLots` empty and ships an empty index rather than breaking the menu
   // download. A TRUNCATED read is still never mistaken for a complete one.
   let barcodes: Record<string, string> = {};
+  // register-scan-exact-size - the owner: "if I scan something, and it knows
+  // what it is I just scanned, that product alone needs to be added to the
+  // cart with out needing to select a variant size". The card index above
+  // only knows the PRODUCT, so every multi-size card asked the budtender to
+  // pick (and a wrong tap decrements the wrong size, R74 S31). This index
+  // carries the package's OWN size, proven from its lot (scan-exact-size-core).
+  let barcodeSizes: Record<string, string[]> = {};
+  let barcodeRefusals: Record<string, string> = {};
   if (liveLots.length > 0) {
     // Sellable = every card key PLUS every variant's own encoded lot key
     // (mastered cards' lots carry the LOT's pos_product_key, not the card
@@ -547,6 +579,41 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         ccrsExternalId: (l as LiveLotFact & { ccrsExternalId: string | null }).ccrsExternalId,
       }));
     barcodes = buildBarcodeIndex(sources, sellableKeys);
+
+    const sizeSources: SizeLotSource[] = (liveLots as (LiveLotFact & ExtraLotFacts)[])
+      // Same lots the card index serves (sellable keys only): a recalled or
+      // delisted card's barcode stays "not found", never a size message.
+      .filter(
+        (l) =>
+          (l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS &&
+          toQty(l.onHandQty) > 0 &&
+          sellableKeys.has(l.posProductKey ?? ""),
+      )
+      .map((l) => ({
+        lotCode: l.lotCode ?? null,
+        ccrsExternalId: l.ccrsExternalId,
+        posProductKey: l.posProductKey,
+        sizeId: l.sizeId,
+        unitWeight: l.unitWeight,
+        unitWeightUom: l.unitWeightUom,
+        isMedical: l.isMedical,
+      }));
+    const sized = buildBarcodeSizeIndex(
+      sizeSources,
+      menu.map((item) => ({
+        id: item.id,
+        name: cleanCardDisplayName(item.name, "", String(item.category)),
+        variants: item.variants.map((v) => ({ id: v.id, label: v.label, medical: v.medical })),
+      })),
+      new Set(products.map((p) => p.variantId)),
+    );
+    barcodeSizes = sized.index.sizes;
+    barcodeRefusals = sized.index.refusals;
+    if (sized.stats.multiSizeLots > 0 || sized.stats.refused > 0) {
+      const line = `[pos/menu] scan sizes: ${sizeIndexSummary(sized.stats)}`;
+      if (sized.stats.unknown > 0 || sized.stats.conflicts > 0) console.warn(line);
+      else console.info(line);
+    }
   }
 
   // Phase 4 (G-29 items 1–2) — Other Inventory (non-cannabis goods) on the
@@ -591,6 +658,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     },
     // POS B23 — barcode → product-key index for scan-to-cart.
     barcodes,
+    // register-scan-exact-size — barcode → the package's own size / refusal.
+    barcodeSizes,
+    barcodeRefusals,
     // POS B33 — the owner's cash-rounding policy rides the bundle so OFFLINE
     // sales round the amount due exactly like online ones.
     rounding,
@@ -601,6 +671,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     // bundle so the receipt's printed policy and the More-menu label match
     // Register Activity → Return policy, even OFFLINE.
     returnPolicy,
+    // R-DRAWER-1 — with or without a printed receipt; rides the bundle so
+    // OFFLINE registers keep the owner's choice.
+    drawerOnSale,
     // SLICE 28 — special-discount program settings (employee/industry/
     // veteran rates + switches) so the register offers them OFFLINE.
     specialDiscounts,

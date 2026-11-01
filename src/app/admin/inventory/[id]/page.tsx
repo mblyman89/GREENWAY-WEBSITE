@@ -1176,7 +1176,7 @@ export default async function LotDetailPage({
                 ? lot.menu_source_variant_source === "owner"
                   ? "You picked this size."
                   : "The Cultivera import set this size."
-                : "Not linked yet."}
+                : "Not linked yet. Until it is, scanning this lot at the register may ask the budtender to pick the size (the package weight is used when it proves the size). Saving a size here makes every scan of this lot add exactly that size."}
             </p>
             <form action={sizeAction} className="flex flex-wrap items-end gap-3">
               <Field label="Size" htmlFor="lot_size">
