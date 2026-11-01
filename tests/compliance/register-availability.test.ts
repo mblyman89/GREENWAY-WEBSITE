@@ -353,15 +353,16 @@ describe("SLICE 16 — compliance gates are never widened", () => {
     expect(variantIds).not.toContain("LOT-BAD-onboarded");
   });
 
-  it("keeps a HIDDEN product off the register even with stock on hand", async () => {
-    // `hidden` is a human's decision (or a reviewer rejection). Stock is not
-    // permission to overrule a person.
+  it("sells a HIDDEN product that has stock on hand (owner: no exceptions)", async () => {
+    // register-sell-hidden-and-held-stock - the owner, verbatim: "its in the
+    // inventory list, it needs to scan on the registers, no exceptions." A
+    // website hide keeps it off the WEBSITE only; the register sells stock.
     menuItems = [item({ hidden: true, inventoryStatus: "in-stock" })];
     lotRows = [lotRow({ on_hand_qty: 99 })];
 
     const bundle = await getBundle();
 
-    expect(bundle.products).toHaveLength(0);
+    expect(bundle.products).toHaveLength(1);
   });
 
   it("does not treat quarantined, recalled, destroyed or sold_out lots as stock", async () => {
