@@ -3455,3 +3455,39 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0332_money_path_smoke_test.rollback.sql`.
   It drops the function. Nothing else depends on it.
+
+## G-71d — 0333 — Error alerting (owner message 12)
+
+- [ ] `0333_platform_error_events.sql` (error alerting, owner message 12, D102). Apply it
+  **after 0332**. It adds one table. No data changes.
+  - **Why:** in October 2026 the database refused the server on every customer return and the
+    app handled it quietly, so nobody knew until a cashier said so. From now on, every time a
+    page or action crashes, or the database refuses the server, a row is written to
+    `platform_error_events`, and staff are emailed (and pushed) **straight away**: on the
+    first "permission denied", the third "missing table or function", or the fifth crash
+    within 10 minutes. At most one email per kind per hour (missing: per day). The morning
+    platform-health email adds the last 24 hours.
+  - **`public.platform_error_events`:** when, kind (`server_error`, `db_permission`,
+    `db_missing`), where (the page, or the table / function), the error code and a short
+    message. The app removes tokens, emails and long numbers before saving, and never saves a
+    query string.
+  - **Grants are written out on purpose (standing rule 15):** only the server role, read and
+    add only; it can never change or delete a row. No browser role can see it. Kept by a
+    factory reset (an operations record).
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select has_table_privilege('service_role', 'public.platform_error_events', 'INSERT') as can_add,     -- true
+         has_table_privilege('service_role', 'public.platform_error_events', 'DELETE') as can_delete,  -- false
+         has_table_privilege('anon', 'public.platform_error_events', 'SELECT') as public_can_read;     -- false
+  ```
+
+  **Then:** Back office → **Admin → Platform health**. A **Recent errors** panel appears
+  (*"No errors recorded."* on a quiet day). Until 0333 is applied it says *"Error alerting is
+  not installed yet"* and the morning email carries the same warning.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0333_platform_error_events.rollback.sql`.
+  It drops the table; the app keeps working and simply stops recording errors.
