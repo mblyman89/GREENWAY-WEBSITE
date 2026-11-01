@@ -339,7 +339,10 @@ The cart screen has three zones.
 
 **Scan (preferred).** Scan the **package barcode**. You do not need to click into anything, because the register listens for the scanner even when nothing is selected.
 - Success: *"Scanned: Blue Dream · 3.5g — added to sale"*. The row is tagged **JUST SCANNED**.
-- One barcode matches several sizes: *"Barcode matched <name> — pick the size that left the shelf:"*. Tap the size in your hand.
+- **Each package adds its own size.** Scanning the 3.5g bag adds the 3.5g; scanning the 7g bag adds the 7g. The register does not show the other sizes. It knows the size from the lot's size link (Back office → Inventory → the lot → **Which size is this lot?**), from the size it was received as, or from the package weight.
+- Size not on sale right now: *"This package is <name> (<size>), and that size is not on the register right now … Nothing was added."* **Do not ring it up as another size.** Set it aside and tell a manager.
+- Lot not linked to a size yet (rare): *"<name>: this package's lot is not linked to a size yet. Check the size printed on the package and tap it."* Tap the size **printed on the package**. Then a manager links the lot once under **Which size is this lot?**, and from then on every scan adds it straight away.
+- You typed the product key rather than scanning a package: *"<name>: pick the size."* Tap the size in your hand.
 - No match: *"Barcode "X" matched nothing on the menu — check the label or search by name."* Check that you scanned the right label. If the item is real but missing from the menu, tell a manager. **Do not ring a different item in its place.**
 - If a customer's licence gets scanned on the cart screen, the register ignores it.
 

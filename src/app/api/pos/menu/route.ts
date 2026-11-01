@@ -226,7 +226,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       // (migration 0024) let a scan prove a package's size when the lot has
       // no 0294 size link. Same table, same read; no new grant needed.
       const LOT_COLS =
-        "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, is_sample, unit_weight, unit_weight_uom, is_medical";
+        "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, unit_weight, unit_weight_uom, is_medical, is_sample";
       // Before migration 0308 there is no held_qty column: retry without it
       // (nothing is held then, so on hand is the register stock as before).
       let withHeld = true;
@@ -579,7 +579,14 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     barcodes = buildBarcodeIndex(sources, sellableKeys);
 
     const sizeSources: SizeLotSource[] = (liveLots as (LiveLotFact & ExtraLotFacts)[])
-      .filter((l) => (l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS && toQty(l.onHandQty) > 0)
+      // Same lots the card index serves (sellable keys only): a recalled or
+      // delisted card's barcode stays "not found", never a size message.
+      .filter(
+        (l) =>
+          (l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS &&
+          toQty(l.onHandQty) > 0 &&
+          sellableKeys.has(l.posProductKey ?? ""),
+      )
       .map((l) => ({
         lotCode: l.lotCode ?? null,
         ccrsExternalId: l.ccrsExternalId,
