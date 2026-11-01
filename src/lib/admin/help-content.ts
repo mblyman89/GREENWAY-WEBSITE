@@ -316,7 +316,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I add customers?",
-        a: "Add them one at a time from the Customers page, or bring in a whole list at once using Customers → Import.",
+        a: "Add them one at a time from the Customers page, or bring in your whole Cultivera list at once: Customers → Import, then drag the Cultivera customer export (.xlsx) onto the box. You see a preview first; importing the same file again updates customers and never duplicates them.",
         href: "/admin/customers/import",
       },
       {

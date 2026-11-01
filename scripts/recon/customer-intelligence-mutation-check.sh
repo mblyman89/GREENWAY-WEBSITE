@@ -31,6 +31,7 @@ I=src/lib/customers/customer-insights-core.ts
 G=src/lib/customers/customer-segments-core.ts
 M=supabase/migrations/0232_customer_rollups.sql
 IM=src/lib/customers/import.ts
+IC=src/lib/customers/customer-import-core.ts
 DP='src/app/admin/customers/[id]/page.tsx'
 LP=src/app/admin/customers/page.tsx
 IP=src/app/admin/customers/insights/page.tsx
@@ -54,7 +55,7 @@ mutate "migration drops returns trigger"      $M 'create trigger customer_return
 mutate "migration leaves compute public"      $M 'revoke all on function public.customer_rollup_compute(uuid) from public, anon, authenticated;' '-- (no revoke)'
 mutate "migration update trigger narrowed"    $M 'after update of status, customer_id, total_minor_units, completed_at, placed_at' 'after update of status, customer_id'
 # --- connection: importer ---
-mutate "import writes lifetime again"         $IM 'imported_spend_minor_units: row.lifetime_spend_minor_units' 'lifetime_spend_minor_units: row.lifetime_spend_minor_units'
+mutate "import writes lifetime again"         $IC 'imported_spend_minor_units: moneyToMinor(' 'lifetime_spend_minor_units: moneyToMinor('
 mutate "import fallback on any error"         $IM 'return (err.code === "PGRST204" || err.code === "42703") && msg.includes("imported_spend_minor_units");' 'return true;'
 # --- intelligence: one customer ---
 mutate "net spend ignores refunds"            $I '  const net = gross - refunds;' '  const net = gross;'

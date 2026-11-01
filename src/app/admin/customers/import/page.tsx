@@ -2,25 +2,19 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { Field, Textarea, Button } from "@/components/admin/ui";
 import { countCustomers } from "@/lib/customers/store";
 import { StatCard } from "@/components/admin/StatCard";
-import { importCustomersAction } from "./actions";
+import { CustomerImportDropzone } from "@/components/admin/customers/CustomerImportDropzone";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
-export default async function CustomerImportPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    error?: string;
-    inserted?: string;
-    updated?: string;
-    skipped?: string;
-  }>;
-}) {
+// G-73 (owner message 15): the file is read in the browser and sent in small
+// batches, so no single request is large or long; 60 s covers a slow batch.
+export const maxDuration = 60;
+
+export default async function CustomerImportPage() {
   await requirePermission("customers.manage");
-  const { error, inserted, updated, skipped } = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -37,25 +31,11 @@ export default async function CustomerImportPage({
 
   const counts = await countCustomers();
 
-  const errorMsg =
-    error === "empty"
-      ? "Paste your customer CSV before importing."
-      : error === "norows"
-        ? "No customer rows were found in that CSV."
-        : error === "save"
-          ? "Something went wrong saving the customers."
-          : null;
-
-  const success =
-    inserted != null || updated != null
-      ? `Imported: ${inserted ?? 0} new, ${updated ?? 0} updated, ${skipped ?? 0} skipped.`
-      : null;
-
   return (
     <div>
       <AdminPageHeader
         title="Import customers"
-        subtitle="Paste your Cultivera customer export (CSV). We dedupe by Customer ID, then phone, then email — so re-importing is safe and only fills in what's new."
+        subtitle="Drop your Cultivera customer export. We match by Customer ID, so importing the same file again updates customers and never duplicates them."
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -69,10 +49,10 @@ export default async function CustomerImportPage({
             id="customer-import"
             title="How customer import works"
             steps={[
-              "Export your customers from Cultivera as CSV (or save the spreadsheet as CSV).",
-              "Open it, copy everything (including the header row), and paste below.",
-              "We map names, phone, email, birthdate, medical flag, spend, and city/state/zip.",
-              "Re-import any time — existing customers are updated, not duplicated.",
+              "In Cultivera, export Customers. You get a file like 82BB4F__November-01-2026_Customers.xlsx.",
+              "Drag that file onto the box below (or click the box and choose it). Do not open or change it first.",
+              "Read the preview: how many customers, and what was left blank and why (half-typed phones, placeholder birthdays like 11/11/1999).",
+              "Press Import and keep the page open until it says Done. If it stops, press Continue; nothing is duplicated.",
             ]}
           >
             <p>
@@ -90,43 +70,7 @@ export default async function CustomerImportPage({
           <StatCard label="Consented" value={counts.consented} accent="green" />
         </div>
 
-        {errorMsg && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
-            {errorMsg}
-          </div>
-        )}
-        {success && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
-            {success}
-          </div>
-        )}
-
-        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-xs text-[var(--admin-gold)]">
-          Large lists: paste in chunks of a few thousand rows (keep the header row each time) if a
-          single paste times out. Re-importing is safe — duplicates are merged.
-        </div>
-
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Paste customer CSV</h2>
-          <form action={importCustomersAction} className="space-y-4">
-            <Field
-              label="Customer CSV"
-              help="Include the header row. Recognized columns: Customer ID, First/Last Name, Phone Number, Email, Date Of Birth, IS MEDICAL, Total Spent, City, State, Zip, Last Purchase Date."
-              htmlFor="csv_text"
-              required
-            >
-              <Textarea
-                id="csv_text"
-                name="csv_text"
-                rows={12}
-                placeholder="Customer ID,First Name,Last Name,Phone Number,Total Spent,..."
-              />
-            </Field>
-            <Button type="submit" variant="save" size="sm">
-              Import customers
-            </Button>
-          </form>
-        </div>
+        <CustomerImportDropzone today={pacificToday()} />
       </div>
     </div>
   );

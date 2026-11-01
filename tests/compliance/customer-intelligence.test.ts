@@ -163,8 +163,14 @@ describe("migration 0232 text", () => {
 describe("importer: old-POS spend goes to imported_spend_minor_units", () => {
   const src = read("src/lib/customers/import.ts");
   it("writes the new column, keeps a legacy fallback", () => {
-    expect(src).toMatch(/imported_spend_minor_units:\s*row\.lifetime_spend_minor_units/);
-    expect(src).toMatch(/legacyPayload/);
+    // G-73: the importer writes batches planned by customer-import-core; the
+    // rows carry imported_spend_minor_units and never lifetime_spend_minor_units
+    // (live, 0232). The legacy fallback renames only for the missing column.
+    const core = read("src/lib/customers/customer-import-core.ts");
+    expect(core).toMatch(/imported_spend_minor_units: moneyToMinor\(/);
+    expect(core).not.toMatch(/lifetime_spend_minor_units:/);
+    expect(src).toMatch(/function toLegacy/);
+    expect(src).toMatch(/isMissingImportedSpendColumn\(res\.error\)\) \{\n\s*res = await admin\.from\("customers"\)\.upsert\(payload\.map\(toLegacy\)/);
   });
   it("falls back only for the genuine missing-column error", () => {
     expect(isMissingImportedSpendColumn({ code: "PGRST204", message: "Could not find the 'imported_spend_minor_units' column" })).toBe(true);
