@@ -1596,7 +1596,9 @@ export async function replayStrandedCartAdjustments(resolvedBy: string): Promise
     .is("resolved_at", null)
     .eq("exception_reason", STRANDED_UUID_REASON)
     .order("occurred_at", { ascending: true })
-    .limit(1000);
+    // Under the 1000-row API cap on purpose (SLICE 5C). Rows past 500 stay
+    // open and the button records them on the next press.
+    .limit(500);
   if (error) {
     return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : `Could not read the exception queue: ${error.message}` };
   }
