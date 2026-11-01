@@ -82,7 +82,14 @@ import { openEmployeeLoan } from "@/lib/pos/employee-loan-store";
 import { LOAN_ACK_TEXT } from "@/lib/pos/employee-loan-core";
 import { countFriendsFamilyUses, getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
 import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
-import { validateCartAdjustPayload, type CartAdjustPayload } from "./cart-adjust-core";
+import {
+  planCartAdjustReplay,
+  REPLAY_RESOLUTION_NOTE,
+  STRANDED_UUID_REASON,
+  validateCartAdjustPayload,
+  type CartAdjustExceptionRow,
+  type CartAdjustPayload,
+} from "./cart-adjust-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard, getMedTaxSettings } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -1515,22 +1522,13 @@ async function processCartAdjustment(
   if (!check.ok) {
     return markException(admin, ledgerId, envelope.clientUuid, `Invalid cart adjustment: ${check.errors.join(" ")}`);
   }
-  const p = payload as CartAdjustPayload;
-  const { error } = await admin.from("pos_cart_adjustments").upsert(
-    {
-      client_uuid: envelope.clientUuid,
-      register_id: envelope.registerId,
-      employee_id: envelope.employeeId,
-      action: p.action,
-      variant_id: p.variantId && isUuid(p.variantId) ? p.variantId : null,
-      product_name: p.productName ? String(p.productName).slice(0, 300) : null,
-      units_removed: p.unitsRemoved,
-      value_minor: p.valueMinor,
-      line_count: Number.isInteger(p.lineCount) ? p.lineCount : null,
-      occurred_at: envelope.occurredAt,
-    },
-    { onConflict: "client_uuid", ignoreDuplicates: true },
-  );
+  const error = await insertCartAdjustment(admin, {
+    clientUuid: envelope.clientUuid,
+    registerId: envelope.registerId,
+    employeeId: envelope.employeeId,
+    occurredAt: envelope.occurredAt,
+    payload: payload as CartAdjustPayload,
+  });
   if (error) {
     return markException(
       admin,
@@ -1543,6 +1541,118 @@ async function processCartAdjustment(
   }
   await markProcessed(admin, ledgerId);
   return { clientUuid: envelope.clientUuid, status: "processed" };
+}
+
+/**
+ * The ONE write into pos_cart_adjustments, shared by sync and the R-CART-1
+ * replay. Idempotent on client_uuid (a re-run is a no-op). The uuid column
+ * variant_id keeps only a real UUID; the menu id stays in the ledger payload
+ * and product_name carries what staff read.
+ */
+async function insertCartAdjustment(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  row: { clientUuid: string; registerId: string; employeeId: string; occurredAt: string; payload: CartAdjustPayload },
+): Promise<{ code?: string; message: string } | null> {
+  const p = row.payload;
+  const { error } = await admin.from("pos_cart_adjustments").upsert(
+    {
+      client_uuid: row.clientUuid,
+      register_id: row.registerId,
+      employee_id: row.employeeId,
+      action: p.action,
+      variant_id: p.variantId && isUuid(p.variantId) ? p.variantId : null,
+      product_name: p.productName ? String(p.productName).slice(0, 300) : null,
+      units_removed: p.unitsRemoved,
+      value_minor: p.valueMinor,
+      line_count: Number.isInteger(p.lineCount) ? p.lineCount : null,
+      occurred_at: row.occurredAt,
+    },
+    { onConflict: "client_uuid", ignoreDuplicates: true },
+  );
+  return error ?? null;
+}
+
+export type CartAdjustReplayResult =
+  | { ok: true; recorded: number; left: { clientUuid: string; why: string }[]; failed: { clientUuid: string; why: string }[] }
+  | { ok: false; error: string };
+
+/**
+ * R-CART-1 — record the cart adjustments the old UUID rule stranded in the
+ * exception queue, then resolve each with REPLAY_RESOLUTION_NOTE. Only rows
+ * planCartAdjustReplay picks (exact old reason, still open, valid today).
+ * Per row: insert (idempotent on client_uuid) FIRST, then resolve with a
+ * compare-and-set on `resolved_at is null`, so a double click or two
+ * managers at once can neither double-record nor overwrite a note. A row
+ * whose insert fails stays open with the plain reason.
+ */
+export async function replayStrandedCartAdjustments(resolvedBy: string): Promise<CartAdjustReplayResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pos_sale_events")
+    .select("id, client_uuid, register_id, employee_id, occurred_at, event_type, status, resolved_at, exception_reason, payload")
+    .eq("event_type", "cart_adjustment")
+    .eq("status", "exception")
+    .is("resolved_at", null)
+    .eq("exception_reason", STRANDED_UUID_REASON)
+    .order("occurred_at", { ascending: true })
+    .limit(1000);
+  if (error) {
+    return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : `Could not read the exception queue: ${error.message}` };
+  }
+  type Raw = {
+    id: string; client_uuid: string; register_id: string; employee_id: string; occurred_at: string;
+    event_type: string; status: string; resolved_at: string | null; exception_reason: string | null; payload: unknown;
+  };
+  const raws = (data as Raw[] | null) ?? [];
+  const byId = new Map(raws.map((r) => [r.id, r]));
+  const plan = planCartAdjustReplay(
+    raws.map((r): CartAdjustExceptionRow => ({
+      id: r.id, clientUuid: r.client_uuid, eventType: r.event_type, status: r.status,
+      resolvedAt: r.resolved_at, exceptionReason: r.exception_reason, payload: r.payload,
+    })),
+  );
+  const failed: { clientUuid: string; why: string }[] = [];
+  let recorded = 0;
+  for (const item of plan.record) {
+    const raw = byId.get(item.id)!;
+    const insertError = await insertCartAdjustment(admin, {
+      clientUuid: raw.client_uuid,
+      registerId: raw.register_id,
+      employeeId: raw.employee_id,
+      occurredAt: raw.occurred_at,
+      payload: item.payload,
+    });
+    if (insertError) {
+      failed.push({
+        clientUuid: raw.client_uuid,
+        why: isMissingSchemaError(insertError)
+          ? "Cart adjustments need supabase/migrations/0301_pos_cart_adjustments.sql applied."
+          : `Not recorded: ${insertError.message}`,
+      });
+      continue;
+    }
+    const { data: resolvedRows, error: resolveError } = await admin
+      .from("pos_sale_events")
+      .update({ resolved_by: resolvedBy, resolved_at: new Date().toISOString(), resolution_note: REPLAY_RESOLUTION_NOTE })
+      .eq("id", raw.id)
+      .eq("status", "exception")
+      .is("resolved_at", null)
+      .select("id");
+    if (resolveError) {
+      failed.push({ clientUuid: raw.client_uuid, why: `Recorded, but could not mark resolved: ${resolveError.message}` });
+      continue;
+    }
+    // Zero rows = someone resolved it a moment ago; the insert was a no-op
+    // or a correct first write either way, so it is not counted twice.
+    if ((resolvedRows as unknown[] | null)?.length) recorded += 1;
+  }
+  return {
+    ok: true,
+    recorded,
+    left: plan.leave.map((l) => ({ clientUuid: l.clientUuid, why: l.why })),
+    failed,
+  };
 }
 
 // ---------------------------------------------------------------------------

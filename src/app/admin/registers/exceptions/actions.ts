@@ -13,7 +13,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { resolvePosException } from "@/lib/pos/sync-store";
+import { replayStrandedCartAdjustments, resolvePosException } from "@/lib/pos/sync-store";
 
 const BASE = "/admin/registers/exceptions";
 
@@ -36,4 +36,36 @@ export async function resolvePosExceptionAction(formData: FormData): Promise<voi
   });
   revalidatePath(BASE);
   redirect(`${BASE}?resolved=1`);
+}
+
+/**
+ * R-CART-1 — record every cart adjustment the old "variantId must be a UUID"
+ * rule stranded here, and resolve each with a fixed note. Safe to press
+ * twice: the insert is idempotent and the resolve is compare-and-set.
+ */
+export async function recordStrandedCartAdjustmentsAction(): Promise<void> {
+  const session = await requirePermission("staffing.manage");
+  const result = await replayStrandedCartAdjustments(session.profile.id);
+  if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "pos.cart_adjustments_replayed",
+    entityType: "pos_sale_event",
+    entityId: null,
+    after: { recorded: result.recorded, left: result.left, failed: result.failed },
+  });
+  revalidatePath(BASE);
+  const problems = [...result.failed, ...result.left];
+  if (problems.length > 0) {
+    const first = problems[0];
+    redirect(
+      `${BASE}?error=` +
+        encodeURIComponent(
+          `Recorded ${result.recorded}. ${problems.length} could not be recorded and are still open (first: ${first.clientUuid.slice(0, 8)}: ${first.why})`,
+        ),
+    );
+  }
+  redirect(`${BASE}?replayed=${result.recorded}`);
 }
