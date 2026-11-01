@@ -634,5 +634,5 @@ R-CART-1: see the R-CART-1 section of `05-GAP-REGISTER.md` and the R-CART-1 row 
 
 ### Applied
 
-G-75 (D118–D120): see the G-75 section of `05-GAP-REGISTER.md` and the G-75 row of `06-FIX-PHASE-PLAN.md`. Migration 0335 is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`), then re-drop the customer file.
+G-75 (D118–D120): merged as #1624; see the G-75 section of `05-GAP-REGISTER.md` and the G-75 row of `06-FIX-PHASE-PLAN.md`. Migration 0335 is for the owner to run (`docs/MIGRATIONS_TO_RUN.md`), then re-drop the customer file.
 
