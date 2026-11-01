@@ -189,6 +189,10 @@ export function CustomerImportDropzone({ today }: { today: string }) {
               ["With an email", mapped.report.withEmail],
               ["With a birthday", mapped.report.withBirthday],
               ["Medical", mapped.report.medical],
+              ["With Total Spent", mapped.report.withSpend],
+              ["With Last Purchase", mapped.report.withLastPurchase],
+              ["With Date Created", mapped.report.withCreatedDate],
+              ["Veteran", mapped.report.veterans],
             ].map(([label, v]) => (
               <div key={label as string} className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2">
                 <div className="text-[var(--admin-text-muted)]">{label}</div>
@@ -200,7 +204,7 @@ export function CustomerImportDropzone({ today }: { today: string }) {
             <table className="w-full text-left text-xs">
               <thead className="text-[var(--admin-text-muted)]">
                 <tr>
-                  {["Customer ID", "Name", "Phone", "Email", "Birthday", "Old-POS spend", "Last purchase"].map((h) => (
+                  {["Customer ID", "Name", "Phone", "Email", "Birthday", "Total spent", "Last purchase", "Customer since", "Tax"].map((h) => (
                     <th key={h} className="px-2 py-1 font-semibold">
                       {h}
                     </th>
@@ -217,6 +221,8 @@ export function CustomerImportDropzone({ today }: { today: string }) {
                     <td className="px-2 py-1">{r.birthdate ?? "—"}</td>
                     <td className="px-2 py-1">${(r.imported_spend_minor_units / 100).toFixed(2)}</td>
                     <td className="px-2 py-1">{r.last_purchase_at ? r.last_purchase_at.slice(0, 10) : "—"}</td>
+                    <td className="px-2 py-1">{r.imported_created_at ? r.imported_created_at.slice(0, 10) : "—"}</td>
+                    <td className="px-2 py-1">{r.tax_designations ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -167,6 +167,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/money-smoke-0332-pg-check.sql", mustPrint: "MONEY SMOKE 0332 CHECK PASSED" },
   { file: "scripts/recon/platform-errors-0333-pg-check.sql", mustPrint: "PLATFORM ERRORS 0333 CHECK PASSED" },
   { file: "scripts/recon/destruction-hold-0334-pg-check.sql", mustPrint: "DESTRUCTION HOLD 0334 CHECK PASSED" },
+  { file: "scripts/recon/customer-search-0335-pg-check.sql", mustPrint: "CUSTOMER SEARCH 0335 CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */

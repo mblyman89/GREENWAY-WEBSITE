@@ -143,6 +143,18 @@ export async function getAccountByCustomer(customerId: string): Promise<LoyaltyA
   return (data as LoyaltyAccount | null) ?? null;
 }
 
+/** G-75: loyalty accounts for many customers in ONE read (register search). */
+export async function getAccountsByCustomers(customerIds: string[]): Promise<Map<string, LoyaltyAccount>> {
+  const out = new Map<string, LoyaltyAccount>();
+  if (!isSupabaseServiceConfigured || customerIds.length === 0) return out;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("loyalty_accounts").select("*").in("customer_id", [...new Set(customerIds)]);
+  for (const a of (data ?? []) as LoyaltyAccount[]) {
+    if (a.customer_id) out.set(a.customer_id, a);
+  }
+  return out;
+}
+
 export async function getAccount(accountId: string): Promise<LoyaltyAccount | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();

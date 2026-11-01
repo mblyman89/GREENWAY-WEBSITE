@@ -1705,12 +1705,17 @@ export function RegisterShell({
               headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
             });
             const body = (await res.json().catch(() => null)) as
-              | { members?: { customerId: string; label: string; points: number; tierName: string | null }[]; error?: string }
+              | {
+                  members?: { customerId: string; label: string; points: number; tierName: string | null; fullName?: string; detail?: string }[];
+                  note?: string | null;
+                  error?: string;
+                }
               | null;
             if (!res.ok || !body?.members) {
               return { ok: false as const, error: body?.error ?? "Lookup failed — try again." };
             }
-            return { ok: true as const, members: body.members };
+            // G-75: full name + detail line are shown in the results only.
+            return { ok: true as const, members: body.members, note: body.note ?? null };
           } catch {
             return { ok: false as const, error: "Network error — try again or ring without the member." };
           }

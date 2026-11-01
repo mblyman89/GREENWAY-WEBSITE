@@ -3523,3 +3523,40 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0334_destruction_hold_legal_minimum.rollback.sql`.
   It puts the default back to 72; to restore a 72-hour hold, set **Hold (hours)** to 72 on screen.
+
+## G-75 — 0335 — Customer search + every spreadsheet column (D118–D120)
+
+- [ ] `0335_customer_search.sql` (G-75, owner message 17, D118–D120). Apply it **after 0334**.
+  - **Why:** the owner said *"i am having a hard time searching for customers on the front
+    register ... find all matches even if we spell the name partially, or use their last name or
+    phone number, etc."* and *"please fix this so we get all data from the spreadsheet"*. Total
+    Spent and Last Purchase Date were already saved by the import; the screens now show them.
+    Two columns in the file were not saved at all: **Date Created** and **Tax Designations**.
+  - **What it does:** adds `customers.imported_created_at` (Date Created) and
+    `customers.tax_designations` (e.g. Veteran); turns on the `pg_trgm` extension and adds four
+    search indexes (first name, last name, email, phone digits); and adds
+    `customer_search_fuzzy`, the typo search ("bil mclendon" finds Bill McClendon). The function
+    is server-only: revoked from public / anon / authenticated, granted to service_role. The
+    customers table grants do not change.
+  - Without 0335 the new search still works (partial names, last name, either order, phone
+    digits, email, Customer ID). Only "closest spellings" and the two new columns wait for it.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) from information_schema.columns
+   where table_schema = 'public' and table_name = 'customers'
+     and column_name in ('imported_created_at', 'tax_designations');          -- 2
+  select * from public.customer_search_fuzzy('bil mclendon', 5);              -- Bill McClendon's id, score ~0.5+
+  ```
+
+  **Then:** Back office → **Customers → Import customers**, and drop the same Cultivera file
+  again (`82BB4F__November-01-2026_Customers.xlsx`). It updates the same customers by Customer
+  ID (no duplicates) and fills in **Customer since** and **Tax designation**. On the register,
+  open **Customer** and type part of a name, a last name, phone digits or a Customer ID.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0335_customer_search.rollback.sql`.
+  It removes the typo search and the indexes and keeps the two columns (they hold imported
+  data); the statements to drop them are in the file, commented out.

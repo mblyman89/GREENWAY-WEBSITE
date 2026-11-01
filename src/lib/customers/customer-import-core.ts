@@ -38,6 +38,12 @@
  *     stored value, a medical flag is never removed, the last purchase is the
  *     later of the two. Old-POS spend goes to imported_spend_minor_units only
  *     (0232: lifetime_spend_minor_units is live and never written here).
+ *  9. Owner message 17 (G-75): every column with real data is kept. "Date
+ *     Created" (when Cultivera added the customer, read as UTC like the other
+ *     timestamps) goes to imported_created_at and "Tax Designations" (e.g.
+ *     "Veteran") to tax_designations (both 0335). The other columns in the
+ *     November 2026 file are empty for every row (licence, address, city,
+ *     zip, groups) or the same for every row (Active = Y, the N flags).
  */
 
 /** A birthday shared by this many customers in one file is a placeholder. */
@@ -64,6 +70,10 @@ export type CustomerImportRow = {
   city: string | null;
   zip: string | null;
   last_purchase_at: string | null;
+  /** 0335: Cultivera "Date Created". */
+  imported_created_at: string | null;
+  /** 0335: Cultivera "Tax Designations", e.g. "Veteran". */
+  tax_designations: string | null;
 };
 
 export type ImportReport = {
@@ -82,6 +92,9 @@ export type ImportReport = {
   withBirthday: number;
   medical: number;
   veterans: number;
+  withSpend: number;
+  withLastPurchase: number;
+  withCreatedDate: number;
   missingColumns: string[];
 };
 
@@ -212,7 +225,7 @@ function emptyReport(rowsInFile: number, missing: string[]): ImportReport {
   return {
     rowsInFile, duplicateRows: 0, customers: 0, skippedNoIdentity: 0, skippedNoCustomerId: 0, skippedIds: [],
     phonesDropped: 0, emailsDropped: 0, dobPlaceholders: 0, dobImplausible: 0,
-    withPhone: 0, withEmail: 0, withBirthday: 0, medical: 0, veterans: 0, missingColumns: missing,
+    withPhone: 0, withEmail: 0, withBirthday: 0, medical: 0, veterans: 0, withSpend: 0, withLastPurchase: 0, withCreatedDate: 0, missingColumns: missing,
   };
 }
 
@@ -240,6 +253,7 @@ export function mapCustomerGrid(grid: Grid, today: string): MappedImport {
     id: at("customer id"), first: at("first name"), last: at("last name"), phone: at("phone number"),
     spent: at("total spent"), dob: at("date of birth"), med: at("is medical"), state: at("state"),
     city: at("city"), zip: at("zip"), email: at("email"), tax: at("tax designations"), lastBuy: at("last purchase date"),
+    created: at("date created"),
   };
   const get = (r: Cell[], i: number): Cell => (i >= 0 && i < r.length ? r[i] : null);
   const txt = (r: Cell[], i: number) => cellText(get(r, i));
@@ -291,8 +305,10 @@ export function mapCustomerGrid(grid: Grid, today: string): MappedImport {
       }
     }
     const lastBuy = cellToDate(get(r, c.lastBuy));
+    const createdAt = cellToDate(get(r, c.created));
     const medical = txt(r, c.med).toUpperCase() === "Y";
-    if (/veteran/i.test(txt(r, c.tax))) report.veterans++;
+    const tax = txt(r, c.tax).replace(/\s+/g, " ").slice(0, 200);
+    if (/veteran/i.test(tax)) report.veterans++;
 
     const row: CustomerImportRow = {
       external_id: id,
@@ -309,8 +325,13 @@ export function mapCustomerGrid(grid: Grid, today: string): MappedImport {
       city: txt(r, c.city) || null,
       zip: txt(r, c.zip) || null,
       last_purchase_at: lastBuy ? lastBuy.toISOString() : null,
+      imported_created_at: createdAt ? createdAt.toISOString() : null,
+      tax_designations: tax || null,
     };
     if (row.phone) report.withPhone++;
+    if (row.imported_spend_minor_units > 0) report.withSpend++;
+    if (row.last_purchase_at) report.withLastPurchase++;
+    if (row.imported_created_at) report.withCreatedDate++;
     if (row.email) report.withEmail++;
     if (row.birthdate) report.withBirthday++;
     if (row.is_medical_patient) report.medical++;
@@ -342,6 +363,7 @@ export function sanitizeImportRow(x: unknown): CustomerImportRow | null {
   const e = cleanEmail(typeof o.email === "string" ? o.email : "");
   const bd = str(o.birthdate, 10);
   const lp = str(o.last_purchase_at, 40);
+  const cr = str(o.imported_created_at, 40);
   const spend = typeof o.imported_spend_minor_units === "number" && Number.isFinite(o.imported_spend_minor_units)
     ? Math.max(0, Math.min(2147483647, Math.round(o.imported_spend_minor_units)))
     : 0;
@@ -360,6 +382,8 @@ export function sanitizeImportRow(x: unknown): CustomerImportRow | null {
     city: str(o.city, 120),
     zip: str(o.zip, 20),
     last_purchase_at: lp && !Number.isNaN(new Date(lp).getTime()) ? new Date(lp).toISOString() : null,
+    imported_created_at: cr && !Number.isNaN(new Date(cr).getTime()) ? new Date(cr).toISOString() : null,
+    tax_designations: str(o.tax_designations, 200),
   };
 }
 
@@ -378,11 +402,19 @@ export type ExistingCustomer = {
   city: string | null;
   zip: string | null;
   last_purchase_at: string | null;
+  /** 0335; absent when the server read with LEGACY_EXISTING_COLUMNS. */
+  imported_created_at?: string | null;
+  tax_designations?: string | null;
 };
 
 /** Columns the server selects for matching; keep in step with ExistingCustomer. */
 export const EXISTING_COLUMNS =
+  "id,external_id,first_name,last_name,phone,phone_normalized,email,email_normalized,birthdate,is_medical_patient,state,city,zip,last_purchase_at,imported_created_at,tax_designations";
+/** The same without the 0335 columns, for a database where 0335 has not run yet. */
+export const LEGACY_EXISTING_COLUMNS =
   "id,external_id,first_name,last_name,phone,phone_normalized,email,email_normalized,birthdate,is_medical_patient,state,city,zip,last_purchase_at";
+/** Columns 0335 adds. The writer drops them and retries if the database does not have them yet. */
+export const COLUMNS_0335 = ["imported_created_at", "tax_designations"] as const;
 
 export type CustomerWrite = Omit<CustomerImportRow, never> & { import_source: string };
 export type BatchPlan = {
@@ -413,6 +445,8 @@ export function mergeForUpdate(ex: ExistingCustomer, inc: CustomerImportRow): Cu
     city: inc.city ?? ex.city,
     zip: inc.zip ?? ex.zip,
     last_purchase_at: later(ex.last_purchase_at, inc.last_purchase_at),
+    imported_created_at: inc.imported_created_at ?? ex.imported_created_at ?? null,
+    tax_designations: inc.tax_designations ?? ex.tax_designations ?? null,
     import_source: IMPORT_SOURCE,
   };
 }
@@ -468,7 +502,9 @@ export function describeReport(r: ImportReport): string[] {
   if (r.emailsDropped) lines.push(`${n(r.emailsDropped)} emails were not valid addresses and were left blank.`);
   if (r.dobPlaceholders) lines.push(`${n(r.dobPlaceholders)} birthdays were placeholders (the same date on ${PLACEHOLDER_DOB_MIN} or more customers, like 11/11/1999) and were left blank.`);
   if (r.dobImplausible) lines.push(`${n(r.dobImplausible)} birthdays were impossible (before 1910, or under 18 today) and were left blank.`);
-  if (r.veterans) lines.push(`${n(r.veterans)} customers are marked Veteran in Cultivera. Customer records have no veteran field, so this is not imported; the veteran discount is still applied at the register after checking a military ID.`);
+  if (r.withSpend || r.withLastPurchase) lines.push(`${n(r.withSpend)} have a Total Spent and ${n(r.withLastPurchase)} have a Last Purchase Date. Both are saved and shown on the customer list, the profile and the register search.`);
+  if (r.withCreatedDate) lines.push(`${n(r.withCreatedDate)} have a Date Created, saved as "customer since".`);
+  if (r.veterans) lines.push(`${n(r.veterans)} customers are marked Veteran in Cultivera. This is saved on their record (Tax designation) so staff can see it; the veteran discount is still applied at the register after checking a military ID.`);
   return lines;
 }
 
@@ -513,7 +549,7 @@ export function __runCustomerImportCoreTests(): { passed: number; failed: number
   const grid: Grid = [H];
   grid.push([13, "bill", "mcclendon", "(360) 809-3778", 291.2, null, "N", "WA", "", "", 46067.86]);
   grid.push([13, "bill", "mcclendon", "(360) 809-3778", 291.2, null, "N", "WA", "", "", 46067.86]);
-  grid.push([14, "belfair", "", "(575) 7-", 0, 36283, "N", "WA", "nope", "Veteran", null]);
+  grid.push([14, "belfair", "", "(575) 7-", 0, 36283, "N", "WA", "nope", " Veteran ", null]);
   grid.push([7406, "", "", "", 0, null, "N", "WA", "", "", null]);
   grid.push([6906, '"', "", "", 0, null, "Y", "WA", "", "", null]);
   grid.push([20, "", "Smith", "", 5, 45534, "Y", "WA", "a@b.co", "", "8/30/2024 2:36:31 PM"]);
@@ -535,6 +571,15 @@ export function __runCustomerImportCoreTests(): { passed: number; failed: number
   ok("grid: phone fragment dropped and counted", byId.get("14")?.phone === null && r.phonesDropped === 1);
   ok("grid: bad email dropped and counted", byId.get("14")?.email === null && r.emailsDropped === 1);
   ok("grid: veteran counted", r.veterans === 1);
+  ok("grid: tax designation saved, trimmed", byId.get("14")?.tax_designations === "Veteran" && byId.get("13")?.tax_designations === null);
+  ok("grid: spend + last purchase counted", r.withSpend === 2 && r.withLastPurchase === 2);
+  ok("grid: no Date Created column = null, not invented", byId.get("13")?.imported_created_at === null && r.withCreatedDate === 0);
+  {
+    const g2 = mapCustomerGrid(parseCsv("Customer ID,First Name,Last Name,Date Created,Last Purchase Date\n13,bill,mcclendon,8/30/2024 2:36:31 PM,2/14/2026 8:38:24 PM\n14,ann,lee,,\n"), "2026-11-01");
+    ok("grid: Date Created read as UTC", g2.rows[0]?.imported_created_at === "2024-08-30T14:36:31.000Z" && g2.report.withCreatedDate === 1);
+    ok("grid: empty Date Created stays null", g2.rows[1]?.imported_created_at === null);
+    ok("report: spend/last purchase line", describeReport(g2.report).some((l) => /0 have a Total Spent and 1 have a Last Purchase Date/.test(l)));
+  }
   ok("grid: real birthday kept", byId.get("14")?.birthdate === "1999-05-03");
   ok("grid: under-18 birthday dropped", byId.get("20")?.birthdate === null);
   ok("grid: pre-1910 birthday dropped", byId.get("300")?.birthdate === null && r.dobImplausible === 2);
@@ -556,18 +601,20 @@ export function __runCustomerImportCoreTests(): { passed: number; failed: number
   ok("sanitize: re-cleans a bad phone", sanitizeImportRow({ ...good, phone: "(575) 7-" })?.phone_normalized === null);
   ok("sanitize: clamps negative spend", sanitizeImportRow({ ...good, imported_spend_minor_units: -9 })?.imported_spend_minor_units === 0);
   ok("sanitize: drops bad birthdate", sanitizeImportRow({ ...good, birthdate: "11/11/1999" })?.birthdate === null);
+  ok("sanitize: bad created date dropped", sanitizeImportRow({ ...good, imported_created_at: "soon" })?.imported_created_at === null);
+  ok("sanitize: tax designation capped", (sanitizeImportRow({ ...good, tax_designations: "x".repeat(500) })?.tax_designations ?? "").length === 200);
   ok("sanitize: medical only when true", sanitizeImportRow({ ...good, is_medical_patient: "Y" })?.is_medical_patient === false);
 
   // plan
   const ex = (o: Partial<ExistingCustomer> & { id: string }): ExistingCustomer => ({
     external_id: null, first_name: "Old", last_name: null, phone: null, phone_normalized: null, email: null,
     email_normalized: null, birthdate: null, is_medical_patient: false, state: null, city: null, zip: null,
-    last_purchase_at: null, ...o,
+    last_purchase_at: null, imported_created_at: null, tax_designations: null, ...o,
   });
   const inc = (o: Partial<CustomerImportRow> & { external_id: string }): CustomerImportRow => ({
     first_name: "New", last_name: null, phone: null, phone_normalized: null, email: null, email_normalized: null,
     birthdate: null, is_medical_patient: false, imported_spend_minor_units: 100, state: "WA", city: null, zip: null,
-    last_purchase_at: null, ...o,
+    last_purchase_at: null, imported_created_at: null, tax_designations: null, ...o,
   });
   const p1 = planImportBatch([inc({ external_id: "1" })], [ex({ id: "a", external_id: "1" })]);
   ok("plan: Customer ID match updates", p1.updates.length === 1 && p1.updates[0].id === "a" && p1.inserts.length === 0);
@@ -593,6 +640,13 @@ export function __runCustomerImportCoreTests(): { passed: number; failed: number
   ok("merge: medical flag never removed", mg.is_medical_patient === true);
   ok("merge: last purchase is the later one", mg.last_purchase_at === "2026-10-01T00:00:00.000Z");
   ok("merge: old-POS spend written to imported spend", mg.imported_spend_minor_units === 5000 && !("lifetime_spend_minor_units" in mg));
+  const mg3 = mergeForUpdate(
+    ex({ id: "h", imported_created_at: "2024-08-30T14:36:31.000Z", tax_designations: "Veteran" }),
+    inc({ external_id: "10" }),
+  );
+  ok("merge: empty created/tax cells keep stored values", mg3.imported_created_at === "2024-08-30T14:36:31.000Z" && mg3.tax_designations === "Veteran");
+  ok("merge: incoming tax designation wins", mergeForUpdate(ex({ id: "i", tax_designations: "Veteran" }), inc({ external_id: "11", tax_designations: "Senior" })).tax_designations === "Senior");
+  ok("columns: 0335 columns read, legacy list without them", EXISTING_COLUMNS.includes("imported_created_at") && !LEGACY_EXISTING_COLUMNS.includes("tax_designations"));
   const mg2 = mergeForUpdate(ex({ id: "g", phone: "(360) 555-0101", phone_normalized: "3605550101" }), inc({ external_id: "8", phone: "(360) 555-0102", phone_normalized: "3605550102" }));
   ok("merge: a new phone replaces the stored one", mg2.phone_normalized === "3605550102" && mg2.phone === "(360) 555-0102");
   ok("plan: every write has the same columns", (() => {

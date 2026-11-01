@@ -348,6 +348,7 @@
     "clean_slate_test_data",
     "consume_lot_hold",
     "current_order_name_seq",
+    "customer_search_fuzzy",
     "depart_vendor_return",
     "dismiss_duplicate_manifest",
     "gl_approve_journal",

@@ -8,9 +8,20 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { ilikeContains } from "@/lib/supabase/postgrest-escape";
+import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import {
+  SEARCH_CANDIDATE_CAP,
+  buildCustomerSearchFilter,
+  fuzzyQueryText,
+  parseCustomerQuery,
+  rankCustomerMatches,
+  shouldTryFuzzy,
+} from "@/lib/customers/customer-search-core";
 import type { Customer, CustomerInput, PatientAuthorization } from "@/lib/customers/types";
 import type { SortColumn } from "@/lib/admin/list-filter-core";
+
+/** 0335: closest spellings of a name (trigram similarity), service_role only. */
+export const CUSTOMER_SEARCH_FUZZY_RPC = "customer_search_fuzzy";
 
 /** Digits-only phone for dedupe/search (mirrors loyalty normalization). */
 export function normalizePhone(phone: string | null | undefined): string | null {
@@ -19,39 +30,93 @@ export function normalizePhone(phone: string | null | undefined): string | null 
   return digits.length > 0 ? digits : null;
 }
 
-export async function listCustomers(opts?: { q?: string; limit?: number }): Promise<Customer[]> {
-  if (!isSupabaseServiceConfigured) return [];
+/**
+ * G-75 (owner message 17): THE customer search. Every word typed must match
+ * a first name, last name or email (any order, any part); digits match
+ * anywhere in the phone or exactly the Cultivera Customer ID. Matches are
+ * ranked best first by customer-search-core (pure, self-tested). When nothing
+ * matches exactly and a name was typed, the typo search from migration 0335
+ * (customer_search_fuzzy) offers the closest spellings; until 0335 is applied
+ * that step is simply skipped.
+ */
+export type CustomerSearchResult = { rows: Customer[]; total: number; fuzzy: boolean };
+
+export async function searchCustomers(
+  raw: string,
+  opts?: { limit?: number; isMedical?: boolean; marketingConsent?: boolean; doNotContact?: boolean },
+): Promise<CustomerSearchResult> {
+  const empty: CustomerSearchResult = { rows: [], total: 0, fuzzy: false };
+  if (!isSupabaseServiceConfigured) return empty;
+  const parsed = parseCustomerQuery(raw);
+  const filter = buildCustomerSearchFilter(parsed);
+  if (!filter) return empty;
+  const limit = Math.max(1, Math.min(opts?.limit ?? 25, SEARCH_CANDIDATE_CAP));
   const admin = createSupabaseAdminClient();
   let query = admin
     .from("customers")
-    .select("*")
+    .select("*", { count: "exact" })
+    .or(filter)
     .order("last_visit_at", { ascending: false, nullsFirst: false })
+    .order("last_purchase_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(opts?.limit ?? 500);
-
-  if (opts?.q && opts.q.trim().length > 0) {
-    const digits = normalizePhone(opts.q.trim());
-    // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
-    const like = ilikeContains(opts.q);
-    // Match on name, email, or normalized phone.
-    const ors = like
-      ? [`first_name.ilike.${like}`, `last_name.ilike.${like}`, `email.ilike.${like}`]
-      : [];
-    if (digits) ors.push(`phone_normalized.ilike.%${digits}%`);
-    if (ors.length > 0) query = query.or(ors.join(","));
+    .limit(SEARCH_CANDIDATE_CAP);
+  if (opts?.isMedical !== undefined) query = query.eq("is_medical_patient", opts.isMedical);
+  if (opts?.marketingConsent !== undefined) query = query.eq("marketing_consent", opts.marketingConsent);
+  if (opts?.doNotContact !== undefined) query = query.eq("do_not_contact", opts.doNotContact);
+  const { data, count, error } = await query;
+  if (error) {
+    console.error("[customers] search failed", error.message);
+    return empty;
+  }
+  const exact = rankCustomerMatches((data as Customer[] | null) ?? [], parsed);
+  if (exact.length > 0 || !shouldTryFuzzy(parsed, exact.length)) {
+    return { rows: exact.slice(0, limit), total: Math.max(count ?? 0, exact.length), fuzzy: false };
   }
 
-  const { data } = await query;
+  // Nobody spelled that way: ask for the closest spellings (0335).
+  const { data: near, error: nearErr } = await admin.rpc(CUSTOMER_SEARCH_FUZZY_RPC, {
+    p_query: fuzzyQueryText(parsed),
+    p_limit: limit,
+  });
+  if (nearErr) {
+    if (!isMissingDbFunctionError(nearErr)) console.error("[customers] fuzzy search failed", nearErr.message);
+    return empty;
+  }
+  const scores = new Map<string, number>();
+  for (const r of (near ?? []) as { customer_id: string; score: number }[]) scores.set(r.customer_id, Number(r.score) || 0);
+  if (scores.size === 0) return empty;
+  let fq = admin.from("customers").select("*").in("id", [...scores.keys()]);
+  if (opts?.isMedical !== undefined) fq = fq.eq("is_medical_patient", opts.isMedical);
+  if (opts?.marketingConsent !== undefined) fq = fq.eq("marketing_consent", opts.marketingConsent);
+  if (opts?.doNotContact !== undefined) fq = fq.eq("do_not_contact", opts.doNotContact);
+  const { data: rows } = await fq;
+  const ranked = rankCustomerMatches((rows as Customer[] | null) ?? [], parsed, scores);
+  return { rows: ranked.slice(0, limit), total: ranked.length, fuzzy: ranked.length > 0 };
+}
+
+export async function listCustomers(opts?: { q?: string; limit?: number }): Promise<Customer[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  if (opts?.q && opts.q.trim().length > 0) {
+    return (await searchCustomers(opts.q, { limit: opts.limit ?? 500 })).rows;
+  }
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("customers")
+    .select("*")
+    .order("last_visit_at", { ascending: false, nullsFirst: false })
+    .order("last_purchase_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(opts?.limit ?? 500);
   return (data as Customer[] | null) ?? [];
 }
 
 /**
  * GW-033 — paged variant of listCustomers for the admin customers list.
  * Returns the requested window plus the exact filtered total so the page can
- * render a real pager ("Showing 101–200 of 431 customers") instead of a
- * silently truncated 500-row list. Same search semantics as listCustomers
- * (name/email ilike + digits-only phone); other callers keep the small-limit
- * listCustomers.
+ * render a real pager. G-75: a search uses searchCustomers, so the back office
+ * and the register find exactly the same people. With the default sort
+ * ("Best match") the results are ranked; any other sort orders the matches by
+ * that column.
  */
 export async function listCustomersPaged(opts: {
   q?: string;
@@ -59,12 +124,27 @@ export async function listCustomersPaged(opts: {
   to: number;
   /** SLICE 26: whitelisted sort columns (list-filter-core.CUSTOMER_SORTS). */
   sort?: SortColumn[];
+  /** G-75: rank a search best match first (the default sort). */
+  bestMatch?: boolean;
   /** Tri-state flags (undefined = filter off). */
   isMedical?: boolean;
   marketingConsent?: boolean;
   doNotContact?: boolean;
-}): Promise<{ rows: Customer[]; total: number }> {
+}): Promise<{ rows: Customer[]; total: number; fuzzy?: boolean }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
+  const parsed = parseCustomerQuery(opts.q);
+  const filter = buildCustomerSearchFilter(parsed);
+  const flags = { isMedical: opts.isMedical, marketingConsent: opts.marketingConsent, doNotContact: opts.doNotContact };
+
+  if (filter && opts.bestMatch !== false) {
+    const res = await searchCustomers(opts.q ?? "", { ...flags, limit: SEARCH_CANDIDATE_CAP });
+    // Ranked paging covers the best SEARCH_CANDIDATE_CAP matches; a search
+    // broader than that falls through to plain column order below.
+    if (res.fuzzy || res.total <= SEARCH_CANDIDATE_CAP) {
+      return { rows: res.rows.slice(opts.from, opts.to + 1), total: res.rows.length, fuzzy: res.fuzzy };
+    }
+  }
+
   const admin = createSupabaseAdminClient();
   let query = admin.from("customers").select("*", { count: "exact" });
 
@@ -75,6 +155,7 @@ export async function listCustomersPaged(opts: {
 
   const sort: SortColumn[] = opts.sort ?? [
     { column: "last_visit_at", ascending: false, nullsFirst: false },
+    { column: "last_purchase_at", ascending: false, nullsFirst: false },
     { column: "created_at", ascending: false },
   ];
   for (const s of sort) {
@@ -84,16 +165,7 @@ export async function listCustomersPaged(opts: {
     });
   }
 
-  if (opts.q && opts.q.trim().length > 0) {
-    const digits = normalizePhone(opts.q.trim());
-    // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
-    const like = ilikeContains(opts.q);
-    const ors = like
-      ? [`first_name.ilike.${like}`, `last_name.ilike.${like}`, `email.ilike.${like}`]
-      : [];
-    if (digits) ors.push(`phone_normalized.ilike.%${digits}%`);
-    if (ors.length > 0) query = query.or(ors.join(","));
-  }
+  if (filter) query = query.or(filter);
 
   const { data, count } = await query.range(opts.from, opts.to);
   return { rows: (data as Customer[] | null) ?? [], total: count ?? 0 };
