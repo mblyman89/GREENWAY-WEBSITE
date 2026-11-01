@@ -104,7 +104,7 @@ Statuses: `action-needed` (we must change something), `watch` (may affect us, ch
 - **Status:** done
 - **Notice:** https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners
 - **Impact on Greenway:** CI used actions/checkout@v4 and actions/setup-node@v4, which kept working after the removal (G-71a run 41260189512) because the runner forced them onto Node 24.
-- **Action:** G-71e: moved to actions/checkout v7.0.1 and actions/setup-node v7.1.0 (both run on node24), pinned to commit SHAs; Dependabot proposes newer versions monthly.
+- **Action:** G-71e: moved to actions/checkout v7.0.1 and actions/setup-node v7.1.0 (both run on node24), pinned to commit SHAs; newer versions are taken by a Greenway Dev PR at the monthly review (G-74).
 
 ### nextjs-15-eol
 
@@ -124,7 +124,7 @@ Statuses: `action-needed` (we must change something), `watch` (may affect us, ch
 - **Status:** watch
 - **Notice:** https://github.com/vercel/next.js/releases
 - **Impact on Greenway:** Installed 16.2.9; the latest 16.x was 16.4.3 on 2026-10-23. Patch releases carry security fixes.
-- **Action:** Dependabot opens the upgrade PR (weekly, grouped minor and patch; G-71e). Read the 16.x release notes, then follow standing rule 17 (re-author, full CI gate, rebase-merge, verify production).
+- **Action:** scripts/platform/upgrade-plan.ts lists it at the monthly review (G-74, no Dependabot). Read the 16.x release notes, then follow standing rule 17 (Greenway Dev PR with exact versions, full CI gate, rebase-merge, verify production).
 
 ### npm-12-install-scripts
 

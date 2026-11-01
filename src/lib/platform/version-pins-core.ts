@@ -6,7 +6,7 @@
  * this slice the node.js fixes too please."
  *
  * PURE. Text in, findings out. tests/compliance/g71e-version-pins.test.ts feeds
- * it the real package.json files, lockfiles, workflow and dependabot.yml.
+ * it the real package.json files, lockfiles, workflows and the .github file list.
  *
  * What "locked" means here, each rule with the failure it prevents:
  *
@@ -23,8 +23,9 @@
  *     setup-node uses node-version, so a literal would silently win.
  *  5. Every `uses:` action is pinned to a full 40-character commit SHA with its
  *     release tag in a comment. A tag like @v4 can be moved by its owner.
- *  6. Dependabot watches every directory that has a package.json, plus the
- *     workflow actions, so every pinned thing has an upgrade path by PR.
+ *  6. No Dependabot config (G-74, owner message 16, D115). Upgrades are found
+ *     by scripts/deps/upgrade-plan.ts and opened as Greenway Dev PRs, the same
+ *     way as every other change (standing rules 6, 7, 17).
  */
 
 /** Node majors Vercel offers for builds and functions (docs updated 2026-02-27: 26.x default, 24.x, 22.x). */
@@ -146,42 +147,22 @@ export function checkWorkflow(yaml: string, file: string): PinFinding[] {
   return out;
 }
 
-/** The ecosystem/directory pairs a dependabot.yml declares (enough YAML for our own file). */
-export function parseDependabotUpdates(yaml: string): Array<{ ecosystem: string; directory: string }> {
-  const out: Array<{ ecosystem: string; directory: string }> = [];
-  let cur: { ecosystem: string; directory: string } | null = null;
-  for (const raw of yaml.split(/\r?\n/)) {
-    const line = raw.replace(/#.*$/, "");
-    const eco = /^\s*-\s*package-ecosystem:\s*"?([\w-]+)"?\s*$/.exec(line);
-    if (eco) {
-      if (cur) out.push(cur);
-      cur = { ecosystem: eco[1], directory: "" };
-      continue;
-    }
-    const dir = /^\s+directory:\s*"?([^"\s]+)"?\s*$/.exec(line);
-    if (dir && cur) cur.directory = dir[1];
-  }
-  if (cur) out.push(cur);
-  return out;
-}
+/**
+ * Rule 6 (G-74, owner message 16, D115): no Dependabot config. Upgrades are
+ * Greenway Dev pull requests found by scripts/deps/upgrade-plan.ts, so
+ * Dependabot must never open version PRs again (its commits fail the
+ * authorship check and Vercel will not deploy them). `files` is every path
+ * under .github/ that exists.
+ */
+export const DEPENDABOT_CONFIG_PATHS: readonly string[] = [".github/dependabot.yml", ".github/dependabot.yaml"];
 
-/** Rule 6: Dependabot covers every npm directory and the workflow actions. */
-export function checkDependabot(yaml: string, npmDirs: readonly string[]): PinFinding[] {
-  const ups = parseDependabotUpdates(yaml);
-  const out: PinFinding[] = [];
-  if (!/^version:\s*2\s*$/m.test(yaml)) out.push({ where: ".github/dependabot.yml", problem: "must start with version: 2" });
-  for (const d of npmDirs) {
-    if (!ups.some((u) => u.ecosystem === "npm" && u.directory === d)) {
-      out.push({ where: ".github/dependabot.yml", problem: `no npm entry for ${d}; its pinned versions would never get an upgrade PR` });
-    }
-  }
-  if (!ups.some((u) => u.ecosystem === "github-actions" && u.directory === "/")) {
-    out.push({ where: ".github/dependabot.yml", problem: "no github-actions entry; the SHA-pinned actions would never get an upgrade PR" });
-  }
-  if (/versioning-strategy:\s*"?(widen|increase-if-necessary)"?/.test(yaml)) {
-    out.push({ where: ".github/dependabot.yml", problem: "widen / increase-if-necessary would write ranges back; use increase" });
-  }
-  return out;
+export function checkNoDependabot(files: readonly string[]): PinFinding[] {
+  return files
+    .filter((f) => DEPENDABOT_CONFIG_PATHS.includes(f.replace(/\\/g, "/").replace(/^\.\//, "")))
+    .map((f) => ({
+      where: f,
+      problem: "Dependabot config is back; upgrades are Greenway Dev PRs from scripts/platform/upgrade-plan.ts (G-74, owner message 16: \"Can we go back to the old way of merging pr's?\")",
+    }));
 }
 
 /** One package directory: package.json + package-lock.json text. */
@@ -195,7 +176,7 @@ export interface PackageDir {
 export function auditVersionPins(input: {
   packages: readonly PackageDir[];
   workflows: ReadonlyArray<{ file: string; text: string }>;
-  dependabot: string;
+  githubFiles: readonly string[];
   npmrc: readonly string[];
 }): PinFinding[] {
   const out: PinFinding[] = [];
@@ -206,7 +187,7 @@ export function auditVersionPins(input: {
     out.push(...findRanges(pkg, file), ...findLockDrift(pkg, lock, file), ...checkEngines(pkg, file), ...checkTypesNode(pkg, file));
   }
   for (const w of input.workflows) out.push(...checkWorkflow(w.text, w.file));
-  out.push(...checkDependabot(input.dependabot, input.packages.map((p) => p.dir)));
+  out.push(...checkNoDependabot(input.githubFiles));
   input.npmrc.forEach((t, i) => {
     if (!/^\s*save-exact\s*=\s*true\s*$/m.test(t)) out.push({ where: `.npmrc #${i + 1}`, problem: "save-exact=true missing; npm install would write a ^range" });
   });
@@ -297,31 +278,21 @@ export function __runVersionPinsTests(): { passed: number; failed: number; failu
   ok(checkWorkflow(good + "\n      - uses: ./local-action", "w").length === 0, "local actions need no SHA");
   ok(checkWorkflow("name: x", "w").some((f) => f.problem.includes("no uses")), "empty workflow flagged");
 
-  // dependabot
-  const dep = [
-    "version: 2",
-    "updates:",
-    '  - package-ecosystem: "npm"',
-    '    directory: "/"',
-    '    versioning-strategy: "increase"',
-    '  - package-ecosystem: "npm"',
-    '    directory: "/merch-site"',
-    '  - package-ecosystem: "github-actions"',
-    '    directory: "/"',
-  ].join("\n");
-  ok(parseDependabotUpdates(dep).length === 3, "parses three update entries");
-  ok(parseDependabotUpdates(dep)[1].directory === "/merch-site", "reads directory");
-  ok(checkDependabot(dep, ["/", "/merch-site"]).length === 0, "covers both npm dirs and actions");
-  ok(checkDependabot(dep, ["/", "/merch-site", "/new-app"]).some((f) => f.problem.includes("/new-app")), "a new package dir without Dependabot is flagged");
-  ok(checkDependabot(dep.replace('"github-actions"', '"docker"'), ["/"]).some((f) => f.problem.includes("github-actions")), "missing actions entry flagged");
-  ok(checkDependabot(dep.replace('"increase"', '"widen"'), ["/"]).some((f) => f.problem.includes("widen")), "widen would reintroduce ranges");
-  ok(checkDependabot(dep.replace("version: 2", "version: 1"), ["/"]).length === 1, "version 2 required");
+  // no Dependabot (G-74)
+  ok(checkNoDependabot([".github/workflows/compliance-tests.yml"]).length === 0, "workflows only: clean");
+  ok(checkNoDependabot([".github/dependabot.yml"]).length === 1, "dependabot.yml flagged");
+  ok(checkNoDependabot([".github/dependabot.yaml"]).length === 1, ".yaml spelling flagged too");
+  ok(checkNoDependabot(["./.github/dependabot.yml"])[0]?.problem.includes("upgrade-plan"), "finding names the replacement");
+  ok(checkNoDependabot([]).length === 0, "no .github files: clean");
+  ok(checkNoDependabot([".github\\dependabot.yml"]).length === 1, "Windows separators still flagged");
+  ok(checkNoDependabot([".github/dependabot.yml.bak", "docs/dependabot.yml"]).length === 0, "only the real config paths count");
 
   // auditVersionPins end to end
   const pj = JSON.stringify({ engines: { node: "24.x" }, dependencies: { a: "1.0.0" }, devDependencies: { "@types/node": "24.19.2" } });
   const lk = JSON.stringify({ packages: { "": { engines: { node: "24.x" } }, "node_modules/a": { version: "1.0.0" }, "node_modules/@types/node": { version: "24.19.2" } } });
-  const base = { packages: [{ dir: "/", pkgText: pj, lockText: lk }], workflows: [{ file: "w", text: good }], dependabot: dep, npmrc: ["save-exact=true\n"] };
+  const base = { packages: [{ dir: "/", pkgText: pj, lockText: lk }], workflows: [{ file: "w", text: good }], githubFiles: [".github/workflows/w.yml"], npmrc: ["save-exact=true\n"] };
   ok(auditVersionPins(base).length === 0, "audit clean on a locked repo");
+  ok(auditVersionPins({ ...base, githubFiles: [".github/dependabot.yml"] }).length === 1, "audit flags a Dependabot config");
   ok(auditVersionPins({ ...base, npmrc: ["# nothing\n"] }).some((f) => f.problem.includes("save-exact")), "missing save-exact flagged");
   ok(auditVersionPins({ ...base, packages: [{ dir: "/merch-site", pkgText: pj.replace('"1.0.0"', '"^1.0.0"'), lockText: lk }] }).some((f) => f.where.startsWith("merch-site/package.json")), "subdirectory named in findings");
 
