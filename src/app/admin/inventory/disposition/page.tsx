@@ -3,12 +3,14 @@
  *
  * One guided page for the three disposition flows a WA retailer actually has
  * (grounded in docs/RETURNS_DESTRUCTION_COMPLIANCE.md):
- *   1. Customer returns — WAC 314-55-079(12) attestations, CCRS Sale
- *      Delete/Update correction + "Other" inventory adjustment (CCRS FAQ).
+ *   1. Customer returns — taken at the register and the Returns desk only
+ *      (Fix Phase 7.1, G-45, owner D66: the back-office wizard was removed);
+ *      this page lists them and their CCRS Sale corrections.
  *   2. Vendor returns — CCRS-generated manifest workflow (WAC 314-55-085).
  *   3. Destruction — render-unusable methods per current WAC 314-55-097,
- *      configurable STORE-POLICY hold (the old 72h LCB notice was removed by
- *      WSR 22-14-111), waste records, and the WAC 314-55-225 recall guard.
+ *      a store hold whose legal minimum and default is 0 (G-50, owner D67; the
+ *      old 72h LCB notice was removed by WSR 22-14-111), waste records, and
+ *      the WAC 314-55-225 recall guard.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -24,6 +26,7 @@ import {
   listCustomerReturns,
   dispositionSummary,
   getDispositionSettings,
+  readCorrectionRoute,
   type DestructionEventWithLot,
   type VendorReturnWithLot,
 } from "@/lib/inventory/disposition";
@@ -64,7 +67,18 @@ import { pacificParts } from "@/lib/reports/timezone";
 import { heldReleaseMessage } from "@/lib/inventory/held-stock-core";
 import { formatDestructionPacific } from "@/lib/inventory/destruction-record-core";
 import { listEmployees } from "@/lib/staffing/store";
-import { CustomerReturnWizard } from "@/components/admin/inventory/CustomerReturnWizard";
+// Fix Phase 7.1 (G-46, G-49, G-50, G-45): readable errors, the legal-minimum
+// hold wording, both CCRS files named, and the Sale correction download only
+// while the weekly CCRS batch cannot send the corrections itself.
+import {
+  dispositionErrorMessage,
+  scheduleButtonLabel,
+  holdPolicyText,
+  destructionHelpStep,
+  RECORDS_HELP_STEP,
+  CUSTOMER_RETURN_HELP_STEP,
+  pendingCorrectionsText,
+} from "@/lib/inventory/disposition-messages-core";
 // Fix Phase 1.7a (G-43 req 7): optional photo / video evidence, private bucket.
 import { DestructionEvidenceUploader } from "@/components/admin/inventory/DestructionEvidenceUploader";
 import { listEvidenceForEvents } from "@/lib/inventory/destruction-evidence-store";
@@ -84,15 +98,13 @@ import {
 export const dynamic = "force-dynamic";
 
 const OK_MESSAGES: Record<string, string> = {
-  customer_return:
-    "Customer return logged — inventory adjusted, CCRS Sale correction queued. Download the correction CSV before your next upload.",
   returned:
     "Vendor return logged. The units are reserved (out of sale) and still on hand; nothing goes to CCRS until they depart.",
   manifest: "Manifest step saved.",
   transport: "Transport details saved. Download Manifest.CSV and upload it to CCRS.",
   departed: "Departure recorded: on-hand reduced and the CCRS Other adjustment posted.",
   vr_cancelled: "Vendor return cancelled.",
-  scheduled: "Destruction scheduled — the hold timer is running and the lot is quarantined.",
+  scheduled: "Destruction scheduled and the lot is quarantined. It can be completed once its hold (if any) has passed.",
   destroyed: "Destruction completed and the CCRS 'Destruction' adjustment posted.",
   cancelled: "Destruction cancelled.",
   settings: "Hold policy saved.",
@@ -139,7 +151,7 @@ export default async function DispositionPage({
   const canCancelVendorReturn = can(session.profile.role, "inventory.vendor_return.cancel");
   const sp = await searchParams;
 
-  const [lots, quarantineLots, recalledLots, vendors, returns, destructions, customerReturns, summary, dispositionSettings, roster] =
+  const [lots, quarantineLots, recalledLots, vendors, returns, destructions, customerReturns, summary, dispositionSettings, correctionRoute, roster] =
     await Promise.all([
       listLots({ status: "active", limit: 500 }),
       // Fix Phase 1.3 (G-28 req 1, F-05a-17): the destruction picker also lists
@@ -155,6 +167,8 @@ export default async function DispositionPage({
       listCustomerReturns(20),
       dispositionSummary(),
       getDispositionSettings(),
+      // G-45: the download is offered only while the weekly batch cannot send corrections.
+      readCorrectionRoute(),
       // Fix Phase 1.6a (G-43; D64): the witness is chosen from the staff roster.
       listEmployees(),
     ]);
@@ -163,6 +177,7 @@ export default async function DispositionPage({
   const evidence = await listEvidenceForEvents(destructions.map((d) => d.id));
 
   const holdHours = dispositionSettings.holdHours;
+  const errorText = dispositionErrorMessage(sp.error);
   const destroyableLots = [...lots, ...quarantineLots].filter((l) => isDestroyableLotStatus(l.status));
   const returnableLots = [...lots, ...quarantineLots, ...recalledLots];
   const lotStatusLabel = (st: string) => (st === "recalled" ? "Recalled" : st === "quarantine" ? "Quarantine" : "Active");
@@ -192,9 +207,12 @@ export default async function DispositionPage({
         subtitle="Customer returns, vendor returns with manifests, and compliant destruction — with CCRS corrections queued automatically."
       />
 
-      {sp.error ? (
-        <div className="rounded-xl border border-[var(--admin-danger)]/30 bg-[var(--admin-danger)]/[0.06] px-4 py-3 text-sm text-[var(--admin-danger)]">
-          {decodeURIComponent(sp.error)}
+      {errorText ? (
+        <div
+          data-testid="disposition-error"
+          className="rounded-xl border border-[var(--admin-danger)]/30 bg-[var(--admin-danger)]/[0.06] px-4 py-3 text-sm text-[var(--admin-danger)]"
+        >
+          {errorText}
         </div>
       ) : null}
       {sp.ok ? (
@@ -225,19 +243,28 @@ export default async function DispositionPage({
       </div>
 
       {summary.correctionsPending > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.06] px-4 py-3">
-          <p className="text-sm text-white/80">
-            <span className="font-semibold text-[var(--admin-gold)]">{summary.correctionsPending}</span> customer-return Sale
-            correction{summary.correctionsPending === 1 ? "" : "s"} pending — include this file in your next CCRS
-            upload so the returned sale{summary.correctionsPending === 1 ? " is" : "s are"} deleted/updated in CCRS.
-          </p>
-          <Link
-            href="/admin/inventory/disposition/sale-correction-export"
-            prefetch={false}
-            className="rounded-lg bg-[var(--admin-gold)] px-4 py-2 text-sm font-bold text-black transition hover:brightness-110"
-          >
-            Download Sale correction CSV
-          </Link>
+        <div
+          data-testid="corrections-pending"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.06] px-4 py-3"
+        >
+          <p className="text-sm text-white/80">{pendingCorrectionsText(summary.correctionsPending, correctionRoute)}</p>
+          {correctionRoute === "manual_download" ? (
+            <Link
+              href="/admin/inventory/disposition/sale-correction-export"
+              prefetch={false}
+              className="rounded-lg bg-[var(--admin-gold)] px-4 py-2 text-sm font-bold text-black transition hover:brightness-110"
+            >
+              Download Sale correction CSV
+            </Link>
+          ) : correctionRoute === "weekly_batch" ? (
+            <Link
+              href="/admin/reports/compliance"
+              prefetch={false}
+              className="rounded-lg border border-[var(--admin-gold)]/40 px-4 py-2 text-sm font-bold text-[var(--admin-gold)] transition hover:bg-[var(--admin-gold)]/10"
+            >
+              Open Reports → Compliance
+            </Link>
+          ) : null}
         </div>
       ) : null}
 
@@ -245,22 +272,29 @@ export default async function DispositionPage({
         id="disposition-help"
         title="How disposition works (the compliant way)"
         steps={[
-          "Customer return: find the completed sale, attest that the product is in ORIGINAL packaging with a fully legible lot ID (WAC 314-55-079(12)) — otherwise refuse it. The system adds it back to inventory as a CCRS 'Other' adjustment and queues the Sale Delete/Update correction (per the LCB's CCRS FAQ).",
+          CUSTOMER_RETURN_HELP_STEP,
           "Vendor return: get the processor's written acceptance (RMA) first. Logging reserves the units (out of sale, still on hand). Greenway is the origin: download Manifest.CSV, upload it to CCRS, wait for the LCB's success email with the manifest PDF, and print it; it travels with the product (WAC 314-55-085). On-hand comes off and the CCRS 'Other' adjustment posts only at departure.",
-          `Destruction: scheduling opens a ${holdHours}-hour hold (a STORE POLICY you can tune below — the old 72-hour LCB notice was removed from the rule). Product must be rendered unusable BEFORE leaving the premises: grind + mix at least 50% non-cannabis waste (WAC 314-55-097).`,
+          destructionHelpStep(holdHours),
           "Recalls: NEVER destroy recall-affected product before notifying the LCB and coordinating with your enforcement officer (WAC 314-55-225) — the completion form enforces this.",
-          "Everything posts to the CCRS InventoryAdjustment.csv on the Compliance tab; keep all records 5 years (WAC 314-55-087).",
+          RECORDS_HELP_STEP,
         ]}
       />
 
-      {/* Customer return wizard */}
-      <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+      {/* Customer returns: the register and the Returns desk only (G-45, owner D66). */}
+      <section data-testid="customer-return-paths" className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
         <h2 className="mb-1 text-sm font-black uppercase tracking-[0.14em] text-white/80">Customer return</h2>
-        <p className="mb-4 text-xs text-white/40">
-          Guided intake for a valid customer return — inventory add-back, CCRS Sale correction, and (optionally) a
-          destruction event, all in one step.
+        <p className="mb-3 text-xs text-white/40">
+          Customer returns are taken with the receipt at the register (<strong>Return an item</strong>) or on the{" "}
+          <strong>Returns desk</strong>. Both check the store return policy and work out the refund. The back-office
+          wizard was removed (owner decision D66).
         </p>
-        <CustomerReturnWizard />
+        <Link
+          href="/admin/registers/returns"
+          prefetch={false}
+          className="inline-block rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white/80 transition hover:bg-white/5"
+        >
+          Open the Returns desk
+        </Link>
       </section>
 
       {/* Vendor return + schedule destruction forms */}
@@ -345,9 +379,11 @@ export default async function DispositionPage({
         <section id="schedule-destruction" className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
           <h2 className="mb-1 text-sm font-black uppercase tracking-[0.14em] text-white/80">Schedule a destruction</h2>
           <p className="mb-4 text-xs text-white/40">
-            Opens a {holdHours}h hold and quarantines the lot (a lot already in Quarantine stays there). Complete
-            it below once the hold elapses. Recalled lots are not listed: they go back to the vendor, never
-            destroyed by us.
+            Quarantines the lot (a lot already in Quarantine stays there).{" "}
+            {holdHours === 0
+              ? "With no hold (the legal minimum), complete it below as soon as it is done."
+              : `Opens a ${holdHours}h store hold; complete it below once the hold elapses.`}{" "}
+            Recalled lots are not listed: they go back to the vendor, never destroyed by us.
           </p>
           {destroyableLots.length === 0 ? (
             <EmptyState title="No Active or Quarantine lots" description="Receive inventory first." />
@@ -387,7 +423,7 @@ export default async function DispositionPage({
                 Recall product? Never destroy it: recalled product goes back to the vendor (owner decision D65).
                 The admin tells the LCB officer first (WAC 314-55-225), then Log a vendor return with reason Recall.
               </p>
-              <Button type="submit">Schedule (opens {holdHours}h hold)</Button>
+              <Button type="submit">{scheduleButtonLabel(holdHours)}</Button>
             </form>
           )}
         </section>
@@ -809,8 +845,7 @@ export default async function DispositionPage({
       <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
         <h2 className="mb-1 text-sm font-black uppercase tracking-[0.14em] text-white/80">Destruction hold policy</h2>
         <p className="mb-4 text-xs text-white/40">
-          How long a scheduled destruction is held before it can be completed. This is a STORE POLICY safety window —
-          the old 72-hour LCB notice was removed from WAC 314-55-097 (WSR 22-14-111). 72h remains a sensible default.
+          {holdPolicyText(holdHours)}
         </p>
         <form action={updateDispositionSettingsAction} className="flex flex-wrap items-end gap-3">
           <Field label="Hold (hours)" help={`${HOLD_HOURS_MIN}–${HOLD_HOURS_MAX}`}>

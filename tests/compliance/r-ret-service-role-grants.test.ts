@@ -32,7 +32,6 @@ import {
   isMissingDbFunctionError,
   isPermissionDeniedError,
 } from "@/lib/db/rpc-fallback-core";
-import { __runReturnSearchCoreTests, noMatchMessage, planReturnSearch } from "@/lib/inventory/return-search-core";
 
 const ROOT = process.cwd();
 const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
@@ -149,7 +148,6 @@ describe("R-RET: the server (service_role) can call what migrations lock down", 
 describe("R-RET: permission denied is explained, never mistaken for 'not migrated'", () => {
   it("pure self-tests pass", () => {
     expect(() => __runRpcFallbackCoreTests()).not.toThrow();
-    expect(__runReturnSearchCoreTests().failed).toBe(0);
   });
 
   it("the owner's exact error becomes a 'run 0330' instruction", () => {
@@ -170,37 +168,23 @@ describe("R-RET: permission denied is explained, never mistaken for 'not migrate
   });
 });
 
-describe("R-RET: the back office finds a register sale by what is printed on the receipt", () => {
-  it("plans a receipt lookup, an order-number lookup and a member lookup", () => {
-    expect(planReturnSearch("1a2b 3c4d").receipt).toBe("1A2B3C4D");
-    expect(planReturnSearch("gwy4f9c2a").orderNumber).toBe("GWY-4F9C2A");
-    expect(planReturnSearch("Michael Lyman").member).toEqual({ first: "Michael", last: "Lyman" });
+describe("R-RET G-70 superseded by D66 (Fix Phase 7.1): no back-office return search", () => {
+  // The owner's error ("No completed sales matched. Only completed orders can
+  // be returned.") came from the Customer return wizard's search. D66 ("Q4-
+  // remove it.") removed the wizard, so its search went with it. Returns are
+  // found by the printed receipt on the Returns desk and the register.
+  it("the wizard, its search and its core are gone; nothing still shows the old dead end", () => {
+    expect(existsSync(join(ROOT, "src/components/admin/inventory/CustomerReturnWizard.tsx"))).toBe(false);
+    expect(existsSync(join(ROOT, "src/lib/inventory/return-search-core.ts"))).toBe(false);
+    expect(src("src/lib/inventory/disposition.ts")).not.toMatch(/export async function searchReturnableOrderLines/);
+    expect(src("src/app/admin/inventory/disposition/actions.ts")).not.toMatch(/findReturnableLinesAction|createCustomerReturnAction/);
+    expect(src("scripts/compliance/run-pure-selftests.ts")).not.toContain("__runReturnSearchCoreTests");
   });
 
-  it("the empty result says what to type, not the old dead end", () => {
-    const m = noMatchMessage(planReturnSearch("Purple Otter"));
-    expect(m).toMatch(/8-character receipt number/);
-    expect(m).not.toContain("Only completed orders can be returned.");
-  });
-
-  it("the store searches pos_sale_events, display_name and customers; the wizard shows the message", () => {
-    const disp = src("src/lib/inventory/disposition.ts");
-    expect(disp).toMatch(/export async function searchReturnableOrderLines/);
-    expect(disp).toMatch(/from\("pos_sale_events"\)/);
-    expect(disp).toMatch(/clientUuidMatchesReceipt\(e\.client_uuid, plan\.receipt!\)/);
-    expect(disp).toMatch(/display_name\.ilike/);
-    expect(disp).toMatch(/from\("customers"\)\.select\("id"\)/);
-    expect(disp).toMatch(/\.eq\("status", "completed"\)/);
-    const wiz = src("src/components/admin/inventory/CustomerReturnWizard.tsx");
-    expect(wiz).not.toContain("No completed sales matched. Only completed orders can be returned.");
-    expect(wiz).toContain("res.emptyMessage");
-    expect(wiz).toMatch(/Receipt # \(8 characters\)/);
-    expect(src("src/app/admin/inventory/disposition/actions.ts")).toContain("searchReturnableOrderLines(q, 8)");
-  });
-
-  it("is registered in the pure self-test runner", () => {
-    expect(src("scripts/compliance/run-pure-selftests.ts")).toContain(
-      'assertRan("return-search-core", __runReturnSearchCoreTests(), 37)',
-    );
+  it("the Returns desk still finds a sale by the printed receipt", () => {
+    const store = src("src/lib/pos/returns-store.ts");
+    expect(store).toMatch(/export async function lookupSaleByReceipt/);
+    expect(store).toMatch(/clientUuidMatchesReceipt\(r\.client_uuid, wanted\)/);
+    expect(src("src/app/admin/registers/returns/actions.ts")).toContain("lookupSaleByReceipt(");
   });
 });

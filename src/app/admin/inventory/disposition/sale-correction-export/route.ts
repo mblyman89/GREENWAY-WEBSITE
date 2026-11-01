@@ -15,8 +15,12 @@
  * SaleDate, more returned than sold, disagreeing snapshots) is refused by name
  * and stays pending.
  *
- * Prefer the weekly batch once the ledger is loaded: it checks each line is
- * held by CCRS and records the file in the outbox. This download does not.
+ * Fix Phase 7.1 (G-45, F-15-10): the weekly batch checks each line is held
+ * by CCRS and records the file in the outbox; this download does not. So it
+ * only runs while the production ledger is NOT loaded (or 0283 is missing),
+ * which is exactly when the batch withholds every correction and points here.
+ * Once the ledger is loaded it refuses (409) and nothing is marked; when the
+ * app cannot tell, it refuses too (readCorrectionRoute).
  *
  * Marks the included returns as exported and audits the download. Requires
  * inventory.manage (same gate as the disposition page).
@@ -27,7 +31,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { buildSaleCorrectionFile, makeSaleCorrectionFileName } from "@/lib/compliance/ccrs-sale-correction-core";
-import { markCorrectionsExported } from "@/lib/inventory/disposition";
+import { markCorrectionsExported, readCorrectionRoute } from "@/lib/inventory/disposition";
+import { correctionDownloadRefusal } from "@/lib/inventory/disposition-messages-core";
 import { CCRS_COLUMNS, withholdUnencodableRows } from "@/lib/compliance/ccrs-batch-core";
 import {
   planReturnCorrections,
@@ -44,6 +49,13 @@ const RETURN_COLUMNS =
 
 export async function GET() {
   const session = await requirePermission("inventory.manage");
+
+  // G-45: refuse before reading or marking anything unless this download is
+  // the only way the corrections can go out.
+  const refusal = correctionDownloadRefusal(await readCorrectionRoute());
+  if (refusal) {
+    return new Response(`${refusal}\r\n`, { status: 409, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
 
   const license = await getCcrsLicenseSettings();
   let rows: string[][] = [];
@@ -68,7 +80,13 @@ export async function GET() {
         ? await admin.from("customer_returns").select(RETURN_COLUMNS).in("sale_detail_external_id", lineIds)
         : { data: [] };
       const byId = new Map<string, ReturnRecord>();
-      for (const r of [...pendingRows, ...((siblings as CustomerReturnRowLike[] | null) ?? [])]) byId.set(r.id, returnRecordFromRow(r));
+      for (const r of [...pendingRows, ...((siblings as CustomerReturnRowLike[] | null) ?? [])]) {
+        // Fix Phase 7.1: an Other Inventory (non-cannabis) return is never a
+        // CCRS Sale correction, the same rule as the weekly batch (Phase 4,
+        // ccrs-batch.ts readReturnsForCorrections; 0323 writes 'NonCannabis').
+        if ((r as { sale_type?: string | null }).sale_type === "NonCannabis") continue;
+        byId.set(r.id, returnRecordFromRow(r));
+      }
       const plan = planReturnCorrections({
         returns: [...byId.values()],
         license,

@@ -15,10 +15,6 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { ilikeContains } from "@/lib/supabase/postgrest-escape";
-import { pagedAll } from "@/lib/supabase/chunked-in";
-import { clientUuidMatchesReceipt } from "@/lib/pos/returns-core";
-import { noMatchMessage, planReturnSearch } from "@/lib/inventory/return-search-core";
 // GW-012: atomic lot quantity writes (strict for reductions).
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
@@ -63,6 +59,9 @@ import {
   RELEASE_LOT_HOLD_RPC,
 } from "@/lib/inventory/held-stock-core";
 import { dbErrorForStaff, isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+// Fix Phase 7.1 (G-45): who sends customer-return Sale corrections.
+import { correctionRouteFromSeedRead, type CorrectionRoute } from "@/lib/inventory/disposition-messages-core";
+import { SALE_SLICE_RPC } from "@/lib/compliance/ccrs-return-corrections-core";
 // Fix Phase 1.6c (G-42 req 6 with G-25): a Recall return takes the LCB contact from the lot's recall event.
 import { recallReturnContact } from "@/lib/inventory/recall-event-core";
 import { listRecallEventsForLot } from "@/lib/inventory/recall-event-store";
@@ -83,7 +82,8 @@ import {
  * LEGACY default pre-destruction hold (hours). The old 72-hour WSLCB notice
  * was REMOVED from current rule (WSR 22-14-111; see compliance doc §5.1) — the
  * hold is now a configurable STORE POLICY in disposition_settings (default
- * still 72h). Kept exported for backwards compatibility.
+ * 0h, the legal minimum — D67, Fix Phase 7.1 G-50). Kept exported for
+ * backwards compatibility.
  */
 export const DESTRUCTION_QUARANTINE_HOURS = HOLD_HOURS_DEFAULT;
 
@@ -416,251 +416,11 @@ async function postAddition(
 // adjustment "as a return, with details"). See compliance doc §2.
 // ---------------------------------------------------------------------------
 
-export type ReturnableOrderLine = {
-  order_id: string;
-  order_number: string;
-  completed_at: string | null;
-  placed_at: string;
-  customer_name: string;
-  line_id: string;
-  product_id: string | null;
-  product_name: string;
-  quantity: number;
-  price_minor_units: number;
-  regular_price_minor_units: number | null;
-  already_returned: number;
-};
-
-type ReturnSearchOrderRow = {
-  id: string;
-  order_number: string;
-  status: string;
-  placed_at: string;
-  completed_at: string | null;
-  customer_first_name: string;
-  customer_last_name: string | null;
-  display_name?: string | null;
-  customer_id?: string | null;
-};
-
-const RETURN_SEARCH_ORDER_COLS =
-  "id, order_number, status, placed_at, completed_at, customer_first_name, customer_last_name, display_name, customer_id";
-const RETURN_SEARCH_ORDER_COLS_LEGACY =
-  "id, order_number, status, placed_at, completed_at, customer_first_name, customer_last_name, customer_id";
-
-/**
- * How far back a printed receipt number is looked up from the back office.
- * Wider than the register's return window (max 60 days, return-policy-core)
- * so a manager can still find an older sale; bounded so the scan of
- * pos_sale_events (client_uuid is a uuid column, so the suffix match is done
- * here, like lookupSaleByReceipt) stays small.
- */
-const BACK_OFFICE_RECEIPT_LOOKBACK_DAYS = 60;
-
-export type ReturnSearchResult = {
-  lines: ReturnableOrderLine[];
-  /** Plain message for staff when nothing matched (null when lines were found). */
-  emptyMessage: string | null;
-};
-
-/**
- * Search COMPLETED orders (the only returnable kind) and flatten their lines,
- * annotated with quantities already returned so the UI can prevent
- * double-returns.
- *
- * R-RET (owner message 10): register sales are saved as "Walk-in" with an
- * unprinted GWY- number, so the old order#/name/phone search could never find
- * the sale on the paper in the customer's hand. The search now also finds a
- * sale by the 8-character receipt number, the fun receipt name
- * (orders.display_name), and the loyalty member's name or phone
- * (orders.customer_id -> customers). See return-search-core.ts.
- */
-export async function searchReturnableOrderLines(search: string, limit = 8): Promise<ReturnSearchResult> {
-  const plan = planReturnSearch(search);
-  if (!isSupabaseServiceConfigured || !plan.text) return { lines: [], emptyMessage: noMatchMessage(plan) };
-  const admin = createSupabaseAdminClient();
-
-  const found = new Map<string, ReturnSearchOrderRow>();
-  const add = (rows: ReturnSearchOrderRow[] | null | undefined) => {
-    for (const r of rows ?? []) if (r && r.status === "completed" && !found.has(r.id)) found.set(r.id, r);
-  };
-  let receiptNotCompleted: string | null = null;
-
-  // 1. Printed receipt number -> the register sale event -> its order.
-  if (plan.receipt) {
-    const cutoff = new Date(Date.now() - BACK_OFFICE_RECEIPT_LOOKBACK_DAYS * 86_400_000).toISOString();
-    type EventRow = { client_uuid: string; order_id: string | null; status: string };
-    const events = await pagedAll<EventRow>(async (from, to) => {
-      const { data } = await admin
-        .from("pos_sale_events")
-        .select("client_uuid, order_id, status")
-        .eq("event_type", "sale")
-        .gte("occurred_at", cutoff)
-        .order("occurred_at", { ascending: false })
-        .order("client_uuid", { ascending: true })
-        .range(from, to);
-      return (data as EventRow[] | null) ?? [];
-    });
-    const hits = events.filter((e) => clientUuidMatchesReceipt(e.client_uuid, plan.receipt!));
-    const orderIds = hits.map((e) => e.order_id).filter((x): x is string => !!x);
-    if (orderIds.length > 0) {
-      const { data } = await admin.from("orders").select(RETURN_SEARCH_ORDER_COLS_LEGACY).in("id", orderIds);
-      const rows = (data as ReturnSearchOrderRow[] | null) ?? [];
-      add(rows);
-      const notDone = rows.find((r) => r.status !== "completed");
-      if (notDone && !rows.some((r) => r.status === "completed")) receiptNotCompleted = notDone.status;
-    } else if (hits.length > 0) {
-      receiptNotCompleted = hits[0].status === "exception" ? "a sync exception" : hits[0].status;
-    }
-  }
-
-  // 2. Exact GWY- order number (typed with or without the dash).
-  if (plan.orderNumber) {
-    const { data } = await admin
-      .from("orders")
-      .select(RETURN_SEARCH_ORDER_COLS_LEGACY)
-      .eq("order_number", plan.orderNumber)
-      .limit(1);
-    add(data as ReturnSearchOrderRow[] | null);
-  }
-
-  // 3. Free text on the order: order #, fun receipt name, names, phone.
-  // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
-  const like = ilikeContains(plan.text);
-  if (like) {
-    const base = [
-      `order_number.ilike.${like}`,
-      `customer_first_name.ilike.${like}`,
-      `customer_last_name.ilike.${like}`,
-      `customer_phone.ilike.${like}`,
-    ];
-    const run = (cols: string, ors: string[]) =>
-      admin
-        .from("orders")
-        .select(cols)
-        .eq("status", "completed")
-        .or(ors.join(","))
-        .order("completed_at", { ascending: false, nullsFirst: false })
-        .limit(limit);
-    const withName = await run(RETURN_SEARCH_ORDER_COLS, [...base, `display_name.ilike.${like}`]);
-    if (withName.error && /display_name/i.test(withName.error.message ?? "")) {
-      // Before 0147 (no orders.display_name): the old search, unchanged.
-      add((await run(RETURN_SEARCH_ORDER_COLS_LEGACY, base)).data as unknown as ReturnSearchOrderRow[] | null);
-    } else {
-      add(withName.data as unknown as ReturnSearchOrderRow[] | null);
-    }
-  }
-
-  // 4. Loyalty member: name or phone on public.customers -> their completed orders.
-  if (plan.member || plan.phoneDigits) {
-    const ors: string[] = [];
-    if (plan.member) {
-      const f = ilikeContains(plan.member.first);
-      const l = plan.member.last ? ilikeContains(plan.member.last) : null;
-      if (f && l) ors.push(`and(first_name.ilike.${f},last_name.ilike.${l})`);
-      else if (f) ors.push(`first_name.ilike.${f}`, `last_name.ilike.${f}`);
-    }
-    if (plan.phoneDigits) ors.push(`phone_normalized.ilike.%${plan.phoneDigits}%`);
-    if (ors.length > 0) {
-      const { data: members } = await admin.from("customers").select("id").or(ors.join(",")).limit(25);
-      const memberIds = ((members as { id: string }[] | null) ?? []).map((m) => m.id);
-      if (memberIds.length > 0) {
-        const { data } = await admin
-          .from("orders")
-          .select(RETURN_SEARCH_ORDER_COLS_LEGACY)
-          .eq("status", "completed")
-          .in("customer_id", memberIds)
-          .order("completed_at", { ascending: false, nullsFirst: false })
-          .limit(limit);
-        add(data as ReturnSearchOrderRow[] | null);
-      }
-    }
-  }
-
-  const orderRows = [...found.values()]
-    .sort((a, b) => (b.completed_at ?? b.placed_at).localeCompare(a.completed_at ?? a.placed_at))
-    .slice(0, limit);
-  if (orderRows.length === 0) {
-    return { lines: [], emptyMessage: noMatchMessage(plan, { receiptFoundButNotCompleted: receiptNotCompleted }) };
-  }
-
-  // Member names for the result list (the order itself says "Walk-in").
-  const memberIds = [...new Set(orderRows.map((o) => o.customer_id).filter((x): x is string => !!x))];
-  const memberName = new Map<string, string>();
-  if (memberIds.length > 0) {
-    const { data } = await admin.from("customers").select("id, first_name, last_name").in("id", memberIds);
-    for (const c of (data as { id: string; first_name: string; last_name: string | null }[] | null) ?? []) {
-      memberName.set(c.id, [c.first_name, c.last_name].filter(Boolean).join(" "));
-    }
-  }
-
-  const orderIds = orderRows.map((o) => o.id);
-  const [{ data: lines }, returnedByLine] = await Promise.all([
-    admin
-      .from("order_lines")
-      .select("id, order_id, product_id, product_name, quantity, price_minor_units, regular_price_minor_units")
-      .in("order_id", orderIds)
-      .order("created_at", { ascending: true }),
-    (async () => {
-      const map = new Map<string, number>();
-      try {
-        const { data } = await admin
-          .from("customer_returns")
-          .select("order_line_id, quantity")
-          .in("order_id", orderIds);
-        for (const r of (data as { order_line_id: string | null; quantity: number }[] | null) ?? []) {
-          if (!r.order_line_id) continue;
-          map.set(r.order_line_id, (map.get(r.order_line_id) ?? 0) + Number(r.quantity || 0));
-        }
-      } catch {
-        // customer_returns table missing (pre-0115) — no prior returns to count.
-      }
-      return map;
-    })(),
-  ]);
-
-  const byOrder = new Map(orderRows.map((o) => [o.id, o]));
-  const out: ReturnableOrderLine[] = [];
-  for (const l of (lines as
-    | {
-        id: string;
-        order_id: string;
-        product_id: string | null;
-        product_name: string;
-        quantity: number;
-        price_minor_units: number;
-        regular_price_minor_units: number | null;
-      }[]
-    | null) ?? []) {
-    const o = byOrder.get(l.order_id);
-    if (!o) continue;
-    const onOrder = [o.customer_first_name, o.customer_last_name].filter(Boolean).join(" ");
-    const member = o.customer_id ? memberName.get(o.customer_id) : undefined;
-    out.push({
-      order_id: l.order_id,
-      order_number: o.order_number,
-      completed_at: o.completed_at,
-      placed_at: o.placed_at,
-      customer_name: member ? `${member} (member)` : onOrder,
-      line_id: l.id,
-      product_id: l.product_id,
-      product_name: l.product_name,
-      quantity: Number(l.quantity) || 0,
-      price_minor_units: l.price_minor_units,
-      regular_price_minor_units: l.regular_price_minor_units,
-      already_returned: returnedByLine.get(l.id) ?? 0,
-    });
-  }
-  return {
-    lines: out,
-    emptyMessage: out.length === 0 ? "That sale was found but it has no item lines to return." : null,
-  };
-}
-
-/** Back-compat wrapper: just the lines. */
-export async function findReturnableOrderLines(search: string, limit = 8): Promise<ReturnableOrderLine[]> {
-  return (await searchReturnableOrderLines(search, limit)).lines;
-}
+// Fix Phase 7.1 (G-45, owner D66: "Q4- remove it."): the back-office return
+// search (searchReturnableOrderLines, R-RET G-70) served only the removed
+// Customer return wizard and is gone with it. The Returns desk and the
+// register find a sale by its printed receipt (returns-store.ts
+// lookupSaleByReceipt) and run the store return policy.
 
 export async function listCustomerReturns(limit = 50): Promise<CustomerReturn[]> {
   if (!isSupabaseServiceConfigured) return [];
@@ -1090,6 +850,35 @@ export async function markCorrectionsExported(ids: string[]): Promise<void> {
       .in("id", ids);
   } catch {
     // non-fatal
+  }
+}
+
+/**
+ * Fix Phase 7.1 (G-45, F-15-10): who sends the customer-return Sale
+ * corrections right now: the weekly CCRS batch (production ledger loaded and
+ * 0283 installed) or the manual download (otherwise; the batch then withholds
+ * them). Two small reads; every error is classified, an unclassified one is
+ * "unknown" and the download refuses (correctionRouteFromSeedRead).
+ */
+export async function readCorrectionRoute(): Promise<CorrectionRoute> {
+  if (!isSupabaseServiceConfigured) return "unknown";
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count, error } = await admin
+      .from("ccrs_files")
+      .select("id", { count: "exact", head: true })
+      .eq("env", "prod")
+      .eq("purpose", "seed")
+      .eq("state", "closed");
+    if (error) {
+      return correctionRouteFromSeedRead({ closedSeedRows: null, errorCode: error.code ?? null, errorMessage: error.message ?? null });
+    }
+    if ((count ?? 0) <= 0) return correctionRouteFromSeedRead({ closedSeedRows: count ?? null });
+    const slice = await admin.rpc(SALE_SLICE_RPC, { p_env: "prod", p_detail_ids: [] });
+    if (slice.error && !isMissingDbFunctionError(slice.error)) return "unknown";
+    return correctionRouteFromSeedRead({ closedSeedRows: count ?? null, saleSliceMissing: !!slice.error });
+  } catch {
+    return "unknown";
   }
 }
 

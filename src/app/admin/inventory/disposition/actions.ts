@@ -8,7 +8,6 @@ import { recordAudit } from "@/lib/auth/audit";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import {
   createVendorReturn,
-  createCustomerReturn,
   scheduleDestruction,
   completeDestruction,
   cancelDestruction,
@@ -18,18 +17,15 @@ import {
   updateVendorReturnTransport,
   cancelVendorReturn,
   getVendorReturn,
-  searchReturnableOrderLines,
   dispositionSummary,
   listDestructionEvents,
   listVendorReturns,
   getDispositionSettings,
-  type ReturnableOrderLine,
 } from "@/lib/inventory/disposition";
 import {
   VENDOR_RETURN_REASONS,
   DESTRUCTION_REASONS,
 } from "@/lib/inventory/disposition-reasons";
-import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import {
   VENDOR_RETURN_STATUSES,
   evaluateVendorReturnCancel,
@@ -58,7 +54,6 @@ import {
 
 const RET = new Set<string>(VENDOR_RETURN_REASONS);
 const DES = new Set<string>(DESTRUCTION_REASONS);
-const CUST = new Set<string>(CUSTOMER_RETURN_REASONS);
 const MANIFEST = new Set<string>(VENDOR_RETURN_STATUSES);
 
 const BASE = "/admin/inventory/disposition";
@@ -73,71 +68,12 @@ function posNum(v: string): number | null {
   return v !== "" && Number.isFinite(n) && n > 0 ? n : null;
 }
 
-// ── Customer returns (Task Q) ────────────────────────────────────────────────
-
-export type FindReturnableResult =
-  | { ok: true; lines: ReturnableOrderLine[]; emptyMessage: string | null }
-  | { ok: false; error: string };
-
-/** Client-callable search for the return wizard (completed orders only): receipt #, fun name, order #, member, name, phone. */
-export async function findReturnableLinesAction(search: string): Promise<FindReturnableResult> {
-  await requirePermission("inventory.manage");
-  const q = (search ?? "").trim();
-  if (q.length < 2) return { ok: false, error: "Type at least 2 characters." };
-  try {
-    const { lines, emptyMessage } = await searchReturnableOrderLines(q, 8);
-    return { ok: true, lines, emptyMessage };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Search failed." };
-  }
-}
-
-export async function createCustomerReturnAction(formData: FormData) {
-  const session = await requirePermission("inventory.manage");
-  const orderId = str(formData, "order_id");
-  const orderLineId = str(formData, "order_line_id");
-  const lotId = str(formData, "lot_id") || null;
-  const qty = Number(formData.get("quantity"));
-  const disposition = str(formData, "disposition") === "restock" ? "restock" : "destroy";
-  const reason = str(formData, "reason") || "other";
-  const detail = str(formData, "detail") || null;
-  const refundDollars = Number(formData.get("refund_dollars"));
-  const refundMinor = Number.isFinite(refundDollars) ? Math.max(0, Math.round(refundDollars * 100)) : 0;
-  const originalPackaging = formData.get("original_packaging") === "on";
-  const lotIdLegible = formData.get("lot_id_legible") === "on";
-
-  if (!orderId || !orderLineId) redirect(`${BASE}?error=${encodeURIComponent("Pick a completed sale line first.")}`);
-  if (!Number.isFinite(qty) || qty <= 0) redirect(`${BASE}?error=qty`);
-  if (!CUST.has(reason)) redirect(`${BASE}?error=reason`);
-
-  const result = await createCustomerReturn(
-    {
-      orderId,
-      orderLineId,
-      lotId,
-      quantity: qty,
-      disposition,
-      reason,
-      detail,
-      refundMinor,
-      originalPackaging,
-      lotIdLegible,
-    },
-    session.userId,
-  );
-  if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
-  await recordAudit({
-    actorId: session.profile.id,
-    actorEmail: session.email,
-    action: "customer_return.create",
-    entityType: "customer_returns",
-    entityId: result.id,
-    after: { order_id: orderId, order_line_id: orderLineId, quantity: qty, disposition, reason, refund_minor: refundMinor, held: result.held },
-  });
-  revalidatePath(BASE);
-  revalidatePath("/admin/inventory");
-  redirect(`${BASE}?ok=customer_return`);
-}
+// ── Customer returns ─────────────────────────────────────────────────────
+// Fix Phase 7.1 (G-45, owner D66: "Q4- remove it."): the back-office
+// Customer return wizard and its two actions are gone. Customer returns go
+// through the register's Return an item and the Returns desk
+// (/admin/registers/returns) only; both run the store return policy and work
+// out the refund (returns-store.ts processCounterReturn).
 
 // ── Vendor returns ───────────────────────────────────────────────────────────
 
@@ -318,8 +254,9 @@ export async function scheduleDestructionAction(formData: FormData) {
   const reason = str(formData, "reason") || "other";
   const detail = str(formData, "detail") || null;
   const qty = Number(formData.get("quantity"));
-  if (!lotId || !Number.isFinite(qty) || qty <= 0) redirect(`${BASE}?error=qty`);
-  if (!DES.has(reason)) redirect(`${BASE}?error=reason`);
+  // G-46 (F-15-13): codes the page turns into sentences (disposition-messages-core).
+  if (!lotId || !Number.isFinite(qty) || qty <= 0) redirect(`${BASE}?error=destroy_qty`);
+  if (!DES.has(reason)) redirect(`${BASE}?error=destroy_reason`);
 
   const result = await scheduleDestruction({ lotId, quantity: qty, reason, detail }, session.userId);
   if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);

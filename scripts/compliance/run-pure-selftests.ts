@@ -568,7 +568,7 @@ import { __runNotifyOutcomeCoreTests } from "../../src/lib/orders/notify-outcome
 import { __runEmailReadinessTests } from "../../src/lib/orders/email-readiness-core";
 import { __runStatusCasCoreTests } from "../../src/lib/orders/status-cas-core";
 import { __runRpcFallbackCoreTests } from "../../src/lib/db/rpc-fallback-core";
-import { __runReturnSearchCoreTests } from "../../src/lib/inventory/return-search-core";
+import { __runDispositionMessagesTests } from "../../src/lib/inventory/disposition-messages-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
 import { __runRegisterPolishCoreTests } from "../../src/lib/pos/register-polish-core";
 import { __runHeldStockCoreTests } from "../../src/lib/pos/held-stock-core";
@@ -2672,7 +2672,6 @@ __runLiquidVolumeTests();
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
   assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt
-  assertRan("return-search-core", __runReturnSearchCoreTests(), 37); // R-RET (owner message 10): back-office return search finds register sales by printed receipt #, fun name, GWY- order #, loyalty member name/phone; empty result says what to type
   assertRan("db-contract-core", __runDbContractCoreTests(), 30); // G-71a (owner message 12): daily DB health check: contract parse, unreachable = FAIL (run 0330), missing = WARN, call errors explained, one alert per Pacific day, escaped email
   assertRan("platform-changes", __runPlatformChangesTests(), 30); // G-71b (owner message 12): platform changes register valid, deadline warnings 30/7/1/overdue once each, monthly review once per month, stale register flagged, escaped email
   assertRan("money-smoke-core", __runMoneySmokeCoreTests(), 30); // G-71c (owner message 12): daily sale/return/till test: parse (ok must match 13 steps), failure explained per step and SQLSTATE (42501 -> 0330), not installed = warn, worse status wins, one daily report
@@ -2680,6 +2679,7 @@ __runLiquidVolumeTests();
   assertRan("disposition-core", __runDispositionCoreTests(), 50); // R-RET-2 (owner message 13): every unit of a sale line refundable one return at a time (owner's OG Kush $18.70 x2 case), never more than was paid, plain-English return messages with dollar amounts
   assertRan("version-pins-core", __runVersionPinsTests(), 50); // G-71e (owner message 14, item 5): exact versions only, package.json = lockfile, engines.node 24.x on a Vercel major, CI reads Node from package.json, actions pinned to SHAs, no Dependabot config (G-74)
   assertRan("upgrade-plan-core", __runUpgradePlanTests(), 50); // G-74 (owner message 16, D115/D116): upgrades found by scripts/platform/upgrade-plan.ts (patch/minor together after 7 days, majors alone, @types/node held to the Node major, lockstep groups) and opened as Greenway Dev PRs
+  assertRan("disposition-messages-core", __runDispositionMessagesTests(), 46); // Fix Phase 7.1 (G-46, G-49, G-50, G-45; D66/D67): readable Returns & Destruction errors, the hold at the legal minimum (0, "Schedule"), both CCRS files named, the Sale correction download only while the weekly batch cannot send it
   assertRan("customer-import-core", __runCustomerImportCoreTests(), 60); // G-73 (owner message 15): drag-and-drop Cultivera customer import: .xlsx/.csv read in the browser, repeats merged, fragment phones/bad emails/placeholder birthdays blanked and counted, Customer ID first and phone/email only for unclaimed customers, updates never blank stored values, spend to imported_spend only
   console.log("ALL PURE SELF-TESTS PASSED");
 }

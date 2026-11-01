@@ -119,9 +119,13 @@ Operational requirements:
 4. **Retailer-side CCRS record.** There is no retailer "transfer-out" CSV.
    The retailer's on-hand reduction is reported as an **InventoryAdjustment
    with reason `Other`** and a detail naming the return (processor, manifest
-   number, RMA). The Upload User Guide's own mapping table for destruction
-   reasons lists "Returned to seller → Other", confirming `Other` +
-   detail is the LCB-expected encoding for product going back up the chain.
+   number, RMA). Correction (Fix Phase 7.1, F-15-18): the Upload User
+   Guide's "Returned to seller" row is in **Table 4, DestructionReason**,
+   under the **PlantDestruction** file (producers' plants). The
+   InventoryAdjustment reasons (Destruction, Reconciliation, Lost, Seizure,
+   Theft, Other) have **no** return-to-vendor row. `Other` + detail is our
+   best-fit encoding, not an LCB-confirmed one; the open examiner question is
+   U-72 (`docs/ccrs-bible/12-unverified-register.md`).
 5. **Records.** Keep the manifest, the processor confirmation, and the RMA
    with the return record for five years (WAC 314-55-087 record retention —
    three years until WSR 24-19-040, effective 10/12/2024).
@@ -161,7 +165,8 @@ Operational requirements:
   gives time to catch mistakes, coordinate witnesses, and mirrors the
   quarantine concept), but it is **no longer a current-rule mandate** and the
   app must not claim it is. The hold is now a configurable store policy
-  (default 72h, may be shortened to 0) — documented in the UI as policy, not law.
+  (default **0h, the legal minimum**, since Fix Phase 7.1 / D67 / migration
+  0334; range 0–336h) — documented in the UI as policy, not law.
 
 ### 5.2 Rendering unusable (current rule)
 
@@ -274,16 +279,21 @@ templates:
 Design decisions (deliberate, documented):
 
 - **Hold before destruction is store policy, not law** (§5.1). Configurable
-  `hold_hours` (default 72, range 0–336) in `disposition_settings`.
+  `hold_hours` (default 0 since migration 0334 / D67, range 0–336) in `disposition_settings`.
 - **Recall-reason destructions cannot complete** until the operator confirms
   LCB coordination (officer/date captured) — WAC 314-55-225 (§4).
+- **Customer returns** (Fix Phase 7.1, D66): the back-office customer-return
+  wizard was removed. Customer returns go through the register's **Return an
+  item** and the **Returns desk** only. The notes below describe the removed
+  wizard and are kept for history.
 - **Customer returns require both attestations** (original packaging +
   legible lot ID) — WAC 314-55-079(12) (§2). Refunds are recorded in minor
   units (cents).
 - **Customer-return restock posts a POSITIVE adjustment** with internal
   reason `return` → CCRS `Other` + mandatory detail stating "ADD". The
-  original sale is corrected via the Sale-correction CSV (Delete for full
-  line return, Update with remaining quantity for partial).
+  original sale is corrected by the weekly CCRS batch when the ledger is
+  loaded; the Sale-correction CSV download runs only when the batch cannot
+  send them (Fix Phase 7.1, G-45) and otherwise refuses without marking.
 - **Customer-return destroy path** posts the add-back adjustment AND opens a
   destruction event for the returned quantity so the ledger tells the whole
   story (§2).
