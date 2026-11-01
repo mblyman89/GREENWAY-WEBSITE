@@ -1237,6 +1237,7 @@ import { __runCountAuditStatsTests } from "../../src/lib/pos/count-audit-stats-c
 import { __runIntakeHardenTests } from "../../src/lib/inbound-email/intake-harden-core";
 import { __runDbContractCoreTests } from "../../src/lib/platform/db-contract-core";
 import { __runPlatformChangesTests } from "../../src/lib/platform/platform-changes";
+import { __runVersionPinsTests } from "../../src/lib/platform/version-pins-core";
 import { __runMoneySmokeCoreTests } from "../../src/lib/platform/money-smoke-core";
 import { __runPlatformErrorsCoreTests } from "../../src/lib/platform/platform-errors-core";
 
@@ -2675,6 +2676,7 @@ __runLiquidVolumeTests();
   assertRan("money-smoke-core", __runMoneySmokeCoreTests(), 30); // G-71c (owner message 12): daily sale/return/till test: parse (ok must match 13 steps), failure explained per step and SQLSTATE (42501 -> 0330), not installed = warn, worse status wins, one daily report
   assertRan("platform-errors-core", __runPlatformErrorsCoreTests(), 40); // G-71d (owner message 12): error alerting: 42501 alerts on the first, missing at 3, crashes at 5 in 10 min; redirect/notFound ignored; messages scrubbed (tokens, emails, numbers); routes without query strings; per-instance throttle; one alert per kind per hour; 24h digest merged into the daily report
   assertRan("disposition-core", __runDispositionCoreTests(), 50); // R-RET-2 (owner message 13): every unit of a sale line refundable one return at a time (owner's OG Kush $18.70 x2 case), never more than was paid, plain-English return messages with dollar amounts
+  assertRan("version-pins-core", __runVersionPinsTests(), 50); // G-71e (owner message 14, item 5): exact versions only, package.json = lockfile, engines.node 24.x on a Vercel major, CI reads Node from package.json, actions pinned to SHAs, Dependabot covers every package dir
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

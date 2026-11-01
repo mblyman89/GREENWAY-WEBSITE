@@ -114,9 +114,9 @@ export const PLATFORM_CHANGES: readonly PlatformChange[] = [
     title: "supabase-js drops Node.js 20",
     deadline: "2026-06-30",
     source: "https://supabase.com/changelog/45715-deprecation-notice-dropping-support-for-node-js-20",
-    status: "action-needed",
-    impact: "CI (.github/workflows, 3 jobs) still builds and tests on Node 20, which reached end of life on 2026-04-30. Production on Vercel is not on Node 20 (see vercel-node20). CI therefore tests on a different Node than production runs.",
-    action: "Move CI to the Node major production uses (22 or 24) and pin it in package.json engines (item 5, version pinning).",
+    status: "done",
+    impact: "Until G-71e, CI (.github/workflows, 3 jobs) built and tested on Node 20, which reached end of life on 2026-04-30, so CI tested on a different Node than production ran.",
+    action: "G-71e (owner message 14): package.json and merch-site/package.json set engines.node 24.x, every CI job reads its Node from package.json (node-version-file), and tests/compliance/g71e-version-pins.test.ts fails if a Node literal comes back.",
   },
   {
     id: "vercel-node20",
@@ -124,9 +124,9 @@ export const PLATFORM_CHANGES: readonly PlatformChange[] = [
     title: "Node.js 20 disabled for new Vercel builds and functions",
     deadline: "2026-10-01",
     source: "https://vercel.com/changelog/node-js-20-is-being-deprecated",
-    status: "not-affected",
-    impact: "Production deployments after 2026-10-01 succeeded (for example R-RET e1c8da0b on 2026-10-31), and Vercel says a project on 20 errors on every new deployment, so production is on 22 or 24. package.json has no engines field, so the version lives only in Project Settings.",
-    action: "Pin engines.node in package.json so the version is in the repo, not the dashboard (item 5).",
+    status: "done",
+    impact: "Production deployments after 2026-10-01 succeeded (for example R-RET e1c8da0b on 2026-10-31), so production was already off Node 20, but the version lived only in Project Settings.",
+    action: "G-71e: engines.node is 24.x in both package.json files; Vercel reads it and it overrides Project Settings, so the version is in the repo and changes only by pull request.",
   },
   {
     id: "github-actions-node20",
@@ -134,9 +134,9 @@ export const PLATFORM_CHANGES: readonly PlatformChange[] = [
     title: "GitHub Actions runners removed Node 20 for JavaScript actions",
     deadline: "2026-09-23",
     source: "https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners",
-    status: "not-affected",
-    impact: "CI uses actions/checkout@v4 and actions/setup-node@v4 and is green after the removal (G-71a run 41260189512), so the runner runs them on Node 24.",
-    action: "When a major version of these actions is released, move to it in its own PR.",
+    status: "done",
+    impact: "CI used actions/checkout@v4 and actions/setup-node@v4, which kept working after the removal (G-71a run 41260189512) because the runner forced them onto Node 24.",
+    action: "G-71e: moved to actions/checkout v7.0.1 and actions/setup-node v7.1.0 (both run on node24), pinned to commit SHAs; Dependabot proposes newer versions monthly.",
   },
   {
     id: "nextjs-15-eol",
@@ -156,7 +156,27 @@ export const PLATFORM_CHANGES: readonly PlatformChange[] = [
     source: "https://github.com/vercel/next.js/releases",
     status: "watch",
     impact: "Installed 16.2.9; the latest 16.x was 16.4.3 on 2026-10-23. Patch releases carry security fixes.",
-    action: "Each monthly review: read the 16.x release notes for security fixes; take them in a slice with the full CI gate (item 5).",
+    action: "Dependabot opens the upgrade PR (weekly, grouped minor and patch; G-71e). Read the 16.x release notes, then follow standing rule 17 (re-author, full CI gate, rebase-merge, verify production).",
+  },
+  {
+    id: "npm-12-install-scripts",
+    vendor: "nodejs",
+    title: "npm 12 blocks dependency install scripts unless allowScripts approves them",
+    deadline: null,
+    source: "https://github.com/npm/cli/blob/latest/CHANGELOG.md",
+    status: "watch",
+    impact: "Node 24 ships npm 11.19.1, which still runs install scripts and only warns (checked in G-71e: esbuild, sharp and unrs-resolver are listed). npm 12 blocks them by default, so each one must be approved or proven unnecessary first.",
+    action: "Before moving to a Node or npm that bundles npm 12: add an allowScripts policy to package.json (npm install-scripts approve) and prove npm ci plus next build in the same PR.",
+  },
+  {
+    id: "nodejs-24-eol",
+    vendor: "nodejs",
+    title: "Node.js 24 end of life (production and CI run 24.x)",
+    deadline: "2028-04-30",
+    source: "https://nodejs.org/en/about/previous-releases",
+    status: "watch",
+    impact: "G-71e pinned 24.x: LTS since 2025-10-28, maintenance until 2028-04-30. Node 26 became LTS only on 2026-10-28 (Vercel's default for new projects); 24 has a year of LTS fixes and is the Node GitHub's runners use for actions.",
+    action: "Move to 26.x in its own slice after 26 has had some months of LTS fixes: change PRODUCTION_NODE_MAJOR in version-pins-core.ts and engines.node in both package.json files, run the full CI gate.",
   },
 ];
 
@@ -336,6 +356,7 @@ export function __runPlatformChangesTests(): { passed: number; failed: number } 
   ok(validateRegister(PLATFORM_CHANGES).length === 0, "the real register is well formed");
   ok(validDay(REGISTER_REVIEWED_ON), "REGISTER_REVIEWED_ON is a real day");
   ok(PLATFORM_CHANGES.some((e) => e.id === "supabase-no-auto-expose" && e.status === "done"), "the R-RET cause is on the register as done");
+  ok(["supabase-js-node20", "vercel-node20", "github-actions-node20"].every((id) => PLATFORM_CHANGES.some((e) => e.id === id && e.status === "done")), "the Node.js 20 entries are done (G-71e)");
   ok(validateRegister([mk({}), mk({})]).some((p) => p.includes("duplicate")), "duplicate ids refused");
   ok(validateRegister([mk({ id: "Bad Id" })]).length > 0, "bad id refused");
   ok(validateRegister([mk({ deadline: "2026-02-30" })]).length > 0, "impossible date refused");
