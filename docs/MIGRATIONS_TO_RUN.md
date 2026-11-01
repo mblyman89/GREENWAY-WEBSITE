@@ -3588,8 +3588,9 @@ in Vercel.
   ```
 
   **Then:** Back office → **Customers → ⭐ Cultivera loyalty** → **Start reading Cultivera**.
-  The crawl reads one customer a second (about 16,600 customers, about 5 hours; it pauses
-  after 8 hours and **Continue** picks up where it stopped). When it says Finished, review the
+  The crawl reads one customer at a time with a 1-second pause between (each record takes
+  about 1.6-2 s to answer, so about 16,600 customers is roughly 12-13 hours). It pauses after
+  8 hours; press **Continue** and it picks up where it stopped. When it says Finished, review the
   preview, tick the box, and press **Apply**.
 
   **Rollback (only if needed):** `supabase/rollbacks/0336_cultivera_loyalty_import.rollback.sql`.

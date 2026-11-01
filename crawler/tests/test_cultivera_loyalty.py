@@ -271,3 +271,23 @@ def test_not_configured_is_503(env, monkeypatch):
 def test_settings_default_pace_is_slow():
     s = Settings(_env_file=None)
     assert s.cultivera_loyalty_pace_seconds >= 1.0
+
+
+def test_loyalty_and_archive_refuse_each_other():
+    """One Cultivera crawl at a time: the archive harvest and the loyalty crawl share one login."""
+    import pytest
+    from app import cultivera_archive_jobs as archive_jobs
+    from app import cultivera_loyalty_jobs as loyalty_jobs
+
+    archive_jobs._active["run_id"] = "20261101T000000Z-aaaaaaaa"
+    try:
+        with pytest.raises(RuntimeError, match="busy"):
+            loyalty_jobs.start_or_resume(client_factory=lambda: None)
+    finally:
+        archive_jobs._active["run_id"] = None
+    loyalty_jobs._active["run_id"] = "20261101T000000Z-bbbbbbbb"
+    try:
+        with pytest.raises(RuntimeError, match="busy"):
+            archive_jobs.start_or_resume(client_factory=lambda: None)
+    finally:
+        loyalty_jobs._active["run_id"] = None
