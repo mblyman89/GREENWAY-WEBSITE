@@ -140,6 +140,9 @@ export default async function CustomersPage({
             <Button href="/admin/customers/import" variant="neutral" size="sm">
               ⬆ Import
             </Button>
+            <Button href="/admin/customers/loyalty-import" variant="neutral" size="sm">
+              ⭐ Cultivera loyalty
+            </Button>
             <Button href="/admin/customers/new" variant="save" size="sm">
               + New customer
             </Button>
