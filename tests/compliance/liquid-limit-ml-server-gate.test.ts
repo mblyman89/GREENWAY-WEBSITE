@@ -111,6 +111,7 @@ vi.mock("@/lib/promotions/discount-engine", () => ({
   // set keeps every line at its regular price so the money gate is satisfied
   // and the limit lines are the only thing under test.
   loadActiveRules: async () => [],
+  loadPromoSchedule: async () => ({ schedule: [], activeNow: [] }),
   loadProductCosts: async () => new Map<string, number>(),
 }));
 

@@ -100,6 +100,7 @@ vi.mock("@/lib/pos/recall-hold-store", () => ({ recalledProductKeys: async () =>
 // Everything else the bundle needs, stubbed to boring defaults.
 vi.mock("@/lib/promotions/discount-engine", () => ({
   loadActiveRules: async () => [],
+  loadPromoSchedule: async () => ({ schedule: [], activeNow: [] }),
   loadProductCosts: async () => new Map(),
 }));
 vi.mock("@/lib/compliance/sales-limits", () => ({

@@ -63,6 +63,7 @@ const hold: { keys: Set<string>; fail: boolean } = { keys: new Set(), fail: fals
 vi.mock("@/lib/pos/live-menu", () => ({ loadLiveMenuAll: async () => MENU }));
 vi.mock("@/lib/promotions/discount-engine", () => ({
   loadActiveRules: async () => [],
+  loadPromoSchedule: async () => ({ schedule: [], activeNow: [] }),
   loadProductCosts: async () => new Map<string, number>(),
 }));
 vi.mock("@/lib/pos/recall-hold-store", () => ({
