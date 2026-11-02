@@ -804,6 +804,7 @@ import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilie
 import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-availability-core";
 import { __runRegisterCoverageCoreTests } from "../../src/lib/pos/register-coverage-core";
 import { __runRegisterFixLaterCoreTests } from "../../src/lib/pos/register-fix-later-core";
+import { __runRegisterLoyaltySignupCoreTests } from "../../src/lib/pos/register-loyalty-signup-core";
 import { __runScanExactSizeCoreTests } from "../../src/lib/pos/scan-exact-size-core";
 import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
 import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
@@ -2705,6 +2706,7 @@ __runLiquidVolumeTests();
   assertRan("register-coverage-core", __runRegisterCoverageCoreTests(), 45); // register-sell-all-back-office-stock + register-sell-hidden-and-held-stock (owner: "its in the inventory list, it needs to scan on the registers, no exceptions"): EVERY hidden card (importer, person, needs-category) with live active lots, a cannabis category and a real price is rung up at the register (still off the website); only non-cannabis and unpriced cards stay off; per-size units left come from live lots
   assertRan("scan-exact-size-core", __runScanExactSizeCoreTests(), 32); // register-scan-exact-size (owner: "if I scan something, and it knows what it is I just scanned, that product alone needs to be added to the cart with out needing to select a variant size"): a package barcode adds ITS OWN size from the lot's 0294 size link, receiving variant or package weight; a proven size off the register is refused; no evidence keeps the pick (never guessed)
   assertRan("register-fix-later-core", __runRegisterFixLaterCoreTests(), 60); // register-sell-everything-fix-later (owner: "Everything must sell. No exceptions. We will fix it all later."): Quarantine lots sell (except a scheduled destruction), a stocked lot with no menu product sells from the lot itself (name, size, category with Concentrate fallback, 2x cost price), Fix & sell builds the line from a scanned package code, only recall / failed lab / destruction / destroyed / sample / expired edible stop a sale
+  assertRan("register-loyalty-signup-core", __runRegisterLoyaltySignupCoreTests(), 120); // register-loyalty-signup (owner: "I need a way to sign up new loyalty customers from the iPad register."): 21+ from the sale's verified ID, phone or email required, optional TCPA consent needs a typed signature + the published wording hash, duplicate check (phone / email / name + birthday) before any write, shared signup -> customer mapping, idempotent request id, audit carries no PII, register <-> route reply parsing
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
