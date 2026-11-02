@@ -14,7 +14,15 @@ account (docs/roadmap/CVB-CULTIVERA-BENCHMARK.md section 4 has the table). Three
 the hard way and are encoded here on purpose:
   * `orders` and `customers` return HTTP 504 (the gateway's ~60 s limit) for large pages, so orders are
     read in MONTHLY windows of 1,000 and customers in pages of 1,000;
-  * `shifts/list` returns ZERO rows (with the right Count) for a 5,000 page, so it pages at 1,000;
+  * `shifts/list` returns ZERO rows (with the right Count) unless the body ALSO carries the Kendo keys the
+    web app spreads in (`...options`: skip/take/page/pageSize/sort) - re-measured 2026-11-02 (CVB-7);
+  * `products` returns ZERO rows (with the right Count) for the Page-wrapped body; the web app sends
+    Skip/Take FLAT - re-measured 2026-11-02 (CVB-7);
+  * `customers/customer-loyalty-point-adjustment` answers HTTP 500 unless CustomerId/FromDate/ToDate are
+    present (null = every customer), and also 500 for ANY sort (its grid has serverSorting off) - CVB-7;
+  * `activity` serves at most 1,000 rows per call and IGNORES Skip (every page is the newest 1,000), so it
+    is read in Pacific MONTH windows, and a month the server holds more than one call's rows for is read
+    DAY by day (a day is ~100-225 rows; a day the server still truncates fails loudly) - CVB-7;
   * the keyless roll-up reports (daily-sales, sales-by-sku, ...) have no Id; they are read in ONE page and
     refused if the page is short of Count, so a silent truncation is impossible.
 
@@ -35,7 +43,7 @@ import json
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .cultivera_pos import (
@@ -58,6 +66,8 @@ ARCHIVE_FROM = "2015-01-01"
 PART_ROWS = 20_000
 KEYLESS_MAX = 25_000
 MAX_PAGES = 2_000
+# `activity` serves at most this many rows per call whatever Take says, and ignores Skip (measured CVB-7).
+ACTIVITY_CAP = 1_000
 
 _DAY = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 PART_NAME = re.compile(r"^[a-z0-9_]+\.(p\d{4}|\d{4}-\d{2}|s\d{5}|cc\d{5})\.jsonl\.gz$")
@@ -102,6 +112,36 @@ def month_windows(first_day: str, last_day: str) -> list[tuple[str, str, str]]:
     return out
 
 
+def day_list(first_day: str, last_day: str) -> list[str]:
+    """Every YYYY-MM-DD from first_day to last_day inclusive."""
+    a, b = _DAY.match(first_day), _DAY.match(last_day)
+    if not a or not b or first_day > last_day:
+        raise CultiveraPosError(f"bad window {first_day}..{last_day}")
+    d0 = datetime(int(a.group(1)), int(a.group(2)), int(a.group(3)))
+    n = (datetime(int(b.group(1)), int(b.group(2)), int(b.group(3))) - d0).days
+    return [(d0 + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(n + 1)]
+
+
+def next_day(day: str) -> str:
+    m = _DAY.match(day or "")
+    if not m:
+        raise CultiveraPosError(f"date must be YYYY-MM-DD, got {day!r}")
+    return (datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def wall_day(row: dict[str, Any], field: str) -> str:
+    """A row's Pacific wall-clock day (YYYY-MM-DD) from its "MM/DD/YYYY ..." field; unreadable fails loudly."""
+    return first_day_from_str(str(row.get(field) or ""))
+
+
+def _key_order(key: str) -> Callable[[dict[str, Any]], tuple[int, Any]]:
+    """Stable part order: numeric keys numerically, anything else as text after them."""
+    def k(r: dict[str, Any]) -> tuple[int, Any]:
+        v = r.get(key)
+        return (0, v) if isinstance(v, int) and not isinstance(v, bool) else (1, str(v))
+    return k
+
+
 def first_day_from_str(created_at_str: str) -> str:
     """Cultivera's CreatedAtStr is the Pacific wall clock "MM/DD/YYYY hh:mm AM" -> YYYY-MM-DD."""
     m = re.match(r"^(\d{2})/(\d{2})/(\d{4})", created_at_str or "")
@@ -142,7 +182,14 @@ def flat_style(filters: dict[str, Any], key: str | None = "Id") -> Callable[[int
     return lambda skip, take: {**filters, "Skip": skip, "Take": take, "Sort": _sort(key), "HasSortInfo": bool(key)}
 
 
-def kendo_style(filters: dict[str, Any], key: str = "Id") -> Callable[[int, int], dict[str, Any]]:
+def page_kendo_style(filters: dict[str, Any], key: str | None = "Id") -> Callable[[int, int], dict[str, Any]]:
+    """The Page-wrapped body PLUS the lowercase Kendo keys - exactly what the back office sends for grids
+    whose parameterMap spreads `...options` (shifts/list ignores Page without them: measured CVB-7)."""
+    return lambda skip, take: {**page_style(filters, key)(skip, take), "skip": skip, "take": take,
+                               "page": skip // take + 1, "pageSize": take, "sort": _sort(key)}
+
+
+def kendo_style(filters: dict[str, Any], key: str | None = "Id") -> Callable[[int, int], dict[str, Any]]:
     """{...filters, skip, take, page, pageSize, sort} - orders, inventories, vendors (Kendo grid)."""
     return lambda skip, take: {**filters, "skip": skip, "take": take, "page": skip // take + 1, "pageSize": take,
                                "sort": _sort(key)}
@@ -179,6 +226,10 @@ class Paged:
     key: str = "Id"
     pii: bool = False
     note: str = ""
+    # date-windowed (the server caps one call and ignores Skip): body(from, to) is called PER WINDOW with
+    # real days, and windows are Count-verified; the dataset total must equal the all-time Count.
+    windowed: bool = False
+    day_field: str = "DateActivityStr"  # windowed only: the row's Pacific wall clock "MM/DD/YYYY hh:mm AM"
 
 
 @dataclass(frozen=True)
@@ -214,9 +265,10 @@ PAGED: tuple[Paged, ...] = (
     Paged("roles", "roles", lambda f, t: flat_style({"Name": ""}), take=1000),
     Paged("clocks", "clocks", _p(_const({"DeviceIds": [], "EmployeeIds": [], "CheckInDateFrom": None,
                                            "CheckInDateTo": None, "HideCheckOut": False})), take=1000),
-    Paged("shifts", "shifts/list", _p(_const({"ShiftNumber": None, "DeviceIds": [], "ShiftDateFrom": None,
-                                                "ShiftDateTo": None, "HideClosed": False})), take=1000,
-          note="5,000 per page returns zero rows (measured); 1,000 works"),
+    Paged("shifts", "shifts/list", lambda f, t: page_kendo_style({"ShiftNumber": None, "DeviceIds": [],
+                                                                  "ShiftDateFrom": None, "ShiftDateTo": None,
+                                                                  "HideClosed": False}), take=1000,
+          note="needs the lowercase Kendo keys too, or every page is empty (re-measured CVB-7: 1,662 rows)"),
     Paged("discounts", "discounts", _p(_const({"DiscountName": "", "HideNotActive": False})), take=1000),
     Paged("promotions", "promotions", _p(_const({"PromotionName": "", "HideNotActive": False, "DateFrom": None,
                                                    "DateTo": None})), take=1000),
@@ -226,12 +278,13 @@ PAGED: tuple[Paged, ...] = (
     Paged("categories", "products/categories", _p(_const({"CategoryName": "", "IsActive": False})), take=1000),
     Paged("strains", "products/strains", _p(_const({"StrainName": "", "IsActive": False})), take=5000),
     Paged("brands", "brands", _p(_const({"Name": "", "VendorIds": [], "HideNotActive": False})), take=5000),
-    Paged("products", "products", _p(_const({"StrainId": None, "Product": "", "BrandIds": [], "TagIds": [],
+    Paged("products", "products", lambda f, t: flat_style({"StrainId": None, "Product": "", "BrandIds": [], "TagIds": [],
                                                "HideMasterProduct": False, "HideNotAvailable": False,
                                                "HideOutOfStock": False, "HideDiscontinued": False,
                                                "InventoryTypeIds": [], "VendorIds": [], "CategoryIds": [],
-                                               "ShowNonCannabis": False})), take=2000,
-          note="ShowNonCannabis=false is ALL products (17,605); true is non-cannabis only (189)"),
+                                               "ShowNonCannabis": False}), take=2000,
+          note="FLAT Skip/Take (the Page body returns zero rows, CVB-7); ShowNonCannabis=false is ALL products "
+               "(17,605); true is non-cannabis only (189)"),
     Paged("storage_locations", "storage-locations", _p(_const({"Name": "", "StorageLocationTypeIds": [],
                                                                 "ShowOnlySaleFloor": False})), take=1000),
     Paged("tax_settings", "tax-settings", _p(_const({"Name": ""})), take=1000),
@@ -259,8 +312,10 @@ PAGED: tuple[Paged, ...] = (
                                     "ShowUnderageCounts": False}), take=1000),
     Paged("inventory_discrepancies", "inventories/inventory-discrepancies",
           _p(_const({"Barcode": "", "ProductIds": [], "RegisterIds": [], "HideProcessed": False})), take=1000),
-    Paged("loyalty_adjustments", "customers/customer-loyalty-point-adjustment", lambda f, t: kendo_style({}),
-          take=1000),
+    Paged("loyalty_adjustments", "customers/customer-loyalty-point-adjustment",
+          lambda f, t: kendo_style({"CustomerId": None, "FromDate": None, "ToDate": None}, key=None), take=1000,
+          note="HTTP 500 without CustomerId/FromDate/ToDate, or with a sort (the grid has serverSorting off); "
+               "null = every customer (measured CVB-7: 25 rows)"),
     Paged("inventories", "inventories", lambda f, t: kendo_style({}), take=5000),
     Paged("aging_inventory", "reports/aging-inventory",
           _p(lambda f, t: {"Barcode": "", "ProductIds": [], "VendorIds": [], "BrandIds": [], "CategoryIds": [],
@@ -279,9 +334,13 @@ PAGED: tuple[Paged, ...] = (
     Paged("loyalty_accrual", "reports/loyalty-point-accrual",
           _p(lambda f, t: {"CustomerIds": [], "EmployeeIds": [], "TypeIds": [], "OrderNo": None,
                            "DateFrom": mdy(f), "DateTo": mdy(t)}), take=5000, pii=True),
-    Paged("activity", "activity", _p(_const({"ActivityNumber": None, "ShiftNumber": None, "ActivityTypesIds": [],
-                                               "DateFrom": None, "DateTo": None})), take=5000,
-          note="register activity: opens, drops, payouts, pay-ins, closes, sales, returns"),
+    Paged("activity", "activity", lambda f, t: page_style({"ActivityNumber": None, "ShiftNumber": None,
+                                                            "ActivityTypesIds": [],
+                                                            "DateFrom": mdy(f) if f else None,
+                                                            "DateTo": mdy(t) if t else None}, None),
+          take=ACTIVITY_CAP, windowed=True,
+          note="register activity: opens, drops, payouts, pay-ins, closes, sales, returns. The server serves "
+               "<= 1,000 rows a call and ignores Skip (measured CVB-7), so it is read in month/day windows"),
     Paged("sales_lines", "reports/daily-sales-detail", _p(sales_filter), take=5000,
           note="every sold line: employee, payment, discount, tax, cost, returns"),
     Paged("discount_lines", "reports/promotion-details-report",
@@ -493,11 +552,67 @@ class Archive:
             raise CultiveraPosError(f"{endpoint}: Count {count} but {len(seen)} unique rows")
         return count
 
+    def _one_window(self, p: Paged, f: str, t: str) -> tuple[list[dict[str, Any]], int]:
+        """ONE call for the days f..t. Returns (rows, Count); rows are complete only when len == Count."""
+        got, count = parse_page(self.post(p.endpoint, p.body(f, t)(0, p.take)))
+        return got, count
+
+    def windowed_into_parts(self, p: Paged) -> int:
+        """For a list the server caps per call and will not page (activity, CVB-7): one part per Pacific month.
+        A month whose Count fits one call is read in one call; a bigger month is read DAY by day. Every window
+        is Count-verified (unique keys == Count), a day the server still truncates fails loudly, and the
+        windows' total must equal the all-time Count. Resumes month by month."""
+        d = self.ds(p.name)
+        windows = d.setdefault("windows", {})
+        for label, f, t in month_windows(self.date_from, self.date_to):
+            if windows.get(label, {}).get("status") == "done":
+                continue
+            got, count = self._one_window(p, f, t)
+            rows: dict[str, dict[str, Any]] = {}
+            if len(got) == count:
+                for r in got:
+                    rows.setdefault(str(r.get(p.key)), r)
+                days = 1
+            else:
+                # Day by day, but each call covers the day AND the next one: Cultivera's day filter is 24 hours,
+                # so on the fall-back day (25 h) a one-day call misses 11 PM-midnight (measured CVB-7:
+                # 2024-11-03 lost 2 rows, 2025-11-02 lost 1). Rows are kept only when their own Pacific
+                # wall-clock day is inside this month, and de-duplicated by key.
+                days = 0
+                for day in day_list(f, t):
+                    nxt = day_list(day, next_day(day))[-1]
+                    dgot, dcount = self._one_window(p, day, nxt)
+                    if len(dgot) != dcount:
+                        raise CultiveraPosError(
+                            f"{p.endpoint} {day}..{nxt}: Count {dcount} but one call held {len(dgot)} rows")
+                    for r in dgot:
+                        if f <= wall_day(r, p.day_field) <= t:
+                            rows.setdefault(str(r.get(p.key)), r)
+                    days += 1
+            if len(rows) != count:
+                raise CultiveraPosError(f"{p.endpoint} {label}: Count {count} but {len(rows)} unique rows")
+            if rows:
+                self.write_part(p.name, f"{p.name}.{label}.jsonl.gz", sorted(rows.values(), key=_key_order(p.key)))
+            windows[label] = {"status": "done", "count": count, "calls": days}
+            self.save()
+        _, total = parse_page(self.post(p.endpoint, p.body(None, None)(0, 1)))
+        windowed = sum(w["count"] for w in windows.values())
+        if windowed != total:
+            raise CultiveraPosError(f"{p.endpoint}: windows hold {windowed} but the all-time Count is {total}")
+        return total
+
     def stage_paged(self) -> dict[str, Any]:
         done = 0
         for p in PAGED:
             d = self.ds(p.name)
             if d["status"] == "done":
+                continue
+            if p.windowed:
+                d.update(endpoint=p.endpoint, kind="windowed", pii=p.pii, key=p.key, status="running")
+                self.save()
+                d.update(status="done", count=self.windowed_into_parts(p))
+                self.save()
+                done += 1
                 continue
             d.update(endpoint=p.endpoint, kind="paged", pii=p.pii, key=p.key, status="running")
             self.save()
