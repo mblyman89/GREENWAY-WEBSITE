@@ -567,6 +567,53 @@ export function detailLotKeys(productId: string, variantId: string): string[] {
   return [...keys];
 }
 
+
+// ---------------------------------------------------------------------------
+// Database read helpers (rule 15 — explicit columns, every error explained)
+// ---------------------------------------------------------------------------
+
+type DbError = { code?: string | null; message?: string | null } | null | undefined;
+
+/**
+ * If `error` is a "column does not exist" error that names one of the
+ * OPTIONAL columns, return that column so the caller can retry without it
+ * (a migration not yet applied in that environment). Otherwise null — a
+ * missing REQUIRED column is a real problem and must surface.
+ */
+export function missingOptionalColumn(error: DbError, optional: readonly string[]): string | null {
+  if (!error) return null;
+  const code = String(error.code ?? "");
+  const msg = String(error.message ?? "");
+  const signalled = code === "42703" || code === "PGRST204" || /column .* does not exist|could not find the .* column/i.test(msg);
+  if (!signalled) return null;
+  // Longest names first so "pos_thca" is not mistaken for "pos_thc".
+  const sorted = [...optional].sort((a, b) => b.length - a.length);
+  for (const col of sorted) {
+    const re = new RegExp(`(^|[^a-z0-9_])${col}([^a-z0-9_]|$)`, "i");
+    if (re.test(msg)) return col;
+  }
+  return null;
+}
+
+/** One read error in plain words, for the card's warning strip. */
+export function explainReadError(what: string, error: DbError): string {
+  const code = String(error?.code ?? "");
+  switch (code) {
+    case "42501":
+      return `Could not read ${what}: the server is not allowed to read that table (permission denied).`;
+    case "42P01":
+    case "PGRST205":
+      return `Could not read ${what}: that table is missing from the database (a migration has not been applied).`;
+    case "42703":
+    case "PGRST204":
+      return `Could not read ${what}: a column the register expects is missing (a migration has not been applied).`;
+    default: {
+      const msg = String(error?.message ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+      return `Could not read ${what}${msg ? `: ${msg}` : ""}.`;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
@@ -763,6 +810,18 @@ export function __runProductDetailCoreTests(): void {
   ok(resp.warnings.length === 2 && resp.warnings[0] === "pre", "caller warning kept + size warning added");
   const none = buildProductDetails({ productId: "P", variantId: "P-x", lots: [], labs: [], vendors: [], brands: [], manifests: [], todayPacific: today });
   ok(none.lots.length === 0 && none.warnings.length === 0, "no lots, no invented warning");
+
+
+  // missingOptionalColumn / explainReadError
+  ok(missingOptionalColumn({ code: "42703", message: 'column inventory_lots.held_qty does not exist' }, ["held_qty", "received_on"]) === "held_qty", "optional missing column found");
+  ok(missingOptionalColumn({ code: "42703", message: 'column inventory_lots.pos_thca does not exist' }, ["pos_thc", "pos_thca"]) === "pos_thca", "longest name wins");
+  ok(missingOptionalColumn({ code: "42703", message: 'column inventory_lots.lot_code does not exist' }, ["held_qty"]) === null, "required column not swallowed");
+  ok(missingOptionalColumn({ code: "42501", message: "permission denied held_qty" }, ["held_qty"]) === null, "permission error not a missing column");
+  ok(missingOptionalColumn(null, ["held_qty"]) === null, "no error");
+  ok(explainReadError("lots", { code: "42501" }).includes("permission"), "42501 explained");
+  ok(explainReadError("lots", { code: "PGRST205" }).includes("missing from the database"), "PGRST205 explained");
+  ok(explainReadError("lots", { code: "42703" }).includes("column"), "42703 explained");
+  ok(explainReadError("lots", { code: "X", message: "boom" }) === "Could not read lots: boom.", "fallback message");
 
   console.log(`product-detail-core: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
