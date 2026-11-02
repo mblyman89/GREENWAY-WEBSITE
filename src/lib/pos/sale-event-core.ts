@@ -222,6 +222,13 @@ export type PosSaleLine = {
    * At sync it snapshots onto order_lines.unit_grams (migration 0122).
    */
   unitGrams?: number | null;
+  /**
+   * D133 — the promotion (EngineRule id) the register applied to this line,
+   * when one applied. OPTIONAL (older registers omit it). The sync compares it
+   * with the promotions that were actually running when the sale happened and
+   * warns the owner on a mismatch (register.promo_day_mismatch). Never blocks.
+   */
+  promoRuleId?: string;
 };
 
 export type PosSalePayload = {
@@ -236,6 +243,12 @@ export type PosSalePayload = {
   changeMinor?: number;
   /** The drawer session this sale belongs to (open DrawerSession id). */
   drawerSessionId: string;
+  /**
+   * D133 — the Pacific day (YYYY-MM-DD) the register chose its daily deals
+   * for. OPTIONAL (older registers omit it). A sale priced with another day's
+   * deals is flagged at sync for the owner; the sale itself always stands.
+   */
+  promoDayKey?: string;
   /**
    * Present when this register sale was STARTED from a website pickup order
    * loaded into the register ("the customer is here and wants to add items").
@@ -417,6 +430,10 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       if (l.variantId !== undefined && (typeof l.variantId !== "string" || !l.variantId.trim())) {
         errors.push(`Line ${i + 1}: variantId, when present, must be a non-empty string.`);
       }
+      // D133: promoRuleId is OPTIONAL but never blank or oversized.
+      if (l.promoRuleId !== undefined && (typeof l.promoRuleId !== "string" || !l.promoRuleId.trim() || l.promoRuleId.length > 120)) {
+        errors.push(`Line ${i + 1}: promoRuleId, when present, must be a non-empty id.`);
+      }
       // AN-1: unitGrams is OPTIONAL (pre-AN-1 queues omit it; null = unknown
       // weight) but when present-and-non-null it must be a positive finite
       // number — garbage weights never reach the server's limit gate.
@@ -538,6 +555,9 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
     }
   }
   if (!isUuid(p.drawerSessionId)) errors.push("drawerSessionId must be a UUID (sale must belong to an open drawer).");
+  if (p.promoDayKey !== undefined && (typeof p.promoDayKey !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.promoDayKey))) {
+    errors.push("promoDayKey, when present, must be a YYYY-MM-DD day.");
+  }
   // Optional: when a sale was started from a loaded website order, its source
   // order id must be a real UUID (omitted for walk-ins so pre-existing payload
   // shapes stay byte-identical).
@@ -905,6 +925,10 @@ export function __runPosSaleEventTests(): void {
     "mode off cannot ride a rounding block",
   );
   ok(!validateSalePayload({ ...goodSale, drawerSessionId: "till-1" }).ok, "non-uuid drawer session refused");
+  ok(validateSalePayload({ ...goodSale, promoDayKey: "2026-11-02" }).ok, "D133 promo day accepted");
+  ok(!validateSalePayload({ ...goodSale, promoDayKey: "Monday" }).ok, "D133 bad promo day refused");
+  ok(validateSalePayload({ ...goodSale, lines: goodSale.lines.map((l) => ({ ...l, promoRuleId: "rule-1" })) }).ok, "D133 promo rule id accepted");
+  ok(!validateSalePayload({ ...goodSale, lines: goodSale.lines.map((l) => ({ ...l, promoRuleId: " " })) }).ok, "D133 blank promo rule id refused");
   ok(!validateSalePayload({ ...goodSale, idVerification: undefined }).ok, "sale without ID gate refused");
   ok(
     !validateSalePayload({ ...goodSale, idVerification: { method: "manual" } }).ok,

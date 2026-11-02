@@ -735,3 +735,13 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | It asks why I am opening it again | The drawer opens once per count; a second open needs a reason and the owner sees it (D131) |
 | Where does the owner see drawer opens? | Register Activity → Over / short warnings → Drawer opened for the count (owner/admin, D131) |
 | Can I clock out before the second count? | Yes. As soon as your blind count is done on the iPad (SOP-01 §4.2, D132) |
+
+**Promotion hardening (D133–D136) answers:**
+
+| Question | Answer (built, promotion hardening) |
+|---|---|
+| How do I set up the daily deals? | Promotions → **Set up our daily deals** → read the changes → press the button. Thursday is set up by hand (D134) |
+| Does the button change Thursday? | No. Use Guided Thursday setup or the Thursday planner (D134) |
+| Which sections of a promotion do I need? | Open **Which sections do I need?** on the form: it lists, for each kind of deal, what to fill and what is ignored (D136) |
+| What is the gold "wording heads-up"? | A warning that the text may break Washington's ad rules or not match the deal. It suggests wording and never blocks (D135) |
+| The register says today's deals are not loaded | The day changed and the register has not got today's deals yet. It refreshes on its own; if it stays, connect to the internet and press Refresh menu (More menu) (D133) |

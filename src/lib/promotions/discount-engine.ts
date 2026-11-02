@@ -61,6 +61,7 @@ import {
   seedRuleSnapshots,
   type PublishedRuleSnapshot,
 } from "./published-rules-core";
+import type { PromoSchedule } from "@/lib/pos/register-promo-day-core";
 
 /**
  * Load the EngineRules that are active right now. We must re-read the raw
@@ -71,6 +72,36 @@ export async function loadActiveRules(when = new Date()): Promise<EngineRule[]> 
   const published = await getPublishedPromotions();
   const active = published.filter((p) => isActiveNow(p, when));
   return attachConfigs(active);
+}
+
+/**
+ * D133 — every PUBLISHED promotion as an EngineRule WITH its weekday / date
+ * window, for the iPad register's menu bundle. The register picks the rules
+ * active for the sale's own Pacific day (register-promo-day-core), so a
+ * bundle cached overnight can never apply yesterday's deal. Also returns the
+ * rules active at `when` (the legacy `rules` field) from the SAME read, so the
+ * two can never disagree.
+ */
+export async function loadPromoSchedule(when = new Date()): Promise<{
+  schedule: PromoSchedule;
+  activeNow: EngineRule[];
+}> {
+  const published = await getPublishedPromotions();
+  const rules = await attachConfigs(published);
+  const byId = new Map(published.map((p) => [p.id, p]));
+  const scheduled = rules.map((rule) => {
+    const p = byId.get(rule.id);
+    return {
+      rule,
+      weekday: p?.weekday ?? null,
+      startsAt: p?.startsAt ?? null,
+      endsAt: p?.endsAt ?? null,
+    };
+  });
+  return {
+    schedule: { rules: scheduled, builtAt: when.toISOString() },
+    activeNow: published.filter((p) => isActiveNow(p, when)).map((p) => rules.find((r) => r.id === p.id)!).filter(Boolean),
+  };
 }
 
 /**

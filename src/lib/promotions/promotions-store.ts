@@ -208,6 +208,113 @@ export async function listLotRefsForKeys(
   }
 }
 
+/**
+ * D134 — the daily-deal rows (by promo_key) WITH their targets/exclusions, for
+ * the "Set up our daily deals" planner. Reads `{error}` on every query: a
+ * failed read returns ok:false (the button must never plan from a partial view).
+ */
+export async function listPromotionsWithRulesByKeys(
+  keys: string[],
+): Promise<{ ok: true; rows: PromotionWithRules[] } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "The database isn't configured in this environment." };
+  if (keys.length === 0) return { ok: true, rows: [] };
+  const admin = createSupabaseAdminClient();
+  const { data: promos, error } = await admin.from("promotions").select("*").in("promo_key", keys);
+  if (error) return { ok: false, error: error.message };
+  const rows = (promos as PromotionRow[] | null) ?? [];
+  if (rows.length === 0) return { ok: true, rows: [] };
+  const ids = rows.map((r) => r.id);
+  const [t, e] = await Promise.all([
+    admin.from("promotion_targets").select("*").in("promotion_id", ids),
+    admin.from("promotion_exclusions").select("*").in("promotion_id", ids),
+  ]);
+  if (t.error) return { ok: false, error: t.error.message };
+  if (e.error) return { ok: false, error: e.error.message };
+  const tRows = (t.data as PromotionTargetRow[] | null) ?? [];
+  const eRows = (e.data as PromotionExclusionRow[] | null) ?? [];
+  return {
+    ok: true,
+    rows: rows.map((r) => ({
+      ...r,
+      targets: tRows.filter((x) => x.promotion_id === r.id),
+      exclusions: eRows.filter((x) => x.promotion_id === r.id),
+    })),
+  };
+}
+
+/**
+ * D134 — create or update ONE promotion and replace its rules, reading
+ * `{error}` at every step (createPromotion/updatePromotion predate that rule
+ * and swallow failures). Used by the daily-deal setup button.
+ */
+export async function savePromotionChecked(
+  id: string | null,
+  input: PromotionInput,
+  targets: RuleInput[],
+  exclusions: RuleInput[],
+  actorId: string,
+  opts: { publish?: boolean; wasPublished?: boolean } = {},
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "The database isn't configured in this environment." };
+  const admin = createSupabaseAdminClient();
+  const statusPatch: Record<string, unknown> = opts.publish
+    ? { status: "published", ...(opts.wasPublished ? {} : { published_at: new Date().toISOString() }) }
+    : {};
+  let promoId = id;
+  if (promoId) {
+    const { error } = await admin
+      .from("promotions")
+      .update({ ...input, ...statusPatch, updated_by: actorId })
+      .eq("id", promoId);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { data, error } = await admin
+      .from("promotions")
+      .insert({ ...input, ...statusPatch, created_by: actorId, updated_by: actorId })
+      .select("id")
+      .single();
+    if (error || !data) return { ok: false, error: error?.message ?? "insert returned no row" };
+    promoId = (data as { id: string }).id;
+  }
+  const [dt, de] = await Promise.all([
+    admin.from("promotion_targets").delete().eq("promotion_id", promoId),
+    admin.from("promotion_exclusions").delete().eq("promotion_id", promoId),
+  ]);
+  if (dt.error) return { ok: false, error: dt.error.message };
+  if (de.error) return { ok: false, error: de.error.message };
+  if (targets.length > 0) {
+    const { error } = await admin
+      .from("promotion_targets")
+      .insert(targets.map((r) => ({ promotion_id: promoId, scope: r.scope, value: r.value })));
+    if (error) return { ok: false, error: error.message };
+  }
+  if (exclusions.length > 0) {
+    const { error } = await admin
+      .from("promotion_exclusions")
+      .insert(exclusions.map((r) => ({ promotion_id: promoId, scope: r.scope, value: r.value })));
+    if (error) return { ok: false, error: error.message };
+  }
+  // Same immutable publish snapshot setPromotionStatus takes (best-effort: the
+  // snapshot is an audit aid, the deal itself is already saved).
+  if (opts.publish) {
+    try {
+      const promo = await getPromotion(promoId as string);
+      if (promo) {
+        const affected = await previewAffectedProducts(promo);
+        await admin.from("promotion_audit_snapshots").insert({
+          promotion_id: promoId,
+          snapshot: { promotion: promo },
+          affected_count: affected.length,
+          taken_by: actorId,
+        });
+      }
+    } catch {
+      // never undo a saved deal over a snapshot
+    }
+  }
+  return { ok: true, id: promoId as string };
+}
+
 export async function setPromotionStatus(
   id: string,
   status: PostStatus,

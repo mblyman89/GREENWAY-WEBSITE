@@ -213,8 +213,10 @@ export function guardRuleShapeFor(promo: PromotionWithRules): GuardRuleShape {
  */
 export async function guardPromotionPublish(
   promo: PromotionWithRules,
+  /** D134: a menu already loaded by the caller (the daily-deal button checks six deals). */
+  preloaded?: GuardMenu,
 ): Promise<PublishGuardResult> {
-  const { products, hiddenSkipped, neverSkipped, readProblems } = await loadGuardMenu();
+  const { products, hiddenSkipped, neverSkipped, readProblems } = preloaded ?? (await loadGuardMenu());
   if (products.length === 0) {
     return { blocked: false, findings: [], affectedCount: 0, hiddenSkipped, neverSkipped, affected: [], readProblems };
   }

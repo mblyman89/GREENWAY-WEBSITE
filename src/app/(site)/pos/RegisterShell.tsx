@@ -195,6 +195,7 @@ import { parseProductDetailsResponse, type ProductDetailsFn } from "@/lib/pos/pr
 import { priceLookupUnavailableReason } from "@/lib/pos/price-lookup-core";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
+import { rulesForSale, shouldAutoRefreshMenu } from "@/lib/pos/register-promo-day-core";
 
 // ---------------------------------------------------------------------------
 // Local storage keys (device-scoped; every durable fact lives server-side)
@@ -323,6 +324,13 @@ export function RegisterShell({
   const [saleActive, setSaleActive] = useState(false);
   const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
+  // D133: signature of the deals active right now (day + rule ids), the
+  // instant it was taken, and the stale-bundle warning (if any).
+  const [promoClock, setPromoClock] = useState<{ sig: string; at: number; warning: string | null }>({
+    sig: "",
+    at: 0,
+    warning: null,
+  });
   // R74 S43: latest bundle for callbacks (failure banner, order-load retry).
   const menuBundleRef = useRef<PosMenuBundle | null>(null);
   // B17 — the last frozen receipt snapshot (survives the post-sale auto-lock)
@@ -952,6 +960,44 @@ export function RegisterShell({
     }
   }, [creds, menuLoading]);
 
+  // ── D133: promo clock + automatic menu refresh ──
+  // Every 30 s: re-pick the deals for the current Pacific moment (only a
+  // CHANGE in the active set re-prices anything), and download a fresh menu
+  // when the Pacific day changed or the bundle is older than 10 minutes -
+  // never mid-sale, never offline, never while a download is running.
+  const refreshMenuRef = useRef(refreshMenu);
+  const promoGateRef = useRef({ online, saleActive, menuLoading });
+  useEffect(() => {
+    refreshMenuRef.current = refreshMenu;
+    promoGateRef.current = { online, saleActive, menuLoading };
+  }, [refreshMenu, online, saleActive, menuLoading]);
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const bundle = menuBundleRef.current;
+      if (bundle) {
+        const picked = rulesForSale(bundle, now);
+        const sig = `${picked.dayKey}|${picked.source}|${picked.rules.map((r) => r.id).join(",")}`;
+        setPromoClock((prev) => (prev.sig === sig ? prev : { sig, at: now.getTime(), warning: picked.warning }));
+      }
+      const gate = promoGateRef.current;
+      const why = shouldAutoRefreshMenu({
+        fetchedAt: bundle?.fetchedAt ?? null,
+        now,
+        online: gate.online,
+        saleActive: gate.saleActive,
+        busy: gate.menuLoading,
+      });
+      if (why === "day_changed" || why === "periodic") void refreshMenuRef.current();
+    };
+    const t0 = setTimeout(tick, 0);
+    const t1 = setInterval(tick, 30_000);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(t1);
+    };
+  }, [menuBundle]);
+
   // Refresh the bundle from the server once creds exist (cached copy was
   // hydrated in the boot effect; offline sales use it until this succeeds).
   // The setState inside refreshMenu is a busy-flag around a network fetch
@@ -1232,13 +1278,30 @@ export function RegisterShell({
     (pairingProblem ? pairingProblemBanner(pairingProblem) : null) ??
     storageAlert ??
     queueDepthWarning(pendingCount);
-  const shownBanner = persistentAlert ?? banner;
+  // D133: an old cached bundle (no schedule) on a later day applies no deal;
+  // say so instead of quietly charging full price or yesterday's deal.
+  const shownBanner = persistentAlert ?? promoClock.warning ?? banner;
 
   // Slice 5 — the bundle SaleFlow/rebuilds price against. When medical test
   // mode is ON, force medical.endorsed=true so the owner can rehearse the
   // tax-free flow; OFF (default) returns the real server bundle untouched. The
   // override never fabricates a medical config that the server didn't ship.
-  const effectiveBundle = menuBundle ? applyMedicalTestMode(menuBundle, medicalTestMode) : null;
+  //
+  // D133 — the deals are chosen HERE, for the register's own Pacific day
+  // (rulesForSale over the bundle's promoSchedule), and re-chosen by the
+  // promo clock below. A bundle cached overnight therefore prices Monday with
+  // Monday's deals, never Sunday's (the 2026-11-02 incident).
+  const effectiveBundle = useMemo(() => {
+    if (!menuBundle) return null;
+    const at = new Date(promoClock.at || Date.parse(menuBundle.fetchedAt) || 0);
+    const picked = rulesForSale(menuBundle, at);
+    return applyMedicalTestMode(
+      { ...menuBundle, rules: picked.rules, promoDayKey: picked.dayKey },
+      medicalTestMode,
+    );
+    // promoClock.sig changes exactly when the active deal set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuBundle, medicalTestMode, promoClock.sig]);
   const medicalTestModeBanner = medicalTestModeBannerActive(menuBundle, medicalTestMode);
   // Slice A-06 (OD-40): the owner's /admin/medical switch decides whether this
   // register may offer test mode at all (bundle.medical.testModeAllowed).

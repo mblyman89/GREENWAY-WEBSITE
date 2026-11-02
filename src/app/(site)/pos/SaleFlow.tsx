@@ -1213,6 +1213,8 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             // Omitted entirely when there is no name, so an offline sale's
             // payload stays byte-identical to its pre-Slice-23 shape.
             ...(funNameForSale ? { displayName: funNameForSale } : {}),
+            // D133: the Pacific day the deals were chosen for (sync checks it).
+            ...(bundle.promoDayKey ? { promoDayKey: bundle.promoDayKey } : {}),
             idVerification:
               verdict.method === "manual" && manualEventUuid
                 ? { method: "manual", manualEventUuid }

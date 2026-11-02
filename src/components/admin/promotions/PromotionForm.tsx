@@ -36,7 +36,10 @@ import { PromotionSmartSelector } from "@/components/admin/promotions/PromotionS
 import type { MenuProductOption, SavedAudience } from "@/lib/promotions/promotions-store";
 import { Button } from "@/components/admin/ui";
 import { isMarkdownConfig } from "@/lib/promotions/markdown-lock-core";
-import { StickyActionBar } from "@/components/admin/ux";
+import { InfoHint, StickyActionBar } from "@/components/admin/ux";
+import { FIELD_HELP } from "@/lib/promotions/promotion-guide-core";
+import { PromotionBuildGuide } from "@/components/admin/promotions/PromotionBuildGuide";
+import { PromotionCopyCheck } from "@/components/admin/promotions/PromotionCopyCheck";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
@@ -145,12 +148,17 @@ export function PromotionForm({
     <form action={action} className="space-y-8">
       {promotion && <input type="hidden" name="id" value={promotion.id} />}
 
+      {/* D136: which sections matter for which deal type (owner: "it is not
+          clear if I need the top one set in addition to the ones below"). */}
+      <PromotionBuildGuide open={!promotion} />
+
       {/* Core */}
       <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Details</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Step 1 · Details <span className="normal-case tracking-normal text-white/30">(always)</span></h2>
+        <p className="-mt-2 text-xs text-white/40">What customers read. The wording check below warns about anything risky or anything that doesn&apos;t match the deal. It never blocks.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Title *</span>
+            <span className="mb-1 block text-xs text-white/50">Title * <InfoHint text={FIELD_HELP.title} /></span>
             <input
               name="title"
               defaultValue={promotion?.title ?? ""}
@@ -160,7 +168,7 @@ export function PromotionForm({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Machine key (optional)</span>
+            <span className="mb-1 block text-xs text-white/50">Machine key (optional) <InfoHint text={FIELD_HELP.promoKey} /></span>
             <input
               name="promo_key"
               defaultValue={promotion?.promo_key ?? ""}
@@ -170,7 +178,7 @@ export function PromotionForm({
           </label>
         </div>
         <label className="block">
-          <span className="mb-1 block text-xs text-white/50">Description</span>
+          <span className="mb-1 block text-xs text-white/50">Description <InfoHint text={FIELD_HELP.description} /></span>
           <textarea
             name="description"
             defaultValue={promotion?.description ?? ""}
@@ -179,7 +187,7 @@ export function PromotionForm({
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-white/50">Badge / bonus note (shown on card)</span>
+          <span className="mb-1 block text-xs text-white/50">Badge / bonus note (shown on card) <InfoHint text={FIELD_HELP.bonusNote} /></span>
           <input
             name="bonus_note"
             defaultValue={promotion?.bonus_note ?? ""}
@@ -189,14 +197,20 @@ export function PromotionForm({
         </label>
 
         <PromotionAiCopy aiEnabled={aiEnabled} />
+        <PromotionCopyCheck knownBrands={brands} />
       </section>
 
       {/* Discount */}
       <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Discount</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Step 2 · Discount <span className="normal-case tracking-normal text-white/30">(always)</span></h2>
+        <p className="-mt-2 text-xs text-white/40">
+          Pick the deal type first. <strong className="text-white/60">Percent</strong> is used only by &ldquo;Percent off&rdquo;, and{" "}
+          <strong className="text-white/60">Fixed off</strong> only by &ldquo;Fixed amount off&rdquo;. Every other type takes its numbers from
+          Step 3 · Mechanics, so leave Percent at 0 for those.
+        </p>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Discount type</span>
+            <span className="mb-1 block text-xs text-white/50">Discount type <InfoHint text={FIELD_HELP.discountType} /></span>
             <select
               name="discount_type"
               defaultValue={promotion?.discount_type ?? "percent"}
@@ -210,7 +224,7 @@ export function PromotionForm({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Percent (%)</span>
+            <span className="mb-1 block text-xs text-white/50">Percent (%), Percent-off deals only <InfoHint text={FIELD_HELP.percent} /></span>
             <input
               name="discount_percent"
               type="number"
@@ -222,7 +236,7 @@ export function PromotionForm({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Fixed off (¢, minor units)</span>
+            <span className="mb-1 block text-xs text-white/50">Fixed off in cents (300 = $3), Fixed deals only <InfoHint text={FIELD_HELP.fixed} /></span>
             <input
               name="discount_fixed"
               type="number"
@@ -235,7 +249,7 @@ export function PromotionForm({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Multi-item tier % (optional)</span>
+            <span className="mb-1 block text-xs text-white/50">Multi-item badge % (optional, label only) <InfoHint text={FIELD_HELP.multiItemPercent} /></span>
             <input
               name="multi_item_percent"
               type="number"
@@ -254,7 +268,7 @@ export function PromotionForm({
               className="h-4 w-4 accent-[var(--admin-accent)]"
             />
             <span className="text-sm text-white/70">
-              Show honest struck per-item price on cards
+              Show honest struck per-item price on cards <InfoHint text={FIELD_HELP.perItemSale} />
               <span className="block text-xs text-white/40">
                 Off for weight/spend/basket tiers — card shows the note only; cart computes the exact
                 charge.
@@ -267,7 +281,8 @@ export function PromotionForm({
       {/* Fix Phase 4.5a (F-06-17): clearance / vendor-day markdown lock. */}
       <section className="space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">
-          Clearance or vendor-day markdown
+          Clearance or vendor-day markdown <span className="normal-case tracking-normal text-white/30">(rarely, leave unticked for normal deals)</span>
+          <InfoHint text={FIELD_HELP.markdown} />
         </h2>
         <label className="flex items-start gap-3">
           <input
@@ -293,7 +308,7 @@ export function PromotionForm({
       {/* Mechanics (structured config) */}
       <section className="space-y-5 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">
-          Mechanics (advanced — only the section matching your discount type is used)
+          Step 3 · Mechanics <span className="normal-case tracking-normal text-white/30">(only for tier, spend, weight, BOGO and basket deals)</span>
         </h2>
         <p className="text-xs text-white/40">
           Fill in ONLY the block for the discount type selected above; everything else is ignored
@@ -310,17 +325,18 @@ export function PromotionForm({
           {/* Multi-item qty tiers + either/or */}
           <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
-              Multi-item tier (qty)
+              Multi-item tier (qty) <InfoHint text={FIELD_HELP.qtyTiers} />
             </h3>
-            <p className="text-xs text-white/40">e.g. buy 2 → 15% off, buy 4 → 25% off.</p>
+            <p className="text-xs text-white/40">For &ldquo;Multi-item tier&rdquo; deals. Doobie Tuesday: buy at least 1 → 20, buy at least 4 → 25.</p>
             {tierRow("cfg_qty_tier", "Buy at least", qtyTiers)}
             <div className="mt-2 border-t border-white/10 pt-3">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-white/50">
-                Either/or bundle (Doobie Tuesday style)
+                Either/or bundle (rarely needed) <InfoHint text={FIELD_HELP.eitherOr} />
               </h4>
               <p className="mb-2 text-xs text-white/40">
-                Flat % OR buy-N-for-M — the register applies whichever saves the customer LESS
-                (store-advantaged, uniform for everyone). Leave blank if unused.
+                Flat % OR buy-N-for-M. The register gives whichever is BETTER for the customer, so the advertised
+                deal is always honored. Leave blank when you use the tiers above. If both are filled, this box wins
+                and the tiers are ignored.
               </p>
               <div className="grid grid-cols-3 gap-2">
                 <label className="block">
@@ -342,7 +358,7 @@ export function PromotionForm({
           {/* Weight tiers */}
           <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
-              Weight tier (grams)
+              Weight tier (grams) <InfoHint text={FIELD_HELP.weightTiers} />
             </h3>
             <p className="text-xs text-white/40">
               e.g. 7g (quarter) → 15%, 14g (half) → 20%, 28g (oz) → 30%.
@@ -353,15 +369,15 @@ export function PromotionForm({
           {/* Spend tiers */}
           <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
-              Spend threshold (dollars)
+              Spend threshold (dollars) <InfoHint text={FIELD_HELP.spendTiers} />
             </h3>
-            <p className="text-xs text-white/40">e.g. spend $50 → 15%, $100 → 20% (enter dollars).</p>
+            <p className="text-xs text-white/40">For &ldquo;Spend threshold&rdquo; deals. Wax Wednesday: $0 → 20, $150 → 30. Leaving it empty falls back to 15/20/30 at $50/$100/$150.</p>
             {tierRow("cfg_spend_tier", "Spend $ ≥", spendTiers)}
           </div>
 
           {/* BOGO */}
           <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">BOGO</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">BOGO <InfoHint text={FIELD_HELP.bogo} /></h3>
             <p className="text-xs text-white/40">
               Buy X, get Y at Z% off — the CHEAPEST eligible units are the discounted ones
               (store-advantaged). Max 99%.
@@ -385,7 +401,7 @@ export function PromotionForm({
           {/* Basket */}
           <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4 lg:col-span-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
-              Basket deal
+              Basket deal (pick one option) <InfoHint text={FIELD_HELP.basket} />
             </h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -428,7 +444,7 @@ export function PromotionForm({
 
       {/* Schedule */}
       <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Schedule</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Step 4 · Schedule <span className="normal-case tracking-normal text-white/30">(always: a weekday OR dates)</span></h2>
         <p className="text-xs text-white/40">
           Pick a weekday for a recurring daily deal, OR leave it blank and set a date window for a
           one-off / seasonal promo. Starts and Ends are store time (Pacific). To have it go live by
@@ -436,7 +452,7 @@ export function PromotionForm({
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Recurring weekday</span>
+            <span className="mb-1 block text-xs text-white/50">Recurring weekday <InfoHint text={FIELD_HELP.weekday} /></span>
             <select
               name="weekday"
               defaultValue={promotion?.weekday ?? ""}
@@ -451,7 +467,7 @@ export function PromotionForm({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-white/50">Starts (optional)</span>
+            <span className="mb-1 block text-xs text-white/50">Starts (optional) <InfoHint text={FIELD_HELP.window} /></span>
             <input
               name="starts_at"
               type="datetime-local"
@@ -470,7 +486,7 @@ export function PromotionForm({
           </label>
         </div>
         <label className="block max-w-xs">
-          <span className="mb-1 block text-xs text-white/50">Priority (higher wins for badge)</span>
+          <span className="mb-1 block text-xs text-white/50">Priority (badge tie-break only) <InfoHint text={FIELD_HELP.priority} /></span>
           <input
             name="priority"
             type="number"
@@ -483,7 +499,11 @@ export function PromotionForm({
 
       {/* Targeting */}
       <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">What it applies to</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Step 5 · What it applies to <span className="normal-case tracking-normal text-white/30">(always: storewide OR at least one category, brand or product)</span></h2>
+        <p className="-mt-2 text-xs text-white/40">
+          A product gets the deal if it matches ANY ticked category, brand or product. With nothing ticked and Storewide off,
+          the deal reaches nothing. You only need one of the pickers below; the smart tools just tick products for you.
+        </p>
 
         <label className="flex items-center gap-3">
           <input
@@ -494,13 +514,13 @@ export function PromotionForm({
             className="h-4 w-4 accent-[var(--admin-accent)]"
           />
           <span className="text-sm text-white/70">
-            Storewide (applies to everything — e.g. Super Saturday / clearance event)
+            Storewide (applies to everything — e.g. Super Saturday / clearance event) <InfoHint text={FIELD_HELP.storewide} />
           </span>
         </label>
 
         {/* Category targeting */}
         <div>
-          <p className="mb-2 text-xs text-white/50">Categories</p>
+          <p className="mb-2 text-xs text-white/50">Categories <InfoHint text={FIELD_HELP.categories} /></p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {GREENWAY_CATEGORY_VALUES.map((cat) => (
               <label
@@ -523,7 +543,7 @@ export function PromotionForm({
         {/* Thursday brand selector */}
         <div>
           <p className="mb-2 text-xs text-white/50">
-            Brands{" "}
+            Brands <InfoHint text={FIELD_HELP.brands} />{" "}
             <span className="text-white/30">
               (Top Shelf Thursday selector — pick the featured brands from the live menu)
             </span>
@@ -606,10 +626,11 @@ export function PromotionForm({
 
       {/* Exclusions */}
       <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Exclusions (optional)</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Step 6 · Exclusions (optional) <InfoHint text={FIELD_HELP.exclusions} /></h2>
         <p className="text-xs text-white/40">
           Carve out categories, brands, or individual products that should NOT get
-          this deal. Exclusions always win over targets.
+          this deal. Exclusions always win over targets, so never exclude a category you ticked in Step 5 (it
+          cancels it).
         </p>
 
         {/* Category exclusions */}
