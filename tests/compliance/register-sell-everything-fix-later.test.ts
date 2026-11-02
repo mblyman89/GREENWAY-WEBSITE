@@ -64,6 +64,7 @@ vi.mock("@/lib/pos/live-menu", () => ({ loadLiveMenuAll: async () => menuItems }
 vi.mock("@/lib/pos/recall-hold-store", () => ({ recalledProductKeys: async () => recalledKeys }));
 vi.mock("@/lib/promotions/discount-engine", () => ({
   loadActiveRules: async () => [],
+  loadPromoSchedule: async () => ({ schedule: [], activeNow: [] }),
   loadProductCosts: async () => new Map(),
 }));
 vi.mock("@/lib/compliance/sales-limits", () => ({
