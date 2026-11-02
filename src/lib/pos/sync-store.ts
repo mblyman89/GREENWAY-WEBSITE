@@ -74,6 +74,8 @@ import {
   type MenuPriceRow,
 } from "./price-drift-core";
 import { getPublishedVersion } from "./menu-version";
+import { loadPromoSchedule } from "@/lib/promotions/discount-engine";
+import { promoDayMismatch, summarizePromoMismatch, PROMO_MISMATCH_AUDIT_ACTION } from "./register-promo-day-core";
 // SLICE 28 — special discounts (employee/industry/veteran): the pure rules +
 // percent math the register used, re-run server-side, plus the settings and
 // the migration-0133 use ledger.
@@ -1405,6 +1407,44 @@ async function processSale(
     }
   } catch {
     // A drift-check failure must never affect an already-completed sale.
+  }
+
+  // D133 — promo-DAY NOTICE (never blocks): the 11/2 incident had a register
+  // apply Sunday's 3-for-2 on Monday morning from a bundle cached overnight.
+  // Re-check every promo line against the rules that were ACTUALLY running
+  // at the sale's own Pacific time. Mismatches are audited for the manager;
+  // the sale stands (the customer paid the displayed price).
+  try {
+    const promoLines = sale.lines.filter((l) => typeof l.promoRuleId === "string" && l.promoRuleId);
+    if (promoLines.length > 0 || sale.promoDayKey) {
+      const { schedule, activeNow } = await loadPromoSchedule(new Date(envelope.occurredAt));
+      const ruleTitles: Record<string, string> = {};
+      for (const s of schedule.rules) ruleTitles[s.rule.id] = s.rule.title;
+      const findings = promoDayMismatch({
+        occurredAt: envelope.occurredAt,
+        promoDayKey: sale.promoDayKey ?? null,
+        lines: sale.lines.map((l) => ({ productName: l.productName, promoRuleId: l.promoRuleId ?? null })),
+        activeRuleIds: activeNow.map((r) => r.id),
+        ruleTitles,
+      });
+      if (findings.length > 0) {
+        await recordAudit({
+          actorId: null,
+          actorEmail: `pos-device:${device.id}`,
+          action: PROMO_MISMATCH_AUDIT_ACTION,
+          entityType: "order",
+          entityId: order.id,
+          after: {
+            clientUuid: envelope.clientUuid,
+            occurredAt: envelope.occurredAt,
+            summary: summarizePromoMismatch(findings),
+            findings,
+          },
+        });
+      }
+    }
+  } catch {
+    // A promo-check failure must never affect an already-completed sale.
   }
 
   await markProcessed(admin, ledgerId, { order_id: order.id });

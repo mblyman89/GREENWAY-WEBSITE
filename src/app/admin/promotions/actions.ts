@@ -23,6 +23,8 @@ import {
   removeNeverDiscount,
   addPromotionProductExclusions,
   listMenuBrands,
+  listPromotionsWithRulesByKeys,
+  savePromotionChecked,
   type PromotionInput,
   type RuleInput,
   type SavedAudience,
@@ -43,13 +45,22 @@ import {
 import type {
   DiscountType,
   PostStatus,
+  PromotionWithRules,
   Weekday,
 } from "@/lib/promotions/types";
 import {
   generatePromotionCopy,
   isAiConfigured as isPromoAiConfigured,
 } from "@/lib/promotions/ai-copy";
-import { guardPromotionPublish, auditPublishedPromotions } from "@/lib/promotions/promo-guard";
+import { guardPromotionPublish, auditPublishedPromotions, loadGuardMenu } from "@/lib/promotions/promo-guard";
+import { DAILY_DEAL_SEEDS } from "@/lib/promotions/daily-deal-seed";
+import {
+  planDailyDeals,
+  dailySetupOutcomeMessage,
+  MANUAL_DAILY_KEYS,
+  type DailyDealPlan,
+  type ExistingDailyPromo,
+} from "@/lib/promotions/daily-deal-setup-core";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { parsePromoWindow, scheduleGate } from "@/lib/promotions/promo-preview-core";
 import {
@@ -1104,4 +1115,142 @@ export async function removeNeverDiscountAction(id: string): Promise<{ ok: true 
   revalidatePath("/admin/promotions");
   revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// D134 — "Set up our daily deals" (owner 2026-11-02: "for our routine daily
+// deals, I want a button that I can push that will set it up automatically
+// for me. except for thursday, that one is a manual processes.")
+// ---------------------------------------------------------------------------
+
+async function loadDailyPlan(): Promise<{ ok: true; plan: DailyDealPlan } | { ok: false; error: string }> {
+  const keys = DAILY_DEAL_SEEDS.map((s) => s.promoKey).filter((k) => !MANUAL_DAILY_KEYS.has(k));
+  const read = await listPromotionsWithRulesByKeys(keys);
+  if (!read.ok) return { ok: false, error: read.error };
+  const existing: ExistingDailyPromo[] = read.rows.map((r) => ({
+    id: r.id,
+    promo_key: r.promo_key,
+    title: r.title,
+    description: r.description,
+    bonus_note: r.bonus_note,
+    status: r.status,
+    discount_type: r.discount_type,
+    discount_percent: Number(r.discount_percent),
+    discount_fixed: Number(r.discount_fixed),
+    multi_item_percent: r.multi_item_percent == null ? null : Number(r.multi_item_percent),
+    per_item_sale: r.per_item_sale,
+    config: r.config,
+    weekday: r.weekday,
+    starts_at: r.starts_at,
+    ends_at: r.ends_at,
+    priority: r.priority,
+    targets: r.targets.map((t) => ({ scope: t.scope, value: t.value })),
+    exclusions: r.exclusions.map((e) => ({ scope: e.scope, value: e.value })),
+  }));
+  return { ok: true, plan: planDailyDeals(existing) };
+}
+
+/** Preview for the button (read-only). */
+export async function previewDailyDealSetupAction(): Promise<
+  { ok: true; plan: DailyDealPlan } | { ok: false; error: string }
+> {
+  await requirePermission("promotions.manage");
+  return loadDailyPlan();
+}
+
+/**
+ * Apply the plan: every non-Thursday daily deal is created or corrected to the
+ * standard deal and published. Each day is cost-floor checked BEFORE it is
+ * saved (the same guard as Publish); a day that would go below cost is left
+ * exactly as it was and reported. Audited once per changed day and once for
+ * the press. Never touches Thursday.
+ */
+export async function applyDailyDealSetupAction(): Promise<void> {
+  const session = await requirePermission("promotions.manage");
+  const back = (tone: "ok" | "error", text: string) =>
+    redirect(`/admin/promotions?dailyTone=${tone}&daily=${encodeURIComponent(text)}#daily-setup`);
+
+  const loaded = await loadDailyPlan();
+  if (!loaded.ok) back("error", `Nothing was changed: the promotions could not be read (${loaded.error}).`);
+  const plan = (loaded as { ok: true; plan: DailyDealPlan }).plan;
+  const todo = plan.items.filter((i) => i.action !== "unchanged");
+  if (todo.length === 0) back("ok", dailySetupOutcomeMessage({ created: [], updated: [], unchanged: plan.items.map((i) => i.dayLabel), skipped: [] }));
+
+  const menu = await loadGuardMenu();
+  if (menu.readProblems.length > 0) {
+    back("error", `Nothing was changed: the cost-floor check could not read everything (${menu.readProblems.join("; ")}). Reload and try again.`);
+  }
+
+  const created: string[] = [];
+  const updated: string[] = [];
+  const skipped: { day: string; reason: string }[] = [];
+  const nowIso = new Date().toISOString();
+
+  for (const item of todo) {
+    // Cost-floor check on the PLANNED deal, before anything is written.
+    const draft: PromotionWithRules = {
+      id: item.existingId ?? `planned-${item.promoKey}`,
+      status: "published",
+      published_at: null,
+      created_by: null,
+      updated_by: null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      ...item.input,
+      weekday: item.input.weekday as Weekday,
+      targets: item.targets.map((t, n) => ({ id: `t${n}`, promotion_id: "planned", scope: t.scope, value: t.value, created_at: nowIso })),
+      exclusions: item.exclusions.map((e, n) => ({ id: `e${n}`, promotion_id: "planned", scope: e.scope, value: e.value, created_at: nowIso })),
+    };
+    const guard = await guardPromotionPublish(draft, menu);
+    if (guard.blocked) {
+      const hits = guard.findings.filter((f) => f.reason === "below_cost");
+      skipped.push({
+        day: item.dayLabel,
+        reason: `${hits.length} product${hits.length === 1 ? "" : "s"} would go below cost; open the deal and use the cost-floor tools`,
+      });
+      continue;
+    }
+
+    const wasPublished = item.changes.every((c) => !c.startsWith("Status:")) && item.existingId != null;
+    const saved = await savePromotionChecked(item.existingId, item.input, item.targets, item.exclusions, session.userId, {
+      publish: true,
+      wasPublished,
+    });
+    if (!saved.ok) {
+      skipped.push({ day: item.dayLabel, reason: `could not save (${saved.error})` });
+      continue;
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: item.action === "create" ? "promotion.daily_setup_create" : "promotion.daily_setup_update",
+      entityType: "promotion",
+      entityId: saved.id,
+      after: { promoKey: item.promoKey, changes: item.changes, input: item.input, targets: item.targets, exclusions: item.exclusions },
+    });
+    (item.action === "create" ? created : updated).push(item.dayLabel);
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "promotion.daily_setup",
+    entityType: "promotion",
+    entityId: null,
+    after: { created, updated, skipped, unchanged: plan.items.filter((i) => i.action === "unchanged").map((i) => i.dayLabel), thursday: "manual" },
+  });
+
+  revalidatePath("/admin/promotions");
+  revalidatePath("/specials");
+  revalidatePath("/menu");
+  revalidatePath("/(site)", "layout");
+  back(
+    skipped.length ? "error" : "ok",
+    dailySetupOutcomeMessage({
+      created,
+      updated,
+      unchanged: plan.items.filter((i) => i.action === "unchanged").map((i) => i.dayLabel),
+      skipped,
+    }) + " Registers pick up the change on their next menu refresh (automatic within 10 minutes).",
+  );
 }

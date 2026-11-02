@@ -36,6 +36,11 @@ import { pacificDayKey, storeWeekday } from "@/lib/reports/timezone";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 import { PromotionsAdvisorPanel } from "@/components/admin/promotions/PromotionsAdvisorPanel";
 import { GuidedThursdayLauncher } from "@/components/admin/promotions/GuidedThursdayLauncher";
+import { DailyDealSetupPanel } from "@/components/admin/promotions/DailyDealSetupPanel";
+import { PromotionBuildGuide } from "@/components/admin/promotions/PromotionBuildGuide";
+import { previewDailyDealSetupAction } from "@/app/admin/promotions/actions";
+import { checkPromotionCopy } from "@/lib/promotions/promotion-copy-core";
+import { parseEngineConfig } from "@/lib/promotions/published-rules-core";
 import { getContentForRender } from "@/lib/cms/render-content";
 import {
   resolveSpecialsPresentation,
@@ -51,6 +56,8 @@ type Params = {
   q?: string;
   sort?: string;
   deleted?: string;
+  daily?: string;
+  dailyTone?: string;
 };
 
 const SORTS = ["schedule", "title", "status", "type", "newest"] as const;
@@ -89,7 +96,7 @@ function href(sp: Params, patch: Partial<Params>): string {
   const merged = { ...sp, ...patch };
   const parts: string[] = [];
   for (const [k, v] of Object.entries(merged)) {
-    if (k === "deleted") continue;
+    if (k === "deleted" || k === "daily" || k === "dailyTone") continue;
     if (v) parts.push(`${k}=${encodeURIComponent(v)}`);
   }
   return `/admin/promotions${parts.length ? `?${parts.join("&")}` : ""}`;
@@ -127,13 +134,29 @@ export default async function PromotionsAdminPage({
     );
   }
 
-  const [promos, conflicts, audit, presentationJson, menuBrands] = await Promise.all([
+  const [promos, conflicts, audit, presentationJson, menuBrands, dailyPlan] = await Promise.all([
     listPromotions(),
     detectConflicts(),
     auditPublishedPromotions(),
     getContentForRender("specials.deals.presentation"),
     listMenuBrands(),
+    previewDailyDealSetupAction(),
   ]);
+  // D135: wording heads-up per promotion (warn only; targets are checked on the promotion page).
+  const copyWarnings = new Map<string, number>(
+    promos.map((p) => [
+      p.id,
+      checkPromotionCopy({
+        title: p.title,
+        description: p.description,
+        bonusNote: p.bonus_note,
+        discountType: p.discount_type,
+        discountPercent: Number(p.discount_percent),
+        config: parseEngineConfig(p.config),
+        weekday: p.weekday,
+      }).length,
+    ]),
+  );
 
   // PR-P5 governance: resolve the staff who created/last-changed each promotion
   // to friendly names so the table can show "changed by …" without exposing IDs.
@@ -209,17 +232,20 @@ export default async function PromotionsAdminPage({
             id="promotions"
             title="How promotions work"
             steps={[
-              "Create a promotion, choose the mechanics (percent, BOGO, tiers, basket, either/or), and pick the products/brands.",
+              "Routine days: press \"Set up our daily deals\". For anything else: + New promotion, then fill in only the sections the guide says your deal type needs.",
               "Preview affected products and test in the simulator — the exact engine the register uses.",
               "Publish. Publishing HARD-BLOCKS if any product's worst case would fall below its acquisition cost (CCRS).",
               "Deals never stack — every item gets only the single best deal, and the register clamps at the cost floor.",
             ]}
           >
             <p>
-              The daily deals are set in stone: Tuesday is 20% off prerolls &amp; blunts OR 4-for-3
-              (whichever saves less), Sunday is 3-for-2 storewide with savings spread
-              store-advantaged. The below-cost audit re-checks every published deal against your
-              live menu and costs.
+              Routine days: press <strong>Set up our daily deals</strong> below and Monday, Tuesday,
+              Wednesday, Friday, Saturday and Sunday are created or corrected for you. Tuesday is 20% off
+              prerolls & blunts, 25% on 4 or more (the 4-for-3). Wednesday is 20% off concentrates
+              & vapes, 30% at $150+. Sunday is 3-for-2 storewide with the savings spread across the
+              basket. Thursday is set up by hand each week. The below-cost audit re-checks every published
+              deal against your live menu and costs. Registers re-check today&apos;s deals by themselves
+              (every 10 minutes and at midnight).
             </p>
           </HelpPanel>
         }
@@ -288,6 +314,17 @@ export default async function PromotionsAdminPage({
         {scheduleItems.length > 0 && (
           <WeeklyScheduleStrip items={scheduleItems} todayWeekday={todayWeekday} />
         )}
+
+        {/* ── D134: one-press routine daily deals ── */}
+        <DailyDealSetupPanel
+          plan={dailyPlan.ok ? dailyPlan.plan : null}
+          readError={dailyPlan.ok ? null : dailyPlan.error}
+          message={sp.daily ?? null}
+          tone={sp.dailyTone === "error" ? "error" : sp.daily ? "ok" : null}
+        />
+
+        {/* ── D136: how a promotion is built (which sections matter) ── */}
+        <PromotionBuildGuide compact />
 
         {/* ── Guided Thursday brand sale (PR-P5) ─────────────────────────── */}
         <GuidedThursdayLauncher brands={menuBrands} />
@@ -610,6 +647,15 @@ export default async function PromotionsAdminPage({
                         {p.promo_key}
                       </span>
                     )}
+                    {(copyWarnings.get(p.id) ?? 0) > 0 ? (
+                      <Link
+                        href={`/admin/promotions/${p.id}#copy-check`}
+                        className="mt-1 block text-xs font-semibold text-amber-300 hover:underline"
+                        title="Wording heads-up: open the promotion to see why and a suggested rewrite. Nothing is blocked."
+                      >
+                        ⚠ {copyWarnings.get(p.id)} wording heads-up{copyWarnings.get(p.id) === 1 ? "" : "s"}
+                      </Link>
+                    ) : null}
                     {/* Fix Phase 4.5a (F-06-17): the markdown lock, visible in the list. */}
                     {isMarkdownConfig(p.config) ? (
                       <span className="mt-1 block text-xs font-semibold text-amber-300">{MARKDOWN_LOCK_LABEL}</span>

@@ -10,6 +10,9 @@
  *   rules    — the promotions ACTIVE RIGHT NOW as pure EngineRules, so the
  *              device prices with the IDENTICAL engine the website checkout
  *              and the server-side completion gate use (no drift possible)
+ *   promoSchedule — D133: every published promotion with its weekday /
+ *              window; the register picks the sale's own Pacific day's deals
+ *              from it, so a cached bundle never applies yesterday's deal
  *   limits   — the owner's WAC 314-55-095 sales-limit settings
  *   hours    — the WAC 314-55-147 sales-hours window (owner may tighten)
  *
@@ -24,7 +27,7 @@ import { isMissingHeldQtyColumnError, sellableQty } from "@/lib/inventory/held-s
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
-import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
+import { loadPromoSchedule, loadProductCosts } from "@/lib/promotions/discount-engine";
 import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
@@ -137,10 +140,10 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy, drawerOnSale] =
+  const [menu, promo, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy, drawerOnSale] =
     await Promise.all([
       loadLiveMenuAll(),
-      loadActiveRules(),
+      loadPromoSchedule(),
       loadProductCosts(),
       getSalesLimitSettings(),
       getSalesHoursWindow(),
@@ -768,7 +771,11 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
 
   const bundle: PosMenuBundle = {
     products,
-    rules,
+    // Legacy field (registers before D133): the rules active right now.
+    rules: promo.activeNow,
+    // D133: every published deal with its day, so the register picks the
+    // sale's own Pacific day's deals itself, even from a cached bundle.
+    promoSchedule: promo.schedule,
     limits: {
       enforce: limitSettings.enforce,
       hardBlock: limitSettings.hardBlock,

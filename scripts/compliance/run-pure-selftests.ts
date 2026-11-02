@@ -1259,6 +1259,11 @@ import { __runCultiveraBenchmarkReportCoreTests } from "../../src/lib/reports/cu
 import { __runCustomerSearchCoreTests } from "../../src/lib/customers/customer-search-core";
 import { __runMoneySmokeCoreTests } from "../../src/lib/platform/money-smoke-core";
 import { __runPlatformErrorsCoreTests } from "../../src/lib/platform/platform-errors-core";
+import { __runRegisterPromoDayTests } from "../../src/lib/pos/register-promo-day-core";
+import { __runDailyDealSetupTests } from "../../src/lib/promotions/daily-deal-setup-core";
+import { __runPromotionCopyTests } from "../../src/lib/promotions/promotion-copy-core";
+import { __runPromotionCopyFormTests } from "../../src/lib/promotions/promotion-copy-form-core";
+import { __runPromotionGuideTests } from "../../src/lib/promotions/promotion-guide-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2715,6 +2720,11 @@ __runLiquidVolumeTests();
   assertRan("register-fix-later-core", __runRegisterFixLaterCoreTests(), 60); // register-sell-everything-fix-later (owner: "Everything must sell. No exceptions. We will fix it all later."): Quarantine lots sell (except a scheduled destruction), a stocked lot with no menu product sells from the lot itself (name, size, category with Concentrate fallback, 2x cost price), Fix & sell builds the line from a scanned package code, only recall / failed lab / destruction / destroyed / sample / expired edible stop a sale
   assertRan("register-loyalty-signup-core", __runRegisterLoyaltySignupCoreTests(), 120); // register-loyalty-signup (owner: "I need a way to sign up new loyalty customers from the iPad register."): 21+ from the sale's verified ID, phone or email required, optional TCPA consent needs a typed signature + the published wording hash, duplicate check (phone / email / name + birthday) before any write, shared signup -> customer mapping, idempotent request id, audit carries no PII, register <-> route reply parsing
   assertRan("customer-table-core", __runCustomerTableCoreTests(), 150); // customers-table-enterprise (owner: "I want the contact column to be phone and email separated. I want this table to be very useful and powerful."): column registry (phone + email separate, every header sort exists in CUSTOMER_SORTS), URL grammar round-trip + garbage fallback, filter ops, phone / age / birthday / recognition-card status, source labels, export row (cents, Pacific days) + PII-free audit, manager-only download, shared figures rule
+  assertRan("register-promo-day-core", __runRegisterPromoDayTests(), 30); // D133 (owner 2026-11-02: "enhance and harden the ipad registers and the promotions logic to protect against this in the future"): the register picks deals for the SALE's Pacific day from the full schedule, an old bundle from a past day applies NO deals (+ banner), auto menu refresh every 10 min and at the day change, sync audits wrong-day / not-running promo lines (never blocks)
+  assertRan("daily-deal-setup-core", __runDailyDealSetupTests(), 40); // D134 ("a button that I can push that will set it up automatically for me. except for thursday"): plans create/fix for Mon-Tue-Wed-Fri-Sat-Sun from DAILY_DEAL_SEEDS, keeps owner wording + carve-outs, drops self-cancelling exclusions, never touches Thursday, second run is a no-op
+  assertRan("promotion-copy-core", __runPromotionCopyTests(), 44); // D135 ("warned if the text we use is misleading or unlawful or inappropriate, etc. not block, just warn and suggest"): free/giveaway (RCW 69.50.357), minors / health / over-consumption / alcohol / guarantees (WAC 314-55-155), vendor-funded (WAC 314-55-018), "unlimited", plus copy-vs-mechanics (percent, bundle, $ tier, day, product type, storewide, brand not targeted)
+  assertRan("promotion-copy-form-core", __runPromotionCopyFormTests(), 11); // D135: live check reads the form exactly like buildConfig saves it
+  assertRan("promotion-guide-core", __runPromotionGuideTests(), 18); // D136 ("make building promotions a bit easier ... clear explanations for what each section does"): which-sections table per deal type + field hover help, checked against what the engine reads
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

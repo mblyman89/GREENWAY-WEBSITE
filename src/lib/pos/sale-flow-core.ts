@@ -17,6 +17,7 @@
  *     can never enter the offline queue.
  */
 
+import type { PromoSchedule } from "./register-promo-day-core";
 import {
   computePromotions,
   lineCostFloor,
@@ -200,8 +201,24 @@ export type PosLimitSettings = {
 
 export type PosMenuBundle = {
   products: PosMenuProduct[];
-  /** Active PUBLISHED promotion rules (already filtered to "active now" server-side). */
+  /**
+   * Active PUBLISHED promotion rules at DOWNLOAD time. Kept for older
+   * registers; current registers price with `promoSchedule` instead (D133).
+   */
   rules: EngineRule[];
+  /**
+   * D133 — EVERY published promotion with its weekday / date window, so the
+   * register chooses today's deals itself at sale time from the Pacific clock
+   * (register-promo-day-core rulesForSale). A bundle cached overnight then
+   * prices Monday with Monday's deals. Optional: a bundle downloaded before
+   * D133 lacks it and is trusted only on its own download day.
+   */
+  promoSchedule?: PromoSchedule;
+  /**
+   * D133 — set ON-DEVICE (never by the server): the Pacific day `rules` were
+   * chosen for by withTodaysPromotions. Rides each sale as promoDayKey.
+   */
+  promoDayKey?: string;
   limits: PosLimitSettings;
   hours: SalesHoursWindow;
   /**
@@ -510,6 +527,8 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       variantLabel: entry.product.variantLabel,
       appliedLabel: d?.appliedLabel,
       ...(d && d.appliedLabel ? { appliedPercent: d.appliedPercent } : {}),
+      // D133: which promotion priced this line (the sync checks it was running that day).
+      ...(d && d.appliedLabel && d.appliedRuleId ? { promoRuleId: d.appliedRuleId } : {}),
       ...(d && d.appliedLabel && (d.atCostFloor || unit > rawUnit) ? { atCostFloor: true } : {}),
       // AN-1: true per-unit weight from the bundle (null/absent = unknown).
       unitGrams: entry.product.unitGrams ?? null,
@@ -679,6 +698,8 @@ export type BuildSaleArgs = {
    * prints the real receipt number — the owner's stated fallback.
    */
   displayName?: string;
+  /** D133: the Pacific day the register chose its daily deals for (rulesForSale().dayKey). */
+  promoDayKey?: string;
 };
 
 export type BuildSaleResult =
@@ -732,6 +753,8 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       // AN-1: true per-unit weight (omitted when unknown so pre-AN-1 payload
       // shapes stay byte-identical for weightless items).
       ...(typeof l.unitGrams === "number" && l.unitGrams > 0 ? { unitGrams: l.unitGrams } : {}),
+      // D133: the promotion that priced the line (omitted when none applied).
+      ...(l.promoRuleId ? { promoRuleId: l.promoRuleId } : {}),
     })),
     totalMinor: args.totals.totalMinorUnits,
     subtotalMinor: args.totals.subtotalMinorUnits,
@@ -740,6 +763,7 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       ? { paymentMethod: "employee_tab" as const, employeeTab: { employeeId: tab.employeeId, acknowledged: true as const } }
       : { paymentMethod: "cash" as const, tenderedMinor: args.tenderedMinor, changeMinor: tender.changeMinor }),
     drawerSessionId: args.drawerSessionId,
+    ...(args.promoDayKey ? { promoDayKey: args.promoDayKey } : {}),
     idVerification: args.idVerification,
     // Carry the source website order id only when this sale was loaded from
     // one (omitted for walk-ins so pre-existing payload shapes are unchanged).
