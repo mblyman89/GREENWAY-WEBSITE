@@ -1351,7 +1351,9 @@ describe("D-65 — the connections survive the reset", () => {
     // G-71a: +1 KEEP platform_health_runs (0331; append-only health-check log).
     // G-71d: +1 KEEP platform_error_events (0333; append-only error log).
     // CVL: +1 KEEP customer_cultivera_loyalty (0336; the old system's loyalty record, no FK into a wiped table).
-    expect(plan.keep.length).toBe(190);
+    // CVB-3: +4 KEEP cultivera_archive_runs, cultivera_archive_files, cultivera_benchmark_days,
+    // cultivera_payback_entries (0337; retained Cultivera history + the owner's payback ledger).
+    expect(plan.keep.length).toBe(194);
     expect(plan.wipe.length).toBe(139);
   });
 

@@ -3595,3 +3595,36 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0336_cultivera_loyalty_import.rollback.sql`.
   It removes the apply function. Credited points stay (they are real balances).
+
+## CVB-3 — 0337 — Cultivera benchmark: archive storage and the payback ledger
+
+- [ ] `0337_cultivera_benchmark_archive.sql` (CVB-3, owner request 2026-11-01). Apply it **after 0336**.
+  - **Why:** the owner said *"This will also allow me to retain Cultivera historical data safely in our
+    system"* and *"Maybe add a total build cost amount that goes down as our system outperforms theirs as
+    well as account for the 5500 less for not using Cultivera anymore. ... Total build was 40k."*
+  - **What it does:**
+    - adds the **private** storage bucket `cultivera-archive`, which holds the harvested files byte for byte;
+    - adds `cultivera_archive_runs` and `cultivera_archive_files`: provenance (sha256, bytes, rows) for every file. Append-only;
+    - adds `cultivera_benchmark_days`: Cultivera's own daily-sales figures in cents. These can be refreshed by a newer capture and are never deleted;
+    - adds `cultivera_payback_entries`: an append-only ledger. It is seeded once with the build cost **$40,000.00** and **$5,500.00 saved on 2026-11-01**, so **$34,500.00** remains;
+    - adds two server-only functions, `cvb_register_archive_run` and `cvb_upsert_benchmark_days`.
+
+    Every table has RLS on, is service_role only, and is KEPT by the factory reset.
+
+  Safe to re-run (the two owner figures are inserted once, ever).
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) from information_schema.tables
+   where table_schema = 'public' and table_name like 'cultivera\_%' escape '\'
+     and table_name in ('cultivera_archive_runs', 'cultivera_archive_files',
+                        'cultivera_benchmark_days', 'cultivera_payback_entries');   -- 4
+  select public from storage.buckets where id = 'cultivera-archive';               -- false
+  select sum(case kind when 'build_cost' then amount_minor else -amount_minor end)
+    from public.cultivera_payback_entries;                                          -- 3450000
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0337_cultivera_benchmark_archive.rollback.sql`.
+  It removes the two functions; the retained history and the payback ledger stay (the statements to drop
+  them are in the file, commented out).

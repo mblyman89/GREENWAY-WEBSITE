@@ -568,7 +568,7 @@ describe("S-16 wiring and guards", () => {
   });
   it("no migration was added by this slice", () => {
     const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
-    expect(migs[migs.length - 1]).toBe("0336_cultivera_loyalty_import.sql");
+    expect(migs[migs.length - 1]).toBe("0337_cultivera_benchmark_archive.sql");
   });
   it("the bucket counts in the report header match the result", () => {
     const r = run([line(), line({ id: "L9" })]);
