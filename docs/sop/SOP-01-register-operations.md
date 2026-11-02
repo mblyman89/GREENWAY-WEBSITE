@@ -22,6 +22,7 @@
 3. Before you start
 4. Procedures
    - 4.1 Unlocking the register (your PIN)
+   - 4.1a Price lookup from the lock screen (no PIN)
    - 4.2 Clocking in and out
    - 4.3 Counting in your drawer (opening float)
    - 4.4 Reading the home screen
@@ -146,8 +147,28 @@ What can stop you (full list in section 5):
 - *"Handbook acknowledgment required before using the register…"*: read and acknowledge the handbook in the back office, or ask a manager to mark your signed paper copy. Owners are exempt.
 
 **Also on the lock screen:**
+- **🔍 Price lookup**: see any product's price without unlocking (4.1a).
 - **Update available — tap to refresh** (or **Force refresh**): loads the newest app version. Do this between customers, never mid-sale.
 - The app version number, for support calls.
+
+### 4.1a Price lookup from the lock screen (no PIN)
+
+Use this when a customer asks "how much is this?" and nobody is signed in, or when you just want to check a price without starting a sale.
+
+1. On the lock screen, tap **🔍 Price lookup**. The menu opens full screen. No PIN is needed.
+2. **Scan the package.** You do not need to tap anything first; the register listens for the scanner. The product's card opens and shows:
+   - the **price**. If a promotion is running, the card shows the shelf price struck through, **today's price** in large print, and the deal name with what the customer saves. Today's price is calculated exactly as the register would ring it.
+   - the stock line (**In stock · N left**, **Low stock**, **Out of stock**);
+   - every product fact and lot detail (4.8, *Product info card*).
+3. Or **search** by name, brand, category or size, and tap a tile. The category and classification chips filter the grid as in a sale.
+4. If the scan matches more than one size, the register asks you to pick the size on the package; each button shows that size's price. If the package's size is not on the register, or the barcode matches nothing, the screen says so.
+5. Tap **Done** to return to the lock screen. If nobody touches or scans anything for **90 seconds**, it closes on its own. A *"Closing in Ns"* hint appears for the last 15 seconds.
+
+Things to know:
+- **It cannot ring a sale.** There is no cart and no Add button. To sell, close it and unlock with your PIN.
+- **It works offline.** Prices come from the menu saved on the iPad. Lot details and the photo need internet; offline, the card says so.
+- The button is greyed out until the menu has downloaded to the iPad at least once.
+- The card never shows cost or margin.
 
 ### 4.2 Clocking in and out
 
@@ -349,6 +370,18 @@ The cart screen has three zones.
 **Search.** Type a name, brand or size in the bar. Matching rows appear underneath; tap one to add it. Press Enter to treat the text as a barcode.
 
 **☰ Browse menu.** Opens the full product grid. Use the category chips across the top and the classification chips (special limit buckets) to filter. Tap a tile to add it. **ⓘ** shows product info. **☆** pins the item to this register's **Favorites** (up to 24 per iPad).
+
+**Product info card (ⓘ).** Tap **ⓘ** on any tile, in a sale or in Price lookup. The card shows everything the store knows about that size:
+- **Top:** category, name, size, brand, photo (online), potency, terpenes, description.
+- **This size** (from the saved menu, so it works offline): size, weight or volume per unit, THC per unit, items per package, units left, legal lane (low-THC beverage or 10-unit "otherwise taken"), any expired lot still on the shelf, and the POS key.
+- **Lot details** (online): one block per lot, with the lot selling now marked **Selling now** and opened first. Tap a lot to open or close it. Each lot shows:
+  - **Lot & traceability:** the **vendor lot number**, with where it came from: the vendor's WCIA file, the vendor's CCRS file, or entered by staff. *Read from a PDF manifest — not yet confirmed* and *Source not recorded* are shown in yellow: check the package label. **Not on file** means the vendor lot number has not been recorded yet. Also shown: the lot code, the CCRS inventory id, status, manifest, invoice and transfer date.
+  - **Vendor & brand:** vendor name, legal name, DBA and licence number.
+  - **Product:** product and strain names, strain type, inventory type, package weight or volume, servings.
+  - **Stock & dates:** received qty, on hand, held (not sellable), sellable, sold / used, received date (with how many days ago), and expiry, flagged when soon or past.
+  - **Potency on the package** (what the vendor printed), and the **lab result (COA)**: lab, test id, test date, pass or fail, THC, THCA, CBD, CBDA, totals, the certificate's other cannabinoids and terpenes in ppm, and a link to open the certificate.
+- A yellow note at the top of Lot details means something could not be read from the back office, or the lots are filed under the product rather than this exact size. Check the package label in that case.
+- The price at the bottom shows today's deal price when a promotion applies.
 
 **★ Favorites.** This register's pinned best-sellers, one tap to add.
 
