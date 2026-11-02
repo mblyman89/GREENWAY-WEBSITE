@@ -185,7 +185,9 @@ import {
 } from "@/lib/pos/active-sale-resume-core";
 import type { PosCardCapture } from "@/lib/pos/medical-pos-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
-import { SaleFlow, type PosMemberHit } from "./SaleFlow";
+import { PriceLookupScreen, SaleFlow, type PosMemberHit } from "./SaleFlow";
+import { parseProductDetailsResponse, type ProductDetailsFn } from "@/lib/pos/product-detail-view-core";
+import { priceLookupUnavailableReason } from "@/lib/pos/price-lookup-core";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
 
@@ -1237,6 +1239,45 @@ export function RegisterShell({
   // register may offer test mode at all (bundle.medical.testModeAllowed).
   const medicalTestModeAvailable = medicalTestModeOffered(menuBundle);
 
+  // Lot details for the info card (owner: "every detail available, vendor
+  // lot number, everything"). ONLINE-ONLY, device-authenticated, best-effort:
+  // offline / failed = null and the card says lot details need a connection.
+  // Shared by the sale screen AND the lock-screen price lookup.
+  const deviceId = creds?.deviceId ?? "";
+  const deviceKey = creds?.deviceKey ?? "";
+  const fetchProductDetails = useCallback<ProductDetailsFn>(
+    async (productId, variantId) => {
+      if (!deviceId || !deviceKey || !navigator.onLine) return null;
+      try {
+        const res = await posFetch(
+          `/api/pos/product-details?productId=${encodeURIComponent(productId)}&variantId=${encodeURIComponent(variantId)}`,
+          { headers: { "x-pos-device-id": deviceId, "x-pos-device-key": deviceKey } },
+        );
+        if (!res.ok) return null;
+        return parseProductDetailsResponse(await res.json().catch(() => null));
+      } catch {
+        return null;
+      }
+    },
+    [deviceId, deviceKey],
+  );
+  const fetchProductImage = useCallback(
+    async (productId: string): Promise<{ url: string; isFallback: boolean } | null> => {
+      // POS B42 — the info card's photo, ONLINE-ONLY and best-effort.
+      if (!deviceId || !deviceKey || !navigator.onLine) return null;
+      try {
+        const res = await posFetch(`/api/pos/product-image?productId=${encodeURIComponent(productId)}`, {
+          headers: { "x-pos-device-id": deviceId, "x-pos-device-key": deviceKey },
+        });
+        const body = (await res.json().catch(() => null)) as { image?: { url: string; isFallback: boolean } | null } | null;
+        return res.ok ? (body?.image ?? null) : null;
+      } catch {
+        return null;
+      }
+    },
+    [deviceId, deviceKey],
+  );
+
   if (screen === "loading") {
     return (
       <main className="pos-shell flex min-h-screen flex-col items-center justify-center gap-4">
@@ -1303,6 +1344,9 @@ export function RegisterShell({
         updateReady={!!updateWaiting || isBuildStale(buildVersion, serverVersion)}
         onForceRefresh={forceRefresh}
         onClearBanner={() => setBanner(null)}
+        lookupBundle={effectiveBundle}
+        onProductImage={fetchProductImage}
+        onProductDetails={fetchProductDetails}
         onUnlocked={(emp, drawerInfo, registerId, defaultFloatMinor) => {
           setEmployee(emp);
           setDrawer(drawerInfo);
@@ -1678,22 +1722,8 @@ export function RegisterShell({
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
         }}
-        onProductImage={async (productId) => {
-          // POS B42 — the info card's photo, ONLINE-ONLY and best-effort:
-          // offline/failed = no photo, the card still shows every cached fact.
-          if (!navigator.onLine) return null;
-          try {
-            const res = await posFetch(`/api/pos/product-image?productId=${encodeURIComponent(productId)}`, {
-              headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
-            });
-            const body = (await res.json().catch(() => null)) as
-              | { image?: { url: string; isFallback: boolean } | null }
-              | null;
-            return res.ok ? (body?.image ?? null) : null;
-          } catch {
-            return null;
-          }
-        }}
+        onProductImage={fetchProductImage}
+        onProductDetails={fetchProductDetails}
         onMemberLookup={async (q) => {
           // POS B14 — member lookup is ONLINE-ONLY (no customer book is ever
           // cached on the iPad). Offline: ring the sale without the member.
@@ -2450,6 +2480,9 @@ function LockScreen({
   onClearBanner,
   onUnlocked,
   onPunch,
+  lookupBundle,
+  onProductImage,
+  onProductDetails,
 }: {
   creds: DeviceCreds;
   online: boolean;
@@ -2459,6 +2492,10 @@ function LockScreen({
   updateReady: boolean;
   onForceRefresh: () => void;
   onClearBanner: () => void;
+  /** The cached menu bundle the price lookup browses (null = not downloaded yet). */
+  lookupBundle: PosMenuBundle | null;
+  onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  onProductDetails?: ProductDetailsFn;
   onUnlocked: (emp: UnlockedEmployee, drawer: DrawerInfo, registerId: string, defaultFloatMinor: number | null) => void;
   onPunch: (emp: UnlockedEmployee) => void;
 }) {
@@ -2466,6 +2503,10 @@ function LockScreen({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"unlock" | "clock">("unlock");
+  // Lock-screen price lookup: read-only full-screen browse, no PIN.
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const lookupBlocked = priceLookupUnavailableReason(lookupBundle);
+  const closeLookup = useCallback(() => setLookupOpen(false), []);
 
   const submit = async () => {
     if (pin.length < 4 || busy) return;
@@ -2574,6 +2615,30 @@ function LockScreen({
       >
         {mode === "unlock" ? "Clock in / out instead" : "Back to unlock"}
       </button>
+      {/* Price lookup — no PIN. Opens the menu full screen; scan a package
+          to see its price and every detail. Read-only: it cannot ring a sale. */}
+      <button
+        type="button"
+        onClick={() => {
+          setPin("");
+          setError(null);
+          setLookupOpen(true);
+        }}
+        disabled={lookupBlocked !== null}
+        title={lookupBlocked ?? "Scan or search any product to see its price"}
+        className="pos-tile mt-5 min-h-12 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-6 py-3 text-base font-bold text-[var(--pos-accent)] disabled:opacity-40"
+      >
+        🔍 Price lookup
+      </button>
+      {lookupBlocked ? <p className="mt-1 max-w-xs text-center text-xs text-[var(--pos-text-muted)]">{lookupBlocked}</p> : null}
+      {lookupOpen && lookupBundle ? (
+        <PriceLookupScreen
+          bundle={lookupBundle}
+          onProductImage={online ? onProductImage : undefined}
+          onProductDetails={online ? onProductDetails : undefined}
+          onClose={closeLookup}
+        />
+      ) : null}
       {/* AN-1 — build identity + the update/force-refresh affordance. The
           version here is the RUNNING build; when the server reports a newer
           deploy (or a worker is parked) the button turns into an explicit

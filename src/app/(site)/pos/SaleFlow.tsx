@@ -44,6 +44,16 @@ import {
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan, scanPickPrompt, type ScanPickReason } from "@/lib/pos/scan-to-cart-core";
+import { cardFactRows, terpeneLabel, type LotDetailRow, type LotDetailView, type ProductDetailsFn, type ProductDetailsResponse } from "@/lib/pos/product-detail-view-core";
+import {
+  PRICE_LOOKUP_IDLE_MS,
+  PRICE_LOOKUP_WARN_MS,
+  lookupIdleRemaining,
+  lookupPrice,
+  lookupStockLine,
+  resolveLookupScan,
+  type LookupScanOutcome,
+} from "@/lib/pos/price-lookup-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import {
@@ -436,6 +446,13 @@ export type SaleFlowProps = {
    */
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
   /**
+   * Lot details — every back-office fact about the lots of one size (vendor
+   * lot #, CCRS id, manifest, lab, dates…). ONLINE-ONLY: the shell calls
+   * /api/pos/product-details with device auth. null = offline/failed; the
+   * card still shows every bundle fact.
+   */
+  onProductDetails?: ProductDetailsFn;
+  /**
    * B43 — out-of-stock quick-flag (Toast "86 it"). ONLINE-ONLY: the shell
    * posts /api/pos/stock-flag (device auth, audited) and, on success,
    * removes the item from its cached bundle so the tile disappears at once.
@@ -654,7 +671,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onProductDetails, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -1045,6 +1062,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onMemberHistory={onMemberHistory}
         onApprove={onApprove}
         onProductImage={onProductImage}
+        onProductDetails={onProductDetails}
         onStockFlag={onStockFlag}
         onLoyalty={onLoyalty}
         appliedLoyalty={appliedLoyalty}
@@ -2525,7 +2543,8 @@ function ProductTile({
   product: PosMenuProduct;
   pinned: boolean;
   onAdd: () => void;
-  onTogglePin: () => void;
+  /** Undefined = no pin star (read-only price lookup). */
+  onTogglePin?: () => void;
   /** B42 — open the product-info card (undefined = no affordance). */
   onInfo?: () => void;
 }) {
@@ -2568,17 +2587,19 @@ function ProductTile({
           {money(product.regularPriceMinor)}
         </span>
       </button>
-      <button
-        type="button"
-        onClick={onTogglePin}
-        aria-label={pinned ? "Unpin from favorites" : "Pin to favorites"}
-        title={pinned ? "Unpin from favorites" : "Pin to favorites"}
-        className={`absolute right-0.5 top-0.5 flex h-9 w-9 items-center justify-center rounded-full text-base leading-none ${
-          pinned ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)] opacity-60"
-        }`}
-      >
-        {pinned ? "★" : "☆"}
-      </button>
+      {onTogglePin ? (
+        <button
+          type="button"
+          onClick={onTogglePin}
+          aria-label={pinned ? "Unpin from favorites" : "Pin to favorites"}
+          title={pinned ? "Unpin from favorites" : "Pin to favorites"}
+          className={`absolute right-0.5 top-0.5 flex h-9 w-9 items-center justify-center rounded-full text-base leading-none ${
+            pinned ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)] opacity-60"
+          }`}
+        >
+          {pinned ? "★" : "☆"}
+        </button>
+      ) : null}
       {onInfo ? (
         <button
           type="button"
@@ -2703,6 +2724,7 @@ function CartScreen({
   onMemberHistory,
   onApprove,
   onProductImage,
+  onProductDetails,
   onStockFlag,
   onLoyalty,
   appliedLoyalty,
@@ -2740,6 +2762,8 @@ function CartScreen({
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /** B42 — info-card photo resolve (ONLINE-ONLY via the shell). */
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  /** Lot details (ONLINE-ONLY via the shell). */
+  onProductDetails?: ProductDetailsFn;
   /** B43 — out-of-stock quick-flag (ONLINE-ONLY via the shell; one-way). */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** AM-B — loyalty redemption via /api/pos/loyalty (ONLINE-ONLY via the shell). */
@@ -4275,7 +4299,9 @@ function CartScreen({
       {infoProduct ? (
         <ProductInfoModal
           product={infoProduct}
+          rules={bundle.rules}
           onProductImage={onProductImage}
+          onProductDetails={onProductDetails}
           onStockFlag={onStockFlag}
           onAdd={() => {
             manualAdd(infoProduct);
@@ -4296,21 +4322,35 @@ function CartScreen({
  * device cache). Sensory/descriptive facts only — no effects or medical
  * claims (website posture, WAC 314-55-155).
  */
-function ProductInfoModal({
+export function ProductInfoModal({
   product,
+  rules,
   onProductImage,
+  onProductDetails,
   onStockFlag,
   onAdd,
   onClose,
 }: {
   product: PosMenuProduct;
+  /** Promotions in force — when given, the card shows TODAY's price too. */
+  rules?: PosMenuBundle["rules"];
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  /** Lot details (vendor lot #, CCRS id, lab…) — ONLINE-ONLY via the shell. */
+  onProductDetails?: ProductDetailsFn;
   /** B43 — flag this item out of stock (undefined = affordance hidden). */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
-  onAdd: () => void;
+  /** Undefined = read-only card (lock-screen price lookup): no "Add to check". */
+  onAdd?: () => void;
   onClose: () => void;
 }) {
   const info = useMemo(() => buildProductInfo(product), [product]);
+  const facts = useMemo(() => cardFactRows(product), [product]);
+  const price = useMemo(() => (rules ? lookupPrice(product, rules) : null), [product, rules]);
+  const stock = lookupStockLine(product);
+  // Lot details: fetched ONLINE when the card opens. idle -> loading -> done.
+  const [details, setDetails] = useState<ProductDetailsResponse | null>(null);
+  const [detailsState, setDetailsState] = useState<"off" | "loading" | "done" | "failed">(onProductDetails ? "loading" : "off");
+  const [openLot, setOpenLot] = useState<string | null>(null);
   const [image, setImage] = useState<{ url: string; isFallback: boolean } | null>(null);
   const [imageState, setImageState] = useState<"loading" | "done">(onProductImage ? "loading" : "done");
   // B43 — the two-tap flag flow: closed → picking a reason → posting.
@@ -4337,6 +4377,28 @@ function ProductInfoModal({
   };
 
   useEffect(() => {
+    // ONLINE-ONLY lot details. `active` guards a late response landing on a
+    // different product's card (the lookup screen reuses one card).
+    if (!onProductDetails) return;
+    let active = true;
+    onProductDetails(product.productId, product.variantId)
+      .then((d) => {
+        if (!active) return;
+        setDetails(d);
+        setDetailsState(d ? "done" : "failed");
+        // Open the lot the register is selling from (or the only lot).
+        const first = d?.lots.find((l) => l.sellable) ?? d?.lots[0];
+        setOpenLot(first ? first.lotId : null);
+      })
+      .catch(() => {
+        if (active) setDetailsState("failed");
+      });
+    return () => {
+      active = false;
+    };
+  }, [onProductDetails, product.productId, product.variantId]);
+
+  useEffect(() => {
     // ONLINE-ONLY, best-effort photo fetch when the card opens. `active`
     // guards against a late response landing on a different product's card.
     if (!onProductImage) return;
@@ -4358,7 +4420,7 @@ function ProductInfoModal({
   const style = categoryStyle(info.category);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
@@ -4421,15 +4483,50 @@ function ProductInfoModal({
           <p className="mt-3 text-sm leading-relaxed text-[var(--pos-text-muted)]">{info.description}</p>
         ) : null}
 
-        <div className="mt-5 flex items-center justify-between gap-3">
-          <span className="text-lg font-bold text-[var(--pos-accent)]">{money(info.priceMinor)}</span>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 text-sm font-bold text-[var(--pos-accent-ink)]"
-          >
-            Add to check
-          </button>
+        {/* Size-level facts from the cached bundle (work offline). */}
+        {facts.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">This size</p>
+            <DetailGrid rows={facts} />
+          </div>
+        ) : null}
+
+        <LotDetailsPanel
+          state={detailsState}
+          details={details}
+          openLot={openLot}
+          setOpenLot={setOpenLot}
+        />
+
+        <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            {price && price.savingsMinor > 0 ? (
+              <>
+                <p className="text-xs text-[var(--pos-text-faint)] line-through">{money(price.regularMinor)}</p>
+                <p className="text-2xl font-bold text-[var(--pos-accent)]">{money(price.todayMinor)}</p>
+                {price.dealLabel ? <p className="text-xs font-semibold text-[var(--pos-ok)]">{price.dealLabel} · save {money(price.savingsMinor)}</p> : null}
+              </>
+            ) : (
+              <p className="text-2xl font-bold text-[var(--pos-accent)]">{money(info.priceMinor)}</p>
+            )}
+            {price?.problem ? <p className="mt-1 text-xs font-semibold text-[var(--pos-danger)]">{price.problem}</p> : null}
+            <p
+              className={`mt-1 text-xs font-semibold ${
+                stock.tone === "danger" ? "text-[var(--pos-danger)]" : stock.tone === "warn" ? "text-[var(--pos-warn)]" : "text-[var(--pos-text-muted)]"
+              }`}
+            >
+              {stock.text}
+            </p>
+          </div>
+          {onAdd ? (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 text-sm font-bold text-[var(--pos-accent-ink)]"
+            >
+              Add to check
+            </button>
+          ) : null}
         </div>
 
         {/* B43 — Toast-style "86 it": the shelf is empty but the menu still
@@ -4483,6 +4580,425 @@ function ProductInfoModal({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lock-screen PRICE LOOKUP (owner: "a button that opens the browse menu in
+ * full screen mode, with the ability to scan a product to see its price").
+ *
+ * Full-screen, READ-ONLY browse over the register's CACHED bundle: no cart,
+ * no employee, no PIN, no sale. Scan a package (keyboard-wedge burst, Socket
+ * Mobile SDK, or typed + Enter) and its info card opens with the shelf price,
+ * today's price after promotions (the sale's own engine) and every detail.
+ * Tapping a tile opens the same card. Closes itself after
+ * PRICE_LOOKUP_IDLE_MS without a touch or scan so the lock screen comes back
+ * on its own (the register is unattended while it shows).
+ */
+export function PriceLookupScreen({
+  bundle,
+  onProductImage,
+  onProductDetails,
+  onClose,
+}: {
+  bundle: PosMenuBundle;
+  onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  onProductDetails?: ProductDetailsFn;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [classification, setClassification] = useState<PosClassificationKind | null>(null);
+  const [card, setCard] = useState<PosMenuProduct | null>(null);
+  const [notice, setNotice] = useState<Exclude<LookupScanOutcome, { kind: "show" }> | null>(null);
+  const [lastActivity, setLastActivity] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+
+  const touch = useCallback(() => setLastActivity(Date.now()), []);
+
+  // Idle auto-close: a 1 s tick only drives the countdown hint and the close.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const remaining = lookupIdleRemaining(lastActivity, now, PRICE_LOOKUP_IDLE_MS);
+  useEffect(() => {
+    if (remaining <= 0) onClose();
+  }, [remaining, onClose]);
+
+  // Any touch or key anywhere counts as activity.
+  useEffect(() => {
+    const on = () => touch();
+    window.addEventListener("pointerdown", on);
+    window.addEventListener("keydown", on);
+    return () => {
+      window.removeEventListener("pointerdown", on);
+      window.removeEventListener("keydown", on);
+    };
+  }, [touch]);
+
+  const chips = useMemo(() => menuCategoryChips(bundle.products), [bundle.products]);
+  const classificationChips = useMemo(() => posClassificationChips(bundle.products), [bundle.products]);
+  const activeClassification = useMemo(
+    () => (classification && classificationChips.some((c) => c.kind === classification) ? classification : null),
+    [classification, classificationChips],
+  );
+  const results = useMemo(
+    () => filterMenuProducts(bundle.products, query, category, activeClassification).slice(0, 90),
+    [bundle.products, query, category, activeClassification],
+  );
+
+  const handleScan = useCallback(
+    (raw: string) => {
+      touch();
+      const out = resolveLookupScan(bundle, raw);
+      if (out.kind === "show") {
+        setNotice(null);
+        setCard(out.product);
+        return;
+      }
+      setCard(null);
+      setNotice(out);
+    },
+    [bundle, touch],
+  );
+
+  // Socket Mobile scanners deliver whole payloads. Licences are ignored here
+  // (route !== "product") — the lookup never reads an ID.
+  const socket = useSocketScanner({
+    enabled: true,
+    onScan: (payload, route) => {
+      if (route !== "product") return;
+      handleScan(payload);
+    },
+  });
+  const sdkOwnsScanning = socket.sdkOwnsScanning;
+
+  // Keyboard-wedge scanners: a fast burst ending in Enter with nothing
+  // focused is a scan (same detector as the sale screen).
+  const wedgeRef = useRef<WedgeState>(emptyWedgeState());
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (sdkOwnsScanning()) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      const r = wedgeKey(wedgeRef.current, e.key, performance.now());
+      wedgeRef.current = r.state;
+      if (r.scan) {
+        e.preventDefault();
+        handleScan(r.scan);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [handleScan, sdkOwnsScanning]);
+
+  const secondsLeft = Math.ceil(remaining / 1000);
+  return (
+    <div className="pos-shell fixed inset-0 z-40 flex flex-col bg-[var(--pos-canvas)] p-4 text-[var(--pos-text)]" role="dialog" aria-modal="true" aria-label="Price lookup">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">Price lookup</h1>
+          <p className="text-xs text-[var(--pos-text-muted)]">
+            Scan a package or tap a product to see its price. Nothing here rings a sale.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {remaining <= PRICE_LOOKUP_WARN_MS ? (
+            <span className="text-xs font-semibold text-[var(--pos-warn)]">Closing in {secondsLeft}s</span>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-2 text-sm font-semibold"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+
+      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg" aria-hidden>
+            🔍
+          </span>
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setNotice(null);
+              touch();
+            }}
+            onKeyDown={(e) => {
+              // Wedge scanners type into a focused box and press Enter.
+              if (e.key === "Enter" && query.trim().length > 0) {
+                e.preventDefault();
+                const out = resolveLookupScan(bundle, query);
+                if (out.kind === "show") {
+                  setNotice(null);
+                  setCard(out.product);
+                  setQuery("");
+                } else if (out.kind === "none" && results.length > 0) {
+                  // Not a code — leave it as a name search.
+                  setNotice(null);
+                } else {
+                  setNotice(out);
+                }
+              }
+            }}
+            placeholder="Scan a package barcode or search name, brand, category, size…"
+            className="w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-3 pl-10 pr-3 text-base focus:border-[var(--pos-accent-border)] focus:outline-none"
+          />
+        </div>
+
+        {chips.length > 0 ? (
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setCategory(null)}
+              className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${
+                category === null
+                  ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+                  : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+              }`}
+            >
+              All
+            </button>
+            {chips.map((c) => {
+              const active = category !== null && c.category.toLowerCase() === category.toLowerCase();
+              const style = categoryStyle(c.category);
+              return (
+                <button
+                  key={c.category.toLowerCase()}
+                  type="button"
+                  onClick={() => setCategory(active ? null : c.category)}
+                  className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-bold capitalize ${
+                    active ? `${style.chip} bg-[var(--pos-surface-hover)]` : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                  }`}
+                >
+                  <span className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${style.dot}`} aria-hidden />
+                  {c.category}
+                  <span className="ml-1 font-normal opacity-60">{c.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {classificationChips.length > 0 ? (
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {classificationChips.map((chip) => {
+              const active = activeClassification === chip.kind;
+              return (
+                <button
+                  key={chip.kind}
+                  type="button"
+                  title={chip.title}
+                  aria-pressed={active}
+                  onClick={() => setClassification(active ? null : chip.kind)}
+                  className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${
+                    active
+                      ? "border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] text-[var(--pos-info)]"
+                      : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                  }`}
+                >
+                  {chip.label}
+                  <span className="ml-1 font-normal opacity-60">{chip.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {notice ? (
+          notice.kind === "pick" ? (
+            <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
+              <p className="text-xs font-semibold text-[var(--pos-info)]">{notice.prompt}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {notice.candidates.map((p) => (
+                  <button
+                    key={p.variantId}
+                    type="button"
+                    onClick={() => {
+                      setNotice(null);
+                      setCard(p);
+                    }}
+                    className="rounded-full bg-[var(--pos-info-solid)] px-3 py-1.5 text-xs font-bold text-white"
+                  >
+                    {p.variantLabel ?? "each"} · {money(lookupPrice(p, bundle.rules).todayMinor)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setNotice(null)}
+                  className="pos-tile rounded-full border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--pos-warn)]">{notice.message}</p>
+              <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-xs font-bold text-[var(--pos-warn-muted)]">
+                ✕
+              </button>
+            </div>
+          )
+        ) : null}
+
+        <ul className="mt-3 grid min-h-0 flex-1 grid-cols-2 content-start gap-2.5 overflow-y-auto md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {results.map((p) => (
+            <li key={p.variantId}>
+              <ProductTile product={p} pinned={false} onAdd={() => setCard(p)} onInfo={() => setCard(p)} />
+            </li>
+          ))}
+          {results.length === 0 ? (
+            <li className="col-span-full px-2 py-6 text-center text-sm text-[var(--pos-text-faint)]">No products match.</li>
+          ) : null}
+        </ul>
+      </section>
+
+      {card ? (
+        <ProductInfoModal
+          key={card.variantId}
+          product={card}
+          rules={bundle.rules}
+          onProductImage={onProductImage}
+          onProductDetails={onProductDetails}
+          onClose={() => setCard(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** A compact label/value grid used by the info card's fact sections. */
+function DetailGrid({ rows }: { rows: LotDetailRow[] }) {
+  return (
+    <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+      {rows.map((r, i) => (
+        <div key={`${r.label}-${i}`} className="min-w-0">
+          <dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">{r.label}</dt>
+          <dd
+            className={`break-words text-sm font-semibold ${
+              r.tone === "danger"
+                ? "text-[var(--pos-danger)]"
+                : r.tone === "warn"
+                  ? "text-[var(--pos-warn)]"
+                  : r.tone === "ok"
+                    ? "text-[var(--pos-ok)]"
+                    : "text-[var(--pos-text)]"
+            }`}
+          >
+            {r.value}
+          </dd>
+          {r.note ? <p className="text-[10px] leading-tight text-[var(--pos-text-faint)]">{r.note}</p> : null}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Every back-office fact about the lots of this size (owner: "every detail
+ * available, vendor lot number, everything"). One collapsible block per lot;
+ * the lot the register is selling from opens first. ONLINE-ONLY — offline
+ * the card says so and keeps every bundle fact above.
+ */
+function LotDetailsPanel({
+  state,
+  details,
+  openLot,
+  setOpenLot,
+}: {
+  state: "off" | "loading" | "done" | "failed";
+  details: ProductDetailsResponse | null;
+  openLot: string | null;
+  setOpenLot: (id: string | null) => void;
+}) {
+  if (state === "off") return null;
+  return (
+    <div className="mt-4 border-t border-[var(--pos-border)] pt-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">Lot details</p>
+        {state === "done" && details && details.lotCount > details.lots.length ? (
+          <p className="text-[10px] text-[var(--pos-text-faint)]">
+            Showing {details.lots.length} of {details.lotCount} lots
+          </p>
+        ) : null}
+      </div>
+      {state === "loading" ? (
+        <div className="mt-2 h-16 animate-pulse rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)]" />
+      ) : state === "failed" ? (
+        <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+          Lot details need a connection to the back office. Everything above is from this register&apos;s saved menu.
+        </p>
+      ) : details ? (
+        <>
+          {details.warnings.map((w) => (
+            <p key={w} className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              {w}
+            </p>
+          ))}
+          {details.lots.length === 0 ? (
+            <p className="mt-1 text-xs text-[var(--pos-text-muted)]">No received lots are on file for this size.</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {details.lots.map((lot) => (
+                <LotBlock key={lot.lotId} lot={lot} open={openLot === lot.lotId} onToggle={() => setOpenLot(openLot === lot.lotId ? null : lot.lotId)} />
+              ))}
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function LotBlock({ lot, open, onToggle }: { lot: LotDetailView; open: boolean; onToggle: () => void }) {
+  return (
+    <div className={`rounded-xl border ${lot.sellable ? "border-[var(--pos-accent-border)]" : "border-[var(--pos-border)]"} bg-[var(--pos-surface-2)]`}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left">
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold">{lot.headline}</span>
+          {lot.summary ? <span className="block text-xs text-[var(--pos-text-muted)]">{lot.summary}</span> : null}
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-[var(--pos-text-faint)]">
+          {lot.sellable ? <span className="mr-2 text-[var(--pos-accent)]">Selling now</span> : null}
+          {open ? "Hide" : "Show"}
+        </span>
+      </button>
+      {open ? (
+        <div className="space-y-3 border-t border-[var(--pos-border)] px-3 py-3">
+          {lot.sections.map((sec) =>
+            sec.rows.length > 0 ? (
+              <div key={sec.title}>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-accent)]">{sec.title}</p>
+                <DetailGrid rows={sec.rows} />
+              </div>
+            ) : null,
+          )}
+          {lot.terpenes.length > 0 ? (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-accent)]">Terpenes (lab)</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {lot.terpenes.map((t) => (
+                  <span key={t.name} className="rounded-full border border-[var(--pos-border)] bg-[var(--pos-surface)] px-2.5 py-1 text-xs capitalize text-[var(--pos-text-muted)]">
+                    {t.name} · {terpeneLabel(t.ppm)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {lot.coaUrl ? (
+            <a href={lot.coaUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-[var(--pos-info)] underline underline-offset-2">
+              Open the lab certificate (COA)
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
