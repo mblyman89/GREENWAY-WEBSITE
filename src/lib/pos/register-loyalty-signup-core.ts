@@ -597,6 +597,163 @@ export function isUniqueViolation(err: { code?: string | null } | null | undefin
 // Self-tests
 // ---------------------------------------------------------------------------
 
+
+// ---------------------------------------------------------------------------
+// Register <-> route contract (shared by RegisterShell and the signup sheet)
+// ---------------------------------------------------------------------------
+
+/** GET /api/pos/loyalty-signup: what the form shows. */
+export type RegisterSignupFormContent = {
+  consentText: string;
+  consentTextSha256: string;
+  signupBonusPoints: number;
+  terms: {
+    earnLine: string;
+    valueLine: string;
+    redeemLine: string;
+    signupBonusLine: string | null;
+    expiryLine: string | null;
+  };
+};
+
+/** The member the register attaches (same shape as the member lookup hit). */
+export type RegisterSignupMember = {
+  customerId: string;
+  label: string;
+  points: number;
+  tierName: string | null;
+  fullName?: string;
+};
+
+export type RegisterSignupDuplicate = DuplicateMatch & { reasons: string[] };
+
+export type RegisterSignupSubmitResult =
+  | { kind: "ok"; outcome: SignupOutcome; member: RegisterSignupMember; message: string }
+  | { kind: "duplicates"; matches: RegisterSignupDuplicate[]; message: string }
+  | { kind: "consent_changed"; error: string; consentText: string; consentTextSha256: string }
+  | { kind: "error"; error: string; fields: FieldErrors };
+
+/** What the shell gives the sale screen (undefined = feature hidden). */
+export type RegisterSignupApi = {
+  load: () => Promise<{ ok: true; form: RegisterSignupFormContent } | { ok: false; error: string }>;
+  submit: (body: Record<string, unknown>) => Promise<RegisterSignupSubmitResult>;
+};
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function asMember(v: unknown): RegisterSignupMember | null {
+  if (!isObj(v) || typeof v.customerId !== "string" || !v.customerId || typeof v.label !== "string") return null;
+  return {
+    customerId: v.customerId,
+    label: v.label,
+    points: typeof v.points === "number" && Number.isFinite(v.points) ? v.points : 0,
+    tierName: typeof v.tierName === "string" ? v.tierName : null,
+    ...(typeof v.fullName === "string" ? { fullName: v.fullName } : {}),
+  };
+}
+
+/** Read the GET reply. Never throws. */
+export function interpretSignupFormResponse(
+  httpStatus: number,
+  body: unknown,
+): { ok: true; form: RegisterSignupFormContent } | { ok: false; error: string } {
+  if (httpStatus < 200 || httpStatus >= 300 || !isObj(body)) {
+    const err = isObj(body) && typeof body.error === "string" ? body.error : `The signup form did not load (HTTP ${httpStatus}).`;
+    return { ok: false, error: err };
+  }
+  const t = isObj(body.terms) ? body.terms : {};
+  const line = (k: string) => (typeof t[k] === "string" ? (t[k] as string) : "");
+  const opt = (k: string) => (typeof t[k] === "string" ? (t[k] as string) : null);
+  if (typeof body.consentText !== "string" || typeof body.consentTextSha256 !== "string" || !SHA256_RE.test(body.consentTextSha256)) {
+    return { ok: false, error: "The message consent wording did not load. Try again." };
+  }
+  return {
+    ok: true,
+    form: {
+      consentText: body.consentText,
+      consentTextSha256: body.consentTextSha256,
+      signupBonusPoints: typeof body.signupBonusPoints === "number" ? body.signupBonusPoints : 0,
+      terms: {
+        earnLine: line("earnLine"),
+        valueLine: line("valueLine"),
+        redeemLine: line("redeemLine"),
+        signupBonusLine: opt("signupBonusLine"),
+        expiryLine: opt("expiryLine"),
+      },
+    },
+  };
+}
+
+/** Read the POST reply. Never throws; an unreadable reply is an error, never "ok". */
+export function interpretSignupResponse(httpStatus: number, body: unknown): RegisterSignupSubmitResult {
+  const b = isObj(body) ? body : {};
+  const fields = (isObj(b.fields) ? b.fields : {}) as FieldErrors;
+  if (httpStatus >= 200 && httpStatus < 300) {
+    if (b.status === "duplicates" && Array.isArray(b.matches)) {
+      const matches: RegisterSignupDuplicate[] = [];
+      for (const m of b.matches) {
+        if (!isObj(m) || typeof m.customerId !== "string" || typeof m.label !== "string") continue;
+        const bases = (Array.isArray(m.bases) ? m.bases : []).filter(
+          (x): x is DuplicateBasis => x === "name_dob" || x === "phone" || x === "email",
+        );
+        matches.push({
+          customerId: m.customerId,
+          label: m.label,
+          fullName: typeof m.fullName === "string" ? m.fullName : m.label,
+          bases,
+          reasons: bases.map((x) => DUPLICATE_BASIS_LABEL[x]),
+        });
+      }
+      if (matches.length > 0) {
+        return { kind: "duplicates", matches, message: typeof b.message === "string" ? b.message : "This customer may already have an account." };
+      }
+    }
+    const member = asMember(b.member);
+    const outcome = b.outcome === "created" || b.outcome === "linked" || b.outcome === "replayed" ? b.outcome : null;
+    if (b.status === "ok" && member && outcome) {
+      return { kind: "ok", outcome, member, message: typeof b.message === "string" ? b.message : "Signed up." };
+    }
+    return { kind: "error", error: "The server sent an answer the register could not read. Search for the customer before trying again.", fields: {} };
+  }
+  const error = typeof b.error === "string" && b.error ? b.error : `Signup failed (HTTP ${httpStatus}). Nothing was lost, try again.`;
+  if (b.code === "consent_changed" && typeof b.consentText === "string" && typeof b.consentTextSha256 === "string") {
+    return { kind: "consent_changed", error, consentText: b.consentText, consentTextSha256: b.consentTextSha256 };
+  }
+  return { kind: "error", error, fields };
+}
+
+/** The sheet's first-name / last-name / DOB starting values. */
+export function initialSignupNames(
+  scanned: { firstName: string | null; lastName: string | null } | null,
+  search: { firstName?: string; lastName?: string },
+): { firstName: string; lastName: string } {
+  const sf = prefillFirstName(scanned?.firstName ?? "");
+  const sl = titleCaseName(scanned?.lastName ?? "");
+  return { firstName: sf || search.firstName || "", lastName: sl || search.lastName || "" };
+}
+
+/** Why the Sign up button is disabled (null = ready). Mirrors the server parse. */
+export function signupBlocker(f: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  marketingConsent: boolean;
+  signature: string;
+  consentLoaded: boolean;
+}): string | null {
+  if (!f.firstName.trim() || !f.lastName.trim()) return "Add the first and last name.";
+  const phoneDigits = f.phone.replace(/\D/g, "");
+  if (!phoneDigits && !f.email.trim()) return "Add a phone number or an email.";
+  if (phoneDigits && phoneDigits.length !== 10 && !(phoneDigits.length === 11 && phoneDigits.startsWith("1"))) return "Phone numbers have 10 digits.";
+  if (f.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return "That email does not look right.";
+  if (f.marketingConsent && !f.consentLoaded) return "The consent wording is still loading.";
+  if (f.marketingConsent && f.signature.trim().length < 2) return "The customer types their name to say yes to messages.";
+  return null;
+}
+
 export function __runRegisterLoyaltySignupCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -805,6 +962,43 @@ export function __runRegisterLoyaltySignupCoreTests(): { passed: number; failed:
   ok(classifySignupDbError({ code: "42703" }, "save").includes("column"), "missing column");
   ok(classifySignupDbError({ code: "XX000", message: "boom" }, "save").includes("boom"), "other error shown");
   ok(isUniqueViolation({ code: "23505" }) && !isUniqueViolation({ code: "42501" }) && !isUniqueViolation(null), "23505 = already done");
+
+  // --- register <-> route contract
+  const form = interpretSignupFormResponse(200, { consentText: "Wording", consentTextSha256: sha, signupBonusPoints: 200, terms: { earnLine: "Earn 1", valueLine: "v", redeemLine: "r", signupBonusLine: "bonus", expiryLine: null } });
+  ok(form.ok && form.form.signupBonusPoints === 200 && form.form.terms.signupBonusLine === "bonus" && form.form.terms.expiryLine === null, "form reply read");
+  ok(!interpretSignupFormResponse(401, { error: "Device key rejected." }).ok, "form reply error");
+  const fe = interpretSignupFormResponse(200, { consentText: "x", consentTextSha256: "nope" });
+  ok(!fe.ok, "form reply without a real hash refused");
+  const okr = interpretSignupResponse(200, { status: "ok", outcome: "created", member: { customerId: "c1", label: "Jane D.", points: 200, tierName: null }, message: "Welcome" });
+  ok(okr.kind === "ok" && okr.member.points === 200 && okr.outcome === "created", "ok reply read");
+  const dupr = interpretSignupResponse(200, { status: "duplicates", matches: [{ customerId: "c2", label: "Jane D.", fullName: "Jane Doe", bases: ["phone", "bogus"] }], message: "m" });
+  ok(dupr.kind === "duplicates" && dupr.matches[0].bases.length === 1 && dupr.matches[0].reasons[0] === DUPLICATE_BASIS_LABEL.phone, "duplicates reply read");
+  ok(interpretSignupResponse(200, { status: "ok" }).kind === "error", "ok without member is an error");
+  ok(interpretSignupResponse(200, null).kind === "error", "empty 200 is an error");
+  const cc = interpretSignupResponse(409, { error: "changed", code: "consent_changed", consentText: "New", consentTextSha256: sha });
+  ok(cc.kind === "consent_changed" && cc.consentText === "New", "consent changed read");
+  const er = interpretSignupResponse(400, { error: "First name is required.", fields: { firstName: "First name is required." } });
+  ok(er.kind === "error" && er.fields.firstName === "First name is required.", "field errors read");
+  const e5 = interpretSignupResponse(503, "x");
+  ok(e5.kind === "error" && e5.error.includes("503"), "unreadable error has the status");
+
+  const n1 = initialSignupNames({ firstName: "JANE MARIE", lastName: "O'BRIEN" }, { firstName: "Joe", lastName: "Smith" });
+  ok(n1.firstName === "Jane" && n1.lastName === "O'Brien", "scan names win over search");
+  const n2 = initialSignupNames(null, { lastName: "Smith" });
+  ok(n2.firstName === "" && n2.lastName === "Smith", "search names when no scan");
+  const n3 = initialSignupNames({ firstName: null, lastName: null }, {});
+  ok(n3.firstName === "" && n3.lastName === "", "no names -> blanks");
+
+  const ready = { firstName: "Jane", lastName: "Doe", phone: "(360) 555-0101", email: "", marketingConsent: false, signature: "", consentLoaded: false };
+  ok(signupBlocker(ready) === null, "ready form");
+  ok(signupBlocker({ ...ready, lastName: " " }) !== null, "blocker: last name");
+  ok(signupBlocker({ ...ready, phone: "", email: "" }) !== null, "blocker: contact");
+  ok(signupBlocker({ ...ready, phone: "555-01" }) !== null, "blocker: short phone");
+  ok(signupBlocker({ ...ready, phone: "", email: "jane@" }) !== null, "blocker: bad email");
+  ok(signupBlocker({ ...ready, phone: "", email: "jane@example.com" }) === null, "email only is fine");
+  ok(signupBlocker({ ...ready, marketingConsent: true, signature: "Jane Doe" }) !== null, "blocker: consent wording not loaded");
+  ok(signupBlocker({ ...ready, marketingConsent: true, consentLoaded: true, signature: "J" }) !== null, "blocker: signature");
+  ok(signupBlocker({ ...ready, marketingConsent: true, consentLoaded: true, signature: "Jane Doe" }) === null, "consent + signature ready");
 
   return { passed, failed };
 }

@@ -56,6 +56,8 @@ import {
 } from "@/lib/pos/price-lookup-core";
 // register-sell-everything-fix-later: "Fix & sell" on a scan that matched nothing.
 import { looksLikePackageCode } from "@/lib/pos/register-fix-later-core";
+import { prefillFromSearch, type RegisterSignupApi } from "@/lib/pos/register-loyalty-signup-core";
+import { RegisterLoyaltySignup } from "./RegisterLoyaltySignup";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import {
@@ -393,6 +395,12 @@ export type SaleFlowProps = {
    */
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   /**
+   * register-loyalty-signup: sign a new loyalty customer up from the sale
+   * (GET form content + POST signup via /api/pos/loyalty-signup). ONLINE-ONLY
+   * via the shell; undefined hides the Sign up button.
+   */
+  onLoyaltySignup?: RegisterSignupApi;
+  /**
    * B30 — email the frozen receipt snapshot (opt-in digital receipt). Only
    * provided when the shell has confirmed the email provider is configured
    * (undefined hides the option entirely). ONLINE-ONLY; the address is used
@@ -692,7 +700,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onProductDetails, onStockFlag, onFixAndSell, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onLoyaltySignup, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onProductDetails, onStockFlag, onFixAndSell, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -728,6 +736,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     return () => document.removeEventListener("keydown", onKeyDownCapture, true);
   }, []);
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(initialVerdict ?? null);
+  // register-loyalty-signup: the names parsed off the scanned ID (null for a
+  // hand-checked ID or a resumed sale) prefill the loyalty signup sheet.
+  const [scannedName, setScannedName] = useState<{ firstName: string | null; lastName: string | null } | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
   // POS B9 — set ONLY by the ID gate's medical path (card captured + its
   // audit event enqueued). The card, not a toggle, is what makes the sale
@@ -1046,6 +1057,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onCancel={onCancel}
         onPassed={(v, manualUuid, card, cardUuid, scannedName) => {
           setVerdict(v);
+          setScannedName(scannedName);
           setManualEventUuid(manualUuid);
           setMedicalCard(card);
           setCardEventUuid(cardUuid);
@@ -1081,6 +1093,8 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         setMember={setMember}
         onMemberLookup={onMemberLookup}
         onMemberHistory={onMemberHistory}
+        onLoyaltySignup={onLoyaltySignup}
+        scannedName={scannedName}
         onApprove={onApprove}
         onProductImage={onProductImage}
         onProductDetails={onProductDetails}
@@ -2744,6 +2758,8 @@ function CartScreen({
   setMember,
   onMemberLookup,
   onMemberHistory,
+  onLoyaltySignup,
+  scannedName,
   onApprove,
   onProductImage,
   onProductDetails,
@@ -2781,6 +2797,10 @@ function CartScreen({
   onMemberLookup?: MemberLookupFn;
   /** B29 — history for the ATTACHED member (ONLINE-ONLY via the shell). */
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
+  /** register-loyalty-signup (ONLINE-ONLY via the shell). */
+  onLoyaltySignup?: RegisterSignupApi;
+  /** Names parsed off the scanned ID (signup prefill). */
+  scannedName: { firstName: string | null; lastName: string | null } | null;
   /** B24 — manager PIN verify (ONLINE-ONLY; /api/pos/approve via the shell). */
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /** B42 — info-card photo resolve (ONLINE-ONLY via the shell). */
@@ -3348,6 +3368,9 @@ function CartScreen({
         setMember={setMember}
         onMemberLookup={onMemberLookup}
         onMemberHistory={onMemberHistory}
+        onLoyaltySignup={onLoyaltySignup}
+        scannedName={scannedName}
+        employeeName={employeeName}
         verdict={verdict}
         medicalCard={medicalCard}
         menuFetchedAt={bundle.fetchedAt}
@@ -6113,6 +6136,9 @@ function CustomerBand({
   setMember,
   onMemberLookup,
   onMemberHistory,
+  onLoyaltySignup,
+  scannedName,
+  employeeName,
   verdict,
   medicalCard,
   menuFetchedAt,
@@ -6126,6 +6152,9 @@ function CustomerBand({
   setMember: (m: PosMemberHit | null) => void;
   onMemberLookup?: MemberLookupFn;
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
+  onLoyaltySignup?: RegisterSignupApi;
+  scannedName: { firstName: string | null; lastName: string | null } | null;
+  employeeName?: string;
   verdict: Extract<IdGateVerdict, { allowed: true }>;
   medicalCard: PosCardCapture | null;
   menuFetchedAt: string;
@@ -6174,6 +6203,10 @@ function CustomerBand({
   }, [history, products]);
 
   const carded = !!medicalCard;
+  // register-loyalty-signup: the sheet lives HERE (not in MemberPanel) so it
+  // stays open on its "Welcome" screen after the new member attaches.
+  const [signupPrefill, setSignupPrefill] = useState<ReturnType<typeof prefillFromSearch> | null>(null);
+  const startSignup = onLoyaltySignup ? (q: string) => setSignupPrefill(prefillFromSearch(q)) : undefined;
 
   return (
     <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-3">
@@ -6259,7 +6292,19 @@ function CustomerBand({
 
       {/* Walk-in: the existing attach/search flow (B14), unchanged. */}
       {!member ? (
-        <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
+        <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} onStartSignup={startSignup} />
+      ) : null}
+
+      {signupPrefill && onLoyaltySignup ? (
+        <RegisterLoyaltySignup
+          api={onLoyaltySignup}
+          verdict={verdict}
+          scannedName={scannedName}
+          searchPrefill={signupPrefill}
+          employeeName={employeeName ?? ""}
+          onSignedUp={(m) => setMember({ customerId: m.customerId, label: m.label, points: m.points, tierName: m.tierName })}
+          onClose={() => setSignupPrefill(null)}
+        />
       ) : null}
 
       {/* THE USUAL — one-tap re-adds from B29 favorites. */}
@@ -6318,11 +6363,14 @@ function MemberPanel({
   setMember,
   onMemberLookup,
   onMemberHistory,
+  onStartSignup,
 }: {
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
   onMemberLookup?: MemberLookupFn;
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
+  /** register-loyalty-signup: open the signup sheet, prefilled from the search text. */
+  onStartSignup?: (q: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -6457,13 +6505,24 @@ function MemberPanel({
     // AM-A — the collapsed customer band: one obvious tap to attach a member
     // (Dutchie puts the customer at the top; so do we).
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-3 flex min-h-11 w-full items-center gap-2 rounded-xl border border-dashed border-[var(--pos-border-strong)] px-4 py-2.5 text-left text-sm text-[var(--pos-text-muted)] active:bg-[var(--pos-surface-hover)]"
-      >
-        <span aria-hidden>👤</span> Attach customer — name, phone, email or Customer ID (optional)
-      </button>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-dashed border-[var(--pos-border-strong)] px-4 py-2.5 text-left text-sm text-[var(--pos-text-muted)] active:bg-[var(--pos-surface-hover)]"
+        >
+          <span aria-hidden>👤</span> Attach customer — name, phone, email or Customer ID (optional)
+        </button>
+        {onStartSignup ? (
+          <button
+            type="button"
+            onClick={() => onStartSignup("")}
+            className="pos-tile min-h-11 shrink-0 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-4 py-2.5 text-sm font-bold text-[var(--pos-warn)]"
+          >
+            ⭐ Sign up for loyalty
+          </button>
+        ) : null}
+      </div>
     );
   }
 
@@ -6505,6 +6564,19 @@ function MemberPanel({
         </button>
       </div>
       {error ? <p className="mt-2 text-xs text-[var(--pos-warn)]">{error}</p> : null}
+      {onStartSignup ? (
+        <button
+          type="button"
+          onClick={() => onStartSignup(q)}
+          className={`pos-tile mt-2 min-h-11 w-full rounded-lg border px-4 py-2 text-sm font-bold ${
+            hits && hits.length === 0
+              ? "border-[var(--pos-warn-border)] bg-[var(--pos-warn-solid)] text-white"
+              : "border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
+          }`}
+        >
+          ⭐ {hits && hits.length === 0 ? "Not found: sign them up for loyalty" : "New customer? Sign up for loyalty"}
+        </button>
+      ) : null}
       {hits && hits.length > 0 ? (
         <ul className="mt-2 max-h-80 space-y-1.5 overflow-y-auto">
           {hits.map((h) => (

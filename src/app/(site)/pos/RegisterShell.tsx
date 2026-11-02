@@ -69,6 +69,7 @@ import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 // register-sell-everything-fix-later: a Fix & sell line joins the cached menu.
 import { addFixLaterProduct } from "@/lib/pos/register-fix-later-core";
+import { interpretSignupFormResponse, interpretSignupResponse } from "@/lib/pos/register-loyalty-signup-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import {
   MEDICAL_TESTMODE_KEY,
@@ -1792,6 +1793,48 @@ export function RegisterShell({
           } catch {
             return { ok: false as const, error: "Network error — try again or ring without the member." };
           }
+        }}
+        onLoyaltySignup={{
+          // register-loyalty-signup: sign a new loyalty customer up from the
+          // sale. ONLINE-ONLY like the member lookup (no customer book is
+          // cached on the iPad). The sheet re-sends the same request id on a
+          // retry, so a dropped reply never makes a second account.
+          load: async () => {
+            if (!navigator.onLine) {
+              return { ok: false as const, error: "Offline: reconnect to sign up a loyalty customer, or ring the sale without one." };
+            }
+            try {
+              const res = await posFetch("/api/pos/loyalty-signup", {
+                headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+              });
+              return interpretSignupFormResponse(res.status, await res.json().catch(() => null));
+            } catch {
+              return { ok: false as const, error: "Could not reach the server. Try again." };
+            }
+          },
+          submit: async (body) => {
+            if (!navigator.onLine) {
+              return { kind: "error" as const, error: "Offline: nothing was saved. Reconnect and tap Sign up again.", fields: {} };
+            }
+            try {
+              const res = await posFetch("/api/pos/loyalty-signup", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-pos-device-id": creds.deviceId,
+                  "x-pos-device-key": creds.deviceKey,
+                },
+                body: JSON.stringify(body),
+              });
+              return interpretSignupResponse(res.status, await res.json().catch(() => null));
+            } catch {
+              return {
+                kind: "error" as const,
+                error: "Could not reach the server. Tap Sign up again: it is safe, it will not make a second account.",
+                fields: {},
+              };
+            }
+          },
         }}
         onMemberMatch={async (identity) => {
           // AO-3 — scan auto-attach: parsed name + DOB (already in hand from
