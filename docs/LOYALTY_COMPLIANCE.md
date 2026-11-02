@@ -125,3 +125,13 @@ ledger/redemptions/orders (all aggregates):
 3. Register flow: open the order → Loyalty section → enter the customer's
    code or apply member pricing → complete the sale as usual. The section
    explains every rule inline.
+
+## 6. Signing up at the register (register-loyalty-signup)
+
+The register can sign a new customer up (`/api/pos/loyalty-signup`, SOP-01 §4.12a; slice doc `docs/slice-register-loyalty-signup.md`).
+
+- **Age.** The birthday comes from the sale's passing ID check and must be 21 or older on the Pacific calendar (RCW 69.50.357).
+- **Messages.** Consent is optional, starts unchecked and is never a condition of joining or buying. Saying yes shows the published `loyalty.form.consent_text` wording, and the customer types their name as the signature (47 CFR 64.1200(f)(9) prior express written consent; an electronic signature counts). The server refuses if the wording the customer saw is not the published wording (SHA-256 compare). The row keeps the wording and its hash.
+- **A "no" stays a no.** Register signups that said no are stored with `consent = false`, so the newsletter never emails them. Linking an existing customer never removes an earlier signed yes and never overrides `do_not_contact`.
+- **Signup bonus.** The bonus is loyalty points, the same as a website signup (`enrollCustomer`). Points are redeemed only as a discount at a sale, so the cost floor in §1.1 still applies when they are spent.
+

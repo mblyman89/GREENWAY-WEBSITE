@@ -486,6 +486,22 @@ Errors:
 
 **Earning.** The rail shows *"This sale earns ~N points"*. The real points are added by the server when the sale syncs.
 
+### 4.12a Sign up a new loyalty customer
+
+Use this when the customer is not a member yet. It takes about 30 seconds and needs internet.
+
+1. Check the ID as usual (4.5). The birthday for the signup comes from this check.
+2. On the customer band tap **⭐ Sign up for loyalty**. If you searched first and found nobody, tap **Not found: sign them up for loyalty**: what you typed (phone, email or name) is carried over.
+3. Check the **first and last name**. After a scan they are already filled in from the ID. The **birthday is locked** (🔒) to the ID. Nobody types it.
+4. Add the **mobile phone** or the **email** (one is enough; both is better). This is how you find them next time.
+5. Pitch it in one line: the yellow box shows the signup bonus and the earn rate.
+6. **Messages are optional.** Only if the customer wants deals by text and email, tick the box, turn the screen to the customer, let them read the wording and **type their own name** as the signature. Never tick it for them. It is not needed to join or to buy.
+7. Tap **Sign up and attach to this sale**.
+8. If the register shows *"This customer may already have an account"*, ask the customer. Tap **Use this account** if it is them. Tap **Not them: create a new account anyway** only if it is a different person.
+9. The Welcome screen shows the points. Tap **Back to the sale**. The member is attached, so this sale earns points.
+
+Next visit, scanning their ID attaches the account by itself (name + birthday), or search by phone or email.
+
 ### 4.13 Special discounts: employee, friends & family, veteran, industry
 
 The rates are set by the owner in **Settings → Special discounts** (admin only). Defaults are employee 35%, friends & family 35% (capped at 4 uses per guest per rolling 30 days), veteran 15%, and industry off until the owner sets a rate. **Only programs the owner has enabled show as buttons.** Each button shows its rate, for example **Employee discount 35%**. Hover text explains what each needs.
@@ -1096,6 +1112,10 @@ Since Phase 2.9 (owner message 6: *"The register activity page also, the top but
 | *"<item> is a DOH High-THC product and may ONLY be sold to a patient with a valid recognition card (chapter 246-70 WAC)…"* | BLOCK (legal) | DOH rule | Remove it, or restart on the medical path | — |
 | *"<item>: this takes the last one in stock."* / *"…menu shows only M left — check the shelf before promising."* | WARN | Low count | Check the shelf | — |
 | *"A saved sale is holding stock this cart needs — saved by <name> <time ago>."* | WARN | Another held sale uses the item | Only delete the saved sale if that customer left | — |
+| *"This customer may already have an account. Use it, or create a new one anyway."* | WARN | Loyalty signup found the same phone, email or name + birthday | Ask the customer. **Use this account** if it is them. | — |
+| *"The message consent wording was just updated. Show the customer the new wording and ask again."* | BLOCK (soft) | The owner changed the consent wording while the sheet was open | Let the customer read the new wording and type their name again | — |
+| *"Loyalty members must be 21 or older."* / *"The ID check for this sale has no birthday…"* | BLOCK | Signup birthday comes from this sale's ID | Check the ID again | — |
+| *"Offline: reconnect to sign up a loyalty customer, or ring the sale without one."* | BLOCK | Signup needs internet | Ring the sale; sign them up next visit | — |
 
 ### 5.5 Discounts and price changes
 
@@ -1422,6 +1442,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.14 draft | Fix phase | register-loyalty-signup (owner: *"I need a way to sign up new loyalty customers from the iPad register."*). New §4.12a: **⭐ Sign up for loyalty** on the customer band; names from the ID scan, birthday locked to the ID check, phone or email, optional text/email consent signed by the customer, duplicate check (Use this account / create anyway), member attached to the sale. §5.4 messages. No migration. The iPad app must be rebuilt. | Fix program |
 | 1.13 draft | Fix phase | R-DRAWER-1 (owner request: *"popping the cash drawer with a receipt or with out the receipt printed"*). §4.16 step 2: the two settings, Drawer open / Open drawer, once per sale; §4.37 button list; quick card. F-01-6 and F-01-7 FIXED. No migration. The iPad app must be rebuilt. | Fix program |
 | 1.12 draft | Fix phase | G-75 (owner message 17, D118–D119). §4 cart header: the customer search (any part of a name in either order, last name, phone digits, email, Customer ID; results as you type, up to 25, with last 4 phone digits, last purchase, total spent, medical, Customer ID; closest spellings after migration 0335). Messages updated. The iPad app must be rebuilt for the new result layout. | Fix program |
 | 1.11 draft | Fix phase | Fix Phase 6F (owner message 9, D91–D96; G-67, G-68 BUILT). §4.23 store policy: anyone with the receipt by default, Loyalty members only toggle, return window setting (default 7), non-returnable product types; receipt and packaging always required. §4.27 step 7: the tips box is required on the iPad close (0 allowed). §5 messages, quick card. No migration. The iPad app must be rebuilt. | Fix program |

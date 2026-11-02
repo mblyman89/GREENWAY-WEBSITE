@@ -16,6 +16,7 @@ import {
   type LoyaltyStatus,
 } from "@/lib/loyalty/signups-store";
 import { getLinkedCustomersForSignups } from "@/lib/loyalty/signup-customer-store";
+import { REGISTER_SIGNUP_SOURCE } from "@/lib/pos/register-loyalty-signup-core";
 import {
   setLoyaltyStatusAction,
   updateLoyaltyNoteAction,
@@ -353,9 +354,9 @@ export default async function LoyaltySignupReviewPage({
                       {s.birthday ? ` · b. ${s.birthday}` : ""}
                     </p>
                     <p className="mt-0.5 text-xs text-white/40">
-                      Submitted {formatDate(s.submitted_at)}
+                      {s.source === REGISTER_SIGNUP_SOURCE ? "Signed up at the register" : "Submitted"} {formatDate(s.submitted_at)}
                       {s.entered_at ? ` · entered ${formatDate(s.entered_at)}` : ""}
-                      {` · notify: ${s.notification_status}`}
+                      {s.source === REGISTER_SIGNUP_SOURCE ? "" : ` · notify: ${s.notification_status}`}
                     </p>
                     {s.staff_note ? (
                       <p className="mt-2 rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-white/60">
