@@ -39,7 +39,8 @@ export function clockOutBlockedMessage(owned: readonly OwnedDrawer[]): string | 
   const where = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   return (
     `You still have an open drawer on ${where}. Close your drawer first (count it out on the register: bills, tips, your PIN), ` +
-    "then clock out. Closing the drawer does not clock you out (owner rule D84)."
+    "then clock out. You do not wait for the office second count (owner rule D132). " +
+    "Closing the drawer does not clock you out (owner rule D84)."
   );
 }
 
@@ -263,6 +264,7 @@ export function __runShiftEndCoreTests(): { passed: number; failed: number } {
   ok(clockOutBlockedMessage([]) === null, "no open drawer: no message");
   ok((clockOutBlockedMessage(r1) ?? "").includes("Sales Register 1"), "message names the register");
   ok((clockOutBlockedMessage(r1) ?? "").includes("does not clock you out"), "message says closing does not clock out");
+  ok((clockOutBlockedMessage(r1) ?? "").includes("do not wait for the office second count"), "D132: message says the second count is not waited for");
   ok(
     (clockOutBlockedMessage([...r1, { sessionId: "s2", registerName: "Sales Register 2" }]) ?? "").includes("Sales Register 1 and Sales Register 2"),
     "two registers joined with and",

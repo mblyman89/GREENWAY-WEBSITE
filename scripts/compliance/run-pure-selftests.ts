@@ -992,6 +992,7 @@ import { __runVendorReturnPacketCoreTests } from "../../src/lib/inventory/vendor
 import { __runDrawerFigureCoreTests } from "../../src/lib/registers/drawer-figure-core";
 import { __runSecondCountCoreTests } from "../../src/lib/registers/second-count-core";
 import { __runDrawerCorrectionCoreTests } from "../../src/lib/registers/drawer-correction-core";
+import { __runDrawerPopCoreTests } from "../../src/lib/registers/drawer-pop-core";
 import { __runOverShortWarningCoreTests } from "../../src/lib/registers/over-short-warning-core";
 import { __runDepositBagFlowTests } from "../../src/lib/registers/deposit-bag-flow-core";
 import { __runEodSheetTests } from "../../src/lib/registers/eod-sheet-core";
@@ -1980,6 +1981,7 @@ __runLiquidVolumeTests();
   assertRan("drawer-figure-core", __runDrawerFigureCoreTests(), 34); // Fix Phase 2.1: G-05 / F-01-4 per-drawer cash figure (no typed cash sales)
   assertRan("second-count-core", __runSecondCountCoreTests(), 25); // Fix Phase 2.2: G-01 / owner D2 second-person count at till close
   assertRan("drawer-correction-core", __runDrawerCorrectionCoreTests(), 42); // Owner D125-D127: confirm a $0 close, hold when counts differ > $5, correct a reconciled drawer
+  assertRan("drawer-pop-core", __runDrawerPopCoreTests(), 30); // Owner D129-D132: open the drawer for the blind count (assigned cashier only, once free, repeats need a reason and warn), clock-out after the blind count
   assertRan("over-short-warning-core", __runOverShortWarningCoreTests(), 35); // Fix Phase 2.3: G-03 / owner D7, D16, D21 $5 over/short warnings
   assertRan("deposit-bag-flow-core", __runDepositBagFlowTests(), 69); // Fix Phase 2.6: G-04 / owner D21, D23-D27 night count, morning recount, seal, bank
   assertRan("eod-sheet-core", __runEodSheetTests(), 28); // Fix Phase 2.6b: G-15 end-of-day deposit sheet (deposit, refunds, bag, export)
@@ -2690,7 +2692,7 @@ __runLiquidVolumeTests();
   assertRan("count-generators-core", { passed: __runCountGeneratorsCoreTests(), failed: 0 }, 30); // Fix Phase 4.4c (G-40, D58): vendor of the day rotation in whole-product chunks, high value, exceptions, expiring, why each lot, one open count per lot
   assertRan("full-count-core", { passed: __runFullCountCoreTests(), failed: 0 }, 30); // Fix Phase 4.4d (G-41, D58): year-end full count split into vendor sections (products never split), one per year, roll-up stage, combined money, December reminder
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
-  assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
+  assertRan("shift-end-core", __runShiftEndCoreTests(), 47); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   assertRan("clock-core", __runClockCoreTests(), 16); // Owner D124: register clock in/out answered by the server directly (refusals shown, never hidden in the queue)
   assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt
   assertRan("db-contract-core", __runDbContractCoreTests(), 30); // G-71a (owner message 12): daily DB health check: contract parse, unreachable = FAIL (run 0330), missing = WARN, call errors explained, one alert per Pacific day, escaped email

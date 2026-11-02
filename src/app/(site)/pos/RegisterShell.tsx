@@ -45,6 +45,7 @@ import {
   forgetPairedPrinter,
   getPairedPrinter,
   getPairedPrinterIdentifier,
+  openCashDrawer,
   printReceipt,
   setPairedPrinterIdentifier,
 } from "@/lib/pos/star-printer";
@@ -5959,6 +5960,14 @@ function TillModal({
   // Owner D125 (2026-11-02): a $0.00 close must be confirmed. On 2026-11-01
   // SR2 was closed at $0.00 by mistake with $2,678.10 still in it.
   const [confirmEmpty, setConfirmEmpty] = useState(false);
+  // Owner D130/D131 (2026-11-02): "I need the drawer to pop for the first
+  // blind count." The cashier working the drawer opens it with their PIN;
+  // the server checks and audits it first. A second open needs a reason.
+  const [popBusy, setPopBusy] = useState(false);
+  const [popped, setPopped] = useState(0);
+  const [popNote, setPopNote] = useState<string | null>(null);
+  const [popNeedsReason, setPopNeedsReason] = useState(false);
+  const [popReason, setPopReason] = useState("");
   // Fix Phase 6 (G-64, owner D89 / Q-E-10): "The tip jar is pooled for the
   // morning crew, and pooled for the night crew. At shift change the tips are
   // counted and evenly distributed to the two employees." The cashier types
@@ -6006,6 +6015,72 @@ function TillModal({
     close: "Close drawer — blind count",
     swap: "Change swap with the safe",
   } as const;
+
+  // Owner D130: server first (PIN = the cashier working this drawer, audited),
+  // then the kick. The count stays blind: the server never sends a figure.
+  const popForCount = async () => {
+    if (popBusy || busy || pin.length < 4) return;
+    if (!navigator.onLine) {
+      setError("Offline \u2014 the drawer can only be opened for the count online, so your PIN can be checked.");
+      return;
+    }
+    setPopBusy(true);
+    setError(null);
+    setPopNote(null);
+    try {
+      const res = await posFetch("/api/pos/till", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+        body: JSON.stringify({ action: "pop", pin, ...(popReason.trim() ? { reason: popReason.trim() } : {}) }),
+      });
+      const resBody = (await res.json().catch(() => null)) as
+        | { ok?: boolean; error?: string; code?: string; popNumber?: number; repeat?: boolean; employeeName?: string }
+        | null;
+      if (!res.ok || !resBody?.ok) {
+        if (resBody?.code === "reason_required") setPopNeedsReason(true);
+        setError(resBody?.error ?? "The drawer could not be opened \u2014 try again.");
+        return;
+      }
+      setPopped(resBody.popNumber ?? popped + 1);
+      setPopNeedsReason(true); // any further open needs a reason (D131)
+      setPopReason("");
+      const kick = await openCashDrawer(getPairedPrinterIdentifier());
+      if (kick.ok) {
+        setPopNote(resBody.repeat ? "Drawer opened again. The owner sees this, with your reason." : "Drawer open. Count the bills, then finish below.");
+      } else {
+        // The packaged app is the only way to open the drawer without paper;
+        // anywhere else, a short slip carries the kick (it is already audited).
+        const html = buildNoSaleSlipHtml({
+          registerLabel: creds.name,
+          openedAtIso: new Date().toISOString(),
+          reason: "Close drawer: opened for the blind count",
+          openedByName: resBody.employeeName ?? employeeName,
+          approvedByName: "Own drawer (owner rule D130)",
+        });
+        const msg = await printSlip(html, true, "no_sale");
+        setPopNote(msg ? `${kick.message} ${msg}` : "Drawer open (a short slip printed). Count the bills, then finish below.");
+      }
+    } catch {
+      setError("Could not reach the server \u2014 try again.");
+    } finally {
+      setPopBusy(false);
+    }
+  };
+
+  // Owner D131: walking away from an opened drawer is a warning for the owner.
+  const cancel = () => {
+    if (mode === "close" && popped > 0) {
+      const leave = window.confirm(
+        "The drawer was opened for the count. If it is not closed within 15 minutes the owner is warned. Leave anyway?",
+      );
+      if (!leave) return;
+    }
+    onClose();
+  };
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -6102,7 +6177,7 @@ function TillModal({
               ? `Drawer closed with ${formatCents(tipsMinor)} in tips.`
               : "Drawer closed.") +
             " The register is ready for the next cashier. The second count is done in the office." +
-            " You are still clocked in: tap Clock out on the lock screen when you leave (owner rule D84).",
+            " You are still clocked in: you can clock out now on the lock screen (owner rules D84, D132).",
           null,
         );
       }
@@ -6118,7 +6193,7 @@ function TillModal({
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{TITLES[mode]}</h2>
-          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
+          <button type="button" onClick={cancel} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Cancel
           </button>
         </div>
@@ -6129,8 +6204,46 @@ function TillModal({
               ? `Cash pulled from the drawer into the safe. Recorded under ${employeeName}'s PIN; a second person can witness with theirs.`
               : mode === "swap"
                 ? `Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under ${employeeName}'s PIN and approved by a manager or lead with theirs.`
-                : `Count the bills in the drawer, enter your tips, then your PIN. That's it: the register is then ready for the next cashier. You will NOT see the expected amount (that protects you). The second count is done in the office.`}
+                : `Enter your PIN and tap Open drawer to count. Count the bills, enter your tips, then Close drawer. That's it: the register is then ready for the next cashier, and you can clock out. You will NOT see the expected amount (that protects you). The second count is done in the office.`}
         </p>
+
+        {mode === "close" ? (
+          <div className="mt-4 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">Step 1: your PIN, open the drawer</p>
+            <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+              Only the cashier working this drawer can open it here, with their own PIN. It opens once for the count; opening it again needs a reason and the owner sees it.
+            </p>
+            <input
+              className="mt-2 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              aria-label="Your PIN"
+              placeholder="PIN"
+              value={pin}
+              maxLength={6}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+            {popNeedsReason ? (
+              <input
+                className="mt-2 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm"
+                placeholder="Why open it again? (required)"
+                value={popReason}
+                maxLength={200}
+                onChange={(e) => setPopReason(e.target.value)}
+              />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void popForCount()}
+              disabled={pin.length < 4 || popBusy || busy || (popNeedsReason && popReason.trim().length < 3)}
+              className="mt-2 pos-tile w-full rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] py-2.5 text-sm font-semibold text-[var(--pos-accent)] disabled:opacity-40"
+            >
+              {popBusy ? "Opening\u2026" : popped > 0 ? "Open drawer again" : "Open drawer to count"}
+            </button>
+            {popNote ? <p className="mt-2 text-sm font-semibold">{popNote}</p> : null}
+          </div>
+        ) : null}
 
         {mode === "drop" ? (
           <>
@@ -6359,18 +6472,24 @@ function TillModal({
           </>
         )}
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-          Your PIN
-        </label>
-        <input
-          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          value={pin}
-          maxLength={6}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        />
+        {mode !== "close" ? (
+          <>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              Your PIN
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={pin}
+              maxLength={6}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+          </>
+        ) : (
+          <p className="mt-4 text-xs text-[var(--pos-text-muted)]">Close drawer uses your PIN from step 1.</p>
+        )}
 
         {error ? <p className="mt-3 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
 

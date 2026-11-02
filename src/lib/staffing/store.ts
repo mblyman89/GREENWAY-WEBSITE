@@ -14,6 +14,7 @@ import { type Hm, shiftDurationMinutes } from "@/lib/staffing/schedule-core";
 import { hashPin, isPinHash, verifyPin } from "@/lib/security/pin-hash";
 import { decryptSecret } from "@/lib/security/at-rest-crypto";
 import { clockOutBlocked, type OwnedDrawer } from "@/lib/registers/shift-end-core";
+import { openDrawersWorkedBy } from "@/lib/registers/drawer-pop-store";
 
 export type Employee = {
   id: string;
@@ -214,26 +215,24 @@ export async function onTheClock(): Promise<
 }
 
 /**
- * Fix Phase 6 (G-61, owner D84): the OPEN drawers this employee counted in
- * (drawer_sessions.opened_by). A read error returns an empty list on
- * purpose: the guard must never trap someone on the clock because the
- * database hiccupped (they would be paid for time they did not work, and the
- * drawer is still caught by the close and reconcile steps).
+ * Fix Phase 6 (G-61, owner D84): the OPEN drawers this employee is working.
+ *
+ * Owner D132 (2026-11-02, "Clock out allowed after first blind count, not
+ * after second count closing the till."): only a drawer still OPEN blocks
+ * (status 'open'); once the blind count is done on the iPad the drawer is
+ * 'closed' and the office second count / reconcile are not waited for. And
+ * the drawer is the cashier's who works it (D129, drawer-pop-core#custodianOf:
+ * the one ringing its sales), not whoever happened to count it in: on
+ * 2026-11-01 a manager counted SR1 in for the evening cashier and was then
+ * refused at clock-out on his own drawer's close because of it.
+ *
+ * A read error returns an empty list on purpose: the guard must never trap
+ * someone on the clock because the database hiccupped (they would be paid
+ * for time they did not work, and the drawer is still caught by the close
+ * and reconcile steps).
  */
 export async function openDrawersOwnedBy(employeeId: string): Promise<OwnedDrawer[]> {
-  if (!isSupabaseServiceConfigured || !employeeId) return [];
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("drawer_sessions")
-    .select("id, register_id")
-    .eq("opened_by", employeeId)
-    .eq("status", "open")
-    .limit(10);
-  if (error || !data || data.length === 0) return [];
-  const rows = data as { id: string; register_id: string }[];
-  const { data: regs } = await admin.from("registers").select("id, name").in("id", [...new Set(rows.map((r) => r.register_id))]);
-  const names = new Map(((regs as { id: string; name: string }[] | null) ?? []).map((r) => [r.id, r.name]));
-  return rows.map((r) => ({ sessionId: r.id, registerName: names.get(r.register_id) ?? "a register" }));
+  return openDrawersWorkedBy(employeeId);
 }
 
 export type ClockResult =

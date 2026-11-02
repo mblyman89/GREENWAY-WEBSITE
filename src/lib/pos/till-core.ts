@@ -102,7 +102,19 @@ export type TillSwapRequest = {
   outDenoms?: DenomCounts;
 };
 
-export type TillRequest = TillOpenRequest | TillDropRequest | TillCloseRequest | TillSwapRequest;
+/**
+ * Owner D130 (2026-11-02): open the drawer for the blind count. Only the
+ * cashier working the drawer (drawer-pop-core#custodianOf) may; the route
+ * checks the PIN. A repeat open on the same drawer needs a reason (D131).
+ * Moves no cash and never returns an expected figure.
+ */
+export type TillPopRequest = {
+  action: "pop";
+  pin: string;
+  reason?: string;
+};
+
+export type TillRequest = TillOpenRequest | TillDropRequest | TillCloseRequest | TillSwapRequest | TillPopRequest;
 
 export type TillValidation = { ok: true; req: TillRequest } | { ok: false; error: string };
 
@@ -295,6 +307,16 @@ export function validateTillRequest(body: unknown): TillValidation {
     };
   }
 
+  if (action === "pop") {
+    // Owner D130/D131: the reason is checked against the drawer's history in
+    // the route (drawer-pop-core#checkPop); here only its shape.
+    const reasonRaw = typeof b.reason === "string" ? b.reason.trim() : "";
+    if (reasonRaw.length > MAX_NOTES_LEN) {
+      return { ok: false, error: `The reason must be ${MAX_NOTES_LEN} characters or fewer.` };
+    }
+    return { ok: true, req: { action, pin, ...(reasonRaw ? { reason: reasonRaw } : {}) } };
+  }
+
   return { ok: false, error: "Unknown till action." };
 }
 
@@ -442,6 +464,14 @@ export function __runTillCoreTests(): void {
     "swap: unequal change refused");
   ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678", inDenoms: { twenties: 5 } }).ok,
     "swap: one side only refused");
+
+  // Owner D130/D131: open the drawer for the blind count.
+  const pop1 = validateTillRequest({ action: "pop", pin: "1234" });
+  ok(pop1.ok && pop1.req.action === "pop" && !("reason" in pop1.req), "pop: PIN only accepted");
+  const pop2 = validateTillRequest({ action: "pop", pin: "1234", reason: "  it shut  " });
+  ok(pop2.ok && pop2.req.action === "pop" && pop2.req.reason === "it shut", "pop: trimmed reason carried");
+  ok(!validateTillRequest({ action: "pop", pin: "1234", reason: "x".repeat(501) }).ok, "pop: oversized reason rejected");
+  ok(!validateTillRequest({ action: "pop", pin: "" }).ok, "pop: PIN required");
 
   // shape guards
   ok(!validateTillRequest(null).ok, "null body rejected");
