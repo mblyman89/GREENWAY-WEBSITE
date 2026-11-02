@@ -152,7 +152,7 @@ The comparison is between **periods**. Cultivera's history (2024-08-30 → cutov
 | CVB-1 | This roadmap | this PR |
 | CVB-2 | Archive harvester on the crawler (34 paged datasets, 11 roll-up reports, 15 summaries, 11 lookups, monthly orders, cycle-count details, valuation snapshots), Count-verified, resumable, read-only | merged #1631 |
 | CVB-3 | Migration 0337: private bucket, archive run / file provenance, Cultivera daily figures, payback ledger seeded with the owner's two figures, two service_role functions | this PR |
-| CVB-4 | Pure cores: dollars → cents ingest normaliser for the daily report, comparison engine, payback ledger arithmetic; self-tests + vitest | next PR |
+| CVB-4 | Pure cores (`src/lib/reports/cultivera-benchmark-core.ts`): dollars → cents ingest normaliser for the daily report (a day with two different answers is kept out), manifest → archive register list (refused whole, never partial), comparison engine (missing side is never zero; a partial period cannot win), payback ledger arithmetic and the outperformance credit rule; 40 self-tests + vitest mirror that checks agreement with 0337 | PR (stacked on CVB-1/3) |
 | CVB-5 | Admin → Cultivera archive page (owner-only): run the harvester, archive a finished run into the bucket after verifying every sha256, store the daily figures | later |
 | CVB-6 | Reports → Cultivera Benchmark tab (owner-only): side-by-side metrics, period picker, payback meter, "record a saving" / "credit outperformance" owner actions | later |
 | CVB-7 | Deeper comparisons from the archive: discounts by employee, employee samples / purchases, voids and returns, cycle-count accuracy, vendor purchase stats, inventory valuation | later |
