@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.13 (draft for owner review; R-DRAWER-1 (owner request): the drawer can open **without a printed receipt** on a cash sale, set at Register Activity → Cash drawer & receipt, and opens **once per sale** (§4.16). Earlier: G-75 (owner message 17, D118–D119): the register customer search finds any part of a name in either order, a last name, phone digits, email or Customer ID, as you type, with the last purchase and total spent on each result (§4 cart header). Earlier, 1.11: Fix Phase 6F (owner message 9, D91–D96): **anyone may return by default**, with the loyalty rule, the return window (default **7 days**) and the returnable product types as settings at Register Activity → Return policy (§4.23); the **tips box is required** on the iPad close, 0 allowed (§4.27). Earlier: Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.15 (draft for owner review; owner message (shift end, D121–D124): **the iPad close is one person**: bills, tips, your PIN, done; the register is then ready for the next cashier. **The second count is done in the office** on Register Activity, and a manager cannot reconcile until it is saved (§4.27, §4.30). **Clock in / Clock out** is a big button on the lock screen and answers straight away (§4.2). Earlier, 1.14: register loyalty signup (§4.12a). Earlier, 1.13: R-DRAWER-1 (owner request): the drawer can open **without a printed receipt** on a cash sale, set at Register Activity → Cash drawer & receipt, and opens **once per sale** (§4.16). Earlier: G-75 (owner message 17, D118–D119): the register customer search finds any part of a name in either order, a last name, phone digits, email or Customer ID, as you type, with the last purchase and total spent on each result (§4 cart header). Earlier, 1.11: Fix Phase 6F (owner message 9, D91–D96): **anyone may return by default**, with the loyalty rule, the return window (default **7 days**) and the returnable product types as settings at Register Activity → Return policy (§4.23); the **tips box is required** on the iPad close, 0 allowed (§4.27). Earlier: Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -98,7 +98,7 @@ The register knows who you are by your **PIN** (4–6 digits). The iPad itself i
 | Step | Who can do it | How the system checks |
 |---|---|---|
 | Unlock the register, ring sales, count in, drop cash, close blind | Any active employee | Your PIN. You must be clocked in to start a sale, and your handbook acknowledgment must be current. |
-| Clock in / out | Any active employee | PIN on the lock screen (works offline, syncs later) |
+| Clock in / out | Any active employee | PIN on the lock screen, **Clock in / Clock out** button (needs a connection; shows the server's answer) |
 | No sale (open drawer) | Cashier asks; a **manager or lead** approves | Manager/lead PIN, checked online |
 | Price override (markdown) | **Manager or lead** | Manager/lead PIN, checked online |
 | Lift scan-required for one sale | **Manager or lead** | Manager/lead PIN, checked online |
@@ -174,19 +174,23 @@ Things to know:
 
 You must be **clocked in** before you can start a sale.
 
-**From the lock screen (recommended at the start of a shift):**
-1. Tap **Clock in / out instead**.
-2. Enter your PIN. The register clocks you in if you were out, or out if you were in.
-3. A banner confirms it, for example *"Jamie: clock-in recorded."* If the iPad is offline it says *"(offline — will sync)"*. Punches are queued and sent automatically when the connection returns.
+**From the lock screen (recommended; owner rule D124):**
+1. Tap the big **⏱️ Clock in / Clock out** button under the PIN pad. The title changes to **⏱️ Enter PIN to clock in / out**. (**Back to unlock** returns to the unlock pad.)
+2. Enter your PIN. The register clocks you in if you were out, or out if you were in. It asks the server straight away and shows the server's answer; it does **not** unlock the register.
+3. A green banner confirms it, for example *"Jamie: clocked OUT at 4:46 PM."* or *"Jamie: clocked IN at 7:58 AM."*
+4. If the server refuses, a red banner says so and nothing was recorded, for example *"Jamie: NOT clocked in or out. You still have an open drawer on Register 1. …"* (the clock-out guard below).
+5. **Offline:** *"Offline. Clocking in or out needs a connection. Nothing was recorded. Try again when the register is back online."* The lock-screen clock needs the server to check your PIN, so it is never queued.
 
-**From the home screen:** if you unlocked while not clocked in, the main card shows *"You're not clocked in…"* with a **Clock in now** button. You can also use **MORE ▾ → Clock in/out**.
+**From the home screen:** if you unlocked while not clocked in, the main card shows *"You're not clocked in…"* with a **⏱️ Clock in now** button. You can also use **MORE ▾ → Clock in/out**. These also ask the server first and show its answer (*"<name>: clocked IN at …"* or *"<name>: NOT clocked in. <reason>"*). Only when there is **no connection at all** is the punch saved on the iPad: *"<name>: no connection. Clock-in saved on this register and will send when it reconnects. Check the back office time clock later."*
+
+**Why this changed (owner message, D124).** The owner said: *"The clock out feature is not working either."* The records showed every register punch was a clock-in and no clock-out had ever reached the server: the old lock-screen clock put the punch in the iPad's offline queue and showed a success banner without waiting for the server, and a clock-out refused by the drawer guard below was only visible later on Register exceptions. Since v1.15 the register waits for the server's answer and says plainly whether you are clocked out.
 
 **End of shift:** close your drawer first (4.27), then clock out.
 
 **Clock-out guard (owner rule D84, Fix Phase 6, gap G-61).** The owner said: *"Block. I don't want to clock out on the register change out step. A lot of times they count out early to let the new employee add their till ahead of their shift, so they can finish other tasks if needed before they clock out. Anyone can clock in and out on a locked register so we can use that for now."*
 - **Closing your drawer does not clock you out.** You can close early (so the next cashier can count in their insert), keep working, and clock out later from the lock screen.
-- **You cannot clock out while you still own an open drawer** (a drawer you counted in that is not closed yet). The register says: *"You still have an open drawer on <register>. Close your drawer first (blind count and second count), then clock out. Closing the drawer does not clock you out (owner rule D84)."* The server refuses it too (`src/lib/staffing/store.ts` `toggleClock`), so it holds on every iPad and in the browser.
-- **Offline:** an offline clock-out is queued. If it reaches the server while you still own an open drawer, it is refused and shows on **Register exceptions** as *"Punch replay failed: You still have an open drawer …"*. A manager fixes the punch on the timesheet.
+- **You cannot clock out while you still own an open drawer** (a drawer **you counted in** that is not closed yet; the owner of a drawer is the person who counted it in, so if you counted in a drawer someone else is working on, it has to be closed before you can clock out). The register says: *"You still have an open drawer on <register>. Close your drawer first (count it out on the register: bills, tips, your PIN), then clock out. Closing the drawer does not clock you out (owner rule D84)."* The server refuses it too (`src/lib/staffing/store.ts` `toggleClock`), so it holds on every iPad and in the browser.
+- **Offline (home screen only):** an offline clock-out is queued. If it reaches the server while you still own an open drawer, it is refused and shows on **Register exceptions** as *"Punch replay failed: You still have an open drawer …"*. A manager fixes the punch on the timesheet.
 - A manager's correction of a punch on the timesheet is never blocked.
 
 ### 4.3 Counting in your drawer (opening float)
@@ -771,7 +775,9 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
 2. Make your last **cash drop** if one is due (4.25). The drop must be recorded **before** the close.
 3. Take the **tip jar** out and count it **by itself**, with your crew-mate (the tip jar is the crew's, owner rule D89). Tips are employee money, not drawer cash.
 4. **MORE ▾ → 🔐 Close drawer (blind count)** (or **Close (blind count)** in the Cash drawer panel).
-5. The window is titled **Close drawer — blind count**: *"Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you. Then a second employee counts it too."*
+**One person, one pass (owner rule D121).** The owner said: *"The register should have the employee count out the drawer, entering the bill quantities, then tips, then end, that's it. The register is now ready to take on a new employee. The second count happens in the office on the computer via the back office app."*
+
+5. The window is titled **Close drawer — blind count**: *"Count the bills in the drawer, enter your tips, then your PIN. That's it: the register is then ready for the next cashier. You will NOT see the expected amount (that protects you). The second count is done in the office."*
 6. Count **every** bill and coin in the drawer by denomination and type **how many** of each. Count twice.
 7. **Tips: crew tip pool (owner rule D89, Fix Phase 6, gap G-64).** The owner said: *"The tip jar is pooled for the morning crew, and pooled for the night crew. At shift change the tips are counted and evenly distributed to the two employees. This is the amount to be reported on everyone's own close till summary report. I want everyone to be completely accountable for their register."*
    - The window starts on **Crew tip pool** (the other choice is **My own tips**). Enter the **whole jar** under *"Crew tip pool (the whole jar, counted together)"* and **People sharing** (starts at 2; up to 10).
@@ -779,38 +785,37 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
    - **Your share is what is saved as your tips** and printed on your own till summary (*"Tips at close: this cashier's own share …"*). Your crew-mate enters the same pool at their close and gets the same share. The server does the split again itself; it does not trust the screen.
    - **My own tips** (no pool, e.g. working alone on a register with your own jar): the old box below.
    Old box, **My own tips**: enter the tip-jar total. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Type 0 if there were no tips."*
-   - **The tips box is required (Fix Phase 6F, D92).** The owner said: *"I just want to make sure the cashier is accountable for their tips too. We are a cash only business, so pooled tips won't show up in the system until they are reported."* A blank box shows *"Required — count the tip jar and enter it (type 0 if there were no tips)."* and **Next: second count** stays off. **0** means "counted, and there were none". (The back-office close still allows blank for when the cashier is not there to count; that close shows "not recorded".)
-8. **Enter your PIN** and tap **Next: second count**. (The button stays off until your PIN is typed and the tips box is valid.)
-9. **Second-person count (owner rule D2, built in Phase 2.2, gap G-01).** The owner said: *"Q2- close only, and it can be any second employee. It doesn't need to be a lead or manager."* Hand the iPad to **any other employee**. The window now reads: *"Second count. Hand the iPad to another employee (any employee, not <you>). They count the drawer by themselves and enter their own PIN. <your> count stays hidden."*
-   - Your count is **hidden** on this step and the second grid starts **empty**, so the second person counts blind, on their own.
-   - They count every bill and coin and type how many of each. The line **Second count: $X** adds up as they type.
-   - They type **their own PIN** under **Second employee's PIN**.
-   - Made a mistake? **Back to <your> count (clears the second count)** returns to your step and wipes the second count.
-   - The server checks the second PIN and refuses **your own** PIN: *"The second count must be done by a different employee. Hand the count to someone else and have them enter their own PIN."* A wrong PIN: *"No active employee for the second PIN."* (wrong PINs count toward the iPad's lock, 5 misses in 60 seconds).
-   - Count-in has **no** second count (D2 says close only).
-10. **More than one drawer on this register today?** You no longer need an X report to split the day. Since Phase 2.1 (G-05) every sale carries the drawer it was rung on, and reconcile adds up only this drawer's sales (4.30). An X report is still useful for the paperwork, but it is optional.
-11. The second person taps **Record blind count & close**.
-12. Success: *"Blind count recorded — a manager reconciles it in the back office."* (or *"Blind count recorded with $X in tips — …"*; with a crew pool, the pool sentence from step 7), then *"You are still clocked in: clock out when you are done (owner rule D84)."*, followed by the second-count result:
-    - *"Second count by <name>: both counts agree."*, or
-    - *"WARNING: the second count by <name> differs by $X (they counted more / they counted less). Both counts are saved; tell a manager."*
-    A difference is a **warning only**: the drawer is already closed and both counts are saved. The owner has not said a difference should block (gap G-01 requirement 2). **Over / short uses your count** (the closer's), the same as before. If the counts differ, tell the manager on duty. It is good practice to recount together before you walk away, but the system does not ask for it.
+   - **The tips box is required (Fix Phase 6F, D92).** The owner said: *"I just want to make sure the cashier is accountable for their tips too. We are a cash only business, so pooled tips won't show up in the system until they are reported."* A blank box shows *"Required — count the tip jar and enter it (type 0 if there were no tips)."* and **Close drawer** stays off. **0** means "counted, and there were none". (The back-office close still allows blank for when the cashier is not there to count; that close shows "not recorded".)
+8. **Enter your PIN** and tap **Close drawer**. (The button stays off until your PIN is typed and the tips box is valid.) There is **no** second PIN and no hand-over on the iPad.
+9. **More than one drawer on this register today?** You no longer need an X report to split the day. Since Phase 2.1 (G-05) every sale carries the drawer it was rung on, and reconcile adds up only this drawer's sales (4.30). An X report is still useful for the paperwork, but it is optional.
+10. Success: *"Drawer closed."* (or *"Drawer closed with $X in tips."*; with a crew pool, the pool sentence from step 7), then *"The register is ready for the next cashier. The second count is done in the office."* and *"You are still clocked in: tap Clock out on the lock screen when you leave (owner rule D84)."*
+11. The register shows **No drawer**. The next cashier can count in their own insert straight away (4.3, 4.27a).
+12. Take your insert to the office (4.29). It is counted a second time there (below) before a manager reconciles it.
 13. Handle the cash as in 4.29.
 
-**Why two counts:** one person can miscount, or be tempted. A second person counting on their own catches a miscount on the spot, and a match is strong evidence the count is right. Both names and both totals stay on the drawer record (migration 0314: `second_counted_by`, `second_count_minor`), and both denomination breakdowns are kept (`drawer_counts` rows `close` and `second`).
+**Second count in the office (owner rules D2, D122, D123).** Two people still count every drawer (D2: *"it can be any second employee. It doesn't need to be a lead or manager."*); since v1.15 the second count is done in the office, not on the iPad, so the change-over at the register is quick.
+1. In the office, open back office → **Register Activity** (`/admin/registers`). Under **Needs attention**, every closed drawer without a second count has a **Second count** card (*"… closed on the register by <name>"*). Anyone with register access can do it (staff included); it does not need a manager.
+2. **Any employee except the person who closed the drawer** counts the insert by themselves, without looking at the closer's number (the card never shows it), and types how many of each bill and coin.
+3. They type **their own PIN** and click **Save second count**.
+4. The banner reads *"Second count saved. Both counts agree. The drawer can be reconciled now."* or, in gold, *"Second count saved. Warning: The counts differ by $X … Both counts are kept. The drawer can be reconciled now."* A difference is a warning only; over / short still uses the closer's count.
+5. The card then turns into the manager's **Reconcile** card (4.30). **A manager cannot reconcile a drawer before its second count is saved** (D123): *"Not reconciled: do the second count first (Second count form on this drawer's card). A different employee counts the drawer and enters their PIN."*
 
-**Closing from the back office (managers).** A manager can also close a drawer on **Register Activity** → the register's card → **Close drawer (blind count-out)** (used for the Manager Till, SOP-02). The same rule applies there (Phase 2.2):
-- **Counted by** is now **required** (it says *"Select…"*): pick the person who counted.
-- Under **Second count (required)**: *"Any other employee counts the drawer by themselves, without looking at the count above, and types what they counted. They cannot be the person in Counted by. If the two counts differ, the drawer still closes and the difference is shown at reconcile."* They fill in **Second count total** and type their PIN under **Second employee's PIN**.
-- The server checks the PIN and refuses the person picked in **Counted by**. Wrong PINs on this form share one lock (5 misses in 60 seconds locks it for 60 seconds).
-- The banner reads *"Drawer closed. Both counts agree. A manager reconciles it below."* or, in gold, *"Drawer closed. Warning: The counts differ by $X: the second person counted $X more/less. Over / short uses the closer's count. Both counts are saved and shown at reconcile."*
+Messages on this card: *"The second count must be done by a different employee. Hand the count to someone else and have them enter their own PIN."* (the closer's own PIN) · *"Enter your own 4–6 digit PIN (the person doing the second count)."* · *"No active employee for that PIN."* (wrong PINs on this form share one lock: 5 misses in 60 seconds locks it for 60 seconds) · *"Enter the bill quantities you counted."* · *"Someone already recorded the second count for this drawer. Nothing was changed."*
+
+**Why two counts:** one person can miscount, or be tempted. A second person counting on their own catches a miscount, and a match is strong evidence the count is right. Both names and both totals stay on the drawer record (migration 0314: `second_counted_by`, `second_count_minor`), and both denomination breakdowns are kept (`drawer_counts` rows `close` and `second`).
+
+**Closing from the back office (managers).** A manager can also close a drawer on **Register Activity** → the register's card → **Close drawer (blind count-out)** (used for the Manager Till, SOP-02):
+- **Counted by** is required (it says *"Select…"*): pick the person who counted.
+- **Second count (optional now; otherwise do it on the drawer's card before reconcile)** is folded away. If a second employee is there, open it: they fill in **Second count total** and type their PIN under **Second employee's PIN**. The server refuses the person picked in **Counted by**. If you leave it closed, the drawer gets a **Second count** card under Needs attention (above).
+- The banner reads *"Drawer closed. Next: the second count on its card below (any other employee), then a manager reconciles it."* or, when the second count was given, *"Drawer closed. Both counts agree. …"* / the gold warning.
 
 **Two taps, or two iPads.** Only one close counts. If the drawer was closed a moment earlier: *"This drawer was closed by someone else a moment ago. Nothing was changed."* (finding F-01-2, close part).
 
-**The iPad app must be updated (owner action).** The packaged iPad register app is built from the same register screen (`register-app/vite.config.ts` L5–8, `register-app/src/main.tsx` L23), so it only shows the second-count step after it is rebuilt and reinstalled. The server now **requires** the second count, so an iPad still on an older build cannot close a drawer: it shows *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* Until the iPads are updated, close from the browser register (`/pos`) or from the back office (above).
+**Refresh the iPads (owner action).** The register screen comes from the website, so each iPad gets the one-person close and the new clock button after the register app is **closed and reopened** (or the page is reloaded). An iPad still on the old screen can still close: it may still ask for a second PIN, but the server now ignores it, and the second count is done in the office anyway. Its clock button stays the old, unreliable one until it is refreshed.
 
 **Why it is blind:** if you could see the expected amount, a short drawer could be "fixed" by fudging the count, and an honest miscount could not be told apart from theft. With a blind count your number stands on its own. A manager compares it to the system later. A blind count protects you.
 
-Messages: *"No open drawer on this register."* (already closed, or never opened) · *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* · *"The second employee's PIN must be 4–6 digits."* · *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* (tell the owner) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50), or 0 if there were none."* · *"Required — count the tip jar and enter it (type 0 if there were no tips)."*
+Messages: *"No open drawer on this register."* (already closed, or never opened) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50), or 0 if there were none."* · *"Required — count the tip jar and enter it (type 0 if there were no tips)."*
 
 **After closing:** the register shows **No drawer**. You cannot ring another sale on this register until someone counts in again.
 
@@ -820,25 +825,27 @@ Messages: *"No open drawer on this register."* (already closed, or never opened)
 
 Every cashier has **their own insert** for their shift, and is accountable for it from count-in to close. The 3pm–4pm overlap is the shift change:
 
-1. **Outgoing cashier** (morning crew, around 3pm–4pm): make your last drop, close your drawer (4.27: blind count, crew tip pool, second count by any other employee). **You stay clocked in.** Take your insert out and give it to the manager or lead for the safe / deposit (SOP-03 §4.4).
+1. **Outgoing cashier** (morning crew, around 3pm–4pm): make your last drop, close your drawer (4.27: bills, crew tip pool, your PIN; one person, D121). **You stay clocked in.** Take your insert out and give it to the manager or lead for the safe / deposit (SOP-03 §4.4).
 2. **Incoming cashier** (night crew): put **your own fresh insert** in the same register and **Count in drawer** (4.3). The float check warns if it is not the standard float.
 3. The register allows **one open drawer at a time**, so the incoming cashier can only count in after the outgoing close is saved (*"This register already has an open drawer. Close it first."*).
-4. The outgoing cashier finishes any other tasks, then clocks out on the lock screen (4.2). The app refuses the clock-out only if they still own an open drawer.
-5. **No solo close or open** (owner rule D86: *"No solo closer or opener."*). The second count at close is always required (D2). **A lead or manager is always on at open and close** (D88: *"There is always a lead or manager at open and close."*).
+4. The outgoing cashier finishes any other tasks, then taps **⏱️ Clock in / Clock out** on the lock screen (4.2). The app refuses the clock-out only if they still own an open drawer.
+5. **Two people still count every drawer** (D2, D86: *"No solo closer or opener."*), but the second count is done **in the office** on Register Activity, not at the register (D122). The register is free for the next cashier as soon as the close is saved. **A lead or manager is always on at open and close** (D88: *"There is always a lead or manager at open and close."*).
 
 **Quick card: shift change and close**
 
 ```
 SHIFT CHANGE (3-4pm)                         NIGHT CLOSE (11pm)
-Outgoing: last drop -> tips: crew pool       Each cashier: last drop -> close (blind +
-  + people -> blind count -> 2nd person        2nd person, crew tip pool) -> still clocked in
-  counts -> Record. STILL CLOCKED IN.        Manager/lead: Deposit bags -> tick each till
-Incoming: own fresh insert -> Count in         stack against the screen -> Save assembled bag
-  (warns if not $167.50).                      -> bag in safe UNSEALED. Reconcile now or the
-Outgoing: finish tasks -> lock screen ->       morning manager does it before the seal.
-  Clock out (refused while you own an      Everyone: clock out on the lock screen.
-  an open drawer).                         Morning: different employee counts the bag blind
-                                             -> seal (warns if a drawer is unreconciled).
+Outgoing: last drop -> Close drawer:         Each cashier: last drop -> close (bills,
+  bills -> tips (crew pool + people)           tips, PIN) -> still clocked in
+  -> your PIN -> Close drawer. DONE.         Office: any other employee does the
+  STILL CLOCKED IN. Insert to the office.      Second count on Register Activity
+Incoming: own fresh insert -> Count in       Manager/lead: reconcile (after the 2nd
+  (warns if not $167.50).                      count) -> Deposit bags -> Save bag
+Office: any other employee -> Second           -> bag in safe UNSEALED.
+  count card on Register Activity.           Everyone: lock screen -> Clock in /
+Outgoing: finish tasks -> lock screen ->       Clock out.
+  Clock in / Clock out (refused while you    Morning: different employee counts the bag
+  own an open drawer).                         blind -> seal.
 ```
 
 ### 4.28 The X / Z day report
@@ -875,7 +882,7 @@ Messages: *"Offline — the day report needs a connection to verify the PIN and 
 At close, after the blind count:
 1. **Drawer cash**: follow the store's cash routine in **SOP-02** (master till / safe) and **SOP-03** (end-of-day sheet, deposit bag). **The float stays in the drawer** for tomorrow (**$167.50** in each sales register, **$300.00** in the Manager Till, owner decisions D19/D22; the system closes with `floatStaysInDrawer: true`, `drawer-posting-service.ts` L194). Everything above the float is the takings and goes into the deposit (SOP-03 §4.4–4.5). *(Corrected in v1.1: v1.0 said the float "goes back to the master till / safe", which was wrong, finding F-03-4.)*
 2. **Tips**: the crew pool is split evenly at each close (D89, 4.27 step 7); each person takes their share. Tips never go into the drawer count or the deposit.
-3. **Close slip (form 8.2)**: hand it to the manager with the void and return receipts and the swap log (form 8.3). The second count is now recorded by the register (Phase 2.2). Fill in the slip's second-count column only when the register could not take it (for example, migration 0314 not applied yet).
+3. **Close slip (form 8.2)**: hand it to the manager with the void and return receipts and the swap log (form 8.3). The second count is recorded in the office on Register Activity (D122, 4.27). Fill in the slip's second-count column only when the back office could not take it.
 4. **Print the Z report** (4.28) when the last drawer of the day is closed, and put it with the end-of-day paperwork.
 
 > The deposit bag is on **Deposit bags** in the back office (SOP-03 §4.5–§4.13; built in Phase 2.6, assembled and verified at night since Fix Phase 6, D82).
@@ -909,8 +916,9 @@ Since Phase 2.1 (G-05, findings F-01-4 and F-01-3) **you do not type cash sales*
 | **Drops to the safe** | This drawer's recorded drops |
 | **= Expected in drawer** | Opening float + Cash sales − Refunds − Drops |
 | **Counted at close (name)** / **Over / short** | The closer's blind count, and counted − expected |
-| **Second count (name)** | The second employee's own count (Phase 2.2, G-01). **None** on drawers closed before migration 0314 |
+| **Second count (name)** | The second employee's own count, done in the office (D122). Until it is saved the drawer shows a **Second count** card instead of this Reconcile card (D123) |
 
+0. **Second count first (D123).** A closed drawer shows the **Second count** card (4.27) until a second employee has counted it; only then does it become this Reconcile card. Staff can do the second count; reconcile still needs a manager.
 1. Read the figure. The expected amount is now the real one (the old "$0.00 before reconcile" problem is gone).
    - Under the figure one line compares the two counts: *"Both counts agree."* or, in gold, *"Warning: The counts differ by $X: the second person counted $X more/less. Over / short uses the closer's count."* A difference does **not** block reconcile (warning only, gap G-01). Talk to both counters before you reconcile, and note what you find on the close slip.
 2. If a sale from this drawer was **refused by the server** (an exception), the card says so. It is **not** counted, so if the customer paid, the drawer will show over by that amount. Clear it in **Register exceptions** (4.32).
@@ -1173,17 +1181,18 @@ Since Phase 2.9 (owner message 6: *"The register activity page also, the top but
 | *"This register already has an open drawer. Close it first."* | BLOCK | One drawer per register | Use the open drawer, or close it | Manager |
 | *"No open drawer on this register."* | BLOCK | Drop/swap/close need an open drawer | Count in | — |
 | *"A drop cannot witness itself — a second person must enter their PIN."* | BLOCK | Two-person rule | Another person, or no witness | — |
-| *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* | BLOCK | Owner rule D2: a second count at every close | Hand the iPad to any other employee | Co-worker |
-| *"The second count must be done by a different employee. Hand the count to someone else and have them enter their own PIN."* | BLOCK | The closer typed their own PIN as the second counter | Another employee counts and enters their PIN | Co-worker |
+| *"The second count must be done by a different employee. Hand the count to someone else and have them enter their own PIN."* | BLOCK | Office second count: the closer typed their own PIN | Another employee counts and enters their PIN | Co-worker |
 | *"No active employee for the second PIN."* / *"The second employee's PIN must be 4–6 digits."* | BLOCK | The second PIN did not match an active employee (counts toward the PIN lock) | Re-type carefully | — |
-| *"WARNING: the second count by <name> differs by $X …"* | WARN | The two counts are different. The drawer **is** closed and both counts are saved | Tell the manager on duty; recount together if you can | Manager |
+| *"Second count saved. Warning: The counts differ by $X …"* | WARN | Office second count: the two counts are different. Both counts are saved | Tell the manager on duty; recount if you can | Manager |
+| *"Not reconciled: do the second count first …"* | BLOCK | Owner rule D123: reconcile waits for the office second count | Any employee except the closer does the Second count card | Co-worker |
+| *"<name>: NOT clocked in or out. <reason>"* | BLOCK | The server refused the punch (for example the drawer guard below); nothing was recorded | Do what the reason says, then tap Clock in / Clock out again | — |
 | *"This drawer was closed by someone else a moment ago. Nothing was changed."* | BLOCK | A second close of the same drawer (two taps or two iPads) | Nothing; it is already closed | — |
-| *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* | BLOCK | Setup not finished | Use the paper close slip (8.2) and tell the owner | Owner |
+| *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* | BLOCK | Setup not finished (back office) | Use the paper close slip (8.2) and tell the owner | Owner |
 | *"Pick a drop window (afternoon, night, or other)."* | BLOCK | Required | Pick one | — |
 | *"Drop amount must be a positive whole number of cents."* / *"Drop amount is implausibly large — check the number."* | BLOCK | Typo guard (max $50,000) | Re-type | — |
 | *"A manager or lead must approve the swap with their PIN."* / *"A swap cannot approve itself — a manager or lead must enter their PIN."* | BLOCK | Control | Manager or lead | Lead / manager |
 | *"Notes must be 500 characters or fewer."* | BLOCK | Length | Shorten | — |
-| *"You still have an open drawer on <register>. Close your drawer first (blind count and second count), then clock out. …"* | BLOCK | Owner rule D84: no clock-out while you own an open drawer | Close your drawer (4.27), then clock out | — |
+| *"You still have an open drawer on <register>. Close your drawer first (count it out on the register: bills, tips, your PIN), then clock out. …"* | BLOCK | Owner rule D84: no clock-out while you own an open drawer | Close your drawer (4.27), then clock out | — |
 | *"This count-in is $X over / short of the standard float of $Y …"* | WARN | Owner rule D85: the count-in is not the standard float. The drawer still opens | Recount; if right, open and tell the manager | Manager |
 | *"The number of people sharing the tips must be between 1 and 10."* / *"The crew tip pool must be zero or more, in dollars and cents."* | BLOCK | Crew tip pool typo guard (D89) | Re-type | — |
 | *"Tips must be zero or a positive whole number of cents."* / *"Tips amount is implausibly large — check the number."* | BLOCK | Typo guard | Re-type | — |
@@ -1245,7 +1254,7 @@ Print these from this page. Keep completed forms with the day's paperwork (SOP-0
 
 ### 8.1 Shift-open checklist (budtender)
 
-- [ ] Clocked in (lock screen → **Clock in / out instead**)
+- [ ] Clocked in (lock screen → **⏱️ Clock in / Clock out**, green banner *"clocked IN"*)
 - [ ] Register unlocked; top right shows **clocked in** and **Online**
 - [ ] Footer: **MENU** has today's time; **QUEUE all clear**; **SYNC** 0 pending
 - [ ] **No** amber "Medical TEST MODE" banner
@@ -1260,7 +1269,7 @@ Print these from this page. Keep completed forms with the day's paperwork (SOP-0
 GREENWAY — DRAWER CLOSE SLIP                     Date: ____/____/______
 Register: ____________   Cashier: ______________________  Time closed: ______
 
-BLIND COUNT (cashier)                 SECOND COUNT (any 2nd employee — D2)
+BLIND COUNT (cashier)                 SECOND COUNT (office, any 2nd employee — D2)
 $100 x ____ = ________                $100 x ____ = ________
 $50  x ____ = ________                $50  x ____ = ________
 $20  x ____ = ________                $20  x ____ = ________
@@ -1308,7 +1317,7 @@ Only for swaps from an iPad not yet rebuilt (they show *"not recorded (value onl
 
 Part of form 8.2. Any second employee counts alone, without seeing the first count, then the two compare. Both sign.
 
-> **Since Phase 2.2 (G-01) the register records the second count** (4.27 step 9): the second person's PIN, their own denominations and total. Use this paper sign-off only when the register cannot take it (migration 0314 not applied). Otherwise the slip's second-count column may be left blank.
+> **The second count is recorded in the office** (4.27, D122): the second person's PIN, their own denominations and total, on Register Activity. Use this paper sign-off only when the back office cannot take it. Otherwise the slip's second-count column may be left blank.
 
 ### 8.5 Over/short reason form (D7: more than $5.00)
 
@@ -1330,7 +1339,7 @@ Owner reviewed: ____________________   Date: ________
 
 ### 8.6 Manager end-of-day checklist
 
-- [ ] Every drawer closed blind (with the second count and the crew tip pool), with a signed close slip (8.2); everyone clocked out on the lock screen after their close (D84)
+- [ ] Every drawer closed blind on the register (bills, crew tip pool, PIN) and second-counted in the office (D122), with a signed close slip (8.2); everyone clocked out on the lock screen after their close (D84)
 - [ ] Z report printed (REPORTS → manager PIN)
 - [ ] Register Activity: every closed drawer **reconciled** (cash sales worked out on paper, net of this drawer's voids/returns, never blank)
 - [ ] Any over/short > $5 → reason written in the Reconcile card (form 8.5 only before migration 0315)
@@ -1424,7 +1433,7 @@ Owner reviewed: ____________________   Date: ________
 
 | Owner requirement | Today | Interim procedure in this SOP | Gap / finding |
 |---|---|---|---|
-| ~~D2: second-person count at close (any second employee)~~ | **BUILT, Phase 2.2**: the register (and the back-office close) takes a second employee's PIN and own count (4.27). A difference is a warning | Paper slip 8.2/8.4 only if migration 0314 is not applied | G-01 BUILT · F-01-9 FIXED, F-00-5 close part FIXED |
+| ~~D2: second-person count at close (any second employee)~~ | **BUILT, Phase 2.2; moved to the office in v1.15 (D122)**: the Second count card on Register Activity takes a second employee's PIN and own count, before reconcile (4.27, D123). A difference is a warning | Paper slip 8.2/8.4 only if migration 0314 is not applied | G-01 BUILT · F-01-9 FIXED, F-00-5 close part FIXED |
 | ~~D3: log big bills master till → little safe, and which small bills/coin came back~~ | **BUILT, Phase 2.7b**: the change swap takes the bills both ways (4.26); the master till ↔ little safe exchange is on the Store safe page (SOP-02 §4.10) | SOP-02 form 8.3 only for an iPad not yet rebuilt | G-02 BUILT · F-01-8, F-00-7 FIXED |
 | ~~D7: $5 over/short warning screen (admin only: who, when, how much, required reason)~~ | **BUILT, Phase 2.3**: reason required over $5.00 at reconcile (optional at $5.00 or less, D21); **Over / short warnings** screen, owner and admin only, drawers and master till (4.30 step 6) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-01-11 FIXED |
 | ~~Deposit bag (seal → morning verify → safe → bank)~~ | **BUILT, Phase 2.6**; night assembled and verified since Fix Phase 6 (D82) | SOP-03 | G-04 · F-00-6 FIXED |
@@ -1442,6 +1451,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.15 draft | Fix phase | Owner message (shift end: *"The register should have the employee count out the drawer, entering the bill quantities, then tips, then end, that's it."*; *"The clock out feature is not working either."*), D121–D124. §4.2: big **Clock in / Clock out** button on the lock screen, server answer shown (clocked IN/OUT at time, or NOT clocked and why), no offline queue on the lock screen; home-screen punch asks the server first. §4.27: one-person close (bills, tips, PIN, Close drawer); new *Second count in the office* subsection; back-office close second count optional; refresh note. §4.27a steps 1, 4, 5 and quick card; §4.29 step 3; §4.30 second count before reconcile (D123); §5.8 messages; checklists; form 8.4 note; Appendix B D2 row. No migration. Refresh the iPads. | Fix program |
 | 1.14 draft | Fix phase | register-loyalty-signup (owner: *"I need a way to sign up new loyalty customers from the iPad register."*). New §4.12a: **⭐ Sign up for loyalty** on the customer band; names from the ID scan, birthday locked to the ID check, phone or email, optional text/email consent signed by the customer, duplicate check (Use this account / create anyway), member attached to the sale. §5.4 messages. No migration. The iPad app must be rebuilt. | Fix program |
 | 1.13 draft | Fix phase | R-DRAWER-1 (owner request: *"popping the cash drawer with a receipt or with out the receipt printed"*). §4.16 step 2: the two settings, Drawer open / Open drawer, once per sale; §4.37 button list; quick card. F-01-6 and F-01-7 FIXED. No migration. The iPad app must be rebuilt. | Fix program |
 | 1.12 draft | Fix phase | G-75 (owner message 17, D118–D119). §4 cart header: the customer search (any part of a name in either order, last name, phone digits, email, Customer ID; results as you type, up to 25, with last 4 phone digits, last purchase, total spent, medical, Customer ID; closest spellings after migration 0335). Messages updated. The iPad app must be rebuilt for the new result layout. | Fix program |

@@ -38,7 +38,7 @@ export function clockOutBlockedMessage(owned: readonly OwnedDrawer[]): string | 
   const names = [...new Set(owned.map((o) => o.registerName || "a register"))];
   const where = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   return (
-    `You still have an open drawer on ${where}. Close your drawer first (blind count and second count), ` +
+    `You still have an open drawer on ${where}. Close your drawer first (count it out on the register: bills, tips, your PIN), ` +
     "then clock out. Closing the drawer does not clock you out (owner rule D84)."
   );
 }

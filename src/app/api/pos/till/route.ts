@@ -20,11 +20,9 @@
  *   close — count-out, recorded BLIND. This endpoint NEVER returns expected
  *           cash or variance — the manager reveals over/short at reconcile
  *           in the back office. That is the whole point of a blind count.
- *           Fix Phase 2.2 (G-01, owner D2: "close only, and it can be any
- *           second employee"): a SECOND employee's PIN is verified here and
- *           must be a different person; their own count is stored too. The
- *           only thing echoed back is whether the two counts agree (and by
- *           how much they differ) — never expected or over/short.
+ *           Owner D121 (supersedes D2/D86/D90 at the till): ONE person
+ *           closes: bills, tips, their own PIN, done. No second PIN here.
+ *           The second count is done in the back office (owner D122).
  *   swap  — value-neutral change trade with the safe (big bills in, equal
  *           change out; zero net movement on both sides). Requires a
  *           manager/lead approval PIN verified here (same role gate as
@@ -40,7 +38,6 @@ import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { validateTillRequest } from "@/lib/pos/till-core";
-import { checkSecondCounter, compareCounts } from "@/lib/registers/second-count-core";
 import { denomTotalMinor } from "@/lib/registers/cash";
 import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession, getRegister } from "@/lib/registers/store";
 import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
@@ -277,19 +274,13 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, billsSaved: result.billsSaved ?? false });
   }
 
-  // ── close: BLIND count-out + second-person count (G-01, owner D2) ──
-  if (!isValidPin(till.secondPin)) {
-    return NextResponse.json({ error: "The second employee's PIN must be 4–6 digits." }, { status: 400 });
-  }
-  const second = await getEmployeeByPin(till.secondPin);
-  if (!second) {
-    await notePinFailure(throttleScope);
-    return NextResponse.json({ error: "No active employee for the second PIN." }, { status: 401 });
-  }
-  await notePinSuccess(throttleScope);
-  const who = checkSecondCounter(employee.id, second.id);
-  if (!who.ok) return NextResponse.json({ error: who.error }, { status: 400 });
-
+  // ── close: BLIND count-out, ONE person (owner D121) ──
+  // The cashier counts the bills, enters tips, and their own PIN; that is
+  // the whole close. The register is free for the next cashier at once. The
+  // second count happens later in the back office on the office computer
+  // (owner D122, admin/registers secondCountAction). An old register build
+  // that still sends a second PIN and second counts is accepted; the extra fields
+  // are ignored (validateTillRequest drops them).
   const result = await closeDrawerBlind({
     sessionId: session.id,
     employeeId: employee.id,
@@ -297,10 +288,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     // Tips are the employee's money — recorded alongside the close but kept
     // OUT of the drawer math (migration 0134; best-effort if unapplied).
     ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
-    second: { employeeId: second.id, denoms: till.secondDenoms },
   });
   if (!result.ok) return NextResponse.json({ error: result.error ?? "Close failed." }, { status: 409 });
-  const cmp = compareCounts(denomTotalMinor(till.denoms), denomTotalMinor(till.secondDenoms));
 
   await recordAudit({
     actorId: employee.staff_id,
@@ -316,23 +305,17 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
       // Fix Phase 6 (G-64, owner D89): the crew pool this share came from.
       ...(till.tipPool ? { tipPool: till.tipPool } : {}),
-      // Fix Phase 2.2 (G-01): who counted second and whether the counts agree.
-      secondCountedBy: second.id,
-      secondCountedByName: second.full_name,
-      countsAgree: cmp.state === "match",
-      countDiffMinor: cmp.diffMinor,
+      // Owner D122: the second count is done in the back office.
+      secondCount: "back_office",
       ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
     },
   });
 
-  // BLIND: no expected, no variance. The two people already know both of
-  // their own counts, so whether they agree is not a secret; it is returned
-  // so the register can warn them before they walk away.
+  // BLIND: no expected, no variance.
   // Fix Phase 6 (G-61, owner D84): closing does NOT clock anyone out.
   const pooled = till.tipPool ? splitTipPool(till.tipPool.poolMinor, till.tipPool.people) : null;
   return NextResponse.json({
     ok: true,
-    secondCount: { name: second.full_name, agree: cmp.state === "match", diffMinor: cmp.diffMinor },
     ...(pooled && pooled.ok ? { tipPool: { ...till.tipPool, sentence: tipPoolSentence(pooled) } } : {}),
   });
 }

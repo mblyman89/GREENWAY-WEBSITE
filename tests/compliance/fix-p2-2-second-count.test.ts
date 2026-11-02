@@ -3,9 +3,11 @@
  * second-person count, then over/short warnings"; owner D2: "Q2- close only,
  * and it can be any second employee").
  *
- * Every drawer close needs a second employee's PIN and their own blind count.
- * The server refuses the closer's own PIN (with a DB check as a backstop),
- * both counts are stored, and a difference is a warning only.
+ * Every drawer gets a second employee's PIN and their own blind count. Since
+ * owner D121 / D122 the iPad close is one person and the second count is
+ * done in the back office afterwards (reconcile waits for it, D123). The
+ * server refuses the closer's own PIN (with a DB check as a backstop), both
+ * counts are stored, and a difference is a warning only.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -20,7 +22,7 @@ import {
   BACKOFFICE_TILL_THROTTLE_SCOPE,
   __runSecondCountCoreTests,
 } from "@/lib/registers/second-count-core";
-import { validateTillRequest, SECOND_COUNT_REQUIRED_ERROR } from "@/lib/pos/till-core";
+import { validateTillRequest } from "@/lib/pos/till-core";
 
 const root = resolve(__dirname, "../..");
 const read = (p: string) => readFileSync(resolve(root, p), "utf8");
@@ -75,10 +77,9 @@ describe("Phase 2.2 pure core", () => {
 });
 
 describe("Phase 2.2 request validation", () => {
-  it("a close without a second PIN is refused", () => {
+  it("owner D121: a close without a second PIN is accepted (one person at the till)", () => {
     const r = validateTillRequest({ action: "close", pin: "1234", denoms: {} } as unknown);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe(SECOND_COUNT_REQUIRED_ERROR);
+    expect(r.ok).toBe(true);
   });
   it("count-in needs no second count (D2: close only)", () => {
     const r = validateTillRequest({ action: "open", pin: "1234", denoms: { fifties: 2 } } as unknown);
@@ -98,10 +99,22 @@ describe("Phase 2.2 migration 0314", () => {
 });
 
 describe("Phase 2.2 server paths", () => {
-  it("the register route checks the second PIN on the server", () => {
-    expect(ROUTE).toMatch(/checkSecondCounter\(employee\.id, second\.id\)/);
-    expect(ROUTE).toMatch(/secondCountedBy/);
-    expect(ROUTE).toMatch(/countsAgree/);
+  it("owner D121: the register route closes with one PIN and leaves the second count to the office", () => {
+    expect(ROUTE).not.toMatch(/checkSecondCounter/);
+    expect(ROUTE).not.toMatch(/till\.secondPin/);
+    expect(ROUTE).toMatch(/secondCount: "back_office"/);
+  });
+  it("owner D122: the back office records the second count, checked against the closer", () => {
+    expect(STORE).toMatch(/export async function recordSecondCount/);
+    expect(STORE).toMatch(/checkSecondCounter\(session\.closed_by, opts\.employeeId\)/);
+    expect(STORE).toMatch(/\.is\("second_count_minor", null\)/);
+    expect(ACTIONS).toMatch(/export async function secondCountAction/);
+    expect(ACTIONS).toMatch(/drawer\.second_counted/);
+    expect(ACTIONS).toMatch(/countsAgree/);
+  });
+  it("owner D123: reconcile waits for the second count (refusal audited)", () => {
+    expect(ACTIONS).toMatch(/second_count_missing: true/);
+    expect(ACTIONS).toMatch(/do the second count first/);
   });
   it("close is compare-and-swap and records count-row errors", () => {
     expect(STORE).toMatch(/\.eq\("status", "open"\)\s*\.select\("id"\)/);
@@ -109,7 +122,7 @@ describe("Phase 2.2 server paths", () => {
     expect(STORE).toMatch(/countRowWarnings/);
     expect(STORE).toMatch(/count_type: "second"/);
   });
-  it("the back-office close needs Counted by plus a second PIN, throttled", () => {
+  it("the back-office close needs Counted by; a second PIN there is optional and throttled", () => {
     expect(ACTIONS).toMatch(/second_pin/);
     expect(ACTIONS).toMatch(/BACKOFFICE_TILL_THROTTLE_SCOPE/);
     expect(ACTIONS).toMatch(/checkSecondCounter\(/);
@@ -118,14 +131,17 @@ describe("Phase 2.2 server paths", () => {
 });
 
 describe("Phase 2.2 screens", () => {
-  it("the register close has a second step", () => {
-    expect(SHELL).toMatch(/Next: second count/);
-    expect(SHELL).toMatch(/Second employee&apos;s PIN/);
-    expect(SHELL).toMatch(/clears the second count/);
-    expect(SHELL).toMatch(/secondPin/);
+  it("owner D121: the register close is one screen with one PIN", () => {
+    expect(SHELL).not.toMatch(/Next: second count/);
+    expect(SHELL).not.toMatch(/Second employee&apos;s PIN/);
+    expect(SHELL).not.toMatch(/secondPin/);
+    expect(SHELL).toMatch(/The second count is done in the office/);
   });
   it("the back-office form and reconcile card show the second count", () => {
-    expect(CONTROLS).toMatch(/Second count \(required\)/);
+    expect(CONTROLS).not.toMatch(/Second count \(required\)/);
+    expect(CONTROLS).toMatch(/Second count \(optional now/);
+    expect(PAGE).toMatch(/function SecondCountCard/);
+    expect(PAGE).toMatch(/action=\{secondCountAction\}/);
     expect(CONTROLS).toMatch(/namePrefix="second_"/);
     expect(GRID).toMatch(/namePrefix/);
     expect(PAGE).toMatch(/Second count/);
@@ -137,8 +153,7 @@ describe("Phase 2.2 screens", () => {
 describe("Phase 2.2 docs (D41 living SOP)", () => {
   it("SOP-01 v1.6 and SOP-03 v1.3 describe the in-app second count", () => {
     expect(SOP1).toMatch(/\*\*Version\*\* \| 1\.([6-9]|\d\d) /);
-    expect(SOP1).toMatch(/Next: second count/);
-    expect(SOP1).toMatch(/The iPad app must be updated/);
+    expect(SOP1).toMatch(/Second count in the office/);
     expect(SOP3).toMatch(/\*\*Version\*\* \| 1\.([3-9]|\d\d) /);
     expect(SOP3).toMatch(/built in Phase 2\.2/);
   });
@@ -147,6 +162,6 @@ describe("Phase 2.2 docs (D41 living SOP)", () => {
     expect(G5).toMatch(/\| G-01 \|[^\n]*\*\*BUILT\*\* \(Phase 2\.2\) \|/);
     expect(P6).toMatch(/\| 2\.2 \| G-01 second-person count/);
     expect(C4).toMatch(/Phase 2\.2 \(G-01 second-person count\) answers/);
-    expect(KB).toMatch(/Second count at close \(Phase 2\.2, G-01/);
+    expect(KB).toMatch(/Second count in the office \(owner rule D122/);
   });
 });

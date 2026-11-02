@@ -50,6 +50,7 @@ const ENDPOINTS = [
   "/api/pos/member-match",
   "/api/pos/member-history",
   "/api/pos/product-image",
+  "/api/pos/clock",
 ];
 
 describe("pos/api-base-core", () => {
