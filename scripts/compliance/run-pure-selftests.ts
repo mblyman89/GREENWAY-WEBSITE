@@ -689,6 +689,7 @@ import { __runDrawerOnSaleCoreTests } from "../../src/lib/pos/drawer-on-sale-cor
 import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 import { __runProductDetailCoreTests } from "../../src/lib/pos/product-detail-core";
 import { __runProductDetailViewCoreTests } from "../../src/lib/pos/product-detail-view-core";
+import { __runPriceLookupCoreTests } from "../../src/lib/pos/price-lookup-core";
 import { __runStockFlagCoreTests } from "../../src/lib/pos/stock-flag-core";
 import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
 import { __runSwCoreTests } from "../../src/lib/pos/sw-core";
@@ -1764,6 +1765,7 @@ __runLiquidVolumeTests();
   __runProductInfoCoreTests();
   __runProductDetailCoreTests();
   __runProductDetailViewCoreTests();
+  __runPriceLookupCoreTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
