@@ -307,6 +307,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       ...(till.tipPool ? { tipPool: till.tipPool } : {}),
       // Owner D122: the second count is done in the back office.
       secondCount: "back_office",
+      // Owner D125: a $0.00 close the closer confirmed as really empty.
+      ...(till.confirmedEmpty ? { confirmedEmpty: true } : {}),
       ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
     },
   });

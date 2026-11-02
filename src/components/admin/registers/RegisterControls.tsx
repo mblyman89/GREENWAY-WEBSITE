@@ -168,6 +168,11 @@ export function RegisterControls({
             were no tips. Leave blank ONLY when the cashier is not here to count their jar (the
             close then shows tips &ldquo;not recorded&rdquo;). On the iPad the tips box is required.
           </p>
+          {/* Owner D125: a $0.00 count-out is refused unless this is ticked. */}
+          <label className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
+            <input type="checkbox" name="confirm_empty" value="1" />
+            Only if the count above is $0.00: the drawer is really empty (all the cash was dropped to the safe)
+          </label>
           <EmployeePicker name="employee_id" employees={employees} label="Counted by" required />
           {/* Owner D121 / D122: closing is one person. The second count is
               done afterwards in the office, on this drawer's card under

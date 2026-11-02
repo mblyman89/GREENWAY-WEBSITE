@@ -50,7 +50,7 @@ describe("shift-end-core pure rules", () => {
     expect(s.ok && s.shareMinor === 5_000 && s.leftoverMinor === 1).toBe(true);
   });
   it("D89: the till close stores the cashier's share, not the typed tips", () => {
-    const v = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: 99_999, tipPool: { poolMinor: 9_000, people: 2 } });
+    const v = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, confirmEmpty: true, tipsMinor: 99_999, tipPool: { poolMinor: 9_000, people: 2 } });
     expect(v.ok).toBe(true);
     expect(JSON.stringify(v)).toContain('"tipsMinor":4500');
   });

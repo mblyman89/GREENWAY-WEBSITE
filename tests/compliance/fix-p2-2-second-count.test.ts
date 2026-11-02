@@ -78,7 +78,7 @@ describe("Phase 2.2 pure core", () => {
 
 describe("Phase 2.2 request validation", () => {
   it("owner D121: a close without a second PIN is accepted (one person at the till)", () => {
-    const r = validateTillRequest({ action: "close", pin: "1234", denoms: {} } as unknown);
+    const r = validateTillRequest({ action: "close", pin: "1234", denoms: { twenties: 1 } } as unknown);
     expect(r.ok).toBe(true);
   });
   it("count-in needs no second count (D2: close only)", () => {

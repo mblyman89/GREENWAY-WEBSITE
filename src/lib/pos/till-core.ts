@@ -30,6 +30,7 @@ import { type DenomCounts, EMPTY_DENOMS, denomTotalMinor } from "@/lib/registers
 import { validateSwapAmount } from "@/lib/registers/safe-core";
 import { checkSwapDenoms } from "@/lib/registers/little-safe-core";
 import { splitTipPool } from "@/lib/registers/shift-end-core";
+import { checkZeroClose } from "@/lib/registers/drawer-correction-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,6 +72,11 @@ export type TillCloseRequest = {
    * different figure from the split.
    */
   tipPool?: { poolMinor: number; people: number; shareMinor: number; leftoverMinor: number };
+  /**
+   * Owner D125 (2026-11-02): a $0.00 close is only accepted when the closer
+   * ticked "The drawer is really empty". Present (true) only on a $0.00 close.
+   */
+  confirmedEmpty?: true;
 };
 
 
@@ -190,7 +196,11 @@ export function validateTillRequest(body: unknown): TillValidation {
     }
     if (action === "open") return { ok: true, req: { action, pin, denoms } };
     // A blind close of a genuinely empty drawer is legitimate (all cash was
-    // dropped) — no minimum on close.
+    // dropped), but owner D125: a $0.00 close must be CONFIRMED. On
+    // 2026-11-01 SR2 was closed at $0.00 by mistake with $2,678.10 in it.
+    const zero = checkZeroClose(denomTotalMinor(denoms), b.confirmEmpty);
+    if (!zero.ok) return { ok: false, error: zero.error };
+    const empty = zero.confirmedEmpty ? { confirmedEmpty: true as const } : {};
     // Owner D121: one person closes. No second PIN or second count here; the
     // second count is done in the back office (D122). Anything an old
     // register build still sends for a second count is ignored.
@@ -211,6 +221,7 @@ export function validateTillRequest(body: unknown): TillValidation {
           denoms,
           tipsMinor: split.shareMinor,
           tipPool: { poolMinor: split.poolMinor, people: split.people, shareMinor: split.shareMinor, leftoverMinor: split.leftoverMinor },
+          ...empty,
         },
       };
     }
@@ -222,9 +233,9 @@ export function validateTillRequest(body: unknown): TillValidation {
       if (tipsMinor > MAX_TIPS_MINOR) {
         return { ok: false, error: "Tips amount is implausibly large — check the number." };
       }
-      return { ok: true, req: { action, pin, denoms, tipsMinor } };
+      return { ok: true, req: { action, pin, denoms, tipsMinor, ...empty } };
     }
-    return { ok: true, req: { action, pin, denoms } };
+    return { ok: true, req: { action, pin, denoms, ...empty } };
   }
 
   if (action === "drop") {
@@ -344,9 +355,14 @@ export function __runTillCoreTests(): void {
     "drop: oversized notes rejected");
 
   // validateTillRequest — close (BLIND: an all-dropped empty drawer may close at 0)
-  const close1 = validateTillRequest({ action: "close", pin: "1234", denoms: {} });
-  ok(close1.ok && close1.req.action === "close" && denomTotalMinor(close1.req.denoms) === 0,
-    "close: zero-count blind close accepted (all cash was dropped)");
+  const close1 = validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true });
+  ok(close1.ok && close1.req.action === "close" && denomTotalMinor(close1.req.denoms) === 0 && close1.req.confirmedEmpty === true,
+    "close: zero-count blind close accepted when confirmed empty (all cash was dropped, D125)");
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {} }).ok,
+    "close: a $0.00 close WITHOUT the 'really empty' tick is refused (D125)");
+  const notZero = validateTillRequest({ action: "close", pin: "1234", denoms: { ones: 1 }, confirmEmpty: true });
+  ok(notZero.ok && notZero.req.action === "close" && notZero.req.confirmedEmpty === undefined,
+    "close: the tick is ignored on a non-zero count (D125)");
   ok(close1.ok && close1.req.action === "close" && close1.req.tipsMinor === undefined,
     "close: tips omitted stays omitted (tips_minor stays NULL — not recorded)");
 
@@ -360,26 +376,26 @@ export function __runTillCoreTests(): void {
   ok(tipsToMinor("abc") === null, "tipsToMinor: garbage rejected");
 
   // Fix Phase 6 (G-64, owner D89): crew tip pool, split by the server
-  const pool = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipPool: { poolMinor: 8501, people: 2 }, tipsMinor: 99999 });
+  const pool = validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipPool: { poolMinor: 8501, people: 2 }, tipsMinor: 99999 });
   ok(pool.ok && pool.req.action === "close" && pool.req.tipsMinor === 4250 && pool.req.tipPool?.leftoverMinor === 1,
     "close: tip pool $85.01 / 2 -> $42.50 share recorded, typed tipsMinor ignored, 1 cent left in the jar");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipPool: { poolMinor: 100, people: 0 } }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipPool: { poolMinor: 100, people: 0 } }).ok,
     "close: tip pool with zero people refused");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipPool: { poolMinor: MAX_TIPS_MINOR + 1, people: 2 } }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipPool: { poolMinor: MAX_TIPS_MINOR + 1, people: 2 } }).ok,
     "close: implausibly large tip pool refused");
 
   // validateTillRequest — close with tips (employee money, separate from drawer)
   const closeTips = validateTillRequest({ action: "close", pin: "1234", denoms: { twenties: 2 }, tipsMinor: 4250 });
   ok(closeTips.ok && closeTips.req.action === "close" && closeTips.req.tipsMinor === 4250,
     "close: $42.50 tips carried through validation");
-  const closeTips0 = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 0 });
+  const closeTips0 = validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: 0 });
   ok(closeTips0.ok && closeTips0.req.action === "close" && closeTips0.req.tipsMinor === 0,
     "close: explicit zero tips preserved (counted-zero, distinct from omitted)");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: -1 }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: -1 }).ok,
     "close: negative tips rejected");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 10.5 }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: 10.5 }).ok,
     "close: non-integer tips cents rejected");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: MAX_TIPS_MINOR + 1 }).ok,
     "close: implausibly large tips rejected");
   const openNoTips = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });
   ok(openNoTips.ok && openNoTips.req.action === "open" && !("tipsMinor" in openNoTips.req),

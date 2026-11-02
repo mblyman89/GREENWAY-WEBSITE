@@ -408,6 +408,13 @@ export async function reconcileDrawer(opts: {
   refundsPaidMinor: number;
   reconciledBy: string | null;
   overShortReason?: string | null;
+  /**
+   * Owner D126: the counts were more than $5.00 apart and the manager chose
+   * the count to reconcile on. `countedMinor` replaces closing_count_minor
+   * (compare-and-set on the original), and `note` is appended to the drawer's
+   * notes so the closer's original figure stays on the record.
+   */
+  countBasis?: { countedMinor: number; originalClosingMinor: number; note: string };
 }): Promise<{
   ok: boolean;
   error?: string;
@@ -435,13 +442,23 @@ export async function reconcileDrawer(opts: {
     cashSalesMinor: opts.cashSalesMinor - opts.refundsPaidMinor,
     dropsMinor,
   });
-  const os = overShort(session.closing_count_minor ?? 0, expected);
+  const counted = opts.countBasis ? opts.countBasis.countedMinor : (session.closing_count_minor ?? 0);
+  if (opts.countBasis && (!Number.isInteger(counted) || counted < 0)) {
+    return { ok: false, error: "The chosen count is not a whole number of cents. Nothing was saved." };
+  }
+  const os = overShort(counted, expected);
   const reasonCheck = checkOverShortReason(os, opts.overShortReason ?? "", "This drawer");
   if (!reasonCheck.ok) return { ok: false, error: reasonCheck.error, overShortMinor: os, expectedMinor: expected };
   const reason = reasonCheck.reason;
 
   const base = {
     status: "reconciled",
+    ...(opts.countBasis
+      ? {
+          closing_count_minor: counted,
+          notes: [session.notes?.trim(), `Reconcile: ${opts.countBasis.note}`].filter(Boolean).join("\n"),
+        }
+      : {}),
     expected_close_minor: expected,
     over_short_minor: os,
     reconciled_at: new Date().toISOString(),
@@ -449,13 +466,16 @@ export async function reconcileDrawer(opts: {
   };
   const figureCols = { cash_sales_minor: opts.cashSalesMinor, refunds_paid_minor: opts.refundsPaidMinor };
   const reasonCols = { over_short_reason: reason, over_short_reason_by: reason ? opts.reconciledBy : null };
-  const write = (withFigure: boolean, withReason: boolean) =>
-    admin
+  const write = (withFigure: boolean, withReason: boolean) => {
+    let q = admin
       .from("drawer_sessions")
       .update({ ...base, ...(withFigure ? figureCols : {}), ...(withReason ? reasonCols : {}) })
       .eq("id", opts.sessionId)
-      .eq("status", "closed")
-      .select("id");
+      .eq("status", "closed");
+    // D126: only replace the count the manager was looking at.
+    if (opts.countBasis) q = q.eq("closing_count_minor", opts.countBasis.originalClosingMinor);
+    return q.select("id");
+  };
   const missingCol = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
   let reasonSaved = true;
   let { data, error } = await write(true, true);

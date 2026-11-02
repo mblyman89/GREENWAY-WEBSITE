@@ -5956,6 +5956,9 @@ function TillModal({
   // money, counted separately and openly — it must never sit in the drawer
   // count or it would show as a false overage at reconcile.
   const [tips, setTips] = useState("");
+  // Owner D125 (2026-11-02): a $0.00 close must be confirmed. On 2026-11-01
+  // SR2 was closed at $0.00 by mistake with $2,678.10 still in it.
+  const [confirmEmpty, setConfirmEmpty] = useState(false);
   // Fix Phase 6 (G-64, owner D89 / Q-E-10): "The tip jar is pooled for the
   // morning crew, and pooled for the night crew. At shift change the tips are
   // counted and evenly distributed to the two employees." The cashier types
@@ -5995,7 +5998,7 @@ function TillModal({
         ? amountMinor !== null
         : mode === "swap"
           ? amountMinor !== null && swapOutMinor === swapInMinor && approverPin.length >= 4
-          : tipsValid);
+          : tipsValid && (countedMinor > 0 || confirmEmpty));
 
   const TITLES = {
     open: "Count in drawer",
@@ -6038,6 +6041,8 @@ function TillModal({
                 action: mode,
                 pin,
                 denoms,
+                // Owner D125: the server refuses a $0.00 close without this.
+                ...(countedMinor === 0 && confirmEmpty ? { confirmEmpty: true } : {}),
                 // Only send tips when the box was actually filled in: an
                 // untouched field stays "not recorded" (NULL) while a typed
                 // "0" is a real counted-zero jar.
@@ -6270,6 +6275,18 @@ function TillModal({
                 <p className="mt-1 text-right text-xs text-[var(--pos-text-muted)]">Standard float: {formatCents(standardFloatMinor)}</p>
               )
             ) : null}
+            {mode === "close" && countedMinor === 0 && (
+              <div className="mt-2 rounded-lg border border-[var(--pos-warn)] bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]">
+                <p className="font-semibold">No bills or coins entered. The count is $0.00.</p>
+                <p className="mt-1 text-xs">
+                  If there is cash in the drawer, enter it above. Only tick the box if the drawer is really empty (all the cash was dropped to the safe).
+                </p>
+                <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" className="h-5 w-5" checked={confirmEmpty} onChange={(e) => setConfirmEmpty(e.target.checked)} />
+                  The drawer is really empty
+                </label>
+              </div>
+            )}
             {mode === "close" && (
               <>
                 {/* Fix Phase 6 (G-64, owner D89): the crew pool, split evenly. */}

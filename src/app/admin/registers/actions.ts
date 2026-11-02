@@ -27,6 +27,8 @@ import {
 import { loadDrawerFigure, assignReturnRefund, VOID_REFUND_ASSIGNED_ACTION, voidRefundState } from "@/lib/registers/drawer-figure-store";
 import { figureReady, parsePaidFrom } from "@/lib/registers/drawer-figure-core";
 import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
+import { checkZeroClose, countBasisNeeded, resolveCountBasis } from "@/lib/registers/drawer-correction-core";
+import { correctReconciledDrawer } from "@/lib/registers/drawer-correction-store";
 import { getSession, getRegister } from "@/lib/registers/store";
 import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
 import {
@@ -143,6 +145,9 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
   // them). A second count typed here at the same time is optional.
   const fail = (msg: string) => redirect(`${BASE}?error=` + encodeURIComponent(msg));
   if (!employeeId) fail(CLOSER_REQUIRED_ERROR);
+  // Owner D125: a $0.00 count-out is refused unless "really empty" is ticked.
+  const zero = checkZeroClose(denomTotalMinor(denoms), formData.get("confirm_empty"));
+  if (!zero.ok) fail(zero.error);
   const secondPin = str(formData, "second_pin");
   let secondEmp: { id: string; full_name: string } | null = null;
   let secondDenoms: ReturnType<typeof parseDenoms> | null = null;
@@ -180,6 +185,7 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
     after: {
       via: "back_office",
       employeeId,
+      ...(zero.ok && zero.confirmedEmpty ? { confirmedEmpty: true } : {}),
       ...(tipsRaw && tipsParsed !== null ? { tipsMinor: tipsParsed } : {}),
       ...(tipPoolSplit && tipPoolSplit.ok
         ? { tipPool: { poolMinor: tipPoolSplit.poolMinor, people: tipPoolSplit.people, shareMinor: tipPoolSplit.shareMinor, leftoverMinor: tipPoolSplit.leftoverMinor } }
@@ -309,6 +315,37 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
     });
     redirect(`${BASE}?error=` + encodeURIComponent(`Not reconciled: ${figure.blockers.join(" ")}`));
   }
+  // Owner D126 (2026-11-02): when the closer's count and the second count
+  // are more than $5.00 apart, the drawer is held until the manager chooses
+  // which count it is reconciled on (closer / second / a recount) and writes
+  // why. On 2026-11-01 SR2 was reconciled on a $0.00 close while the second
+  // count said $2,678.10.
+  let basisChoice: Extract<ReturnType<typeof resolveCountBasis>, { ok: true }> | null = null;
+  if (
+    toReconcile &&
+    toReconcile.status === "closed" &&
+    countBasisNeeded(toReconcile.closing_count_minor, toReconcile.second_count_minor)
+  ) {
+    const choice = resolveCountBasis({
+      closingMinor: toReconcile.closing_count_minor as number,
+      secondMinor: toReconcile.second_count_minor as number,
+      basis: str(formData, "count_basis"),
+      recountRaw: str(formData, "recount"),
+      reason: str(formData, "count_basis_reason"),
+    });
+    if (!choice.ok) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "drawer.reconcile_refused",
+        entityType: "drawer_session",
+        entityId: sessionId,
+        after: { count_basis_required: true, closing_minor: toReconcile.closing_count_minor, second_minor: toReconcile.second_count_minor },
+      });
+      redirect(`${BASE}?error=` + encodeURIComponent(choice.error));
+    }
+    basisChoice = choice as Extract<ReturnType<typeof resolveCountBasis>, { ok: true }>;
+  }
   const result = await reconcileDrawer({
     sessionId,
     cashSalesMinor: figure.cashSalesMinor,
@@ -320,7 +357,12 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
     // Fix Phase 2.3 (G-03, owner D7 / D21): required when the drawer is more
     // than $5.00 over or short; reconcileDrawer checks it against its own
     // over/short (never the page's).
-    overShortReason: str(formData, "over_short_reason"),
+    // D126: when the manager chose the count, their "why this count" reason
+    // stands in for a blank over/short reason (one reason, not two boxes).
+    overShortReason: str(formData, "over_short_reason") || (basisChoice ? basisChoice.reason : ""),
+    ...(basisChoice
+      ? { countBasis: { countedMinor: basisChoice.countedMinor, originalClosingMinor: toReconcile!.closing_count_minor as number, note: basisChoice.note } }
+      : {}),
   });
   if (!result.ok && result.overShortMinor != null && isOverShortWarning(result.overShortMinor)) {
     // A refusal for a missing reason is recorded, so the owner can see it.
@@ -371,8 +413,29 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
       over_short_warning: result.warning ?? false,
       over_short_reason: result.reason ?? null,
       over_short_reason_saved: result.reasonSaved ?? true,
+      // Owner D126: the count the drawer was reconciled on, when the two counts disagreed.
+      ...(basisChoice
+        ? {
+            count_basis: basisChoice.basis,
+            count_basis_reason: basisChoice.reason,
+            closer_count_minor: toReconcile!.closing_count_minor,
+            second_count_minor: toReconcile!.second_count_minor,
+            counted_minor_used: basisChoice.countedMinor,
+          }
+        : {}),
     },
   });
+  if (basisChoice) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.count_basis_chosen",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      before: { closing_count_minor: toReconcile!.closing_count_minor, second_count_minor: toReconcile!.second_count_minor },
+      after: { count_basis: basisChoice.basis, counted_minor_used: basisChoice.countedMinor, reason: basisChoice.reason, note: basisChoice.note },
+    });
+  }
   if (result.warning) {
     // D7: "Just warnings for now." A separate, searchable audit action for
     // every drawer more than $5.00 over or short.
@@ -480,4 +543,71 @@ export async function assignRefundAction(formData: FormData): Promise<void> {
   });
   revalidatePath(BASE);
   redirect(`${back}?assigned=1`);
+}
+
+/**
+ * Owner D127 (2026-11-02): correct the counted cash on a RECONCILED drawer.
+ * Owner and admin only (the same people who see the $5 warnings). Use the
+ * second count or type the right figure; a written reason is required.
+ * Over/short is worked out again against the expected figure the reconcile
+ * stored. The old and new figures go in the drawer's notes and the audit
+ * log. The books are not touched: a drawer that already has a ledger entry,
+ * or whose cash is in a sealed deposit bag, is refused.
+ */
+export async function correctReconciledDrawerAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("registers.warnings");
+  const sessionId = str(formData, "session_id");
+  const back = sessionId ? `${BASE}/history/${sessionId}` : `${BASE}/history`;
+  if (!sessionId) redirect(`${back}?error=` + encodeURIComponent("Missing drawer."));
+  const whenLabel = new Date().toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const result = await correctReconciledDrawer({
+    sessionId,
+    basis: str(formData, "basis"),
+    typedRaw: str(formData, "typed_count"),
+    reason: str(formData, "reason"),
+    who: session.email || "staff",
+    correctedBy: await employeeIdForStaff(session.profile.id),
+    whenLabel,
+  });
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.reconcile_correction_refused",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: { basis: str(formData, "basis"), error: result.error },
+    });
+    redirect(`${back}?error=` + encodeURIComponent(result.error));
+  }
+  const fixed = result as Extract<typeof result, { ok: true }>;
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "drawer.reconcile_corrected",
+    entityType: "drawer_session",
+    entityId: sessionId,
+    before: { closing_count_minor: fixed.oldCountMinor, over_short_minor: fixed.oldOverShortMinor, over_short_reason: fixed.oldReason },
+    after: {
+      closing_count_minor: fixed.newCountMinor,
+      over_short_minor: fixed.newOverShortMinor,
+      over_short_reason: fixed.newReason,
+      expected_minor: fixed.expectedMinor,
+      basis: str(formData, "basis"),
+      reason: fixed.reason,
+      books_touched: false,
+    },
+  });
+  revalidatePath(BASE);
+  revalidatePath(`${BASE}/history`);
+  revalidatePath(back);
+  revalidatePath(`${BASE}/over-short`);
+  redirect(`${back}?corrected=${fixed.newOverShortMinor}`);
 }

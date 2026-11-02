@@ -991,6 +991,7 @@ import { __runDestructionEvidenceCoreTests } from "../../src/lib/inventory/destr
 import { __runVendorReturnPacketCoreTests } from "../../src/lib/inventory/vendor-return-packet-core";
 import { __runDrawerFigureCoreTests } from "../../src/lib/registers/drawer-figure-core";
 import { __runSecondCountCoreTests } from "../../src/lib/registers/second-count-core";
+import { __runDrawerCorrectionCoreTests } from "../../src/lib/registers/drawer-correction-core";
 import { __runOverShortWarningCoreTests } from "../../src/lib/registers/over-short-warning-core";
 import { __runDepositBagFlowTests } from "../../src/lib/registers/deposit-bag-flow-core";
 import { __runEodSheetTests } from "../../src/lib/registers/eod-sheet-core";
@@ -1978,6 +1979,7 @@ __runLiquidVolumeTests();
   assertRan("vendor-return-packet-core", __runVendorReturnPacketCoreTests(), 37); // Fix Phase 1.7b: G-42 req 7 printable vendor-return packet (form 8.2)
   assertRan("drawer-figure-core", __runDrawerFigureCoreTests(), 34); // Fix Phase 2.1: G-05 / F-01-4 per-drawer cash figure (no typed cash sales)
   assertRan("second-count-core", __runSecondCountCoreTests(), 25); // Fix Phase 2.2: G-01 / owner D2 second-person count at till close
+  assertRan("drawer-correction-core", __runDrawerCorrectionCoreTests(), 42); // Owner D125-D127: confirm a $0 close, hold when counts differ > $5, correct a reconciled drawer
   assertRan("over-short-warning-core", __runOverShortWarningCoreTests(), 35); // Fix Phase 2.3: G-03 / owner D7, D16, D21 $5 over/short warnings
   assertRan("deposit-bag-flow-core", __runDepositBagFlowTests(), 69); // Fix Phase 2.6: G-04 / owner D21, D23-D27 night count, morning recount, seal, bank
   assertRan("eod-sheet-core", __runEodSheetTests(), 28); // Fix Phase 2.6b: G-15 end-of-day deposit sheet (deposit, refunds, bag, export)

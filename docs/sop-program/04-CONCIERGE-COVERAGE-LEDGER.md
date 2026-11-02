@@ -717,3 +717,11 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | Reconcile says do the second count first | The office second count has not been saved yet; it must come first (SOP-01 §4.30, D123) |
 | How do I clock out? | Lock screen → **⏱️ Clock in / Clock out** → your PIN; a green banner says *clocked OUT at <time>* (SOP-01 §4.2, D124) |
 | It says NOT clocked in or out | The server refused and nothing was recorded; usually you still own an open drawer (one you counted in). Close it first (SOP-01 §4.2) |
+
+**Drawer guards (D125–D127) answers:**
+
+| Question | Answer (built, drawer guards) |
+|---|---|
+| Close drawer stays off and asks if the drawer is really empty | You entered no bills or coins (the count is $0.00). Enter what you counted, or tick **The drawer is really empty** only if all the cash was dropped (SOP-01 §4.27 step 8, D125) |
+| Reconcile says the counts are held / choose which count | The two counts are more than $5.00 apart. Pick the second count, the closer's count, or your own recount, and write why (SOP-01 §4.30 step 1, D126) |
+| A drawer was reconciled on the wrong count | Owner/admin: Till summary → **Correct this drawer's count**, choose the count, write the reason; the books are not changed (SOP-01 §4.30 step 7, D127) |
