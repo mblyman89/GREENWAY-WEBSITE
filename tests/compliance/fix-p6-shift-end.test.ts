@@ -33,7 +33,7 @@ function fnBody(src: string, name: string): string {
 
 describe("shift-end-core pure rules", () => {
   it("self-tests all pass", () => {
-    expect(__runShiftEndCoreTests()).toEqual({ passed: 46, failed: 0 });
+    expect(__runShiftEndCoreTests()).toEqual({ passed: 47, failed: 0 });
   });
   it("D84: a register clock-out is blocked while the employee owns an open drawer; manager edits are not", () => {
     const owned = [{ sessionId: "s1", registerName: "Register 1" }];

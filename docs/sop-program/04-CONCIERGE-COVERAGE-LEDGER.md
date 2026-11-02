@@ -725,3 +725,13 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | Close drawer stays off and asks if the drawer is really empty | You entered no bills or coins (the count is $0.00). Enter what you counted, or tick **The drawer is really empty** only if all the cash was dropped (SOP-01 §4.27 step 8, D125) |
 | Reconcile says the counts are held / choose which count | The two counts are more than $5.00 apart. Pick the second count, the closer's count, or your own recount, and write why (SOP-01 §4.30 step 1, D126) |
 | A drawer was reconciled on the wrong count | Owner/admin: Till summary → **Correct this drawer's count**, choose the count, write the reason; the books are not changed (SOP-01 §4.30 step 7, D127) |
+
+**Close-drawer open and clock-out (D129–D132) answers:**
+
+| Question | Answer (built, close-drawer open) |
+|---|---|
+| How do I open the drawer to count it at close? | Close drawer → Step 1: your PIN → **Open drawer to count**. Only the cashier working the drawer can (SOP-01 §4.27 step 5, D130) |
+| It says only <name> can open this drawer | You are not the cashier working it. <name> opens it, or a manager uses No sale (SOP-01 §4.27, D129/D130) |
+| It asks why I am opening it again | The drawer opens once per count; a second open needs a reason and the owner sees it (D131) |
+| Where does the owner see drawer opens? | Register Activity → Over / short warnings → Drawer opened for the count (owner/admin, D131) |
+| Can I clock out before the second count? | Yes. As soon as your blind count is done on the iPad (SOP-01 §4.2, D132) |

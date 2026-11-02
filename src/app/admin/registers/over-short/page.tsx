@@ -9,6 +9,8 @@ import { listEmployees } from "@/lib/staffing/store";
 import { businessDayFor } from "@/lib/staffing/time";
 import { backHref } from "@/lib/admin/back-link-core";
 import { loadWarningSources, WARNING_READ_CAP } from "@/lib/registers/over-short-warning-store";
+import { loadPopWarnings } from "@/lib/registers/drawer-pop-store";
+import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import {
   buildWarningRows,
   summarizeWarnings,
@@ -71,9 +73,13 @@ export default async function OverShortWarningsPage({
   const days = parseRangeDays(sp.days);
   const today = businessDayFor(new Date().toISOString());
   const since = dayMinus(today, days - 1);
-  const [sources, employees] = await Promise.all([
+  const nowIso = new Date().toISOString();
+  const [sources, employees, popSources] = await Promise.all([
     loadWarningSources(since),
     listEmployees({ includeInactive: true }),
+    // Owner D131: drawer opened for the count more than once, not closed
+    // within 15 minutes, or closed by someone else.
+    loadPopWarnings(pacificWallTimeToUtcISO(since, "start"), nowIso),
   ]);
   const names = new Map(employees.map((e) => [e.id, e.full_name]));
   const nameFor = (id: string | null) => (id ? (names.get(id) ?? "Unknown employee") : "Not recorded");
@@ -164,6 +170,70 @@ export default async function OverShortWarningsPage({
         />
       </div>
 
+      <section className="space-y-3" aria-labelledby="drawer-pop-warnings">
+        <h2 id="drawer-pop-warnings" className="text-base font-semibold text-white">
+          Drawer opened for the count
+        </h2>
+        <p className="text-xs text-[var(--admin-text-muted)]">
+          Owner rules D130 and D131: on the iPad close, only the cashier working the drawer can open it for the blind count,
+          once. A row here means it was opened again (with the reason they typed), it was not closed within 15 minutes of
+          opening, or someone else closed it. {popSources.pops} opens in the last {days} days. Every open and refusal is in
+          the Security Log (drawer.popped_for_count, drawer.pop_refused).
+        </p>
+        {!popSources.ok ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
+            The drawer opens could not be read. Reload in a minute.
+          </div>
+        ) : popSources.warnings.length === 0 ? (
+          <p className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-white/60">
+            No warnings: every drawer was opened once for its count and closed by the same person.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
+            <table className="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-white/40">
+                  <th className="px-4 py-3 font-medium">When</th>
+                  <th className="px-4 py-3 font-medium">Drawer</th>
+                  <th className="px-4 py-3 font-medium">Warning</th>
+                  <th className="px-4 py-3 font-medium">Opened by</th>
+                  <th className="px-4 py-3 font-medium">Closed by</th>
+                  <th className="px-4 py-3 font-medium">Reason</th>
+                  <th className="px-4 py-3 font-medium print:hidden">Record</th>
+                </tr>
+              </thead>
+              <tbody>
+                {popSources.warnings.map((w) => (
+                  <tr key={w.key} className="border-b border-[var(--admin-border)]/50 align-top last:border-0">
+                    <td className="px-4 py-3 whitespace-nowrap text-white/70">
+                      {fmtTime(w.atIso)}
+                      {w.businessDay ? <span className="block text-xs text-white/40">Business day {w.businessDay}</span> : null}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-white">{w.registerName}</td>
+                    <td className="px-4 py-3 text-orange-400">
+                      {w.words}
+                      {w.kind === "repeat" ? <span className="block text-xs text-white/40">Open number {w.popNumber}</span> : null}
+                    </td>
+                    <td className="px-4 py-3 text-white/80">{nameFor(w.employeeId)}</td>
+                    <td className="px-4 py-3 text-white/60">{w.closedBy ? nameFor(w.closedBy) : "Not closed yet"}</td>
+                    <td className="px-4 py-3 text-white/80">{w.reason ?? <span className="text-white/40">None given</span>}</td>
+                    <td className="px-4 py-3 print:hidden">
+                      <a
+                        href={`${BASE}/history/${w.sessionId}`}
+                        className="text-xs font-semibold text-[var(--admin-accent)] underline-offset-2 hover:underline"
+                      >
+                        Till summary
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <h2 className="text-base font-semibold text-white">Over / short</h2>
       {rows.length === 0 ? (
         <EmptyState
           title="No warnings"

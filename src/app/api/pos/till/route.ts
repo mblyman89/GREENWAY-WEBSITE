@@ -23,6 +23,13 @@
  *           Owner D121 (supersedes D2/D86/D90 at the till): ONE person
  *           closes: bills, tips, their own PIN, done. No second PIN here.
  *           The second count is done in the back office (owner D122).
+ *   pop   — owner D130/D131 (2026-11-02): open the drawer for the blind
+ *           count. Only the cashier working this drawer (D129, the one
+ *           ringing its sales) may, by their own PIN. The audit row
+ *           (drawer.popped_for_count) is written BEFORE the iPad kicks the
+ *           drawer: the iPad only kicks on this endpoint's ok. The first open per drawer is
+ *           free; any further open needs a reason and is an owner warning.
+ *           Never returns an expected figure.
  *   swap  — value-neutral change trade with the safe (big bills in, equal
  *           change out; zero net movement on both sides). Requires a
  *           manager/lead approval PIN verified here (same role gate as
@@ -34,7 +41,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { getEmployeeByPin } from "@/lib/staffing/store";
+import { getEmployeeByPin, getEmployee } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { validateTillRequest } from "@/lib/pos/till-core";
@@ -46,6 +53,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { compactDenoms, denomWords } from "@/lib/registers/little-safe-core";
+import { checkPop } from "@/lib/registers/drawer-pop-core";
+import { drawerCustodian, popsForSession, POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -164,6 +173,65 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   const session = await openSessionForRegister(registerId);
   if (!session) {
     return NextResponse.json({ error: "No open drawer on this register." }, { status: 409 });
+  }
+
+  // ── pop: open the drawer for the blind count (owner D130/D131) ──
+  if (till.action === "pop") {
+    const custodianId = await drawerCustodian(session);
+    const custodian = custodianId && custodianId !== employee.id ? await getEmployee(custodianId) : null;
+    const prior = await popsForSession(session.id);
+    if (prior === null) {
+      // Never hand out a free open on a failed read.
+      return NextResponse.json({ error: "Could not check this drawer's history. Try again in a moment." }, { status: 503 });
+    }
+    const check = checkPop({
+      employeeId: employee.id,
+      custodianId,
+      custodianName: custodianId === employee.id ? employee.full_name : (custodian?.full_name ?? null),
+      priorPops: prior,
+      reason: till.reason,
+    });
+    if (!check.ok) {
+      if (check.code === "not_assigned" || check.code === "no_cashier") {
+        await recordAudit({
+          actorId: employee.staff_id,
+          actorEmail: employee.full_name,
+          action: "drawer.pop_refused",
+          entityType: "drawer_session",
+          entityId: session.id,
+          after: { via: "register", deviceId: auth.device.id, employeeId: employee.id, custodianId, code: check.code },
+        });
+      }
+      const status = check.code === "not_assigned" || check.code === "no_cashier" ? 403 : 400;
+      return NextResponse.json({ error: check.error, code: check.code }, { status });
+    }
+    await recordAudit({
+      actorId: employee.staff_id,
+      actorEmail: employee.full_name,
+      action: POP_AUDIT_ACTION,
+      entityType: "drawer_session",
+      entityId: session.id,
+      after: {
+        via: "register",
+        deviceId: auth.device.id,
+        employeeId: employee.id,
+        popNumber: check.popNumber,
+        repeat: check.repeat,
+        ...(check.reason ? { reason: check.reason } : {}),
+      },
+    });
+    if (check.repeat) {
+      await recordAudit({
+        actorId: employee.staff_id,
+        actorEmail: employee.full_name,
+        action: "drawer.pop_repeat_warning",
+        entityType: "drawer_session",
+        entityId: session.id,
+        after: { via: "register", deviceId: auth.device.id, employeeId: employee.id, popNumber: check.popNumber, reason: check.reason },
+      });
+    }
+    // BLIND: no expected, no variance. The iPad kicks the drawer on ok.
+    return NextResponse.json({ ok: true, popNumber: check.popNumber, repeat: check.repeat, employeeName: employee.full_name });
   }
 
   // ── drop: mid-shift safe drop ──
