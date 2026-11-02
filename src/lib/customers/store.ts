@@ -8,7 +8,8 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import { dbErrorForStaff, isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import type { CustomerFilterOp } from "@/lib/customers/customer-table-core";
 import {
   SEARCH_CANDIDATE_CAP,
   buildCustomerSearchFilter,
@@ -39,11 +40,48 @@ export function normalizePhone(phone: string | null | undefined): string | null 
  * (customer_search_fuzzy) offers the closest spellings; until 0335 is applied
  * that step is simply skipped.
  */
-export type CustomerSearchResult = { rows: Customer[]; total: number; fuzzy: boolean };
+export type CustomerSearchResult = { rows: Customer[]; total: number; fuzzy: boolean; error?: string };
+
+/**
+ * customers-table-enterprise: apply the table's pure filter ops
+ * (customer-table-core.customerFilterOps) to a customers query. One switch,
+ * so the paged list, the search and the download filter identically.
+ */
+type CustomerFilterable<Q> = {
+  eq(column: string, value: boolean | string): Q;
+  is(column: string, value: null): Q;
+  not(column: string, operator: string, value: null): Q;
+  like(column: string, pattern: string): Q;
+};
+function applyCustomerFilterOps<Q extends CustomerFilterable<Q>>(query: Q, ops: readonly CustomerFilterOp[] | undefined): Q {
+  let q = query;
+  for (const o of ops ?? []) {
+    if (o.op === "eq") q = q.eq(o.column, o.value);
+    else if (o.op === "is_null") q = q.is(o.column, null);
+    else if (o.op === "not_null") q = q.not(o.column, "is", null);
+    else q = q.like(o.column, o.pattern);
+  }
+  return q;
+}
+
+/** 42703 / PGRST204: a column the sort or filter names is not in the database yet (its migration has not run). */
+export function isMissingColumnError(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false;
+  const code = (error.code ?? "").trim();
+  if (code === "42703" || code === "PGRST204") return true;
+  return /column .* does not exist|could not find the .* column/i.test(error.message ?? "");
+}
+
+function customerListError(error: { code?: string | null; message?: string | null }): string {
+  if (isMissingColumnError(error)) {
+    return "This sort or filter uses a customer field the database does not have yet (a migration has not been run: see docs/MIGRATIONS_TO_RUN.md). Pick another sort or filter.";
+  }
+  return dbErrorForStaff(error, "The customer list could not be read.");
+}
 
 export async function searchCustomers(
   raw: string,
-  opts?: { limit?: number; isMedical?: boolean; marketingConsent?: boolean; doNotContact?: boolean },
+  opts?: { limit?: number; isMedical?: boolean; marketingConsent?: boolean; doNotContact?: boolean; ops?: readonly CustomerFilterOp[] },
 ): Promise<CustomerSearchResult> {
   const empty: CustomerSearchResult = { rows: [], total: 0, fuzzy: false };
   if (!isSupabaseServiceConfigured) return empty;
@@ -63,10 +101,11 @@ export async function searchCustomers(
   if (opts?.isMedical !== undefined) query = query.eq("is_medical_patient", opts.isMedical);
   if (opts?.marketingConsent !== undefined) query = query.eq("marketing_consent", opts.marketingConsent);
   if (opts?.doNotContact !== undefined) query = query.eq("do_not_contact", opts.doNotContact);
+  query = applyCustomerFilterOps(query, opts?.ops);
   const { data, count, error } = await query;
   if (error) {
-    console.error("[customers] search failed", error.message);
-    return empty;
+    console.error("[customers] search failed", error.code, error.message);
+    return { ...empty, error: customerListError(error) };
   }
   const exact = rankCustomerMatches((data as Customer[] | null) ?? [], parsed);
   if (exact.length > 0 || !shouldTryFuzzy(parsed, exact.length)) {
@@ -89,7 +128,12 @@ export async function searchCustomers(
   if (opts?.isMedical !== undefined) fq = fq.eq("is_medical_patient", opts.isMedical);
   if (opts?.marketingConsent !== undefined) fq = fq.eq("marketing_consent", opts.marketingConsent);
   if (opts?.doNotContact !== undefined) fq = fq.eq("do_not_contact", opts.doNotContact);
-  const { data: rows } = await fq;
+  fq = applyCustomerFilterOps(fq, opts?.ops);
+  const { data: rows, error: rowsErr } = await fq;
+  if (rowsErr) {
+    console.error("[customers] fuzzy rows failed", rowsErr.code, rowsErr.message);
+    return { ...empty, error: customerListError(rowsErr) };
+  }
   const ranked = rankCustomerMatches((rows as Customer[] | null) ?? [], parsed, scores);
   return { rows: ranked.slice(0, limit), total: ranked.length, fuzzy: ranked.length > 0 };
 }
@@ -130,14 +174,17 @@ export async function listCustomersPaged(opts: {
   isMedical?: boolean;
   marketingConsent?: boolean;
   doNotContact?: boolean;
-}): Promise<{ rows: Customer[]; total: number; fuzzy?: boolean }> {
+  /** customers-table-enterprise: the table's filter ops (customer-table-core). */
+  ops?: readonly CustomerFilterOp[];
+}): Promise<{ rows: Customer[]; total: number; fuzzy?: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
   const parsed = parseCustomerQuery(opts.q);
   const filter = buildCustomerSearchFilter(parsed);
-  const flags = { isMedical: opts.isMedical, marketingConsent: opts.marketingConsent, doNotContact: opts.doNotContact };
+  const flags = { isMedical: opts.isMedical, marketingConsent: opts.marketingConsent, doNotContact: opts.doNotContact, ops: opts.ops };
 
   if (filter && opts.bestMatch !== false) {
     const res = await searchCustomers(opts.q ?? "", { ...flags, limit: SEARCH_CANDIDATE_CAP });
+    if (res.error) return { rows: [], total: 0, error: res.error };
     // Ranked paging covers the best SEARCH_CANDIDATE_CAP matches; a search
     // broader than that falls through to plain column order below.
     if (res.fuzzy || res.total <= SEARCH_CANDIDATE_CAP) {
@@ -152,6 +199,7 @@ export async function listCustomersPaged(opts: {
   if (opts.marketingConsent !== undefined)
     query = query.eq("marketing_consent", opts.marketingConsent);
   if (opts.doNotContact !== undefined) query = query.eq("do_not_contact", opts.doNotContact);
+  query = applyCustomerFilterOps(query, opts.ops);
 
   const sort: SortColumn[] = opts.sort ?? [
     { column: "last_visit_at", ascending: false, nullsFirst: false },
@@ -167,7 +215,11 @@ export async function listCustomersPaged(opts: {
 
   if (filter) query = query.or(filter);
 
-  const { data, count } = await query.range(opts.from, opts.to);
+  const { data, count, error } = await query.range(opts.from, opts.to);
+  if (error) {
+    console.error("[customers] list failed", error.code, error.message);
+    return { rows: [], total: 0, error: customerListError(error) };
+  }
   return { rows: (data as Customer[] | null) ?? [], total: count ?? 0 };
 }
 

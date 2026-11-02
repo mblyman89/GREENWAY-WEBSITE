@@ -101,6 +101,12 @@ accounts under **Settings → Accounting settings**.
 - **Customers** (`/admin/customers`) — build customer & patient profiles: the
   foundation for loyalty, purchase history, and (later) register limit checks.
   Add manually or **Customers → Import** a list.
+  The table shows phone and email in separate columns plus birthday / age,
+  medical card status, tax designation, loyalty points and tier, group,
+  visits, spend (here and old POS), dates and source; click a heading to sort,
+  filter by contact, source or birthday month, choose columns and density, and
+  (managers and up) download exactly what is on screen as CSV or Excel
+  (`docs/slice-customers-table-enterprise.md`).
 - **Loyalty Program** (`/admin/loyalty`) — points, tiers, promotions,
   redemptions. (The public loyalty page is edited under **Website → Loyalty**.)
 

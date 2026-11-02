@@ -83,6 +83,7 @@ RFM groups are relative, so they are unstable in a small base. The dashboard lab
 | Display blocks | `src/components/admin/customers/InsightBlocks.tsx` |
 | Profile page | `src/app/admin/customers/[id]/page.tsx` |
 | List page | `src/app/admin/customers/page.tsx` |
+| List table rules / download | `src/lib/customers/customer-table-core.ts`, `src/lib/customers/customer-table-store.ts`, `src/app/admin/customers/export/route.ts` (see `docs/slice-customers-table-enterprise.md`) |
 | Dashboard | `src/app/admin/customers/insights/page.tsx` |
 | Link action | `src/app/admin/customers/actions.ts` (`linkCustomerOrdersAction`) |
 | Tests | `tests/compliance/customer-intelligence.test.ts` |
