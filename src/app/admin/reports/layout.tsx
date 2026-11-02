@@ -17,6 +17,8 @@ export default async function ReportsLayout({ children }: { children: React.Reac
   const session = await requirePermission("reports.view");
   // R41 round 9: the ACH Payments tab shows for owner and admin only.
   const showAchTab = can(session.profile.role, "ach.request");
+  // CVB-6: the Cultivera Benchmark tab shows for the owner only.
+  const showCultiveraTab = can(session.profile.role, "cultivera.benchmark");
   return (
     <div>
       <AdminPageHeader
@@ -25,7 +27,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
         breadcrumbs={<Breadcrumbs items={[{ label: "Reports" }]} />}
       />
       <div className="space-y-5 px-5 py-6 sm:px-8">
-        <ReportTabs showAchTab={showAchTab} />
+        <ReportTabs showAchTab={showAchTab} showCultiveraTab={showCultiveraTab} />
         {children}
       </div>
     </div>

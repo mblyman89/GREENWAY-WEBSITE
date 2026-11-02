@@ -46,15 +46,23 @@ export const REPORT_TABS: ReportTab[] = [
  */
 export const ACH_REPORT_TAB: ReportTab = { href: "/admin/reports/ach-payments", label: "ACH Payments", icon: "🏦" };
 
-export function reportTabsFor(showAchTab: boolean): ReportTab[] {
-  return showAchTab ? [...REPORT_TABS, ACH_REPORT_TAB] : REPORT_TABS;
+/**
+ * CVB-6: the Cultivera Benchmark tab is OWNER ONLY (owner, 2026-11-01: "a new tab added to reports called
+ * Cultivera Benchmark ... This will be owner only access."). The layout passes
+ * showCultiveraTab (can(role, "cultivera.benchmark")); the page and its actions check the same permission.
+ * It sits before ACH Payments so ACH stays the last tab.
+ */
+export const CULTIVERA_BENCHMARK_TAB: ReportTab = { href: "/admin/reports/cultivera-benchmark", label: "Cultivera Benchmark", icon: "\ud83c\udfc1" };
+
+export function reportTabsFor(showAchTab: boolean, showCultiveraTab = false): ReportTab[] {
+  return [...REPORT_TABS, ...(showCultiveraTab ? [CULTIVERA_BENCHMARK_TAB] : []), ...(showAchTab ? [ACH_REPORT_TAB] : [])];
 }
 
-export function ReportTabs({ showAchTab = false }: { showAchTab?: boolean }) {
+export function ReportTabs({ showAchTab = false, showCultiveraTab = false }: { showAchTab?: boolean; showCultiveraTab?: boolean }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-wrap gap-1.5 border-b border-white/10 pb-3">
-      {reportTabsFor(showAchTab).map((tab) => {
+      {reportTabsFor(showAchTab, showCultiveraTab).map((tab) => {
         const active =
           tab.href === "/admin/reports"
             ? pathname === "/admin/reports"

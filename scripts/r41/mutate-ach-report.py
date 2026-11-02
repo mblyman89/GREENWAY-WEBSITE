@@ -33,8 +33,9 @@ M = [
     # --- owner/admin only ---
     ("page-reports-view", PAGE, 'await requirePermission("ach.request");', 'await requirePermission("reports.view");'),
     ("export-reports-view", EXPORT, 'await requirePermission("ach.request");', 'await requirePermission("reports.view");'),
-    ("tab-always", TABS, "return showAchTab ? [...REPORT_TABS, ACH_REPORT_TAB] : REPORT_TABS;", "return [...REPORT_TABS, ACH_REPORT_TAB];"),
-    ("layout-passes-true", LAYOUT, "<ReportTabs showAchTab={showAchTab} />", "<ReportTabs showAchTab={true} />"),
+    # CVB-6 reshaped reportTabsFor (an owner-only Cultivera Benchmark tab sits before ACH); same two mutants.
+    ("tab-always", TABS, "...(showAchTab ? [ACH_REPORT_TAB] : [])", "...[ACH_REPORT_TAB]"),
+    ("layout-passes-true", LAYOUT, "<ReportTabs showAchTab={showAchTab} showCultiveraTab={showCultiveraTab} />", "<ReportTabs showAchTab={true} showCultiveraTab={showCultiveraTab} />"),
     # --- bank matching ---
     ("window-wider", CORE, "export const FILE_WINDOW_MAX_DAYS = 2;", "export const FILE_WINDOW_MAX_DAYS = 3;"),
     ("voided-matched", CORE, '    if (f.status === "voided") {\n      row.stage = "voided";\n    } else if', "    if (false) {\n      row.stage = \"voided\";\n    } else if"),

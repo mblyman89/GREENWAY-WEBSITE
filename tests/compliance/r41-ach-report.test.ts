@@ -242,7 +242,9 @@ describe("owner and admin only", () => {
     expect(tabs.reportTabsFor(true).at(-1)).toEqual(tabs.ACH_REPORT_TAB);
     const layout = read("src/app/admin/reports/layout.tsx");
     expect(layout).toContain('const showAchTab = can(session.profile.role, "ach.request");');
-    expect(layout).toContain("<ReportTabs showAchTab={showAchTab} />");
+    // CVB-6: the layout also passes the owner-only Cultivera Benchmark flag; ACH stays last.
+    expect(layout).toContain("<ReportTabs showAchTab={showAchTab} showCultiveraTab={showCultiveraTab} />");
+    expect(tabs.reportTabsFor(true, true).at(-1)).toEqual(tabs.ACH_REPORT_TAB);
   });
 });
 
