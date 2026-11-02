@@ -98,6 +98,7 @@ export async function archiveRunAction(formData: FormData): Promise<void> {
     redirect(withRun(runId, err(msg(e, "Archive failed."))));
   }
   revalidatePath(PAGE);
+  revalidatePath("/admin/reports/cultivera-benchmark");
   redirect(withRun(runId, q));
 }
 
@@ -121,5 +122,6 @@ export async function rebuildDaysAction(formData: FormData): Promise<void> {
     redirect(withRun(runId, err(msg(e, "Could not rebuild the daily figures."))));
   }
   revalidatePath(PAGE);
+  revalidatePath("/admin/reports/cultivera-benchmark");
   redirect(withRun(runId, q));
 }
