@@ -68,6 +68,27 @@ export const CUSTOMER_SORTS: SortOption[] = [
   { key: "old_spend_high", label: "Old POS spend: high → low", columns: [{ column: "imported_spend_minor_units", ascending: false }] },
   { key: "old_last_purchase", label: "Old POS last purchase: newest", columns: [{ column: "last_purchase_at", ascending: false, nullsFirst: false }] },
   { key: "visits_high", label: "Visits: high → low", columns: [{ column: "visit_count", ascending: false }] },
+  // customers-table-enterprise (owner: "I want this table to be very useful
+  // and powerful."): every sortable column header clicks between two of these
+  // (customer-table-core.CUSTOMER_COLUMNS, self-tested to exist here).
+  { key: "name_desc", label: "Name Z → A", columns: [{ column: "first_name", ascending: false }, { column: "last_name", ascending: false, nullsFirst: false }] },
+  { key: "phone", label: "Phone: low → high", columns: [{ column: "phone_normalized", ascending: true, nullsFirst: false }] },
+  { key: "phone_desc", label: "Phone: high → low", columns: [{ column: "phone_normalized", ascending: false, nullsFirst: false }] },
+  { key: "email", label: "Email A → Z", columns: [{ column: "email", ascending: true, nullsFirst: false }] },
+  { key: "email_desc", label: "Email Z → A", columns: [{ column: "email", ascending: false, nullsFirst: false }] },
+  { key: "birthdate_oldest", label: "Age: oldest first", columns: [{ column: "birthdate", ascending: true, nullsFirst: false }] },
+  { key: "birthdate_youngest", label: "Age: youngest first", columns: [{ column: "birthdate", ascending: false, nullsFirst: false }] },
+  { key: "visits_low", label: "Visits: low → high", columns: [{ column: "visit_count", ascending: true }] },
+  { key: "spend_low", label: "Spend at Greenway: low → high", columns: [{ column: "lifetime_spend_minor_units", ascending: true }] },
+  { key: "old_spend_low", label: "Old POS spend: low → high", columns: [{ column: "imported_spend_minor_units", ascending: true }] },
+  { key: "first_visit_oldest", label: "First visit: oldest", columns: [{ column: "first_visit_at", ascending: true, nullsFirst: false }] },
+  { key: "first_visit_newest", label: "First visit: newest", columns: [{ column: "first_visit_at", ascending: false, nullsFirst: false }] },
+  { key: "lapsed", label: "Longest since last visit", columns: [{ column: "last_visit_at", ascending: true, nullsFirst: false }, { column: "last_purchase_at", ascending: true, nullsFirst: false }] },
+  { key: "since_oldest", label: "Customer since: oldest", columns: [{ column: "imported_created_at", ascending: true, nullsFirst: false }, { column: "created_at", ascending: true }] },
+  { key: "since_newest", label: "Customer since: newest", columns: [{ column: "imported_created_at", ascending: false, nullsFirst: false }, { column: "created_at", ascending: false }] },
+  { key: "oldest", label: "Oldest record first", columns: [{ column: "created_at", ascending: true }] },
+  { key: "updated", label: "Recently updated", columns: [{ column: "updated_at", ascending: false }] },
+  { key: "updated_oldest", label: "Least recently updated", columns: [{ column: "updated_at", ascending: true }] },
 ];
 
 /**

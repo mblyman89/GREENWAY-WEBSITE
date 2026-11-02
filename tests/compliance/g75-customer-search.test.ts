@@ -86,7 +86,10 @@ describe("G-75 Total Spent and Last Purchase from the spreadsheet are shown", ()
     expect(detail).not.toContain("3608093778");
   });
   it("admin list and profile use the combined figures", () => {
-    expect(read("src/app/admin/customers/page.tsx")).toMatch(/customerFigures\(/);
+    // customers-table-enterprise: the list (and its download) use the shared
+    // tableFigures rule, which is customerFigures plus the population rollup.
+    expect(read("src/app/admin/customers/page.tsx")).toMatch(/tableFigures\(/);
+    expect(read("src/lib/customers/customer-table-core.ts")).toMatch(/const f = customerFigures\(c, \{ spendMinor: live\.spendMinor/);
     const profile = read("src/app/admin/customers/[id]/page.tsx");
     expect(profile).toMatch(/customerFigures\(/);
     expect(profile).toMatch(/Total spent \(all time\)/);
