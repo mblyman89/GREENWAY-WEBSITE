@@ -23,6 +23,8 @@
  * scripts/compliance/run-pure-selftests.ts) and mirrored in vitest.
  */
 
+import type { PosMenuProduct } from "./sale-flow-core";
+
 /** One "label: value" fact on a lot. `tone` drives colour only. */
 export type LotDetailRow = {
   label: string;
@@ -160,6 +162,43 @@ export function parseProductDetailsResponse(body: unknown): ProductDetailsRespon
   return { lots, lotCount, warnings };
 }
 
+/** The shell's fetcher: null = offline / failed (the card says so). */
+export type ProductDetailsFn = (productId: string, variantId: string) => Promise<ProductDetailsResponse | null>;
+
+function numText(n: unknown): string | null {
+  return typeof n === "number" && Number.isFinite(n) && n > 0 ? String(Number(n.toFixed(3))) : null;
+}
+
+/**
+ * The size-level facts the CACHED bundle already knows (so they show
+ * offline too) beyond the B42 potency rows: size, weight/volume, per-unit
+ * THC, pack count, units left, legal lane, expiry warning and the POS key a
+ * manager can search in the back office.
+ */
+export function cardFactRows(p: Pick<PosMenuProduct, "productId" | "variantId" | "variantLabel" | "unitGrams" | "unitVolumeMl" | "unitThcMg" | "unitsPerPackage" | "unitsLeft" | "lowThcLiquid" | "otherwiseTaken" | "expiredSince" | "inventoryStatus">): LotDetailRow[] {
+  const rows: LotDetailRow[] = [];
+  if (p.variantLabel && p.variantLabel.trim()) rows.push({ label: "Size", value: p.variantLabel.trim() });
+  const g = numText(p.unitGrams);
+  if (g) rows.push({ label: "Weight per unit", value: `${g} g` });
+  const ml = numText(p.unitVolumeMl);
+  if (ml) rows.push({ label: "Volume per unit", value: `${ml} ml` });
+  const mg = numText(p.unitThcMg);
+  if (mg) rows.push({ label: "THC per unit", value: `${mg} mg` });
+  const pack = numText(p.unitsPerPackage);
+  if (pack && pack !== "1") rows.push({ label: "Items per package", value: pack });
+  if (typeof p.unitsLeft === "number" && Number.isFinite(p.unitsLeft)) {
+    const left = Math.max(0, Math.floor(p.unitsLeft));
+    rows.push({ label: "Units left", value: String(left), ...(left === 0 ? { tone: "danger" as const } : left <= 3 ? { tone: "warn" as const } : {}) });
+  } else if (p.inventoryStatus === "low-stock") {
+    rows.push({ label: "Stock", value: "Low", tone: "warn" });
+  }
+  if (p.lowThcLiquid === true) rows.push({ label: "Legal lane", value: "Low-THC beverage" });
+  if (p.otherwiseTaken === true) rows.push({ label: "Legal lane", value: "Otherwise taken (10-unit limit)" });
+  if (p.expiredSince) rows.push({ label: "Expired lot on shelf", value: `Since ${p.expiredSince}`, tone: "danger" });
+  rows.push({ label: "POS key", value: p.variantId && p.variantId !== p.productId ? `${p.productId} · ${p.variantId}` : p.productId });
+  return rows;
+}
+
 /** Terpene ppm as the card shows it: "4,210 ppm (0.42%)". */
 export function terpeneLabel(ppm: number): string {
   if (!Number.isFinite(ppm) || ppm <= 0) return "—";
@@ -261,6 +300,19 @@ export function __runProductDetailViewCoreTests(): void {
 
   ok(terpeneLabel(4210) === "4,210 ppm (0.42%)", "terpene label");
   ok(terpeneLabel(0) === "—" && terpeneLabel(Number.NaN) === "—", "terpene label blank");
+
+
+  // cardFactRows
+  const facts = cardFactRows({ productId: "P1", variantId: "P1-x", variantLabel: "3.5g", unitGrams: 3.5, unitsLeft: 2, inventoryStatus: "in-stock", unitsPerPackage: 1, lowThcLiquid: true, expiredSince: "2026-01-01" });
+  const fm = new Map(facts.map((r) => [r.label, r]));
+  ok(fm.get("Size")?.value === "3.5g" && fm.get("Weight per unit")?.value === "3.5 g", "size + weight facts");
+  ok(fm.get("Units left")?.tone === "warn", "low units warn");
+  ok(!fm.has("Items per package"), "single-item pack omitted");
+  ok(fm.get("Legal lane")?.value === "Low-THC beverage", "legal lane shown");
+  ok(fm.get("Expired lot on shelf")?.tone === "danger", "expiry danger");
+  ok(fm.get("POS key")?.value === "P1 · P1-x", "pos key with variant");
+  const bare = cardFactRows({ productId: "P2", variantId: "P2", variantLabel: null, inventoryStatus: "in-stock" });
+  ok(bare.length === 1 && bare[0].value === "P2", "bare product: only the key");
 
   console.log(`product-detail-view-core: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
