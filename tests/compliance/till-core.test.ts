@@ -46,7 +46,8 @@ describe("till-core (POS B21)", () => {
     if (open.ok) expect(denomTotalMinor((open.req as { denoms: Record<string, number> }).denoms)).toBe(11000);
 
     expect(validateTillRequest({ action: "open", pin: "1234", denoms: {} }).ok).toBe(false);
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {} }).ok).toBe(true);
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {} }).ok).toBe(false); // D125: $0 needs the tick
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true }).ok).toBe(true);
   });
 
   it("drop validates amount (integer cents, positive, plausible), window, witness, notes", () => {
@@ -89,17 +90,17 @@ describe("till-core (POS B21)", () => {
     expect(withTips.ok).toBe(true);
     if (withTips.ok && withTips.req.action === "close") expect(withTips.req.tipsMinor).toBe(4250);
 
-    const zeroTips = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 0 });
+    const zeroTips = validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: 0 });
     expect(zeroTips.ok).toBe(true);
     if (zeroTips.ok && zeroTips.req.action === "close") expect(zeroTips.req.tipsMinor).toBe(0);
 
-    const omitted = validateTillRequest({ action: "close", pin: "1234", denoms: {} });
+    const omitted = validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true });
     expect(omitted.ok).toBe(true);
     if (omitted.ok && omitted.req.action === "close") expect(omitted.req.tipsMinor).toBeUndefined();
 
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: -1 }).ok).toBe(false);
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 10.5 }).ok).toBe(false);
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: -1 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: 10.5 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, confirmEmpty: true, tipsMinor: MAX_TIPS_MINOR + 1 }).ok).toBe(false);
 
     // Tips only exist at close — a stray tipsMinor on open is ignored.
     const open = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });

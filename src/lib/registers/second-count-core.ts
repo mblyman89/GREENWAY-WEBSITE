@@ -74,6 +74,16 @@ function dollars(minor: number): string {
   return `$${Math.floor(abs / 100).toLocaleString("en-US")}.${String(abs % 100).padStart(2, "0")}`;
 }
 
+/**
+ * Owner D126: up to $5.00 apart, over / short uses the closer's count. More
+ * than $5.00 apart, a manager must choose the count at reconcile.
+ */
+function basisWords(cmp: SecondCountCompare): string {
+  return Math.abs(cmp.diffMinor) > 500
+    ? "That is more than $5.00, so a manager chooses which count to reconcile on."
+    : "Over / short uses the closer's count.";
+}
+
 /** One plain sentence for the reconcile card, the till summary and the register. */
 export function secondCountSentence(cmp: SecondCountCompare): string {
   switch (cmp.state) {
@@ -82,9 +92,9 @@ export function secondCountSentence(cmp: SecondCountCompare): string {
     case "match":
       return "Both counts agree.";
     case "second_higher":
-      return `The counts differ by ${dollars(cmp.diffMinor)}: the second person counted ${dollars(cmp.diffMinor)} more. Over / short uses the closer's count.`;
+      return `The counts differ by ${dollars(cmp.diffMinor)}: the second person counted ${dollars(cmp.diffMinor)} more. ${basisWords(cmp)}`;
     case "second_lower":
-      return `The counts differ by ${dollars(cmp.diffMinor)}: the second person counted ${dollars(cmp.diffMinor)} less. Over / short uses the closer's count.`;
+      return `The counts differ by ${dollars(cmp.diffMinor)}: the second person counted ${dollars(cmp.diffMinor)} less. ${basisWords(cmp)}`;
   }
 }
 
@@ -144,6 +154,7 @@ export function __runSecondCountCoreTests(): { passed: number; failed: number } 
   ok(secondCountSentence(lo).includes("closer's count"), "sentence says which count is used");
   ok(secondCountSentence({ state: "none", diffMinor: 0 }).startsWith("No second count"), "legacy sentence");
   ok(secondCountSentence(compareCounts(0, 123456)).includes("$1,234.56"), "thousands separator");
+  ok(secondCountSentence(compareCounts(0, 267810)).includes("a manager chooses which count"), "D126: more than $5 apart -> the manager chooses");
 
   // closeErrorMessage
   ok(closeErrorMessage("column \"second_count_minor\" does not exist").includes("0314"), "missing column names the migration");

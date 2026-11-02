@@ -6,6 +6,9 @@ import { Breadcrumbs } from "@/components/admin/ux";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { tillSummaryData } from "@/lib/registers/eod-store";
 import { compareCounts, secondCountSentence } from "@/lib/registers/second-count-core";
+import { can } from "@/lib/auth/roles";
+import { OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
+import { correctReconciledDrawerAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +47,16 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 
 export default async function TillSummaryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ error?: string; corrected?: string }>;
 }) {
-  await requirePermission("inventory.manage");
+  const staff = await requirePermission("inventory.manage");
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
+  // Owner D127: owner and admin may correct a reconciled drawer's count.
+  const canCorrect = can(staff.profile.role, "registers.warnings");
   if (!isSupabaseServiceConfigured) notFound();
 
   const data = await tillSummaryData(id);
@@ -70,6 +78,15 @@ export default async function TillSummaryPage({
           ]}
         />
       </div>
+
+      {sp.error ? (
+        <div className="mx-auto mt-4 max-w-2xl rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 print:hidden">{sp.error}</div>
+      ) : null}
+      {sp.corrected != null ? (
+        <div className="mx-auto mt-4 max-w-2xl rounded border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800 print:hidden">
+          Drawer corrected · now {overShortLabel(Number(sp.corrected) || 0)}. The old and new figures are in the notes below and in the audit log. The books were not touched.
+        </div>
+      ) : null}
 
       <div className="ticket-print mx-auto mt-4 max-w-2xl bg-white px-8 py-8 text-black">
         {/* Header */}
@@ -166,7 +183,7 @@ export default async function TillSummaryPage({
         {session.reconciled_at ? (
           <p className="mt-1 text-[0.65rem] text-black/50">Reconciled {fmtTime(session.reconciled_at)}.</p>
         ) : null}
-        {session.notes ? <p className="mt-2 text-sm">Notes: {session.notes}</p> : null}
+        {session.notes ? <p className="mt-2 whitespace-pre-line text-sm">Notes: {session.notes}</p> : null}
 
         {/* Drops detail */}
         <h2 className="mt-6 border-b border-black/30 pb-1 text-sm font-black uppercase tracking-[0.15em]">
@@ -246,6 +263,56 @@ export default async function TillSummaryPage({
           Greenway Marijuana · WA license 413541 · file with the day&apos;s physical records
         </p>
       </div>
+
+      {/* Owner D127: correct a reconciled drawer (owner / admin). Not printed. */}
+      {canCorrect && session.status === "reconciled" && session.closing_count_minor != null && session.expected_close_minor != null ? (
+        <details className="mx-auto mt-4 max-w-2xl rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3 text-sm print:hidden">
+          <summary className="cursor-pointer font-semibold text-[var(--admin-text)]">Correct this drawer&apos;s count (owner / admin)</summary>
+          <form action={correctReconciledDrawerAction} className="mt-3 space-y-2 text-xs text-[var(--admin-text)]">
+            <input type="hidden" name="session_id" value={session.id} />
+            <p className="text-[var(--admin-text-muted)]">
+              Reconciled on {formatCents(session.closing_count_minor)} against an expected {formatCents(session.expected_close_minor)} (
+              {overShortLabel(session.over_short_minor ?? 0)}). Choose the right count. Over / short is worked out again against the same
+              expected figure. The old figures stay in the notes and the audit log. This does not change the books; a drawer that already
+              has a ledger entry, or whose cash is in a sealed deposit bag, cannot be corrected here.
+            </p>
+            {session.second_count_minor != null ? (
+              <label className="flex items-center gap-2">
+                <input type="radio" name="basis" value="second" required />
+                Use the second count ({formatCents(session.second_count_minor)}
+                {secondCountedByName ? `, ${secondCountedByName}` : ""}) → {overShortLabel(session.second_count_minor - session.expected_close_minor)}
+              </label>
+            ) : null}
+            <label className="flex flex-wrap items-center gap-2">
+              <input type="radio" name="basis" value="typed" required={session.second_count_minor == null} />
+              Type the correct count: $
+              <input
+                name="typed_count"
+                inputMode="decimal"
+                placeholder="0.00"
+                className="w-28 rounded border border-[var(--admin-border)] bg-transparent px-2 py-0.5"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-semibold">Reason (required)</span>
+              <textarea
+                name="reason"
+                required
+                maxLength={OVER_SHORT_REASON_MAX_LEN}
+                rows={2}
+                placeholder="For example: the closer entered $0 by mistake; the second count is right."
+                className="w-full rounded border border-[var(--admin-border)] bg-transparent px-2 py-1"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Save correction
+            </button>
+          </form>
+        </details>
+      ) : null}
     </div>
   );
 }

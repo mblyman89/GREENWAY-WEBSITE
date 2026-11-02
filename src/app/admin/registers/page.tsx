@@ -17,6 +17,7 @@ import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-co
 import { businessDayFor } from "@/lib/staffing/time";
 import { compareCounts, secondCountSentence } from "@/lib/registers/second-count-core";
 import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
+import { countBasisNeeded } from "@/lib/registers/drawer-correction-core";
 import { undeclaredBagsBefore } from "@/lib/registers/deposit-bag-store";
 import { undeclaredBagWarning } from "@/lib/accounting/safe-bag-core";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -780,17 +781,65 @@ function ReconcileCard({
           )}
           <form action={reconcileDrawerAction} className="space-y-2">
             <input type="hidden" name="session_id" value={item.sessionId} />
+            {/* Owner D126: the two counts are more than $5.00 apart, so the
+                drawer is held until the manager picks the count to reconcile
+                on and writes why. The server checks this again. */}
+            {countBasisNeeded(item.closingCountMinor, item.secondCountMinor) ? (
+              <fieldset className="space-y-1 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 p-2 text-xs text-[var(--admin-text)]">
+                <legend className="px-1 font-semibold text-[var(--admin-gold)]">
+                  Held: the counts are {formatCents(Math.abs((item.secondCountMinor ?? 0) - (item.closingCountMinor ?? 0)))} apart. Choose the count to reconcile on.
+                </legend>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="count_basis" value="second" required />
+                  Use the second count ({formatCents(item.secondCountMinor)}{item.secondCountedByName ? `, ${item.secondCountedByName}` : ""})
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="count_basis" value="closer" />
+                  Use the closer&apos;s count ({formatCents(item.closingCountMinor)}{item.closedByName ? `, ${item.closedByName}` : ""})
+                </label>
+                <label className="flex flex-wrap items-center gap-2">
+                  <input type="radio" name="count_basis" value="recount" />
+                  I recounted it myself: $
+                  <input
+                    name="recount"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    className="w-28 rounded border border-[var(--admin-border)] bg-transparent px-2 py-0.5 text-[var(--admin-text)]"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block font-semibold">Why this count? (required)</span>
+                  <textarea
+                    name="count_basis_reason"
+                    required
+                    maxLength={OVER_SHORT_REASON_MAX_LEN}
+                    rows={2}
+                    placeholder="For example: the closer entered $0 by mistake; the second count is right."
+                    className="w-full rounded border border-[var(--admin-border)] bg-transparent px-2 py-1 text-[var(--admin-text)]"
+                  />
+                </label>
+                <p className="text-[var(--admin-text-muted)]">
+                  The over / short above uses the closer&apos;s count. Reconcile works it out again from the count you choose. The closer&apos;s
+                  original figure stays in the drawer&apos;s notes and the audit log.
+                </p>
+              </fieldset>
+            ) : null}
             {/* Fix Phase 2.3 (G-03, owner D7 / D21): a reason is required only
                 when the drawer is more than $5.00 over or short. The server
                 checks again against its own figure when you click. */}
             {(() => {
-              const warn = isOverShortWarning(f.overShortMinor);
+              // D126: when held, the over/short depends on the count chosen, so
+              // the server decides whether the reason is required.
+              const held = countBasisNeeded(item.closingCountMinor, item.secondCountMinor);
+              const warn = !held && isOverShortWarning(f.overShortMinor);
               return (
                 <label className="block text-xs text-[var(--admin-text-muted)]">
                   {warn ? (
                     <span className="mb-1 block font-semibold text-[var(--admin-gold)]">
                       Warning: more than $5.00 {(f.overShortMinor ?? 0) > 0 ? "over" : "short"}. Reason (required)
                     </span>
+                  ) : held ? (
+                    <span className="mb-1 block">Reason for over / short (optional: if left blank, the &ldquo;why this count&rdquo; reason above is used)</span>
                   ) : (
                     <span className="mb-1 block">Reason for over / short (optional at $5.00 or less)</span>
                   )}
