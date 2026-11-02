@@ -173,6 +173,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Crypto Portfolio", href: "/admin/crypto", permission: "finances.view", icon: "\u20bf", group: "Lyman" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
   { label: "ATM", href: "/admin/atm", permission: "finances.view", icon: "\ud83c\udfe7", group: "Lyman" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
   { label: "Security Log", href: "/admin/audit", permission: "audit.view", icon: "\ud83d\udd0e", group: "Lyman" }, // who did what, and when. Renamed from "Audit Log" (books-22) so it is not confused with Inventory Auditing, and re-gated from users.manage to audit.view = OWNER ONLY: this is the record an admin would have to edit to hide something, so the admin is exactly who should not be reading it.
+  { label: "Cultivera Archive", href: "/admin/cultivera-archive", permission: "cultivera.benchmark", icon: "\ud83d\uddc4\ufe0f", group: "Lyman" }, // CVB-5: owner-only (Michael 2026-11-01 "This will be owner only access"): harvest Cultivera's back office read-only, keep every file byte for byte in the private cultivera-archive bucket, store its daily figures for the Reports -> Cultivera Benchmark tab
   // Slice books-06: the four MONEY pages moved from "settings.manage"
   // (owner+admin) to "finances.view" (OWNER ONLY), matching migration 0190,
   // which re-gates the 25 tables behind them from is_staff() to is_owner().

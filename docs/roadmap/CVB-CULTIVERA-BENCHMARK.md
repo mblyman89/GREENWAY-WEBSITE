@@ -149,11 +149,11 @@ The comparison is between **periods**. Cultivera's history (2024-08-30 → cutov
 | Slice | What | Status |
 |---|---|---|
 | CVB-0 | Live probe of the back office (endpoints, shapes, page limits, counts) | done (notes kept outside the repository) |
-| CVB-1 | This roadmap | this PR |
+| CVB-1 | This roadmap | merged #1633 |
 | CVB-2 | Archive harvester on the crawler (34 paged datasets, 11 roll-up reports, 15 summaries, 11 lookups, monthly orders, cycle-count details, valuation snapshots), Count-verified, resumable, read-only | merged #1631 |
-| CVB-3 | Migration 0337: private bucket, archive run / file provenance, Cultivera daily figures, payback ledger seeded with the owner's two figures, two service_role functions | this PR |
-| CVB-4 | Pure cores (`src/lib/reports/cultivera-benchmark-core.ts`): dollars → cents ingest normaliser for the daily report (a day with two different answers is kept out), manifest → archive register list (refused whole, never partial), comparison engine (missing side is never zero; a partial period cannot win), payback ledger arithmetic and the outperformance credit rule; 40 self-tests + vitest mirror that checks agreement with 0337 | PR (stacked on CVB-1/3) |
-| CVB-5 | Admin → Cultivera archive page (owner-only): run the harvester, archive a finished run into the bucket after verifying every sha256, store the daily figures | later |
+| CVB-3 | Migration 0337: private bucket, archive run / file provenance, Cultivera daily figures, payback ledger seeded with the owner's two figures, two service_role functions | merged #1633 |
+| CVB-4 | Pure cores (`src/lib/reports/cultivera-benchmark-core.ts`): dollars → cents ingest normaliser for the daily report (a day with two different answers is kept out), manifest → archive register list (refused whole, never partial), comparison engine (missing side is never zero; a partial period cannot win), payback ledger arithmetic and the outperformance credit rule; 40 self-tests + vitest mirror that checks agreement with 0337 | merged #1634 |
+| CVB-5 | Admin → Lyman → **Cultivera Archive** (`/admin/cultivera-archive`, owner-only `cultivera.benchmark`): start / continue / stop the harvest; progress for each of the 8 stages; **Archive to our storage** (every file checked against the manifest's sha256, then stored with upsert:false; a size mismatch stops it; resumable within the 300 s page limit; the manifest's bytes are stored and their sha256 registered); Cultivera's daily figures are read back from the bucket, sha256-checked and stored in cents; a dataset browser; archived harvests. Pure core `cultivera-archive-core.ts` (28 self-tests) + vitest | PR (not merged) |
 | CVB-6 | Reports → Cultivera Benchmark tab (owner-only): side-by-side metrics, period picker, payback meter, "record a saving" / "credit outperformance" owner actions | later |
 | CVB-7 | Deeper comparisons from the archive: discounts by employee, employee samples / purchases, voids and returns, cycle-count accuracy, vendor purchase stats, inventory valuation | later |
 

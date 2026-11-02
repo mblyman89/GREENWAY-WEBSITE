@@ -732,7 +732,9 @@ describe("N4 the Accounting and Lyman tabs", () => {
     );
   });
 
-  it("Lyman holds the four money pages, the Security Log and the calendar", () => {
+  it("Lyman holds the four money pages, the Security Log, the calendar and the Cultivera archive", () => {
+    // CVB-5: the Cultivera archive (owner-only, cultivera.benchmark). Michael:
+    // "Add a new page in the admin" ... "This will be owner only access."
     /*
      * books-23 added the Compliance Calendar here. Michael, verbatim:
      *
@@ -754,6 +756,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/audit",
         "/admin/compliance/calendar",
         "/admin/crypto",
+        "/admin/cultivera-archive",
         "/admin/loans",
         "/admin/plaid",
       ].sort(),
@@ -998,7 +1001,7 @@ describe("N6 the top nav can actually render the new tabs", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("N7 owner-only is derived, not copied", () => {
-  it("names exactly the eight owner-only permissions in use today", () => {
+  it("names exactly the ten owner-only permissions in use today", () => {
     // R41 S0 added `ach.act`. Michael's D-6 answer (Option B): only the owner
     // acts alone on vendor bank / ACH; Stephen (admin) holds `ach.request`
     // instead, so his live changes become requests Michael approves.
@@ -1017,12 +1020,17 @@ describe("N7 owner-only is derived, not copied", () => {
     // Fix Phase 1.3 (G-28 req 6, F-15-9) added `inventory.destruction.cancel`:
     // SOP-15 §2 store rule 3, "Only the owner cancels a scheduled destruction".
     // Fix Phase 1.5 (G-42 req 5) added `inventory.vendor_return.cancel`.
+    // CVB-5 added `cultivera.benchmark`. Michael, 2026-11-01, on the Cultivera
+    // archive and benchmark: "This will be owner only access." It holds the
+    // whole Cultivera history (PII datasets included) and the build-cost
+    // payback ledger, so it is its own permission rather than finances.view.
     expect(ownerOnlyPermissions().sort()).toEqual(
       [
         "ach.act",
         "audit.view",
         "books.view",
         "compliance.calendar",
+        "cultivera.benchmark",
         "finances.view",
         "financials.view",
         "inventory.audit",

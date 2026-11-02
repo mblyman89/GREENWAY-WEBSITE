@@ -74,6 +74,7 @@ export type Permission =
   | "settings.manage"
   | "ach.act"
   | "ach.request"
+  | "cultivera.benchmark"
   | "staffing.manage"
   | "staffing.lifecycle"
   | "registers.warnings"
@@ -281,6 +282,11 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // pins both. The routing itself lives in src/lib/auth/ach-authority-core.ts.
   "ach.act": ["owner"],
   "ach.request": ["owner", "admin"],
+  // CVB-5 (owner request 2026-11-01, verbatim in docs/sop-program/00-OWNER-REQUEST-VERBATIM.md):
+  // "This will be owner only access." The Cultivera archive page and the Reports -> Cultivera
+  // Benchmark tab. Every 0337 table is service_role only; this gate is checked on every page and
+  // every server action.
+  "cultivera.benchmark": ["owner"],
   "staffing.manage": ["owner", "admin", "manager"],
   // Phase 0.3 (G-59, D74): Activate, Terminate and Rehire are owner and admin
   // only. Michael: "I would like to modify this to be owner admin only. No
@@ -341,6 +347,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "settings.manage": "Change settings",
   "ach.act": "Change live ACH banking alone (owner only)",
   "ach.request": "Ask for ACH banking changes (owner approves)",
+  "cultivera.benchmark": "Cultivera archive & benchmark, build-cost payback (owner only)",
   "staffing.manage": "Manage employees, shifts & time clock",
   "staffing.lifecycle": "Activate, terminate & rehire employees (owner & admin)",
   "registers.warnings": "See over/short warnings over $5 (owner & admin)",
@@ -391,6 +398,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "settings.manage",
   "ach.act",
   "ach.request",
+  "cultivera.benchmark",
 ];
 
 /**

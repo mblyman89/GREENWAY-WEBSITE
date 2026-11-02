@@ -71,7 +71,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "CCRS: opens Compliance Health.",
       "Admin: Users, Integrations, Equipment, Sales Limits, AI Usage, Settings, Help & FAQ, Menu Imports.",
       "Accounting (owner only): the general ledger, journal, trial balance, chart of accounts, bills & 280E, payroll & COGS, bank reconciliation, conversion, and Inventory Auditing.",
-      "Lyman (owner only): Bank Feeds, Loans, Crypto Portfolio, ATM, and the Security Log.",
+      "Lyman (owner only): Bank Feeds, Loans, Crypto Portfolio, ATM, Compliance Calendar, Cultivera Archive (the checked copy of Cultivera's back office), and the Security Log.",
     ],
   },
   {

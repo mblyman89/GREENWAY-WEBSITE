@@ -691,3 +691,15 @@ The full request is quoted in `docs/roadmap/CVB-CULTIVERA-BENCHMARK.md` section 
 | CVB-D3 | **The history is kept byte for byte in a private bucket**, with sha256 provenance per file and append-only run records. These are KEPT by the factory reset. | "retain Cultivera historical data safely in our system" |
 | CVB-D4 | **Owner-only**: permission `cultivera.benchmark: ["owner"]`, and every table is service_role only. | "This will be owner only access" |
 | CVB-D5 | **Pushed, never merged by this agent.** Each slice is a branch with an open PR, with patches copied to `/workspace/cvb-safe/`. | "do not merge them until I tell you it is safe"; "use the shared root workspace folder to keep work safe" |
+
+### Follow-up (verbatim, after #1633 / #1634)
+
+> Please merge now. Then proceed with the next two slices. Complete all work, commit to the shared root workspace folder. Wait to merge until I say it's safe to do so. Follow the standing rules. Thank you.
+
+#1633 and #1634 were merged on that instruction. The next two slices are CVB-5 (Admin → Cultivera Archive) and CVB-6 (Reports → Cultivera Benchmark tab). Both are pushed with open PRs and are NOT merged, with patches in `/workspace/cvb-safe/`.
+
+| # | Decision | Source phrase |
+|---|---|---|
+| CVB-D6 | **The archive is a checked copy, never an overwrite.** Each file from the crawler is checked against the manifest (bytes + sha256) and stored with `upsert:false`. If a stored object's size differs from the manifest, the archive stops and says so. The manifest's own bytes are stored as `manifest.json`, and their sha256 is registered. If the page's time limit is reached, it reports how far it got; pressing Archive again carries on. | "retain Cultivera historical data safely in our system" |
+| CVB-D7 | **Cultivera's daily figures are read back from our bucket, not from the crawler.** Each file is checked against the registered sha256 before it is used, so the benchmark keeps working after the Cultivera account is closed. | "my account is set to deactivate soon" |
+| CVB-D8 | **The archive page sits in the owner's Lyman menu** with the other owner-only pages. Its page and all four server actions are gated on `cultivera.benchmark` and audited. | "Add a new page in the admin"; "This will be owner only access" |
