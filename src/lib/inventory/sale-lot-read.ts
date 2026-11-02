@@ -56,7 +56,10 @@ export async function readSaleLots(
       .from("inventory_lots")
       .select(cols)
       .in("pos_product_key", [...keys])
-      .eq("status", "active")
+      // register-sell-sold-out-stock: a lot the Oct-30 count zeroed is
+      // flipped back to Active by apply_lot_delta when units return; a
+      // Sold out lot that still holds units is drawn like an Active one.
+      .in("status", ["active", "sold_out"])
       // Fix Phase 0.2 (G-51): a sale never draws a trade sample lot, even
       // when it shares the product key (WAC 314-55-096(1)(i)).
       .eq("is_sample", false)

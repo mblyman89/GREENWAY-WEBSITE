@@ -64,7 +64,7 @@ import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import {
   reconcileRegisterAvailability,
   toQty,
-  SELLABLE_LOT_STATUS,
+  isRegisterSellableLotStatus,
   type LiveLotFact,
   type SnapshotCard,
 } from "@/lib/pos/register-availability-core";
@@ -308,10 +308,17 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     let units = 0;
     for (const k of new Set(keys.map((x) => x.trim()))) {
       for (const l of lotsByKey.get(k) ?? []) {
-        if ((l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS) units += Math.max(0, toQty(l.onHandQty));
+        if (isRegisterSellableLotStatus(l.status)) units += Math.max(0, toQty(l.onHandQty));
       }
     }
     return units;
+  };
+  // register-sell-sold-out-stock: a lot Active OR Sold out, any quantity.
+  const hasSellableLot = (keys: readonly string[]): boolean => {
+    for (const k of new Set(keys.map((x) => x.trim()))) {
+      for (const l of lotsByKey.get(k) ?? []) if (isRegisterSellableLotStatus(l.status)) return true;
+    }
+    return false;
   };
   const registerOnly = new Set<string>();
   const snapshotCards: SnapshotCard[] = menu.map((item) => {
@@ -330,7 +337,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         posInventoryCategory: item.posInventoryCategory ?? null,
         variantPrices: item.variants.length > 0 ? item.variants.map((v) => v.priceMinorUnits) : [item.priceMinorUnits],
       });
-      registerEligible = cls.kind === "register_eligible" && liveActiveUnits(lotKeys) > 0;
+      // register-sell-sold-out-stock: a hidden card with a lot the register
+      // may ring (Active or Sold out) sells even when the count says 0.
+      registerEligible = cls.kind === "register_eligible" && (liveActiveUnits(lotKeys) > 0 || hasSellableLot(lotKeys));
       if (registerEligible) registerOnly.add(item.id);
     }
     return {
@@ -571,7 +580,11 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     const sources: LotBarcodeSource[] = liveLots
       .filter(
         (l) =>
-          (l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS && toQty(l.onHandQty) > 0,
+          // register-sell-sold-out-stock: every Active or Sold out lot's
+          // barcode scans, even at a 0 count (the package is in the
+          // cashier's hand; the stock refusal offers "Sell anyway").
+          // Quarantine / recalled / destroyed stay out.
+          isRegisterSellableLotStatus(l.status),
       )
       .map((l) => ({
         lotCode: l.lotCode ?? null,
@@ -585,8 +598,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       // delisted card's barcode stays "not found", never a size message.
       .filter(
         (l) =>
-          (l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS &&
-          toQty(l.onHandQty) > 0 &&
+          isRegisterSellableLotStatus(l.status) &&
           sellableKeys.has(l.posProductKey ?? ""),
       )
       .map((l) => ({

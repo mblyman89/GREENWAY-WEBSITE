@@ -208,7 +208,7 @@ describe("the wire itself — reachability, which nothing pure can see", () => {
     expect(svc).toContain("readSaleLots(");
     expect(read("src/lib/inventory/sale-decrement.ts")).toContain("readSaleLots(");
     const lotRead = read("src/lib/inventory/sale-lot-read.ts");
-    expect(lotRead).toContain('.eq("status", "active")');
+    expect(lotRead).toContain('.in("status", ["active", "sold_out"])'); // register-sell-sold-out-stock
     expect(lotRead).toContain('.gt("on_hand_qty", 0)');
     expect(lotRead).toContain('.order("created_at", { ascending: true })');
   });

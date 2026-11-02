@@ -134,10 +134,14 @@ export function expiryKindFor(
   return "warn";
 }
 
-/** An Active, non-sample lot with sellable units whose expiry has passed. */
+/**
+ * An Active (or Sold out - register-sell-sold-out-stock: the register now
+ * rings Sold out lots too, so the expiry hold must see them) non-sample lot
+ * with sellable units whose expiry has passed.
+ */
 export function isSellableExpired(lot: ExpiryLot, today: string): boolean {
   return (
-    lot.status === "active" &&
+    (lot.status === "active" || lot.status === "sold_out") &&
     lot.isSample !== true &&
     Number.isFinite(lot.sellableQty) &&
     lot.sellableQty > 0 &&

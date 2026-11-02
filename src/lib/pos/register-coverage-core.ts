@@ -235,7 +235,9 @@ export function attributeLotsToVariants(
     if (!key || seenKeys.has(key)) continue;
     seenKeys.add(key);
     for (const lot of lotsByKey.get(key) ?? []) {
-      if (squash(lot.status).toLowerCase() !== "active") continue;
+      // register-sell-sold-out-stock: Sold out lots count like Active ones.
+      const st = squash(lot.status).toLowerCase();
+      if (st !== "active" && st !== "sold_out") continue;
       const units = qtyOf(lot.onHandQty);
       if (units <= 0) continue;
       const nm = squash(lot.productName);

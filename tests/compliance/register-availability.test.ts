@@ -313,9 +313,12 @@ describe("SLICE 16 — the owner's defect, end to end through the real route", (
     const ids = bundle.products.map((p) => p.productId);
 
     expect(ids).toContain("HAS-STOCK");
-    expect(ids).not.toContain("TRULY-EMPTY");
-    // And the empty product's barcode must NOT become scannable.
-    expect(bundle.barcodes["bbbb-2222"]).toBeUndefined();
+    // register-sell-sold-out-stock (owner: "I want to sell it anyways"): a
+    // zero COUNT is not proof of an empty shelf - the Oct-30 count import
+    // zeroed 465 lots that are still on the shelf. The card stays on the
+    // register and its barcode scans; the sale logs the shortfall.
+    expect(ids).toContain("TRULY-EMPTY");
+    expect(bundle.barcodes["bbbb-2222"]).toBe("TRULY-EMPTY");
   });
 });
 
@@ -365,8 +368,8 @@ describe("SLICE 16 — compliance gates are never widened", () => {
     expect(bundle.products).toHaveLength(1);
   });
 
-  it("does not treat quarantined, recalled, destroyed or sold_out lots as stock", async () => {
-    for (const status of ["quarantine", "recalled", "destroyed", "sold_out"]) {
+  it("does not treat quarantined, recalled or destroyed lots as stock", async () => {
+    for (const status of ["quarantine", "recalled", "destroyed"]) {
       menuItems = [item()];
       lotRows = [lotRow({ status })];
 
@@ -376,9 +379,33 @@ describe("SLICE 16 — compliance gates are never widened", () => {
     }
   });
 
-  it("does not resurrect a card from a lot with no units on hand", async () => {
+  it("register-sell-sold-out-stock: keeps a card whose Active/Sold out lot counts 0 (sell anyway) and its barcode scans", async () => {
+    for (const status of ["active", "sold_out"]) {
+      menuItems = [item()];
+      lotRows = [lotRow({ status, on_hand_qty: 0 })];
+
+      const bundle = await getBundle();
+
+      expect(bundle.products, `zero-count ${status} lot keeps the card`).toHaveLength(1);
+      expect(bundle.barcodes["lotcode-1111"], `zero-count ${status} lot barcode scans`).toBe("KEY-A");
+      // No fake "0 left": the count is unknown, so the scan adds straight away.
+      expect(bundle.products[0].unitsLeft).toBeNull();
+    }
+  });
+
+  it("register-sell-sold-out-stock: a Sold out lot that still holds units sells", async () => {
     menuItems = [item()];
-    lotRows = [lotRow({ on_hand_qty: 0 })];
+    lotRows = [lotRow({ status: "sold_out", on_hand_qty: 3 })];
+
+    const bundle = await getBundle();
+
+    expect(bundle.products).toHaveLength(1);
+    expect(bundle.barcodes["lotcode-1111"]).toBe("KEY-A");
+  });
+
+  it("register-sell-sold-out-stock: a zero-count quarantined lot stays off", async () => {
+    menuItems = [item()];
+    lotRows = [lotRow({ status: "quarantine", on_hand_qty: 0 })];
 
     const bundle = await getBundle();
 
@@ -528,8 +555,11 @@ describe("SLICE 16 — the pure core's own guarantees", () => {
   });
 
   it("distinguishes 'no stock' from 'no evidence' — they are not the same fact", () => {
-    const noStock = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ onHandQty: 0 })] });
+    const noStock = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "quarantine", onHandQty: 0 })] });
     expect(noStock.cards[0].reason).toBe("no_live_stock");
+    // register-sell-sold-out-stock: a zero-count Active lot is sold anyway.
+    const zero = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ onHandQty: 0 })] });
+    expect(zero.cards[0].reason).toBe("sell_anyway_zero_count");
 
     const noEvidence = reconcileRegisterAvailability({ cards: [card()], lots: [] });
     expect(noEvidence.cards[0].reason).toBe("no_lot_evidence");
