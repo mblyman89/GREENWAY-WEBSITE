@@ -57,7 +57,8 @@ export async function readExpiredActiveLots(today: string): Promise<ExpiredLotRe
       admin
         .from("inventory_lots")
         .select(withHeld ? `${COLS}, held_qty` : COLS)
-        .eq("status", "active")
+        // register-sell-sold-out-stock: Sold out lots are register-sellable now.
+        .in("status", ["active", "sold_out"])
         .lt("expires_on", today)
         .order("id", { ascending: true })
         .range(from, to);

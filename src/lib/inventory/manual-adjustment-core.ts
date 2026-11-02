@@ -194,9 +194,21 @@ export function wantsAutoSoldOut(currentStatus: string, qtyDelta: number): boole
   return currentStatus === "active" && qtyDelta < 0;
 }
 
+/**
+ * register-sell-sold-out-stock - the owner counted 3 Buddies Black Haze back
+ * onto a Sold out lot and it STAYED Sold out, so the register would not ring
+ * it. Sold out is a count outcome, not a hold: when a person adds units to a
+ * Sold out lot, it goes back to Active (apply_lot_delta's own sold_out ->
+ * active direction). Quarantine / Recalled / Destroyed never change here.
+ */
+export function wantsRestockToActive(currentStatus: string, qtyDelta: number): boolean {
+  return currentStatus === "sold_out" && qtyDelta > 0;
+}
+
 /** The status the pre-0129 fallback writes (Active at zero -> Sold out; anything else unchanged). */
 export function fallbackStatusAfter(currentStatus: string, nextQty: number, autoSoldOut: boolean): string {
   if (autoSoldOut && nextQty <= 0 && currentStatus === "active") return "sold_out";
+  if (autoSoldOut && nextQty > 0 && currentStatus === "sold_out") return "active";
   return currentStatus;
 }
 
@@ -267,7 +279,9 @@ export function __runManualAdjustmentCoreTests(): { passed: number; failed: numb
   ok(codes(evaluateManualAdjustment({ ...base, reason: "damage", note: "x".repeat(251) })).includes("note_too_long"), "note over 250 refused");
   ok(codes(evaluateManualAdjustment({ ...base, reason: "bogus" })).includes("invalid_reason"), "unknown reason refused");
   ok(wantsAutoSoldOut("active", -1) && !wantsAutoSoldOut("sold_out", -1) && !wantsAutoSoldOut("sold_out", 3) && !wantsAutoSoldOut("active", 2), "auto flip only when removing from Active");
-  ok(fallbackStatusAfter("active", 0, true) === "sold_out" && fallbackStatusAfter("sold_out", 2, false) === "sold_out" && fallbackStatusAfter("recalled", 0, false) === "recalled", "fallback never restocks to Active");
+  ok(fallbackStatusAfter("active", 0, true) === "sold_out" && fallbackStatusAfter("sold_out", 2, false) === "sold_out" && fallbackStatusAfter("recalled", 0, false) === "recalled", "fallback without the flag never restocks to Active");
+  ok(wantsRestockToActive("sold_out", 3) && !wantsRestockToActive("quarantine", 3) && !wantsRestockToActive("recalled", 3) && !wantsRestockToActive("sold_out", -1), "a count added to a Sold out lot (only) goes back to Active");
+  ok(fallbackStatusAfter("sold_out", 3, true) === "active" && fallbackStatusAfter("quarantine", 3, true) === "quarantine", "fallback restocks Sold out -> Active only");
   ok(adjustmentActorName(null, new Map()) === "System" && adjustmentActorName("u1", new Map()) === "Unknown", "never guess a name");
   ok(adjustmentReasonLabel("destruction").includes("retired") && adjustmentReasonLabel("theft") === "Theft", "history labels");
   return { passed, failed };

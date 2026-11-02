@@ -208,11 +208,22 @@ describe("importer-hidden back-office stock is sellable at the register", () => 
     expect(bundle.products.map((p) => p.productId)).toEqual(["KEY-A"]);
   });
 
-  it("does NOT serve an importer-hidden card without live active stock", async () => {
+  it("does NOT serve an importer-hidden card whose only lots are quarantined/recalled/destroyed", async () => {
     menuItems = [importerHidden({ inventoryStatus: "in-stock" })];
-    lotRows = [lotRow({ on_hand_qty: 0 }), lotRow({ id: "lot-2", status: "quarantine", on_hand_qty: 50 })];
+    lotRows = [
+      lotRow({ status: "quarantine", on_hand_qty: 50 }),
+      lotRow({ id: "lot-2", status: "recalled", on_hand_qty: 5 }),
+      lotRow({ id: "lot-3", status: "destroyed", on_hand_qty: 0 }),
+    ];
     const bundle = await getBundle();
     expect(bundle.products).toEqual([]);
+  });
+
+  it("register-sell-sold-out-stock: serves a hidden card whose lot is Sold out at a 0 count", async () => {
+    menuItems = [importerHidden({ inventoryStatus: "unavailable" })];
+    lotRows = [lotRow({ status: "sold_out", on_hand_qty: 0 })];
+    const bundle = await getBundle();
+    expect(bundle.products.map((p) => p.productId)).toEqual(["KEY-A"]);
   });
 
   it("sells EVERY hidden card with live stock - person hides and category holds included (owner: no exceptions)", async () => {
@@ -283,7 +294,9 @@ describe("importer-hidden back-office stock is sellable at the register", () => 
     menuItems = [importerHidden()];
     lotRows = [lotRow({ on_hand_qty: 4, held_qty: 4 })];
     const bundle = await getBundle();
-    expect(bundle.products).toEqual([]);
+    // register-sell-sold-out-stock: the card stays (sell anyway) but the 4
+    // held units are never shown or counted as register stock.
+    for (const p of bundle.products as unknown as PosMenuProduct[]) expect(p.unitsLeft ?? 0).toBe(0);
   });
 });
 

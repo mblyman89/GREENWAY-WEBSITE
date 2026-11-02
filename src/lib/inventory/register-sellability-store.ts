@@ -48,7 +48,7 @@ import {
   toQty,
   statusForUnits,
   normalizeKey,
-  SELLABLE_LOT_STATUS,
+  isRegisterSellableLotStatus,
   type LiveLotFact,
   type LotDiagnosis,
   type SellabilitySummary,
@@ -298,7 +298,7 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
     const facts: LiveLotFact[] = rows
       .filter(
         (r) =>
-          (r.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS &&
+          isRegisterSellableLotStatus(r.status) &&
           sellableQty(toQty(r.on_hand_qty), r.held_qty) > 0,
       )
       .map((r) => ({

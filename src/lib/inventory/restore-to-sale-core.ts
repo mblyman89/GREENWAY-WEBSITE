@@ -45,7 +45,7 @@
  *
  * No React, no DB, no `server-only` — safe for the tsx self-test harness.
  */
-import { statusForUnits, toQty, SELLABLE_LOT_STATUS, type InventoryStatusSlug } from "@/lib/pos/register-availability-core";
+import { statusForUnits, toQty, isRegisterSellableLotStatus, type InventoryStatusSlug } from "@/lib/pos/register-availability-core";
 
 // ---------------------------------------------------------------------------
 // Inputs
@@ -94,7 +94,7 @@ export type RestoreDecision =
 export function sellableUnits(lots: readonly RestoreLotFact[]): number {
   let total = 0;
   for (const lot of lots) {
-    if ((lot.status ?? "").trim().toLowerCase() !== SELLABLE_LOT_STATUS) continue;
+    if (!isRegisterSellableLotStatus(lot.status)) continue;
     total += toQty(lot.onHandQty);
   }
   return total;

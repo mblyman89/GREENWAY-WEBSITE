@@ -35,6 +35,7 @@ import {
   RETIRED_ADJUSTMENT_REASONS,
   LOT_ADJUSTED_AUDIT_ACTION,
   wantsAutoSoldOut,
+  wantsRestockToActive,
   fallbackStatusAfter,
 } from "@/lib/inventory/manual-adjustment-core";
 import type { LotGateFacts } from "@/lib/inventory/lot-activation-gate-core";
@@ -679,7 +680,9 @@ export async function createAdjustment(
   if (insErr || !adj) return { ok: false, error: insErr?.message ?? "Could not record the adjustment." };
   const adjustmentId = (adj as { id: string }).id;
 
-  const autoSoldOut = wantsAutoSoldOut(status, delta);
+  // register-sell-sold-out-stock: Active -> Sold out at 0 (removal) AND
+  // Sold out -> Active when a count adds units back (so the register sells it).
+  const autoSoldOut = wantsAutoSoldOut(status, delta) || wantsRestockToActive(status, delta);
   const written = await applyLotDelta(admin, {
     lotId: input.lotId,
     delta,

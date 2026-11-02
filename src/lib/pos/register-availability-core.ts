@@ -129,6 +129,31 @@
 /** The only lot lifecycle value whose stock may be sold (migration 0023). */
 export const SELLABLE_LOT_STATUS = "active";
 
+/**
+ * register-sell-sold-out-stock - the owner, verbatim: "The register needs to
+ * stop rejecting it and allow it ... These items are not in active status
+ * even though the detail page shows them as active. I need to sell these
+ * products right now."
+ *
+ * The Oct-30 Cultivera count import (R50) wrote 465 lots down to 0 and the
+ * database flipped them `sold_out`, while the packages are still on the
+ * shelf. `sold_out` is a COUNT outcome, not a compliance hold: nobody took
+ * the product off the floor. So the register now treats `active` AND
+ * `sold_out` lots as the product's sellable lots. A `sold_out` / zero-count
+ * lot keeps its card and its barcode on the register; the count is shown as
+ * unknown so the cashier can ring it, and the sale's stock draw records the
+ * shortfall for the oversold report (it never invents units).
+ *
+ * Still NEVER sellable: `quarantine` (CCRS: not received / held), `recalled`
+ * (WAC 314-55-215), `destroyed` (reported to CCRS), trade samples, held units.
+ */
+export const REGISTER_SELLABLE_LOT_STATUSES: ReadonlySet<string> = new Set(["active", "sold_out"]);
+
+/** True when a lot's status lets the register ring it up (active or sold_out). */
+export function isRegisterSellableLotStatus(status: string | null | undefined): boolean {
+  return REGISTER_SELLABLE_LOT_STATUSES.has((status ?? "").trim().toLowerCase());
+}
+
 /** Inventory status vocabulary shared with the menu pipeline. */
 export type InventoryStatusSlug = "in-stock" | "low-stock" | "unavailable";
 
@@ -202,6 +227,8 @@ export type AvailabilityReasonCode =
   | "restored_from_live_stock"
   /** Snapshot said unavailable and no live active lot holds stock. */
   | "no_live_stock"
+  /** register-sell-sold-out-stock: an Active/Sold out lot exists but counts 0 - sold anyway. */
+  | "sell_anyway_zero_count"
   /** Snapshot said unavailable and this card has no lot rows to judge by. */
   | "no_lot_evidence"
   /** AN-7 recall hold — never overridden. */
@@ -260,7 +287,7 @@ export function indexLiveStock(lots: readonly LiveLotFact[]): Map<string, number
   for (const lot of lots) {
     const key = normalizeKey(lot.posProductKey);
     if (!key) continue;
-    if ((lot.status ?? "").trim().toLowerCase() !== SELLABLE_LOT_STATUS) continue;
+    if (!isRegisterSellableLotStatus(lot.status)) continue;
     const qty = toQty(lot.onHandQty);
     if (qty <= 0) continue;
     byKey.set(key, (byKey.get(key) ?? 0) + qty);
@@ -279,6 +306,21 @@ export function keysWithAnyLot(lots: readonly LiveLotFact[]): Set<string> {
   for (const lot of lots) {
     const key = normalizeKey(lot.posProductKey);
     if (key) seen.add(key);
+  }
+  return seen;
+}
+
+/**
+ * register-sell-sold-out-stock: every key with at least one lot the register
+ * may ring up (active or sold_out), REGARDLESS of quantity. A zero count is
+ * not proof the shelf is empty (the owner is holding the package), so such a
+ * card stays on the register with an unknown count.
+ */
+export function keysWithSellableLot(lots: readonly LiveLotFact[]): Set<string> {
+  const seen = new Set<string>();
+  for (const lot of lots) {
+    const key = normalizeKey(lot.posProductKey);
+    if (key && isRegisterSellableLotStatus(lot.status)) seen.add(key);
   }
   return seen;
 }
@@ -330,6 +372,7 @@ export function reconcileRegisterAvailability(inputs: {
 }): ReconcileResult {
   const stockByKey = indexLiveStock(inputs.lots);
   const withLots = keysWithAnyLot(inputs.lots);
+  const withSellableLot = keysWithSellableLot(inputs.lots);
 
   const cards: CardAvailability[] = [];
   let restoredCount = 0;
@@ -401,6 +444,25 @@ export function reconcileRegisterAvailability(inputs: {
       continue;
     }
 
+    if (cardHasAnyLot(card, withSellableLot)) {
+      // register-sell-sold-out-stock: the lot is Active or Sold out but its
+      // count says 0 (e.g. the Oct-30 count import zeroed it while the
+      // package is on the shelf). The owner: "I want to sell it anyways."
+      // Served with an UNKNOWN count; the sale records the shortfall.
+      restoredCount += 1;
+      cards.push({
+        productId: card.productId,
+        sellable: true,
+        restored: true,
+        reason: "sell_anyway_zero_count",
+        liveUnits: 0,
+        liveStatus: "low-stock",
+        message:
+          "On the register even though the back office count is 0 (lot Active or Sold out). Ring it up; the sale is logged as a shortfall so the count can be corrected.",
+      });
+      continue;
+    }
+
     if (!cardHasAnyLot(card, withLots)) {
       // No lot rows exist for this product at all (merch, non-cannabis, or an
       // import-only card). We have no evidence either way, so we leave the
@@ -426,7 +488,7 @@ export function reconcileRegisterAvailability(inputs: {
       liveUnits: 0,
       liveStatus: "unavailable",
       message:
-        "No sellable stock: every lot for this product is empty, or is quarantined, recalled, destroyed or sold out.",
+        "Not sellable: every lot for this product is quarantined, recalled or destroyed.",
     });
   }
 
@@ -502,7 +564,7 @@ export function diagnoseLot(
   }
 
   const status = (lot.status ?? "").trim().toLowerCase();
-  if (status !== SELLABLE_LOT_STATUS) {
+  if (!isRegisterSellableLotStatus(status)) {
     return {
       lotId: lot.id,
       label,
@@ -759,7 +821,7 @@ export function __runRegisterAvailabilityCoreTests(): void {
   }
 
   // ── Non-active / empty lots are not stock ───────────────────────────────
-  for (const status of ["quarantine", "recalled", "destroyed", "sold_out", "", null]) {
+  for (const status of ["quarantine", "recalled", "destroyed", "", null]) {
     const r = reconcileRegisterAvailability({
       cards: [card()],
       lots: [lot({ status })],
@@ -768,9 +830,24 @@ export function __runRegisterAvailabilityCoreTests(): void {
     ok(r.cards[0].reason === "no_live_stock", `lot status ${status ?? "null"} -> no_live_stock`);
   }
   {
-    const r = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ onHandQty: 0 })] });
-    ok(!r.cards[0].sellable, "empty active lot is not stock");
-    ok(r.cards[0].reason === "no_live_stock", "empty lot -> no_live_stock, we looked");
+    // register-sell-sold-out-stock: a Sold out lot that holds units is stock.
+    const r = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "sold_out", onHandQty: 3 })] });
+    ok(r.cards[0].sellable && r.cards[0].reason === "restored_from_live_stock", "sold_out lot with units is sellable");
+    ok(r.cards[0].liveUnits === 3, "sold_out units counted");
+  }
+  {
+    // register-sell-sold-out-stock: a zero count on an Active or Sold out lot
+    // keeps the card on the register (unknown count; sell anyway).
+    for (const status of ["active", "sold_out"]) {
+      const r = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status, onHandQty: 0 })] });
+      ok(r.cards[0].sellable, `zero-count ${status} lot still sells`);
+      ok(r.cards[0].reason === "sell_anyway_zero_count", `zero-count ${status} -> sell_anyway_zero_count`);
+    }
+    const q = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "quarantine", onHandQty: 0 })] });
+    ok(!q.cards[0].sellable, "zero-count quarantine lot stays off");
+    const rec = reconcileRegisterAvailability({ cards: [card({ recalled: true })], lots: [lot({ status: "sold_out", onHandQty: 0 })] });
+    ok(!rec.cards[0].sellable && rec.cards[0].reason === "recall_hold", "recall still beats a sold_out lot");
+    ok(isRegisterSellableLotStatus(" Sold_Out ") && !isRegisterSellableLotStatus("quarantine"), "status helper");
   }
   {
     // Status is compared case-insensitively and whitespace-tolerantly.
