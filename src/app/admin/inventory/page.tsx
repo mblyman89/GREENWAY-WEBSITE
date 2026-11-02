@@ -457,6 +457,10 @@ export default async function InventoryPage({
         breadcrumbs={<Breadcrumbs items={[{ label: "Inventory" }]} />}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {/* register-sell-everything-fix-later: lots the register sells anyway, to fix properly. */}
+            <Button href="/admin/inventory/fix-later" variant="neutral" size="sm" data-testid="inventory-fix-later-button">
+              Fix later
+            </Button>
             {/* R34: owner expiration rules (best-by dates for lots with no manufacturer date). */}
             <Button href="/admin/inventory/expiration-rules" variant="neutral" size="sm">
               Expiration rules

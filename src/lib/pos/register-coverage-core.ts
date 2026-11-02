@@ -236,8 +236,9 @@ export function attributeLotsToVariants(
     seenKeys.add(key);
     for (const lot of lotsByKey.get(key) ?? []) {
       // register-sell-sold-out-stock: Sold out lots count like Active ones.
+      // register-sell-everything-fix-later: so do Quarantine lots.
       const st = squash(lot.status).toLowerCase();
-      if (st !== "active" && st !== "sold_out") continue;
+      if (st !== "active" && st !== "sold_out" && st !== "quarantine") continue;
       const units = qtyOf(lot.onHandQty);
       if (units <= 0) continue;
       const nm = squash(lot.productName);
@@ -403,8 +404,8 @@ export function __runRegisterCoverageCoreTests(): { passed: number; failed: numb
     ok(variantUnitsLeft(a, "LOT-B-onboarded", 6) === null, "counters disagree -> unknown");
   }
   {
-    const a = attributeLotsToVariants(["K"], [{ id: "K-x" }], lotsByProductKey([L({ status: "quarantine" }), L({ onHandQty: 0 }), L({ status: " Active ", onHandQty: "2.6" })]));
-    ok(a.byVariant.get("K-x") === 2.6 && variantUnitsLeft(a, "K-x", null) === 2, "only active stocked lots count; whole units");
+    const a = attributeLotsToVariants(["K"], [{ id: "K-x" }], lotsByProductKey([L({ status: "recalled" }), L({ onHandQty: 0 }), L({ status: " Active ", onHandQty: "2.6" })]));
+    ok(a.byVariant.get("K-x") === 2.6 && variantUnitsLeft(a, "K-x", null) === 2, "only sellable stocked lots count; whole units");
   }
   {
     const a = attributeLotsToVariants(["K", "K"], [{ id: "K-x" }], lotsByProductKey([L()]));

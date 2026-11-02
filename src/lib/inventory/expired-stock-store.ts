@@ -58,7 +58,9 @@ export async function readExpiredActiveLots(today: string): Promise<ExpiredLotRe
         .from("inventory_lots")
         .select(withHeld ? `${COLS}, held_qty` : COLS)
         // register-sell-sold-out-stock: Sold out lots are register-sellable now.
-        .in("status", ["active", "sold_out"])
+        // register-sell-everything-fix-later: so are Quarantine lots, so an
+        // expired edible in Quarantine is blocked exactly like an Active one.
+        .in("status", ["active", "sold_out", "quarantine"])
         .lt("expires_on", today)
         .order("id", { ascending: true })
         .range(from, to);

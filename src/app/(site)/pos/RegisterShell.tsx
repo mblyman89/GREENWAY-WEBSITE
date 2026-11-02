@@ -32,7 +32,7 @@ import {
 } from "@/lib/pos/register-client-core";
 import type { PosSyncAck } from "@/lib/pos/sync-core";
 import type { PosEventType } from "@/lib/pos/sale-event-core";
-import type { PosCartEntry, PosMenuBundle } from "@/lib/pos/sale-flow-core";
+import type { PosCartEntry, PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import {
   buildNoSaleSlipHtml,
   buildPosReceiptHtml,
@@ -67,6 +67,8 @@ import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
 import { floatCheck, splitTipPool, tipPoolSentence, DEFAULT_TIP_POOL_PEOPLE, MAX_TIP_POOL_PEOPLE } from "@/lib/registers/shift-end-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
+// register-sell-everything-fix-later: a Fix & sell line joins the cached menu.
+import { addFixLaterProduct } from "@/lib/pos/register-fix-later-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import {
   MEDICAL_TESTMODE_KEY,
@@ -1668,6 +1670,47 @@ export function RegisterShell({
               return next;
             });
             return { ok: true as const };
+          } catch {
+            return { ok: false as const, error: "Could not reach the server — try again." };
+          }
+        }}
+        onFixAndSell={async (code) => {
+          // register-sell-everything-fix-later — the owner: "let the system
+          // fix it for me so it can be sold, then set that item aside so I
+          // can fix it properly". ONLINE-ONLY: the server reads the lot,
+          // refuses only a recall / failed lab / destruction / expired
+          // edible, and lists the lot on the back office Fix later page.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — Fix & sell needs a connection (it reads the lot from the back office)." };
+          }
+          try {
+            const res = await posFetch("/api/pos/fix-and-sell", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify({ code, employeeName: employee?.fullName ?? "" }),
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { fixed?: boolean; product?: PosMenuProduct; message?: string; error?: string }
+              | null;
+            if (!res.ok || !body?.fixed || !body.product) {
+              return { ok: false as const, error: body?.error ?? "Could not fix that package — try again." };
+            }
+            const product = body.product;
+            setMenuBundle((prev) => {
+              if (!prev) return prev;
+              const next = addFixLaterProduct(prev, product, code);
+              try {
+                posStorageSet(LS_MENU, JSON.stringify(next));
+              } catch {
+                // Cache write failure is non-fatal — the in-memory bundle still works.
+              }
+              return next;
+            });
+            return { ok: true as const, product, message: body.message ?? `Fixed: ${product.name}` };
           } catch {
             return { ok: false as const, error: "Could not reach the server — try again." };
           }

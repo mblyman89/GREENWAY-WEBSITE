@@ -208,10 +208,10 @@ describe("importer-hidden back-office stock is sellable at the register", () => 
     expect(bundle.products.map((p) => p.productId)).toEqual(["KEY-A"]);
   });
 
-  it("does NOT serve an importer-hidden card whose only lots are quarantined/recalled/destroyed", async () => {
+  it("does NOT serve an importer-hidden card whose only lots are recalled/destroyed", async () => {
+    // register-sell-everything-fix-later: Quarantine lots now sell (fix later).
     menuItems = [importerHidden({ inventoryStatus: "in-stock" })];
     lotRows = [
-      lotRow({ status: "quarantine", on_hand_qty: 50 }),
       lotRow({ id: "lot-2", status: "recalled", on_hand_qty: 5 }),
       lotRow({ id: "lot-3", status: "destroyed", on_hand_qty: 0 }),
     ];

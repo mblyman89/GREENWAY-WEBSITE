@@ -17,8 +17,8 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 describe("register-sell-sold-out-stock", () => {
   it("Active and Sold out lots are register-sellable; holds are not", () => {
-    for (const s of ["active", "sold_out", " SOLD_OUT "]) expect(isRegisterSellableLotStatus(s)).toBe(true);
-    for (const s of ["quarantine", "recalled", "destroyed", "", null]) expect(isRegisterSellableLotStatus(s)).toBe(false);
+    for (const s of ["active", "sold_out", " SOLD_OUT ", "quarantine"]) expect(isRegisterSellableLotStatus(s)).toBe(true);
+    for (const s of ["scheduled_destruction", "recalled", "destroyed", "", null]) expect(isRegisterSellableLotStatus(s)).toBe(false);
   });
 
   it("a card whose only lot is Sold out at 0 stays on the register", () => {
@@ -28,7 +28,9 @@ describe("register-sell-sold-out-stock", () => {
     });
     expect(r.cards[0].sellable).toBe(true);
     expect(r.cards[0].reason).toBe("sell_anyway_zero_count");
-    expect(keysWithSellableLot([{ id: "l", posProductKey: "K", status: "quarantine", onHandQty: 5 }]).size).toBe(0);
+    expect(keysWithSellableLot([{ id: "l", posProductKey: "K", status: "recalled", onHandQty: 5 }]).size).toBe(0);
+    // register-sell-everything-fix-later: Quarantine is sellable (fix later).
+    expect(keysWithSellableLot([{ id: "l", posProductKey: "K", status: "quarantine", onHandQty: 5 }]).size).toBe(1);
   });
 
   it("a count added to a Sold out lot puts it back to Active (Black Haze +3 stayed Sold out)", () => {
@@ -46,7 +48,8 @@ describe("register-sell-sold-out-stock", () => {
     expect(route).not.toMatch(/=== SELLABLE_LOT_STATUS/);
     expect(route).toContain("isRegisterSellableLotStatus(l.status)");
     const saleRead = read("src/lib/inventory/sale-lot-read.ts");
-    expect(saleRead).toContain('.in("status", ["active", "sold_out"])');
+    // register-sell-everything-fix-later widened the draw to Quarantine too.
+    expect(saleRead).toContain('SALE_DRAW_LOT_STATUSES = ["active", "sold_out", "quarantine"] as const');
     expect(saleRead).toContain('.eq("is_sample", false)');
   });
 });

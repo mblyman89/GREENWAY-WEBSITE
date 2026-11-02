@@ -28,6 +28,13 @@ import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-stor
 // Fix Phase 1.4 (G-44): held units (customer-return Destroy) are never drawn.
 import { isMissingHeldQtyColumnError, toHeldNumber } from "@/lib/inventory/held-stock-core";
 
+/**
+ * register-sell-everything-fix-later - the lot statuses a sale draws from:
+ * Active, Sold out (a stale count) and Quarantine (sold now, fixed later).
+ * Recalled and Destroyed are never drawn.
+ */
+export const SALE_DRAW_LOT_STATUSES = ["active", "sold_out", "quarantine"] as const;
+
 export type SaleLotRow = {
   id: string;
   pos_product_key: string | null;
@@ -59,7 +66,11 @@ export async function readSaleLots(
       // register-sell-sold-out-stock: a lot the Oct-30 count zeroed is
       // flipped back to Active by apply_lot_delta when units return; a
       // Sold out lot that still holds units is drawn like an Active one.
-      .in("status", ["active", "sold_out"])
+      // register-sell-everything-fix-later: the owner, "Everything must
+      // sell. No exceptions." A lot still in Quarantine from intake (no COA,
+      // manifest not finalized) is on the shelf and sells; it is on the
+      // back office Fix later list. Recalled / destroyed are never drawn.
+      .in("status", [...SALE_DRAW_LOT_STATUSES])
       // Fix Phase 0.2 (G-51): a sale never draws a trade sample lot, even
       // when it shares the product key (WAC 314-55-096(1)(i)).
       .eq("is_sample", false)

@@ -803,6 +803,7 @@ import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilie
 // SLICE 16 — full back-office inventory sellable at the register.
 import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-availability-core";
 import { __runRegisterCoverageCoreTests } from "../../src/lib/pos/register-coverage-core";
+import { __runRegisterFixLaterCoreTests } from "../../src/lib/pos/register-fix-later-core";
 import { __runScanExactSizeCoreTests } from "../../src/lib/pos/scan-exact-size-core";
 import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
 import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
@@ -1968,7 +1969,7 @@ __runLiquidVolumeTests();
   assertRan("destruction-lot-status-core", __runDestructionLotStatusCoreTests(), 31); // Fix Phase 1.3: G-28 destruction keeps held lots held
   assertRan("inventory held-stock-core", __runInventoryHeldStockCoreTests(), 24); // Fix Phase 1.4: G-44 customer-return Destroy units are held, never sellable
   assertRan("vendor-return-core", __runVendorReturnCoreTests(), 59); // Fix Phase 1.5: G-42 vendor return reserves at logging, Manifest.CSV, on-hand off at departure
-  assertRan("expired-stock-core", __runExpiredStockCoreTests(), 37); // Fix Phase 1.6b: G-24 expired stock (D36, D44)
+  assertRan("expired-stock-core", __runExpiredStockCoreTests(), 38); // Fix Phase 1.6b: G-24 expired stock (D36, D44)
   assertRan("destruction-record-core", __runDestructionRecordCoreTests(), 28); // Fix Phase 1.6a: G-43 witness from roster, camera, Other approval, schedule qty, Pacific
   assertRan("recall-event-core", __runRecallEventCoreTests(), 68); // Fix Phase 1.6c: G-25 recall log, LCB deadlines, plan, website/online propagation
   assertRan("destruction-evidence-core", __runDestructionEvidenceCoreTests(), 36); // Fix Phase 1.7a: G-43 req 7 photo + video evidence (private bucket, bytes checked)
@@ -2703,6 +2704,7 @@ __runLiquidVolumeTests();
   assertRan("customer-search-core", __runCustomerSearchCoreTests(), 65); // G-75 (owner message 17): one shared customer search for the register and back office: partial first/last name in either order, phone digits, email, Customer ID; ranked best match first; typo search only when nothing matches; register hit shows phone last 4, last purchase, total spent (Greenway + old POS)
   assertRan("register-coverage-core", __runRegisterCoverageCoreTests(), 45); // register-sell-all-back-office-stock + register-sell-hidden-and-held-stock (owner: "its in the inventory list, it needs to scan on the registers, no exceptions"): EVERY hidden card (importer, person, needs-category) with live active lots, a cannabis category and a real price is rung up at the register (still off the website); only non-cannabis and unpriced cards stay off; per-size units left come from live lots
   assertRan("scan-exact-size-core", __runScanExactSizeCoreTests(), 32); // register-scan-exact-size (owner: "if I scan something, and it knows what it is I just scanned, that product alone needs to be added to the cart with out needing to select a variant size"): a package barcode adds ITS OWN size from the lot's 0294 size link, receiving variant or package weight; a proven size off the register is refused; no evidence keeps the pick (never guessed)
+  assertRan("register-fix-later-core", __runRegisterFixLaterCoreTests(), 60); // register-sell-everything-fix-later (owner: "Everything must sell. No exceptions. We will fix it all later."): Quarantine lots sell (except a scheduled destruction), a stocked lot with no menu product sells from the lot itself (name, size, category with Concentrate fallback, 2x cost price), Fix & sell builds the line from a scanned package code, only recall / failed lab / destruction / destroyed / sample / expired edible stop a sale
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

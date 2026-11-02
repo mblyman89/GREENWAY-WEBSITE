@@ -65,7 +65,7 @@ describe("G-24 core: which expired lots are hard-blocked (D36, D44)", () => {
   it("self-tests pass", () => {
     const r = __runExpiredStockCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(37);
+    expect(r.passed).toBe(38);
   });
 
   it.each([
@@ -110,11 +110,16 @@ describe("G-24 core: which expired lots are hard-blocked (D36, D44)", () => {
     expect(msg).toContain("D36, D44");
   });
 
-  it("a quarantined, sold-out or sample expired lot does not hold the product", () => {
-    for (const o of [{ status: "quarantine" }, { sellableQty: 0 }, { isSample: true }]) {
+  it("an empty or sample expired lot does not hold the product", () => {
+    for (const o of [{ sellableQty: 0 }, { isSample: true }]) {
       const idx = buildExpiredKeyIndex([lot({ inventoryType: "Solid Edible", ...o })], TODAY);
       expect(idx.blocked.size).toBe(0);
     }
+  });
+
+  it("register-sell-everything-fix-later: an expired Quarantine edible IS blocked (Quarantine sells now)", () => {
+    const idx = buildExpiredKeyIndex([lot({ inventoryType: "Solid Edible", status: "quarantine" })], TODAY);
+    expect(idx.blocked.size).toBe(1);
   });
 
   it("an expired flower lot asks for the warning, then records the note", () => {

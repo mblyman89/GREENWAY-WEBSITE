@@ -82,7 +82,8 @@ describe("R74 S31 C — the wiring", () => {
   it("decrement and cost replan share ONE lot read (same lots by construction)", () => {
     expect(dec).toContain("readSaleLots(admin, lotKeys)");
     expect(post).toContain("readSaleLots(admin, keys)");
-    expect(lotRead).toContain('.in("status", ["active", "sold_out"])'); // register-sell-sold-out-stock
+    expect(lotRead).toContain('.in("status", [...SALE_DRAW_LOT_STATUSES])'); // register-sell-everything-fix-later
+    expect(lotRead).toContain('SALE_DRAW_LOT_STATUSES = ["active", "sold_out", "quarantine"] as const');
     expect(lotRead).toContain('.gt("on_hand_qty", 0)');
     expect(lotRead).toContain('.order("created_at", { ascending: true })');
     expect(lotRead).toContain("menu_source_variant_id");

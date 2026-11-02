@@ -79,6 +79,15 @@ import {
   type CoverageLot,
 } from "@/lib/pos/register-coverage-core";
 import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
+// register-sell-everything-fix-later: every lot with stock sells. A stocked
+// lot no menu product sells gets a register-only line built from the lot
+// itself; a Quarantine lot sells unless a destruction is scheduled for it.
+import {
+  synthesizeLotRegisterProduct,
+  withDestructionHolds,
+  type FixLaterLot,
+} from "@/lib/pos/register-fix-later-core";
+import { OPEN_DESTRUCTION_STATUSES } from "@/lib/inventory/destruction-lot-status-core";
 
 /**
  * SLICE 5C — memory ceiling for the barcode-index lot scan. NOT a row cap:
@@ -89,6 +98,11 @@ const BARCODE_SCAN_MAX_ROWS = 100_000;
 /** Lot facts carried past LiveLotFact for the barcode + exact-size indexes. */
 type ExtraLotFacts = {
   ccrsExternalId: string | null;
+  /** register-sell-everything-fix-later: facts for a register-only lot line. */
+  unitCostMinor: number | null;
+  lotCategory: string | null;
+  inventoryType: string | null;
+  labResultId: string | null;
   sizeId: string | null;
   unitWeight: number | string | null;
   unitWeightUom: string | null;
@@ -223,12 +237,16 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         unit_weight: number | string | null;
         unit_weight_uom: string | null;
         is_medical: boolean | null;
+        unit_cost_minor_units: number | null;
+        category: string | null;
+        inventory_type: string | null;
+        lab_result_id: string | null;
       };
       // register-scan-exact-size: unit_weight / unit_weight_uom / is_medical
       // (migration 0024) let a scan prove a package's size when the lot has
       // no 0294 size link. Same table, same read; no new grant needed.
       const LOT_COLS =
-        "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, unit_weight, unit_weight_uom, is_medical, is_sample";
+        "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, unit_weight, unit_weight_uom, is_medical, unit_cost_minor_units, category, inventory_type, lab_result_id, is_sample";
       // Before migration 0308 there is no held_qty column: retry without it
       // (nothing is held then, so on hand is the register stock as before).
       let withHeld = true;
@@ -264,6 +282,22 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       if (!verdict.complete) {
         console.warn(`[pos/menu] inventory lot read may be incomplete — ${verdict.message}`);
       }
+      // register-sell-everything-fix-later: a Quarantine lot sells (fix
+      // later) EXCEPT when a destruction is scheduled for it: those are
+      // relabelled `scheduled_destruction` here so nothing downstream can
+      // ever ring them. A failed read of the destruction list refuses EVERY
+      // Quarantine lot (fail closed) rather than risk selling one.
+      const quarantineIds = rows.filter((r) => (r.status ?? "").trim().toLowerCase() === "quarantine").map((r) => r.id);
+      let destructionHeld = new Set<string>();
+      if (quarantineIds.length > 0) {
+        const { data: dRows, error: dErr } = await admin
+          .from("destruction_events")
+          .select("lot_id")
+          .in("status", [...OPEN_DESTRUCTION_STATUSES]);
+        destructionHeld = dErr
+          ? new Set(quarantineIds)
+          : new Set(((dRows as { lot_id: string | null }[] | null) ?? []).map((d) => d.lot_id ?? "").filter(Boolean));
+      }
       // Fix Phase 0.2 (G-51): trade samples never count as register stock
       // and never enter the barcode index (WAC 314-55-096(1)(i)).
       liveLots = withoutSampleLots(rows).map((l) => ({
@@ -282,7 +316,12 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         unitWeight: l.unit_weight ?? null,
         unitWeightUom: l.unit_weight_uom ?? null,
         isMedical: typeof l.is_medical === "boolean" ? l.is_medical : null,
+        unitCostMinor: typeof l.unit_cost_minor_units === "number" ? l.unit_cost_minor_units : null,
+        lotCategory: l.category ?? null,
+        inventoryType: l.inventory_type ?? null,
+        labResultId: l.lab_result_id ?? null,
       })) as (LiveLotFact & ExtraLotFacts)[];
+      liveLots = withDestructionHolds(liveLots as (LiveLotFact & ExtraLotFacts)[], destructionHeld);
     } catch {
       liveLots = [];
       liveLotsComplete = false;
@@ -542,6 +581,88 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // ═══ register-sell-everything-fix-later — LOTS WITH NO MENU PRODUCT ═══
+  //
+  // The owner: "Everything must sell. No exceptions. We will fix it all
+  // later. We need to sell everything we have stock of. No matter what."
+  // A stocked lot whose product key no published card sells (an intake that
+  // never reached Product Onboarding, a Cultivera lot with no COA held in
+  // Quarantine) still rings up: a register-only line is built from the lot
+  // (its name, size, category and a 2x-cost auto price) and its barcode is
+  // indexed below. The lot is listed on the back office Fix later page.
+  // Only a recall, a FAILED lab, a destruction hold, an expired edible or a
+  // trade sample keeps it off.
+  let fixLaterLines = 0;
+  if (liveLots.length > 0) {
+    const servedKeys = new Set(products.map((p) => p.productId));
+    for (const p of products) {
+      const k = lotKeyFromVariantId(p.variantId);
+      if (k) servedKeys.add(k);
+    }
+    // Only keys NO published card covers. A card that exists but is kept off
+    // (non-cannabis / unpriced hidden card, recalled size) keeps its own
+    // decision; synthesizing a line for it would sell what was refused.
+    for (const card of snapshotCards) for (const k of card.lotKeys) servedKeys.add(k.trim());
+    const candidates = new Map<string, (LiveLotFact & ExtraLotFacts)[]>();
+    for (const l of liveLots as (LiveLotFact & ExtraLotFacts)[]) {
+      const key = (l.posProductKey ?? "").trim();
+      if (!key || servedKeys.has(key)) continue;
+      if (!isRegisterSellableLotStatus(l.status) || toQty(l.onHandQty) <= 0) continue;
+      if (recalled.has(key) || expiredIdx.blocked.has(key)) continue;
+      const arr = candidates.get(key) ?? [];
+      arr.push(l);
+      candidates.set(key, arr);
+    }
+    // A FAILED lab result is a real stop (contaminated / over limits).
+    let failedLabs = new Set<string>();
+    const labIds = [...new Set([...candidates.values()].flat().map((l) => l.labResultId).filter((v): v is string => !!v))];
+    if (labIds.length > 0) {
+      try {
+        const { data: labRows } = await createSupabaseAdminClient()
+          .from("lab_results")
+          .select("id, passed")
+          .in("id", labIds);
+        failedLabs = new Set(
+          ((labRows as { id: string; passed: boolean | null }[] | null) ?? []).filter((r) => r.passed === false).map((r) => r.id),
+        );
+      } catch {
+        // A failed lab read leaves the lots selling; the completion gate and
+        // the Fix later page still show the lab state.
+      }
+    }
+    for (const [key, lots] of candidates) {
+      const sellable = lots.filter((l) => !(l.labResultId && failedLabs.has(l.labResultId)));
+      if (sellable.length === 0) continue;
+      const first = sellable[0];
+      const units = sellable.reduce((n, l) => n + Math.max(0, toQty(l.onHandQty)), 0);
+      const fact: FixLaterLot = {
+        id: first.id,
+        posProductKey: key,
+        lotCode: first.lotCode ?? null,
+        ccrsExternalId: first.ccrsExternalId,
+        productName: first.productName ?? null,
+        status: first.status,
+        onHandQty: units,
+        category: first.lotCategory,
+        inventoryType: first.inventoryType,
+        unitCostMinor: first.unitCostMinor,
+        unitWeight: first.unitWeight,
+        unitWeightUom: first.unitWeightUom,
+        hasMenuProduct: false,
+      };
+      const line = synthesizeLotRegisterProduct(fact);
+      if (!line) continue;
+      const warn = expiredIdx.warned.get(key);
+      products.push(warn ? { ...line, expiredSince: warn.expiresOn } : line);
+      fixLaterLines += 1;
+    }
+    if (fixLaterLines > 0) {
+      console.info(
+        `[pos/menu] ${fixLaterLines} stocked lot(s) with no menu product are on the register from the lot itself (Fix later list)`,
+      );
+    }
+  }
+
   // POS B23 — barcode index for keyboard-wedge scan-to-cart, built from the
   // SAME live lot read the availability reconciliation above used.
   //
@@ -583,7 +704,8 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
           // register-sell-sold-out-stock: every Active or Sold out lot's
           // barcode scans, even at a 0 count (the package is in the
           // cashier's hand; the stock refusal offers "Sell anyway").
-          // Quarantine / recalled / destroyed stay out.
+          // register-sell-everything-fix-later: Quarantine lots scan too;
+          // recalled / destroyed / destruction-held stay out.
           isRegisterSellableLotStatus(l.status),
       )
       .map((l) => ({
@@ -700,6 +822,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "x-pos-menu-products": String(products.length),
+    "x-pos-menu-fix-later": String(fixLaterLines),
   };
   if (acceptsGzip(req.headers.get("accept-encoding"))) {
     const body = gzipSync(Buffer.from(json, "utf8"));
