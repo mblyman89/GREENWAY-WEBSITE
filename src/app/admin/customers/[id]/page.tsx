@@ -522,9 +522,9 @@ export default async function CustomerDetailPage({
                         <Fact
                           label="Points balance"
                           value={`${ins.loyalty.balancePoints.toLocaleString("en-US")} pts`}
-                          hint={`Worth ${money(ins.loyalty.balanceValueMinor)}${ins.loyalty.canRedeem ? " — can redeem now" : ""}`}
+                          hint={ins.loyalty.rewardLine}
                         />
-                        <Fact label="Tier" value={ins.loyalty.tierName ?? "—"} hint={`${ins.loyalty.lifetimePoints.toLocaleString("en-US")} lifetime points`} />
+                        <Fact label="Badge" value={ins.loyalty.tierName ?? "—"} hint={`${ins.loyalty.lifetimePoints.toLocaleString("en-US")} lifetime points`} />
                         <Fact
                           label="Rewards used"
                           value={`${ins.loyalty.codesRedeemed} reward${ins.loyalty.codesRedeemed === 1 ? "" : "s"}`}

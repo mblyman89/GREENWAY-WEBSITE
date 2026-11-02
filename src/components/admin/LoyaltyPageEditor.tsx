@@ -14,8 +14,8 @@
  *   - R41 S5 (owner directive R41 Q9): the marketing-consent disclosure IS
  *     editable here, with a live wording checklist; only an empty paragraph
  *     is refused (client + server).
- *   - Every NUMBER on the program-terms card (points earned/redeemed, dollar
- *     value, member tiers) is LIVE from the register's loyalty settings and is
+ *   - Every NUMBER on the program-terms card (points earned, the fixed
+ *     rewards, member badge names) is LIVE from the register's loyalty settings and is
  *     NOT editable here — so the public page can never advertise terms that
  *     differ from what the register actually pays. A read-only snapshot of the
  *     live numbers is shown for reference, with a deep link to where they are
@@ -406,9 +406,8 @@ function LiveTermsPanel({ liveTerms }: { liveTerms: LoyaltyLiveTermsVM }) {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-xs font-black uppercase tracking-wide text-[var(--admin-text-muted)]">
-                <th className="px-3 py-2">Tier</th>
-                <th className="px-3 py-2">Lifetime points</th>
-                <th className="px-3 py-2">Perk</th>
+                <th className="px-3 py-2">Member badge</th>
+                <th className="px-3 py-2">Earned at</th>
               </tr>
             </thead>
             <tbody>
@@ -416,9 +415,6 @@ function LiveTermsPanel({ liveTerms }: { liveTerms: LoyaltyLiveTermsVM }) {
                 <tr key={t.name} className="border-b border-[var(--admin-border)] last:border-b-0">
                   <td className="px-3 py-2 font-black text-[var(--admin-text)]">{t.name}</td>
                   <td className="px-3 py-2 text-[var(--admin-text-muted)]">{t.thresholdLabel}</td>
-                  <td className="px-3 py-2 text-[var(--admin-text-muted)]">
-                    {t.perkLabel || "Member perks"}
-                  </td>
                 </tr>
               ))}
             </tbody>

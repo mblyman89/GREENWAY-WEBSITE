@@ -4,21 +4,23 @@
  * Loyalty redemption AT THE REGISTER. An authenticated DEVICE sends its
  * CURRENT priced cart lines and one of three actions:
  *
- *   "redeem-points" — the attached member spends points right now. The
- *     server sizes the redemption to what this cart can legally absorb
- *     (never more than the balance, never below the program minimum),
- *     ISSUES the code (points deducted, status='issued'), and returns the
- *     per-variant spread computed with the SAME pure spreadCodeValue +
- *     statutory/cost floors the back office uses (acquisition costs live
- *     server-side only — the device could never compute the floors).
+ *   "redeem-points" — D137 (owner 2026-11-02): the attached member uses ONE
+ *     reward: `rewardPoints` 150 (10% off) or 300 (25% off). Exactly those
+ *     points are deducted, never the whole balance. The percent comes off
+ *     each item's regular price; per item the customer gets the BETTER of
+ *     the day's deal or the reward (never both), every price stays at the
+ *     legal floor or above (acquisition costs live server-side only), items
+ *     on the never-discount list keep their price, and there is no dollar
+ *     cap. An older register app that sends no `rewardPoints` gets the best
+ *     reward the balance covers. Nothing is deducted when the reward would
+ *     save nothing.
  *
- *   "apply-code" — the customer brought an existing GW-XXXX-XXXX code
- *     (issued from their profile). Looked up but NOT claimed — the atomic
- *     claim (markRedemptionUsed) happens at sync against the materialized
- *     order, exactly like the back-office apply path. Value is never
- *     partially burned: a cart that can't absorb the full value refuses
- *     with the absorbable amount, same message discipline as the back
- *     office.
+ *   "apply-code" — the customer brought a GW-XXXX-XXXX reward code (issued
+ *     from their profile). Looked up but NOT claimed — the atomic claim
+ *     happens at sync against the materialized order, exactly like the
+ *     back-office apply path. The code's percent is applied with the same
+ *     rules. Codes from the retired $0.10-per-point program are refused
+ *     with instructions to cancel them (the points go back).
  *
  *   "release" — the register dropped the discount (cart changed, sale
  *     cancelled or saved). A code issued via "redeem-points" is cancelled
@@ -34,15 +36,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import {
-  adjustPoints,
+  cancelRedemption,
   getAccountByCustomer,
-  getConfig,
   issueRedemption,
   lookupRedeemableCode,
 } from "@/lib/loyalty/loyalty-store";
-import { canRedeem, pointsValueMinor } from "@/lib/loyalty/engine";
-import { spreadCodeValue, type LoyaltySaleLine } from "@/lib/loyalty/loyalty-sale-core";
+import { type LoyaltySaleLine } from "@/lib/loyalty/loyalty-sale-core";
+import {
+  LEGACY_CODE_MESSAGE,
+  applyRewardPricing,
+  chooseReward,
+  redemptionReward,
+  rewardShortLabel,
+} from "@/lib/loyalty/loyalty-reward-core";
 import { loadProductCosts } from "@/lib/promotions/discount-engine";
+import { listNeverDiscountKeys } from "@/lib/promotions/promotions-store";
+import { recordAudit } from "@/lib/auth/audit";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import { costForLine } from "@/lib/promotions/size-cost-core";
@@ -110,6 +119,15 @@ async function toSaleLines(lines: DeviceLine[]): Promise<LoyaltySaleLine[]> {
   }));
 }
 
+/** Device lines whose product is on the owner's never-discount list. */
+async function neverDiscountLineIds(lines: DeviceLine[]): Promise<Set<string>> {
+  const keys = new Set((await listNeverDiscountKeys()).map((k) => k.trim().toLowerCase()));
+  const out = new Set<string>();
+  if (keys.size === 0) return out;
+  for (const l of lines) if (keys.has(l.productId.trim().toLowerCase())) out.add(lineKey(l));
+  return out;
+}
+
 function spreadToPerVariant(spread: { lineId: string; loyaltyDiscountMinorUnits: number }[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const s of spread) {
@@ -143,26 +161,26 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     if (!redemptionId) {
       return NextResponse.json({ error: "redemptionId required." }, { status: 400 });
     }
+    // Only a code THIS register issued for a sale in progress may be
+    // cancelled here; a code the customer brought from their profile is
+    // never touched by release (it was never claimed).
     const admin = createSupabaseAdminClient();
+    const { data: own } = await admin
+      .from("loyalty_redemptions")
+      .select("id, channel")
+      .eq("id", redemptionId)
+      .maybeSingle<{ id: string; channel: string | null }>();
+    if (!own || (own.channel !== "register" && own.channel !== "both")) {
+      return NextResponse.json({ released: false, refundedPoints: 0 });
+    }
     // Conditional on still-'issued': a code that synced (claimed) or was
     // already cancelled is left alone — release is best-effort cleanup.
-    const { data: cancelled } = await admin
-      .from("loyalty_redemptions")
-      .update({ status: "cancelled" })
-      .eq("id", redemptionId)
-      .eq("status", "issued")
-      .select("id, account_id, points, code");
-    const row = (cancelled ?? [])[0] as
-      | { id: string; account_id: string; points: number; code: string }
-      | undefined;
-    if (!row) return NextResponse.json({ released: false, refundedPoints: 0 });
-    // Refund the points the issuance deducted.
-    await adjustPoints({
-      accountId: row.account_id,
-      points: row.points,
-      note: `Register released code ${row.code} before the sale completed — points refunded.`,
+    const res = await cancelRedemption({
+      redemptionId,
+      note: "Register removed the reward before the sale completed, points returned",
     });
-    return NextResponse.json({ released: true, refundedPoints: row.points });
+    if (!res.ok) return NextResponse.json({ released: false, refundedPoints: 0 });
+    return NextResponse.json({ released: true, refundedPoints: res.refundedPoints });
   }
 
   const lines = parseLines(body.lines);
@@ -182,22 +200,24 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         { status: 404 },
       );
     }
-    const spread = spreadCodeValue(saleLines, redemption.value_minor);
-    if (!spread.ok) {
-      const msg =
-        spread.reason === "no_capacity"
-          ? "This cart is already at the legal price floor (RCW 69.50.357 / acquisition cost) — the code cannot be applied. Add items first."
-          : `This cart can only absorb $${(spread.absorbableMinorUnits / 100).toFixed(2)} above the legal price floors, but the code is worth $${(redemption.value_minor / 100).toFixed(2)}. Add items first — value is never partially burned.`;
-      return NextResponse.json({ error: msg }, { status: 409 });
+    const reward = redemptionReward(redemption);
+    if (!reward) {
+      return NextResponse.json({ error: LEGACY_CODE_MESSAGE }, { status: 409 });
+    }
+    const priced = applyRewardPricing(saleLines, reward, { excludeLineIds: await neverDiscountLineIds(lines) });
+    if (!priced.ok) {
+      return NextResponse.json({ error: priced.message.replace(" No points were used.", " The code stays open.") }, { status: 409 });
     }
     return NextResponse.json({
       redemptionId: redemption.id,
       code: redemption.code,
-      valueMinor: redemption.value_minor,
-      appliedMinor: spread.appliedMinorUnits,
+      valueMinor: priced.appliedMinorUnits,
+      appliedMinor: priced.appliedMinorUnits,
       pointsSpent: 0,
       source: "code",
-      perVariant: spreadToPerVariant(spread.lines),
+      rewardPoints: reward.points,
+      percentBps: reward.percentBps,
+      perVariant: spreadToPerVariant(priced.lines),
     });
   }
 
@@ -212,64 +232,52 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         { status: 404 },
       );
     }
-    const cfg = await getConfig();
-    if (cfg.pointValueMinor <= 0) {
-      return NextResponse.json({ error: "The loyalty program has no point cash value configured." }, { status: 409 });
-    }
-    if (!canRedeem(account.balance_points, Math.max(1, cfg.minRedeemPoints), cfg)) {
-      return NextResponse.json(
-        {
-          error: `Not enough points: balance ${account.balance_points}, minimum ${cfg.minRedeemPoints}.`,
-        },
-        { status: 409 },
-      );
-    }
+    // One reward per sale (D137): 150 pts = 10% off, 300 pts = 25% off.
+    // An older register app sends no rewardPoints and gets the best reward
+    // the balance covers, never the whole balance.
+    const chosen = chooseReward(account.balance_points, body.rewardPoints);
+    if (!chosen.ok) return NextResponse.json({ error: chosen.error }, { status: 409 });
+    const reward = chosen.reward;
+    const priced = applyRewardPricing(saleLines, reward, { excludeLineIds: await neverDiscountLineIds(lines) });
+    if (!priced.ok) return NextResponse.json({ error: priced.message }, { status: 409 });
 
-    // Size the redemption to what the cart can absorb: try the full balance,
-    // and on insufficient capacity shrink to the absorbable value — value is
-    // never partially burned, so the spread below always applies in full.
-    let points = account.balance_points;
-    let spread = spreadCodeValue(saleLines, pointsValueMinor(points, cfg));
-    if (!spread.ok && spread.reason === "insufficient_capacity") {
-      points = Math.min(points, Math.floor(spread.absorbableMinorUnits / cfg.pointValueMinor));
-      if (points >= cfg.minRedeemPoints && points > 0) {
-        spread = spreadCodeValue(saleLines, pointsValueMinor(points, cfg));
-      }
-    }
-    if (!spread.ok) {
-      const msg =
-        spread.reason === "no_capacity"
-          ? "This cart is already at the legal price floor — points cannot be applied. Add items first."
-          : `This cart can only absorb $${(spread.absorbableMinorUnits / 100).toFixed(2)}, which is below the ${cfg.minRedeemPoints}-point minimum redemption. Add items first.`;
-      return NextResponse.json({ error: msg }, { status: 409 });
-    }
-
-    // Issue the code NOW (points deducted, status='issued'); the sync claims
-    // it atomically against the materialized order. If the sale never syncs,
-    // the register's release (or the code's expiry) returns the value.
-    const issued = await issueRedemption({ accountId: account.id, points });
+    // Issue the code NOW (exactly the reward's points deducted,
+    // status='issued'); the sync claims it atomically against the
+    // materialized order. If the sale never syncs, the register's release
+    // returns the points.
+    const issued = await issueRedemption({
+      accountId: account.id,
+      points: reward.points,
+      valueMinor: priced.appliedMinorUnits,
+      channel: "register",
+    });
     if (!issued.ok) {
       return NextResponse.json({ error: issued.error }, { status: 409 });
     }
-    // The device needs the redemption row id for the payload + release
-    // (issueRedemption returns only the human code).
-    const admin = createSupabaseAdminClient();
-    const { data: row } = await admin
-      .from("loyalty_redemptions")
-      .select("id")
-      .eq("code", issued.code)
-      .maybeSingle<{ id: string }>();
-    if (!row) {
-      return NextResponse.json({ error: "Issued code could not be resolved — try again." }, { status: 500 });
-    }
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-device:${deviceId}`,
+      action: "loyalty.reward_used",
+      entityType: "loyalty_account",
+      entityId: account.id,
+      after: {
+        code: issued.code,
+        reward: rewardShortLabel(reward),
+        points: reward.points,
+        applied_minor: priced.appliedMinorUnits,
+        requested: body.rewardPoints ?? "best (older register app)",
+      },
+    }).catch(() => {});
     return NextResponse.json({
-      redemptionId: row.id,
+      redemptionId: issued.id,
       code: issued.code,
-      valueMinor: issued.valueMinor,
-      appliedMinor: spread.appliedMinorUnits,
-      pointsSpent: points,
+      valueMinor: priced.appliedMinorUnits,
+      appliedMinor: priced.appliedMinorUnits,
+      pointsSpent: reward.points,
       source: "points",
-      perVariant: spreadToPerVariant(spread.lines),
+      rewardPoints: reward.points,
+      percentBps: reward.percentBps,
+      perVariant: spreadToPerVariant(priced.lines),
     });
   }
 

@@ -5,12 +5,12 @@
  * the register): cart fingerprinting for stale-spread detection, applying
  * the server's per-variant spread, and the redeem-button/code-input helpers.
  */
+import { chooseReward, rewardOptionsFor } from "@/lib/loyalty/loyalty-reward-core";
 import { describe, expect, it } from "vitest";
 import {
   __runRegisterLoyaltyCoreTests,
   applyLoyaltyToPricedLines,
   looksLikeLoyaltyCode,
-  maxRedeemablePoints,
   normalizeLoyaltyCodeInput,
   pricingFingerprint,
   type LoyaltyPricedLine,
@@ -73,11 +73,12 @@ describe("applyLoyaltyToPricedLines", () => {
   });
 });
 
-describe("maxRedeemablePoints", () => {
-  it("redeems the full balance only at/above the program minimum", () => {
-    expect(maxRedeemablePoints(250, 100)).toBe(250);
-    expect(maxRedeemablePoints(99, 100)).toBe(0);
-    expect(maxRedeemablePoints(0, 0)).toBe(0);
+describe("D137 rewards replace whole-balance redemption", () => {
+  it("offers only 150 / 300 point rewards, never the whole balance", () => {
+    expect(rewardOptionsFor(2472).map((r) => r.points)).toEqual([150, 300]);
+    expect(rewardOptionsFor(149)).toEqual([]);
+    const c = chooseReward(2472, undefined);
+    expect(c.ok && c.reward.points).toBe(300);
   });
 });
 

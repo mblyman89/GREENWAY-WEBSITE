@@ -57,8 +57,7 @@ type TierDisplayRow = Record<string, unknown>;
 type CodeDisplayRow = Record<string, unknown>;
 
 const TIER_COLUMNS: ReportColumn<TierDisplayRow>[] = [
-  { key: "name", header: "Tier", align: "left" },
-  { key: "discountLabel", header: "Standing discount", align: "right" },
+  { key: "name", header: "Member badge", align: "left" },
   { key: "members", header: "Members", align: "right" },
   { key: "outstandingPoints", header: "Outstanding pts", align: "right" },
   { key: "lifetimePoints", header: "Lifetime pts", align: "right" },
@@ -67,7 +66,7 @@ const TIER_COLUMNS: ReportColumn<TierDisplayRow>[] = [
 const CODE_COLUMNS: ReportColumn<CodeDisplayRow>[] = [
   { key: "label", header: "Stage", align: "left" },
   { key: "count", header: "Codes", align: "right" },
-  { key: "valueLabel", header: "Cash value", align: "right" },
+  { key: "valueLabel", header: "Amount taken off", align: "right" },
 ];
 
 export default async function LoyaltyReportPage({
@@ -88,7 +87,6 @@ export default async function LoyaltyReportPage({
 
   const tierRows: TierDisplayRow[] = r.tiers.map((t) => ({
     name: t.name,
-    discountLabel: t.discountBps > 0 ? `${(t.discountBps / 100).toFixed(0)}%` : "—",
     members: t.members.toLocaleString("en-US"),
     outstandingPoints: t.outstandingPoints.toLocaleString("en-US"),
     lifetimePoints: t.lifetimePoints.toLocaleString("en-US"),
@@ -97,7 +95,7 @@ export default async function LoyaltyReportPage({
   const codeRows: CodeDisplayRow[] = r.codeFunnel.map((c) => ({
     label: c.label,
     count: c.count.toLocaleString("en-US"),
-    valueLabel: formatMinorCurrency(c.valueMinor),
+    valueLabel: c.takenOffMinor == null ? "—" : formatMinorCurrency(c.takenOffMinor),
   }));
 
   return (
@@ -114,7 +112,7 @@ export default async function LoyaltyReportPage({
         />
         <StatCard label="Points earned" value={r.pointsEarned.toLocaleString("en-US")} hint={range.label} accent="gold" />
         <StatCard
-          label="Points redeemed"
+          label="Points used for rewards"
           value={r.pointsRedeemed.toLocaleString("en-US")}
           hint={`${pct(r.redemptionRate)} redemption rate`}
           accent="orange"
@@ -129,21 +127,21 @@ export default async function LoyaltyReportPage({
       {/* Program economics — the professional layer */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Points liability"
-          value={formatMinorCurrency(r.liabilityMinor)}
-          hint="Outstanding points valued at cash"
+          label="Can use a reward now"
+          value={r.membersWithReward.toLocaleString("en-US")}
+          hint={`${r.membersWithTopReward.toLocaleString("en-US")} can use 25% off · points have no cash value`}
           accent="orange"
         />
         <StatCard
-          label="Redeemed value"
-          value={formatMinorCurrency(r.redeemedValueMinor)}
-          hint="Cash value of points redeemed"
+          label="Rewards used"
+          value={(r.rewards10Used + r.rewards25Used).toLocaleString("en-US")}
+          hint={`${r.rewards10Used.toLocaleString("en-US")} × 10% off · ${r.rewards25Used.toLocaleString("en-US")} × 25% off`}
           accent="green"
         />
         <StatCard
-          label="Breakage"
-          value={formatMinorCurrency(r.breakageMinor)}
-          hint={`${r.breakagePoints.toLocaleString("en-US")} points expired`}
+          label="Points expired"
+          value={r.breakagePoints.toLocaleString("en-US")}
+          hint="Points that expired unused"
           accent="muted"
         />
         <StatCard
@@ -156,23 +154,23 @@ export default async function LoyaltyReportPage({
 
       {/* Discount code economics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Codes issued" value={r.codesIssued.toLocaleString("en-US")} accent="muted" />
+        <StatCard label="Reward codes issued" value={r.codesIssued.toLocaleString("en-US")} accent="muted" />
         <StatCard
-          label="Codes redeemed"
+          label="Reward codes used"
           value={r.codesRedeemed.toLocaleString("en-US")}
           hint={`${pct(r.codeRedemptionRate)} redemption rate`}
           accent="green"
         />
         <StatCard
-          label="Discount value (redeemed)"
+          label="Amount taken off by rewards"
           value={formatMinorCurrency(r.discountValueMinor)}
-          hint={`Avg ${r.avgDaysToRedeem} days to redeem`}
+          hint={`Avg ${r.avgDaysToRedeem} days from issue to use`}
           accent="gold"
         />
         <StatCard
-          label="Outstanding code value"
-          value={formatMinorCurrency(r.outstandingCodeValueMinor)}
-          hint={`${r.codesOutstanding.toLocaleString("en-US")} codes live`}
+          label="Reward codes still open"
+          value={r.codesOutstanding.toLocaleString("en-US")}
+          hint="Cancel one from the customer's page to return the points"
           accent="orange"
         />
       </div>
@@ -186,22 +184,22 @@ export default async function LoyaltyReportPage({
             emptyLabel="No point activity in this window."
           />
         </Section>
-        <Section title="Members by tier" subtitle="Standing-discount distribution.">
+        <Section title="Members by badge" subtitle="Badges are names only — no discount.">
           <BarList
             data={r.tiers.map((t) => ({ label: t.name, value: t.members }))}
             color={REPORT_COLORS.GOLD}
-            emptyLabel="No tiers configured."
+            emptyLabel="No badges configured."
           />
         </Section>
       </div>
 
       {/* Tier detail table */}
-      <Section title="Tier detail" exportHref={`/admin/reports/loyalty/export?${qs}`}>
-        <ReportTable columns={TIER_COLUMNS} rows={tierRows} emptyLabel="No tiers configured." />
+      <Section title="Badge detail" exportHref={`/admin/reports/loyalty/export?${qs}`}>
+        <ReportTable columns={TIER_COLUMNS} rows={tierRows} emptyLabel="No badges configured." />
       </Section>
 
       {/* Discount code funnel */}
-      <Section title="Discount code funnel" subtitle="Issued → redeemed → outstanding, with cash value at each stage.">
+      <Section title="Reward code funnel" subtitle="Issued → used → still open. Only used rewards took money off a sale.">
         <ReportTable columns={CODE_COLUMNS} rows={codeRows} emptyLabel="No codes issued in this window." />
       </Section>
 
@@ -214,11 +212,11 @@ export default async function LoyaltyReportPage({
             emptyLabel="No points earned in this window."
           />
         </Section>
-        <Section title="Daily points redeemed">
+        <Section title="Daily points used for rewards">
           <BarList
             data={r.dailyRedeem.map((d) => ({ label: d.date, value: d.points }))}
             color={REPORT_COLORS.ORANGE}
-            emptyLabel="No points redeemed in this window."
+            emptyLabel="No points used for rewards in this window."
           />
         </Section>
       </div>

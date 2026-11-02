@@ -174,6 +174,8 @@ export type PosReceiptInput = {
     memberLabel: string;
     /** Points this sale will earn once synced (device estimate). */
     pointsEarned: number | null;
+    /** D137: the reward used on this sale, e.g. "25% off (300 pts)". */
+    rewardUsed?: string | null;
   } | null;
 
   // -- Slice 22b presentation switches (all optional, all default-safe) -----
@@ -704,6 +706,9 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
           input.loyalty.pointsEarned != null && input.loyalty.pointsEarned > 0
             ? `<p class="sub">Points earned this visit: ${Math.floor(input.loyalty.pointsEarned)}</p>`
             : "",
+          input.loyalty.rewardUsed
+            ? `<p class="sub">Reward used: ${escapeReceiptHtml(input.loyalty.rewardUsed)}</p>`
+            : "",
         ]
       : []),
     ...(policyText
@@ -1051,6 +1056,13 @@ export function __runPosReceiptCoreTests(): void {
   });
   ok(zeroPoints.includes("Loyalty: Jane D.") && !zeroPoints.includes("Points earned"), "zero points row omitted");
   ok(!buildPosReceiptHtml(base).includes("Loyalty:"), "no loyalty block when absent");
+  // D137: the reward used prints under the member line; never a dollar-per-point value.
+  const withReward = buildPosReceiptHtml({
+    ...base,
+    loyalty: { memberLabel: "Jane D.", pointsEarned: 20, rewardUsed: "25% off (300 pts)" },
+  });
+  ok(withReward.includes("Reward used: 25% off (300 pts)"), "reward used printed");
+  ok(!withLoyalty.includes("Reward used"), "no reward row when none used");
 
   // B16 refund receipt: same 576px family, original receipt number, no card data.
   const refund = buildRefundReceiptHtml({

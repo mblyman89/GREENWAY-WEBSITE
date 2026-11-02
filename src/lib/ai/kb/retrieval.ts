@@ -46,6 +46,7 @@ import {
   type KbFaqRow,
 } from "./store";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
+import { rewardRedeemSentence, rewardTermsLines } from "@/lib/loyalty/loyalty-reward-core";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
 import { renderNoteFacts, type KbNote, type NoteMatchFacts } from "./kb-notes-core";
 import type { ProductFacts } from "../suggestions";
@@ -1025,9 +1026,11 @@ async function loadFaqs(): Promise<FaqLike[]> {
 }
 
 /**
- * Compose the LIVE loyalty earn-rate sentence from loyalty_config. Returns "" if
- * the config isn't available so we never fabricate a rate. pointsPerDollar and
- * pointValueMinor come straight from the owner-editable program config.
+ * Compose the LIVE loyalty sentence from loyalty_config. Returns "" if the
+ * config isn't available so we never fabricate a rate. The earn rate comes
+ * from the owner-editable config; the rewards (D137: 150 pts = 10% off, 300
+ * pts = 25% off) come from loyalty-reward-core. Points have NO cash value —
+ * the $0.10-per-point program is retired, so never quote a dollar per point.
  */
 async function liveLoyaltySentence(): Promise<string> {
   try {
@@ -1035,18 +1038,7 @@ async function liveLoyaltySentence(): Promise<string> {
     if (!cfg || !Number.isFinite(cfg.pointsPerDollar) || cfg.pointsPerDollar <= 0) return "";
     const ppd = cfg.pointsPerDollar;
     const ptLabel = ppd === 1 ? "point" : "points";
-    // pointValueMinor is the redemption value of ONE point, in cents.
-    const centsPerPoint = Number.isFinite(cfg.pointValueMinor) ? cfg.pointValueMinor : null;
-    let redeem = "";
-    if (centsPerPoint && centsPerPoint > 0) {
-      const dollarsPerPoint = centsPerPoint / 100;
-      redeem = ` Each point is worth about $${dollarsPerPoint.toFixed(2)} toward a future purchase.`;
-    }
-    const minRedeem =
-      Number.isFinite(cfg.minRedeemPoints) && cfg.minRedeemPoints > 0
-        ? ` You can start redeeming once you've banked ${cfg.minRedeemPoints} points.`
-        : "";
-    return `Current loyalty earn rate: ${ppd} ${ptLabel} per $1 spent (pretax).${redeem}${minRedeem}`.trim();
+    return `Current loyalty earn rate: ${ppd} ${ptLabel} per $1 spent (pretax). Rewards: ${rewardTermsLines().join(" ")} ${rewardRedeemSentence()} Points have no cash value.`.trim();
   } catch {
     return "";
   }

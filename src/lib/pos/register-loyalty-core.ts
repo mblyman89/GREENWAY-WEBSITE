@@ -47,7 +47,8 @@ export type AppliedLoyalty = {
   redemptionId: string;
   /** The human code (GW-XXXX-XXXX). */
   code: string;
-  /** Full stored value of the code (points × pointValueMinor). */
+  /** Amount the reward takes off this cart (D137: rewards are a percent, so
+   *  this equals appliedMinor; kept for payload compatibility). */
   valueMinor: number;
   /** Value actually applied to this cart (≤ valueMinor; penny remainders stay unused). */
   appliedMinor: number;
@@ -59,6 +60,10 @@ export type AppliedLoyalty = {
   fingerprint: string;
   /** variantId → per-UNIT reduction (whole cents). */
   perVariant: Record<string, number>;
+  /** D137: the reward used (150 or 300 points). Absent on old cached state. */
+  rewardPoints?: number;
+  /** D137: the reward's percent in basis points (1000 = 10%). */
+  percentBps?: number;
 };
 
 /** A priced cart line as the device sends it to /api/pos/loyalty. */
@@ -73,7 +78,14 @@ export type PosLoyaltyLineInput = {
 
 /** What the register asks /api/pos/loyalty for. */
 export type PosLoyaltyRequest =
-  | { action: "redeem-points"; customerId: string; lines: PosLoyaltyLineInput[] }
+  | {
+      action: "redeem-points";
+      customerId: string;
+      lines: PosLoyaltyLineInput[];
+      /** D137: which reward (150 = 10% off, 300 = 25% off). Old app builds
+       *  omit it and the server picks the best reward the balance covers. */
+      rewardPoints?: number;
+    }
   | { action: "apply-code"; code: string; lines: PosLoyaltyLineInput[] }
   | { action: "release"; redemptionId: string };
 
@@ -86,6 +98,10 @@ export type PosLoyaltyGrant = {
   pointsSpent: number;
   source: "points" | "code";
   perVariant: Record<string, number>;
+  /** D137: the reward used (150 or 300 points). */
+  rewardPoints?: number;
+  /** D137: the reward's percent in basis points. */
+  percentBps?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -169,16 +185,6 @@ export function applyLoyaltyToPricedLines<T extends LoyaltyPricedLine>(
 // ---------------------------------------------------------------------------
 // UI helpers
 // ---------------------------------------------------------------------------
-
-/**
- * The most points this member could redeem right now under the program
- * config (0 when below the minimum — the button should not render).
- */
-export function maxRedeemablePoints(balancePoints: number, minRedeemPoints: number): number {
-  const balance = Math.max(0, Math.floor(balancePoints));
-  const min = Math.max(0, Math.floor(minRedeemPoints));
-  return balance >= min && balance > 0 ? balance : 0;
-}
 
 /** Normalize a typed redemption code: trim + uppercase. */
 export function normalizeLoyaltyCodeInput(raw: string): string {
@@ -276,11 +282,6 @@ export function __runRegisterLoyaltyCoreTests(): void {
 
   const zeroOff = applyLoyaltyToPricedLines([mk("v1", 1000)], { v1: 0 });
   ok(zeroOff.appliedMinor === 0, "zero/absent reductions apply nothing");
-
-  // ── maxRedeemablePoints ──────────────────────────────────────────────────
-  ok(maxRedeemablePoints(250, 100) === 250, "balance above the minimum redeems in full");
-  ok(maxRedeemablePoints(99, 100) === 0, "below the minimum cannot redeem");
-  ok(maxRedeemablePoints(0, 0) === 0, "zero balance never redeems");
 
   // ── code normalization + shape ───────────────────────────────────────────
   ok(normalizeLoyaltyCodeInput("  gw-7k3m-92qf ") === "GW-7K3M-92QF", "code input normalizes");

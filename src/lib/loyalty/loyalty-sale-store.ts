@@ -6,18 +6,21 @@
  * nothing consumed them at the register, and tier standing discounts were
  * never applied to a sale. This store:
  *
- *   - applies a redemption CODE to an open order (atomic claim via the
- *     conditional markRedemptionUsed update; value spread by the pure
- *     loyalty-sale-core with statutory + acquisition-cost floors),
- *   - applies MEMBER TIER pricing (per-line best-deal-wins vs the promo
- *     price — never stacked),
+ *   - applies a REWARD CODE the customer brought (atomic claim via the
+ *     conditional markRedemptionUsed update),
+ *   - (D137) uses one of the member's REWARDS on the order — 150 pts = 10%
+ *     off, 300 pts = 25% off — the back-office twin of the register buttons.
+ *     Either way the percent is priced by the pure loyalty-reward-core:
+ *     better of the deal or the reward per item, legal floors, never-discount
+ *     items untouched, no dollar cap. Member TIER pricing is RETIRED (D139):
+ *     Bronze / Gold are badge names only,
  *   - removes a loyalty application (restores prices from the per-line
- *     snapshot; conditionally releases the code back to 'issued'),
+ *     snapshot; a code the customer brought goes back to 'issued', a code
+ *     issued for this sale is cancelled and its points returned),
  *   - releases the code when an order is cancelled / no-show, and
  *   - reads the loyalty context for the order detail UI + completion gate.
  *
- * ONE loyalty application per order (owner: "no discount stacking") — either
- * tier pricing or a code, never both. All money tax-inclusive minor units.
+ * ONE reward per sale (owner: "one redemption per sale"). All money tax-inclusive minor units.
  * Degrades gracefully before migration 0116 (missing columns → clear error).
  */
 import "server-only";
@@ -28,18 +31,25 @@ import { loadProductCosts } from "@/lib/promotions/discount-engine";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import { costForLine } from "@/lib/promotions/size-cost-core";
+import { type LoyaltySaleLine } from "@/lib/loyalty/loyalty-sale-core";
 import {
-  applyTierPricing,
-  spreadCodeValue,
-  type LoyaltySaleLine,
-} from "@/lib/loyalty/loyalty-sale-core";
+  LEGACY_CODE_MESSAGE,
+  applyRewardPricing,
+  chooseReward,
+  redemptionReward,
+  rewardOptionsFor,
+  rewardShortLabel,
+} from "@/lib/loyalty/loyalty-reward-core";
 import {
+  cancelRedemption,
   getAccount,
   getAccountByCustomer,
+  issueRedemption,
   listTiers,
   lookupRedeemableCode,
   markRedemptionUsed,
 } from "@/lib/loyalty/loyalty-store";
+import { listNeverDiscountKeys } from "@/lib/promotions/promotions-store";
 import type { OrderLineRow, OrderRow } from "@/lib/orders/types";
 
 const OPEN_STATUSES = new Set(["new", "acknowledged", "preparing", "ready"]);
@@ -132,8 +142,112 @@ async function insertLoyaltyEvent(orderId: string, note: string, actorLabel: str
 
 export type LoyaltyMutation = { ok: true; message: string } | { ok: false; error: string };
 
+/** Order lines whose product is on the owner's never-discount list (D140). */
+async function neverDiscountLineIds(lines: LoyaltyLineRow[]): Promise<Set<string>> {
+  const keys = new Set((await listNeverDiscountKeys()).map((k) => k.trim().toLowerCase()));
+  const out = new Set<string>();
+  if (keys.size === 0) return out;
+  for (const l of lines) if (keys.has(String(l.product_id ?? "").trim().toLowerCase())) out.add(l.id);
+  return out;
+}
+
+/** The common refusals before any loyalty is applied to an order. */
+function precheckOrder(order: LoyaltyOrderRow, lines: LoyaltyLineRow[]): string | null {
+  if (!OPEN_STATUSES.has(order.status)) {
+    return "This order is closed — reopen it (logged reversal) before applying loyalty.";
+  }
+  if (order.loyalty_kind) {
+    return "A loyalty reward is already applied. Remove it first — only ONE reward per sale (no stacking).";
+  }
+  if (lines.length === 0) return "The order has no items.";
+  return null;
+}
+
+/**
+ * Write a priced reward onto the order: reduced line prices + per-line
+ * snapshot, recomputed header totals, the loyalty header columns. On any
+ * write error the lines are restored and `undo` runs (release / refund).
+ */
+async function writeRewardToOrder(opts: {
+  orderId: string;
+  order: LoyaltyOrderRow;
+  lines: LoyaltyLineRow[];
+  priced: { lines: { lineId: string; unitPriceMinorUnits: number; loyaltyDiscountMinorUnits: number }[]; appliedMinorUnits: number };
+  redemptionId: string;
+  code: string;
+  customerId: string | null;
+  undo: () => Promise<void>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = createSupabaseAdminClient();
+  const byId = new Map(opts.priced.lines.map((l) => [l.lineId, l]));
+  const updatedLines: LoyaltyLineRow[] = [];
+  const restore = async () => {
+    for (const [i, u] of updatedLines.entries()) {
+      await admin
+        .from("order_lines")
+        .update({ price_minor_units: opts.lines[i].price_minor_units, loyalty_discount_minor_units: 0 })
+        .eq("id", u.id);
+    }
+  };
+  for (const line of opts.lines) {
+    const s = byId.get(line.id);
+    const reduction = s?.loyaltyDiscountMinorUnits ?? 0;
+    const newPrice = s ? s.unitPriceMinorUnits : line.price_minor_units;
+    const { error } = await admin
+      .from("order_lines")
+      .update({ price_minor_units: newPrice, loyalty_discount_minor_units: reduction })
+      .eq("id", line.id);
+    if (error) {
+      await restore();
+      await opts.undo();
+      if (isMissingColumnError(error)) {
+        return { ok: false, error: "Migration 0116 (loyalty at sale) has not been applied yet." };
+      }
+      return { ok: false, error: `Could not apply the reward: ${error.message}` };
+    }
+    updatedLines.push({ ...line, price_minor_units: newPrice, loyalty_discount_minor_units: reduction });
+  }
+
+  const totals = await recomputeHeaderTotals(updatedLines);
+  const { error: headerError } = await admin
+    .from("orders")
+    .update({
+      ...totals,
+      loyalty_kind: "code",
+      loyalty_redemption_id: opts.redemptionId,
+      loyalty_code: opts.code,
+      loyalty_discount_minor_units: opts.priced.appliedMinorUnits,
+      loyalty_tier_label: null,
+      ...(opts.customerId ? { customer_id: opts.order.customer_id ?? opts.customerId } : {}),
+    })
+    .eq("id", opts.orderId);
+  if (headerError) {
+    await restore();
+    await opts.undo();
+    if (isMissingColumnError(headerError)) {
+      return { ok: false, error: "Migration 0116 (loyalty at sale) has not been applied yet." };
+    }
+    return { ok: false, error: `Could not apply the reward: ${headerError.message}` };
+  }
+
+  // Record what the reward actually took off (the code was issued at $0 when
+  // it came from the customer's profile). Best-effort: display/reporting only.
+  const { error: valueError } = await admin
+    .from("loyalty_redemptions")
+    .update({ value_minor: opts.priced.appliedMinorUnits })
+    .eq("id", opts.redemptionId);
+  if (valueError) {
+    await insertLoyaltyEvent(
+      opts.orderId,
+      `NOTE: the reward amount could not be recorded on code ${opts.code} (${valueError.message}); the sale itself is correct.`,
+      "system",
+    );
+  }
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
-// Apply a redemption CODE
+// Apply a reward CODE the customer brought (issued from their profile)
 // ---------------------------------------------------------------------------
 export async function applyCodeToOrder(opts: {
   orderId: string;
@@ -145,38 +259,24 @@ export async function applyCodeToOrder(opts: {
   const loaded = await loadOrderWithLines(opts.orderId);
   if (!loaded) return { ok: false, error: "Order not found." };
   const { order, lines } = loaded;
-
-  if (!OPEN_STATUSES.has(order.status)) {
-    return { ok: false, error: "This order is closed — reopen it (logged reversal) before applying loyalty." };
-  }
-  if (order.loyalty_kind) {
-    return {
-      ok: false,
-      error: "A loyalty discount is already applied. Remove it first — only ONE loyalty application per order (no stacking).",
-    };
-  }
-  if (lines.length === 0) return { ok: false, error: "The order has no items." };
+  const refusal = precheckOrder(order, lines);
+  if (refusal) return { ok: false, error: refusal };
 
   const redemption = await lookupRedeemableCode(opts.code);
   if (!redemption) {
     return { ok: false, error: "Code not found, expired, or already used. Check the code with the customer." };
   }
+  // D137: a code is a PERCENT reward (150 pts = 10%, 300 pts = 25%). A code
+  // from the retired $0.10-per-point program is refused (cancel it to refund).
+  const reward = redemptionReward(redemption);
+  if (!reward) return { ok: false, error: LEGACY_CODE_MESSAGE };
 
-  // Spread the stored value across the lines above the legal floors.
   const costs = await loadProductCosts();
-  const spread = spreadCodeValue(toSaleLines(lines, costs), redemption.value_minor);
-  if (!spread.ok) {
-    if (spread.reason === "no_capacity") {
-      return {
-        ok: false,
-        error:
-          "This cart is already at the legal price floor (RCW 69.50.357 / acquisition cost) — the code cannot be applied. Add items first.",
-      };
-    }
-    return {
-      ok: false,
-      error: `This cart can only absorb $${(spread.absorbableMinorUnits / 100).toFixed(2)} above the legal price floors, but the code is worth $${(redemption.value_minor / 100).toFixed(2)}. Add items, or issue the customer a smaller code from their profile — value is never partially burned.`,
-    };
+  const priced = applyRewardPricing(toSaleLines(lines, costs), reward, {
+    excludeLineIds: await neverDiscountLineIds(lines),
+  });
+  if (!priced.ok) {
+    return { ok: false, error: priced.message.replace(" No points were used.", " The code stays open for another visit.") };
   }
 
   // ATOMIC CLAIM: conditional update on status='issued' — two registers
@@ -184,90 +284,49 @@ export async function applyCodeToOrder(opts: {
   const claimed = await markRedemptionUsed(opts.code, opts.orderId);
   if (!claimed.ok) return { ok: false, error: claimed.error ?? "Code could not be claimed." };
 
-  // Look up the member behind the code so the order earns their points.
   const account = await getAccount(redemption.account_id);
-
   const admin = createSupabaseAdminClient();
-  const byId = new Map(spread.lines.map((l) => [l.lineId, l]));
-  const rollback = async () => {
-    await admin
-      .from("loyalty_redemptions")
-      .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
-      .eq("id", redemption.id)
-      .eq("status", "redeemed")
-      .eq("redeemed_order_id", opts.orderId);
-  };
-
-  // Write the reduced line prices + per-line snapshot.
-  const updatedLines: LoyaltyLineRow[] = [];
-  for (const line of lines) {
-    const s = byId.get(line.id);
-    const reduction = s?.loyaltyDiscountMinorUnits ?? 0;
-    const newPrice = s ? s.unitPriceMinorUnits : line.price_minor_units;
-    const { error } = await admin
-      .from("order_lines")
-      .update({ price_minor_units: newPrice, loyalty_discount_minor_units: reduction })
-      .eq("id", line.id);
-    if (error) {
-      // Restore any lines already written (to their ORIGINAL prices), release
-      // the code, and refuse.
-      for (const [i, u] of updatedLines.entries()) {
-        await admin
-          .from("order_lines")
-          .update({ price_minor_units: lines[i].price_minor_units, loyalty_discount_minor_units: 0 })
-          .eq("id", u.id);
-      }
-      await rollback();
-      if (isMissingColumnError(error)) {
-        return { ok: false, error: "Migration 0116 (loyalty at sale) has not been applied yet." };
-      }
-      return { ok: false, error: `Could not apply the code: ${error.message}` };
-    }
-    updatedLines.push({ ...line, price_minor_units: newPrice, loyalty_discount_minor_units: reduction });
-  }
-
-  const totals = await recomputeHeaderTotals(updatedLines);
-  const { error: headerError } = await admin
-    .from("orders")
-    .update({
-      ...totals,
-      loyalty_kind: "code",
-      loyalty_redemption_id: redemption.id,
-      loyalty_code: redemption.code,
-      loyalty_discount_minor_units: spread.appliedMinorUnits,
-      loyalty_tier_label: null,
-      ...(account ? { customer_id: order.customer_id ?? account.customer_id } : {}),
-    })
-    .eq("id", opts.orderId);
-  if (headerError) {
-    for (const [i, u] of updatedLines.entries()) {
+  const written = await writeRewardToOrder({
+    orderId: opts.orderId,
+    order,
+    lines,
+    priced,
+    redemptionId: redemption.id,
+    code: redemption.code,
+    customerId: account?.customer_id ?? null,
+    undo: async () => {
       await admin
-        .from("order_lines")
-        .update({ price_minor_units: lines[i].price_minor_units, loyalty_discount_minor_units: 0 })
-        .eq("id", u.id);
-    }
-    await rollback();
-    if (isMissingColumnError(headerError)) {
-      return { ok: false, error: "Migration 0116 (loyalty at sale) has not been applied yet." };
-    }
-    return { ok: false, error: `Could not apply the code: ${headerError.message}` };
-  }
+        .from("loyalty_redemptions")
+        .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
+        .eq("id", redemption.id)
+        .eq("status", "redeemed")
+        .eq("redeemed_order_id", opts.orderId);
+    },
+  });
+  if (!written.ok) return written;
 
-  const applied = `$${(spread.appliedMinorUnits / 100).toFixed(2)}`;
+  const applied = `$${(priced.appliedMinorUnits / 100).toFixed(2)}`;
   await insertLoyaltyEvent(
     opts.orderId,
-    `Loyalty code ${redemption.code} applied (${applied} off${spread.unusedMinorUnits > 0 ? `; $${(spread.unusedMinorUnits / 100).toFixed(2)} penny-split remainder returned unused` : ""}).`,
+    `Loyalty reward ${rewardShortLabel(reward)} applied with code ${redemption.code} — ${applied} off (better of the deal or the reward on each item, never both).`,
     opts.actorLabel ?? null,
   );
-  return { ok: true, message: `Code ${redemption.code} applied — ${applied} off.` };
+  return { ok: true, message: `${rewardShortLabel(reward)} applied with code ${redemption.code} — ${applied} off.` };
 }
 
 // ---------------------------------------------------------------------------
-// Apply MEMBER TIER pricing
+// D137: use one of the member's REWARDS on this order (back office)
 // ---------------------------------------------------------------------------
-export async function applyTierToOrder(opts: {
+/**
+ * The back-office twin of the register's reward buttons: 150 pts = 10% off,
+ * 300 pts = 25% off, exactly those points deducted, same pricing rules. The
+ * code is issued (channel "order") and claimed by this order at once; removing
+ * the reward (or cancelling the order) cancels the code and returns the points.
+ */
+export async function applyRewardToOrder(opts: {
   orderId: string;
   customerId: string;
+  rewardPoints: number;
   actorId?: string | null;
   actorLabel?: string | null;
 }): Promise<LoyaltyMutation> {
@@ -275,96 +334,102 @@ export async function applyTierToOrder(opts: {
   const loaded = await loadOrderWithLines(opts.orderId);
   if (!loaded) return { ok: false, error: "Order not found." };
   const { order, lines } = loaded;
-
-  if (!OPEN_STATUSES.has(order.status)) {
-    return { ok: false, error: "This order is closed — reopen it (logged reversal) before applying loyalty." };
-  }
-  if (order.loyalty_kind) {
-    return {
-      ok: false,
-      error: "A loyalty discount is already applied. Remove it first — only ONE loyalty application per order (no stacking).",
-    };
-  }
-  if (lines.length === 0) return { ok: false, error: "The order has no items." };
+  const refusal = precheckOrder(order, lines);
+  if (refusal) return { ok: false, error: refusal };
 
   const account = await getAccountByCustomer(opts.customerId);
   if (!account || !account.is_active) {
     return { ok: false, error: "This customer is not enrolled in the loyalty program. Enroll them from their customer page first." };
   }
-  const tiers = await listTiers();
-  const tier = tiers.find((t) => t.id === account.tier_id) ?? null;
-  if (!tier || tier.discountBps <= 0) {
-    return { ok: false, error: "This member has not reached a discount tier yet — no member pricing to apply." };
-  }
+  const chosen = chooseReward(account.balance_points, opts.rewardPoints);
+  if (!chosen.ok) return { ok: false, error: chosen.error };
+  const reward = chosen.reward;
 
   const costs = await loadProductCosts();
-  const result = applyTierPricing(toSaleLines(lines, costs), tier.discountBps);
-  if (result.additionalSavingsMinorUnits <= 0) {
-    return {
-      ok: false,
-      error: `The current promo prices already beat or match ${tier.name} pricing on every line — the customer keeps the better deal (no stacking).`,
-    };
+  const priced = applyRewardPricing(toSaleLines(lines, costs), reward, {
+    excludeLineIds: await neverDiscountLineIds(lines),
+  });
+  if (!priced.ok) return { ok: false, error: priced.message };
+
+  const issued = await issueRedemption({
+    accountId: account.id,
+    points: reward.points,
+    valueMinor: priced.appliedMinorUnits,
+    channel: "order",
+    actorId: opts.actorId ?? null,
+  });
+  if (!issued.ok) return { ok: false, error: issued.error };
+
+  const refund = async (why: string) => {
+    // Put the code back to 'issued' (if the claim landed) so cancelRedemption
+    // can cancel it and return the points.
+    const admin = createSupabaseAdminClient();
+    await admin
+      .from("loyalty_redemptions")
+      .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
+      .eq("id", issued.id)
+      .eq("status", "redeemed")
+      .eq("redeemed_order_id", opts.orderId);
+    await cancelRedemption({ redemptionId: issued.id, note: why, actorId: opts.actorId ?? null });
+  };
+
+  const claimed = await markRedemptionUsed(issued.code, opts.orderId);
+  if (!claimed.ok) {
+    await refund("Reward could not be attached to the order, points returned");
+    return { ok: false, error: claimed.error ?? "The reward could not be attached to the order. No points were used." };
   }
 
-  const admin = createSupabaseAdminClient();
-  const byId = new Map(result.lines.map((l) => [l.lineId, l]));
-  const updatedLines: LoyaltyLineRow[] = [];
-  for (const line of lines) {
-    const t = byId.get(line.id);
-    const reduction = t?.loyaltyDiscountMinorUnits ?? 0;
-    const newPrice = t ? t.unitPriceMinorUnits : line.price_minor_units;
-    const { error } = await admin
-      .from("order_lines")
-      .update({ price_minor_units: newPrice, loyalty_discount_minor_units: reduction })
-      .eq("id", line.id);
-    if (error) {
-      for (const [i, u] of updatedLines.entries()) {
-        await admin
-          .from("order_lines")
-          .update({ price_minor_units: lines[i].price_minor_units, loyalty_discount_minor_units: 0 })
-          .eq("id", u.id);
-      }
-      if (isMissingColumnError(error)) {
-        return { ok: false, error: "Migration 0116 (loyalty at sale) has not been applied yet." };
-      }
-      return { ok: false, error: `Could not apply member pricing: ${error.message}` };
-    }
-    updatedLines.push({ ...line, price_minor_units: newPrice, loyalty_discount_minor_units: reduction });
-  }
+  const written = await writeRewardToOrder({
+    orderId: opts.orderId,
+    order,
+    lines,
+    priced,
+    redemptionId: issued.id,
+    code: issued.code,
+    customerId: opts.customerId,
+    undo: () => refund("Reward could not be written to the order, points returned"),
+  });
+  if (!written.ok) return written;
 
-  const totals = await recomputeHeaderTotals(updatedLines);
-  const { error: headerError } = await admin
-    .from("orders")
-    .update({
-      ...totals,
-      loyalty_kind: "tier",
-      loyalty_redemption_id: null,
-      loyalty_code: null,
-      loyalty_discount_minor_units: result.additionalSavingsMinorUnits,
-      loyalty_tier_label: tier.name,
-      customer_id: order.customer_id ?? opts.customerId,
-    })
-    .eq("id", opts.orderId);
-  if (headerError) {
-    for (const [i, u] of updatedLines.entries()) {
-      await admin
-        .from("order_lines")
-        .update({ price_minor_units: lines[i].price_minor_units, loyalty_discount_minor_units: 0 })
-        .eq("id", u.id);
-    }
-    if (isMissingColumnError(headerError)) {
-      return { ok: false, error: "Migration 0116 (loyalty at sale) has not been applied yet." };
-    }
-    return { ok: false, error: `Could not apply member pricing: ${headerError.message}` };
-  }
-
-  const saved = `$${(result.additionalSavingsMinorUnits / 100).toFixed(2)}`;
+  const applied = `$${(priced.appliedMinorUnits / 100).toFixed(2)}`;
   await insertLoyaltyEvent(
     opts.orderId,
-    `Member tier pricing applied (${tier.name}, ${(tier.discountBps / 100).toFixed(0)}% — ${saved} additional savings; best deal wins per line, never stacked).`,
+    `Loyalty reward ${rewardShortLabel(reward)} used (code ${issued.code}) — ${applied} off (better of the deal or the reward on each item, never both).`,
     opts.actorLabel ?? null,
   );
-  return { ok: true, message: `${tier.name} member pricing applied — ${saved} additional savings.` };
+  return { ok: true, message: `${rewardShortLabel(reward)} applied — ${applied} off. ${reward.points} points used.` };
+}
+
+/**
+ * Give an order's reward back to the customer. A code the customer BROUGHT
+ * (issued from their profile) goes back to 'issued' so they can use it
+ * another time; a code issued FOR this sale (register / back office) is
+ * cancelled and its points are returned to the balance.
+ */
+async function giveRewardBack(
+  orderId: string,
+  redemptionId: string,
+  why: string,
+): Promise<{ released: boolean; refundedPoints: number }> {
+  const admin = createSupabaseAdminClient();
+  const { data: row } = await admin
+    .from("loyalty_redemptions")
+    .select("id, channel")
+    .eq("id", redemptionId)
+    .maybeSingle<{ id: string; channel: string | null }>();
+  const { data: released } = await admin
+    .from("loyalty_redemptions")
+    .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
+    .eq("id", redemptionId)
+    .eq("status", "redeemed")
+    .eq("redeemed_order_id", orderId)
+    .select("id");
+  if (!released || released.length === 0) return { released: false, refundedPoints: 0 };
+  if (row && (row.channel === "order" || row.channel === "register")) {
+    const res = await cancelRedemption({ redemptionId, note: why });
+    return { released: true, refundedPoints: res.ok ? res.refundedPoints : 0 };
+  }
+  return { released: true, refundedPoints: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -383,7 +448,7 @@ export async function removeLoyaltyFromOrder(opts: {
   if (!OPEN_STATUSES.has(order.status)) {
     return { ok: false, error: "This order is closed — reopen it (logged reversal) before changing loyalty." };
   }
-  if (!order.loyalty_kind) return { ok: false, error: "No loyalty discount is applied to this order." };
+  if (!order.loyalty_kind) return { ok: false, error: "No loyalty reward is applied to this order." };
 
   const admin = createSupabaseAdminClient();
 
@@ -416,32 +481,26 @@ export async function removeLoyaltyFromOrder(opts: {
     .eq("id", opts.orderId);
   if (headerError) return { ok: false, error: `Could not clear the loyalty columns: ${headerError.message}` };
 
-  // Release the code back to the customer (their points stay stored in it).
   let releaseNote = "";
   if (order.loyalty_kind === "code" && order.loyalty_redemption_id) {
-    const { data: released } = await admin
-      .from("loyalty_redemptions")
-      .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
-      .eq("id", order.loyalty_redemption_id)
-      .eq("status", "redeemed")
-      .eq("redeemed_order_id", opts.orderId)
-      .select("id");
-    releaseNote =
-      released && released.length > 0
-        ? ` Code ${order.loyalty_code ?? ""} released back to the customer.`
-        : ` NOTE: code ${order.loyalty_code ?? ""} could not be auto-released — check it on the customer's profile.`;
+    const back = await giveRewardBack(opts.orderId, order.loyalty_redemption_id, "Reward removed from the order, points returned");
+    releaseNote = !back.released
+      ? ` NOTE: code ${order.loyalty_code ?? ""} could not be given back automatically — check it on the customer's profile.`
+      : back.refundedPoints > 0
+        ? ` ${back.refundedPoints} points returned to the customer.`
+        : ` Code ${order.loyalty_code ?? ""} given back to the customer for another visit.`;
   }
 
   await insertLoyaltyEvent(
     opts.orderId,
-    `Loyalty ${order.loyalty_kind === "code" ? "code" : "member tier pricing"} removed; prices restored.${releaseNote}`,
+    `Loyalty ${order.loyalty_kind === "code" ? "reward" : "member pricing (retired)"} removed; prices restored.${releaseNote}`,
     opts.actorLabel ?? null,
   );
-  return { ok: true, message: `Loyalty discount removed.${releaseNote}` };
+  return { ok: true, message: `Loyalty reward removed.${releaseNote}` };
 }
 
 // ---------------------------------------------------------------------------
-// Release the code when an order is cancelled / no-show (best-effort)
+// Give the reward back when an order is cancelled / no-show (best-effort)
 // ---------------------------------------------------------------------------
 export async function releaseLoyaltyCodeForOrder(orderId: string): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
@@ -459,17 +518,13 @@ export async function releaseLoyaltyCodeForOrder(orderId: string): Promise<void>
   if (error || !order) return; // pre-0116 or missing — nothing to release
   if (order.loyalty_kind !== "code" || !order.loyalty_redemption_id) return;
 
-  const { data: released } = await admin
-    .from("loyalty_redemptions")
-    .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
-    .eq("id", order.loyalty_redemption_id)
-    .eq("status", "redeemed")
-    .eq("redeemed_order_id", orderId)
-    .select("id");
-  if (released && released.length > 0) {
+  const back = await giveRewardBack(orderId, order.loyalty_redemption_id, "Order closed without completing, points returned");
+  if (back.released) {
     await insertLoyaltyEvent(
       orderId,
-      `Order closed without completing — loyalty code ${order.loyalty_code ?? ""} automatically released back to the customer.`,
+      back.refundedPoints > 0
+        ? `Order closed without completing — the loyalty reward was cancelled and ${back.refundedPoints} points returned to the customer.`
+        : `Order closed without completing — loyalty code ${order.loyalty_code ?? ""} automatically given back to the customer.`,
       "system",
     );
   }
@@ -483,13 +538,13 @@ export type OrderLoyaltyContext = {
   code: string | null;
   tierLabel: string | null;
   discountMinorUnits: number;
-  redemption: { id: string; status: string; redeemedOrderId: string | null } | null;
-  /** Linked customer's membership (for the "apply member pricing" offer). */
+  redemption: { id: string; status: string; redeemedOrderId: string | null; points: number } | null;
+  /** Linked customer's membership (for the "use a reward" buttons). */
   member: {
     customerId: string;
     balancePoints: number;
+    /** Member badge name (Bronze / Gold, renameable) — a name only. */
     tierName: string | null;
-    tierDiscountBps: number;
   } | null;
   migrationApplied: boolean;
 };
@@ -529,10 +584,12 @@ export async function getOrderLoyaltyContext(orderId: string): Promise<OrderLoya
   if (order.loyalty_redemption_id) {
     const { data: row } = await admin
       .from("loyalty_redemptions")
-      .select("id, status, redeemed_order_id")
+      .select("id, status, redeemed_order_id, points")
       .eq("id", order.loyalty_redemption_id)
-      .maybeSingle<{ id: string; status: string; redeemed_order_id: string | null }>();
-    redemption = row ? { id: row.id, status: row.status, redeemedOrderId: row.redeemed_order_id } : null;
+      .maybeSingle<{ id: string; status: string; redeemed_order_id: string | null; points: number }>();
+    redemption = row
+      ? { id: row.id, status: row.status, redeemedOrderId: row.redeemed_order_id, points: row.points }
+      : null;
   }
 
   let member: OrderLoyaltyContext["member"] = null;
@@ -545,7 +602,6 @@ export async function getOrderLoyaltyContext(orderId: string): Promise<OrderLoya
         customerId: order.customer_id,
         balancePoints: account.balance_points,
         tierName: tier?.name ?? null,
-        tierDiscountBps: tier?.discountBps ?? 0,
       };
     }
   }
@@ -562,22 +618,24 @@ export async function getOrderLoyaltyContext(orderId: string): Promise<OrderLoya
 }
 
 /**
- * Preview what a member's tier pricing would additionally save on this order
- * (0 when promos already win everywhere). Read-only; used by the register UI.
+ * D137: preview what each reward the member can afford would take off THIS
+ * order (read-only; 0 when today's deals already win everywhere), so the
+ * back-office buttons read "Use 300 pts – 25% off ($21.96)".
  */
-export async function previewTierSavings(
+export async function previewRewardSavings(
   orderId: string,
-  customerId: string,
-): Promise<{ tierName: string; additionalSavingsMinorUnits: number } | null> {
-  if (!isSupabaseServiceConfigured) return null;
+  balancePoints: number,
+): Promise<{ points: number; percentBps: number; savingsMinorUnits: number }[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const options = rewardOptionsFor(balancePoints);
+  if (options.length === 0) return [];
   const loaded = await loadOrderWithLines(orderId);
-  if (!loaded) return null;
-  const account = await getAccountByCustomer(customerId);
-  if (!account || !account.is_active || !account.tier_id) return null;
-  const tiers = await listTiers();
-  const tier = tiers.find((t) => t.id === account.tier_id);
-  if (!tier || tier.discountBps <= 0) return null;
+  if (!loaded) return [];
   const costs = await loadProductCosts();
-  const result = applyTierPricing(toSaleLines(loaded.lines, costs), tier.discountBps);
-  return { tierName: tier.name, additionalSavingsMinorUnits: result.additionalSavingsMinorUnits };
+  const saleLines = toSaleLines(loaded.lines, costs);
+  const exclude = await neverDiscountLineIds(loaded.lines);
+  return options.map((r) => {
+    const priced = applyRewardPricing(saleLines, r, { excludeLineIds: exclude });
+    return { points: r.points, percentBps: r.percentBps, savingsMinorUnits: priced.ok ? priced.appliedMinorUnits : 0 };
+  });
 }

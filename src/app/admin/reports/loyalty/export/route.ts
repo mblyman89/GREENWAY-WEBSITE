@@ -32,8 +32,7 @@ const KIND_COLUMNS: TableColumn[] = [
 ];
 
 const TIER_COLUMNS: TableColumn[] = [
-  { key: "name", header: "Tier", type: "text" },
-  { key: "discountBps", header: "Discount (bps)", type: "integer" },
+  { key: "name", header: "Member badge", type: "text" },
   { key: "members", header: "Members", type: "integer" },
   { key: "outstandingPoints", header: "Outstanding pts", type: "integer" },
   { key: "lifetimePoints", header: "Lifetime pts", type: "integer" },
@@ -42,7 +41,7 @@ const TIER_COLUMNS: TableColumn[] = [
 const CODE_COLUMNS: TableColumn[] = [
   { key: "label", header: "Stage", type: "text" },
   { key: "count", header: "Codes", type: "integer" },
-  { key: "valueMinor", header: "Cash value", type: "currency" },
+  { key: "takenOffMinor", header: "Amount taken off", type: "currency" },
 ];
 
 export async function GET(request: Request) {
@@ -66,20 +65,22 @@ export async function GET(request: Request) {
     { metric: "Active members", value: r.activeAccounts.toLocaleString("en-US") },
     { metric: "New enrollments (window)", value: r.newEnrollments.toLocaleString("en-US") },
     { metric: "Points earned", value: r.pointsEarned.toLocaleString("en-US") },
-    { metric: "Points redeemed", value: r.pointsRedeemed.toLocaleString("en-US") },
+    { metric: "Points used for rewards", value: r.pointsRedeemed.toLocaleString("en-US") },
     { metric: "Points outstanding", value: r.pointsOutstanding.toLocaleString("en-US") },
     { metric: "Redemption rate", value: pct(r.redemptionRate) },
-    { metric: "Points liability ($)", value: money(r.liabilityMinor) },
-    { metric: "Redeemed value ($)", value: money(r.redeemedValueMinor) },
-    { metric: "Breakage points", value: r.breakagePoints.toLocaleString("en-US") },
-    { metric: "Breakage ($)", value: money(r.breakageMinor) },
+    { metric: "Members who can use a reward now", value: r.membersWithReward.toLocaleString("en-US") },
+    { metric: "Members who can use 25% off", value: r.membersWithTopReward.toLocaleString("en-US") },
+    { metric: "10% off rewards used", value: r.rewards10Used.toLocaleString("en-US") },
+    { metric: "25% off rewards used", value: r.rewards25Used.toLocaleString("en-US") },
+    { metric: "Points expired", value: r.breakagePoints.toLocaleString("en-US") },
     { metric: "Avg earn basis ($)", value: money(r.avgEarnBasisMinor) },
-    { metric: "Codes issued", value: r.codesIssued.toLocaleString("en-US") },
-    { metric: "Codes redeemed", value: r.codesRedeemed.toLocaleString("en-US") },
-    { metric: "Code redemption rate", value: pct(r.codeRedemptionRate) },
-    { metric: "Avg days to redeem", value: String(r.avgDaysToRedeem) },
-    { metric: "Discount value redeemed ($)", value: money(r.discountValueMinor) },
-    { metric: "Outstanding code value ($)", value: money(r.outstandingCodeValueMinor) },
+    { metric: "Reward codes issued", value: r.codesIssued.toLocaleString("en-US") },
+    { metric: "Reward codes used", value: r.codesRedeemed.toLocaleString("en-US") },
+    { metric: "Reward code use rate", value: pct(r.codeRedemptionRate) },
+    { metric: "Avg days from issue to use", value: String(r.avgDaysToRedeem) },
+    { metric: "Amount taken off by rewards ($)", value: money(r.discountValueMinor) },
+    { metric: "Reward codes still open", value: r.codesOutstanding.toLocaleString("en-US") },
+    { metric: "Note", value: "Points have no cash value (owner decision D138, 2026-11-02)." },
   ];
 
   const sheets: TableSheet[] = [
@@ -90,11 +91,10 @@ export async function GET(request: Request) {
       rows: r.pointsByKind.map((k) => ({ label: k.label, points: k.points })),
     },
     {
-      name: "Tier detail",
+      name: "Badge detail",
       columns: TIER_COLUMNS,
       rows: r.tiers.map((t) => ({
         name: t.name,
-        discountBps: t.discountBps,
         members: t.members,
         outstandingPoints: t.outstandingPoints,
         lifetimePoints: t.lifetimePoints,
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     {
       name: "Code funnel",
       columns: CODE_COLUMNS,
-      rows: r.codeFunnel.map((c) => ({ label: c.label, count: c.count, valueMinor: c.valueMinor })),
+      rows: r.codeFunnel.map((c) => ({ label: c.label, count: c.count, takenOffMinor: c.takenOffMinor })),
     },
   ];
 

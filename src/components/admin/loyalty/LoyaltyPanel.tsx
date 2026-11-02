@@ -3,14 +3,18 @@
  *
  * Per-customer loyalty card for the customer detail page. Server component:
  * loads the account, tier, recent ledger, and active codes, and renders the
- * enroll / adjust / redeem forms (gated by the caller passing canManage).
+ * enroll / adjust / reward-code forms (gated by the caller passing canManage).
+ *
+ * D137–D141 (2026-11-02): points have NO cash value (no "$" next to the
+ * balance); a reward code is one of the two fixed rewards (150 pts = 10% off,
+ * 300 pts = 25% off); badges are names only; an open code can be cancelled
+ * here and its points come straight back.
  */
-import { Button, Input, Select, Field, Badge } from "@/components/admin/ui";
+import { Button, Input, Field, Badge } from "@/components/admin/ui";
 import {
   getAccountByCustomer,
   recentLedger,
   listRedemptions,
-  getConfig,
   listTiers,
 } from "@/lib/loyalty/loyalty-store";
 import { tierForPoints, formatPoints } from "@/lib/loyalty/engine";
@@ -18,11 +22,15 @@ import {
   enrollCustomerAction,
   adjustPointsAction,
   issueRedemptionAction,
+  cancelRedemptionAction,
 } from "@/app/admin/loyalty/actions";
-
-function money(minor: number): string {
-  return `$${(minor / 100).toFixed(2)}`;
-}
+import {
+  LOYALTY_REWARDS,
+  rewardButtonLabel,
+  rewardForPoints,
+  rewardShortLabel,
+  rewardStatusLine,
+} from "@/lib/loyalty/loyalty-reward-core";
 
 function fmtTime(iso: string): string {
   try {
@@ -40,7 +48,7 @@ function fmtTime(iso: string): string {
 
 const LEDGER_LABEL: Record<string, string> = {
   earn: "Earned",
-  redeem: "Redeemed",
+  redeem: "Reward used",
   adjust: "Adjustment",
   signup_bonus: "Signup bonus",
   promo_bonus: "Promo bonus",
@@ -75,8 +83,7 @@ export async function LoyaltyPanel({
     );
   }
 
-  const [cfg, tiers, ledger, redemptions] = await Promise.all([
-    getConfig(),
+  const [tiers, ledger, redemptions] = await Promise.all([
     listTiers(),
     recentLedger(account.id, 20),
     listRedemptions(account.id),
@@ -90,11 +97,9 @@ export async function LoyaltyPanel({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-[var(--admin-text)]">Loyalty</h2>
         {tier ? (
-          <Badge tone="gold">
-            {tier.name} · {(tier.discountBps / 100).toFixed(0)}% off
-          </Badge>
+          <Badge tone="gold">{tier.name}</Badge>
         ) : (
-          <Badge tone="neutral">No tier yet</Badge>
+          <Badge tone="neutral">No badge yet</Badge>
         )}
       </div>
 
@@ -102,46 +107,46 @@ export async function LoyaltyPanel({
         <div className="rounded-lg border border-[var(--admin-border)] px-3 py-2">
           <p className="text-xs text-white/40">Balance</p>
           <p className="font-semibold text-white">
-            {formatPoints(account.balance_points)}{" "}
-            <span className="text-xs font-normal text-white/40">
-              ({money(account.balance_points * cfg.pointValueMinor)})
-            </span>
+            {formatPoints(account.balance_points)}
           </p>
+          <p className="text-xs text-white/40">{rewardStatusLine(account.balance_points)}</p>
         </div>
         <div className="rounded-lg border border-[var(--admin-border)] px-3 py-2">
           <p className="text-xs text-white/40">Lifetime</p>
           <p className="font-semibold text-white">{formatPoints(account.lifetime_points)}</p>
         </div>
         <div className="rounded-lg border border-[var(--admin-border)] px-3 py-2">
-          <p className="text-xs text-white/40">Active codes</p>
+          <p className="text-xs text-white/40">Open reward codes</p>
           <p className="font-semibold text-white">{activeCodes.length}</p>
         </div>
       </div>
 
       {canManage && (
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
-          {/* Redeem */}
-          <form
-            action={issueRedemptionAction}
-            className="space-y-2 rounded-lg border border-[var(--admin-border)] p-3"
-          >
-            <h3 className="text-xs font-semibold text-white/70">Redeem points → code</h3>
-            <input type="hidden" name="account_id" value={account.id} />
-            <input type="hidden" name="customer_id" value={customerId} />
-            <Field label="Points to redeem" help={`Min ${cfg.minRedeemPoints}`}>
-              <Input name="points" inputMode="numeric" placeholder="100" />
-            </Field>
-            <Field label="Send via">
-              <Select name="channel" defaultValue="both">
-                <option value="both">Text &amp; email</option>
-                <option value="sms">Text only</option>
-                <option value="email">Email only</option>
-              </Select>
-            </Field>
-            <Button type="submit" variant="neutral">
-              Issue code
-            </Button>
-          </form>
+          {/* Reward code (D137) */}
+          <div className="space-y-2 rounded-lg border border-[var(--admin-border)] p-3">
+            <h3 className="text-xs font-semibold text-white/70">Give a reward code</h3>
+            <p className="text-xs text-white/40">
+              For a customer to bring in. The points come off now and come back if you cancel the code. To use a
+              reward on a sale right away, use the register or the order&apos;s Loyalty panel instead.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {LOYALTY_REWARDS.map((rw) => {
+                const enough = account.balance_points >= rw.points;
+                return (
+                  <form key={rw.points} action={issueRedemptionAction}>
+                    <input type="hidden" name="account_id" value={account.id} />
+                    <input type="hidden" name="customer_id" value={customerId} />
+                    <input type="hidden" name="rewardPoints" value={rw.points} />
+                    <Button type="submit" variant="neutral" disabled={!enough}>
+                      {rewardButtonLabel(rw)}
+                    </Button>
+                  </form>
+                );
+              })}
+            </div>
+            <p className="text-xs text-white/40">Give the code to the customer (it is shown below once issued).</p>
+          </div>
 
           {/* Adjust */}
           <form
@@ -167,20 +172,32 @@ export async function LoyaltyPanel({
       {/* Active codes */}
       {activeCodes.length > 0 && (
         <div className="mb-4">
-          <h3 className="mb-2 text-xs font-semibold text-white/70">Active redemption codes</h3>
+          <h3 className="mb-2 text-xs font-semibold text-white/70">Open reward codes</h3>
           <div className="space-y-1">
-            {activeCodes.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center justify-between rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-sm"
-              >
-                <span className="font-mono font-semibold text-[var(--admin-gold)]">{c.code}</span>
-                <span className="text-xs text-white/60">
-                  {formatPoints(c.points)} · {money(c.value_minor)}
-                  {c.expires_at ? ` · exp ${fmtTime(c.expires_at)}` : ""}
-                </span>
-              </div>
-            ))}
+            {activeCodes.map((c) => {
+              const rw = rewardForPoints(c.points);
+              return (
+                <div
+                  key={c.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-sm"
+                >
+                  <span className="font-mono font-semibold text-[var(--admin-gold)]">{c.code}</span>
+                  <span className="text-xs text-white/60">
+                    {rw ? rewardShortLabel(rw) : `${formatPoints(c.points)} (old code — can't be used; cancel to return the points)`}
+                    {c.expires_at ? ` · exp ${fmtTime(c.expires_at)}` : ""}
+                  </span>
+                  {canManage && (
+                    <form action={cancelRedemptionAction}>
+                      <input type="hidden" name="redemption_id" value={c.id} />
+                      <input type="hidden" name="customer_id" value={customerId} />
+                      <Button type="submit" size="sm" variant="danger">
+                        Cancel & return points
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

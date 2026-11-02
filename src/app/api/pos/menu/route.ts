@@ -790,12 +790,11 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     receipt,
     // POS B14 — earn rate for the device's points ESTIMATE on the receipt
     // (authoritative accrual runs server-side at completion).
-    // Task AM-B — point cash value + minimum balance so the register can
-    // offer "Redeem points" (the ONLINE /api/pos/loyalty route re-verifies).
+    // D137 — no point cash value any more (retired); the register's reward
+    // buttons come from loyalty-reward-core and the ONLINE /api/pos/loyalty
+    // route re-verifies the balance.
     loyalty: {
       pointsPerDollar: loyaltyCfg.pointsPerDollar,
-      pointValueMinor: loyaltyCfg.pointValueMinor,
-      minRedeemPoints: loyaltyCfg.minRedeemPoints,
     },
     // POS B23 — barcode → product-key index for scan-to-cart.
     barcodes,

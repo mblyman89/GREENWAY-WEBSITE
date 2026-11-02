@@ -82,7 +82,7 @@ vi.mock("@/lib/pos/receipt-config-store", () => ({ getPosReceiptConfig: async ()
 vi.mock("@/lib/pos/cash-rounding-store", () => ({ getPosCashRoundingConfig: async () => ({}) }));
 vi.mock("@/lib/pos/scan-required-store", () => ({ getPosScanRequiredConfig: async () => ({}) }));
 vi.mock("@/lib/loyalty/loyalty-store", () => ({
-  getConfig: async () => ({ pointsPerDollar: 1, pointValueMinor: 1, minRedeemPoints: 100 }),
+  getConfig: async () => ({ pointsPerDollar: 1 }),
 }));
 vi.mock("@/lib/discounts/special-discount-store", () => ({ getSpecialDiscountSettings: async () => [] }));
 vi.mock("@/lib/pos/cors", () => ({

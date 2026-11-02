@@ -70,13 +70,20 @@ import {
 } from "@/lib/pos/id-capture-core";
 import {
   applyLoyaltyToPricedLines,
-  maxRedeemablePoints,
   normalizeLoyaltyCodeInput,
   pricingFingerprint,
   type AppliedLoyalty,
   type PosLoyaltyGrant,
   type PosLoyaltyRequest,
 } from "@/lib/pos/register-loyalty-core";
+// D137 — loyalty rewards (150 pts = 10% off, 300 pts = 25% off).
+import {
+  rewardButtonLabel,
+  rewardForPoints,
+  rewardOptionsFor,
+  rewardShortLabel,
+  rewardStatusLine,
+} from "@/lib/loyalty/loyalty-reward-core";
 // SLICE 28 — special discounts (employee/industry/veteran) at the register:
 // pure percent math + floors + the people-rules, plus the display formatter.
 import {
@@ -579,7 +586,7 @@ function discountLabels(
   appliedSpecial: AppliedSpecialDiscount | null,
 ): { loyaltyLabel: string | null; specialLabel: string | null } {
   return {
-    loyaltyLabel: appliedLoyalty ? `Loyalty reward ${appliedLoyalty.code}` : null,
+    loyaltyLabel: appliedLoyalty ? appliedLoyaltyLabel(appliedLoyalty) : null,
     specialLabel: appliedSpecial
       ? `${SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} (${formatBps(appliedSpecial.percentBps)})`
       : null,
@@ -1382,7 +1389,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                 // one: deal (engine price) → manager override → medical
                 // tax pass-through → loyalty OR special. Display only.
                 ...discountTransparencyFields(l, base.engineLines, medLine?.medicalSavingsMinor ?? 0, {
-                  loyaltyLabel: appliedLoyalty ? `Loyalty reward ${appliedLoyalty.code}` : null,
+                  loyaltyLabel: appliedLoyalty ? appliedLoyaltyLabel(appliedLoyalty) : null,
                   specialLabel: appliedSpecial
                     ? `${SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} (${formatBps(appliedSpecial.percentBps)})`
                     : null,
@@ -1417,6 +1424,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                     pointsEarned: bundle.loyalty
                       ? Math.floor((priced.totals.subtotalMinorUnits / 100) * bundle.loyalty.pointsPerDollar)
                       : null,
+                    rewardUsed:
+                      appliedLoyalty?.rewardPoints && rewardForPoints(appliedLoyalty.rewardPoints)
+                        ? rewardShortLabel(rewardForPoints(appliedLoyalty.rewardPoints)!)
+                        : null,
                   }
                 : null,
           };
@@ -3958,8 +3969,11 @@ function CartScreen({
               <div className="mb-2 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs">
                 <p className="font-semibold text-[var(--pos-accent)]">
                   💚 {member.label} has {member.points.toLocaleString("en-US")} points
-                  {bundle.loyalty.pointValueMinor ? ` (= ${money(member.points * bundle.loyalty.pointValueMinor)})` : ""}
                 </p>
+                {/* D137: points have no cash value; show what they unlock. */}
+                {rewardStatusLine(member.points) ? (
+                  <p className="mt-0.5 text-[var(--pos-text-muted)]">{rewardStatusLine(member.points)}</p>
+                ) : null}
                 {cart.length > 0 ? (
                   <p className="mt-0.5 text-[var(--pos-text-muted)]">
                     This sale earns ~
@@ -4024,7 +4038,7 @@ function CartScreen({
               />
             ) : null}
             {appliedLoyalty && loyaltyView ? (
-              <Row label={`Loyalty ${appliedLoyalty.code}`} value={`−${money(loyaltyView.appliedMinor)}`} accent />
+              <Row label={appliedLoyaltyLabel(appliedLoyalty)} value={`−${money(loyaltyView.appliedMinor)}`} accent />
             ) : null}
             {appliedSpecial && specialView ? (
               <Row
@@ -5584,12 +5598,10 @@ function LoyaltyRedeemPanel({
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeInput, setCodeInput] = useState("");
 
-  const pointValueMinor = bundle.loyalty?.pointValueMinor ?? 0;
-  const minRedeemPoints = bundle.loyalty?.minRedeemPoints ?? 0;
-  const redeemable = member ? maxRedeemablePoints(member.points, minRedeemPoints) : 0;
-  // The most the member's balance could be worth — the server may size it
-  // DOWN to the cart's legal capacity; this is only the button's estimate.
-  const estimateMinor = Math.floor(redeemable * pointValueMinor);
+  // D137: one button per reward the balance covers (150 pts = 10% off,
+  // 300 pts = 25% off). Exactly that many points are used, never the whole
+  // balance. The server re-checks the balance and applies the percent.
+  const rewardOptions = member && bundle.loyalty ? rewardOptionsFor(member.points) : [];
 
   const requestLines = () =>
     pricedLines.map((l) => ({
@@ -5610,9 +5622,11 @@ function LoyaltyRedeemPanel({
     pointsSpent: grant.pointsSpent,
     fingerprint,
     perVariant: grant.perVariant,
+    ...(grant.rewardPoints ? { rewardPoints: grant.rewardPoints } : {}),
+    ...(grant.percentBps ? { percentBps: grant.percentBps } : {}),
   });
 
-  const redeemPoints = async () => {
+  const redeemPoints = async (rewardPoints: number) => {
     if (!member || busy) return;
     setBusy(true);
     setError(null);
@@ -5620,7 +5634,12 @@ function LoyaltyRedeemPanel({
     // the server works, the drift effect drops (and refunds) the grant the
     // moment it lands — a spread is only ever honored for its exact cart.
     const requestedFor = loyaltyFingerprint;
-    const res = await onLoyalty({ action: "redeem-points", customerId: member.customerId, lines: requestLines() });
+    const res = await onLoyalty({
+      action: "redeem-points",
+      customerId: member.customerId,
+      lines: requestLines(),
+      rewardPoints,
+    });
     setBusy(false);
     if (res.ok) setAppliedLoyalty(grantToApplied(res.grant, requestedFor));
     else setError(res.error);
@@ -5646,8 +5665,7 @@ function LoyaltyRedeemPanel({
     return (
       <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2">
         <p className="text-xs font-semibold text-[var(--pos-accent)]">
-          ★ Loyalty {appliedLoyalty.code} — {money(appliedLoyalty.appliedMinor)} off
-          {appliedLoyalty.source === "points" ? ` (${appliedLoyalty.pointsSpent} pts)` : ""}
+          ★ {appliedLoyaltyLabel(appliedLoyalty)} — {money(appliedLoyalty.appliedMinor)} off
         </p>
         <button
           type="button"
@@ -5663,22 +5681,21 @@ function LoyaltyRedeemPanel({
     );
   }
 
-  const showRedeem = member !== null && redeemable > 0 && pointValueMinor > 0;
-
   return (
     <div className="mb-3">
       <div className="flex flex-wrap gap-2">
-        {showRedeem ? (
+        {rewardOptions.map((r) => (
           <button
+            key={r.points}
             type="button"
             disabled={busy || cartEmpty}
-            onClick={redeemPoints}
-            title="Spend the member's points on this sale. The server sizes the discount to what the cart can legally absorb — points are never partially burned."
+            onClick={() => void redeemPoints(r.points)}
+            title={`Uses exactly ${r.points} of the member's points. The percent comes off each item's regular price; per item the customer gets the better of today's deal or the reward, never both.`}
             className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs font-bold text-[var(--pos-accent)] disabled:opacity-40"
           >
-            ★ Redeem {redeemable.toLocaleString("en-US")} pts (~{money(estimateMinor)})
+            ★ {rewardButtonLabel(r)}
           </button>
-        ) : null}
+        ))}
         <button
           type="button"
           disabled={busy || cartEmpty}
@@ -5721,6 +5738,16 @@ function LoyaltyRedeemPanel({
       ) : null}
     </div>
   );
+}
+
+/**
+ * D137 — what an applied reward is called on the rail, the payment screen and
+ * the receipt: "Loyalty 25% off (300 pts) GW-XXXX-XXXX". Falls back to the
+ * code alone for state saved before rewards existed.
+ */
+function appliedLoyaltyLabel(a: AppliedLoyalty): string {
+  const reward = a.rewardPoints ? rewardForPoints(a.rewardPoints) : null;
+  return reward ? `Loyalty ${rewardShortLabel(reward)} ${a.code}` : `Loyalty reward ${a.code}`;
 }
 
 /** SLICE 28 — human labels for the three special-discount programs. */
@@ -6776,7 +6803,7 @@ function TenderScreen({
         ) : null}
         {appliedLoyalty ? (
           <p className="mt-1 text-sm font-semibold text-[var(--pos-accent)]">
-            Loyalty {appliedLoyalty.code} −{money(appliedLoyalty.appliedMinor)}
+            {appliedLoyaltyLabel(appliedLoyalty)} −{money(appliedLoyalty.appliedMinor)}
           </p>
         ) : null}
         {discountSummary.savedTotalMinor > 0 && (discountCfg.showLineSavings || discountCfg.showOrderPercent) ? (

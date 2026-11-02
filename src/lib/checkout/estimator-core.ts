@@ -10,12 +10,11 @@
  *
  *  - LOYALTY EARN mirrors basePointsForSubtotal (src/lib/loyalty/engine.ts):
  *    points accrue on the PRETAX subtotal at pointsPerDollar, floored.
- *  - LOYALTY REDEMPTION value mirrors pointsValueMinor + the statutory floor
- *    policy in loyalty-sale-core.ts: cannabis can never be free
- *    (RCW 69.50.357), so the redeemable value is capped by what the cart can
- *    legally absorb (1¢ floor per cannabis unit; merch may reach $0). The
- *    config minimum-to-redeem gate (loyalty_config.min_redeem_points) is
- *    honoured exactly like canRedeem() in engine.ts.
+ *  - LOYALTY REWARDS (D137) mirror loyalty-reward-core: 150 pts = 10% off,
+ *    300 pts = 25% off, one per visit; per item the better of the deal or
+ *    the reward percent off the regular price, never both; cannabis never
+ *    below the 1¢ statutory floor (RCW 69.50.357). Points have no cash
+ *    value (the $0.10-per-point program is retired).
  *  - MEDICAL savings mirror lineBaseMinor + decideLineExemption in
  *    medical-sale-core.ts (grounded in RCW 82.08.9998 sales-tax exemption and
  *    WAC 314-55-090(1) excise exemption, chapter 246-70 WAC DOH categories):
@@ -66,6 +65,12 @@ import {
   type Tier,
 } from "@/lib/promotions/discount-engine-core";
 import {
+  nextRewardFor,
+  rewardOptionsFor,
+  rewardPercentLabel,
+  type LoyaltyReward,
+} from "@/lib/loyalty/loyalty-reward-core";
+import {
   snapshotToEngineRule,
   type PublishedRuleSnapshot,
 } from "@/lib/promotions/published-rules-core";
@@ -77,10 +82,9 @@ import {
 export type EstimatorLoyaltyConfig = {
   /** 1.0 = 1 point per pretax dollar (loyalty_config.points_per_dollar). */
   pointsPerDollar: number;
-  /** Cents per point (loyalty_config.point_value_minor). */
-  pointValueMinor: number;
-  /** Minimum balance before any redemption (loyalty_config.min_redeem_points). */
-  minRedeemPoints: number;
+  // D137: no point cash value any more — the $0.10-per-point program is
+  // retired. The rewards (150 pts = 10% off, 300 pts = 25% off) come from
+  // loyalty-reward-core, the same constants the register uses.
 };
 
 export type EstimatorMedicalConfig = {
@@ -99,8 +103,6 @@ export type EstimatorContext = {
 
 export const DEFAULT_ESTIMATOR_LOYALTY: EstimatorLoyaltyConfig = {
   pointsPerDollar: 1,
-  pointValueMinor: 1,
-  minRedeemPoints: 100,
 };
 
 // ---------------------------------------------------------------------------
@@ -116,69 +118,94 @@ export type EstimatorLine = {
   quantity: number;
   /** Engine-discounted per-unit price, TAX-INCLUSIVE, minor units. */
   unitPriceMinorUnits: number;
+  /**
+   * D137: the per-unit REGULAR price (before the day's deal), so the reward
+   * estimate gives each item the better of the deal or the reward. Optional;
+   * without it the deal price is used as the regular price.
+   */
+  regularPriceMinorUnits?: number;
 };
 
 // ---------------------------------------------------------------------------
-// Loyalty — earn preview + redemption estimate
+// Loyalty — earn preview + reward estimate
 // ---------------------------------------------------------------------------
 
 /**
  * Points this order would earn — mirrors basePointsForSubtotal in
  * src/lib/loyalty/engine.ts EXACTLY (pretax dollars × rate, floored; no
  * negative). Register promotions (multipliers/happy hour) can only ADD to
- * this, so the preview is a safe lower bound.
+ * this, so the preview is a safe lower bound. Points have no cash value
+ * (D137), so only the count is returned.
  */
 export function estimateEarnPoints(
   pretaxSubtotalMinor: number,
   cfg: EstimatorLoyaltyConfig,
-): { points: number; valueMinor: number } {
-  if (pretaxSubtotalMinor <= 0) return { points: 0, valueMinor: 0 };
+): { points: number } {
+  if (pretaxSubtotalMinor <= 0) return { points: 0 };
   const points = Math.floor((pretaxSubtotalMinor / 100) * cfg.pointsPerDollar);
-  return { points, valueMinor: points * cfg.pointValueMinor };
+  return { points: Math.max(0, points) };
 }
 
 /**
- * The most loyalty value this cart can legally absorb: every cannabis unit
- * keeps at least the 1¢ statutory floor (RCW 69.50.357); merch may reach $0.
- * Mirrors loyaltyUnitFloor in loyalty-sale-core.ts with costs unknown
- * (the register additionally enforces acquisition-cost floors it knows).
+ * What ONE reward would take off this cart: per item, the better of the
+ * day's deal or the reward percent off the regular price (never both), each
+ * cannabis unit kept at the 1¢ statutory floor (RCW 69.50.357). The register
+ * also enforces acquisition-cost floors and the never-discount list, which
+ * the website does not know, so this is a best-case estimate.
  */
-export function maxLoyaltyAbsorbMinor(lines: EstimatorLine[]): number {
-  let absorb = 0;
+export function estimateRewardSavingsMinor(lines: EstimatorLine[], reward: Pick<LoyaltyReward, "percentBps">): number {
+  let saved = 0;
   for (const line of lines) {
     const qty = Math.max(0, Math.round(line.quantity));
     const unit = Math.max(0, Math.round(line.unitPriceMinorUnits));
-    if (unit <= 0 || qty <= 0) continue;
+    const regular = Math.max(unit, Math.round(line.regularPriceMinorUnits ?? unit));
+    if (qty <= 0 || unit <= 0) continue;
     const floor = isNonCannabisCategory(line.category) ? 0 : MIN_CANNABIS_UNIT_PRICE_MINOR;
-    absorb += Math.max(0, unit - floor) * qty;
+    const rewardPrice = Math.max(floor, Math.round(regular * (1 - reward.percentBps / 10000)));
+    saved += Math.max(0, unit - rewardPrice) * qty;
   }
-  return absorb;
+  return saved;
 }
 
-export type LoyaltyRedeemEstimate =
+export type LoyaltyRewardEstimate =
   | { status: "none" }
-  | { status: "below_min"; shortfallPoints: number }
-  | { status: "ok"; valueMinor: number; cappedByCart: boolean };
+  | { status: "below_min"; shortfallPoints: number; nextPercentLabel: string }
+  | {
+      status: "ok";
+      /** One row per reward the balance covers, lowest first. */
+      options: { points: number; percentLabel: string; savingsMinor: number }[];
+      /** The reward that saves the most on THIS cart (null if none save anything). */
+      bestPoints: number | null;
+    };
 
 /**
- * Estimated register value of a points balance against THIS cart. Honours the
- * config minimum-to-redeem exactly like canRedeem() in engine.ts, and caps at
- * what the cart can legally absorb.
+ * D137: which rewards a points balance unlocks and what each would take off
+ * THIS cart. One reward per visit.
  */
-export function estimateLoyaltyRedemption(
-  balancePoints: number,
-  cfg: EstimatorLoyaltyConfig,
-  lines: EstimatorLine[],
-): LoyaltyRedeemEstimate {
+export function estimateLoyaltyRewards(balancePoints: number, lines: EstimatorLine[]): LoyaltyRewardEstimate {
   const balance = Math.floor(balancePoints);
   if (!Number.isFinite(balance) || balance <= 0) return { status: "none" };
-  if (balance < cfg.minRedeemPoints) {
-    return { status: "below_min", shortfallPoints: cfg.minRedeemPoints - balance };
+  const options = rewardOptionsFor(balance);
+  if (options.length === 0) {
+    const next = nextRewardFor(balance);
+    return next
+      ? { status: "below_min", shortfallPoints: next.pointsNeeded, nextPercentLabel: rewardPercentLabel(next.reward) }
+      : { status: "none" };
   }
-  const raw = Math.max(0, balance * cfg.pointValueMinor);
-  const cap = maxLoyaltyAbsorbMinor(lines);
-  const valueMinor = Math.min(raw, cap);
-  return { status: "ok", valueMinor, cappedByCart: valueMinor < raw };
+  const rows = options.map((r) => ({
+    points: r.points,
+    percentLabel: rewardPercentLabel(r),
+    savingsMinor: estimateRewardSavingsMinor(lines, r),
+  }));
+  let bestPoints: number | null = null;
+  let bestSaved = 0;
+  for (const row of rows) {
+    if (row.savingsMinor > bestSaved) {
+      bestSaved = row.savingsMinor;
+      bestPoints = row.points;
+    }
+  }
+  return { status: "ok", options: rows, bestPoints };
 }
 
 // ---------------------------------------------------------------------------

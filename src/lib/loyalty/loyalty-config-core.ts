@@ -7,20 +7,25 @@
  * tsx.
  *
  * Money is in MINOR UNITS (cents). Discounts in basis points (bps).
+ *
+ * D138 (owner, 2026-11-02): "the $0.10-per-point should be retired". Points
+ * have NO cash value, so the point value and minimum-to-redeem settings are
+ * gone from the customizer. Rewards are fixed (loyalty-reward-core.ts).
+ * D139: member badges (tiers) are names only — the only thing the owner
+ * edits about a badge is its name (parseTierName).
  */
 
 export type ConfigDraft = {
   pointsPerDollar: number;
-  pointValueMinor: number;
-  minRedeemPoints: number;
   signupBonusPoints: number;
   codeExpiryDays: number | null;
 };
 
-export type TierDraft = {
+/** A member badge as the rename card sees it (names only — D139). */
+export type BadgeNameDraft = {
+  id: string;
   name: string;
   minPoints: number;
-  discountBps: number;
 };
 
 export type PromoKind = "signup" | "happy_hour" | "promo" | "custom";
@@ -86,8 +91,6 @@ export function minorToDollarsLabel(minor: number): string {
 // ---------------------------------------------------------------------------
 export function parseConfigDraft(input: {
   pointsPerDollar: unknown;
-  pointValueMinor: unknown; // already in cents
-  minRedeemPoints: unknown;
   signupBonusPoints: unknown;
   codeExpiryDays: unknown; // "" => never (null)
 }): ParseResult<ConfigDraft> {
@@ -96,13 +99,6 @@ export function parseConfigDraft(input: {
   const ppd = parseDecimal(input.pointsPerDollar);
   if (!Number.isFinite(ppd) || ppd < 0) errors.push("Earn rate must be 0 or more points per dollar.");
   else if (ppd > 100) errors.push("Earn rate looks too high (max 100 pt/$1).");
-
-  const pvm = parseInt0(input.pointValueMinor);
-  if (!Number.isFinite(pvm) || pvm < 1) errors.push("Point value must be at least $0.01 per point.");
-  else if (pvm > 10000) errors.push("Point value looks too high (max $100.00 per point).");
-
-  const mrp = parseInt0(input.minRedeemPoints);
-  if (!Number.isFinite(mrp) || mrp < 0) errors.push("Minimum to redeem must be 0 or more points.");
 
   const sbp = parseInt0(input.signupBonusPoints);
   if (!Number.isFinite(sbp) || sbp < 0) errors.push("Signup bonus must be 0 or more points.");
@@ -122,8 +118,6 @@ export function parseConfigDraft(input: {
     ok: true,
     value: {
       pointsPerDollar: ppd,
-      pointValueMinor: pvm,
-      minRedeemPoints: mrp,
       signupBonusPoints: sbp,
       codeExpiryDays: ced,
     },
@@ -131,43 +125,44 @@ export function parseConfigDraft(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Tier validation
+// Member badge names (D139 — names only)
 // ---------------------------------------------------------------------------
-export function parseTierDraft(input: {
-  name: unknown;
-  minPoints: unknown;
-  discountBps: unknown; // already bps
-}): ParseResult<TierDraft> {
+export const BADGE_NAME_MAX = 40;
+
+/**
+ * Validate a new badge name. Trims and collapses inner whitespace, refuses
+ * blank / too long / control characters, and refuses a name another badge
+ * already uses (case-insensitive) so the register never shows two "Gold"s.
+ */
+export function parseTierName(
+  raw: unknown,
+  opts?: { otherNames?: string[] },
+): ParseResult<string> {
+  const name = String(raw ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   const errors: string[] = [];
-  const name = String(input.name ?? "").trim();
-  if (name === "") errors.push("Tier name is required.");
-  else if (name.length > 40) errors.push("Tier name is too long (max 40 characters).");
-
-  const minPoints = parseInt0(input.minPoints);
-  if (!Number.isFinite(minPoints) || minPoints < 0) errors.push("Tier threshold must be 0 or more points.");
-
-  const discountBps = parseInt0(input.discountBps);
-  if (!Number.isFinite(discountBps) || discountBps < 0) errors.push("Tier discount must be 0% or more.");
-  // COMPLIANCE (RCW 69.50.357): a loyalty tier can never make cannabis free —
-  // cap standing discounts below 100%.
-  else if (discountBps >= 10000) errors.push("Tier discount must stay below 100% — cannabis can never be free (RCW 69.50.357).");
-
+  if (name === "") errors.push("Badge name is required.");
+  else if (name.length > BADGE_NAME_MAX) errors.push(`Badge name is too long (max ${BADGE_NAME_MAX} characters).`);
+  else if (/[\u0000-\u001f<>]/.test(name)) errors.push("Badge name can only use letters, numbers, spaces and simple punctuation.");
+  else if ((opts?.otherNames ?? []).some((n) => n.trim().toLowerCase() === name.toLowerCase())) {
+    errors.push(`Another badge is already called "${name}".`);
+  }
   if (errors.length) return { ok: false, errors };
-  return { ok: true, value: { name, minPoints, discountBps } };
+  return { ok: true, value: name };
 }
 
-/** Warn if two tiers share a threshold or a lower tier gives a bigger discount. */
-export function tierWarnings(tiers: TierDraft[]): string[] {
+/** Warn when two badges share a name or a threshold (display clarity only). */
+export function badgeNameWarnings(badges: BadgeNameDraft[]): string[] {
   const warnings: string[] = [];
-  const sorted = [...tiers].sort((a, b) => a.minPoints - b.minPoints);
-  for (let i = 1; i < sorted.length; i += 1) {
-    if (sorted[i].minPoints === sorted[i - 1].minPoints) {
-      warnings.push(`Two tiers share the same ${sorted[i].minPoints}-point threshold.`);
-    }
-    if (sorted[i].discountBps < sorted[i - 1].discountBps) {
-      warnings.push(
-        `"${sorted[i].name}" needs more points than "${sorted[i - 1].name}" but gives a smaller discount.`,
-      );
+  const sorted = [...badges].sort((a, b) => a.minPoints - b.minPoints);
+  const seen = new Set<string>();
+  for (let i = 0; i < sorted.length; i += 1) {
+    const key = sorted[i].name.trim().toLowerCase();
+    if (seen.has(key)) warnings.push(`Two badges are both called "${sorted[i].name}".`);
+    seen.add(key);
+    if (i > 0 && sorted[i].minPoints === sorted[i - 1].minPoints) {
+      warnings.push(`Two badges share the same ${sorted[i].minPoints}-point threshold.`);
     }
   }
   return warnings;
@@ -247,15 +242,15 @@ export function previewEarn(opts: {
   cfg: ConfigDraft;
   multiplierBps?: number;
   flatBonusPoints?: number;
-}): { base: number; total: number; valueMinor: number } {
+}): { base: number; total: number } {
   const { subtotalMinor, cfg } = opts;
-  if (subtotalMinor <= 0) return { base: 0, total: 0, valueMinor: 0 };
+  if (subtotalMinor <= 0) return { base: 0, total: 0 };
   const dollars = subtotalMinor / 100;
   const base = Math.floor(dollars * cfg.pointsPerDollar);
   const mult = opts.multiplierBps ?? 10000;
   const boosted = Math.floor((base * mult) / 10000);
   const total = boosted + (opts.flatBonusPoints ?? 0);
-  return { base, total, valueMinor: total * cfg.pointValueMinor };
+  return { base, total };
 }
 
 // ---------------------------------------------------------------------------
@@ -277,31 +272,33 @@ export function __runLoyaltyConfigTests(): void {
   // config validation
   const okCfg = parseConfigDraft({
     pointsPerDollar: "1",
-    pointValueMinor: "1",
-    minRedeemPoints: "100",
     signupBonusPoints: "0",
     codeExpiryDays: "",
   });
   assert(okCfg.ok && okCfg.value.codeExpiryDays === null, "blank expiry => never");
   const badCfg = parseConfigDraft({
     pointsPerDollar: "-1",
-    pointValueMinor: "0",
-    minRedeemPoints: "x",
     signupBonusPoints: "-5",
     codeExpiryDays: "0",
   });
   assert(!badCfg.ok, "bad config rejected");
+  // D138: the retired point value can't sneak back in through the draft.
+  assert(okCfg.ok && Object.keys(okCfg.value).sort().join(",") === "codeExpiryDays,pointsPerDollar,signupBonusPoints", "no point value in config (D138)");
 
-  // tier validation + warnings
-  const okTier = parseTierDraft({ name: "Gold", minPoints: "300", discountBps: "2500" });
-  assert(okTier.ok && okTier.value.discountBps === 2500, "gold tier ok");
-  const badTier = parseTierDraft({ name: "", minPoints: "-1", discountBps: "20000" });
-  assert(!badTier.ok, "bad tier rejected");
-  const warns = tierWarnings([
-    { name: "A", minPoints: 100, discountBps: 2000 },
-    { name: "B", minPoints: 200, discountBps: 1000 },
+  // badge names (D139)
+  const n1 = parseTierName("  Green   Leaf ");
+  assert(n1.ok && n1.value === "Green Leaf", "badge name trimmed + collapsed");
+  assert(!parseTierName("").ok, "blank badge name refused");
+  assert(!parseTierName("x".repeat(41)).ok, "41-char badge name refused");
+  assert(parseTierName("x".repeat(40)).ok, "40-char badge name ok");
+  assert(!parseTierName("<b>Gold</b>").ok, "markup refused");
+  assert(!parseTierName("gold", { otherNames: ["Gold"] }).ok, "duplicate name refused (case-insensitive)");
+  assert(parseTierName("Gold", { otherNames: ["Bronze"] }).ok, "distinct name ok");
+  const warns = badgeNameWarnings([
+    { id: "a", name: "Gold", minPoints: 150 },
+    { id: "b", name: "gold", minPoints: 300 },
   ]);
-  assert(warns.some((w) => w.includes("smaller discount")), "detects inverted discount");
+  assert(warns.some((w) => w.includes("both called")), "detects duplicate badge names");
 
   // promo validation
   const okPromo = parsePromoDraft({
@@ -338,8 +335,6 @@ export function __runLoyaltyConfigTests(): void {
   // earn preview
   const cfg: ConfigDraft = {
     pointsPerDollar: 1,
-    pointValueMinor: 1,
-    minRedeemPoints: 100,
     signupBonusPoints: 0,
     codeExpiryDays: null,
   };
@@ -349,6 +344,7 @@ export function __runLoyaltyConfigTests(): void {
   assert(p2.total === 110, "$50 @2x +10 => 110 pts");
   const p3 = previewEarn({ subtotalMinor: 0, cfg });
   assert(p3.total === 0, "$0 => 0 pts");
+  assert(!("valueMinor" in p1), "earn preview carries no dollar value (D138)");
 
   console.log("loyalty-config-core: ALL TESTS PASSED");
 }

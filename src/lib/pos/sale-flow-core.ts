@@ -251,14 +251,14 @@ export type PosMenuBundle = {
    */
   loyalty?: {
     pointsPerDollar: number;
-    /**
-     * Task AM-B — cash value of one point + the minimum redeemable balance,
-     * so the register can show the "Redeem points" button with an estimate.
-     * OPTIONAL so pre-AM-B cached bundles still parse (button hidden). The
-     * ONLINE /api/pos/loyalty route re-verifies both before issuing.
+    /*
+     * D137 (owner 2026-11-02): the $0.10-per-point cash value is RETIRED, so
+     * the bundle no longer carries pointValueMinor / minRedeemPoints. The
+     * rewards (150 pts = 10% off, 300 pts = 25% off) are fixed in
+     * loyalty-reward-core and compiled into the register. An OLDER register
+     * app that still looks for pointValueMinor finds none and hides its old
+     * "Redeem all points" button until the app is rebuilt.
      */
-    pointValueMinor?: number;
-    minRedeemPoints?: number;
   };
   /**
    * Barcode index (POS B23): normalized package barcode (lot code / CCRS

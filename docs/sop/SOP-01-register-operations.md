@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.17 (draft for owner review; owner message 2026-11-02 (close-drawer open and clock-out, D129–D132): on the iPad close **only the cashier working the drawer can open it for the blind count**, with their own PIN, **once**; opening it again needs a reason and the owner is warned (§4.27); **you can clock out as soon as your blind count is done**, without waiting for the office second count, and the clock-out guard looks at the drawer you are **working**, not one you counted in for someone else (§4.2). Earlier, v1.16: owner message 2026-11-02 (drawer guards, D125–D127): **a $0.00 close must be confirmed** ("The drawer is really empty"); **reconcile is held** when the two counts are more than $5.00 apart until the manager chooses the count and says why; **owner and admin can correct a reconciled drawer** on its till summary (reason required, books untouched). Earlier, v1.15: owner message (shift end, D121–D124): **the iPad close is one person**: bills, tips, your PIN, done; the register is then ready for the next cashier. **The second count is done in the office** on Register Activity, and a manager cannot reconcile until it is saved (§4.27, §4.30). **Clock in / Clock out** is a big button on the lock screen and answers straight away (§4.2). Earlier, 1.14: register loyalty signup (§4.12a). Earlier, 1.13: R-DRAWER-1 (owner request): the drawer can open **without a printed receipt** on a cash sale, set at Register Activity → Cash drawer & receipt, and opens **once per sale** (§4.16). Earlier: G-75 (owner message 17, D118–D119): the register customer search finds any part of a name in either order, a last name, phone digits, email or Customer ID, as you type, with the last purchase and total spent on each result (§4 cart header). Earlier, 1.11: Fix Phase 6F (owner message 9, D91–D96): **anyone may return by default**, with the loyalty rule, the return window (default **7 days**) and the returnable product types as settings at Register Activity → Return policy (§4.23); the **tips box is required** on the iPad close, 0 allowed (§4.27). Earlier: Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.18 (draft for owner review; owner message 2026-11-02 (loyalty rewards, D137–D141): **150 points = 10% off, 300 points = 25% off**, one reward per sale, no dollar cap, exactly those points used; **points have no cash value** ($0.10 per point retired); Bronze / Gold are **names only** (§4.12). Earlier, v1.17: owner message 2026-11-02 (close-drawer open and clock-out, D129–D132): on the iPad close **only the cashier working the drawer can open it for the blind count**, with their own PIN, **once**; opening it again needs a reason and the owner is warned (§4.27); **you can clock out as soon as your blind count is done**, without waiting for the office second count, and the clock-out guard looks at the drawer you are **working**, not one you counted in for someone else (§4.2). Earlier, v1.16: owner message 2026-11-02 (drawer guards, D125–D127): **a $0.00 close must be confirmed** ("The drawer is really empty"); **reconcile is held** when the two counts are more than $5.00 apart until the manager chooses the count and says why; **owner and admin can correct a reconciled drawer** on its till summary (reason required, books untouched). Earlier, v1.15: owner message (shift end, D121–D124): **the iPad close is one person**: bills, tips, your PIN, done; the register is then ready for the next cashier. **The second count is done in the office** on Register Activity, and a manager cannot reconcile until it is saved (§4.27, §4.30). **Clock in / Clock out** is a big button on the lock screen and answers straight away (§4.2). Earlier, 1.14: register loyalty signup (§4.12a). Earlier, 1.13: R-DRAWER-1 (owner request): the drawer can open **without a printed receipt** on a cash sale, set at Register Activity → Cash drawer & receipt, and opens **once per sale** (§4.16). Earlier: G-75 (owner message 17, D118–D119): the register customer search finds any part of a name in either order, a last name, phone digits, email or Customer ID, as you type, with the last purchase and total spent on each result (§4 cart header). Earlier, 1.11: Fix Phase 6F (owner message 9, D91–D96): **anyone may return by default**, with the loyalty rule, the return window (default **7 days**) and the returnable product types as settings at Register Activity → Return policy (§4.23); the **tips box is required** on the iPad close, 0 allowed (§4.27). Earlier: Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -346,7 +346,7 @@ The cart screen has three zones.
 - **Red/amber notices** (blocks and warnings, 4.10).
 - **Legal limit (WAC 314-55-095)** meter with an **OK / NEAR / OVER** badge and a bar for each category used (for example *Usable 3.5g / 28g*).
 - **Items** list.
-- **Loyalty box** (members): *"💚 <name> has N points (= $X)"* and *"This sale earns ~N points"*, with **★ Redeem N pts (~$X)** and **Loyalty code…**.
+- **Loyalty box** (members): *"💚 <name> has N points"*, a reward line such as *"Can use 10% off now · 100 more points to 25% off"*, and *"This sale earns ~N points"*, with **★ Use 150 pts – 10% off** / **★ Use 300 pts – 25% off** (only the ones the balance covers) and **Loyalty code…** (D137, v1.18).
 - **Special discount buttons** (employee, friends & family, veteran, industry, where enabled).
 - **Totals:**
   - **Subtotal (pre-tax)**
@@ -457,7 +457,7 @@ There are **six** kinds of price reduction at the register. Knowing which ones c
 |---|---|---|---|
 | **Promotions / deals** (menu prices, tiers, "Deals & sale prices") | Automatic, from the menu | Shown in **Discount**; a loyalty or special discount is compared against it (best deal wins) | None |
 | **Medical tax exemption** | Automatic, on a valid card + DOH-registered product + endorsed store | Stacks with everything (it is a tax, not a discount) | Card capture (4.6) |
-| **Loyalty redemption** (points or a code) | Cashier, member present | **Never** with a special discount | None (server checks it) |
+| **Loyalty reward** (150 pts = 10% off, 300 pts = 25% off, or a reward code) | Cashier, member present | **Never** with a special discount; per item the better of the deal or the reward, never both | None (server checks it) |
 | **Special discount** (employee, friends & family, veteran, industry) | Cashier | **Never** with a loyalty redemption; never compounds on a promotion | PINs as listed in 4.13 |
 | **Price override** (markdown, one line) | Manager or lead | Replaces the line's price | Manager/lead PIN |
 | **Discount adjust** (one line, %, or new price) | Cashier + a second employee | Replaces the line's price (never stacks) | Second employee's PIN |
@@ -469,25 +469,43 @@ There are **six** kinds of price reduction at the register. Knowing which ones c
 4. **Discounts are tied to the exact cart.** Any change to the cart after applying a loyalty or special discount removes it. **Build the cart first, apply the discount last, then tender.**
 5. **PIN-based discounts need internet.** The register verifies every PIN with the server.
 
-### 4.12 Loyalty: points and codes
+### 4.12 Loyalty: points and rewards
 
 The loyalty box appears only when a **member is attached** (automatically after an ID scan, or by searching).
 
-**Redeem points**
-1. Tap **★ Redeem N pts (~$X)**. The button appears only when the member has enough points (at or above the program minimum) and the program has a point value set.
-2. The server decides how much of the cart can legally take the discount, and **never burns points partially**.
-3. The applied line shows **★ Loyalty <code> — $X off (N pts)** with **Remove (refund pts)**.
+**The rewards (owner rule D137, v1.18).** *"yes, one redemption per sale, and works exactly as you described in the proposed fix. no dollar cap on the 25% off."*
 
-**Apply a code** (a reward code the customer brings, format **GW-XXXX-XXXX**)
+| Reward | Points used | What it takes off |
+|---|---|---|
+| **10% off** | exactly 150 | 10% off each item's regular price |
+| **25% off** | exactly 300 | 25% off each item's regular price |
+
+- **Points have no cash value** (D138). The old $0.10 per point is retired; never tell a customer their points are "worth" dollars.
+- **One reward per sale**, no dollar cap. The customer picks which one; 25% is usually better when they have 300 or more.
+- **Best of deal or reward, per item.** An item already on a deal as good or better keeps its deal and the reward takes nothing more off it. Never-discount items and legal price floors (1¢, acquisition cost) are respected (D140).
+- **Badges are names only** (D139). Bronze / Gold (or whatever the owner renames them) give no discount.
+
+**Use a reward**
+1. Build the cart first. Tap **★ Use 150 pts – 10% off** or **★ Use 300 pts – 25% off**. A button shows only when the balance covers it. Hover or long-press for the rule.
+2. The server prices it and deducts **exactly** those points.
+3. The applied line shows the reward (for example **Loyalty 25% off (300 pts) GW-…** with the amount off) and **Remove (refund pts)**. The receipt prints *Reward used: 25% off (300 pts)*.
+4. If you change the cart, the reward is removed and the points go back; apply it again last.
+
+**Apply a code** (a reward code the customer brings, format **GW-XXXX-XXXX**, made on their profile in the back office)
 1. Tap **Loyalty code…**, type the code, then tap **Apply** or press Enter.
 2. While the server checks it you see **Checking with the server…**.
-3. On success the code shows as applied, with **Remove**.
+3. On success the code shows as applied, with **Remove**. Removing it leaves the code open for the customer's next visit.
 
 Errors:
 - *"Code not found, expired, or already used. Check the code with the customer."*
-- *"Not enough points: balance N, minimum M."*
+- *"Not enough points: N of the 150 needed for 10% off."*
+- *"Today's deals already match or beat 25% off on every item (or the items are at the legal price floor), so the reward would save nothing. No points were used."* Ring the sale without it; the customer keeps the points.
+- *"This is an old-style points code from the retired $0.10-per-point program, so it can't be used. Cancel it on the customer's profile (the points go back to them), then use a 10% or 25% reward."* A manager cancels it on CRM → Customers → the customer → Loyalty → **Cancel & return points**.
 - *"This member has no loyalty account yet — points start earning on their first completed sale."*
-- *"The loyalty program has no point cash value configured."* Tell a manager.
+
+**Void.** A full void of a sale that used a reward gives the reward's points back automatically, once (D141). A partial return does not.
+
+**Old iPad app.** Until the iPad app is rebuilt, an old register shows no reward button; codes still work. The server never spends a whole balance again.
 
 **Earning.** The rail shows *"This sale earns ~N points"*. The real points are added by the server when the sale syncs.
 
@@ -1148,9 +1166,10 @@ Since Phase 2.9 (owner message 6: *"The register activity page also, the top but
 | *"The sponsor must be someone OTHER than the cashier ringing this sale."* | BLOCK | Two-person rule | Another employee sponsors | — |
 | *"This guest already used friends & family N time(s) in the last 30 days (limit X)."* | BLOCK | Owner cap | Regular price | Owner (cap setting) |
 | *"Code not found, expired, or already used. Check the code with the customer."* | BLOCK | Codes are single-use | Check the code | — |
-| *"Not enough points: balance N, minimum M."* | BLOCK | Program minimum | No redemption | — |
+| *"Not enough points: N of the 150 needed for 10% off."* | BLOCK | Rewards are 150 or 300 points (D137) | No reward | — |
+| *"Today's deals already match or beat X off on every item … No points were used."* | BLOCK | Best of deal or reward, never both (D137) | Ring without the reward | — |
+| *"This is an old-style points code from the retired $0.10-per-point program …"* | BLOCK | $0.10 per point retired (D138, D140) | Cancel the code on the profile, then use a reward | Manager |
 | *"This member has no loyalty account yet — points start earning on their first completed sale."* | BLOCK | No account yet | Ring without redemption | — |
-| *"The loyalty program has no point cash value configured."* | BLOCK | Setup missing | Ring without redemption | Owner |
 | *"An override must LOWER the price — the line already charges $X…"* | BLOCK | Markdown only; prices are set in the back office | Fix the price in the back office | Manager |
 | *"$X is below this item's floor of $Y (statutory cannabis minimum / acquisition cost — RCW 69.50.357, WAC 314-55-155). No PIN can approve it."* | BLOCK (legal) | No giveaways, no below-cost sales | Choose a price at or above the floor | — |
 | *"Pay later is only for an employee purchase (apply the employee discount first)."* | BLOCK | Tabs are for employee purchases only | Apply the employee discount first | — |
@@ -1466,6 +1485,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
 | 1.15 draft | Fix phase | Owner message (shift end: *"The register should have the employee count out the drawer, entering the bill quantities, then tips, then end, that's it."*; *"The clock out feature is not working either."*), D121–D124. §4.2: big **Clock in / Clock out** button on the lock screen, server answer shown (clocked IN/OUT at time, or NOT clocked and why), no offline queue on the lock screen; home-screen punch asks the server first. §4.27: one-person close (bills, tips, PIN, Close drawer); new *Second count in the office* subsection; back-office close second count optional; refresh note. §4.27a steps 1, 4, 5 and quick card; §4.29 step 3; §4.30 second count before reconcile (D123); §5.8 messages; checklists; form 8.4 note; Appendix B D2 row. No migration. Refresh the iPads. | Fix program |
 | 1.16 draft | 2026-11-02 | Owner message (*"Please build 1-3 now."*), D125–D127, after the first real day on the new close (SR2 closed at $0.00 with $2,678.10 in it, then reconciled on the $0.00). §4.27 step 8: a $0.00 close must be confirmed (*The drawer is really empty*), server refuses otherwise; back-office close the same. §4.30 step 1: reconcile held when the two counts are more than $5.00 apart; the manager chooses second / closer / recount and writes why. §4.30 step 7 (new): owner/admin correction of a reconciled drawer on its Till summary, reason required, audited, books untouched. No migration. Refresh the iPads. | Fix program |
+| 1.18 draft | 2026-11-02 | Owner message (*"yes, one redemption per sale, and works exactly as you described in the proposed fix. no dollar cap on the 25% off. bronze and gold stay as names only … the $0.10-per-point should be retired"*), D137–D141. §4.12 rewritten: **Use 150 pts – 10% off** / **Use 300 pts – 25% off**, exactly those points, best of deal or reward per item, one per sale, no cap; points have no cash value; badges are names only; old-style points codes refused with instructions; a full void returns the reward's points. Loyalty box (§4 cart), discount table (§4.11) and Appendix messages updated. No migration. | Fix program |
 | 1.17 draft | 2026-11-02 | Owner message (*"For close drawer step, drawer should pop if given the employee assigned that tills pin…"* and *"Clock out allowed after first blind count, not after second count closing the till."*), D129–D132. §4.27 step 5: **Step 1: your PIN, open the drawer**: only the cashier working the drawer (D129) opens it for the blind count, once; a repeat needs a reason; every open and refusal is audited; the owner is warned on a repeat, a drawer not closed within 15 minutes of opening, or closed by someone else (Over / short warnings → Drawer opened for the count). §4.2: clock-out is allowed as soon as the blind count is done (D132), and the guard looks at the drawer you are working, not one you counted in for someone else. No migration. | Fix program |
 | 1.14 draft | Fix phase | register-loyalty-signup (owner: *"I need a way to sign up new loyalty customers from the iPad register."*). New §4.12a: **⭐ Sign up for loyalty** on the customer band; names from the ID scan, birthday locked to the ID check, phone or email, optional text/email consent signed by the customer, duplicate check (Use this account / create anyway), member attached to the sale. §5.4 messages. No migration. The iPad app must be rebuilt. | Fix program |
 | 1.13 draft | Fix phase | R-DRAWER-1 (owner request: *"popping the cash drawer with a receipt or with out the receipt printed"*). §4.16 step 2: the two settings, Drawer open / Open drawer, once per sale; §4.37 button list; quick card. F-01-6 and F-01-7 FIXED. No migration. The iPad app must be rebuilt. | Fix program |

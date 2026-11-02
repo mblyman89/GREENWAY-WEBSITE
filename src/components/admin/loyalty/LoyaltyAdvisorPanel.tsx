@@ -3,7 +3,7 @@
 /**
  * LoyaltyAdvisorPanel (Task S-a) — on-demand, DRAFTS-ONLY AI briefing for the
  * loyalty command center. Reads aggregate program metrics only (enrollment,
- * points economy, liability, code usage, member vs guest order values, tier
+ * points economy, reward readiness, reward usage, member vs guest order values, tier
  * distribution) — never customer PII — and returns: what needs attention,
  * what's healthy, retention ideas, and next steps. Advisory only — it never
  * changes the program.
@@ -111,7 +111,7 @@ export function LoyaltyAdvisorPanel({ aiEnabled }: { aiEnabled: boolean }) {
                 run();
               }
             }}
-            placeholder='Optional question — e.g. "Are members redeeming fast enough, or is liability piling up?"'
+            placeholder='Optional question — e.g. "Are members using their 10% and 25% rewards, or are points piling up?"'
             className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white/85 placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
           />
         </div>

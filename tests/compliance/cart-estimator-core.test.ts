@@ -7,10 +7,9 @@
  * cannot. This suite pins:
  *
  *  1. LOYALTY parity — estimateEarnPoints === basePointsForSubtotal
- *     (engine.ts); redemption honours the min-redeem gate exactly like
- *     canRedeem(); value = pointsValueMinor; the cap never lets loyalty zero
- *     a cannabis unit (RCW 69.50.357 — mirrors loyaltyUnitFloor with costs
- *     unknown).
+ *     (engine.ts); D137 rewards: 150 pts = 10% off, 300 pts = 25% off, per
+ *     item the better of the deal or the reward, cannabis never below the
+ *     1¢ statutory floor (RCW 69.50.357); points carry no cash value.
  *  2. MEDICAL parity — per-line savings equal lineBaseMinor +
  *     decideLineExemption + the same bps math the completion gate uses
  *     (buildOrderExemptionPlan in medical-sale-core.ts); the honest range
@@ -25,20 +24,15 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_ESTIMATOR_LOYALTY,
   estimateEarnPoints,
-  estimateLoyaltyRedemption,
+  estimateLoyaltyRewards,
+  estimateRewardSavingsMinor,
   estimateMedicalSavings,
   estimatorLineBaseMinor,
-  maxLoyaltyAbsorbMinor,
   tierNudges,
   type EstimatorLine,
   type EstimatorMedicalConfig,
 } from "@/lib/checkout/estimator-core";
-import {
-  basePointsForSubtotal,
-  canRedeem,
-  pointsValueMinor,
-  type LoyaltyConfig,
-} from "@/lib/loyalty/engine";
+import { basePointsForSubtotal, type LoyaltyConfig } from "@/lib/loyalty/engine";
 import {
   buildOrderExemptionPlan,
   lineBaseMinor,
@@ -83,8 +77,6 @@ function engineLine(overrides: Partial<EngineCartLine> = {}): EngineCartLine {
 
 const REG_CFG: LoyaltyConfig = {
   pointsPerDollar: 1,
-  pointValueMinor: 1,
-  minRedeemPoints: 100,
   signupBonusPoints: 0,
   codeExpiryDays: null,
 };
@@ -100,17 +92,17 @@ describe("loyalty earn estimate mirrors the register engine", () => {
     for (const subtotal of [0, 1, 99, 100, 2599, 5000, 12345, 99999]) {
       const est = estimateEarnPoints(subtotal, DEFAULT_ESTIMATOR_LOYALTY);
       expect(est.points).toBe(basePointsForSubtotal(subtotal, REG_CFG));
-      expect(est.valueMinor).toBe(pointsValueMinor(est.points, REG_CFG));
+      // D137: points have no cash value, so the estimate carries none.
+      expect(Object.keys(est)).toEqual(["points"]);
     }
   });
 
-  it("matches at a non-default earn rate (2 pt/$1, 2¢/pt)", () => {
-    const cfg = { pointsPerDollar: 2, pointValueMinor: 2, minRedeemPoints: 100 };
-    const regCfg: LoyaltyConfig = { ...REG_CFG, pointsPerDollar: 2, pointValueMinor: 2 };
+  it("matches at a non-default earn rate (2 pt/$1)", () => {
+    const cfg = { pointsPerDollar: 2 };
+    const regCfg: LoyaltyConfig = { ...REG_CFG, pointsPerDollar: 2 };
     const est = estimateEarnPoints(2599, cfg);
     expect(est.points).toBe(basePointsForSubtotal(2599, regCfg)); // floor(25.99*2)=51
     expect(est.points).toBe(51);
-    expect(est.valueMinor).toBe(102);
   });
 
   it("negative and zero subtotals earn nothing (register parity)", () => {
@@ -119,39 +111,53 @@ describe("loyalty earn estimate mirrors the register engine", () => {
   });
 });
 
-describe("loyalty redemption estimate honours the register gates", () => {
-  const lines = [estLine({ unitPriceMinorUnits: 3500, quantity: 2 })]; // $70 cannabis
+describe("loyalty reward estimate (D137: 150 pts = 10%, 300 pts = 25%)", () => {
+  const lines = [estLine({ unitPriceMinorUnits: 3500, quantity: 2 })]; // $70 cannabis, no deal
 
-  it("below the minimum matches canRedeem() refusal, with the exact shortfall", () => {
-    const r = estimateLoyaltyRedemption(99, DEFAULT_ESTIMATOR_LOYALTY, lines);
-    expect(r.status).toBe("below_min");
-    if (r.status === "below_min") expect(r.shortfallPoints).toBe(1);
-    expect(canRedeem(99, 99, REG_CFG)).toBe(false);
+  it("below 150 points: shows how many more points unlock 10% off", () => {
+    const r = estimateLoyaltyRewards(120, lines);
+    expect(r).toEqual({ status: "below_min", shortfallPoints: 30, nextPercentLabel: "10%" });
   });
 
-  it("at the minimum the full value applies (register parity)", () => {
-    const r = estimateLoyaltyRedemption(100, DEFAULT_ESTIMATOR_LOYALTY, lines);
-    expect(r).toEqual({ status: "ok", valueMinor: 100, cappedByCart: false });
-    expect(canRedeem(100, 100, REG_CFG)).toBe(true);
-    expect(pointsValueMinor(100, REG_CFG)).toBe(100);
+  it("150–299 points: only the 10% reward", () => {
+    const r = estimateLoyaltyRewards(200, lines);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") {
+      expect(r.options).toEqual([{ points: 150, percentLabel: "10%", savingsMinor: 700 }]);
+      expect(r.bestPoints).toBe(150);
+    }
+  });
+
+  it("300+ points: both rewards, never the whole balance's 'cash value'", () => {
+    const r = estimateLoyaltyRewards(2472, lines);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") {
+      expect(r.options.map((o) => o.points)).toEqual([150, 300]);
+      expect(r.options[1]!.savingsMinor).toBe(1750); // 25% of $70
+      expect(r.bestPoints).toBe(300);
+    }
   });
 
   it("zero / invalid balances estimate nothing", () => {
-    expect(estimateLoyaltyRedemption(0, DEFAULT_ESTIMATOR_LOYALTY, lines).status).toBe("none");
-    expect(estimateLoyaltyRedemption(-5, DEFAULT_ESTIMATOR_LOYALTY, lines).status).toBe("none");
-    expect(estimateLoyaltyRedemption(NaN, DEFAULT_ESTIMATOR_LOYALTY, lines).status).toBe("none");
+    expect(estimateLoyaltyRewards(0, lines).status).toBe("none");
+    expect(estimateLoyaltyRewards(-5, lines).status).toBe("none");
+    expect(estimateLoyaltyRewards(NaN, lines).status).toBe("none");
   });
 
-  it("cannabis can never be free: cap leaves the 1¢ statutory floor per unit", () => {
-    // Cart: 2 × $35.00 cannabis. Absorb = 2 × (3500 − 1) = 6998.
-    expect(maxLoyaltyAbsorbMinor(lines)).toBe(6998);
-    const r = estimateLoyaltyRedemption(1_000_000, DEFAULT_ESTIMATOR_LOYALTY, lines);
-    expect(r).toEqual({ status: "ok", valueMinor: 6998, cappedByCart: true });
+  it("better of the deal or the reward per item, never both", () => {
+    // $10 regular, deal price $7 (30% off) beats 25%; deal $8 (20%) loses to 25% ($7.50).
+    const mixed = [
+      estLine({ lineId: "a", unitPriceMinorUnits: 700, regularPriceMinorUnits: 1000 }),
+      estLine({ lineId: "b", unitPriceMinorUnits: 800, regularPriceMinorUnits: 1000 }),
+    ];
+    expect(estimateRewardSavingsMinor(mixed, { percentBps: 2500 })).toBe(50);
   });
 
-  it("merch may reach $0 (statutory floor is cannabis-only)", () => {
+  it("cannabis never below the 1¢ statutory floor; merch may reach $0", () => {
+    const cheap = [estLine({ unitPriceMinorUnits: 1, regularPriceMinorUnits: 1 })];
+    expect(estimateRewardSavingsMinor(cheap, { percentBps: 2500 })).toBe(0);
     const merch = [estLine({ category: "merch", unitPriceMinorUnits: 2000, quantity: 1 })];
-    expect(maxLoyaltyAbsorbMinor(merch)).toBe(2000);
+    expect(estimateRewardSavingsMinor(merch, { percentBps: 1000 })).toBe(200);
   });
 });
 

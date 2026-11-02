@@ -8,21 +8,27 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { LOYALTY_REWARDS, MIN_REWARD_POINTS } from "@/lib/loyalty/loyalty-reward-core";
 import { resolveEndorsement, type RawEndorsementRow } from "@/lib/medical/endorsement-switch-core";
 
 // ---------------------------------------------------------------------------
 // Loyalty & discount report
 // ---------------------------------------------------------------------------
+const TOP_REWARD_POINTS = LOYALTY_REWARDS[LOYALTY_REWARDS.length - 1].points;
 export type LoyaltyKindRow = { kind: string; label: string; points: number };
 export type LoyaltyTierRow = {
   tierId: string | null;
   name: string;
   members: number;
-  discountBps: number;
   outstandingPoints: number;
   lifetimePoints: number;
 };
-export type LoyaltyCodeFunnelRow = { label: string; count: number; valueMinor: number };
+/**
+ * `takenOffMinor` is the amount a USED reward actually took off a sale; open,
+ * expired and cancelled codes took nothing off, so it is null for them
+ * (D138 — points have no cash value, so there is nothing else to report).
+ */
+export type LoyaltyCodeFunnelRow = { label: string; count: number; takenOffMinor: number | null };
 
 export type LoyaltyReport = {
   // Headline membership + points
@@ -31,12 +37,13 @@ export type LoyaltyReport = {
   pointsEarned: number;
   pointsRedeemed: number;
   pointsOutstanding: number;
-  // Program economics (the professional layer)
-  pointValueMinor: number; // cash value of one point (cents)
-  liabilityMinor: number; // outstanding points valued at cash
-  redeemedValueMinor: number; // points redeemed in window valued at cash
+  // Program economics. D138: points have NO cash value, so there is no
+  // dollar "liability" — the real numbers are reward readiness and usage.
+  membersWithReward: number; // balance covers at least the 150-pt reward
+  membersWithTopReward: number; // balance covers the 300-pt reward
+  rewards10Used: number; // 150-pt (10% off) rewards used in window
+  rewards25Used: number; // 300-pt (25% off) rewards used in window
   breakagePoints: number; // points expired in window (never redeemed)
-  breakageMinor: number; // breakage valued at cash
   redemptionRate: number; // points redeemed / points earned (0..1) in window
   avgEarnBasisMinor: number; // avg pretax basis behind each earn event
   newEnrollments: number; // accounts enrolled in window
@@ -48,8 +55,7 @@ export type LoyaltyReport = {
   codesOutstanding: number;
   codeRedemptionRate: number; // redeemed / issued (0..1) in window
   avgDaysToRedeem: number; // avg days issue -> redeem
-  discountValueMinor: number; // value of redeemed codes
-  outstandingCodeValueMinor: number; // value tied up in still-issued codes
+  discountValueMinor: number; // amount actually taken off sales by used rewards
   // Breakdowns
   pointsByKind: LoyaltyKindRow[];
   tiers: LoyaltyTierRow[];
@@ -65,7 +71,7 @@ const LEDGER_KIND_LABELS: Record<string, string> = {
   signup_bonus: "Signup bonus",
   promo_bonus: "Promo bonus",
   adjust: "Manual adjustment",
-  redeem: "Redeemed",
+  redeem: "Used for rewards",
   expire: "Expired (breakage)",
 };
 
@@ -75,11 +81,11 @@ export const EMPTY_LOYALTY_REPORT: LoyaltyReport = {
   pointsEarned: 0,
   pointsRedeemed: 0,
   pointsOutstanding: 0,
-  pointValueMinor: 1,
-  liabilityMinor: 0,
-  redeemedValueMinor: 0,
+  membersWithReward: 0,
+  membersWithTopReward: 0,
+  rewards10Used: 0,
+  rewards25Used: 0,
   breakagePoints: 0,
-  breakageMinor: 0,
   redemptionRate: 0,
   avgEarnBasisMinor: 0,
   newEnrollments: 0,
@@ -91,7 +97,6 @@ export const EMPTY_LOYALTY_REPORT: LoyaltyReport = {
   codeRedemptionRate: 0,
   avgDaysToRedeem: 0,
   discountValueMinor: 0,
-  outstandingCodeValueMinor: 0,
   pointsByKind: [],
   tiers: [],
   codeFunnel: [],
@@ -112,7 +117,6 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
     { data: accountsInWindow },
     { data: ledger },
     { data: redemptions },
-    { data: config },
     { data: tierRows },
   ] = await Promise.all([
     admin.from("loyalty_accounts").select("id", { count: "exact", head: true }),
@@ -133,8 +137,7 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
       .select("status, points, value_minor, created_at, redeemed_at")
       .gte("created_at", fromISO)
       .lte("created_at", toISO),
-    admin.from("loyalty_config").select("point_value_minor").eq("is_active", true).limit(1),
-    admin.from("loyalty_tiers").select("id, name, discount_bps, sort_order").order("sort_order"),
+    admin.from("loyalty_tiers").select("id, name, sort_order").eq("is_active", true).order("sort_order"),
   ]);
 
   const led =
@@ -148,9 +151,8 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
   const bals =
     (balances as { balance_points: number; lifetime_points: number; tier_id: string | null }[] | null) ?? [];
 
-  const pointValueMinor = Number(
-    ((config as { point_value_minor: number }[] | null) ?? [])[0]?.point_value_minor ?? 1,
-  );
+  const membersWithReward = bals.filter((b) => (b.balance_points ?? 0) >= MIN_REWARD_POINTS).length;
+  const membersWithTopReward = bals.filter((b) => (b.balance_points ?? 0) >= TOP_REWARD_POINTS).length;
 
   // --- Points totals + composition by ledger kind ---
   const pointsEarned = led.filter((l) => l.points > 0).reduce((a, l) => a + l.points, 0);
@@ -189,7 +191,7 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
   const enrollmentTrend = [...enrollMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count }));
 
   // --- Tier distribution (member count + points by tier) ---
-  const tierDefs = (tierRows as { id: string; name: string; discount_bps: number }[] | null) ?? [];
+  const tierDefs = (tierRows as { id: string; name: string }[] | null) ?? [];
   const tierAgg = new Map<string | null, { members: number; outstanding: number; lifetime: number }>();
   for (const b of bals) {
     const key = b.tier_id ?? null;
@@ -205,7 +207,6 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
       tierId: t.id,
       name: t.name,
       members: agg.members,
-      discountBps: t.discount_bps,
       outstandingPoints: agg.outstanding,
       lifetimePoints: agg.lifetime,
     };
@@ -214,9 +215,8 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
   if (untiered && untiered.members > 0) {
     tiers.push({
       tierId: null,
-      name: "No tier yet",
+      name: "No badge yet",
       members: untiered.members,
-      discountBps: 0,
       outstandingPoints: untiered.outstanding,
       lifetimePoints: untiered.lifetime,
     });
@@ -231,9 +231,9 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
   const discountValueMinor = reds
     .filter((r) => r.status === "redeemed")
     .reduce((a, r) => a + (r.value_minor ?? 0), 0);
-  const outstandingCodeValueMinor = reds
-    .filter((r) => r.status === "issued")
-    .reduce((a, r) => a + (r.value_minor ?? 0), 0);
+  const usedReds = reds.filter((r) => r.status === "redeemed");
+  const rewards10Used = usedReds.filter((r) => Number(r.points) === 150).length;
+  const rewards25Used = usedReds.filter((r) => Number(r.points) === 300).length;
 
   const redeemedWithDates = reds.filter((r) => r.status === "redeemed" && r.redeemed_at && r.created_at);
   const avgDaysToRedeem =
@@ -250,19 +250,11 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
       : 0;
 
   const codeFunnel: LoyaltyCodeFunnelRow[] = [
-    { label: "Issued", count: codesIssued, valueMinor: reds.reduce((a, r) => a + (r.value_minor ?? 0), 0) },
-    { label: "Redeemed", count: codesRedeemed, valueMinor: discountValueMinor },
-    { label: "Outstanding", count: codesOutstanding, valueMinor: outstandingCodeValueMinor },
-    {
-      label: "Expired",
-      count: codesExpired,
-      valueMinor: reds.filter((r) => r.status === "expired").reduce((a, r) => a + (r.value_minor ?? 0), 0),
-    },
-    {
-      label: "Cancelled",
-      count: codesCancelled,
-      valueMinor: reds.filter((r) => r.status === "cancelled").reduce((a, r) => a + (r.value_minor ?? 0), 0),
-    },
+    { label: "Issued", count: codesIssued, takenOffMinor: null },
+    { label: "Used", count: codesRedeemed, takenOffMinor: discountValueMinor },
+    { label: "Still open", count: codesOutstanding, takenOffMinor: null },
+    { label: "Expired", count: codesExpired, takenOffMinor: null },
+    { label: "Cancelled (points returned)", count: codesCancelled, takenOffMinor: null },
   ];
 
   // --- Top earners (names) ---
@@ -302,11 +294,11 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
     pointsEarned,
     pointsRedeemed,
     pointsOutstanding,
-    pointValueMinor,
-    liabilityMinor: pointsOutstanding * pointValueMinor,
-    redeemedValueMinor: pointsRedeemed * pointValueMinor,
+    membersWithReward,
+    membersWithTopReward,
+    rewards10Used,
+    rewards25Used,
     breakagePoints,
-    breakageMinor: breakagePoints * pointValueMinor,
     redemptionRate: pointsEarned > 0 ? pointsRedeemed / pointsEarned : 0,
     avgEarnBasisMinor,
     newEnrollments: ((accountsInWindow as unknown[] | null) ?? []).length,
@@ -318,7 +310,6 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
     codeRedemptionRate: codesIssued > 0 ? codesRedeemed / codesIssued : 0,
     avgDaysToRedeem,
     discountValueMinor,
-    outstandingCodeValueMinor,
     pointsByKind,
     tiers,
     codeFunnel,

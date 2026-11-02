@@ -44,8 +44,8 @@ export async function generateMetadata() {
 // loyalty_tiers for an identical page. Every writer that changes what this
 // page shows already clears it: the Loyalty-page editor
 // (src/app/admin/loyalty-page/actions.ts) calls revalidatePath("/loyalty"), and
-// the program editors (saveLoyaltyConfigAction, saveLoyaltyTierAction,
-// deleteLoyaltyTierAction in src/app/admin/loyalty/actions.ts) do the same as of
+// the program editors (saveLoyaltyConfigAction, renameLoyaltyTierAction — D139
+// — in src/app/admin/loyalty/actions.ts) do the same as of
 // this slice. 60 s is only the floor. Draft Mode bypasses the route cache, so
 // staff preview still sees drafts on demand.
 export const revalidate = 60;

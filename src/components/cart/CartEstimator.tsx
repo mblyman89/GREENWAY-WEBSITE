@@ -9,9 +9,9 @@
  *
  *  1. TIER NUDGES — "add 3.5g to unlock 20%" from the active published rules
  *     (the same snapshots pricing the cart), computed by tierNudges().
- *  2. LOYALTY — enter a points balance → estimated $ off (live earn rate,
- *     point value, minimum-to-redeem from loyalty_config) + points this order
- *     would earn.
+ *  2. LOYALTY — enter a points balance → which rewards it unlocks (150 pts =
+ *     10% off, 300 pts = 25% off, D137) and what each would take off THIS
+ *     cart, + points this order would earn. Points have no cash value.
  *  3. MEDICAL — "I have a WA medical card" toggle → HONEST best-case
  *     tax-savings range (verified DOH-registry lines set the floor;
  *     unverified cannabis lines only raise the ceiling), grounded in
@@ -26,7 +26,7 @@ import type { GreenwayCategory } from "@/lib/leafly/types";
 import type { EngineCartLine } from "@/lib/promotions/discount-engine-core";
 import {
   estimateEarnPoints,
-  estimateLoyaltyRedemption,
+  estimateLoyaltyRewards,
   estimateMedicalSavings,
   tierNudges,
   type EstimatorContext,
@@ -124,6 +124,7 @@ export function CartEstimator({
         category: item.category,
         quantity: item.quantity,
         unitPriceMinorUnits: item.effectivePriceMinorUnits,
+        regularPriceMinorUnits: item.regularPriceMinorUnits,
       })),
     [items],
   );
@@ -164,7 +165,7 @@ export function CartEstimator({
     if (!loyaltyCfg) return null;
     const parsed = Number.parseInt(pointsInput.trim(), 10);
     if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return estimateLoyaltyRedemption(parsed, loyaltyCfg, estimatorLines);
+    return estimateLoyaltyRewards(parsed, estimatorLines);
   }, [loyaltyCfg, pointsInput, estimatorLines]);
 
   // ---- Medical ----
@@ -175,8 +176,11 @@ export function CartEstimator({
 
   // Estimated best-case totals after each adjustment (never below $0.01/unit;
   // the simple subtraction here is display-only — the register recomputes).
-  const loyaltyAdjustedTotal =
-    redeem?.status === "ok" ? Math.max(0, totalMinorUnits - redeem.valueMinor) : null;
+  const bestReward =
+    redeem?.status === "ok" && redeem.bestPoints != null
+      ? (redeem.options.find((o) => o.points === redeem.bestPoints) ?? null)
+      : null;
+  const loyaltyAdjustedTotal = bestReward ? Math.max(0, totalMinorUnits - bestReward.savingsMinor) : null;
 
   if (items.length === 0) return null;
 
@@ -254,33 +258,35 @@ export function CartEstimator({
               {redeem?.status === "below_min" ? (
                 <p className="text-xs font-bold leading-5 text-zinc-400">
                   {redeem.shortfallPoints} more point{redeem.shortfallPoints === 1 ? "" : "s"} to
-                  reach the {loyaltyCfg.minRedeemPoints}-point redemption minimum.
+                  unlock {redeem.nextPercentLabel} off.
                 </p>
               ) : null}
               {redeem?.status === "ok" ? (
                 <div className="rounded-xl bg-black/40 px-3 py-2.5">
-                  <p className="text-xs font-bold leading-5 text-white">
-                    Estimated points value:{" "}
-                    <span className="text-[var(--greenway)]">
-                      −{formatMinorCurrency(redeem.valueMinor)}
-                    </span>
-                    {redeem.cappedByCart ? (
-                      <span className="text-zinc-500"> (capped by this cart)</span>
-                    ) : null}
-                  </p>
-                  {loyaltyAdjustedTotal != null ? (
+                  {redeem.options.map((o) => (
+                    <p key={o.points} className="text-xs font-bold leading-5 text-white">
+                      {o.points} pts = {o.percentLabel} off:{" "}
+                      {o.savingsMinor > 0 ? (
+                        <span className="text-[var(--greenway)]">about −{formatMinorCurrency(o.savingsMinor)}</span>
+                      ) : (
+                        <span className="text-zinc-500">today&apos;s deals already beat it</span>
+                      )}
+                    </p>
+                  ))}
+                  {loyaltyAdjustedTotal != null && bestReward ? (
                     <p className="mt-1 text-xs font-bold leading-5 text-zinc-400">
-                      Best-case total: {formatMinorCurrency(loyaltyAdjustedTotal)}
+                      Best-case total with {bestReward.percentLabel} off: {formatMinorCurrency(loyaltyAdjustedTotal)}
                     </p>
                   ) : null}
+                  <p className="mt-1 text-[0.7rem] leading-5 text-zinc-500">
+                    One reward per visit. Each item gets the better of the deal or the reward.
+                  </p>
                 </div>
               ) : null}
               {earn ? (
                 <p className="text-xs font-bold leading-5 text-zinc-400">
                   This order earns about {earn.points.toLocaleString("en-US")} point
-                  {earn.points === 1 ? "" : "s"}
-                  {earn.valueMinor > 0 ? ` (≈ ${formatMinorCurrency(earn.valueMinor)})` : ""} —
-                  members earn on every pretax dollar.
+                  {earn.points === 1 ? "" : "s"} — members earn on every pretax dollar.
                 </p>
               ) : null}
             </div>

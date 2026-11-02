@@ -264,8 +264,8 @@ export default async function WebsiteSyncPage({
             </Card>
             <Card>
               <CardHeader
-                title="Tier ladder"
-                subtitle={tiers.length ? "Active tiers, as displayed publicly." : "No active tiers — the public page hides the ladder."}
+                title="Member badges"
+                subtitle={tiers.length ? "Badge names (rename them on Loyalty Program), as displayed publicly." : "No active badges — the public page hides the ladder."}
               />
               {tiers.length ? (
                 <ul className="mt-3 space-y-1.5 text-sm text-[var(--admin-text-muted)]">

@@ -20,7 +20,9 @@ import "server-only";
  *          lot, matching the returns desk's lot-resolution convention).
  *          Idempotent via a "sale_void_restocked" order_event marker.
  *        - loyalty: claw back the FULL points the sale earned (cumulative-
- *          safe against prior partial clawbacks, same math as returns).
+ *          safe against prior partial clawbacks, same math as returns), and
+ *          (D141) give back the reward points the sale USED (150 / 300) —
+ *          a voided sale never happened, so the customer keeps their reward.
  *        - medical: delete the order's WAC 314-55-090(2) exempt-sale ledger
  *          rows — a voided sale never happened, so the excise/LIQ-1295
  *          reports must not count its exemptions.
@@ -38,7 +40,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { setOrderStatus } from "@/lib/orders/orders-store";
-import { getAccountByCustomer, adjustPoints } from "@/lib/loyalty/loyalty-store";
+import { getAccountByCustomer, adjustPoints, returnRewardForVoidedOrder } from "@/lib/loyalty/loyalty-store";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { statusForLevelTotal, pickRestockLot } from "@/lib/inventory/sale-decrement-core";
 // GW-011/GW-012: DB-latched restock marker + atomic quantity deltas.
@@ -353,7 +355,15 @@ export type ProcessVoidInput = {
 };
 
 export type ProcessVoidResult =
-  | { ok: true; refundMinor: number; pointsClawed: number; slipHtml: string; orderNumber: string }
+  | {
+      ok: true;
+      refundMinor: number;
+      pointsClawed: number;
+      /** D141: reward points the voided sale had used, given back. */
+      rewardPointsReturned: number;
+      slipHtml: string;
+      orderNumber: string;
+    }
   | { ok: false; error: string };
 
 /**
@@ -444,6 +454,18 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
     }
   }
 
+  // ── D141: the reward this sale used comes back (idempotent) ─────────────
+  let rewardPointsReturned = 0;
+  let rewardNote = "";
+  {
+    const back = await returnRewardForVoidedOrder({
+      orderId: sale.orderId,
+      note: `Sale void — receipt ${sale.receiptNumber}`,
+    });
+    if (back.ok) rewardPointsReturned = back.refundedPoints;
+    else rewardNote = ` REWARD NOT RETURNED: ${back.error}`;
+  }
+
   // ── Medical exempt-sale ledger: a voided sale never happened ─────────────
   await admin
     .from("medical_exempt_sales")
@@ -455,10 +477,13 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
   await admin.from("order_events").insert({
     order_id: sale.orderId,
     event_type: VOID_MARKER,
-    note:
+    note: (
       `Sale VOIDED at the register. Reason: ${request.reason}. Approved by ${input.approver.fullName}; ` +
       `processed by ${input.processedByName}. Cash returned $${(refund.refundMinor / 100).toFixed(2)}; ` +
-      `${pointsClawed} points clawed back. ${restockNote}`.slice(0, 2000),
+      `${pointsClawed} points clawed back` +
+      (rewardPointsReturned > 0 ? `; ${rewardPointsReturned} reward points returned` : "") +
+      `.${rewardNote} ${restockNote}`
+    ).slice(0, 2000),
     actor_label: `POS void · ${input.approver.fullName}`,
   });
   await recordAudit({
@@ -476,6 +501,8 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
       // Fix Phase 2.1: which drawer paid the cash out (null = not tied yet).
       drawerSessionId: input.drawerSessionId ?? null,
       pointsClawed,
+      rewardPointsReturned,
+      ...(rewardNote ? { rewardError: rewardNote.trim() } : {}),
       restock: restockNote,
     },
   });
@@ -495,5 +522,12 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
     addressLines: receiptAddressLines(config),
   });
 
-  return { ok: true, refundMinor: refund.refundMinor, pointsClawed, slipHtml, orderNumber: sale.orderNumber };
+  return {
+    ok: true,
+    refundMinor: refund.refundMinor,
+    pointsClawed,
+    rewardPointsReturned,
+    slipHtml,
+    orderNumber: sale.orderNumber,
+  };
 }

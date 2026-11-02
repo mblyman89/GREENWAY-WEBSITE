@@ -16,12 +16,9 @@ import { LoyaltyAdvisorPanel } from "@/components/admin/loyalty/LoyaltyAdvisorPa
 import { computeLoyaltyMetrics } from "@/lib/loyalty/loyalty-metrics";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { can } from "@/lib/auth/roles";
+import { LOYALTY_REWARDS, rewardButtonLabel } from "@/lib/loyalty/loyalty-reward-core";
 
 export const dynamic = "force-dynamic";
-
-function pct(bps: number): string {
-  return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
-}
 
 function money(minor: number): string {
   return `$${(minor / 100).toFixed(2)}`;
@@ -35,7 +32,7 @@ export default async function LoyaltyProgramPage() {
     return (
       <div className="space-y-6">
         <Breadcrumbs items={[{ label: "Operations" }, { label: "Loyalty Program" }]} />
-        <AdminPageHeader title="Loyalty program" subtitle="Points, tiers, promotions, and redemptions." />
+        <AdminPageHeader title="Loyalty program" subtitle="Points, rewards, member badges, and promotions." />
         <EmptyState title="Supabase not configured" description="Connect the service role key to manage loyalty." />
       </div>
     );
@@ -47,7 +44,7 @@ export default async function LoyaltyProgramPage() {
     listPromotionsForEdit(),
     loyaltySummary(),
   ]);
-  const metrics = await computeLoyaltyMetrics(cfg.pointValueMinor);
+  const metrics = await computeLoyaltyMetrics();
   const activeTiers = tiers.filter((t) => t.isActive);
 
   return (
@@ -66,18 +63,20 @@ export default async function LoyaltyProgramPage() {
             id="loyalty-program"
             title="How loyalty works"
             steps={[
-              "Customers opt in with email + phone to earn points and daily discounts.",
+              "Customers opt in with email + phone to earn points.",
               "Points accrue on the PRETAX subtotal at the program rate (1pt/$1 by default).",
-              "Reaching a tier unlocks a standing discount (e.g. 150 pts = 10%, 300 pts = 25%).",
-              "Customers redeem points for a CODE texted/emailed — staff applies it on the order page.",
-              "At the register: ONE loyalty application per order (code or member pricing), and each line keeps the BETTER of the promo or tier price — never both.",
+              "Rewards: use 150 points for 10% off, or 300 points for 25% off the pre-tax order. Exactly 150 or 300 points come off — never the whole balance. Points have no cash value.",
+              "ONE reward per sale, no dollar cap. Each item keeps the BETTER of its deal price or the reward price — never both. Never-discount items are skipped.",
+              "Use a reward at the register (reward buttons on the member card) or on an order page (Loyalty panel). A customer's page can also issue a reward code to text/email.",
+              "Member badges (Bronze, Gold…) are names only — rename them below. They give no discount.",
+              "If a sale with a reward is cancelled or voided, the points go back to the customer automatically.",
               "Every reduction stops at the legal floor: never below acquisition cost (WAC 314-55-155(5)(g)), never free cannabis (RCW 69.50.357).",
             ]}
           >
             <p>
-              Points are managed per customer from each customer&apos;s detail page; codes and member
-              pricing are applied on each order&apos;s detail page (Loyalty panel). This page shows
-              program health, configuration, tiers, and earn promotions.
+              Points are managed per customer from each customer&apos;s detail page; rewards are used at
+              the register or on each order&apos;s detail page (Loyalty panel). This page shows program
+              health, configuration, member badge names, and earn promotions.
             </p>
           </HelpPanel>
         }
@@ -91,9 +90,9 @@ export default async function LoyaltyProgramPage() {
           accent="green"
         />
         <StatCard
-          label="Point liability"
-          value={money(metrics.liabilityMinor)}
-          hint={`${summary.pointsOutstanding.toLocaleString("en-US")} pts + ${metrics.codesIssuedOutstanding} live codes`}
+          label="Can use a reward now"
+          value={metrics.membersWithReward.toLocaleString("en-US")}
+          hint={`${metrics.membersWithTopReward.toLocaleString("en-US")} can use 25% off · ${summary.pointsOutstanding.toLocaleString("en-US")} pts outstanding`}
           accent="gold"
         />
         <StatCard
@@ -115,15 +114,15 @@ export default async function LoyaltyProgramPage() {
         <h2 className="text-sm font-semibold text-white">Program health</h2>
         <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <dt className="text-white/40">Codes outstanding</dt>
+            <dt className="text-white/40">Rewards used (30d)</dt>
             <dd className="font-semibold text-white">
-              {metrics.codesIssuedOutstanding.toLocaleString("en-US")} ({money(metrics.codesOutstandingValueMinor)})
+              {metrics.rewards10Used30d.toLocaleString("en-US")} × 10% · {metrics.rewards25Used30d.toLocaleString("en-US")} × 25%
             </dd>
           </div>
           <div>
-            <dt className="text-white/40">Codes used (30d) / expired (all-time)</dt>
+            <dt className="text-white/40">Codes outstanding / expired (all-time)</dt>
             <dd className="font-semibold text-white">
-              {metrics.codesRedeemed30d.toLocaleString("en-US")} / {metrics.codesExpired.toLocaleString("en-US")}
+              {metrics.codesIssuedOutstanding.toLocaleString("en-US")} / {metrics.codesExpired.toLocaleString("en-US")}
             </dd>
           </div>
           <div>
@@ -131,17 +130,17 @@ export default async function LoyaltyProgramPage() {
             <dd className="font-semibold text-white">{metrics.avgDaysIssueToUse ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-white/40">Loyalty value given at register (90d)</dt>
+            <dt className="text-white/40">Amount taken off by rewards (90d)</dt>
             <dd className="font-semibold text-white">{money(metrics.loyaltyDiscountTotal90dMinor)}</dd>
           </div>
         </dl>
         <div className="mt-4 border-t border-[var(--admin-border)] pt-3">
           <p className="text-xs text-white/40">
-            Tier distribution:{" "}
+            Member badges (names only):{" "}
             {metrics.tierDistribution.length > 0
               ? metrics.tierDistribution.map((t) => `${t.name} ${t.count}`).join(" · ")
-              : "no members have reached a tier yet"}
-            {metrics.untieredAccounts > 0 ? ` · below first tier: ${metrics.untieredAccounts}` : ""}
+              : "no members have reached a badge yet"}
+            {metrics.untieredAccounts > 0 ? ` · no badge yet: ${metrics.untieredAccounts}` : ""}
           </p>
         </div>
       </section>
@@ -161,12 +160,14 @@ export default async function LoyaltyProgramPage() {
                 <dd className="font-semibold text-white">{cfg.pointsPerDollar} pt / $1 pretax</dd>
               </div>
               <div>
-                <dt className="text-white/40">Point value</dt>
-                <dd className="font-semibold text-white">{money(cfg.pointValueMinor)} / pt</dd>
+                <dt className="text-white/40">Rewards</dt>
+                <dd className="font-semibold text-white">
+                  {LOYALTY_REWARDS.map((rw) => rewardButtonLabel(rw)).join(" · ")}
+                </dd>
               </div>
               <div>
-                <dt className="text-white/40">Minimum to redeem</dt>
-                <dd className="font-semibold text-white">{cfg.minRedeemPoints} pts</dd>
+                <dt className="text-white/40">Rules</dt>
+                <dd className="font-semibold text-white">One reward per sale · no cash value</dd>
               </div>
               <div>
                 <dt className="text-white/40">Signup bonus</dt>
@@ -174,15 +175,16 @@ export default async function LoyaltyProgramPage() {
               </div>
             </dl>
             <p className="mt-3 text-xs text-white/40">
-              Codes expire {cfg.codeExpiryDays == null ? "never" : `after ${cfg.codeExpiryDays} days`}. Ask a
+              Reward codes expire {cfg.codeExpiryDays == null ? "never" : `after ${cfg.codeExpiryDays} days`}. Ask a
               manager to change the program.
             </p>
           </section>
 
           <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-            <h2 className="mb-4 text-sm font-semibold text-white">Tiers</h2>
+            <h2 className="mb-1 text-sm font-semibold text-white">Member badges</h2>
+            <p className="mb-4 text-xs text-white/40">Names only — badges give no discount.</p>
             {activeTiers.length === 0 ? (
-              <p className="text-sm text-white/50">No tiers configured.</p>
+              <p className="text-sm text-white/50">No badges configured.</p>
             ) : (
               <div className="space-y-2">
                 {activeTiers.map((t) => (
@@ -194,7 +196,6 @@ export default async function LoyaltyProgramPage() {
                       <Badge tone="gold">{t.name}</Badge>
                       <span className="text-sm text-white/70">{t.minPoints.toLocaleString("en-US")}+ lifetime pts</span>
                     </div>
-                    <span className="text-sm font-semibold text-[var(--admin-green)]">{pct(t.discountBps)} off</span>
                   </div>
                 ))}
               </div>
