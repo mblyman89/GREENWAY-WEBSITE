@@ -745,3 +745,14 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | Which sections of a promotion do I need? | Open **Which sections do I need?** on the form: it lists, for each kind of deal, what to fill and what is ignored (D136) |
 | What is the gold "wording heads-up"? | A warning that the text may break Washington's ad rules or not match the deal. It suggests wording and never blocks (D135) |
 | The register says today's deals are not loaded | The day changed and the register has not got today's deals yet. It refreshes on its own; if it stays, connect to the internet and press Refresh menu (More menu) (D133) |
+
+**Loyalty rewards (D137–D141) answers:**
+
+| Question | Answer (built, loyalty rewards) |
+|---|---|
+| How does the customer use points? | At the register: **Use 150 pts – 10% off** or **Use 300 pts – 25% off** (only the ones the balance covers). One reward per sale, no dollar cap (D137) |
+| How much is a point worth? | Nothing in cash. The $0.10 per point is retired; points only unlock the 10% and 25% rewards (D138) |
+| Why did the reward take nothing off an item? | That item already had a deal as good or better (the customer gets the better one, never both), it is on the never-discount list, or it is at its legal floor (D137, D140) |
+| How do I rename Bronze or Gold? | CRM → Loyalty Program → **Member badge names** → type the name → Save. Badges are names only and give no discount (D139) |
+| The register refused an old points code | It is from the retired $0.10 program. Cancel it on the customer's profile (Cancel & return points), then use a 10% or 25% reward (D140) |
+| A sale with a reward was voided. Does the customer get the points back? | Yes, on a full void the reward's points go back automatically, once. A partial return does not return them (D141) |

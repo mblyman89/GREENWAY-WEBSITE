@@ -152,9 +152,9 @@ export const LOYALTY_CONTENT_BLOCKS: readonly LoyaltyContentBlock[] = [
   {
     key: "loyalty.terms.tiers_heading",
     section: "terms",
-    label: "Member tiers — heading",
-    help: "The heading above the member-tier table (the numbers below stay live).",
-    fallback: "Member tiers",
+    label: "Member badges — heading",
+    help: "The heading above the member-badge table (badge names are renamed on Loyalty Program; the numbers stay live).",
+    fallback: "Member badges",
   },
 ] as const;
 
@@ -267,7 +267,7 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
   );
   ok(loyaltyContentFallback("loyalty.terms.title") === "Program terms", "terms.title fallback exact");
   ok(
-    loyaltyContentFallback("loyalty.terms.tiers_heading") === "Member tiers",
+    loyaltyContentFallback("loyalty.terms.tiers_heading") === "Member badges",
     "tiers_heading fallback exact",
   );
   ok(

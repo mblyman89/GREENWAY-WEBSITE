@@ -13,7 +13,6 @@
  */
 import { describe, expect, it } from "vitest";
 import type { LoyaltyConfig, LoyaltyTier } from "@/lib/loyalty/engine";
-import { pointsValueMinor } from "@/lib/loyalty/engine";
 import { loyaltyTermsSummary, tierDisplayRows } from "@/lib/loyalty/program-terms-core";
 import { purchaseLimitRows } from "@/lib/medical/purchase-limit-display-core";
 import { MEDICAL_PURCHASE_LIMITS, RECREATIONAL_PURCHASE_LIMITS } from "@/lib/medical/tax";
@@ -26,43 +25,30 @@ import {
 
 const DEFAULT_CONFIG: LoyaltyConfig = {
   pointsPerDollar: 1,
-  pointValueMinor: 1,
-  minRedeemPoints: 100,
   signupBonusPoints: 0,
   codeExpiryDays: null,
 };
 
-describe("loyaltyTermsSummary — live-config program terms", () => {
-  it("renders the store defaults exactly (1pt/$1, 1¢/pt, redeem from 100)", () => {
+describe("loyaltyTermsSummary — live-config program terms (D137 rewards)", () => {
+  it("renders the store defaults: earn line + the two rewards, no cash value", () => {
     const t = loyaltyTermsSummary(DEFAULT_CONFIG);
     expect(t.earnLine).toBe("Earn 1 point for every $1 you spend (pre-tax).");
-    expect(t.valueLine).toBe("100 points = $1.00 off at the register.");
-    expect(t.redeemLine).toBe("Redeem once you reach 100 points ($1.00).");
+    expect(t.valueLine).toBe("150 points = 10% off your purchase. 300 points = 25% off your purchase.");
+    expect(t.redeemLine).toContain("Use 150 points for 10% off, or 300 points for 25% off.");
+    expect(t.redeemLine).toContain("One reward per visit");
     expect(t.signupBonusLine).toBeNull();
     expect(t.expiryLine).toBeNull();
+  });
+
+  it("never advertises a dollar value per point (the $0.10-per-point program is retired)", () => {
+    const t = loyaltyTermsSummary(DEFAULT_CONFIG);
+    expect(t.valueLine).not.toMatch(/\$/);
+    expect(t.redeemLine).not.toMatch(/\$/);
   });
 
   it("pluralizes the earn rate when the admin raises points per dollar", () => {
     const t = loyaltyTermsSummary({ ...DEFAULT_CONFIG, pointsPerDollar: 2 });
     expect(t.earnLine).toBe("Earn 2 points for every $1 you spend (pre-tax).");
-  });
-
-  it("value line tracks pointValueMinor (5¢/pt → 100 pts = $5.00)", () => {
-    const t = loyaltyTermsSummary({ ...DEFAULT_CONFIG, pointValueMinor: 5 });
-    expect(t.valueLine).toBe("100 points = $5.00 off at the register.");
-  });
-
-  it("redeem line dollar figure MATCHES the register's pointsValueMinor math", () => {
-    const cfg: LoyaltyConfig = { ...DEFAULT_CONFIG, pointValueMinor: 2, minRedeemPoints: 250 };
-    const registerValueMinor = pointsValueMinor(cfg.minRedeemPoints, cfg);
-    expect(registerValueMinor).toBe(500);
-    const t = loyaltyTermsSummary(cfg);
-    expect(t.redeemLine).toBe("Redeem once you reach 250 points ($5.00).");
-  });
-
-  it("formats thousands with separators in the redeem threshold", () => {
-    const t = loyaltyTermsSummary({ ...DEFAULT_CONFIG, minRedeemPoints: 1000 });
-    expect(t.redeemLine).toBe("Redeem once you reach 1,000 points ($10.00).");
   });
 
   it("shows the signup bonus only when configured", () => {
@@ -72,34 +58,26 @@ describe("loyaltyTermsSummary — live-config program terms", () => {
 
   it("shows code expiry with singular/plural days", () => {
     expect(loyaltyTermsSummary({ ...DEFAULT_CONFIG, codeExpiryDays: 30 }).expiryLine).toBe(
-      "Redemption codes stay valid for 30 days.",
+      "Reward codes stay valid for 30 days.",
     );
     expect(loyaltyTermsSummary({ ...DEFAULT_CONFIG, codeExpiryDays: 1 }).expiryLine).toBe(
-      "Redemption codes stay valid for 1 day.",
+      "Reward codes stay valid for 1 day.",
     );
     expect(loyaltyTermsSummary({ ...DEFAULT_CONFIG, codeExpiryDays: 0 }).expiryLine).toBeNull();
   });
 });
 
-describe("tierDisplayRows — live tier ladder", () => {
+describe("tierDisplayRows — member badges are names only (D139)", () => {
   const tiers: LoyaltyTier[] = [
-    { id: "t1", name: "Green", minPoints: 0, discountBps: 0 },
-    { id: "t2", name: "Gold", minPoints: 5000, discountBps: 500 },
-    { id: "t3", name: "Emerald", minPoints: 15000, discountBps: 1000 },
+    { id: "t1", name: "Bronze", minPoints: 150 },
+    { id: "t2", name: "Gold", minPoints: 300 },
   ];
 
-  it("renders one row per active tier, thresholds and perks from the DB values", () => {
-    const rows = tierDisplayRows(tiers);
-    expect(rows).toEqual([
-      { name: "Green", thresholdLabel: "0+ pts", perkLabel: "" },
-      { name: "Gold", thresholdLabel: "5,000+ pts", perkLabel: "5% off" },
-      { name: "Emerald", thresholdLabel: "15,000+ pts", perkLabel: "10% off" },
+  it("renders one row per badge with its lifetime threshold and no perk", () => {
+    expect(tierDisplayRows(tiers)).toEqual([
+      { name: "Bronze", thresholdLabel: "150+ lifetime pts", perkLabel: "" },
+      { name: "Gold", thresholdLabel: "300+ lifetime pts", perkLabel: "" },
     ]);
-  });
-
-  it("handles fractional bps discounts (250 bps → 2.5% off)", () => {
-    const rows = tierDisplayRows([{ id: "x", name: "Silver", minPoints: 100, discountBps: 250 }]);
-    expect(rows[0]!.perkLabel).toBe("2.5% off");
   });
 
   it("empty ladder → no rows (section hidden on the page)", () => {

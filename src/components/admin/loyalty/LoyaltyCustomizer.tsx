@@ -1,27 +1,30 @@
 "use client";
 
 /**
- * LoyaltyCustomizer (Slice 67 — item 2)
+ * LoyaltyCustomizer (Slice 67 — item 2; reworked D137–D139, 2026-11-02)
  *
- * A no-code editor for the whole loyalty program: the earn/redeem
- * configuration, membership tiers, and promotions — with a live "what a
- * customer earns" preview. Employees change everything here instead of
- * touching the database. All saves are validated + audited server-side.
+ * A no-code editor for the loyalty program: how points are earned, the
+ * (fixed) rewards, member badge NAMES, and earn promotions — with a live
+ * "what a customer earns" preview. All saves are validated + audited
+ * server-side.
  *
- * UI units are human-friendly (dollars per point, % discount, x-multiplier);
- * the server actions convert to the stored minor-units / basis-points.
+ * D138: points have NO cash value — the old "each point is worth $" and
+ * "minimum to redeem" settings are retired. D137: rewards are fixed at
+ * 150 pts = 10% off and 300 pts = 25% off, one per sale (shown read-only).
+ * D139: badges (Bronze / Gold) are names only; the owner can rename them.
  */
 import { useMemo, useState, useTransition } from "react";
 import { Button, Card, CardHeader, Field, Input, Select, Textarea, Badge } from "@/components/admin/ui";
-import { ConfirmDialog, useToast } from "@/components/admin/ux";
+import { useToast } from "@/components/admin/ux";
+import { previewEarn, BADGE_NAME_MAX, type ConfigDraft } from "@/lib/loyalty/loyalty-config-core";
 import {
-  previewEarn,
-  type ConfigDraft,
-} from "@/lib/loyalty/loyalty-config-core";
+  LOYALTY_REWARDS,
+  rewardButtonLabel,
+  rewardPercentLabel,
+} from "@/lib/loyalty/loyalty-reward-core";
 import {
   saveLoyaltyConfigAction,
-  saveLoyaltyTierAction,
-  deleteLoyaltyTierAction,
+  renameLoyaltyTierAction,
   saveLoyaltyPromotionAction,
   toggleLoyaltyPromotionAction,
   type LoyaltyActionResult,
@@ -31,7 +34,6 @@ type TierRow = {
   id: string;
   name: string;
   minPoints: number;
-  discountBps: number;
   isActive: boolean;
 };
 type PromoRow = {
@@ -58,7 +60,8 @@ export function LoyaltyCustomizer({
   return (
     <div className="space-y-6">
       <ConfigForm config={config} />
-      <TiersEditor tiers={tiers} />
+      <RewardsCard />
+      <BadgeNamesEditor tiers={tiers} />
       <PromotionsEditor promotions={promotions} />
     </div>
   );
@@ -89,22 +92,20 @@ function ConfigForm({ config }: { config: ConfigDraft }) {
 
   // Local mirror for the live preview.
   const [ppd, setPpd] = useState(String(config.pointsPerDollar));
-  const [pvd, setPvd] = useState((config.pointValueMinor / 100).toFixed(2));
 
   const preview = useMemo(() => {
     const cfg: ConfigDraft = {
       pointsPerDollar: Number(ppd) || 0,
-      pointValueMinor: Math.round((Number(pvd) || 0) * 100),
-      minRedeemPoints: config.minRedeemPoints,
       signupBonusPoints: config.signupBonusPoints,
       codeExpiryDays: config.codeExpiryDays,
     };
-    const sample = previewEarn({ subtotalMinor: 5000, cfg });
-    return {
-      pts: sample.total,
-      value: (sample.valueMinor / 100).toFixed(2),
-    };
-  }, [ppd, pvd, config.minRedeemPoints, config.signupBonusPoints, config.codeExpiryDays]);
+    const pts = previewEarn({ subtotalMinor: 5000, cfg }).total;
+    // How many $50 visits until the first reward (no cash value — D138).
+    const perVisit = Math.max(0, pts);
+    const first = LOYALTY_REWARDS[0];
+    const visitsToFirst = perVisit > 0 ? Math.ceil(first.points / perVisit) : null;
+    return { pts, visitsToFirst, firstLabel: rewardPercentLabel(first) };
+  }, [ppd, config.signupBonusPoints, config.codeExpiryDays]);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -120,7 +121,7 @@ function ConfigForm({ config }: { config: ConfigDraft }) {
       <Card>
         <CardHeader
           title="Program settings"
-          subtitle="How customers earn and redeem points. Changes take effect on the next purchase."
+          subtitle="How customers earn points. Changes take effect on the next purchase. Points have no cash value."
         />
         <div className="grid gap-4 p-5 pt-0 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Points earned per $1" help="How many points a customer earns for each pretax dollar. 1 = 1 point per $1.">
@@ -133,23 +134,10 @@ function ConfigForm({ config }: { config: ConfigDraft }) {
               onChange={(e) => setPpd(e.target.value)}
             />
           </Field>
-          <Field label="Each point is worth ($)" help="Cash value of one point when redeemed. 0.01 = a point is worth one cent.">
-            <Input
-              name="pointValueDollars"
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={pvd}
-              onChange={(e) => setPvd(e.target.value)}
-            />
-          </Field>
-          <Field label="Minimum points to redeem" help="A customer can't cash in points until they reach this balance.">
-            <Input name="minRedeemPoints" type="number" step="1" min="0" defaultValue={config.minRedeemPoints} />
-          </Field>
           <Field label="Signup bonus (points)" help="Points granted the moment a customer joins. 0 for none.">
             <Input name="signupBonusPoints" type="number" step="1" min="0" defaultValue={config.signupBonusPoints} />
           </Field>
-          <Field label="Redemption codes expire after (days)" help="Leave blank for codes that never expire.">
+          <Field label="Reward codes expire after (days)" help="For reward codes handed to a customer to bring in. Leave blank for codes that never expire.">
             <Input
               name="codeExpiryDays"
               type="number"
@@ -168,8 +156,18 @@ function ConfigForm({ config }: { config: ConfigDraft }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-white/40">Live preview</p>
           <p className="mt-1 text-sm text-white/80">
             A <span className="font-semibold text-white">$50.00</span> pretax purchase earns{" "}
-            <span className="font-semibold text-[var(--admin-green)]">{preview.pts.toLocaleString("en-US")} points</span>{" "}
-            (worth <span className="font-semibold text-[var(--admin-gold)]">${preview.value}</span>).
+            <span className="font-semibold text-[var(--admin-green)]">{preview.pts.toLocaleString("en-US")} points</span>
+            {preview.visitsToFirst != null ? (
+              <>
+                {" "}— about{" "}
+                <span className="font-semibold text-[var(--admin-gold)]">
+                  {preview.visitsToFirst} {preview.visitsToFirst === 1 ? "visit" : "visits"}
+                </span>{" "}
+                like that to reach {preview.firstLabel} off.
+              </>
+            ) : (
+              "."
+            )}
           </p>
         </div>
 
@@ -184,60 +182,68 @@ function ConfigForm({ config }: { config: ConfigDraft }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tiers editor
+// Rewards (fixed — D137). Read-only so nobody can quietly change the deal.
 // ---------------------------------------------------------------------------
-function TiersEditor({ tiers }: { tiers: TierRow[] }) {
-  const active = tiers.filter((t) => t.isActive);
+function RewardsCard() {
   return (
     <Card>
       <CardHeader
-        title="Membership tiers"
-        subtitle="Reaching a points threshold unlocks a standing discount. Add, edit, or retire tiers."
+        title="Rewards"
+        subtitle="Fixed rewards a member can use at the register or on an order. Points have no cash value."
       />
       <div className="space-y-3 p-5 pt-0">
-        {active.length === 0 ? (
-          <p className="text-sm text-white/50">No tiers yet. Add one below.</p>
-        ) : (
-          active.map((t) => <TierForm key={t.id} tier={t} />)
-        )}
-        <div className="rounded-[var(--admin-radius)] border border-dashed border-[var(--admin-border)] p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">Add a tier</p>
-          <TierForm tier={null} />
+        <div className="flex flex-wrap gap-2">
+          {LOYALTY_REWARDS.map((r) => (
+            <Badge key={r.points} tone="gold">
+              {rewardButtonLabel(r)}
+            </Badge>
+          ))}
         </div>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-white/70">
+          <li>One reward per sale, no dollar cap. Exactly 150 or 300 points come off — never the whole balance.</li>
+          <li>The percent comes off the pre-tax price. Each item keeps the better of its deal price or the reward price — never both.</li>
+          <li>Never-discount items are skipped, and no price goes below cost or to $0 (WAC 314-55-155, RCW 69.50.357).</li>
+          <li>If a sale with a reward is cancelled or voided, the points go back to the customer automatically.</li>
+        </ul>
       </div>
     </Card>
   );
 }
 
-function TierForm({ tier }: { tier: TierRow | null }) {
+// ---------------------------------------------------------------------------
+// Member badge names (D139 — names only)
+// ---------------------------------------------------------------------------
+function BadgeNamesEditor({ tiers }: { tiers: TierRow[] }) {
+  const active = tiers.filter((t) => t.isActive).sort((a, b) => a.minPoints - b.minPoints);
+  return (
+    <Card>
+      <CardHeader
+        title="Member badge names"
+        subtitle="Badges are names only — they give no discount. Rename them here; the new name shows everywhere (register, customer pages, website)."
+      />
+      <div className="space-y-3 p-5 pt-0">
+        {active.length === 0 ? (
+          <p className="text-sm text-white/50">No member badges are set up.</p>
+        ) : (
+          active.map((t) => <BadgeNameForm key={t.id} tier={t} />)
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function BadgeNameForm({ tier }: { tier: TierRow }) {
   const notify = useActionToast();
   const [pending, startTransition] = useTransition();
-  // GW-035: friendly confirm dialog instead of the browser's window.confirm.
-  const [confirmRetire, setConfirmRetire] = useState(false);
+  const [name, setName] = useState(tier.name);
+  const changed = name.trim() !== tier.name;
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await saveLoyaltyTierAction(fd);
-      notify(res, tier ? "Tier updated." : "Tier added.");
-    });
-  }
-
-  function onDelete(e: React.MouseEvent) {
-    e.preventDefault();
-    if (!tier) return;
-    setConfirmRetire(true);
-  }
-
-  function retireNow() {
-    if (!tier) return;
-    setConfirmRetire(false);
-    const fd = new FormData();
-    fd.set("id", tier.id);
-    startTransition(async () => {
-      const res = await deleteLoyaltyTierAction(fd);
-      notify(res, "Tier retired.");
+      const res = await renameLoyaltyTierAction(fd);
+      notify(res, `Badge renamed to "${name.trim()}".`);
     });
   }
 
@@ -246,51 +252,26 @@ function TierForm({ tier }: { tier: TierRow | null }) {
       onSubmit={onSubmit}
       className="flex flex-wrap items-end gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3"
     >
-      {tier && <input type="hidden" name="id" value={tier.id} />}
-      <div className="w-40">
-        <Field label="Tier name">
-          <Input name="name" type="text" maxLength={40} defaultValue={tier?.name ?? ""} placeholder="Gold" />
-        </Field>
-      </div>
-      <div className="w-40">
-        <Field label="Reach at (points)">
-          <Input name="minPoints" type="number" step="1" min="0" defaultValue={tier?.minPoints ?? ""} placeholder="300" />
-        </Field>
-      </div>
-      <div className="w-36">
-        <Field label="Discount (%)">
+      <input type="hidden" name="id" value={tier.id} />
+      <div className="w-56">
+        <Field label="Badge name">
           <Input
-            name="discountPercent"
-            type="number"
-            step="0.5"
-            min="0"
-            max="100"
-            defaultValue={tier ? tier.discountBps / 100 : ""}
-            placeholder="25"
+            name="name"
+            type="text"
+            maxLength={BADGE_NAME_MAX}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
           />
         </Field>
       </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={pending}>
-          {tier ? "Save" : "Add tier"}
+      <p className="pb-2 text-sm text-white/50">
+        Members get it at {tier.minPoints.toLocaleString("en-US")}+ lifetime points
+      </p>
+      <div className="ml-auto flex gap-2">
+        <Button type="submit" size="sm" disabled={pending || !changed || name.trim() === ""}>
+          {pending ? "Saving…" : "Rename"}
         </Button>
-        {tier && (
-          <Button type="button" size="sm" variant="danger" disabled={pending} onClick={onDelete}>
-            Retire
-          </Button>
-        )}
       </div>
-      {tier && (
-        <ConfirmDialog
-          open={confirmRetire}
-          title={`Retire the "${tier.name}" tier?`}
-          description="Customers keep their points; the discount stops applying."
-          confirmLabel="Retire tier"
-          tone="danger"
-          onConfirm={retireNow}
-          onCancel={() => setConfirmRetire(false)}
-        />
-      )}
     </form>
   );
 }

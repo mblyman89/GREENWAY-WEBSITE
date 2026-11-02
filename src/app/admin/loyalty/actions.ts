@@ -7,13 +7,14 @@ import {
   enrollCustomer,
   adjustPoints,
   issueRedemption,
+  cancelRedemption,
   updateConfig,
-  upsertTier,
-  deactivateTier,
+  renameTier,
+  listTiersForEdit,
   upsertPromotion,
   setPromotionActive,
-  getConfig,
 } from "@/lib/loyalty/loyalty-store";
+import { rewardForPoints, rewardShortLabel } from "@/lib/loyalty/loyalty-reward-core";
 import { computeLoyaltyMetrics } from "@/lib/loyalty/loyalty-metrics";
 import {
   generateLoyaltyAdvice,
@@ -22,10 +23,8 @@ import {
 } from "@/lib/loyalty/loyalty-advisor";
 import {
   parseConfigDraft,
-  parseTierDraft,
+  parseTierName,
   parsePromoDraft,
-  dollarsToMinor,
-  percentToBps,
 } from "@/lib/loyalty/loyalty-config-core";
 
 export type LoyaltyActionResult = { ok: boolean; error?: string; errors?: string[] };
@@ -74,28 +73,60 @@ export async function adjustPointsAction(form: FormData): Promise<void> {
   if (customerId) revalidatePath(`/admin/customers/${customerId}`);
 }
 
+/**
+ * D137: issue a reward CODE from a customer's page for them to bring in (or to
+ * be texted/emailed). Only the two fixed rewards exist — 150 pts (10% off)
+ * or 300 pts (25% off); exactly that many points come off the balance now
+ * and come back if the code is cancelled.
+ */
 export async function issueRedemptionAction(form: FormData): Promise<void> {
   const session = await requirePermission("loyalty.manage");
   const accountId = String(form.get("account_id") ?? "").trim();
   const customerId = String(form.get("customer_id") ?? "").trim();
-  const points = intFromForm(form, "points");
-  const channelRaw = String(form.get("channel") ?? "both").trim();
-  const channel = (["sms", "email", "both"].includes(channelRaw) ? channelRaw : "both") as
-    | "sms"
-    | "email"
-    | "both";
-  if (!accountId || points <= 0) return;
-  const res = await issueRedemption({ accountId, points, channel, actorId: session.userId });
+  const reward = rewardForPoints(intFromForm(form, "rewardPoints"));
+  if (!accountId || !reward) return;
+  const res = await issueRedemption({
+    accountId,
+    points: reward.points,
+    channel: "profile",
+    actorId: session.userId,
+  });
   if (res.ok) {
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
-      action: "loyalty.redeem",
+      action: "loyalty.reward_code.issue",
       entityType: "loyalty_account",
       entityId: accountId,
-      after: { points, code: res.code, valueMinor: res.valueMinor },
+      after: { points: reward.points, percentBps: reward.percentBps, reward: rewardShortLabel(reward), code: res.code },
     });
   }
+  if (customerId) revalidatePath(`/admin/customers/${customerId}`);
+}
+
+/**
+ * D141: cancel an unused reward code and give its points back. Conditional
+ * on the code still being open, so a code that was just used at the
+ * register can never be refunded as well.
+ */
+export async function cancelRedemptionAction(form: FormData): Promise<void> {
+  const session = await requirePermission("loyalty.manage");
+  const redemptionId = String(form.get("redemption_id") ?? "").trim();
+  const customerId = String(form.get("customer_id") ?? "").trim();
+  if (!redemptionId) return;
+  const res = await cancelRedemption({
+    redemptionId,
+    note: "Reward code cancelled from the customer page — points returned",
+    actorId: session.userId,
+  });
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: res.ok ? "loyalty.reward_code.cancel" : "loyalty.reward_code.cancel_failed",
+    entityType: "loyalty_redemption",
+    entityId: redemptionId,
+    after: res.ok ? { code: res.code, refundedPoints: res.refundedPoints } : { error: res.error },
+  });
   if (customerId) revalidatePath(`/admin/customers/${customerId}`);
 }
 
@@ -105,14 +136,11 @@ export async function issueRedemptionAction(form: FormData): Promise<void> {
 // validated by the pure core before touching the database.
 // ---------------------------------------------------------------------------
 
-/** Save the program configuration (earn rate, point value, min redeem, etc.). */
+/** Save the program configuration (earn rate, signup bonus, code expiry). D138: no point value. */
 export async function saveLoyaltyConfigAction(fd: FormData): Promise<LoyaltyActionResult> {
   const session = await requirePermission("loyalty.manage");
   const parsed = parseConfigDraft({
     pointsPerDollar: fd.get("pointsPerDollar"),
-    // UI collects dollars-per-point; convert to minor units for validation.
-    pointValueMinor: dollarsToMinor(fd.get("pointValueDollars")),
-    minRedeemPoints: fd.get("minRedeemPoints"),
     signupBonusPoints: fd.get("signupBonusPoints"),
     codeExpiryDays: fd.get("codeExpiryDays"),
   });
@@ -135,50 +163,35 @@ export async function saveLoyaltyConfigAction(fd: FormData): Promise<LoyaltyActi
   return { ok: true };
 }
 
-/** Create or update a tier. UI collects a percent discount. */
-export async function saveLoyaltyTierAction(fd: FormData): Promise<LoyaltyActionResult> {
-  const session = await requirePermission("loyalty.manage");
-  const id = String(fd.get("id") ?? "").trim() || null;
-  const parsed = parseTierDraft({
-    name: fd.get("name"),
-    minPoints: fd.get("minPoints"),
-    discountBps: percentToBps(fd.get("discountPercent")),
-  });
-  if (!parsed.ok) return { ok: false, errors: parsed.errors };
-  const res = await upsertTier({ id, ...parsed.value });
-  if (!res.ok) return { ok: false, error: res.error };
-  await recordAudit({
-    actorId: session.userId,
-    actorEmail: session.email,
-    action: id ? "loyalty.tier.update" : "loyalty.tier.create",
-    entityType: "loyalty_tier",
-    entityId: id ?? parsed.value.name,
-    after: parsed.value,
-  });
-  revalidatePath("/admin/loyalty");
-  // USAGE-5: the public /loyalty page (revalidate = 60) advertises THESE
-  // numbers, so a saved change must clear it too — the TTL is only the floor.
-  revalidatePath("/loyalty");
-  return { ok: true };
-}
-
-/** Retire (soft-delete) a tier. */
-export async function deleteLoyaltyTierAction(fd: FormData): Promise<LoyaltyActionResult> {
+/**
+ * D139 (owner, 2026-11-02): "bronze and gold stay as names only … i would
+ * like the ability to change their names". Renames a member badge. Nothing
+ * else about a badge is editable any more — badges carry no discount.
+ */
+export async function renameLoyaltyTierAction(fd: FormData): Promise<LoyaltyActionResult> {
   const session = await requirePermission("loyalty.manage");
   const id = String(fd.get("id") ?? "").trim();
-  if (!id) return { ok: false, error: "Missing tier id." };
-  const res = await deactivateTier(id);
+  if (!id) return { ok: false, error: "Missing badge id." };
+  const others = (await listTiersForEdit()).filter((t) => t.id !== id && t.isActive).map((t) => t.name);
+  const parsed = parseTierName(fd.get("name"), { otherNames: others });
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+  const res = await renameTier(id, parsed.value);
   if (!res.ok) return { ok: false, error: res.error };
-  await recordAudit({
-    actorId: session.userId,
-    actorEmail: session.email,
-    action: "loyalty.tier.retire",
-    entityType: "loyalty_tier",
-    entityId: id,
-  });
+  if (res.before !== parsed.value) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "loyalty.tier.rename",
+      entityType: "loyalty_tier",
+      entityId: id,
+      before: { name: res.before },
+      after: { name: parsed.value },
+    });
+  }
+  // The badge name shows in the back office, on customer pages, at the
+  // register (next sale lookup) and on the public /loyalty page.
   revalidatePath("/admin/loyalty");
-  // USAGE-5: the public /loyalty page (revalidate = 60) advertises THESE
-  // numbers, so a saved change must clear it too — the TTL is only the floor.
+  revalidatePath("/admin/customers", "layout");
   revalidatePath("/loyalty");
   return { ok: true };
 }
@@ -247,8 +260,7 @@ export async function generateLoyaltyAdviceAction(
   await requirePermission("loyalty.view");
   if (!isAdvisorAiConfigured) return { ok: false, error: "AI is not configured (set AI_API_KEY)." };
   try {
-    const cfg = await getConfig();
-    const metrics = await computeLoyaltyMetrics(cfg.pointValueMinor);
+    const metrics = await computeLoyaltyMetrics();
     const advice = await generateLoyaltyAdvice(metrics, question ?? null);
     return { ok: true, advice };
   } catch (err) {

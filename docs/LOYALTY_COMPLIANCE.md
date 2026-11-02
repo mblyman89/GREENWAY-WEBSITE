@@ -22,12 +22,11 @@ guessed.
   cannabis-infused products below the cost of acquisition, and may never give
   cannabis away free. Violations run $1,000 each.
 
-**Consequence in code:** every loyalty price reduction (tier discount or
-redemption code) is clamped per unit to
+**Consequence in code:** every loyalty price reduction (a 10% / 25% reward,
+D137) is clamped per unit to
 `max(statutory 1¢ cannabis floor, ceil(acquisition_cost × tax divisor))` — the
 same floors the promotions engine enforces (`order-pricing-core.ts`,
-`cart-discount.ts`). A redemption code can only be applied when the cart can
-absorb its FULL value above those floors.
+`cart-discount.ts`). Never-discount items are excluded (D140).
 
 ### 1.2 Retailer-funded only (money's worth)
 
@@ -35,16 +34,16 @@ absorb its FULL value above those floors.
   negotiate, or participate in retailer discounts, incentive programs, or
   rebates. The loyalty program must be funded 100% by the retailer.
 
-**Consequence:** the program has no vendor-funded mechanics anywhere; point
-value and tier discounts come out of Greenway margin only. The AI advisor's
+**Consequence:** the program has no vendor-funded mechanics anywhere; the
+10% / 25% rewards come out of Greenway margin only. The AI advisor's
 system prompt states this so it never suggests vendor-funded loyalty deals.
 
 ### 1.3 Equal availability
 
 - The CCRS discount rule requires the discount to be "available to all who
   meet the discount conditions." A loyalty program qualifies because
-  enrollment is open to any 21+ customer on equal terms and tier thresholds
-  are objective (lifetime points).
+  enrollment is open to any 21+ customer on equal terms and the reward
+  thresholds (150 / 300 points) are objective and the same for everyone.
 
 ### 1.4 Taxes
 
@@ -63,21 +62,27 @@ system prompt states this so it never suggests vendor-funded loyalty deals.
 > "No discount stacking, better discount wins for the customer with respect
 > to loyalty points getting used."
 
-1. **Tier standing discount vs. promotion — best deal wins, never both.**
-   For each line, the engine compares the promotion-discounted unit price with
-   the tier-discounted-from-REGULAR unit price and keeps whichever is LOWER
-   (better for the customer). A line never receives both. On a tie the
-   promotion label is kept.
-2. **Redemption codes are stored value, not a stackable percent.** Points were
-   already deducted when the code was issued (the code is a wallet). The code
-   value is spread across the cart's units evenly (capacity-weighted, whole
-   cents) after promo/tier pricing, and each unit is still clamped to its
-   floor. If the cart cannot absorb the full value above the floors, the code
-   is refused with the exact absorbable amount so staff can add items or use a
-   smaller code — value is never silently forfeited.
-3. **One code per order.** Applying a second code requires removing the first.
-4. **Member pricing before code.** If a code is already applied, tier pricing
-   changes are blocked until the code is removed (prevents ordering games).
+**Superseded rules, owner message 2026-11-02 (D137–D141).** *"yes, one redemption
+per sale, and works exactly as you described in the proposed fix. no dollar cap
+on the 25% off. bronze and gold stay as names only … the $0.10-per-point should
+be retired"*. The pure rules live in `src/lib/loyalty/loyalty-reward-core.ts`
+(57 self-tests).
+
+1. **Two fixed rewards.** 150 points = 10% off, 300 points = 25% off. Exactly
+   those points are deducted, never the whole balance. Points have **no cash
+   value**; `loyalty_config.point_value_minor` and `min_redeem_points` and
+   `loyalty_tiers.discount_bps` are retired and ignored (no migration).
+2. **Best deal wins, never both, per item.** For each line the engine compares
+   the promotion price with the reward-percent-off-REGULAR price and keeps the
+   LOWER (`applyTierPricing`). On a tie the promotion is kept. If no line gets
+   cheaper the reward is refused and no points are used.
+3. **Floors.** Every unit is clamped to its legal floor (§1.1).
+4. **One reward per sale, no dollar cap.** The server refuses a second reward or
+   a reward together with a special discount.
+5. **Badges are names only.** Bronze (150+ lifetime) and Gold (300+) give no
+   discount; the owner renames them (`renameLoyaltyTierAction`, audited).
+6. **Old-style points codes** (issued with a dollar value) are refused with
+   instructions to cancel them on the profile, which returns the points.
 
 ## 3. Lifecycle & integrity
 
@@ -93,9 +98,13 @@ system prompt states this so it never suggests vendor-funded loyalty deals.
   the redemption row is `redeemed` AND `redeemed_order_id` matches the order —
   otherwise completion is blocked with instructions (defense in depth against
   reopened/cancelled-order drift).
-- **Cancel / no-show:** the code is automatically RELEASED back to `issued`
-  (the sale never happened; the customer keeps their stored value). Points
-  stay deducted because the code still exists. Best-effort, never blocks the
+- **Cancel / no-show:** a code the customer brought is RELEASED back to
+  `issued` (they keep it); a code the register or order page issued for that
+  sale is cancelled and its points returned (D141).
+- **Void (D141):** a full void cancels the used reward code once (conditional
+  update) and returns exactly its points (`returnRewardForVoidedOrder`).
+- **Cancel an open code (D141):** Cancel & return points on the profile
+  (`cancelRedemption`, audited `loyalty.reward_code.cancel`). Best-effort, never blocks the
   transition, always logged as an order event.
 - **Earn:** unchanged — accrual runs once per order on completion
   (idempotent ledger `kind='earn'`), now on the post-discount pre-tax
@@ -109,10 +118,11 @@ system prompt states this so it never suggests vendor-funded loyalty deals.
 `/admin/loyalty` is a command center showing program health computed from the
 ledger/redemptions/orders (all aggregates):
 
-- enrollment, 90-day active accounts, points earned/redeemed (30d),
-  redemption rate, outstanding point liability in dollars, codes outstanding
-  and expired, average days from issue to use, tier distribution, and member
-  vs. guest average order value.
+- enrollment, 90-day active accounts, points earned/used (30d), members who
+  can use a reward now (10% / 25%), rewards used (10% / 25%, 30d), codes
+  outstanding and expired, amount taken off by rewards (90d), average days from
+  issue to use, badge distribution, and member vs. guest average order value.
+  No dollar liability (points have no cash value, D138).
 - A DRAFTS-ONLY AI advisor (same pattern as the Promotions advisor) reads
   ONLY those aggregates — never customer PII or raw rows — and returns a
   briefing: what needs attention, what's healthy, retention ideas, next steps.
@@ -121,7 +131,7 @@ ledger/redemptions/orders (all aggregates):
 ## 5. Owner runbook
 
 1. Apply migration `0116_loyalty_at_sale.sql` in the Supabase SQL editor.
-2. Set point value / tiers / earn promos in `/admin/loyalty` (unchanged).
+2. Set points per dollar, signup bonus, code expiry, badge names and earn promos in `/admin/loyalty`. The rewards (150 = 10%, 300 = 25%) are fixed by the owner (D137).
 3. Register flow: open the order → Loyalty section → enter the customer's
    code or apply member pricing → complete the sale as usual. The section
    explains every rule inline.
@@ -133,5 +143,5 @@ The register can sign a new customer up (`/api/pos/loyalty-signup`, SOP-01 §4.1
 - **Age.** The birthday comes from the sale's passing ID check and must be 21 or older on the Pacific calendar (RCW 69.50.357).
 - **Messages.** Consent is optional, starts unchecked and is never a condition of joining or buying. Saying yes shows the published `loyalty.form.consent_text` wording, and the customer types their name as the signature (47 CFR 64.1200(f)(9) prior express written consent; an electronic signature counts). The server refuses if the wording the customer saw is not the published wording (SHA-256 compare). The row keeps the wording and its hash.
 - **A "no" stays a no.** Register signups that said no are stored with `consent = false`, so the newsletter never emails them. Linking an existing customer never removes an earlier signed yes and never overrides `do_not_contact`.
-- **Signup bonus.** The bonus is loyalty points, the same as a website signup (`enrollCustomer`). Points are redeemed only as a discount at a sale, so the cost floor in §1.1 still applies when they are spent.
+- **Signup bonus.** The bonus is loyalty points, the same as a website signup (`enrollCustomer`). Points are used only for a 10% / 25% reward at a sale, so the cost floor in §1.1 still applies when they are spent.
 

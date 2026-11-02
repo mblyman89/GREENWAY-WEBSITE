@@ -19,11 +19,12 @@ const SYSTEM = [
   "You are a customer-loyalty and retention strategist for Greenway Marijuana (WA I-502 cannabis retailer, Port Orchard WA).",
   "You help a non-technical owner run a professional, industry-standard points program that grows repeat business while staying compliant.",
   "GROUND TRUTH you must respect (verified current rules — do not contradict):",
-  "- Loyalty redemptions and tier discounts are DISCOUNTS: they may never price a product below the retailer's acquisition cost (WAC 314-55-155(5)(g); CCRS Upload User Guide) and cannabis may never be free (RCW 69.50.357). The POS clamps every price to those floors automatically.",
+  "- Loyalty rewards are DISCOUNTS: they may never price a product below the retailer's acquisition cost (WAC 314-55-155(5)(g); CCRS Upload User Guide) and cannabis may never be free (RCW 69.50.357). The POS clamps every price to those floors automatically.",
   "- The program must be 100% retailer-funded: producers/processors may not fund or negotiate any part of it (LCB money's-worth bulletin 23-01). Never suggest vendor-funded loyalty mechanics.",
-  "- Discounts never stack: each order gets ONE loyalty application (a code or member tier pricing), and each line keeps the better of the promo price or tier price — best deal wins for the customer.",
+  "- Rewards are FIXED (owner decision D137, 2026-11-02): 150 points = 10% off the pre-tax order, 300 points = 25% off, ONE reward per sale, no dollar cap. Points have NO cash value — never describe points in dollars or suggest a per-point value. Member badges (e.g. Bronze, Gold) are names only and carry no discount.",
+  "- Discounts never stack: per item the customer keeps the better of the deal price or the reward price, never both. Items marked never-discount are excluded.",
   "- Advertising restrictions apply to loyalty marketing (WAC 314-55-155): no appeal to youth, no over-consumption promotion, no curative claims; keep suggestions in owned channels (in-store, email/SMS to opted-in adults 21+).",
-  "- Points accrue on the PRE-TAX subtotal after discounts. Codes hold stored value (points deducted at issuance) and are released back if the sale is cancelled.",
+  "- Points accrue on the PRE-TAX subtotal after discounts. Points for a reward are deducted when it is used and returned if the sale is cancelled or voided.",
   "You are given ONLY aggregate program metrics. Reference the ACTUAL numbers given — never invent figures, customers, or events.",
   "Do not give legal advice. Keep it concrete, retention-focused, calm, and actionable for a store with a small team.",
 ].join("\n");
@@ -45,11 +46,11 @@ function summarize(m: LoyaltyMetrics): string {
   return [
     `Enrolled members: ${m.accounts} (new in last 30d: ${m.newAccounts30d}; active in last 90d: ${m.activeAccounts90d})`,
     `Points earned last 30d: ${m.pointsEarned30d}; points converted to codes last 30d: ${m.pointsRedeemed30d} (redemption rate ${m.redemptionRate30d == null ? "n/a" : `${m.redemptionRate30d}%`})`,
-    `Outstanding liability: ${m.pointsOutstanding} pts + ${m.codesIssuedOutstanding} live codes = ${money(m.liabilityMinor)} at the current point value (${money(m.pointValueMinor)}/pt)`,
-    `Codes: ${m.codesIssuedOutstanding} outstanding (${money(m.codesOutstandingValueMinor)}), ${m.codesRedeemed30d} used last 30d, ${m.codesExpired} expired all-time, avg ${m.avgDaysIssueToUse ?? "n/a"} days from issue to use`,
+    `Rewards (points have NO cash value): 150 pts = 10% off, 300 pts = 25% off, one per visit. Points outstanding: ${m.pointsOutstanding}; members who can use a reward now: ${m.membersWithReward} (of whom ${m.membersWithTopReward} can use 25% off)`,
+    `Rewards used last 30d: ${m.codesRedeemed30d} (${m.rewards10Used30d} at 10% off, ${m.rewards25Used30d} at 25% off); reward codes outstanding: ${m.codesIssuedOutstanding}; ${m.codesExpired} expired all-time; avg ${m.avgDaysIssueToUse ?? "n/a"} days from issue to use`,
     `Completed orders last 90d: ${m.memberOrders90d} member vs ${m.guestOrders90d} guest; avg order ${m.memberAvgOrderMinor == null ? "n/a" : money(m.memberAvgOrderMinor)} member vs ${m.guestAvgOrderMinor == null ? "n/a" : money(m.guestAvgOrderMinor)} guest`,
-    `Loyalty value given at the register last 90d: ${money(m.loyaltyDiscountTotal90dMinor)}`,
-    `Tier distribution: ${m.tierDistribution.length > 0 ? m.tierDistribution.map((t) => `${t.name} ${t.count}`).join(", ") : "none"}; members below the first tier: ${m.untieredAccounts}`,
+    `Amount taken off by loyalty rewards last 90d: ${money(m.loyaltyDiscountTotal90dMinor)}`,
+    `Member badges (names only — no perks or discounts) distribution: ${m.tierDistribution.length > 0 ? m.tierDistribution.map((t) => `${t.name} ${t.count}`).join(", ") : "none"}; members below the first badge: ${m.untieredAccounts}`,
   ].join("\n");
 }
 

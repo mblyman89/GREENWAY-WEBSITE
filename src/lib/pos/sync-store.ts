@@ -95,6 +95,7 @@ import {
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard, getMedTaxSettings } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
+import { maxRewardOffMinor, redemptionReward, rewardShortLabel } from "@/lib/loyalty/loyalty-reward-core";
 
 // ---------------------------------------------------------------------------
 // Schema guard (migration 0120 applied manually by the owner)
@@ -677,9 +678,9 @@ async function processSale(
   if (sale.loyaltyRedemption) {
     const { data: row } = await admin
       .from("loyalty_redemptions")
-      .select("id, code, status, value_minor, account_id")
+      .select("id, code, status, value_minor, account_id, points")
       .eq("id", sale.loyaltyRedemption.redemptionId)
-      .maybeSingle<{ id: string; code: string; status: string; value_minor: number; account_id: string }>();
+      .maybeSingle<{ id: string; code: string; status: string; value_minor: number; account_id: string; points: number }>();
     if (!row) {
       return markException(
         admin,
@@ -704,12 +705,19 @@ async function processSale(
         `Loyalty code ${row.code} is ${row.status} — it was used, cancelled, or expired after the register applied it. Re-ring the sale, then resolve this exception.`,
       );
     }
-    if (sale.loyaltyRedemption.appliedMinor > row.value_minor) {
+    // D137: a reward row (150 / 300 pts) is a PERCENT, so the ceiling is the
+    // percent of the regular prices; the old fixed-value check stays only for
+    // a code from the retired $0.10-per-point program.
+    const rowReward = redemptionReward({ points: row.points });
+    const ceiling = rowReward ? maxRewardOffMinor(sale.lines, rowReward) : row.value_minor;
+    if (sale.loyaltyRedemption.appliedMinor > ceiling) {
       return markException(
         admin,
         ledgerId,
         envelope.clientUuid,
-        `Loyalty code ${row.code} is worth $${(row.value_minor / 100).toFixed(2)} but the register applied $${(sale.loyaltyRedemption.appliedMinor / 100).toFixed(2)} — refused.`,
+        rowReward
+          ? `Loyalty reward ${row.code} (${rewardShortLabel(rowReward)}) can take at most $${(ceiling / 100).toFixed(2)} off this sale but the register applied $${(sale.loyaltyRedemption.appliedMinor / 100).toFixed(2)} — refused.`
+          : `Loyalty code ${row.code} is worth $${(row.value_minor / 100).toFixed(2)} but the register applied $${(sale.loyaltyRedemption.appliedMinor / 100).toFixed(2)} — refused.`,
       );
     }
     redemptionRow = { id: row.id, code: row.code, account_id: row.account_id, value_minor: row.value_minor };

@@ -105,6 +105,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json({
     refundMinor: result.refundMinor,
     pointsClawed: result.pointsClawed,
+    rewardPointsReturned: result.rewardPointsReturned,
     slipHtml: result.slipHtml,
     orderNumber: result.orderNumber,
   });

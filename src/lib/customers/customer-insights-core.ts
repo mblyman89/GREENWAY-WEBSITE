@@ -40,6 +40,7 @@
  * Money is integer MINOR UNITS (cents) everywhere.
  */
 
+import { bestRewardFor, rewardPercentLabel, rewardStatusLine } from "@/lib/loyalty/loyalty-reward-core";
 import { pacificDayKey, pacificMonthKey, pacificParts, storeWeekday, addPacificDays } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
@@ -105,8 +106,6 @@ export type LoyaltyInput = {
   balancePoints: number;
   lifetimePoints: number;
   tierName: string | null;
-  pointValueMinor: number;
-  minRedeemPoints: number;
   pointsEarned: number;
   pointsRedeemed: number;
   codesRedeemed: number;
@@ -268,7 +267,12 @@ export type CustomerInsights = {
   returnRate: number | null;
   returnReasons: { label: string; count: number }[];
   // Loyalty
-  loyalty: (LoyaltyInput & { balanceValueMinor: number; canRedeem: boolean }) | null;
+  /**
+   * D137 — points have no cash value any more. `canUseReward` is true when
+   * the balance covers at least the 150-point reward; `bestRewardLabel` is
+   * e.g. "25% off"; `rewardLine` is the plain status sentence.
+   */
+  loyalty: (LoyaltyInput & { canUseReward: boolean; bestRewardLabel: string | null; rewardLine: string }) | null;
   // Staples + recommendations
   staples: Staple[];
   recommendations: Recommendation[];
@@ -721,8 +725,12 @@ export function buildCustomerInsights(input: {
   const loyalty = input.loyalty
     ? {
         ...input.loyalty,
-        balanceValueMinor: Math.max(0, intOr0(input.loyalty.balancePoints)) * Math.max(0, intOr0(input.loyalty.pointValueMinor)),
-        canRedeem: input.loyalty.balancePoints >= Math.max(1, input.loyalty.minRedeemPoints),
+        canUseReward: bestRewardFor(intOr0(input.loyalty.balancePoints)) !== null,
+        bestRewardLabel: (() => {
+          const b = bestRewardFor(intOr0(input.loyalty.balancePoints));
+          return b ? `${rewardPercentLabel(b)} off` : null;
+        })(),
+        rewardLine: rewardStatusLine(Math.max(0, intOr0(input.loyalty.balancePoints))),
       }
     : null;
 
@@ -985,8 +993,8 @@ export function buildInsightSentences(
     });
 
   if (x.loyalty) {
-    if (x.loyalty.canRedeem && x.loyalty.balancePoints > 0)
-      out.push({ tone: "good", text: `Has ${x.loyalty.balancePoints.toLocaleString("en-US")} points (${money(x.loyalty.balanceValueMinor)}) ready to redeem. Mention it at their next visit.` });
+    if (x.loyalty.canUseReward && x.loyalty.balancePoints > 0)
+      out.push({ tone: "good", text: `Has ${x.loyalty.balancePoints.toLocaleString("en-US")} points — can use ${x.loyalty.bestRewardLabel} at their next visit. Mention it.` });
   } else if (x.visits >= 2) {
     out.push({ tone: "warn", text: "Not in the loyalty program yet, despite coming back. Sign them up at the next visit." });
   }
@@ -1041,11 +1049,11 @@ export function chooseNextBestAction(
   if (!x.loyalty && x.visits >= 2) {
     return { kind: "enroll_loyalty", title: "Enroll in loyalty", detail: `${plural(x.visits, "visit")} and not a member yet. Points give them a reason to keep choosing you.` };
   }
-  if (x.loyalty && x.loyalty.canRedeem && x.loyalty.balancePoints > 0) {
+  if (x.loyalty && x.loyalty.canUseReward && x.loyalty.balancePoints > 0) {
     return {
       kind: "redeem_points",
       title: "Remind them about their points",
-      detail: `${x.loyalty.balancePoints.toLocaleString("en-US")} points (${money(x.loyalty.balanceValueMinor)}) are ready to redeem.`,
+      detail: `${x.loyalty.balancePoints.toLocaleString("en-US")} points — enough for ${x.loyalty.bestRewardLabel} on their next visit.`,
     };
   }
   if (x.cadence.status === "due_now" || x.cadence.status === "on_track") {
@@ -1231,8 +1239,6 @@ export function __runCustomerInsightsCoreTests(): { passed: number; failed: numb
     balancePoints: 450,
     lifetimePoints: 900,
     tierName: "Gold",
-    pointValueMinor: 1,
-    minRedeemPoints: 100,
     pointsEarned: 900,
     pointsRedeemed: 450,
     codesRedeemed: 1,
@@ -1281,7 +1287,7 @@ export function __runCustomerInsightsCoreTests(): { passed: number; failed: numb
   );
   ok(x.returnsCount === 1 && x.returnedUnits === 1 && x.returnReasons[0].label === "defective", "profile: returns");
   ok(x.returnRate !== null && Math.abs(x.returnRate - 1500 / gross) < 1e-9, "profile: return rate");
-  ok(x.loyalty !== null && x.loyalty.balanceValueMinor === 450 && x.loyalty.canRedeem, "profile: loyalty value + redeemable");
+  ok(x.loyalty !== null && x.loyalty.canUseReward && x.loyalty.bestRewardLabel === "25% off" && x.loyalty.rewardLine === "Can use 25% off now", "profile: loyalty reward status (D137, no cash value)");
   ok(x.staples.length === 2 && x.staples[0].productKey === "p-bd", "profile: staples (2+ days), most-bought first");
   ok(x.staples[0].stockStatus === "unavailable" && x.staples[0].typicalGapDays === 7, "profile: staple stock + gap");
   const gumStaple = x.staples.find((s) => s.productKey === "p-gum")!;
@@ -1306,7 +1312,7 @@ export function __runCustomerInsightsCoreTests(): { passed: number; failed: numb
   ok(text.includes("Usually shops: Fridays, evenings"), "insight: habits");
   ok(text.includes("Their staple Blue Dream 3.5g is out of stock"), "insight: staple out of stock");
   ok(text.includes("Returned 1 item"), "insight: returns");
-  ok(text.includes("450 points ($4.50) ready to redeem"), "insight: points");
+  ok(text.includes("Has 450 points — can use 25% off at their next visit") && !text.includes("$4.50"), "insight: points as a reward, never dollars (D138)");
   ok(text.includes("Birthday in 10 days"), "insight: birthday");
   ok(text.includes("old POS"), "insight: imported spend disclosed");
   ok(text.includes("Premium shopper"), "insight: premium");
@@ -1326,7 +1332,7 @@ export function __runCustomerInsightsCoreTests(): { passed: number; failed: numb
   ok(chooseNextBestAction({ ...onTrackX, daysUntilBirthday: 100 }, ctx, 2).kind === "link_orders", "action: unlinked orders");
   ok(chooseNextBestAction({ ...onTrackX, daysUntilBirthday: 100, loyalty: null }, ctx, 0).kind === "enroll_loyalty", "action: enroll");
   ok(chooseNextBestAction({ ...onTrackX, daysUntilBirthday: 100 }, ctx, 0).kind === "redeem_points", "action: redeem points");
-  const noPts = { ...onTrackX, daysUntilBirthday: 100, loyalty: { ...x.loyalty!, canRedeem: false } };
+  const noPts = { ...onTrackX, daysUntilBirthday: 100, loyalty: { ...x.loyalty!, canUseReward: false } };
   ok(chooseNextBestAction(noPts, ctx, 0).kind === "expect_visit", "action: expect visit");
   ok(
     chooseNextBestAction({ ...noPts, visits: 1, cadence: { ...x.cadence, status: "unknown" as DueStatus } }, ctx, 0).kind === "welcome_back",

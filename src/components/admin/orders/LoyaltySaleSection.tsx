@@ -2,24 +2,28 @@
  * LoyaltySaleSection — Task S-a (server component).
  *
  * The loyalty half of the order detail page (docs/LOYALTY_COMPLIANCE.md):
- *  - Nothing applied: enter the customer's redemption code (GW-XXXX-XXXX), or
- *    find the member and apply their TIER pricing. The section previews the
- *    tier savings and recommends the better option — best deal wins, never
- *    both (owner: "no discount stacking").
- *  - Applied: show what was applied, its value, and a remove button (codes
- *    are released back to the customer on removal / cancellation).
+ *  - Nothing applied: enter the customer's reward code (GW-XXXX-XXXX), or use
+ *    one of the linked member's REWARDS (D137): "Use 150 pts – 10% off" /
+ *    "Use 300 pts – 25% off", each previewing what it takes off THIS order.
+ *    Per item the customer gets the better of the deal or the reward, never
+ *    both; one reward per sale; no dollar cap. (Member TIER pricing is
+ *    retired — Bronze / Gold are badge names only.)
+ *  - Applied: show what was applied, its value, and a remove button (a code
+ *    the customer brought goes back to them; a reward used for this sale is
+ *    cancelled and its points returned).
  *
  * Every reduction respects the statutory cannabis floor (RCW 69.50.357) and
  * the acquisition-cost floor (WAC 314-55-155(5)(g)) — enforced server-side by
  * the pure loyalty-sale-core. Degrades gracefully before migration 0116.
  */
 import { Button, CHIP_ACTION } from "@/components/admin/ui";
-import { getOrderLoyaltyContext, previewTierSavings } from "@/lib/loyalty/loyalty-sale-store";
+import { getOrderLoyaltyContext, previewRewardSavings } from "@/lib/loyalty/loyalty-sale-store";
+import { rewardButtonLabel, rewardForPoints, rewardOptionsFor, rewardShortLabel, rewardStatusLine } from "@/lib/loyalty/loyalty-reward-core";
 import { listCustomers } from "@/lib/customers/store";
 import { getAccountByCustomer } from "@/lib/loyalty/loyalty-store";
 import {
   applyLoyaltyCodeAction,
-  applyLoyaltyTierAction,
+  applyLoyaltyRewardAction,
   removeLoyaltyAction,
 } from "@/app/admin/orders/actions";
 import type { OrderWithLines } from "@/lib/orders/types";
@@ -38,11 +42,10 @@ export async function LoyaltySaleSection({
   const isClosed = order.status === "completed" || order.status === "cancelled" || order.status === "no_show";
   const ctx = await getOrderLoyaltyContext(order.id);
 
-  // Linked member's tier preview (read-only; the action recomputes).
-  const memberPreview =
-    !ctx.kind && ctx.member && ctx.member.tierDiscountBps > 0
-      ? await previewTierSavings(order.id, ctx.member.customerId)
-      : null;
+  // Linked member's reward previews (read-only; the action recomputes).
+  const rewardPreviews =
+    !isClosed && !ctx.kind && ctx.member ? await previewRewardSavings(order.id, ctx.member.balancePoints) : [];
+  const appliedReward = ctx.redemption ? rewardForPoints(ctx.redemption.points) : null;
 
   // Member search (only when open + nothing applied + no linked member offer).
   let results: {
@@ -52,6 +55,7 @@ export async function LoyaltySaleSection({
     phone: string | null;
     enrolled: boolean;
     balance: number;
+    rewards: number[];
   }[] = [];
   if (!isClosed && !ctx.kind && ctx.migrationApplied && searchQuery.trim()) {
     const customers = await listCustomers({ q: searchQuery, limit: 8 });
@@ -65,6 +69,7 @@ export async function LoyaltySaleSection({
           phone: c.phone,
           enrolled: !!account && account.is_active,
           balance: account?.balance_points ?? 0,
+          rewards: rewardOptionsFor(account?.balance_points ?? 0).map((x) => x.points),
         };
       }),
     );
@@ -76,11 +81,11 @@ export async function LoyaltySaleSection({
         <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">Loyalty</h2>
         {ctx.kind === "code" ? (
           <span className="rounded-full border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-gold)]">
-            Code applied
+            Reward applied
           </span>
         ) : ctx.kind === "tier" ? (
           <span className="rounded-full border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)]">
-            Member pricing
+            Member pricing (retired)
           </span>
         ) : (
           <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-white/50">
@@ -101,16 +106,17 @@ export async function LoyaltySaleSection({
             {ctx.kind === "code" ? (
               <>
                 <p className="font-black text-white">
-                  Code <span className="font-mono">{ctx.code}</span>
+                  {appliedReward ? `${rewardShortLabel(appliedReward)} · ` : ""}Code{" "}
+                  <span className="font-mono">{ctx.code}</span>
                 </p>
                 <p className="mt-0.5 text-xs text-white/50">
-                  {money(ctx.discountMinorUnits)} taken off this order. The code was consumed — the
-                  customer&apos;s points were already deducted when it was issued.
+                  {money(ctx.discountMinorUnits)} taken off this order. The customer&apos;s points were
+                  deducted when the reward was issued.
                 </p>
                 {ctx.redemption && (ctx.redemption.status !== "redeemed" || ctx.redemption.redeemedOrderId !== order.id) ? (
                   <p className="mt-2 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-200">
                     This code is no longer reserved for this order — completion is blocked. Remove
-                    the loyalty discount and re-apply a valid code.
+                    the reward and apply it again.
                   </p>
                 ) : null}
               </>
@@ -118,8 +124,9 @@ export async function LoyaltySaleSection({
               <>
                 <p className="font-black text-white">{ctx.tierLabel ?? "Member tier"} pricing</p>
                 <p className="mt-0.5 text-xs text-white/50">
-                  {money(ctx.discountMinorUnits)} additional savings. Each line kept the BETTER of
-                  the promo price or the tier price — never both (no stacking).
+                  {money(ctx.discountMinorUnits)} additional savings, applied before member tier
+                  pricing was retired. Each line kept the better of the promo price or the tier
+                  price.
                 </p>
               </>
             )}
@@ -128,10 +135,11 @@ export async function LoyaltySaleSection({
             <form action={removeLoyaltyAction}>
               <input type="hidden" name="id" value={order.id} />
               <Button type="submit" variant="neutral" size="sm">
-                Remove loyalty discount
+                Remove loyalty reward
               </Button>
               <p className="mt-1.5 text-[0.68rem] leading-4 text-white/35">
-                Prices are restored{ctx.kind === "code" ? " and the code goes back to the customer" : ""}.
+                Prices are restored
+                {ctx.kind === "code" ? " and the customer gets the reward back (points returned, or their code reopened)" : ""}.
               </p>
             </form>
           ) : null}
@@ -144,7 +152,7 @@ export async function LoyaltySaleSection({
           <form action={applyLoyaltyCodeAction} className="space-y-2">
             <input type="hidden" name="id" value={order.id} />
             <label className="block text-[0.66rem] font-black uppercase tracking-[0.12em] text-white/40">
-              Redemption code
+              Reward code
             </label>
             <div className="flex gap-2">
               <input
@@ -158,8 +166,8 @@ export async function LoyaltySaleSection({
               </Button>
             </div>
             <p className="text-[0.68rem] leading-4 text-white/35">
-              The code&apos;s full value comes off this order (spread across items, never below the
-              legal price floors). One loyalty discount per order — no stacking.
+              The code&apos;s reward (10% or 25% off) comes off this order: the better of the deal or
+              the reward on each item, never below the legal price floors. One reward per sale.
             </p>
           </form>
 
@@ -170,27 +178,38 @@ export async function LoyaltySaleSection({
               </p>
               <p className="mt-1 text-sm text-white/80">
                 {ctx.member.balancePoints.toLocaleString("en-US")} pts
-                {ctx.member.tierName ? ` · ${ctx.member.tierName}` : " · no tier yet"}
+                {ctx.member.tierName ? ` · ${ctx.member.tierName}` : ""}
               </p>
-              {memberPreview && memberPreview.additionalSavingsMinorUnits > 0 ? (
-                <form action={applyLoyaltyTierAction} className="mt-2">
-                  <input type="hidden" name="id" value={order.id} />
-                  <input type="hidden" name="customerId" value={ctx.member.customerId} />
-                  <Button type="submit" variant="confirm" size="sm">
-                    Apply {memberPreview.tierName} pricing (−{money(memberPreview.additionalSavingsMinorUnits)})
-                  </Button>
-                </form>
-              ) : ctx.member.tierDiscountBps > 0 ? (
-                <p className="mt-2 text-xs text-white/40">
-                  Today&apos;s promo prices already beat or match this member&apos;s tier pricing on
-                  every item — they automatically keep the better deal.
-                </p>
+              {rewardStatusLine(ctx.member.balancePoints) ? (
+                <p className="mt-0.5 text-xs text-white/45">{rewardStatusLine(ctx.member.balancePoints)}</p>
+              ) : null}
+              {rewardPreviews.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {rewardPreviews.map((p) => {
+                    const r = rewardForPoints(p.points);
+                    if (!r) return null;
+                    return p.savingsMinorUnits > 0 ? (
+                      <form key={p.points} action={applyLoyaltyRewardAction}>
+                        <input type="hidden" name="id" value={order.id} />
+                        <input type="hidden" name="customerId" value={ctx.member!.customerId} />
+                        <input type="hidden" name="rewardPoints" value={p.points} />
+                        <Button type="submit" variant="confirm" size="sm">
+                          {rewardButtonLabel(r)} (−{money(p.savingsMinorUnits)})
+                        </Button>
+                      </form>
+                    ) : (
+                      <span key={p.points} className="text-xs text-white/40">
+                        {rewardShortLabel(r)}: today&apos;s deals already match or beat it on every item.
+                      </span>
+                    );
+                  })}
+                </div>
               ) : null}
             </div>
           ) : (
             <div>
               <p className="text-[0.66rem] font-black uppercase tracking-[0.12em] text-white/40">
-                Find a member (tier pricing)
+                Find a member (use their reward)
               </p>
               <form method="get" className="mt-2 flex gap-2">
                 <input
@@ -221,14 +240,21 @@ export async function LoyaltySaleSection({
                             {r.enrolled ? ` · ${r.balance.toLocaleString("en-US")} pts` : " · not enrolled"}
                           </p>
                         </div>
-                        {r.enrolled ? (
-                          <form action={applyLoyaltyTierAction}>
-                            <input type="hidden" name="id" value={order.id} />
-                            <input type="hidden" name="customerId" value={r.id} />
-                            <button type="submit" className={`shrink-0 ${CHIP_ACTION}`}>
-                              Apply member pricing
-                            </button>
-                          </form>
+                        {r.enrolled && r.rewards.length > 0 ? (
+                          <div className="flex shrink-0 flex-wrap gap-1.5">
+                            {r.rewards.map((pts) => (
+                              <form key={pts} action={applyLoyaltyRewardAction}>
+                                <input type="hidden" name="id" value={order.id} />
+                                <input type="hidden" name="customerId" value={r.id} />
+                                <input type="hidden" name="rewardPoints" value={pts} />
+                                <button type="submit" className={`shrink-0 ${CHIP_ACTION}`}>
+                                  {rewardForPoints(pts) ? rewardButtonLabel(rewardForPoints(pts)!) : `${pts} pts`}
+                                </button>
+                              </form>
+                            ))}
+                          </div>
+                        ) : r.enrolled ? (
+                          <span className="shrink-0 text-[0.66rem] text-white/30">{rewardStatusLine(r.balance)}</span>
                         ) : (
                           <span className="shrink-0 text-[0.66rem] text-white/30">Enroll on their profile</span>
                         )}
@@ -238,8 +264,8 @@ export async function LoyaltySaleSection({
                 )
               ) : null}
               <p className="mt-2 text-[0.68rem] leading-4 text-white/35">
-                Member pricing gives each line the BETTER of the promo price or the tier price —
-                never both. If a promo already wins everywhere, nothing changes.
+                150 points = 10% off, 300 points = 25% off. Each item gets the better of the deal or
+                the reward, never both. If the deals already win everywhere, no points are used.
               </p>
             </div>
           )}

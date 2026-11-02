@@ -9,6 +9,9 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { LOYALTY_REWARDS, MIN_REWARD_POINTS } from "@/lib/loyalty/loyalty-reward-core";
+
+const TOP_REWARD_POINTS = LOYALTY_REWARDS[LOYALTY_REWARDS.length - 1].points;
 
 export type LoyaltyMetrics = {
   /** Enrollment */
@@ -21,12 +24,17 @@ export type LoyaltyMetrics = {
   redemptionRate30d: number | null; // redeemed / earned (null when no earn)
   /** Liability */
   pointsOutstanding: number;
-  pointValueMinor: number;
-  liabilityMinor: number; // outstanding × value + issued codes' value
+  /**
+   * D137 — points have no cash value, so there is no dollar "liability".
+   * What matters is how many members can use a reward right now.
+   */
+  membersWithReward: number; // balance covers at least the 150-pt reward
+  membersWithTopReward: number; // balance covers the 300-pt reward
   /** Codes */
   codesIssuedOutstanding: number;
-  codesOutstandingValueMinor: number;
   codesRedeemed30d: number;
+  rewards10Used30d: number; // 150-pt rewards used in the last 30 days
+  rewards25Used30d: number; // 300-pt rewards used in the last 30 days
   codesExpired: number;
   avgDaysIssueToUse: number | null;
   /** Sale-side (last 90 days, completed orders) */
@@ -44,7 +52,7 @@ function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-export async function computeLoyaltyMetrics(pointValueMinor: number): Promise<LoyaltyMetrics> {
+export async function computeLoyaltyMetrics(): Promise<LoyaltyMetrics> {
   const empty: LoyaltyMetrics = {
     accounts: 0,
     activeAccounts90d: 0,
@@ -53,11 +61,12 @@ export async function computeLoyaltyMetrics(pointValueMinor: number): Promise<Lo
     pointsRedeemed30d: 0,
     redemptionRate30d: null,
     pointsOutstanding: 0,
-    pointValueMinor,
-    liabilityMinor: 0,
+    membersWithReward: 0,
+    membersWithTopReward: 0,
     codesIssuedOutstanding: 0,
-    codesOutstandingValueMinor: 0,
     codesRedeemed30d: 0,
+    rewards10Used30d: 0,
+    rewards25Used30d: 0,
     codesExpired: 0,
     avgDaysIssueToUse: null,
     memberOrders90d: 0,
@@ -80,7 +89,7 @@ export async function computeLoyaltyMetrics(pointValueMinor: number): Promise<Lo
       admin.from("loyalty_ledger").select("account_id, created_at").gte("created_at", d90),
       admin
         .from("loyalty_redemptions")
-        .select("status, value_minor, created_at, redeemed_at"),
+        .select("status, points, created_at, redeemed_at"),
       admin.from("loyalty_tiers").select("id, name").eq("is_active", true),
       admin
         .from("orders")
@@ -99,7 +108,7 @@ export async function computeLoyaltyMetrics(pointValueMinor: number): Promise<Lo
     (ledger90Res.data as { account_id: string; created_at: string }[] | null) ?? [];
   const redemptions =
     (redemptionsRes.data as
-      | { status: string; value_minor: number; created_at: string; redeemed_at: string | null }[]
+      | { status: string; points: number; created_at: string; redeemed_at: string | null }[]
       | null) ?? [];
   const tiers = (tiersRes.data as { id: string; name: string }[] | null) ?? [];
   // Orders query may fail pre-0116 (loyalty column missing) — degrade to a
@@ -131,10 +140,14 @@ export async function computeLoyaltyMetrics(pointValueMinor: number): Promise<Lo
 
   const pointsOutstanding = active.reduce((s, a) => s + Math.max(0, a.balance_points), 0);
   const codesOutstanding = redemptions.filter((r) => r.status === "issued");
-  const codesOutstandingValueMinor = codesOutstanding.reduce((s, r) => s + r.value_minor, 0);
-  const codesRedeemed30d = redemptions.filter(
+  const used30 = redemptions.filter(
     (r) => r.status === "redeemed" && r.redeemed_at && r.redeemed_at >= d30,
-  ).length;
+  );
+  const codesRedeemed30d = used30.length;
+  const rewards10Used30d = used30.filter((r) => Number(r.points) === 150).length;
+  const rewards25Used30d = used30.filter((r) => Number(r.points) === 300).length;
+  const membersWithReward = active.filter((a) => (a.balance_points ?? 0) >= MIN_REWARD_POINTS).length;
+  const membersWithTopReward = active.filter((a) => (a.balance_points ?? 0) >= TOP_REWARD_POINTS).length;
   const codesExpired = redemptions.filter((r) => r.status === "expired").length;
 
   const useDurations = redemptions
@@ -172,11 +185,12 @@ export async function computeLoyaltyMetrics(pointValueMinor: number): Promise<Lo
     redemptionRate30d:
       pointsEarned30d > 0 ? Math.round((pointsRedeemed30d / pointsEarned30d) * 1000) / 10 : null,
     pointsOutstanding,
-    pointValueMinor,
-    liabilityMinor: pointsOutstanding * pointValueMinor + codesOutstandingValueMinor,
+    membersWithReward,
+    membersWithTopReward,
     codesIssuedOutstanding: codesOutstanding.length,
-    codesOutstandingValueMinor,
     codesRedeemed30d,
+    rewards10Used30d,
+    rewards25Used30d,
     codesExpired,
     avgDaysIssueToUse,
     memberOrders90d: memberOrders.length,

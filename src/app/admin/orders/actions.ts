@@ -36,7 +36,7 @@ import { validateOrderName } from "@/lib/orders/order-name-pool-core";
 import { runCompletionGate } from "@/lib/orders/completion-gate";
 import {
   applyCodeToOrder,
-  applyTierToOrder,
+  applyRewardToOrder,
   removeLoyaltyFromOrder,
 } from "@/lib/loyalty/loyalty-sale-store";
 import { customerMedicalStatus } from "@/lib/medical/store";
@@ -320,9 +320,9 @@ export async function detachMedicalCardAction(formData: FormData): Promise<void>
 // ---------------------------------------------------------------------------
 
 /**
- * Apply a customer's redemption code (GW-XXXX-XXXX) to an open order. The
- * code is claimed atomically; its value is spread across the lines above the
- * statutory + acquisition-cost floors; only ONE loyalty application per order.
+ * Apply a customer's reward code (GW-XXXX-XXXX) to an open order. The code is
+ * claimed atomically and its percent (10% / 25%) comes off with the same rules
+ * as the register; only ONE reward per order.
  */
 export async function applyLoyaltyCodeAction(formData: FormData): Promise<void> {
   const session = await requirePermission("orders.manage");
@@ -356,18 +356,22 @@ export async function applyLoyaltyCodeAction(formData: FormData): Promise<void> 
 }
 
 /**
- * Apply the linked member's TIER pricing to an open order — per-line
- * best-deal-wins vs the promo price, never stacked.
+ * D137: use one of the member's rewards on an open order — 150 pts = 10% off
+ * or 300 pts = 25% off (exactly those points used). Same pricing rules as the
+ * register: better of the deal or the reward per item, legal floors,
+ * never-discount items untouched, one reward per sale, no dollar cap.
  */
-export async function applyLoyaltyTierAction(formData: FormData): Promise<void> {
+export async function applyLoyaltyRewardAction(formData: FormData): Promise<void> {
   const session = await requirePermission("orders.manage");
   const orderId = String(formData.get("id") ?? "");
   const customerId = String(formData.get("customerId") ?? "");
+  const rewardPoints = Number(formData.get("rewardPoints") ?? "");
   if (!orderId || !customerId) return;
 
-  const res = await applyTierToOrder({
+  const res = await applyRewardToOrder({
     orderId,
     customerId,
+    rewardPoints,
     actorId: session.profile.id,
     actorLabel: actorLabel(session.email, session.profile.full_name),
   });
@@ -378,10 +382,10 @@ export async function applyLoyaltyTierAction(formData: FormData): Promise<void> 
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: "order.loyalty_tier_applied",
+    action: "loyalty.reward_used",
     entityType: "order",
     entityId: orderId,
-    after: { customer_id: customerId, result: res.message },
+    after: { customer_id: customerId, reward_points: rewardPoints, result: res.message },
   });
   revalidatePath(`/admin/orders/${orderId}`);
   redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent(res.message)}`);
@@ -389,7 +393,8 @@ export async function applyLoyaltyTierAction(formData: FormData): Promise<void> 
 
 /**
  * Remove the loyalty application from an open order: line prices restored
- * from the per-line snapshot; a code is released back to the customer.
+ * from the per-line snapshot; a code the customer brought goes back to them,
+ * a reward used for this sale is cancelled and its points returned.
  */
 export async function removeLoyaltyAction(formData: FormData): Promise<void> {
   const session = await requirePermission("orders.manage");

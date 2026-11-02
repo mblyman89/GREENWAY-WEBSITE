@@ -135,7 +135,8 @@ describe("USAGE-5 · every writer still clears the page it changes", () => {
 
   it("the loyalty PROGRAM editors (config + tiers) clear /loyalty — the public page prints those numbers", () => {
     const src = stripComments(read("src/app/admin/loyalty/actions.ts"));
-    for (const fn of ["saveLoyaltyConfigAction", "saveLoyaltyTierAction", "deleteLoyaltyTierAction"]) {
+    // D139: badges are names only, so the tier editor became renameLoyaltyTierAction.
+    for (const fn of ["saveLoyaltyConfigAction", "renameLoyaltyTierAction"]) {
       expect(fnBody(src, fn), fn).toContain('revalidatePath("/loyalty")');
     }
     // And the public page really does read config + tiers, otherwise the

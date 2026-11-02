@@ -18,11 +18,10 @@ import {
   basePointsForSubtotal,
   earnedPoints,
   tierForPoints,
-  pointsValueMinor,
-  canRedeem,
   generateRedemptionCode,
   codeExpiry,
 } from "@/lib/loyalty/engine";
+import { rewardForPoints, rewardShortLabel } from "@/lib/loyalty/loyalty-reward-core";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -68,8 +67,6 @@ export type RedemptionRow = {
 // ---------------------------------------------------------------------------
 const DEFAULT_CONFIG: LoyaltyConfig = {
   pointsPerDollar: 1,
-  pointValueMinor: 1,
-  minRedeemPoints: 100,
   signupBonusPoints: 0,
   codeExpiryDays: null,
 };
@@ -87,8 +84,8 @@ export async function getConfig(): Promise<LoyaltyConfig> {
   if (!data) return DEFAULT_CONFIG;
   return {
     pointsPerDollar: Number(data.points_per_dollar ?? 1),
-    pointValueMinor: Number(data.point_value_minor ?? 1),
-    minRedeemPoints: Number(data.min_redeem_points ?? 100),
+    // D138: loyalty_config.point_value_minor / min_redeem_points are retired
+    // (points have no cash value; rewards are fixed in loyalty-reward-core).
     signupBonusPoints: Number(data.signup_bonus_points ?? 0),
     codeExpiryDays: data.code_expiry_days == null ? null : Number(data.code_expiry_days),
   };
@@ -106,7 +103,6 @@ export async function listTiers(): Promise<LoyaltyTier[]> {
     id: String(r.id),
     name: String(r.name),
     minPoints: Number(r.min_points),
-    discountBps: Number(r.discount_bps),
   }));
 }
 
@@ -349,25 +345,42 @@ export async function adjustPoints(opts: {
 // ---------------------------------------------------------------------------
 // Redemption codes
 // ---------------------------------------------------------------------------
+/**
+ * D137: issue a REWARD (150 pts = 10% off, 300 pts = 25% off). Exactly the
+ * reward's points are deducted (never the whole balance). `valueMinor` is the
+ * dollar amount the reward actually took off a sale, when known at issue time
+ * (register / order); a code issued from the customer's profile stores 0 and
+ * records its real amount when it is used.
+ *
+ * `channel` records where it was issued: "register" and "order" codes were
+ * spent on a sale in progress (removing the reward cancels the code and
+ * refunds the points); "sms" / "email" / "both" / "profile" codes are handed
+ * to the customer to bring in.
+ */
 export async function issueRedemption(opts: {
   accountId: string;
   points: number;
-  channel?: "sms" | "email" | "both";
+  valueMinor?: number;
+  channel?: "sms" | "email" | "both" | "profile" | "register" | "order";
   actorId?: string | null;
-}): Promise<{ ok: true; code: string; valueMinor: number } | { ok: false; error: string }> {
+}): Promise<{ ok: true; id: string; code: string; valueMinor: number } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const reward = rewardForPoints(opts.points);
+  if (!reward) {
+    return { ok: false, error: "Only the 150-point (10% off) and 300-point (25% off) rewards can be issued." };
+  }
   const account = await getAccount(opts.accountId);
   if (!account) return { ok: false, error: "Account not found" };
-  const cfg = await getConfig();
-  if (!canRedeem(account.balance_points, opts.points, cfg)) {
+  if (account.balance_points < reward.points) {
     return {
       ok: false,
-      error: `Cannot redeem ${opts.points} pts (balance ${account.balance_points}, min ${cfg.minRedeemPoints}).`,
+      error: `Not enough points for ${rewardShortLabel(reward)}: the balance is ${account.balance_points.toLocaleString("en-US")}.`,
     };
   }
 
   const admin = createSupabaseAdminClient();
-  const valueMinor = pointsValueMinor(opts.points, cfg);
+  const cfg = await getConfig();
+  const valueMinor = Math.max(0, Math.round(opts.valueMinor ?? 0));
   const expires = codeExpiry(new Date(), cfg);
 
   // generate a unique code (retry a few times on collision)
@@ -389,7 +402,7 @@ export async function issueRedemption(opts: {
     .insert({
       account_id: opts.accountId,
       code,
-      points: opts.points,
+      points: reward.points,
       value_minor: valueMinor,
       status: "issued",
       channel: opts.channel ?? "both",
@@ -399,18 +412,100 @@ export async function issueRedemption(opts: {
     .select("id")
     .single();
   if (error || !redemption) return { ok: false, error: error?.message ?? "Could not issue code" };
+  const id = (redemption as { id: string }).id;
 
   // deduct points now (reserved by the code)
-  await applyLedger({
+  const ledger = await applyLedger({
     accountId: opts.accountId,
     kind: "redeem",
-    points: -opts.points,
-    redemptionId: (redemption as { id: string }).id,
-    note: `Redemption code ${code} ($${(valueMinor / 100).toFixed(2)})`,
+    points: -reward.points,
+    redemptionId: id,
+    note: `Reward ${code}: ${rewardShortLabel(reward)}`,
     actorId: opts.actorId ?? null,
   });
+  if (!ledger.ok) {
+    // Never leave a live code whose points were not taken.
+    await admin.from("loyalty_redemptions").update({ status: "cancelled" }).eq("id", id).eq("status", "issued");
+    return { ok: false, error: "Could not deduct the points. No reward was issued." };
+  }
 
-  return { ok: true, code, valueMinor };
+  return { ok: true, id, code, valueMinor };
+}
+
+/**
+ * Cancel a still-unused code and give its points back (D141). Conditional on
+ * status 'issued', so a code that was just used can't be refunded too.
+ */
+export async function cancelRedemption(opts: {
+  redemptionId: string;
+  note: string;
+  actorId?: string | null;
+}): Promise<{ ok: true; refundedPoints: number; code: string; accountId: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const { data: cancelled, error } = await admin
+    .from("loyalty_redemptions")
+    .update({ status: "cancelled" })
+    .eq("id", opts.redemptionId)
+    .eq("status", "issued")
+    .select("id, account_id, points, code");
+  if (error) return { ok: false, error: error.message };
+  const row = (cancelled ?? [])[0] as { id: string; account_id: string; points: number; code: string } | undefined;
+  if (!row) return { ok: false, error: "That code is not open any more (already used, cancelled or expired)." };
+  const refund = await adjustPoints({
+    accountId: row.account_id,
+    points: row.points,
+    note: `${opts.note} (code ${row.code})`,
+    actorId: opts.actorId ?? null,
+  });
+  if (!refund.ok) {
+    return { ok: false, error: `Code ${row.code} was cancelled but the ${row.points} points could not be returned: ${refund.error ?? "unknown error"}. Add them back with Adjust points.` };
+  }
+  return { ok: true, refundedPoints: row.points, code: row.code, accountId: row.account_id };
+}
+
+/**
+ * D141: a VOIDED sale never happened, so the reward it used comes back. The
+ * order's consumed reward code (status 'redeemed', redeemed_order_id = the
+ * order) flips to 'cancelled' with a CONDITIONAL update, so a second void
+ * attempt finds nothing and refunds nothing, then exactly the reward's
+ * points are added back. Partial RETURNS do not return the reward (the
+ * customer kept part of the sale); only a full void does.
+ */
+export async function returnRewardForVoidedOrder(opts: {
+  orderId: string;
+  note: string;
+}): Promise<{ ok: true; refundedPoints: number; codes: string[] } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const { data: rows, error } = await admin
+    .from("loyalty_redemptions")
+    .update({ status: "cancelled" })
+    .eq("redeemed_order_id", opts.orderId)
+    .eq("status", "redeemed")
+    .select("id, account_id, points, code");
+  if (error) return { ok: false, error: error.message };
+  let refundedPoints = 0;
+  const codes: string[] = [];
+  for (const r of (rows ?? []) as { id: string; account_id: string; points: number; code: string }[]) {
+    if (!(r.points > 0)) continue;
+    const res = await adjustPoints({
+      accountId: r.account_id,
+      points: r.points,
+      note: `${opts.note} (reward code ${r.code} returned)`,
+      orderId: opts.orderId,
+      actorId: null,
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Reward code ${r.code} was cancelled but its ${r.points} points could not be returned: ${res.error ?? "unknown error"}. Add them back with Adjust points.`,
+      };
+    }
+    refundedPoints += r.points;
+    codes.push(r.code);
+  }
+  return { ok: true, refundedPoints, codes };
 }
 
 export async function listRedemptions(accountId: string): Promise<RedemptionRow[]> {
@@ -509,7 +604,6 @@ export async function listTiersForEdit(): Promise<TierEditRow[]> {
     id: String(r.id),
     name: String(r.name),
     minPoints: Number(r.min_points),
-    discountBps: Number(r.discount_bps),
     sortOrder: Number(r.sort_order ?? 0),
     isActive: Boolean(r.is_active),
   }));
@@ -545,8 +639,6 @@ export async function listPromotionsForEdit(): Promise<PromoEditRow[]> {
 export async function updateConfig(
   cfg: {
     pointsPerDollar: number;
-    pointValueMinor: number;
-    minRedeemPoints: number;
     signupBonusPoints: number;
     codeExpiryDays: number | null;
     notes?: string | null;
@@ -557,8 +649,8 @@ export async function updateConfig(
   const admin = createSupabaseAdminClient();
   const payload = {
     points_per_dollar: cfg.pointsPerDollar,
-    point_value_minor: cfg.pointValueMinor,
-    min_redeem_points: cfg.minRedeemPoints,
+    // D138: point_value_minor / min_redeem_points are retired and no longer
+    // written (the columns stay for history; nothing reads them).
     signup_bonus_points: cfg.signupBonusPoints,
     code_expiry_days: cfg.codeExpiryDays,
     notes: cfg.notes ?? null,
@@ -584,41 +676,27 @@ export async function updateConfig(
   return { ok: true };
 }
 
-/** Create or update a tier. */
-export async function upsertTier(tier: {
-  id?: string | null;
-  name: string;
-  minPoints: number;
-  discountBps: number;
-  sortOrder?: number;
-  isActive?: boolean;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+/**
+ * D139: rename a member badge (Bronze / Gold). Names are the ONLY thing about
+ * a tier that still matters; renaming also zeroes the retired discount column
+ * so the database stops claiming a percent the program no longer gives.
+ */
+export async function renameTier(
+  id: string,
+  name: string,
+): Promise<{ ok: true; before: string | null } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
   const admin = createSupabaseAdminClient();
-  const payload = {
-    name: tier.name,
-    min_points: tier.minPoints,
-    discount_bps: tier.discountBps,
-    sort_order: tier.sortOrder ?? tier.minPoints,
-    is_active: tier.isActive ?? true,
-  };
-  if (tier.id) {
-    const { error } = await admin.from("loyalty_tiers").update(payload).eq("id", tier.id);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { error } = await admin.from("loyalty_tiers").insert(payload);
-    if (error) return { ok: false, error: error.message };
-  }
-  return { ok: true };
-}
-
-/** Soft-delete a tier (mark inactive) so historical assignments stay intact. */
-export async function deactivateTier(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("loyalty_tiers").update({ is_active: false }).eq("id", id);
+  const { data: current, error: readError } = await admin
+    .from("loyalty_tiers")
+    .select("id, name")
+    .eq("id", id)
+    .maybeSingle<{ id: string; name: string }>();
+  if (readError) return { ok: false, error: readError.message };
+  if (!current) return { ok: false, error: "That badge no longer exists. Reload the page." };
+  const { error } = await admin.from("loyalty_tiers").update({ name, discount_bps: 0 }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return { ok: true, before: current.name };
 }
 
 /** Create or update a promotion. */

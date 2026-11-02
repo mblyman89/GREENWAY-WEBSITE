@@ -61,14 +61,16 @@ export function LoyaltyProgramTerms({ terms, tiers, copy }: LoyaltyProgramTermsP
 
           {tiers.length > 0 ? (
             <div className="mt-7 md:mt-9">
-              <h3 className="text-xl font-black text-white md:text-2xl">{copy?.tiersHeading || "Member tiers"}</h3>
+              <h3 className="text-xl font-black text-white md:text-2xl">{copy?.tiersHeading || "Member badges"}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Badges show how long you&apos;ve been with us. Every member gets the same rewards.
+              </p>
               <div className="mt-4 overflow-hidden rounded-xl border border-white/12">
                 <table className="w-full text-left text-sm md:text-base">
                   <thead>
                     <tr className="border-b border-white/12 bg-white/[0.04] text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-400 md:text-xs">
-                      <th scope="col" className="px-4 py-3">Tier</th>
-                      <th scope="col" className="px-4 py-3">Lifetime points</th>
-                      <th scope="col" className="px-4 py-3">Perk</th>
+                      <th scope="col" className="px-4 py-3">Badge</th>
+                      <th scope="col" className="px-4 py-3">Earned at</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -76,9 +78,6 @@ export function LoyaltyProgramTerms({ terms, tiers, copy }: LoyaltyProgramTermsP
                       <tr key={tier.name} className="border-b border-white/8 last:border-b-0">
                         <td className="px-4 py-3 font-black text-white">{tier.name}</td>
                         <td className="px-4 py-3 font-semibold text-zinc-300">{tier.thresholdLabel}</td>
-                        <td className="px-4 py-3 font-semibold text-[var(--greenway)]">
-                          {tier.perkLabel || "Member perks"}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -89,8 +88,8 @@ export function LoyaltyProgramTerms({ terms, tiers, copy }: LoyaltyProgramTermsP
 
           <p className="mt-6 text-xs leading-6 text-zinc-500 md:text-sm md:leading-7">
             Points accrue on the pre-tax subtotal after discounts. Discounts never stack — the
-            register always applies the single best deal for you. Want to see what your points are
-            worth on today&apos;s cart? Open your cart and tap{" "}
+            register always applies the single best deal for you, item by item. Want to see what a
+            reward would take off today&apos;s cart? Open your cart and tap{" "}
             <span className="font-black text-zinc-300">&ldquo;Estimate my register total&rdquo;</span>, or{" "}
             <Link href="/menu" className="font-black text-[var(--greenway)] underline-offset-2 hover:underline">
               start shopping

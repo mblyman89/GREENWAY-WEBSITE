@@ -127,7 +127,7 @@ vi.mock("@/lib/auth/audit", () => ({ recordAudit: async (e: Row) => void audits.
 
 const enrolled: string[] = [];
 vi.mock("@/lib/loyalty/loyalty-store", () => ({
-  getConfig: async () => ({ pointsPerDollar: 1, pointValueMinor: 1, minRedeemPoints: 100, signupBonusPoints: 200, codeExpiryDays: 30 }),
+  getConfig: async () => ({ pointsPerDollar: 1, signupBonusPoints: 200, codeExpiryDays: 30 }),
   listTiers: async () => [],
   enrollCustomer: async (customerId: string) => {
     if (!enrolled.includes(customerId)) enrolled.push(customerId);

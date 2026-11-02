@@ -124,7 +124,11 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     tab: "CRM",
     href: "/admin/loyalty",
     facts: [
-      "CRM → Loyalty Program manages points, tiers, promotions, and redemptions.",
+      "CRM → Loyalty Program manages points, member badge names, earn promotions, and reward codes.",
+      "Loyalty rewards (owner rule D137, 2026-11-02): 150 points = 10% off, 300 points = 25% off. At the register tap Use 150 pts – 10% off or Use 300 pts – 25% off (only the ones the balance covers). Exactly 150 or 300 points are used, never the whole balance. The percent comes off each item's regular price; per item the customer gets the better of today's deal or the reward, never both; never-discount items and legal price floors are respected. One reward per sale, no dollar cap. If today's deals already match or beat the reward on every item, it is refused and no points are used.",
+      "Points have no cash value (D138): the old $0.10 per point is retired on the website, register, receipts, back office and reports. Reports show rewards used and the amount taken off instead of a dollar liability.",
+      "Member badges (D139): Bronze (150+ lifetime points) and Gold (300+) are names only and give no discount. Rename them at CRM → Loyalty Program → Member badge names (1–40 characters, no duplicates); every rename is audited (loyalty.tier.rename) and shows on the website, profiles and register.",
+      "Reward codes (D140–D141): on a customer's profile, Give a reward code makes a 10% or 25% code (GW-XXXX-XXXX) for the customer to bring; Cancel & return points cancels an open code and gives the points back. An old-style points code from the retired $0.10 program is refused at the register; cancel it on the profile, then use a reward. A full void returns the reward's points automatically.",
       "The public-facing Loyalty page (what customers see) is edited under Website → Loyalty.",
       "People who sign up on the website land in CRM → Loyalty Signups for you to review and approve.",
     ],

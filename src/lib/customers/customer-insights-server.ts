@@ -30,7 +30,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
-import { getConfig, listTiers } from "@/lib/loyalty/loyalty-store";
+import { listTiers } from "@/lib/loyalty/loyalty-store";
 import { tierForPoints } from "@/lib/loyalty/engine";
 import { isCustomLineProductId } from "@/lib/pos/custom-sale-core";
 import { REGISTER_PICKED_UP_NOTE_PREFIX } from "@/lib/pos/pickup-progress-core";
@@ -687,8 +687,7 @@ async function loadLoyalty(admin: Admin, customerId: string, partial: string[]):
   if (error) partial.push("loyalty account");
   if (error || !account) return null;
   // Fully paged (never a silent cap): an incomplete read is named in `partial`.
-  const [cfg, tiers, ledgerRows, redemptionRows] = await Promise.all([
-    getConfig(),
+  const [tiers, ledgerRows, redemptionRows] = await Promise.all([
     listTiers(),
     readAll<{ id: string; kind: string; points: number }>(
       "loyalty points history",
@@ -723,8 +722,6 @@ async function loadLoyalty(admin: Admin, customerId: string, partial: string[]):
     balancePoints: num(account.balance_points),
     lifetimePoints: num(account.lifetime_points),
     tierName: tier?.name ?? null,
-    pointValueMinor: cfg.pointValueMinor,
-    minRedeemPoints: cfg.minRedeemPoints,
     pointsEarned: earned,
     pointsRedeemed: redeemed,
     codesRedeemed: codes,

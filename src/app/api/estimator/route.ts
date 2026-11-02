@@ -4,8 +4,9 @@
  * Serves the LIVE back-office context the cart estimator needs so every
  * estimate reflects what the register will actually apply:
  *
- *  - loyalty_config (earn rate, point value, minimum-to-redeem) — the same
- *    row getConfig() feeds the register's loyalty engine;
+ *  - loyalty_config (earn rate) — the same row getConfig() feeds the
+ *    register's loyalty engine (D137: points have no cash value; the
+ *    rewards come from loyalty-reward-core);
  *  - medical_endorsement_config (endorsed on/off + the WAC 314-55-090(6)
  *    excise sunset, evaluated against the store's Pacific date);
  *  - medical_product_registry entries for the cart's product keys (verified
@@ -56,8 +57,6 @@ export async function POST(request: Request) {
     const context: EstimatorContext = {
       loyalty: {
         pointsPerDollar: loyaltyCfg.pointsPerDollar,
-        pointValueMinor: loyaltyCfg.pointValueMinor,
-        minRedeemPoints: loyaltyCfg.minRedeemPoints,
       },
       medical: {
         // A-06: fail closed — no resolved endorsement means not endorsed.

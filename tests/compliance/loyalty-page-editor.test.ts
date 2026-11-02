@@ -146,7 +146,7 @@ describe("public wiring is in place", () => {
     expect(terms).toContain("copy?.tiersHeading");
     expect(terms).toContain('|| "How Greenway Points work"');
     expect(terms).toContain('|| "Program terms"');
-    expect(terms).toContain('|| "Member tiers"');
+    expect(terms).toContain('|| "Member badges"');
   });
 
   it("the /loyalty page fetches all editable keys and passes copy down", () => {
