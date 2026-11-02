@@ -368,8 +368,10 @@ describe("SLICE 16 — compliance gates are never widened", () => {
     expect(bundle.products).toHaveLength(1);
   });
 
-  it("does not treat quarantined, recalled or destroyed lots as stock", async () => {
-    for (const status of ["quarantine", "recalled", "destroyed"]) {
+  it("does not treat recalled or destroyed lots as stock", async () => {
+    // register-sell-everything-fix-later: Quarantine IS stock now (owner:
+    // "Everything must sell. No exceptions."); see the test below.
+    for (const status of ["recalled", "destroyed"]) {
       menuItems = [item()];
       lotRows = [lotRow({ status })];
 
@@ -403,13 +405,14 @@ describe("SLICE 16 — compliance gates are never widened", () => {
     expect(bundle.barcodes["lotcode-1111"]).toBe("KEY-A");
   });
 
-  it("register-sell-sold-out-stock: a zero-count quarantined lot stays off", async () => {
+  it("register-sell-everything-fix-later: a Quarantine lot (no COA yet) sells and its barcode scans", async () => {
     menuItems = [item()];
-    lotRows = [lotRow({ status: "quarantine", on_hand_qty: 0 })];
+    lotRows = [lotRow({ status: "quarantine", on_hand_qty: 5 })];
 
     const bundle = await getBundle();
 
-    expect(bundle.products).toHaveLength(0);
+    expect(bundle.products).toHaveLength(1);
+    expect(bundle.barcodes["lotcode-1111"]).toBe("KEY-A");
   });
 });
 
@@ -537,7 +540,7 @@ describe("SLICE 16 — the pure core's own guarantees", () => {
     const idx = indexLiveStock([
       lot({ id: "a", onHandQty: 5 }),
       lot({ id: "b", onHandQty: 0 }),
-      lot({ id: "c", status: "quarantine", onHandQty: 100 }),
+      lot({ id: "c", status: "recalled", onHandQty: 100 }),
       lot({ id: "d", posProductKey: null, onHandQty: 100 }),
     ]);
     expect(idx.get("KEY-A")).toBe(5);
@@ -555,7 +558,7 @@ describe("SLICE 16 — the pure core's own guarantees", () => {
   });
 
   it("distinguishes 'no stock' from 'no evidence' — they are not the same fact", () => {
-    const noStock = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "quarantine", onHandQty: 0 })] });
+    const noStock = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "destroyed", onHandQty: 0 })] });
     expect(noStock.cards[0].reason).toBe("no_live_stock");
     // register-sell-sold-out-stock: a zero-count Active lot is sold anyway.
     const zero = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ onHandQty: 0 })] });
@@ -593,7 +596,9 @@ describe("SLICE 16 — the pure core's own guarantees", () => {
       diagnoseLot(lot({ id: "1", posProductKey: null }), cards),
       diagnoseLot(lot({ id: "2", posProductKey: "GHOST" }), cards),
     ]);
-    expect(s.blocked).toBe(2);
-    expect(s.headline).toContain("2 lots");
+    // register-sell-everything-fix-later: the no-card lot sells (Fix later).
+    expect(s.blocked).toBe(1);
+    expect(s.headline).toContain("1 lot ");
+    expect(s.headline).toContain("Fix later");
   });
 });

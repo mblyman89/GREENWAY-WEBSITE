@@ -54,6 +54,8 @@ import {
   resolveLookupScan,
   type LookupScanOutcome,
 } from "@/lib/pos/price-lookup-core";
+// register-sell-everything-fix-later: "Fix & sell" on a scan that matched nothing.
+import { looksLikePackageCode } from "@/lib/pos/register-fix-later-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import {
@@ -238,6 +240,15 @@ function categoryStyle(category: string): { chip: string; dot: string } {
 
 /** A loyalty member hit from the server lookup (B14). */
 /** Employee-identity PIN check (/api/pos/witness); friends & family adds the guest's usage. */
+/**
+ * register-sell-everything-fix-later — the shell's Fix & sell call. Resolves
+ * to the register line built from the scanned lot, or the reason it may not
+ * be sold (recall, failed lab, destruction, expired edible, not found).
+ */
+export type FixAndSellFn = (
+  code: string,
+) => Promise<{ ok: true; product: PosMenuProduct; message: string } | { ok: false; error: string }>;
+
 export type WitnessFn = (
   pin: string,
   opts?: { friendsFamilyCustomerId?: string; secondPersonFor?: string },
@@ -460,6 +471,16 @@ export type SaleFlowProps = {
    */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
   /**
+   * register-sell-everything-fix-later — the owner: "I need ways of fixing a
+   * lot from the register, let the system fix it for me so it can be sold,
+   * then set that item aside so I can fix it properly." On a scan that
+   * matched nothing, the shell posts /api/pos/fix-and-sell (device auth,
+   * audited). The server builds a register line from the LOT itself and puts
+   * the lot on the back office Fix later list; the shell adds the line to
+   * its cached menu and SaleFlow adds it to the cart. ONLINE-ONLY.
+   */
+  onFixAndSell?: FixAndSellFn;
+  /**
    * Task AM-B — loyalty redemption at the register. ONLINE-ONLY: the shell
    * posts /api/pos/loyalty (device auth), which verifies the balance, issues
    * (or looks up) the code, and computes the per-variant spread with the
@@ -671,7 +692,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onProductDetails, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onProductDetails, onStockFlag, onFixAndSell, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -1064,6 +1085,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onProductImage={onProductImage}
         onProductDetails={onProductDetails}
         onStockFlag={onStockFlag}
+        onFixAndSell={onFixAndSell}
         onLoyalty={onLoyalty}
         appliedLoyalty={appliedLoyalty}
         setAppliedLoyalty={setAppliedLoyalty}
@@ -2726,6 +2748,7 @@ function CartScreen({
   onProductImage,
   onProductDetails,
   onStockFlag,
+  onFixAndSell,
   onLoyalty,
   appliedLoyalty,
   setAppliedLoyalty,
@@ -2766,6 +2789,8 @@ function CartScreen({
   onProductDetails?: ProductDetailsFn;
   /** B43 — out-of-stock quick-flag (ONLINE-ONLY via the shell; one-way). */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** register-sell-everything-fix-later — Fix & sell a scanned lot (ONLINE-ONLY via the shell). */
+  onFixAndSell?: FixAndSellFn;
   /** AM-B — loyalty redemption via /api/pos/loyalty (ONLINE-ONLY via the shell). */
   onLoyalty?: (
     req: PosLoyaltyRequest,
@@ -2863,6 +2888,10 @@ function CartScreen({
   // AM-A — a global-wedge scan that matched nothing (typo'd label, item not
   // on the menu). Surfaced loudly; a silent miss looks like a broken scanner.
   const [scanMiss, setScanMiss] = useState<string | null>(null);
+  // register-sell-everything-fix-later — the code behind the last miss, so
+  // "Fix & sell" can ask the server to ring it from the lot itself.
+  const [missCode, setMissCode] = useState<string | null>(null);
+  const [fixBusy, setFixBusy] = useState(false);
   // AM-A — the on-demand browse overlay (menu grid / favorites / keypad).
   const [browseOpen, setBrowseOpen] = useState(false);
   // B41 — scan-required mode. `scanUnlocked` is manager-lifted for THIS SALE
@@ -3038,6 +3067,14 @@ function CartScreen({
       setQuery("");
     }
     // none: keep the text — it's a search query, not a barcode.
+    // register-sell-everything-fix-later: a package-shaped code that nothing
+    // on the register matched (and no product name matches either) can be
+    // fixed and sold from its lot.
+    if (onFixAndSell && looksLikePackageCode(query) && filterMenuProducts(bundle.products, query, null).length === 0) {
+      setMissCode(query.trim());
+      setScanFlash(null);
+      setScanMiss(`"${query.trim()}" is not on the register yet. Press Fix & sell to ring it from its lot (it goes on the Fix later list).`);
+    }
   };
 
   /**
@@ -3076,10 +3113,36 @@ function CartScreen({
         setBrowseOpen(false);
         return;
       }
-      setScanMiss(`Barcode "${code}" matched nothing on the menu — check the label or search by name.`);
+      setScanMiss(
+        onFixAndSell
+          ? `Barcode "${code}" is not on the register yet. Press Fix & sell to ring it from its lot (it goes on the Fix later list).`
+          : `Barcode "${code}" matched nothing on the menu — check the label or search by name.`,
+      );
+      setMissCode(looksLikePackageCode(code) ? code : null);
     },
-    [bundle.products, bundle.barcodes, scanAdd, sizeIndex],
+    [bundle.products, bundle.barcodes, scanAdd, sizeIndex, onFixAndSell],
   );
+
+  // register-sell-everything-fix-later: ring the missed code from its lot.
+  const fixAndSell = async () => {
+    if (!onFixAndSell || !missCode || fixBusy) return;
+    setFixBusy(true);
+    const res = await onFixAndSell(missCode).catch(() => ({
+      ok: false as const,
+      error: "Fix & sell needs a connection. Check the internet and try again.",
+    }));
+    setFixBusy(false);
+    if (!res.ok) {
+      setScanMiss(res.error);
+      return;
+    }
+    setMissCode(null);
+    setScanMiss(null);
+    if (scanAdd(res.product)) {
+      setScanFlash(res.message);
+      setLastScannedId(res.product.variantId);
+    }
+  };
 
   // AM-A — document-level wedge capture: fast keystroke bursts ending in
   // Enter are scans even when NOTHING is focused (the owner's "scan without
@@ -3374,9 +3437,20 @@ function CartScreen({
             </p>
           ) : null}
           {scanMiss ? (
-            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
-              {scanMiss}
-            </p>
+            <div className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              <p>{scanMiss}</p>
+              {onFixAndSell && missCode && scanMiss.includes(missCode) ? (
+                <button
+                  type="button"
+                  data-testid="pos-fix-and-sell"
+                  disabled={fixBusy}
+                  onClick={() => void fixAndSell()}
+                  className="mt-2 rounded-lg bg-[var(--pos-accent)] px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                >
+                  {fixBusy ? "Fixing…" : "Fix & sell"}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {scanPick ? (
             <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
@@ -3500,6 +3574,14 @@ function CartScreen({
                               {exempt ? (
                                 <span className="ml-2 rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-info)]">
                                   MED · TAX OFF
+                                </span>
+                              ) : null}
+                              {cartEntry?.product.fixLater ? (
+                                <span
+                                  className="ml-2 rounded bg-[var(--pos-warn-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-warn)]"
+                                  title="Sold from the lot itself. It is on the back office Fix later list."
+                                >
+                                  FIX LATER
                                 </span>
                               ) : null}
                               {activeOverride ? (
@@ -4195,9 +4277,20 @@ function CartScreen({
             </p>
           ) : null}
           {scanMiss ? (
-            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
-              {scanMiss}
-            </p>
+            <div className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              <p>{scanMiss}</p>
+              {onFixAndSell && missCode && scanMiss.includes(missCode) ? (
+                <button
+                  type="button"
+                  data-testid="pos-fix-and-sell"
+                  disabled={fixBusy}
+                  onClick={() => void fixAndSell()}
+                  className="mt-2 rounded-lg bg-[var(--pos-accent)] px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                >
+                  {fixBusy ? "Fixing…" : "Fix & sell"}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {scanPick ? (
             <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">

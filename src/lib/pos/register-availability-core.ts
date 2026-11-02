@@ -110,10 +110,10 @@
  *     (WAC 314-55-215 recall procedures). Stock is exactly what a recall
  *     expects to find, so on-hand quantity is NEVER a reason to override it.
  *
- *   • LOT STATUS. Only lots with status `active` count as sellable stock.
- *     `quarantine`, `recalled`, `destroyed` and `sold_out` do not, no matter
- *     what their on-hand column says. Quarantined product is product that a
- *     human deliberately took off the floor.
+ *   • LOT STATUS. Only lots with a register-sellable status (active,
+ *     sold_out, and since register-sell-everything-fix-later quarantine)
+ *     count as stock. `recalled`, `destroyed` and a destruction hold
+ *     (`scheduled_destruction`) never do, no matter what on hand says.
  *
  *   • HIDDEN CARDS. `hidden` is a human's decision (or a reviewer rejection —
  *     fact-review-store.ts:196). This core reports it in plain English so the
@@ -144,12 +144,21 @@ export const SELLABLE_LOT_STATUS = "active";
  * unknown so the cashier can ring it, and the sale's stock draw records the
  * shortfall for the oversold report (it never invents units).
  *
- * Still NEVER sellable: `quarantine` (CCRS: not received / held), `recalled`
- * (WAC 314-55-215), `destroyed` (reported to CCRS), trade samples, held units.
+ * register-sell-everything-fix-later - the owner, verbatim: "Everything must
+ * sell. No exceptions. We will fix it all later. We need to sell everything
+ * we have stock of. No matter what." A lot still in `quarantine` from intake
+ * (no COA from Cultivera, manifest not finalized) is on the shelf, so it
+ * sells too and goes on the back office Fix later list. A lot quarantined
+ * because a DESTRUCTION is scheduled is relabelled `scheduled_destruction`
+ * by the menu route before it gets here (register-fix-later-core
+ * withDestructionHolds), so it never sells.
+ *
+ * Still NEVER sellable: `recalled` (WAC 314-55-215), `destroyed` (reported
+ * to CCRS), `scheduled_destruction`, trade samples, held units.
  */
-export const REGISTER_SELLABLE_LOT_STATUSES: ReadonlySet<string> = new Set(["active", "sold_out"]);
+export const REGISTER_SELLABLE_LOT_STATUSES: ReadonlySet<string> = new Set(["active", "sold_out", "quarantine"]);
 
-/** True when a lot's status lets the register ring it up (active or sold_out). */
+/** True when a lot's status lets the register ring it up (active, sold_out or quarantine). */
 export function isRegisterSellableLotStatus(status: string | null | undefined): boolean {
   return REGISTER_SELLABLE_LOT_STATUSES.has((status ?? "").trim().toLowerCase());
 }
@@ -596,8 +605,11 @@ export function diagnoseLot(
       sellable: false,
       code: "no_menu_card",
       productKey: key,
+      // register-sell-everything-fix-later: the register still SELLS this
+      // lot (a register-only line built from the lot itself); it is listed
+      // here and on Fix later so the menu product gets made properly.
       message:
-        "This lot has stock, but no product on the published menu uses its product key, so the register has nothing to show.",
+        "No product on the published menu uses this lot's product key. The register still sells it from the lot itself (Fix later), but the website does not show it.",
       fix: "Approve it in Product Onboarding, then publish the menu.",
     };
   }
@@ -669,26 +681,37 @@ export function summarizeSellability(
   const total = diagnoses.length;
   const sellable = byCode.sellable;
   // `lot_empty` and `lot_not_active` are expected states, not faults.
-  const blocked =
-    byCode.no_product_link + byCode.no_menu_card + byCode.recall_hold + byCode.hidden_card;
+  // register-sell-everything-fix-later: a lot with no menu card still SELLS
+  // at the register (a register-only line from the lot), so it is not
+  // "blocked"; it is reported separately as needing a fix later.
+  const blocked = byCode.no_product_link + byCode.recall_hold + byCode.hidden_card;
+  const fixLater = byCode.no_menu_card;
 
-  if (blocked === 0) {
+  if (blocked === 0 && fixLater === 0) {
     return { total, sellable, blocked: 0, byCode, headline: null };
+  }
+
+  const fixLaterLine =
+    fixLater > 0
+      ? `${fixLater} ${fixLater === 1 ? "lot is" : "lots are"} not on the published menu; the register sells ${fixLater === 1 ? "it" : "them"} from the lot (Fix later).`
+      : "";
+  if (blocked === 0) {
+    return { total, sellable, blocked: 0, byCode, headline: fixLaterLine };
   }
 
   const parts: string[] = [];
   if (byCode.no_product_link > 0) parts.push(`${byCode.no_product_link} not linked to a product`);
-  if (byCode.no_menu_card > 0) parts.push(`${byCode.no_menu_card} not on the published menu`);
   if (byCode.hidden_card > 0) parts.push(`${byCode.hidden_card} hidden`);
   if (byCode.recall_hold > 0) parts.push(`${byCode.recall_hold} under a recall hold`);
 
   const plural = blocked === 1 ? "lot" : "lots";
+  const head = `${blocked} ${plural} with stock on hand cannot be sold at the register — ${parts.join(", ")}.`;
   return {
     total,
     sellable,
     blocked,
     byCode,
-    headline: `${blocked} ${plural} with stock on hand cannot be sold at the register — ${parts.join(", ")}.`,
+    headline: fixLaterLine ? `${head} ${fixLaterLine}` : head,
   };
 }
 
@@ -821,7 +844,7 @@ export function __runRegisterAvailabilityCoreTests(): void {
   }
 
   // ── Non-active / empty lots are not stock ───────────────────────────────
-  for (const status of ["quarantine", "recalled", "destroyed", "", null]) {
+  for (const status of ["scheduled_destruction", "recalled", "destroyed", "", null]) {
     const r = reconcileRegisterAvailability({
       cards: [card()],
       lots: [lot({ status })],
@@ -843,11 +866,15 @@ export function __runRegisterAvailabilityCoreTests(): void {
       ok(r.cards[0].sellable, `zero-count ${status} lot still sells`);
       ok(r.cards[0].reason === "sell_anyway_zero_count", `zero-count ${status} -> sell_anyway_zero_count`);
     }
+    // register-sell-everything-fix-later: Quarantine sells (fix later); a
+    // destruction hold (relabelled scheduled_destruction) never does.
     const q = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "quarantine", onHandQty: 0 })] });
-    ok(!q.cards[0].sellable, "zero-count quarantine lot stays off");
+    ok(q.cards[0].sellable, "zero-count quarantine lot still sells (fix later)");
+    const qd = reconcileRegisterAvailability({ cards: [card()], lots: [lot({ status: "scheduled_destruction", onHandQty: 4 })] });
+    ok(!qd.cards[0].sellable, "a lot held for destruction stays off");
     const rec = reconcileRegisterAvailability({ cards: [card({ recalled: true })], lots: [lot({ status: "sold_out", onHandQty: 0 })] });
     ok(!rec.cards[0].sellable && rec.cards[0].reason === "recall_hold", "recall still beats a sold_out lot");
-    ok(isRegisterSellableLotStatus(" Sold_Out ") && !isRegisterSellableLotStatus("quarantine"), "status helper");
+    ok(isRegisterSellableLotStatus(" Sold_Out ") && isRegisterSellableLotStatus("quarantine") && !isRegisterSellableLotStatus("scheduled_destruction"), "status helper");
   }
   {
     // Status is compared case-insensitively and whitespace-tolerantly.
@@ -908,7 +935,8 @@ export function __runRegisterAvailabilityCoreTests(): void {
     ok(d.fix !== null && d.fix.length > 0, "no_product_link has an actionable fix");
   }
   ok(diagnoseLot(lot({ posProductKey: "   " }), cards).code === "no_product_link", "blank key diagnosed");
-  ok(diagnoseLot(lot({ status: "quarantine" }), cards).code === "lot_not_active", "quarantine diagnosed");
+  ok(diagnoseLot(lot({ status: "recalled" }), cards).code === "lot_not_active", "recalled lot diagnosed");
+  ok(diagnoseLot(lot({ status: "quarantine" }), cards).sellable, "quarantine lot with a card sells (fix later)");
   ok(diagnoseLot(lot({ onHandQty: 0 }), cards).code === "lot_empty", "empty lot diagnosed");
   ok(diagnoseLot(lot({ posProductKey: "GHOST" }), cards).code === "no_menu_card", "unlisted key diagnosed");
 
@@ -940,7 +968,7 @@ export function __runRegisterAvailabilityCoreTests(): void {
     "missing link outranks status and quantity",
   );
   ok(
-    diagnoseLot(lot({ status: "quarantine", onHandQty: 0 }), cards).code === "lot_not_active",
+    diagnoseLot(lot({ status: "destroyed", onHandQty: 0 }), cards).code === "lot_not_active",
     "status outranks emptiness",
   );
 
@@ -963,10 +991,12 @@ export function __runRegisterAvailabilityCoreTests(): void {
       diagnoseLot(lot({ id: "4" }), cards),
     ]);
     ok(s.total === 4, "summary total");
-    ok(s.blocked === 2, "empty lots are NOT counted as blocked");
+    // register-sell-everything-fix-later: the no-card lot sells (Fix later).
+    ok(s.blocked === 1, "empty lots and no-card lots are NOT counted as blocked");
     ok(s.sellable === 1, "summary sellable count");
     ok(s.byCode.lot_empty === 1, "empty lots still counted by code");
-    ok(s.headline !== null && s.headline.includes("2 lots"), "headline counts blocked lots");
+    ok(s.headline !== null && s.headline.includes("1 lot "), "headline counts blocked lots");
+    ok(s.headline !== null && s.headline.includes("Fix later"), "headline says the no-card lot sells (fix later)");
     ok(s.headline !== null && s.headline.includes("not linked"), "headline names the link gap");
     ok(s.headline !== null && s.headline.includes("not on the published menu"), "headline names the menu gap");
   }

@@ -141,7 +141,8 @@ export function expiryKindFor(
  */
 export function isSellableExpired(lot: ExpiryLot, today: string): boolean {
   return (
-    (lot.status === "active" || lot.status === "sold_out") &&
+    // register-sell-everything-fix-later: Quarantine lots sell now too.
+    (lot.status === "active" || lot.status === "sold_out" || lot.status === "quarantine") &&
     lot.isSample !== true &&
     Number.isFinite(lot.sellableQty) &&
     lot.sellableQty > 0 &&
@@ -337,7 +338,10 @@ export function __runExpiredStockCoreTests(): { passed: number; failed: number }
   );
   ok(idx.blocked.has("gum") && !idx.warned.has("gum"), "expired edible key is blocked");
   ok(idx.warned.get("wax")?.expiresOn === "2026-07-02", "warned key keeps the earliest expiry");
-  ok(!idx.blocked.has("gone") && !idx.blocked.has("q") && !idx.blocked.has("fresh") && !idx.blocked.has("smp"), "empty, quarantined, fresh and sample lots never hold");
+  ok(!idx.blocked.has("gone") && !idx.blocked.has("fresh") && !idx.blocked.has("smp"), "empty, fresh and sample lots never hold");
+  // register-sell-everything-fix-later: a Quarantine lot sells, so an expired
+  // edible in Quarantine is blocked exactly like an Active one.
+  ok(idx.blocked.has("q"), "an expired Quarantine edible is blocked (it would otherwise sell)");
   ok(idx.blocked.has("mix") && !idx.warned.has("mix"), "a blocked key is never only warned");
 
   const v = evaluateExpiredLines(

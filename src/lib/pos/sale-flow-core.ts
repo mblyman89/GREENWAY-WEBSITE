@@ -156,6 +156,13 @@ export type PosMenuProduct = {
    */
   searchText?: string;
   /**
+   * register-sell-everything-fix-later - true when the register sells this
+   * line straight from a stocked LOT that has no menu product yet (priced at
+   * the store's 2x-cost auto price, category from the lot). The lot is on the
+   * back office "Fix later" list. Optional: absent = a normal menu line.
+   */
+  fixLater?: boolean;
+  /**
    * B42 — product-info facts for the on-demand detail card. SENSORY/
    * descriptive only (no effects/medical claims — website posture). ALL
    * optional so bundles cached before B42 still parse; missing facts are
