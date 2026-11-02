@@ -95,12 +95,17 @@ export async function readFixLaterCoverage(): Promise<FixLaterRead> {
   }
 
   const fixedIds = new Set<string>();
-  const { data: aRows } = await admin
-    .from("audit_logs")
-    .select("entity_id")
-    .eq("action", REGISTER_FIX_AND_SELL_AUDIT_ACTION)
-    .order("created_at", { ascending: false })
-    .limit(2000);
+  const audits = await pagedAllChecked<{ id: string; entity_id: string | null }>(async (from, to) => {
+    const { data, error } = await admin
+      .from("audit_logs")
+      .select("id, entity_id")
+      .eq("action", REGISTER_FIX_AND_SELL_AUDIT_ACTION)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) return { rows: [], ok: false };
+    return { rows: (data as { id: string; entity_id: string | null }[] | null) ?? [], ok: true };
+  });
+  const aRows = audits.rows;
   for (const a of (aRows as { entity_id: string | null }[] | null) ?? []) if (a.entity_id) fixedIds.add(a.entity_id);
 
   const lots = new Map<string, FixLaterLot & { lotCode: string | null }>();
