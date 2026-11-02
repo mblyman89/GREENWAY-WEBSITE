@@ -7,7 +7,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { parseDenoms, denomTotalMinor } from "@/lib/registers/cash";
-import { tipsToMinor, SECOND_COUNT_REQUIRED_ERROR } from "@/lib/pos/till-core";
+import { tipsToMinor } from "@/lib/pos/till-core";
 import {
   BACKOFFICE_TILL_THROTTLE_SCOPE,
   CLOSER_REQUIRED_ERROR,
@@ -22,6 +22,7 @@ import {
   closeDrawerBlind,
   recordDrop,
   reconcileDrawer,
+  recordSecondCount,
 } from "@/lib/registers/store";
 import { loadDrawerFigure, assignReturnRefund, VOID_REFUND_ASSIGNED_ACTION, voidRefundState } from "@/lib/registers/drawer-figure-store";
 import { figureReady, parsePaidFrom } from "@/lib/registers/drawer-figure-core";
@@ -137,34 +138,39 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
     if (!tipPoolSplit.ok) redirect(`${BASE}?error=` + encodeURIComponent(tipPoolSplit.error));
   }
   const tipsParsed = tipPoolSplit && tipPoolSplit.ok ? tipPoolSplit.shareMinor : tipsParsedRaw;
-  // Fix Phase 2.2 (G-01, owner D2): a second employee's own count and PIN.
+  // Owner D121: closing is one person. The closer must be named (so the
+  // second count, done later in the office per D122, can be checked against
+  // them). A second count typed here at the same time is optional.
   const fail = (msg: string) => redirect(`${BASE}?error=` + encodeURIComponent(msg));
   if (!employeeId) fail(CLOSER_REQUIRED_ERROR);
   const secondPin = str(formData, "second_pin");
-  if (!secondPin) fail(SECOND_COUNT_REQUIRED_ERROR);
-  if (!isValidPin(secondPin)) fail("The second employee's PIN must be 4–6 digits.");
-  const locked = await pinPadBlocked(BACKOFFICE_TILL_THROTTLE_SCOPE);
-  if (locked) fail(locked);
-  const second = await getEmployeeByPin(secondPin);
-  if (!second) {
-    await notePinFailure(BACKOFFICE_TILL_THROTTLE_SCOPE);
-    fail("No active employee for the second PIN.");
+  let secondEmp: { id: string; full_name: string } | null = null;
+  let secondDenoms: ReturnType<typeof parseDenoms> | null = null;
+  if (secondPin) {
+    if (!isValidPin(secondPin)) fail("The second employee's PIN must be 4–6 digits.");
+    const locked = await pinPadBlocked(BACKOFFICE_TILL_THROTTLE_SCOPE);
+    if (locked) fail(locked);
+    const second = await getEmployeeByPin(secondPin);
+    if (!second) {
+      await notePinFailure(BACKOFFICE_TILL_THROTTLE_SCOPE);
+      fail("No active employee for the second PIN.");
+    }
+    await notePinSuccess(BACKOFFICE_TILL_THROTTLE_SCOPE);
+    secondEmp = second as NonNullable<typeof second>;
+    const who = checkSecondCounter(employeeId, secondEmp.id);
+    if (!who.ok) fail(who.error);
+    secondDenoms = parseDenoms((k) => formData.get(`second_${k}`) as string | null);
   }
-  await notePinSuccess(BACKOFFICE_TILL_THROTTLE_SCOPE);
-  const secondEmp = second as NonNullable<typeof second>;
-  const who = checkSecondCounter(employeeId, secondEmp.id);
-  if (!who.ok) fail(who.error);
-  const secondDenoms = parseDenoms((k) => formData.get(`second_${k}`) as string | null);
 
   const result = await closeDrawerBlind({
     sessionId,
     employeeId,
     denoms,
     ...(tipsRaw && tipsParsed !== null ? { tipsMinor: tipsParsed } : {}),
-    second: { employeeId: secondEmp.id, denoms: secondDenoms },
+    ...(secondEmp && secondDenoms ? { second: { employeeId: secondEmp.id, denoms: secondDenoms } } : {}),
   });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
-  const cmp = compareCounts(denomTotalMinor(denoms), denomTotalMinor(secondDenoms));
+  const cmp = secondDenoms ? compareCounts(denomTotalMinor(denoms), denomTotalMinor(secondDenoms)) : null;
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
@@ -178,18 +184,85 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
       ...(tipPoolSplit && tipPoolSplit.ok
         ? { tipPool: { poolMinor: tipPoolSplit.poolMinor, people: tipPoolSplit.people, shareMinor: tipPoolSplit.shareMinor, leftoverMinor: tipPoolSplit.leftoverMinor } }
         : {}),
-      secondCountedBy: secondEmp.id,
-      secondCountedByName: secondEmp.full_name,
-      countsAgree: cmp.state === "match",
-      countDiffMinor: cmp.diffMinor,
+      ...(secondEmp && cmp
+        ? {
+            secondCountedBy: secondEmp.id,
+            secondCountedByName: secondEmp.full_name,
+            countsAgree: cmp.state === "match",
+            countDiffMinor: cmp.diffMinor,
+          }
+        : { secondCount: "pending_back_office" }),
       ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
     },
   });
   revalidatePath(BASE);
   redirect(
-    `${BASE}?closed=1${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}` +
+    `${BASE}?closed=1${!cmp || cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}` +
       (tipPoolSplit && tipPoolSplit.ok ? `&tip_pool=` + encodeURIComponent(tipPoolSentence(tipPoolSplit)) : ""),
   );
+}
+
+/**
+ * Owner D122: the SECOND COUNT, done in the office on the computer.
+ *
+ * Owner: "The second count happens in the office on the computer via the
+ * back office app." After the cashier closes the drawer on the iPad (one
+ * person, D121), a different employee counts the drawer again here, enters
+ * the bill quantities and their own PIN. Any employee, any job role, just
+ * not the person who closed it (D2's "any second employee" still holds).
+ * Both counts are kept; if they differ it is a warning, never a block, and
+ * over / short still uses the closer's count.
+ */
+export async function secondCountAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const fail = (msg: string) => redirect(`${BASE}?error=` + encodeURIComponent(msg));
+  const sessionId = str(formData, "session_id");
+  if (!sessionId) fail("Missing session.");
+  const pin = str(formData, "second_pin");
+  if (!isValidPin(pin)) fail("Enter your own 4–6 digit PIN (the person doing the second count).");
+  const locked = await pinPadBlocked(BACKOFFICE_TILL_THROTTLE_SCOPE);
+  if (locked) fail(locked);
+  const emp = await getEmployeeByPin(pin);
+  if (!emp) {
+    await notePinFailure(BACKOFFICE_TILL_THROTTLE_SCOPE);
+    fail("No active employee for that PIN.");
+  }
+  await notePinSuccess(BACKOFFICE_TILL_THROTTLE_SCOPE);
+  const counter = emp as NonNullable<typeof emp>;
+  const denoms = parseDenoms((k) => formData.get(`second_${k}`) as string | null);
+  if (denomTotalMinor(denoms) <= 0) fail("Enter the bill quantities you counted.");
+
+  const result = await recordSecondCount({ sessionId, employeeId: counter.id, denoms });
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.second_count_refused",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: { employeeId: counter.id, error: result.error ?? null },
+    });
+    fail(result.error ?? "Second count not saved.");
+  }
+  const cmp = compareCounts(result.closingMinor ?? null, result.secondMinor ?? null);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "drawer.second_counted",
+    entityType: "drawer_session",
+    entityId: sessionId,
+    after: {
+      via: "back_office",
+      secondCountedBy: counter.id,
+      secondCountedByName: counter.full_name,
+      secondCountMinor: result.secondMinor ?? null,
+      countsAgree: cmp.state === "match",
+      countDiffMinor: cmp.diffMinor,
+      ...(result.countRowWarning ? { countRowWarning: result.countRowWarning } : {}),
+    },
+  });
+  revalidatePath(BASE);
+  redirect(`${BASE}?second=1${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}`);
 }
 
 /**
@@ -206,6 +279,25 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
   const loaded = await loadDrawerFigure(sessionId);
   if (!loaded) redirect(`${BASE}?error=` + encodeURIComponent("Session not found."));
   const { figure } = loaded!;
+  // Owner D123 (professional call, flagged to the owner): the second count
+  // moved off the iPad and into the office (D121 / D122), so reconcile waits
+  // for it. That keeps "two people count every drawer" without slowing the
+  // cash-drawer change at the register.
+  const toReconcile = await getSession(sessionId);
+  if (toReconcile && toReconcile.status === "closed" && toReconcile.second_count_minor == null) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.reconcile_refused",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: { second_count_missing: true },
+    });
+    redirect(
+      `${BASE}?error=` +
+        encodeURIComponent("Not reconciled: do the second count first (Second count form on this drawer's card). A different employee counts the drawer and enters their PIN."),
+    );
+  }
   if (!figureReady(figure)) {
     await recordAudit({
       actorId: session.userId,

@@ -217,7 +217,7 @@ export function __runPosApiBaseCoreTests(): { passed: number; failed: number } {
     "/api/pos/loyalty", "/api/pos/pickup", "/api/pos/day-report", "/api/pos/version",
     "/api/pos/leaderboard", "/api/pos/stock-flag", "/api/pos/email-receipt",
     "/api/pos/member", "/api/pos/member-match", "/api/pos/member-history",
-    "/api/pos/product-image",
+    "/api/pos/product-image", "/api/pos/clock",
   ];
   let allRelativeMatch = true;
   let allAbsoluteMatch = true;
@@ -225,8 +225,8 @@ export function __runPosApiBaseCoreTests(): { passed: number; failed: number } {
     if (buildApiUrl("", e) !== e) allRelativeMatch = false;
     if (buildApiUrl(PROD, e) !== `${PROD}${e}`) allAbsoluteMatch = false;
   }
-  ok("all 19 endpoints unchanged when base is empty", allRelativeMatch);
-  ok("all 19 endpoints prefixed when base is set", allAbsoluteMatch);
+  ok("all 20 endpoints unchanged when base is empty", allRelativeMatch);
+  ok("all 20 endpoints prefixed when base is set", allAbsoluteMatch);
 
   // --- resulting URLs must be parseable and point at the intended host ---
   const built = buildApiUrl(PROD, "/api/pos/sync");

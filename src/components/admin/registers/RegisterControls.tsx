@@ -169,21 +169,25 @@ export function RegisterControls({
             close then shows tips &ldquo;not recorded&rdquo;). On the iPad the tips box is required.
           </p>
           <EmployeePicker name="employee_id" employees={employees} label="Counted by" required />
-          {/* Fix Phase 2.2 (G-01, owner D2): any second employee counts the
-              same drawer on their own and enters their PIN. Required. */}
-          <div className="space-y-2 rounded-lg border border-[var(--admin-border)] p-2">
-            <p className="text-xs font-semibold text-[var(--admin-text)]">Second count (required)</p>
+          {/* Owner D121 / D122: closing is one person. The second count is
+              done afterwards in the office, on this drawer's card under
+              "Needs attention" (any other employee, their own PIN). It can
+              also be typed here right away; leave it blank to do it later. */}
+          <details className="space-y-2 rounded-lg border border-[var(--admin-border)] p-2">
+            <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-text)]">
+              Second count (optional now; otherwise do it on the drawer&apos;s card before reconcile)
+            </summary>
             <p className="text-xs text-[var(--admin-text-muted)]">
               Any other employee counts the drawer by themselves, without looking at the count
-              above, and types what they counted. They cannot be the person in Counted by. If the
-              two counts differ, the drawer still closes and the difference is shown at reconcile.
+              above, and types what they counted. They cannot be the person in Counted by. Leave
+              these blank to do the second count later in the office.
             </p>
             <CountGrid totalLabel="Second count total" namePrefix="second_" />
             <label className="block text-xs text-[var(--admin-text-muted)]">
               Second employee&apos;s PIN
-              <Input name="second_pin" type="password" inputMode="numeric" autoComplete="off" maxLength={6} required />
+              <Input name="second_pin" type="password" inputMode="numeric" autoComplete="off" maxLength={6} />
             </label>
-          </div>
+          </details>
           <div className="flex justify-end">
             <Button type="submit" variant="danger" size="sm">
               Close drawer

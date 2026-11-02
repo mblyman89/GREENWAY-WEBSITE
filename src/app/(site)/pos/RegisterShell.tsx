@@ -65,6 +65,7 @@ import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receip
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
 import { floatCheck, splitTipPool, tipPoolSentence, DEFAULT_TIP_POOL_PEOPLE, MAX_TIP_POOL_PEOPLE } from "@/lib/registers/shift-end-core";
+import { punchSuccessMessage, shouldQueueOffline } from "@/lib/pos/clock-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 // register-sell-everything-fix-later: a Fix & sell line joins the cached menu.
@@ -1398,17 +1399,7 @@ export function RegisterShell({
             setResumeSnapshot(null);
           }
         }}
-        onPunch={(emp) => {
-          // Fix Phase 6 (G-61, owner D84): no clock-out while you own an open drawer.
-          if (emp.clockedIn && emp.clockOutBlockedMessage) {
-            setBanner(`${emp.fullName}: ${emp.clockOutBlockedMessage}`);
-            return;
-          }
-          const intent = emp.clockedIn ? "out" : "in";
-          enqueue("punch", { intent }, emp.id);
-          setBanner(`${emp.fullName}: clock-${intent} recorded${navigator.onLine ? "" : " (offline — will sync)"}.`);
-          void flush();
-        }}
+        onPunched={(message) => setBanner(message)}
       />
     );
   }
@@ -2088,21 +2079,49 @@ export function RegisterShell({
         onSyncNow={() => void flush()}
         onPunch={() => {
           if (!employee) return;
-          // Fix Phase 6 (G-61, owner D84): no clock-out while you own an open
-          // drawer. The list starts from the unlock and is kept current by
-          // the count-in / close below (TillModal onDone).
-          if (employee.clockedIn && (employee.openDrawerSessionIds ?? []).length > 0) {
-            setBanner(
-              employee.clockOutBlockedMessage ??
-                "You still have an open drawer. Close your drawer first (blind count and second count), then clock out.",
-            );
-            return;
-          }
           const intent = employee.clockedIn ? "out" : "in";
-          enqueue("punch", { intent }, employee.id);
-          setEmployee({ ...employee, clockedIn: !employee.clockedIn });
-          setBanner(`Clock-${intent} recorded${navigator.onLine ? "" : " (offline — will sync)"}.`);
-          void flush();
+          // Owner D124: ask the server directly and show its real answer.
+          // The D84 rule (no clock-out while you own an open drawer) is
+          // enforced by the server (toggleClock); its words are shown here,
+          // never hidden in the sync queue. Only a network failure falls back
+          // to the offline queue.
+          void (async () => {
+            let answered = false;
+            try {
+              const res = await posFetch("/api/pos/clock", {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  "x-pos-device-id": creds.deviceId,
+                  "x-pos-device-key": creds.deviceKey,
+                },
+                body: JSON.stringify({ employeeId: employee.id, intent }),
+              });
+              const b = (await res.json().catch(() => null)) as
+                | { ok?: boolean; action?: "in" | "out"; at?: string | null; message?: string; error?: string; employee?: { clockedIn: boolean } }
+                | null;
+              answered = b !== null;
+              if (b?.ok && b.employee) {
+                setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: b.employee!.clockedIn } : cur));
+                setBanner(b.action && b.at ? punchSuccessMessage(employee.fullName, b.action, b.at) : (b.message ?? "Done."));
+                return;
+              }
+              if (answered) {
+                setBanner(`${employee.fullName}: NOT clocked ${intent}. ${b?.error ?? "The server refused the punch."}`);
+                return;
+              }
+            } catch {
+              // fall through to the offline queue
+            }
+            if (shouldQueueOffline(answered, navigator.onLine)) {
+              enqueue("punch", { intent }, employee.id);
+              setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: !employee.clockedIn } : cur));
+              setBanner(
+                `${employee.fullName}: no connection. Clock-${intent} saved on this register and will send when it reconnects. Check the back office time clock later.`,
+              );
+              void flush();
+            }
+          })();
         }}
       />
       {/* SLICE L-14 — the blocking cancellation modal. Rendered FIRST among the
@@ -2565,7 +2584,7 @@ function LockScreen({
   onForceRefresh,
   onClearBanner,
   onUnlocked,
-  onPunch,
+  onPunched,
   lookupBundle,
   onProductImage,
   onProductDetails,
@@ -2583,7 +2602,8 @@ function LockScreen({
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
   onProductDetails?: ProductDetailsFn;
   onUnlocked: (emp: UnlockedEmployee, drawer: DrawerInfo, registerId: string, defaultFloatMinor: number | null) => void;
-  onPunch: (emp: UnlockedEmployee) => void;
+  /** Owner D124: the server's answer to a lock-screen clock in / out. */
+  onPunched: (message: string) => void;
 }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -2594,10 +2614,58 @@ function LockScreen({
   const lookupBlocked = priceLookupUnavailableReason(lookupBundle);
   const closeLookup = useCallback(() => setLookupOpen(false), []);
 
-  const submit = async () => {
+  // Owner D124 / Q-E-6 ("Anyone can clock in and out on a locked register"):
+  // the clock pad goes straight to /api/pos/clock with the PIN. No unlock
+  // step, so nothing about unlocking can get in the way of a clock-out, and
+  // the server's real answer (success or the exact refusal) is shown here.
+  const [clockNotice, setClockNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const submitClock = async () => {
     if (pin.length < 4 || busy) return;
     setBusy(true);
     setError(null);
+    setClockNotice(null);
+    try {
+      const res = await posFetch("/api/pos/clock", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+        body: JSON.stringify({ pin }),
+      });
+      const b = (await res.json().catch(() => null)) as
+        | { ok?: boolean; action?: "in" | "out"; at?: string | null; message?: string; error?: string; employee?: { fullName: string } }
+        | null;
+      setPin("");
+      if (b?.ok) {
+        const text =
+          b.action && b.at && b.employee ? punchSuccessMessage(b.employee.fullName, b.action, b.at) : (b.message ?? "Done.");
+        setClockNotice({ ok: true, text });
+        onPunched(text);
+        setMode("unlock");
+        return;
+      }
+      const who = b?.employee?.fullName ? `${b.employee.fullName}: ` : "";
+      setClockNotice({ ok: false, text: `${who}NOT clocked in or out. ${b?.error ?? "The server refused the punch."}` });
+    } catch {
+      setClockNotice({
+        ok: false,
+        text: online
+          ? "Could not reach the server. Nothing was recorded. Try again."
+          : "Offline. Clocking in or out needs a connection. Nothing was recorded. Try again when the register is back online.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submit = async () => {
+    if (pin.length < 4 || busy) return;
+    if (mode === "clock") return submitClock();
+    setBusy(true);
+    setError(null);
+    setClockNotice(null);
     try {
       const res = await posFetch("/api/pos/unlock", {
         method: "POST",
@@ -2619,12 +2687,6 @@ function LockScreen({
       if (!res.ok || !body?.employee || !body.register) {
         setError(body?.error ?? "Unlock failed.");
         setPin("");
-        return;
-      }
-      if (mode === "clock") {
-        onPunch(body.employee);
-        setPin("");
-        setMode("unlock");
         return;
       }
       onUnlocked(body.employee, body.drawer ?? null, body.register.id, body.register.defaultFloatMinor ?? null);
@@ -2656,7 +2718,21 @@ function LockScreen({
           {banner} <span className="underline">dismiss</span>
         </button>
       ) : null}
-      <h1 className="text-2xl font-semibold">{mode === "unlock" ? "Enter PIN to unlock" : "Enter PIN to clock in / out"}</h1>
+      {clockNotice ? (
+        <button
+          type="button"
+          onClick={() => setClockNotice(null)}
+          className={`mb-4 max-w-md rounded-xl px-4 py-3 text-base font-semibold ${
+            clockNotice.ok
+              ? "bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+              : "bg-[var(--pos-danger-soft)] text-[var(--pos-danger)]"
+          }`}
+        >
+          {clockNotice.ok ? "✅ " : "⚠️ "}
+          {clockNotice.text} <span className="text-sm font-normal underline">ok</span>
+        </button>
+      ) : null}
+      <h1 className="text-2xl font-semibold">{mode === "unlock" ? "Enter PIN to unlock" : "⏱️ Enter PIN to clock in / out"}</h1>
       <div className="mt-4 flex gap-3" aria-label="PIN">
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <span
@@ -2696,10 +2772,15 @@ function LockScreen({
           setMode((m) => (m === "unlock" ? "clock" : "unlock"));
           setPin("");
           setError(null);
+          setClockNotice(null);
         }}
-        className="mt-6 text-sm text-[var(--pos-text-muted)] underline"
+        className={
+          mode === "unlock"
+            ? "pos-tile mt-6 min-h-12 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-6 py-3 text-base font-bold"
+            : "mt-6 text-sm text-[var(--pos-text-muted)] underline"
+        }
       >
-        {mode === "unlock" ? "Clock in / out instead" : "Back to unlock"}
+        {mode === "unlock" ? "⏱️ Clock in / Clock out" : "Back to unlock"}
       </button>
       {/* Price lookup — no PIN. Opens the menu full screen; scan a package
           to see its price and every detail. Read-only: it cannot ring a sale. */}
@@ -5840,13 +5921,10 @@ function PrinterSetupModal({
  * count (they need it to count accurately) but the server NEVER returns
  * expected cash or variance — the manager reveals over/short at reconcile.
  *
- * Fix Phase 2.2 (G-01, owner D2: "close only, and it can be any second
- * employee"): CLOSE has two steps. Step 1 is the closer's count, tips and
- * PIN. Step 2 hides the closer's count and asks a SECOND employee (any job
- * role, not the closer) for their own count and PIN. The server checks the
- * second PIN and refuses the closer's. If the two counts differ the drawer
- * still closes and the cashier is warned (the owner has not said a mismatch
- * should block).
+ * Owner D121 (supersedes D2/D86/D90 at the till): CLOSE is ONE person and
+ * ONE screen: count the bills, enter tips, enter your own PIN, done. The
+ * register is then free for the next cashier. The second count is done in
+ * the back office on the office computer (owner D122), not here.
  */
 function TillModal({
   creds,
@@ -5891,14 +5969,8 @@ function TillModal({
   // amount IS the big bills' total, and the change must equal it.
   const [swapIn, setSwapIn] = useState<DenomCounts>({ ...EMPTY_DENOMS });
   const [swapOut, setSwapOut] = useState<DenomCounts>({ ...EMPTY_DENOMS });
-  // Second-person count (mode "close" only, G-01). The second grid starts
-  // empty and the closer's count is hidden in step 2, so it stays blind.
-  const [closeStep, setCloseStep] = useState<"first" | "second">("first");
-  const [secondDenoms, setSecondDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
-  const [secondPin, setSecondPin] = useState("");
 
   const countedMinor = denomTotalMinor(denoms);
-  const secondCountedMinor = denomTotalMinor(secondDenoms);
   const swapInMinor = denomTotalMinor(swapIn);
   const swapOutMinor = denomTotalMinor(swapOut);
   const amountMinor = mode === "swap" ? (swapInMinor > 0 ? swapInMinor : null) : dollarsToMinor(amount);
@@ -5923,9 +5995,7 @@ function TillModal({
         ? amountMinor !== null
         : mode === "swap"
           ? amountMinor !== null && swapOutMinor === swapInMinor && approverPin.length >= 4
-          : tipsValid && closeStep === "second" && secondPin.length >= 4);
-  // Step 1 of a close is done when the closer's PIN and tips are valid.
-  const firstStepReady = mode === "close" && closeStep === "first" && pin.length >= 4 && tipsValid;
+          : tipsValid);
 
   const TITLES = {
     open: "Count in drawer",
@@ -5976,8 +6046,6 @@ function TillModal({
                     ? { tipPool: { poolMinor: tipsMinor, people: tipPeopleN } }
                     : { tipsMinor }
                   : {}),
-                secondPin,
-                secondDenoms,
               }
             : { action: mode, pin, denoms };
       const res = await posFetch("/api/pos/till", {
@@ -5994,7 +6062,6 @@ function TillModal({
             ok?: boolean;
             drawer?: NonNullable<DrawerInfo>;
             error?: string;
-            secondCount?: { name: string; agree: boolean; diffMinor: number };
             employeeId?: string;
             floatWarning?: string | null;
             tipPool?: { shareMinor: number; sentence: string };
@@ -6002,21 +6069,6 @@ function TillModal({
         | null;
       if (!res.ok || !resBody?.ok) {
         const msg = resBody?.error ?? "Till action failed — try again.";
-        if (mode === "close") {
-          // The closer's own PIN failed: hand the iPad back to the closer
-          // (step 1). Anything else is the second person's to fix here.
-          if (msg === "No active employee for that PIN." || msg === "Enter a valid 4–6 digit PIN.") {
-            setError(`${msg} The closer re-enters their PIN.`);
-            setPin("");
-            setSecondPin("");
-            setSecondDenoms({ ...EMPTY_DENOMS });
-            setCloseStep("first");
-            return;
-          }
-          setError(msg);
-          setSecondPin("");
-          return;
-        }
         setError(msg);
         setPin("");
         return;
@@ -6034,22 +6086,18 @@ function TillModal({
       } else if (mode === "swap") {
         onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`, null);
       } else {
-        const sc = resBody.secondCount;
-        const secondNote = !sc
-          ? ""
-          : sc.agree
-            ? ` Second count by ${sc.name}: both counts agree.`
-            : ` WARNING: the second count by ${sc.name} differs by ${formatCents(Math.abs(sc.diffMinor))} (${sc.diffMinor > 0 ? "they counted more" : "they counted less"}). Both counts are saved; tell a manager.`;
+        // Owner D121: one person, done. The register is ready for the next
+        // cashier right away; the second count happens in the office (D122).
         onDone(
           "close",
           null,
           (resBody.tipPool
-            ? `Blind count recorded. ${resBody.tipPool.sentence} A manager reconciles the drawer in the back office.`
+            ? `Drawer closed. ${resBody.tipPool.sentence}`
             : tips.trim() && tipsMinor !== null
-              ? `Blind count recorded with ${formatCents(tipsMinor)} in tips — a manager reconciles it in the back office.`
-              : "Blind count recorded — a manager reconciles it in the back office.") +
-            secondNote +
-            " You are still clocked in: clock out when you are done (owner rule D84).",
+              ? `Drawer closed with ${formatCents(tipsMinor)} in tips.`
+              : "Drawer closed.") +
+            " The register is ready for the next cashier. The second count is done in the office." +
+            " You are still clocked in: tap Clock out on the lock screen when you leave (owner rule D84).",
           null,
         );
       }
@@ -6076,9 +6124,7 @@ function TillModal({
               ? `Cash pulled from the drawer into the safe. Recorded under ${employeeName}'s PIN; a second person can witness with theirs.`
               : mode === "swap"
                 ? `Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under ${employeeName}'s PIN and approved by a manager or lead with theirs.`
-                : closeStep === "second"
-                  ? `Second count. Hand the iPad to another employee (any employee, not ${employeeName}). They count the drawer by themselves and enter their own PIN. ${employeeName}'s count stays hidden.`
-                  : `Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you. Then a second employee counts it too.`}
+                : `Count the bills in the drawer, enter your tips, then your PIN. That's it: the register is then ready for the next cashier. You will NOT see the expected amount (that protects you). The second count is done in the office.`}
         </p>
 
         {mode === "drop" ? (
@@ -6194,54 +6240,6 @@ function TillModal({
               onChange={(e) => setNotes(e.target.value)}
             />
           </>
-        ) : mode === "close" && closeStep === "second" ? (
-          <>
-            {/* Fix Phase 2.2 (G-01): the second person's own blind count. */}
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {DENOM_FIELDS.map(({ key, label }) => (
-                <label key={key} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
-                  <span className="text-sm font-semibold text-[var(--pos-text)]">{label}</span>
-                  <input
-                    className="w-20 rounded-md border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-2 py-1.5 text-right text-sm"
-                    inputMode="numeric"
-                    value={secondDenoms[key] === 0 ? "" : String(secondDenoms[key])}
-                    placeholder="0"
-                    onChange={(e) => {
-                      const n = Math.max(0, Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0));
-                      setSecondDenoms((d) => ({ ...d, [key]: n }));
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-            <p className="mt-3 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-right text-base font-bold">
-              Second count: {formatCents(secondCountedMinor)}
-            </p>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Second employee&apos;s PIN
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
-              value={secondPin}
-              maxLength={6}
-              onChange={(e) => setSecondPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setSecondDenoms({ ...EMPTY_DENOMS });
-                setSecondPin("");
-                setError(null);
-                setCloseStep("first");
-              }}
-              className="mt-3 text-xs text-[var(--pos-text-muted)] underline"
-            >
-              Back to {employeeName}&apos;s count (clears the second count)
-            </button>
-          </>
         ) : (
           <>
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -6344,39 +6342,21 @@ function TillModal({
           </>
         )}
 
-        {mode === "close" && closeStep === "second" ? null : (
-          <>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Your PIN
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
-              value={pin}
-              maxLength={6}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            />
-          </>
-        )}
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+          Your PIN
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          value={pin}
+          maxLength={6}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
 
         {error ? <p className="mt-3 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
 
-        {mode === "close" && closeStep === "first" ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (!firstStepReady) return;
-              setError(null);
-              setCloseStep("second");
-            }}
-            disabled={!firstStepReady || busy}
-            className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
-          >
-            Next: second count
-          </button>
-        ) : (
         <button
           type="button"
           onClick={() => void submit()}
@@ -6391,9 +6371,8 @@ function TillModal({
                 ? `Record drop${amountMinor !== null ? ` of ${formatCents(amountMinor)}` : ""}`
                 : mode === "swap"
                   ? `Record swap${amountMinor !== null ? ` of ${formatCents(amountMinor)}` : ""}`
-                  : "Record blind count & close"}
+                  : "Close drawer"}
         </button>
-        )}
       </div>
     </div>
   );

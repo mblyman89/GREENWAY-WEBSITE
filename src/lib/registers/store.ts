@@ -226,16 +226,20 @@ export async function closeDrawerBlind(opts: {
    */
   tipsMinor?: number;
   /**
-   * Fix Phase 2.2 (G-01, owner D2): the second employee and their own count.
-   * Required. The caller has already verified the second person's PIN; this
-   * function re-checks that they are not the closer (second-count-core),
-   * and migration 0314's check is the backstop.
+   * Optional second count at close. Owner D121 (supersedes D2/D86/D90 at the
+   * till): the iPad close is ONE person (bills, tips, own PIN). The second
+   * count now happens in the back office (D122, recordSecondCount below).
+   * The back-office close form may still pass one; when present the caller
+   * has verified the second person's PIN and this function re-checks they
+   * are not the closer (migration 0314's check is the backstop).
    */
-  second: { employeeId: string; denoms: DenomCounts };
+  second?: { employeeId: string; denoms: DenomCounts };
 }): Promise<{ ok: boolean; error?: string; countRowWarnings?: string[] }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
-  const who = checkSecondCounter(opts.employeeId, opts.second.employeeId);
-  if (!who.ok) return { ok: false, error: who.error };
+  if (opts.second) {
+    const who = checkSecondCounter(opts.employeeId, opts.second.employeeId);
+    if (!who.ok) return { ok: false, error: who.error };
+  }
   const admin = createSupabaseAdminClient();
   const session = await getSession(opts.sessionId);
   if (!session) return { ok: false, error: "Session not found." };
@@ -243,7 +247,8 @@ export async function closeDrawerBlind(opts: {
 
   const nowISO = new Date().toISOString();
   const closingMinor = denomTotalMinor(opts.denoms);
-  const secondMinor = denomTotalMinor(opts.second.denoms);
+  const second = opts.second ?? null;
+  const secondMinor = second ? denomTotalMinor(second.denoms) : null;
 
   // Compare-and-swap (F-01-2, close part): only a drawer that is still open
   // closes. Two taps, or two devices, cannot both close it; the second sees
@@ -255,9 +260,13 @@ export async function closeDrawerBlind(opts: {
       closed_by: opts.employeeId,
       closing_count_minor: closingMinor,
       closed_at: nowISO,
-      second_counted_by: opts.second.employeeId,
-      second_count_minor: secondMinor,
-      second_counted_at: nowISO,
+      ...(second
+        ? {
+            second_counted_by: second.employeeId,
+            second_count_minor: secondMinor,
+            second_counted_at: nowISO,
+          }
+        : {}),
     })
     .eq("id", opts.sessionId)
     .eq("status", "open")
@@ -294,15 +303,84 @@ export async function closeDrawerBlind(opts: {
     total_minor: closingMinor,
   });
   if (closeRowError) countRowWarnings.push(`close breakdown not saved: ${closeRowError.message}`);
-  const { error: secondRowError } = await admin.from("drawer_counts").insert({
+  if (second) {
+    const { error: secondRowError } = await admin.from("drawer_counts").insert({
+      session_id: opts.sessionId,
+      count_type: "second",
+      counted_by: second.employeeId,
+      ...second.denoms,
+      total_minor: secondMinor,
+    });
+    if (secondRowError) countRowWarnings.push(`second-count breakdown not saved: ${secondRowError.message}`);
+  }
+  return countRowWarnings.length > 0 ? { ok: true, countRowWarnings } : { ok: true };
+}
+
+/**
+ * Owner D122: the second count, done in the BACK OFFICE on the office
+ * computer after the cashier closed the drawer on the iPad (one person,
+ * D121). A different employee (by their own PIN, checked by the caller)
+ * counts the drawer again. Allowed only on a CLOSED drawer (not yet
+ * reconciled) that has no second count yet. Compare-and-swap on
+ * second_count_minor IS NULL so two people cannot both record one.
+ * Migration 0314's columns and its "second counter is not the closer"
+ * check already exist; no new migration.
+ */
+export async function recordSecondCount(opts: {
+  sessionId: string;
+  employeeId: string;
+  denoms: DenomCounts;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  secondMinor?: number;
+  closingMinor?: number | null;
+  countRowWarning?: string;
+}> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const session = await getSession(opts.sessionId);
+  if (!session) return { ok: false, error: "Session not found." };
+  if (session.status !== "closed") {
+    return {
+      ok: false,
+      error:
+        session.status === "open"
+          ? "This drawer is still open. The cashier closes it on the register first."
+          : "This drawer is already reconciled. Nothing was changed.",
+    };
+  }
+  const who = checkSecondCounter(session.closed_by, opts.employeeId);
+  if (!who.ok) return { ok: false, error: who.error };
+  const secondMinor = denomTotalMinor(opts.denoms);
+  const admin = createSupabaseAdminClient();
+  const { data: changed, error } = await admin
+    .from("drawer_sessions")
+    .update({
+      second_counted_by: opts.employeeId,
+      second_count_minor: secondMinor,
+      second_counted_at: new Date().toISOString(),
+    })
+    .eq("id", opts.sessionId)
+    .eq("status", "closed")
+    .is("second_count_minor", null)
+    .select("id");
+  if (error) return { ok: false, error: closeErrorMessage(error.message) };
+  if (!changed || changed.length === 0) {
+    return { ok: false, error: "Someone already recorded the second count for this drawer. Nothing was changed." };
+  }
+  const { error: rowError } = await admin.from("drawer_counts").insert({
     session_id: opts.sessionId,
     count_type: "second",
-    counted_by: opts.second.employeeId,
-    ...opts.second.denoms,
+    counted_by: opts.employeeId,
+    ...opts.denoms,
     total_minor: secondMinor,
   });
-  if (secondRowError) countRowWarnings.push(`second-count breakdown not saved: ${secondRowError.message}`);
-  return countRowWarnings.length > 0 ? { ok: true, countRowWarnings } : { ok: true };
+  return {
+    ok: true,
+    secondMinor,
+    closingMinor: session.closing_count_minor ?? null,
+    ...(rowError ? { countRowWarning: `second-count breakdown not saved: ${rowError.message}` } : {}),
+  };
 }
 
 /**

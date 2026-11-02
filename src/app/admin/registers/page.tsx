@@ -4,13 +4,14 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button, Badge, Card, Section } from "@/components/admin/ui";
+import { Button, Badge, Card, Input, Section } from "@/components/admin/ui";
 import { RegisterControls } from "@/components/admin/registers/RegisterControls";
 import { getRegisterActivity, type ActivityKind } from "@/lib/registers/oversight";
 import { listPosExceptions } from "@/lib/pos/sync-store";
 import { listPosDevices } from "@/lib/pos/device-store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
-import { reconcileDrawerAction, assignRefundAction } from "./actions";
+import { reconcileDrawerAction, assignRefundAction, secondCountAction } from "./actions";
+import { CountGrid } from "@/components/admin/registers/CountGrid";
 import { loadDrawerFigure, drawersForDay, type LoadedDrawerFigure } from "@/lib/registers/drawer-figure-store";
 import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-core";
 import { businessDayFor } from "@/lib/staffing/time";
@@ -41,6 +42,7 @@ export default async function RegisterActivityPage({
     opened?: string;
     float_warn?: string;
     tip_pool?: string;
+    second?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
@@ -281,15 +283,23 @@ export default async function RegisterActivityPage({
         {attention.length > 0 && (
           <Section
             title="Needs attention"
-            description="Closed drawers awaiting a manager reconcile. Night or morning manager; before the bag is sealed (D87)."
+            description="Closed drawers. First the second count (any other employee, in the office), then a manager reconcile. Night or morning manager; before the bag is sealed (D87)."
           >
             {!canManage ? (
-              <Card padding="md">
-                <p className="text-sm text-[var(--admin-text-muted)]">
-                  {attention.length} drawer{attention.length === 1 ? "" : "s"} awaiting a manager
-                  reconcile. Ask a manager to sign off.
-                </p>
-              </Card>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {/* Owner D122: any employee can do the second count in the office. */}
+                {attention
+                  .filter((a) => a.secondCountMinor == null)
+                  .map((a) => (
+                    <SecondCountCard key={a.sessionId} item={a} />
+                  ))}
+                <Card padding="md">
+                  <p className="text-sm text-[var(--admin-text-muted)]">
+                    {attention.length} drawer{attention.length === 1 ? "" : "s"} awaiting a manager
+                    reconcile. Ask a manager to sign off.
+                  </p>
+                </Card>
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {attention.map((a) => (
@@ -491,6 +501,7 @@ function Flash({
     opened?: string;
     float_warn?: string;
     tip_pool?: string;
+    second?: string;
   };
 }) {
   if (sp.error) {
@@ -524,6 +535,25 @@ function Flash({
       </div>
     );
   }
+  if (sp.second != null) {
+    // Owner D122: the second count, done in the office. A difference is a
+    // warning only; over / short uses the closer's count.
+    const diff2 = Number(sp.count_diff);
+    const differs2 = sp.count_diff != null && Number.isFinite(diff2) && diff2 !== 0;
+    return (
+      <div
+        className={
+          differs2
+            ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
+            : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]"
+        }
+      >
+        {differs2
+          ? `Second count saved. Warning: ${secondCountSentence(compareCounts(0, diff2))} Both counts are kept. The drawer can be reconciled now.`
+          : "Second count saved. Both counts agree. The drawer can be reconciled now."}
+      </div>
+    );
+  }
   if (sp.closed != null) {
     // Fix Phase 2.2 (G-01): the close records both counts. A difference is a
     // warning only (the owner has not said it should block).
@@ -539,7 +569,7 @@ function Flash({
       >
         {differs
           ? `Drawer closed. Warning: ${secondCountSentence(compareCounts(0, diff))} Both counts are saved and shown at reconcile.`
-          : "Drawer closed. Both counts agree. A manager reconciles it below."}
+          : "Drawer closed. Next: the second count on its card below (any other employee), then a manager reconciles it."}
         {/* Fix Phase 6 (G-64, owner D89): the crew tip pool split. */}
         {sp.tip_pool ? <span className="mt-1 block text-xs">{sp.tip_pool}</span> : null}
         {/* Fix Phase 6 (G-61, owner D84): closing does not clock out. */}
@@ -607,6 +637,10 @@ function ReconcileCard({
   loaded: LoadedDrawerFigure | null;
   drawerChoices: Map<string, { id: string; label: string }[]>;
 }) {
+  // Owner D122 / D123: the second count comes first, and it is BLIND: the
+  // card shows only the count form (no expected, no closer's count) until it
+  // is saved. Then the figures and the reconcile button appear.
+  if (item.secondCountMinor == null) return <SecondCountCard item={item} />;
   const f = loaded?.figure ?? null;
   const ready = f ? figureReady(f) : false;
   return (
@@ -782,6 +816,47 @@ function ReconcileCard({
           </form>
         </>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Owner D122: "The second count happens in the office on the computer via
+ * the back office app." Any employee except the person who closed the drawer
+ * counts it again by themselves and enters their own PIN. Blind: nothing on
+ * this card shows the closer's count or the expected cash.
+ */
+function SecondCountCard({
+  item,
+}: {
+  item: { sessionId: string; registerName: string; businessDay: string; closedByName: string | null };
+}) {
+  return (
+    <Card padding="md" accent="orange">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-[var(--admin-text)]">{item.registerName}</span>
+        <Badge tone="orange">Second count</Badge>
+      </div>
+      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+        {item.businessDay}
+        {item.closedByName ? ` · closed on the register by ${item.closedByName}` : ""}. Count the drawer by yourself,
+        enter the bill quantities and your own PIN. Any employee can do this except
+        {item.closedByName ? ` ${item.closedByName}` : " the person who closed it"}. The closer&apos;s count stays hidden
+        until you save. Reconcile opens after this.
+      </p>
+      <form action={secondCountAction} className="space-y-2">
+        <input type="hidden" name="session_id" value={item.sessionId} />
+        <CountGrid totalLabel="Second count total" namePrefix="second_" />
+        <label className="block text-xs text-[var(--admin-text-muted)]">
+          Your PIN (the person doing the second count)
+          <Input name="second_pin" type="password" inputMode="numeric" autoComplete="off" maxLength={6} required />
+        </label>
+        <div className="flex justify-end">
+          <Button type="submit" variant="confirm" size="sm">
+            Save second count
+          </Button>
+        </div>
+      </form>
     </Card>
   );
 }

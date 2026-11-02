@@ -1,14 +1,18 @@
 /**
  * src/lib/registers/second-count-core.ts  (Fix Phase 2.2 · G-01 · owner D2)
  *
- * PURE rules for the second-person count at till close. Zero I/O.
+ * PURE rules for the second-person count of a closed drawer. Zero I/O.
  *
  * The owner (D2, 00-OWNER-REQUEST-VERBATIM.md): "Q2- close only, and it can
  * be any second employee. It doesn't need to be a lead or manager."
+ * Owner D121 / D122 (later): the iPad close is ONE person; "The second count
+ * happens in the office on the computer via the back office app." So the
+ * second count is now recorded in the back office after the close, and
+ * reconcile waits for it (D123).
  *
  * The rules this module holds:
- *   1. A close needs a second count by a DIFFERENT employee (any job role).
- *      The server checks it (here, then the 0314 database check as a
+ *   1. The second count is by a DIFFERENT employee (any job role) than the
+ *      closer. The server checks it (here, then the 0314 database check as a
  *      backstop); the screen is only a convenience.
  *   2. Both counts are kept. Over / short still uses the CLOSER's count.
  *   3. If the two counts differ, the difference is shown as a WARNING.
@@ -43,7 +47,7 @@ export function checkSecondCounter(closerId: string | null | undefined, secondId
 }
 
 export type SecondCountState =
-  /** Closed before migration 0314: no second count was asked for. */
+  /** No second count recorded yet (it is done in the office, D122). */
   | "none"
   | "match"
   /** The second person counted MORE than the closer. */
@@ -74,7 +78,7 @@ function dollars(minor: number): string {
 export function secondCountSentence(cmp: SecondCountCompare): string {
   switch (cmp.state) {
     case "none":
-      return "No second count (closed before the second-count rule).";
+      return "No second count yet: do it in the office (any employee except the closer).";
     case "match":
       return "Both counts agree.";
     case "second_higher":

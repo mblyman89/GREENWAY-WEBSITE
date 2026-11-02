@@ -151,7 +151,7 @@ The Phase 2.1 *"PARTLY BUILT … printable per-cashier shift report still OPEN"*
 | Question | Answer (built, Phase 2.2) |
 |---|---|
 | Who does the second count at close? | **Any** other employee (owner D2: *"close only, and it can be any second employee"*), never the closer; not needed at count-in (SOP-01 §4.27 step 9) |
-| How do I close now? | Count, enter tips and your PIN, tap **Next: second count**, hand over the iPad; the second person counts blind, types their PIN, taps **Record blind count & close** (§4.27 steps 8–11) |
+| How do I close now? | *(Superseded by D121, see below.)* Was: count, tips, PIN, then a second person on the iPad |
 | It says the second count must be a different employee | You typed the closer's PIN in the second box; hand it to someone else (§4.27 step 9) |
 | The two counts differ | Warning only: the drawer is closed, both counts are saved, over / short uses the closer's count; tell a manager, who sees both on the Reconcile card (§4.27 step 12, §4.30) |
 | The iPad will not close and asks for a second employee but shows no second step | That iPad runs an older app build; close from the browser register or the back office and tell the owner (§4.27, "The iPad app must be updated") |
@@ -707,3 +707,13 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 **G-71c (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Platform health → daily money-path test**: the test sale, return and till that are undone, what a failed step means at the counter, migration 0332.
 
 **G-71d (owner message 12, D102).** `concierge-kb.ts` settings topic gains **Platform health → error alerts**: what is recorded, when staff are emailed (first permission refusal, 3rd missing object, 5th crash in 10 minutes, once per kind per hour), Recent errors, migration 0333.
+
+**Shift-end fix (D121–D124: one-person close, second count in the office, clock-out) answers, every register user:**
+
+| Question | Answer (built, shift-end fix) |
+|---|---|
+| How do I close my drawer now? | Count the bills, enter your tips, type your PIN, tap **Close drawer**. That's it; the register is ready for the next cashier (SOP-01 §4.27, D121) |
+| Where is the second count? | In the office: Register Activity → the drawer's **Second count** card; any employee except the closer, their own PIN (SOP-01 §4.27 *Second count in the office*, D122) |
+| Reconcile says do the second count first | The office second count has not been saved yet; it must come first (SOP-01 §4.30, D123) |
+| How do I clock out? | Lock screen → **⏱️ Clock in / Clock out** → your PIN; a green banner says *clocked OUT at <time>* (SOP-01 §4.2, D124) |
+| It says NOT clocked in or out | The server refused and nothing was recorded; usually you still own an open drawer (one you counted in). Close it first (SOP-01 §4.2) |
