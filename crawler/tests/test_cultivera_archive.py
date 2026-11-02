@@ -71,6 +71,16 @@ class FakeArchive:
         self.orders = [{"Id": 500 + k, "CreatedAtStr": f"{d} 10:0{k} AM", "IsCanceled": k == 3}
                        for k, d in enumerate(days)]
         self.snapshots = [{"Id": 1, "Value": "Oct 30 2026"}, {"Id": 2, "Value": "Oct 31 2026"}]
+        # activity (CVB-7, measured): the server serves <= activity_cap rows per call and IGNORES Skip.
+        # Sep 2026 is a "big" month (more than one call holds) -> read day by day.
+        self.activity_cap = 7
+        act_days = ["2024-08-30", "2026-08-31"] + ["2026-09-01"] * 3 + ["2026-09-02"] * 3 + ["2026-09-03"] * 2 + ["2026-10-31"]
+        self.lists["activity"] = [{"Id": 9000 + k, "DateActivityStr": f"{d[5:7]}/{d[8:10]}/{d[:4]} 10:00 AM"}
+                                  for k, d in enumerate(act_days)]
+        self.activity_truncate_day: str | None = None
+        # Sep 1 2026 plays the fall-back day: its 11 PM row is invisible to a ONE-day call (measured 2024-11-03)
+        self.lists["activity"][2]["DateActivityStr"] = "09/01/2026 11:30 PM"
+        self.activity_lost_hour_days = {"2026-09-01"}
 
     def endpoint_calls(self, ep: str) -> int:
         return sum(1 for _, u, _ in self.requests if u == cp.Q + ep)
@@ -111,6 +121,27 @@ class FakeArchive:
                 f, t = _day(body["FromDate"]), _day(body["ToDate"])
                 rows = [o for o in rows if f <= _day(o["CreatedAtStr"][:10]) <= t]
             return self._page(rows, body)
+        # the three body shapes re-measured live in CVB-7
+        if ep == "shifts/list" and "skip" not in body:
+            return httpx.Response(200, json={"Count": len(self.lists[ep]), "Data": []})
+        if ep == "products" and "Page" in body:
+            return httpx.Response(200, json={"Count": len(self.lists[ep]), "Data": []})
+        if ep == "customers/customer-loyalty-point-adjustment" and (
+                not {"CustomerId", "FromDate", "ToDate"} <= set(body) or body.get("sort")):
+            return httpx.Response(500, json={"Message": "An error has occurred."})
+        if ep == "activity":
+            rows = self.lists[ep]
+            if body.get("DateFrom"):
+                f, t = _day(body["DateFrom"]), _day(body["DateTo"])
+                rows = [r for r in rows if f <= _day(r["DateActivityStr"][:10]) <= t]
+                if f == t and f in self.activity_lost_hour_days:  # 24 h filter on a 25 h day (measured)
+                    rows = [r for r in rows if "11:" not in r["DateActivityStr"] or "PM" not in r["DateActivityStr"]]
+            cap = self.activity_cap
+            if self.activity_truncate_day and body.get("DateFrom") \
+                    and _day(body["DateFrom"]) == self.activity_truncate_day and body["DateFrom"] != body.get("DateTo"):
+                cap = len(rows) - 1
+            take = int(body["Page"]["Take"])
+            return httpx.Response(200, json={"Count": len(rows), "Data": rows[: min(take, cap)]})  # Skip ignored
         if ep == "reports/inventory-valuation-snapshot":
             sid = body["InventoryValuationSnapshotId"]
             return self._page([{"Id": sid * 10 + j, "Cost": 1.5} for j in range(4)], body)
@@ -184,6 +215,8 @@ def test_catalogue_invariants():
     by = {p.name: p for p in ca.PAGED}
     # page sizes that were measured the hard way
     assert by["customers"].take == 1000 and by["shifts"].take == 1000
+    assert by["activity"].windowed and by["activity"].take == ca.ACTIVITY_CAP == 1000
+    assert [n for n, p in by.items() if p.windowed] == ["activity"]
     assert by["depleted_inventories"].key == "Barcode"
     assert {n for n, p in by.items() if p.pii} == {"employees", "users", "customers", "loyalty_accrual"}
     assert by["vendors"].endpoint == "/vendors"  # the back office's own spelling (measured)
@@ -203,6 +236,8 @@ def test_full_archive_run(tmp_path: Path):
     for p in ca.PAGED:
         d = st["datasets"][p.name]
         expected = 2 if p.name == "cycle_counts" else len(fake.lists[p.endpoint])
+        if p.name == "activity":
+            expected = 11
         assert d["status"] == "done" and d["count"] == d["rows"] == expected, p.name
         assert len(_rows(c.run, st, p.name)) == expected
     # orders: monthly windows Aug..Oct 2026, all 7 orders, the voided one included
@@ -445,3 +480,104 @@ def test_failed_run_resumes(env):
     r2 = c.post("/cultivera-archive/runs", json={}, headers=H).json()
     assert r2 == {"ok": True, "runId": r["runId"], "resumed": True}
     assert c.get(f"/cultivera-archive/runs/{r['runId']}", headers=H).json()["state"]["status"] == "done"
+
+
+# --------------------------------------------------------------------------- CVB-7: the live re-measure
+
+
+def test_cvb7_bodies_match_the_back_office():
+    """The exact shapes the back office's own grids send (cbo-app.bundle.js), re-measured 2026-11-02."""
+    by = {p.name: p for p in ca.PAGED}
+    sh = by["shifts"].body("2015-01-01", "2026-11-01")(1000, 1000)
+    assert sh["Page"] == {"Skip": 1000, "Take": 1000, "Sort": [{"field": "Id", "dir": "asc"}], "HasSortInfo": True}
+    assert (sh["skip"], sh["take"], sh["page"], sh["pageSize"]) == (1000, 1000, 2, 1000)
+    pr = by["products"].body("2015-01-01", "2026-11-01")(16000, 2000)
+    assert "Page" not in pr and (pr["Skip"], pr["Take"]) == (16000, 2000) and pr["ShowNonCannabis"] is False
+    la = by["loyalty_adjustments"].body("2015-01-01", "2026-11-01")(0, 1000)
+    assert la["CustomerId"] is None and la["FromDate"] is None and la["ToDate"] is None and la["take"] == 1000
+    assert la["sort"] == []  # any sort is HTTP 500 (measured)
+    ac = by["activity"].body("2026-10-01", "2026-10-31")(0, 1000)
+    assert ac["DateFrom"] == "10/01/2026" and ac["DateTo"] == "10/31/2026" and ac["Page"]["Take"] == 1000
+    assert by["activity"].body(None, None)(0, 1)["DateFrom"] is None
+    assert ca.day_list("2024-02-28", "2024-03-01") == ["2024-02-28", "2024-02-29", "2024-03-01"]
+    assert ca.next_day("2026-12-31") == "2027-01-01" and ca.next_day("2024-02-28") == "2024-02-29"
+    assert ca.wall_day({"DateActivityStr": "11/03/2024 11:06 PM"}, "DateActivityStr") == "2024-11-03"
+    with pytest.raises(cp.CultiveraPosError):
+        ca.wall_day({}, "DateActivityStr")
+    assert len(ca.day_list("2026-10-01", "2026-10-31")) == 31
+    with pytest.raises(cp.CultiveraPosError):
+        ca.day_list("2026-10-02", "2026-10-01")
+
+
+def test_cvb7_activity_windows_and_big_month_by_day(tmp_path: Path):
+    fake = FakeArchive()
+    c = _client(tmp_path, fake)
+    m = ca.run_archive(c, clock=lambda: 1793491200.0, date_to="2026-10-31")
+    st = c.run.read_json("state.json")
+    assert m["status"] == "done", st.get("error")
+    a = st["datasets"]["activity"]
+    assert a["kind"] == "windowed" and a["count"] == a["rows"] == 11
+    assert a["windows"]["2026-09"] == {"status": "done", "count": 8, "calls": 30}  # big month -> 30 days
+    assert a["windows"]["2024-08"]["calls"] == 1 and a["windows"]["2015-01"]["count"] == 0
+    ids = [r["Id"] for r in _rows(c.run, st, "activity")]
+    assert sorted(ids) == list(range(9000, 9011)) and len(ids) == len(set(ids))
+    names = {p["name"] for p in a["parts"]}
+    assert names == {"activity.2024-08.jsonl.gz", "activity.2026-08.jsonl.gz", "activity.2026-09.jsonl.gz",
+                     "activity.2026-10.jsonl.gz"}
+    assert all(ca.is_archive_file(n) for n in names)
+    # shifts / products / loyalty adjustments now arrive whole
+    for n in ("shifts", "products", "loyalty_adjustments"):
+        assert st["datasets"][n]["count"] == st["datasets"][n]["rows"] > 0, n
+
+
+def test_cvb7_truncated_day_fails_loudly_then_resumes(tmp_path: Path):
+    fake = FakeArchive()
+    fake.activity_truncate_day = "2026-09-01"
+    c = _client(tmp_path, fake)
+    m = ca.run_archive(c, clock=lambda: 1793491200.0, date_to="2026-10-31")
+    st = c.run.read_json("state.json")
+    assert m["status"] == "failed" and "activity 2026-09-01..2026-09-02: Count 6 but one call held 5 rows" in st["error"]
+    w = st["datasets"]["activity"]["windows"]
+    assert w["2026-08"]["status"] == "done" and "2026-09" not in w
+    fake.activity_truncate_day = None
+    before = fake.endpoint_calls("activity")
+    m2 = ca.run_archive(c, clock=lambda: 1793491200.0)
+    assert m2["status"] == "done"
+    # resumed at 2026-09: 1 month call + 30 days + 2026-10 + the all-time check, nothing earlier refetched
+    assert fake.endpoint_calls("activity") - before == 1 + 30 + 1 + 1
+    assert c.run.read_json("state.json")["datasets"]["activity"]["count"] == 11
+
+
+def test_cvb7_windows_must_add_up_to_all_time(tmp_path: Path):
+    fake = FakeArchive()
+    orig = fake.handler
+
+    def handler(req):
+        body = json.loads(req.content) if req.content else {}
+        if str(req.url) == cp.Q + "activity" and body.get("DateFrom") is None:
+            fake.requests.append(("POST", str(req.url), body))
+            return httpx.Response(200, json={"Count": 12, "Data": []})  # one more than the windows hold
+        return orig(req)
+
+    c = cp.PosClient(username="owner@example.com", password=PASSWORD, run=cp.RunDir(tmp_path / "r"),
+                     transport=httpx.MockTransport(handler), pace_seconds=0, sleep=lambda s: None)
+    m = ca.run_archive(c, clock=lambda: 1793491200.0, date_to="2026-10-31")
+    assert m["status"] == "failed"
+    assert "activity: windows hold 11 but the all-time Count is 12" in c.run.read_json("state.json")["error"]
+
+
+def test_cvb7_fall_back_hour_is_not_lost(tmp_path: Path):
+    """2024-11-03 measured live: a ONE-day call misses 11 PM-midnight on the 25-hour day. The two-day
+    windows keep that row, and only rows of the month itself are kept."""
+    fake = FakeArchive()
+    c = _client(tmp_path, fake)
+    m = ca.run_archive(c, clock=lambda: 1793491200.0, date_to="2026-10-31")
+    st = c.run.read_json("state.json")
+    assert m["status"] == "done", st.get("error")
+    sep = [r for p in st["datasets"]["activity"]["parts"] if p["name"] == "activity.2026-09.jsonl.gz"
+           for r in ca.read_gz_jsonl(c.run.p(p["name"]).read_bytes())]
+    assert any(r["DateActivityStr"] == "09/01/2026 11:30 PM" for r in sep)
+    assert all(r["DateActivityStr"].startswith("09/") for r in sep) and len(sep) == 8
+    # the windows reach into the next month (Sep 30 -> Oct 1) but nothing of October leaks in
+    bodies = [b for _, u, b in fake.requests if u == cp.Q + "activity" and b.get("DateFrom") == "09/30/2026"]
+    assert bodies and bodies[0]["DateTo"] == "10/01/2026"

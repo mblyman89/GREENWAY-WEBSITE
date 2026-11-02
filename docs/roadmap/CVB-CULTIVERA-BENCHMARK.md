@@ -40,7 +40,7 @@ Generated from `crawler/app/cultivera_archive.py` (the catalogue the harvester a
 | 2 | `users` | `users` | 1,000 | Id | yes |  |
 | 3 | `roles` | `roles` | 1,000 | Id |  |  |
 | 4 | `clocks` | `clocks` | 1,000 | Id |  |  |
-| 5 | `shifts` | `shifts/list` | 1,000 | Id |  | 5,000 per page returns zero rows (measured); 1,000 works |
+| 5 | `shifts` | `shifts/list` | 1,000 | Id |  | Page body **plus** the lowercase Kendo keys (skip/take/page/pageSize/sort), as the back office sends it; without them every page is empty (re-measured CVB-7: 1,662 of 1,662) |
 | 6 | `discounts` | `discounts` | 1,000 | Id |  |  |
 | 7 | `promotions` | `promotions` | 1,000 | Id |  |  |
 | 8 | `loyalty_rules` | `loyalty-program-rules` | 1,000 | Id |  |  |
@@ -48,7 +48,7 @@ Generated from `crawler/app/cultivera_archive.py` (the catalogue the harvester a
 | 10 | `categories` | `products/categories` | 1,000 | Id |  |  |
 | 11 | `strains` | `products/strains` | 5,000 | Id |  |  |
 | 12 | `brands` | `brands` | 5,000 | Id |  |  |
-| 13 | `products` | `products` | 2,000 | Id |  | ShowNonCannabis=false is ALL products (17,605); true is non-cannabis only (189) |
+| 13 | `products` | `products` | 2,000 | Id |  | **Flat** Skip/Take (the Page body returns zero rows, CVB-7); ShowNonCannabis=false is ALL products (17,605); true is non-cannabis only (189) |
 | 14 | `storage_locations` | `storage-locations` | 1,000 | Id |  |  |
 | 15 | `tax_settings` | `tax-settings` | 1,000 | Id |  |  |
 | 16 | `vendors` | `/vendors` | 1,000 | Id |  |  |
@@ -59,14 +59,14 @@ Generated from `crawler/app/cultivera_archive.py` (the catalogue the harvester a
 | 21 | `samples` | `samples` | 1,000 | Id |  | employee samples (budtender samples) with employee, status and quantity |
 | 22 | `cycle_counts` | `inventories/cycle-counts` | 1,000 | Id |  |  |
 | 23 | `inventory_discrepancies` | `inventories/inventory-discrepancies` | 1,000 | Id |  |  |
-| 24 | `loyalty_adjustments` | `customers/customer-loyalty-point-adjustment` | 1,000 | Id |  |  |
+| 24 | `loyalty_adjustments` | `customers/customer-loyalty-point-adjustment` | 1,000 | Id |  | Needs CustomerId/FromDate/ToDate (null = every customer) and **no sort**, or HTTP 500 (CVB-7: 25 rows) |
 | 25 | `inventories` | `inventories` | 5,000 | Id |  |  |
 | 26 | `aging_inventory` | `reports/aging-inventory` | 5,000 | Id |  |  |
 | 27 | `depleted_inventories` | `inventories/depleted-inventories` | 5,000 | Barcode |  | no Id; Barcode is unique (26,899 of 26,899, measured) |
 | 28 | `shrink` | `reports/shrink-report` | 5,000 | Id |  | every inventory adjustment with reason, employee and cost valuation |
 | 29 | `customers` | `customers` | 1,000 | Id | yes | 5,000 per page times out (HTTP 504, measured); 1,000 works |
 | 30 | `loyalty_accrual` | `reports/loyalty-point-accrual` | 5,000 | Id | yes |  |
-| 31 | `activity` | `activity` | 5,000 | Id |  | register activity: opens, drops, payouts, pay-ins, closes, sales, returns |
+| 31 | `activity` | `activity` | 1,000 a call | Id |  | register activity (opens, drops, payouts, pay-ins, closes, sales, returns). The server serves at most 1,000 rows a call and **ignores Skip**, so it is read in Pacific month windows, and a bigger month day by day; every window Count-verified, windows must equal the all-time Count (CVB-7: 139,335) |
 | 32 | `sales_lines` | `reports/daily-sales-detail` | 5,000 | Id |  | every sold line: employee, payment, discount, tax, cost, returns |
 | 33 | `discount_lines` | `reports/promotion-details-report` | 5,000 | Id |  | every line's discount: employee, discount type, manager-approved discount |
 | 34 | `tax_lines` | `reports/tax-report` | 5,000 | Id |  |  |
@@ -110,7 +110,10 @@ Orders: `orders` in monthly Pacific windows of 1,000 (voids = IsCanceled, refund
 Measured facts that shaped the catalogue (probe notes, 2026-11-01):
 
 - `orders` and `customers` time out (HTTP 504, about 60 s gateway limit) on large pages. Orders are read in monthly windows of 1,000; customers in pages of 1,000 (16,588 customers).
-- `shifts/list` returns zero rows (with the right Count, 1,662) for a 5,000 page; 1,000 works.
+- `shifts/list` returns zero rows (with the right Count, 1,662) unless the body also has the lowercase Kendo keys the back office spreads in. The 2026-11-01 note "1,000 works" was wrong; the first live harvest stopped on it (CVB-7, re-measured 2026-11-02).
+- `products` returns zero rows for the Page-wrapped body; the back office sends Skip/Take flat (CVB-7).
+- `customers/customer-loyalty-point-adjustment` answers HTTP 500 without CustomerId/FromDate/ToDate, or with any sort (CVB-7).
+- `activity` serves at most 1,000 rows per call and ignores Skip: every page is the newest 1,000. A month holds up to about 5,200 rows and a day at most about 225, so busy months are read day by day (CVB-7). Each day call spans that day and the next, because a one-day call is 24 hours and misses 11 PM to midnight on the fall-back day (2024-11-03 lost 2 rows, 2025-11-02 lost 1). Rows are kept by their own Pacific day.
 - `inventories/depleted-inventories` has no Id; Barcode is unique (26,899 of 26,899).
 - `products` with `ShowNonCannabis=false` returns all 17,605 products (`true` returns only the 189 non-cannabis ones).
 - The first order is 2024-08-30 (order 04300000001); about 135,000 orders exist; `promotion-details-report` has 233,067 lines.
@@ -153,9 +156,10 @@ The comparison is between **periods**. Cultivera's history (2024-08-30 → cutov
 | CVB-2 | Archive harvester on the crawler (34 paged datasets, 11 roll-up reports, 15 summaries, 11 lookups, monthly orders, cycle-count details, valuation snapshots), Count-verified, resumable, read-only | merged #1631 |
 | CVB-3 | Migration 0337: private bucket, archive run / file provenance, Cultivera daily figures, payback ledger seeded with the owner's two figures, two service_role functions | merged #1633 |
 | CVB-4 | Pure cores (`src/lib/reports/cultivera-benchmark-core.ts`): dollars → cents ingest normaliser for the daily report (a day with two different answers is kept out), manifest → archive register list (refused whole, never partial), comparison engine (missing side is never zero; a partial period cannot win), payback ledger arithmetic and the outperformance credit rule; 40 self-tests + vitest mirror that checks agreement with 0337 | merged #1634 |
-| CVB-5 | Admin → Lyman → **Cultivera Archive** (`/admin/cultivera-archive`, owner-only `cultivera.benchmark`): start / continue / stop the harvest; progress for each of the 8 stages; **Archive to our storage** (every file checked against the manifest's sha256, then stored with upsert:false; a size mismatch stops it; resumable within the 300 s page limit; the manifest's bytes are stored and their sha256 registered); Cultivera's daily figures are read back from the bucket, sha256-checked and stored in cents; a dataset browser; archived harvests. Pure core `cultivera-archive-core.ts` (28 self-tests) + vitest | PR (not merged) |
-| CVB-6 | Reports → **Cultivera Benchmark** tab (`/admin/reports/cultivera-benchmark`, owner-only `cultivera.benchmark`, before ACH Payments). It has a payback meter ($40,000 less savings and credits, from the insert-only ledger), a period picker, and our period beside Cultivera's same calendar days one year earlier, using the CVB-4 engine. Our side is pre-tax, completed orders by Pacific completed_at day, from the cut-over (0186), with cost from each sale's own `order:<id>#cogs` entry (unknown rather than partial). Cultivera's formulas are measured on the compared days before any derived metric is shown, and returns are not compared. Owner actions: **Record a saving** (idempotent key) and **Credit this period** (recomputed on the server; closed and complete periods only; no day credited twice). Pure core `cultivera-benchmark-report-core.ts` (43 self-tests) + vitest | PR (not merged) |
-| CVB-7 | Deeper comparisons from the archive: discounts by employee, employee samples / purchases, voids and returns, cycle-count accuracy, vendor purchase stats, inventory valuation | later |
+| CVB-5 | Admin → Lyman → **Cultivera Archive** (`/admin/cultivera-archive`, owner-only `cultivera.benchmark`): start / continue / stop the harvest; progress for each of the 8 stages; **Archive to our storage** (every file checked against the manifest's sha256, then stored with upsert:false; a size mismatch stops it; resumable within the 300 s page limit; the manifest's bytes are stored and their sha256 registered); Cultivera's daily figures are read back from the bucket, sha256-checked and stored in cents; a dataset browser; archived harvests. Pure core `cultivera-archive-core.ts` (28 self-tests) + vitest | merged (#1636) |
+| CVB-6 | Reports → **Cultivera Benchmark** tab (`/admin/reports/cultivera-benchmark`, owner-only `cultivera.benchmark`, before ACH Payments). It has a payback meter ($40,000 less savings and credits, from the insert-only ledger), a period picker, and our period beside Cultivera's same calendar days one year earlier, using the CVB-4 engine. Our side is pre-tax, completed orders by Pacific completed_at day, from the cut-over (0186), with cost from each sale's own `order:<id>#cogs` entry (unknown rather than partial). Cultivera's formulas are measured on the compared days before any derived metric is shown, and returns are not compared. Owner actions: **Record a saving** (idempotent key) and **Credit this period** (recomputed on the server; closed and complete periods only; no day credited twice). Pure core `cultivera-benchmark-report-core.ts` (43 self-tests) + vitest | merged (#1638) |
+| CVB-7 | **Harvest fix (live re-measure 2026-11-02).** The first live harvest stopped at stage 5 (paged) on `shifts/list: Count 1662 but 0 unique rows`. Every remaining dataset was re-read live against the back office's own request shapes (cbo-app.bundle.js). Four were wrong and are fixed: shifts (Kendo keys), products (flat paging), loyalty adjustments (filters, no sort), activity (month/day windows, because Skip is ignored). The other datasets and stages (orders, cycle-count details, valuation snapshots) were re-checked live and are unchanged. Pressing Continue resumes the same run. crawler pytest | PR (not merged) |
+| CVB-8 | Deeper comparisons from the archive: discounts by employee, employee samples / purchases, voids and returns, cycle-count accuracy, vendor purchase stats, inventory valuation | later |
 
 ## 8. Gaps and risks (stated, not hidden)
 
