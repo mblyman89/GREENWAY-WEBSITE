@@ -65,6 +65,11 @@ function gradeWord(grade: string): string {
 function buildDigest(bundle: ForecastBundle): string {
   const lines: string[] = [];
   lines.push(`Forecast horizon: next ${bundle.horizon} days. History used: up to ${bundle.lookbackDays} days.`);
+  // CVB-9: the AI is told which system's figures it is reading (owner: "clearly marked").
+  lines.push(bundle.source.note);
+  if (bundle.source.source !== "greenway") {
+    lines.push("Say plainly in the outlook that part or all of this history is Cultivera (imported), from before the switch to this platform.");
+  }
 
   const rev = bundle.revenue;
   if (rev.hasForecast) {

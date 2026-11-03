@@ -18,7 +18,9 @@ import { getForecastBundle, describeWeeklyPattern, DOW_FULL } from "@/lib/report
 import { ForecastChart, type ForecastChartRow } from "@/components/admin/reports/ForecastChart";
 import { ForecastInsightsPanel } from "@/components/admin/reports/ForecastInsightsPanel";
 import type { ForecastResult } from "@/lib/reports/forecast-core";
-import type { DailyObservation } from "@/lib/reports/forecast-core";
+import { can } from "@/lib/auth/roles";
+import { FORECAST_SOURCES, parseForecastSource, type ForecastSource, type SourceInfo, type TaggedObs } from "@/lib/reports/forecast-source-core";
+import { CULTIVERA_LABEL } from "@/lib/reports/cultivera-history-core";
 
 export const dynamic = "force-dynamic";
 
@@ -36,13 +38,26 @@ const GRADE_LABEL: Record<string, string> = {
   "insufficient-data": "Not enough data",
 };
 
-/** Build chart rows: recent actuals (major units) then forecast mean + 80% band. */
+/**
+ * Build chart rows: recent actuals (major units) then forecast mean + 80% band. CVB-9: a Cultivera day goes on its
+ * own line ("cultivera"), so imported figures are never drawn as ours; the day before a switch carries both values
+ * so the two lines meet.
+ */
 function buildRows(
-  recent: DailyObservation[],
+  recent: TaggedObs[],
   result: ForecastResult,
   toMajor: (v: number) => number,
 ): { rows: ForecastChartRow[]; forecastStart?: string } {
-  const rows: ForecastChartRow[] = recent.map((o) => ({ date: o.date, actual: toMajor(o.value) }));
+  const rows: ForecastChartRow[] = recent.map((o, i) => {
+    const v = toMajor(o.value);
+    const next = recent[i + 1];
+    const row: ForecastChartRow = o.source === "cultivera" ? { date: o.date, cultivera: v } : { date: o.date, actual: v };
+    if (next && next.source !== o.source) {
+      if (next.source === "cultivera") row.cultivera = v;
+      else row.actual = v;
+    }
+    return row;
+  });
   // Bridge: repeat the last actual as the first forecast point so the dashed
   // line connects to the solid one.
   const last = recent[recent.length - 1];
@@ -64,11 +79,15 @@ function buildRows(
 export default async function ForecastPage({
   searchParams,
 }: {
-  searchParams: Promise<{ horizon?: string }>;
+  searchParams: Promise<{ horizon?: string; source?: string }>;
 }) {
-  await requirePermission("reports.view");
+  const session = await requirePermission("reports.view");
   const sp = await searchParams;
   const horizon = [7, 14, 30].includes(Number(sp.horizon)) ? Number(sp.horizon) : 14;
+  // CVB-9: the Cultivera choices are owner-only (cultivera.benchmark); everyone else sees Greenway only.
+  const canUseCultivera = can(session.profile.role, "cultivera.benchmark");
+  const source = parseForecastSource(sp.source, canUseCultivera);
+  const hrefFor = (h: number, s: ForecastSource) => `/admin/reports/forecast?horizon=${h}${s === "greenway" ? "" : `&source=${s}`}`;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -79,7 +98,8 @@ export default async function ForecastPage({
     );
   }
 
-  const bundle = await getForecastBundle(horizon);
+  const bundle = await getForecastBundle(horizon, 180, source);
+  const sourceBar = canUseCultivera ? <SourcePicker horizon={horizon} source={source} hrefFor={hrefFor} /> : null;
 
   if (!bundle.hasData) {
     return (
@@ -89,7 +109,7 @@ export default async function ForecastPage({
           {HORIZONS.map((h) => (
             <Link
               key={h.days}
-              href={`/admin/reports/forecast?horizon=${h.days}`}
+              href={hrefFor(h.days, source)}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                 horizon === h.days
                   ? "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black"
@@ -100,6 +120,8 @@ export default async function ForecastPage({
             </Link>
           ))}
         </div>
+        {sourceBar}
+        <SourceNote info={bundle.source} />
         <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6 text-sm text-white/60">
           <p className="font-bold text-white/80">Not enough history to forecast yet.</p>
           <p className="mt-1">
@@ -133,7 +155,7 @@ export default async function ForecastPage({
           {HORIZONS.map((h) => (
             <Link
               key={h.days}
-              href={`/admin/reports/forecast?horizon=${h.days}`}
+              href={hrefFor(h.days, source)}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                 horizon === h.days
                   ? "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black"
@@ -149,8 +171,11 @@ export default async function ForecastPage({
         </span>
       </div>
 
+      {sourceBar}
+      <SourceNote info={bundle.source} />
+
       {/* AI outlook */}
-      <ForecastInsightsPanel horizon={horizon} aiEnabled={isAiConfigured} />
+      <ForecastInsightsPanel horizon={horizon} aiEnabled={isAiConfigured} source={bundle.source.source} />
 
       {/* Headline KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -211,9 +236,14 @@ export default async function ForecastPage({
         rows={revChart.rows}
         forecastStartDate={revChart.forecastStart}
         title="Revenue forecast"
-        subtitle={`Last 6 weeks of actuals (green) and the next ${horizon} days (dashed) with an 80% prediction band.`}
+        subtitle={
+          bundle.source.cultiveraDays > 0
+            ? `Last 6 weeks of actuals (green = Greenway, orange = ${CULTIVERA_LABEL}) and the next ${horizon} days (dashed) with an 80% prediction band.`
+            : `Last 6 weeks of actuals (green) and the next ${horizon} days (dashed) with an 80% prediction band.`
+        }
         valuePrefix="$"
         height={320}
+        cutoverDate={bundle.source.cutover ?? undefined}
       />
       <div className="grid gap-5 lg:grid-cols-2">
         <ForecastChart
@@ -222,6 +252,7 @@ export default async function ForecastPage({
           title="Orders forecast"
           subtitle={`Daily orders, next ${horizon} days.`}
           height={260}
+          cutoverDate={bundle.source.cutover ?? undefined}
         />
         <ForecastChart
           rows={uniChart.rows}
@@ -229,6 +260,7 @@ export default async function ForecastPage({
           title="Units forecast"
           subtitle={`Daily units sold, next ${horizon} days.`}
           height={260}
+          cutoverDate={bundle.source.cutover ?? undefined}
         />
       </div>
 
@@ -239,6 +271,50 @@ export default async function ForecastPage({
         sales, forecast it, and measure the error (MAPE). A forecast is a planning aid, not a
         promise; the wider the band, the more uncertain the day.
       </p>
+    </div>
+  );
+}
+
+/** CVB-9: owner-only data source switch. */
+function SourcePicker({ horizon, source, hrefFor }: { horizon: number; source: ForecastSource; hrefFor: (h: number, s: ForecastSource) => string }) {
+  return (
+    <div data-testid="forecast-source" className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-1 text-xs font-bold uppercase tracking-[0.1em] text-white/40">Data source:</span>
+      {FORECAST_SOURCES.map((s) => (
+        <Link
+          key={s.key}
+          href={hrefFor(horizon, s.key)}
+          className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
+            source === s.key
+              ? s.key === "greenway"
+                ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
+                : "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black"
+              : "border-white/15 bg-white/5 text-white/60 hover:text-white"
+          }`}
+        >
+          {s.label}
+        </Link>
+      ))}
+      <span className="text-[0.7rem] text-white/35">Owner only</span>
+    </div>
+  );
+}
+
+/** CVB-9: says which system fed the forecast; a gold badge whenever Cultivera figures are in it. */
+function SourceNote({ info }: { info: SourceInfo }) {
+  return (
+    <div data-testid="forecast-source-note" className="space-y-2">
+      <p className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+        {info.cultiveraDays > 0 && (
+          <span className="rounded-full border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/15 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-gold)]">
+            {CULTIVERA_LABEL}
+          </span>
+        )}
+        <span>{info.note}</span>
+      </p>
+      {info.warning && (
+        <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-3 py-2 text-xs text-[var(--admin-gold)]">{info.warning}</div>
+      )}
     </div>
   );
 }

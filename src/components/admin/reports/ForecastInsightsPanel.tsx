@@ -34,7 +34,7 @@ function BulletList({ title, items, tone }: { title: string; items: string[]; to
   );
 }
 
-export function ForecastInsightsPanel({ horizon, aiEnabled }: { horizon: number; aiEnabled: boolean }) {
+export function ForecastInsightsPanel({ horizon, aiEnabled, source = "greenway" }: { horizon: number; aiEnabled: boolean; source?: string }) {
   const { toast } = useToast();
   const [insights, setInsights] = useState<ForecastInsights | null>(null);
   const [pending, startTransition] = useTransition();
@@ -42,7 +42,7 @@ export function ForecastInsightsPanel({ horizon, aiEnabled }: { horizon: number;
   function run() {
     setInsights(null);
     startTransition(async () => {
-      const res: ForecastInsightsResult = await generateForecastInsightsAction(horizon);
+      const res: ForecastInsightsResult = await generateForecastInsightsAction(horizon, source);
       if (!res.ok) {
         toast({ tone: "error", message: res.error });
         return;

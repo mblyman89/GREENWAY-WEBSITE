@@ -3,6 +3,8 @@
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getForecastBundle } from "@/lib/reports/forecast";
+import { can } from "@/lib/auth/roles";
+import { parseForecastSource } from "@/lib/reports/forecast-source-core";
 import {
   generateForecastInsights,
   isAiConfigured,
@@ -21,8 +23,11 @@ export type ForecastInsightsResult =
  */
 export async function generateForecastInsightsAction(
   horizon: number,
+  sourceRaw: string = "greenway",
 ): Promise<ForecastInsightsResult> {
   const session = await requirePermission("reports.view");
+  // CVB-9: the Cultivera choices are owner-only (cultivera.benchmark); anyone else gets Greenway only.
+  const source = parseForecastSource(sourceRaw, can(session.profile.role, "cultivera.benchmark"));
 
   if (!isAiConfigured) {
     return {
@@ -35,7 +40,7 @@ export async function generateForecastInsightsAction(
   const h = [7, 14, 30].includes(horizon) ? horizon : 14;
 
   try {
-    const bundle = await getForecastBundle(h);
+    const bundle = await getForecastBundle(h, 180, source);
     if (!bundle.hasData) {
       return {
         ok: false,
@@ -54,7 +59,7 @@ export async function generateForecastInsightsAction(
       actorEmail: session.email,
       action: "reports.forecast_insights",
       entityType: "forecast",
-      after: { model: insights.model, horizon: h },
+      after: { model: insights.model, horizon: h, source: bundle.source.source, sourceNote: bundle.source.note },
     });
 
     return { ok: true, insights };
