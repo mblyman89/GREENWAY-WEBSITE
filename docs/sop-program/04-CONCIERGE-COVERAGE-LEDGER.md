@@ -795,3 +795,9 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 |---|---|
 | A certificate is from a lab I have never heard of. Is the product blocked? | No. Every lab on a CCRS transfer is a certified lab. The general reader reads it, proves it is the same sample by its ids, and shows *"New lab layout … Please confirm these numbers against the PDF"*. The product is never held for it (D159) |
 | How do I re-read certificates received before this fix? | On the delivery press **Re-read every document in this delivery's email**, or on a lot press **Re-read lab certificate** (D159) |
+
+**Books: WCIA "EndProduct" (D160) answers:**
+
+| Question | Answer (built) |
+|---|---|
+| The Accounting tab says the books do not recognise a category "EndProduct" | Fixed for new deliveries: those lots are filed by their state inventory type. The Sungrown and Bellevue deliveries finalized before the fix are re-posted when the books work resumes (D160) |

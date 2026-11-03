@@ -1031,3 +1031,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Why:** Medicine Creek Analytics certificates (31 on one Sungrown delivery) were refused by both readers and failed the identity check.
 - **Built:** `wcia-lab-json-core.ts` tolerant names (self-tests 99 → 107); `coa-pdf-text-core.ts` template `generic`, `parseGeneric`, `percentMgPair`, `GENERIC_CONFIRM_NOTE` (292 → 302); `coa-facts-core.ts` lab-agnostic `rehostedCopyProof` branch and `transferNamesSample` (205 → 213); `coa-bundle-core.ts` trusts the general reader only on a page that looks like one certificate; labs page wording. Vitest `d159-lab-agnostic-coa.test.ts`.
 - **Owner action:** re-read the Sungrown (Edgemont) delivery's certificates: on the delivery, **Re-read every document in this delivery's email** (or **Re-read lab certificate** on a lot).
+
+## Books · WCIA "EndProduct" lots filed by state inventory type (BUILT, owner message 2026-11-03, D160) — S3
+
+- **Owner basis:** *"please complete all task, including the bookkeeping work, if you can keep the spending on it to a minimum."*
+- **Why:** the whole receipt and vendor bill of two WCIA deliveries were refused for the placeholder category "EndProduct".
+- **Built:** `receipt-category-core.ts` `inventoryTypeSlug`, `mapLotCategory` (self-tests: 13 D160 cases, never a non-cannabis account, unknown types still refuse); `receipt-service.ts` and `vendor-bill-service.ts` read `inventory_type, product_name` and use `mapLotCategory`. Sale/refund posting unchanged (they map order-line categories). Vitest `d160-books-state-inventory-type.test.ts`.
+- **Left for when the books resume (owner: paused):** re-post the goods receipt and vendor bill for manifests 12075358321394116 (`7e2ecbd5…`) and 01M624SC4JCCB917 (`0f3136be…`). Both are already finalized and nothing in the app re-posts a finalized delivery, so this needs a small re-post action or a one-time script then. Every lot already maps (checked read-only).
+

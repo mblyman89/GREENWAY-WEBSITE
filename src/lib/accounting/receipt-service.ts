@@ -67,7 +67,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { buildReceiptJournal, type ReceiptLineInput } from "./receipt-journal-core";
-import { mapReceiptCategory } from "./receipt-category-core";
+import { mapLotCategory } from "./receipt-category-core";
 import { submitJournal } from "./posting-service";
 import { PAYLOAD_KIND_SELECT, isMigrationKind, migrationStockRefusal } from "./migration-stock-core";
 
@@ -80,6 +80,8 @@ export type ManifestLotRow = {
   readonly id: string;
   readonly lot_code: string | null;
   readonly category: string | null;
+  readonly inventory_type?: string | null;
+  readonly product_name?: string | null;
   readonly received_qty: number | null;
   readonly unit_cost_minor_units: number | null;
 };
@@ -189,7 +191,7 @@ export function translateLotsToReceiptLines(
   const refusals: string[] = [];
 
   for (const lot of lots) {
-    const mapping = mapReceiptCategory(lot.category);
+    const mapping = mapLotCategory(lot);
     if (mapping.kind === "refused") {
       refusals.push(
         `lot ${lot.lot_code ?? lot.id}: ${mapping.explanation} ${mapping.resolution}`,
@@ -276,7 +278,7 @@ export async function postManifestReceipt(
 
   const { data: lotRows, error: lErr } = await admin
     .from("inventory_lots")
-    .select("id, lot_code, category, received_qty, unit_cost_minor_units, status")
+    .select("id, lot_code, category, inventory_type, product_name, received_qty, unit_cost_minor_units, status")
     .eq("manifest_id", manifestId);
 
   if (lErr) {
