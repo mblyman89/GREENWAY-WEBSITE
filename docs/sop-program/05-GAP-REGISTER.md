@@ -1024,3 +1024,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Why:** two staged re-presses of the published Cultivera file pair held 34 receiving updates (3 deliveries) for two days, silently.
 - **Built:** data operation D156 (audited). `cutover-guard-core.ts` `dropPublishedCopies`, `safeImportIds`, `heldTooLong` (self-tests 85 → 101); `readCultiveraBlocker` reads `pos_imports` hashes (one bounded read, fail-safe to the old rule). `cutover-watch-core.ts` `heldAlerts` (37 → 41); the watch tick reads held updates (fail-soft). Tests `s18-cutover-guard.test.ts`, `r50-a4-cutover-watch.test.ts`. No migration.
 - **Owner action:** none.
+
+## Lab-agnostic certificates · any lab read, flagged, never blocking (BUILT, owner message 2026-11-03, D159) — S2
+
+- **Owner basis:** *"We need our system to not care which lab it came from. Or it needs to flag it so I can confirm myself."*
+- **Why:** Medicine Creek Analytics certificates (31 on one Sungrown delivery) were refused by both readers and failed the identity check.
+- **Built:** `wcia-lab-json-core.ts` tolerant names (self-tests 99 → 107); `coa-pdf-text-core.ts` template `generic`, `parseGeneric`, `percentMgPair`, `GENERIC_CONFIRM_NOTE` (292 → 302); `coa-facts-core.ts` lab-agnostic `rehostedCopyProof` branch and `transferNamesSample` (205 → 213); `coa-bundle-core.ts` trusts the general reader only on a page that looks like one certificate; labs page wording. Vitest `d159-lab-agnostic-coa.test.ts`.
+- **Owner action:** re-read the Sungrown (Edgemont) delivery's certificates: on the delivery, **Re-read every document in this delivery's email** (or **Re-read lab certificate** on a lot).
