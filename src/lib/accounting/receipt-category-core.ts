@@ -321,6 +321,63 @@ export function mapReceiptCategory(raw: string | null | undefined): CategoryMapp
   };
 }
 
+/**
+ * D160 (owner, 2026-11-03: complete the bookkeeping work "if you can keep the
+ * spending on it to a minimum"). WCIA-format transfers (Cultivera vendors)
+ * store the state's placeholder "EndProduct" as the lot category; the real
+ * product line is in the state inventory type ("Concentrate for Inhalation",
+ * "Usable Cannabis", ...) plus the product name. Only when the category
+ * itself is not recognised, the lot is filed by its state inventory type.
+ * Every state inventory type is cannabis, so this can never reach the three
+ * non-cannabis (280E-exempt) accounts; an inventory type this table does not
+ * know still refuses exactly as before.
+ */
+export function inventoryTypeSlug(inventoryType: string | null | undefined, productName: string | null | undefined): string | null {
+  const t = normaliseCategoryKey(inventoryType ?? "");
+  const n = ` ${normaliseCategoryKey(productName ?? "").replace(/\bpre roll/g, "preroll")} `;
+  const pre = /\bpreroll/.test(n);
+  const pack = /\b(\d+ ?pack|pack|multipack)\b/.test(n);
+  const blunt = /\bblunt\b/.test(n);
+  if (t === "concentrate for inhalation") {
+    if (/\b(disposable|aio|all in one)\b/.test(n)) return "disposable-cartridge";
+    if (/\b(cartridge|cart|pod)\b/.test(n)) return "cartridge";
+    if (blunt) return "infused-blunt";
+    if (pre) return pack ? "infused-preroll-pack" : "infused-preroll";
+    if (/\b(rso|feco|rick simpson)\b/.test(n)) return "rso";
+    return "concentrate";
+  }
+  if (t === "usable marijuana" || t === "usable cannabis" || t === "cannabis mix packaged" || t === "marijuana mix packaged") {
+    if (blunt) return "blunt";
+    if (pre) return pack ? "preroll-pack" : "preroll";
+    if (t.includes("mix") || /\b(trim|shake)\b/.test(n)) return "trim";
+    if (/\b(popcorn|smalls)\b/.test(n)) return "popcorn-bud";
+    return "flower";
+  }
+  if (t === "cannabis mix infused" || t === "marijuana mix infused") {
+    if (blunt) return "infused-blunt";
+    if (pre) return pack ? "infused-preroll-pack" : "infused-preroll";
+    return "infused-flower";
+  }
+  if (t === "solid edible" || t === "capsule") return "edible-solid";
+  if (t === "liquid edible") return "edible-liquid";
+  if (t === "topical ointment" || t === "transdermal patch") return "topical";
+  if (t === "tincture") return "tincture";
+  return null;
+}
+
+/**
+ * The receiving / vendor-bill mapper: the category table first (unchanged);
+ * only if it REFUSES, the lot's state inventory type (or the category read as
+ * one, e.g. "Cannabis Mix Infused") files it. Blank stays an honest unknown.
+ */
+export function mapLotCategory(lot: { category: string | null | undefined; inventory_type?: string | null; product_name?: string | null }): CategoryMapping {
+  const m = mapReceiptCategory(lot.category);
+  if (m.kind !== "refused") return m;
+  const slug = inventoryTypeSlug(lot.inventory_type, lot.product_name) ?? inventoryTypeSlug(lot.category, lot.product_name);
+  if (slug === null) return m;
+  return { kind: "mapped", slug, matchedOn: `state inventory type: ${lot.inventory_type ?? lot.category}` };
+}
+
 /** Every slug this table can produce. Used by the self-tests and the census. */
 export function mappableSlugs(): readonly string[] {
   return Array.from(new Set(Object.values(CATEGORY_TABLE))).sort();
@@ -389,6 +446,34 @@ export function __runReceiptCategoryCoreTests(): void {
     expect(`blank (${JSON.stringify(v)}) is unknown, not refused`, mapReceiptCategory(v).kind === "unknown");
   }
   expect("punctuation-only is unknown, not refused", mapReceiptCategory("---").kind === "unknown");
+
+  // D160: the WCIA placeholder "EndProduct" is filed by the state inventory type.
+  const lotCases: ReadonlyArray<readonly [string | null, string | null, string, string]> = [
+    ["EndProduct", "Concentrate for Inhalation", "Full Spec - Elite - Cartridge - 1g - (Comet) (S) The Flave Crave", "cartridge"],
+    ["EndProduct", "Concentrate for Inhalation", "Full Spec - Quantum Badder - Concentrate 1g - (H) Red Apricot Wilson", "concentrate"],
+    ["EndProduct", "Concentrate For Inhalation", "Thrills - Disposable - 1g", "disposable-cartridge"],
+    ["EndProduct", "Concentrate for Inhalation", "Thrills - FlavorStrains ERASR -AIO - 1g", "disposable-cartridge"],
+    ["EndProduct", "Usable Cannabis", "DOH-Full Flower Glass Tip Preroll - 3pack (3.6g) / Blue Jam", "preroll-pack"],
+    ["EndProduct", "Cannabis Mix Packaged", "Thunder Stix - Tilted-DOH-Glass Tip Preroll (1.2g) / Toad Venom (I)", "preroll"],
+    ["EndProduct", "Cannabis Mix Packaged", "Thunder Stix-Tilted-DOH-Glass Tip PreRoll 3-Pack (3.6g) / Toad Venom (I)", "preroll-pack"],
+    ["EndProduct", "Cannabis Mix Packaged", "ThunderStix BLUNT-Tilted-DOH-glass tip preroll(1.2g) / Blue Jam- (IH)", "blunt"],
+    ["EndProduct", "Usable Cannabis", "Sungrown - Flower - 3.5g - Tropicana Cookies", "flower"],
+    ["Cannabis Mix Infused", null, "Infused Pre-Roll 1g", "infused-preroll"],
+    ["EndProduct", "Solid Edible", "Gummies 10pk", "edible-solid"],
+  ];
+  for (const [category, inventory_type, product_name, want] of lotCases) {
+    const m = mapLotCategory({ category, inventory_type, product_name });
+    expect(`D160 ${category} / ${inventory_type} / ${product_name} -> ${want} (got ${JSON.stringify(m)})`, m.kind === "mapped" && m.slug === want);
+    expect(`D160 fallback slug ${want} is real`, known.has(want));
+  }
+  expect("D160 a known category is unchanged by the fallback", (() => { const m = mapLotCategory({ category: "Accessories", inventory_type: "Usable Marijuana", product_name: "Pipe" }); return m.kind === "mapped" && m.slug === "accessories"; })());
+  expect("D160 an unknown inventory type still refuses", mapLotCategory({ category: "EndProduct", inventory_type: "Sparkling Unicorn", product_name: "x" }).kind === "refused");
+  expect("D160 no inventory type still refuses", mapLotCategory({ category: "Sparkling Unicorn Extract", inventory_type: null, product_name: "x" }).kind === "refused");
+  expect("D160 blank stays unknown", mapLotCategory({ category: "", inventory_type: "Usable Cannabis", product_name: "x" }).kind === "unknown");
+  for (const t of ["Concentrate for Inhalation", "Usable Cannabis", "Cannabis Mix Packaged", "Cannabis Mix Infused", "Solid Edible", "Liquid Edible", "Topical Ointment", "Tincture", "Capsule"]) {
+    const sl = inventoryTypeSlug(t, "x");
+    expect(`D160 ${t} never reaches a non-cannabis account`, sl !== null && sl !== "accessories" && sl !== "paraphernalia" && sl !== "merch");
+  }
 
   // A mapped result must never carry a slug outside the chart of accounts.
   for (const s of mappableSlugs()) {

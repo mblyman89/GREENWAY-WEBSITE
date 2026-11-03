@@ -49,7 +49,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { submitJournal } from "@/lib/accounting/posting-service";
 import { findReceiptJournal } from "@/lib/accounting/receipt-evidence";
-import { mapReceiptCategory } from "@/lib/accounting/receipt-category-core";
+import { mapLotCategory } from "@/lib/accounting/receipt-category-core";
 import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
 import { liveManualMinor, parseManualAdjustments } from "@/lib/inventory/invoice-adjustments-core";
 import { PAYLOAD_KIND_SELECT, isMigrationKind, migrationStockRefusal } from "@/lib/accounting/migration-stock-core";
@@ -73,6 +73,8 @@ export type BillLotRow = {
   readonly id: string;
   readonly lot_code: string | null;
   readonly category: string | null;
+  readonly inventory_type?: string | null;
+  readonly product_name?: string | null;
   readonly received_qty: number | null;
   readonly unit_cost_minor_units: number | null;
   readonly status: string | null;
@@ -200,7 +202,7 @@ export function translateLotsToBillLines(
   let lineNo = 0;
 
   for (const lot of billable) {
-    const mapping = mapReceiptCategory(lot.category);
+    const mapping = mapLotCategory(lot);
     if (mapping.kind === "refused") {
       refusals.push(`lot ${lot.lot_code ?? lot.id}: ${mapping.explanation} ${mapping.resolution}`);
       continue;
@@ -366,7 +368,7 @@ export async function postManifestVendorBill(
 
   const { data: lotRows, error: lErr } = await admin
     .from("inventory_lots")
-    .select("id, lot_code, category, received_qty, unit_cost_minor_units, status, is_sample")
+    .select("id, lot_code, category, inventory_type, product_name, received_qty, unit_cost_minor_units, status, is_sample")
     .eq("manifest_id", manifestId);
 
   if (lErr) {
