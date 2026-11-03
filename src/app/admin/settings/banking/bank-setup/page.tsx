@@ -4,7 +4,8 @@
  * The bank-side checklist for the owner's meeting with Brenda (Timberland
  * Cash Management): what is already confirmed in her own words, what to ask
  * (testing, the release code, an ACH debit block, an ACH filter, the Fed
- * notice email) and what the owner decides (dual approval). Then the sourced
+ * notice email) and what the owner decides (none left: dual approval was
+ * declined by the owner on 2026-11-02, R41 S20). Then the sourced
  * ACH glossary, each term with plain words and the source's own definition.
  *
  * Pure page: no database reads, no writes. The printable sheet is at
@@ -88,7 +89,7 @@ export default async function BankSetupPage() {
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-base font-semibold text-white">Where things stand ({today})</h2>
             <Badge tone="orange">{counts.ask} to ask</Badge>
-            <Badge tone="gold">{counts.decide} you decide</Badge>
+            {counts.decide ? <Badge tone="gold">{counts.decide} you decide</Badge> : null}
             <Badge tone="green">{counts.confirmed} confirmed</Badge>
             <a href="/admin/settings/banking/bank-setup/sheet" target="_blank" rel="noopener" className={`${btnGhost} ml-auto`}>
               Print the meeting sheet &#8599;

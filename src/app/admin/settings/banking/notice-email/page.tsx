@@ -32,7 +32,9 @@ import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import { mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
 import {
   AUTH_WORD,
+  BRENDA_SAMPLE_SENDER,
   buildNoticeQuery,
+  catchesBrendaSample,
   FED_NOTICE_DOMAIN,
   FED_PORTAL_RETENTION_DAYS,
   LINK_TEXT,
@@ -59,6 +61,7 @@ const inputCls =
 /** The daily routine, in order. Each line says why. */
 const DAILY_STEPS: { step: string; why: string }[] = [
   { step: "Type achedi.com into the browser yourself and sign in. Do not click the link in an email.", why: "The Fed's guide asks you to make sure the link goes to the real achedi.com site; typing it removes the question." },
+  { step: "The first time, the Fed's site asks you to create a password before the document opens. Keep it with the bank logins.", why: "Brenda: \u201cYou will need to create a password to open the document.\u201d" },
   { step: "Open any new report and download it.", why: `Reports are deleted after ${FED_PORTAL_RETENTION_DAYS} calendar days, so a downloaded copy is your record.` },
   { step: "Sign in to the Timberland portal: Reporting \u2192 Electronic Documents.", why: "Brenda says this is the second place notices are delivered." },
   { step: "Log every return or correction (NOC) on ACH operations the same day.", why: "Fixing the account before the next payroll is what stops the same payment bouncing twice." },
@@ -125,6 +128,11 @@ export default async function NoticeEmailPage({ searchParams }: { searchParams: 
   const ready = [
     { ok: mail.configured, label: "Google Workspace sign-in (shared with the CCRS email monitor)", fix: mail.configured ? null : `Not set up: ${mail.problem ?? (mail.missing.length ? `${mail.missing.join(", ")} missing` : "see Compliance \u2192 CCRS email")}.` },
     { ok: keySet, label: "Encryption key (DATA_ENCRYPTION_KEY) so bank email is never stored in clear", fix: keySet ? null : "Set DATA_ENCRYPTION_KEY in Vercel. Until then nothing is fetched." },
+    {
+      ok: catchesBrendaSample(settings.senders),
+      label: `Senders catch Brenda's sample return email (from ${BRENDA_SAMPLE_SENDER})`,
+      fix: catchesBrendaSample(settings.senders) ? null : `Add ${BRENDA_SAMPLE_SENDER} to the senders below and save. The display name says encryptedmail.achedi.com but the address is at achedi.com.`,
+    },
     { ok: list.available, label: "Database table (migration 0290)", fix: list.available ? null : "Apply migration 0290 (docs/MIGRATIONS_TO_RUN.md)." },
   ];
 
@@ -299,7 +307,7 @@ export default async function NoticeEmailPage({ searchParams }: { searchParams: 
               <label className="block">
                 <span className="flex items-center text-white/70">
                   Senders (one per line, up to {MAX_SENDERS})
-                  <InfoHint text={`A domain (like ${FED_NOTICE_DOMAIN}) matches that domain and its sub-domains; a full address matches only that address. When the first real notice arrives, check its sender and add it here if it differs.`} />
+                  <InfoHint text={`A domain (like ${FED_NOTICE_DOMAIN}) matches that domain and its sub-domains; a full address matches only that address. Brenda's sample return email came from ${BRENDA_SAMPLE_SENDER}, so keep that address here too.`} />
                 </span>
                 <textarea name="senders" rows={3} defaultValue={settings.senders.join("\n")} className={`${inputCls} font-mono`} />
               </label>
@@ -344,6 +352,12 @@ export default async function NoticeEmailPage({ searchParams }: { searchParams: 
           <Quote id="brendaTwoWays" />
           <Quote id="brendaEmail" />
           <Quote id="brendaPortal" />
+          <p className="mt-3 text-sm text-white/80">Brenda&apos;s sample return email (2026-11-02):</p>
+          <Quote id="brendaReturnEmail" />
+          <Quote id="brendaSampleFrom" />
+          <Quote id="brendaPassword" />
+          <Quote id="brendaMostCommon" />
+          <p className="text-xs text-white/50">Log the R code printed on the document, not one picked from these words. R03 and R04 both mean the account details are wrong, and both hold the payee until new signed details arrive.</p>
           <p className="mt-3 text-sm text-white/80">The Federal Reserve&apos;s guide to its encrypted email:</p>
           <Quote id="fedSender" />
           <Quote id="fedDontRely" />

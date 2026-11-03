@@ -16,6 +16,13 @@
  *     the achedi.com portal for 60 calendar days, a missing email has "likely
  *     been trapped by a spam filter", and "it is a best practice not to rely
  *     on these notification emails but rather to access the portal directly".
+ *   - Brenda, 2026-11-02 (R41 S20): a sample return email. Its From line is
+ *     "encryptedmail.achedi.com <notification@achedi.com>": the display name
+ *     carries the Fed's domain but the ADDRESS is at the base domain
+ *     achedi.com, so a watch set only to encryptedmail.achedi.com would miss
+ *     it. That exact address is now the second built-in sender. She adds:
+ *     "You will need to create a password to open the document." and "The
+ *     most comment return is invalid account." (typo hers).
  *   - Gmail search: `{ }` matches "one or more of your search criteria";
  *     Spam and Trash are searched too (includeSpamTrash, as for CCRS).
  *
@@ -41,6 +48,7 @@
 export const FED_GUIDE_FILE = "ach/frbservices-edi-encrypted-email-guide.txt";
 export const BRENDA_FILE = "ach/timberland-brenda-2026-10-19-email-3.txt";
 export const GMAIL_OPS_FILE = "ach/gmail-search-operators.txt";
+export const BRENDA_RETURN_FILE = "ach/timberland-brenda-2026-11-02-return-email.txt";
 
 export const NOTICE_MAIL_QUOTES = {
   fedSender: "When a report is generated, you should receive a notification email from the domain name encryptedmail.achedi.com.",
@@ -52,6 +60,10 @@ export const NOTICE_MAIL_QUOTES = {
   brendaTwoWays: "Notices are delivered in 2 manners.",
   brendaEmail: "The first is an email directly to you via the federal reserves website and it a secure encrypted email.",
   brendaPortal: "The 2nd delivery method is under the reporting tab, electronic documents.",
+  brendaReturnEmail: "When and if you ever receive an ACH return from non-Timberland Bank customers, you will receive an email that looks like the snippet below.",
+  brendaPassword: "You will need to create a password to open the document.",
+  brendaMostCommon: "The most comment return is invalid account.",
+  brendaSampleFrom: "encryptedmail.achedi.com <notification@achedi.com>",
   gmailOr: "Find emails that match one or more of your search criteria.",
   gmailAnywhere: "Find emails across Gmail. This includes emails in Spam and Trash.",
 } as const;
@@ -67,12 +79,24 @@ export const NOTICE_QUOTE_FILE: Record<NoticeQuoteId, string> = {
   brendaTwoWays: BRENDA_FILE,
   brendaEmail: BRENDA_FILE,
   brendaPortal: BRENDA_FILE,
+  brendaReturnEmail: BRENDA_RETURN_FILE,
+  brendaPassword: BRENDA_RETURN_FILE,
+  brendaMostCommon: BRENDA_RETURN_FILE,
+  brendaSampleFrom: BRENDA_RETURN_FILE,
   gmailOr: GMAIL_OPS_FILE,
   gmailAnywhere: GMAIL_OPS_FILE,
 };
 
 /** The sender domain the Fed's guide names (quote fedSender). The only built-in sender. */
 export const FED_NOTICE_DOMAIN = "encryptedmail.achedi.com";
+/**
+ * The From ADDRESS on Brenda's sample return email (quote brendaSampleFrom).
+ * An exact address, not the whole achedi.com domain: only this sender is
+ * trusted, and the Fed domain above stays as the guide's sender.
+ */
+export const BRENDA_SAMPLE_SENDER = "notification@achedi.com";
+/** The built-in senders: the Fed guide's domain and Brenda's sample address. */
+export const BUILT_IN_SENDERS: readonly string[] = [FED_NOTICE_DOMAIN, BRENDA_SAMPLE_SENDER];
 /** The portal domain the Open Message link must go to (quote fedLinkCheck). */
 export const FED_PORTAL_DOMAIN = "achedi.com";
 /** Days a report stays in the Fed portal (quote fedRetention). */
@@ -99,7 +123,7 @@ export type NoticeMailSettings = {
 
 export const DEFAULT_NOTICE_SETTINGS: NoticeMailSettings = {
   enabled: false,
-  senders: [FED_NOTICE_DOMAIN],
+  senders: [...BUILT_IN_SENDERS],
   mailbox: null,
   lookbackHours: DEFAULT_NOTICE_LOOKBACK_HOURS,
   updatedAt: null,
@@ -129,7 +153,7 @@ export function settingsFromJson(v: unknown): NoticeMailSettings {
   return {
     // Turned on only when explicitly true AND there is at least one sender.
     enabled: o.enabled === true && uniq.length > 0,
-    senders: uniq.length ? uniq : [FED_NOTICE_DOMAIN],
+    senders: uniq.length ? uniq : [...BUILT_IN_SENDERS],
     mailbox: mb,
     lookbackHours: lb,
     updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : null,
@@ -180,6 +204,11 @@ export function senderMatches(fromAddress: string | null, senders: readonly stri
   const a = fromAddress.toLowerCase();
   const domain = a.split("@")[1] ?? "";
   return senders.some((s) => (s.includes("@") ? a === s : domain === s || domain.endsWith(`.${s}`)));
+}
+
+/** True when the saved senders would catch Brenda's sample return email (R41 S20). */
+export function catchesBrendaSample(senders: readonly string[]): boolean {
+  return senderMatches(BRENDA_SAMPLE_SENDER, senders);
 }
 
 /** The domain part only (what is stored in clear), or null. */
@@ -369,7 +398,13 @@ export function __runAchNoticeMailCoreTests(): { passed: number; failed: number 
   ok(settingsFromJson(null).enabled === false, "missing settings = off");
   ok(settingsFromJson({ enabled: "yes", senders: ["a.com"] }).enabled === false, "enabled must be true, not truthy");
   ok(settingsFromJson({ enabled: true, senders: [] }).enabled === false, "no sender = off");
-  ok(settingsFromJson({ enabled: true, senders: ["bad host"] }).senders[0] === FED_NOTICE_DOMAIN, "bad sender falls back to the Fed domain");
+  ok(settingsFromJson({ enabled: true, senders: ["bad host"] }).senders.join() === BUILT_IN_SENDERS.join(), "bad sender falls back to the built-in senders");
+  ok(DEFAULT_NOTICE_SETTINGS.senders.includes(BRENDA_SAMPLE_SENDER), "Brenda's sample sender is built in");
+  ok(catchesBrendaSample(DEFAULT_NOTICE_SETTINGS.senders), "the defaults catch Brenda's sample");
+  ok(!catchesBrendaSample([FED_NOTICE_DOMAIN]), "the Fed domain alone misses Brenda's sample");
+  ok(catchesBrendaSample(["achedi.com"]), "the base domain catches it");
+  ok(!senderMatches("other@achedi.com", BUILT_IN_SENDERS), "only the exact sample address at the base domain");
+  ok(NOTICE_MAIL_QUOTES.brendaSampleFrom.includes(`<${BRENDA_SAMPLE_SENDER}>`), "the sender comes from Brenda's sample");
   ok(settingsFromJson({ enabled: true, senders: ["A.COM", "a.com"] }).senders.length === 1, "senders de-duplicated, lower-cased");
   ok(settingsFromJson({ lookbackHours: 9999 }).lookbackHours === DEFAULT_NOTICE_LOOKBACK_HOURS, "lookback out of range falls back");
   ok(settingsFromJson({ mailbox: "not an address" }).mailbox === null, "bad mailbox ignored");
@@ -424,7 +459,7 @@ export function __runAchNoticeMailCoreTests(): { passed: number; failed: number 
   const nk = planTick(on, mail, false, now);
   ok(!nk.run && nk.reason === "no_key", "no encryption key: nothing fetched");
   const go = planTick({ ...on, mailbox: "other@x.test" }, mail, true, now);
-  ok(go.run && go.mailbox === "other@x.test" && go.query.startsWith(`from:${FED_NOTICE_DOMAIN} after:`), "runs on the owner's mailbox");
+  ok(go.run && go.mailbox === "other@x.test" && go.query.startsWith(`{from:${FED_NOTICE_DOMAIN} from:${BRENDA_SAMPLE_SENDER}} after:`), "runs on the owner's mailbox, both built-in senders");
   const go2 = planTick(on, mail, true, now);
   ok(go2.run && go2.mailbox === "box@x.test", "blank mailbox = the CCRS mailbox");
   // alert

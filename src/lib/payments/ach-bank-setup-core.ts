@@ -5,7 +5,9 @@
  * Pure, no I/O. Nothing here is guessed:
  *   - every quote is an exact substring (whitespace flattened) of a mirror in
  *     docs/authorities/ (tests/compliance/r41-s19-bank-setup.test.ts checks it);
- *   - an item is "confirmed" only when Brenda's own words on file say so;
+ *   - an item is "confirmed" only when Brenda's own words on file say so,
+ *     or (R41 S20) when it is the owner's own choice and his words are on
+ *     file (dual approval: "I don't want dual approval.", 2026-11-02);
  *     anything the mirrors do not answer is a question to ask, never an
  *     assumed answer (for example: whether Timberland offers an ACH filter,
  *     or what it costs, is not on record, so it is a question);
@@ -17,11 +19,13 @@ export const SAO_FILE = "ach/wa-sao-ach-best-practices.txt";
 export const TIMBERLAND_FILE = "ach/timberland-ach-agreement-2026-10-14.redacted.txt";
 export const BRENDA_FILE = "ach/timberland-brenda-2026-10.txt";
 export const BRENDA3_FILE = "ach/timberland-brenda-2026-10-19-email-3.txt";
+/** R41 S20: Brenda's return-email note and the owner's same-day notes (2026-11-02). */
+export const BRENDA4_FILE = "ach/timberland-brenda-2026-11-02-return-email.txt";
 export const FRB_FILE = "ach/frbservices-edi-encrypted-email-guide.txt";
 export const NACHA_CED_FILE = "ach/nacha-company-entry-descriptions.txt";
 export const TIMBERLAND_PHONE = "1-800-562-8761";
 
-export const SOURCE_FILES = [SAO_FILE, TIMBERLAND_FILE, BRENDA_FILE, BRENDA3_FILE, FRB_FILE, NACHA_CED_FILE] as const;
+export const SOURCE_FILES = [SAO_FILE, TIMBERLAND_FILE, BRENDA_FILE, BRENDA3_FILE, BRENDA4_FILE, FRB_FILE, NACHA_CED_FILE] as const;
 
 export type SetupQuote = { readonly text: string; readonly file: (typeof SOURCE_FILES)[number]; readonly where: string };
 
@@ -190,6 +194,17 @@ export const SETUP_QUOTES = {
     file: BRENDA3_FILE,
     where: "Owner's note with email 3 (not Brenda's words)",
   },
+  // R41 S20 (2026-11-02): Brenda's return-email note, and the owner's own words the same day
+  brReturnEmail: {
+    text: "When and if you ever receive an ACH return from non-Timberland Bank customers, you will receive an email that looks like the snippet below.",
+    file: BRENDA4_FILE,
+    where: "Brenda, 2026-11-02 (sample return email)",
+  },
+  brPassword: { text: "You will need to create a password to open the document.", file: BRENDA4_FILE, where: "Brenda, 2026-11-02 (sample return email)" },
+  brMostCommon: { text: "The most comment return is invalid account.", file: BRENDA4_FILE, where: "Brenda, 2026-11-02 (sample return email; typo hers)" },
+  ownerNoDual: { text: "I don't want dual approval.", file: BRENDA4_FILE, where: "Owner's decision, 2026-11-02 (not Brenda's words)" },
+  ownerZoom: { text: "She wants to zoom call so she can watch it happen on our system.", file: BRENDA4_FILE, where: "Owner's note, 2026-11-02 (not Brenda's words)" },
+  ownerAskBlock: { text: "I will ask Brenda the debit block question tomorrow during the test.", file: BRENDA4_FILE, where: "Owner's note, 2026-11-02 (not Brenda's words)" },
   brUnbalancedOk: { text: "Total debits in the file are always $0.00. My software refuses to produce a file with a debit or a mixed (200) batch. That\u2019s good", file: BRENDA3_FILE, where: "Brenda, email 3, item 1c (her reply: That\u2019s good)" },
 } as const satisfies Record<string, SetupQuote>;
 
@@ -217,16 +232,16 @@ export const BANK_CHECKLIST: readonly ChecklistItem[] = [
   {
     id: "testing",
     title: "Testing the system with Timberland",
-    hint: "Brenda asked to talk about testing. She has said yes to a test file before the first live payroll.",
+    hint: "Brenda said yes to a test file. She wants a Zoom call to watch the test happen on Greenway's system (see Test day).",
     status: "ask",
-    onRecord: "Brenda said yes to accepting a test file before the first live payroll, and has asked to discuss how the testing will go.",
+    onRecord: "Brenda said yes to accepting a test file before the first live payroll. She wants to watch the test on a Zoom call; the Test day page is the script.",
     ask: [
       "How should the test file be sent: uploaded in the portal as normal, or another way?",
       "What will you check in it, and how will you tell us it passed?",
       "Should the test be a prenote ($0) file, a live file to the owner's own account, or both?",
       "After the test passes, is anything else needed before the first live payroll file?",
     ],
-    said: ["brTestFile", "brTesting"],
+    said: ["brTestFile", "brTesting", "ownerZoom"],
     why: [],
   },
   {
@@ -245,11 +260,11 @@ export const BANK_CHECKLIST: readonly ChecklistItem[] = [
   {
     id: "dual",
     title: "Dual approval (two people to release a file)",
-    hint: "Off today. Timberland prefers it on. Turning it on needs a second person with a login, so it is the owner's choice.",
-    status: "decide",
-    onRecord: "Dual approval is off and the owner is the only user. Timberland prefers it on and has a change form to turn it on.",
-    ask: ["If Greenway turns dual approval on later, can you send the change form, and does the second person need their own token or text code?"],
-    said: ["brDualOff", "brDualPrefer", "tbDualBox"],
+    hint: "Off, by the owner's choice (2026-11-02). Timberland prefers it on; the change form exists if that ever changes.",
+    status: "confirmed",
+    onRecord: "Dual approval stays off: the owner decided on 2026-11-02, the signed Schedule C says No, and Brenda says it is not turned on. Timberland prefers it on and has a change form if the owner ever changes his mind.",
+    ask: [],
+    said: ["ownerNoDual", "brDualOff", "tbDualBox", "brDualPrefer"],
     why: ["saoTwoPeople", "tbSupervision"],
   },
   {
@@ -257,13 +272,13 @@ export const BANK_CHECKLIST: readonly ChecklistItem[] = [
     title: "ACH debit block on accounts that should never be debited",
     hint: "A block stops ACH charges on an account that should not receive them. Whether Timberland offers it is not on record yet.",
     status: "ask",
-    onRecord: "Nothing on record. The State Auditor recommends blocks on any account not authorized for ACH.",
+    onRecord: "Nothing on record. The State Auditor recommends blocks on any account not authorized for ACH. The owner will ask during the Zoom test.",
     ask: [
       "Does Timberland offer an ACH debit block? Which Greenway accounts could have one?",
       "Is there a fee, and what form turns it on?",
     ],
     said: [],
-    why: ["saoBlocks"],
+    why: ["saoBlocks", "ownerAskBlock"],
   },
   {
     id: "filter",
@@ -284,12 +299,12 @@ export const BANK_CHECKLIST: readonly ChecklistItem[] = [
     title: "Return and NOC notices: Fed encrypted email and electronic documents",
     hint: "Notices come by the Fed's encrypted email and under Reporting > electronic documents. Check both, every day.",
     status: "ask",
-    onRecord: "Brenda said notices come two ways: the Federal Reserve's encrypted email, and the Reporting tab (electronic documents). She also emails the first time.",
+    onRecord: "Brenda said notices come two ways: the Federal Reserve's encrypted email, and the Reporting tab (electronic documents). She sent a sample return email (2026-11-02): a password is created to open it, and invalid account is the most common return. The Notice email page watches for her sample's sender.",
     ask: [
       "Is the owner's email already registered for the Fed's encrypted email, or will an invitation come?",
       "Where exactly is Reporting > electronic documents in the new cash management login?",
     ],
-    said: ["brNotices"],
+    said: ["brNotices", "brReturnEmail", "brPassword", "brMostCommon"],
     why: ["frbEncrypted", "frbDailyCheck", "tbNoc"],
   },
   {
@@ -371,7 +386,7 @@ export const ACH_GLOSSARY: readonly GlossaryEntry[] = [
   { id: "noc", term: "NOC (C code)", plain: "A notice from the receiving bank saying a detail (such as an account number) must be corrected before the next payment.", source: "gNocName", href: "/admin/settings/banking/operations" },
   { id: "reversal", term: "Reversal", plain: "Undoing a wrong or duplicate payment. For Greenway it is a call to Timberland, within 5 banking days and 24 hours of finding the error.", source: "tbReversalWindow" },
   { id: "sameday", term: "Same Day ACH", plain: "A payment that settles the day it is sent. Greenway is not signed up for it.", source: "gSameDay" },
-  { id: "dual", term: "Dual approval", plain: "A second person has to approve a file before the bank releases it. Off today at Timberland; the owner decides.", source: "saoTwoPeople", href: "/admin/settings/banking/approvals" },
+  { id: "dual", term: "Dual approval", plain: "A second person has to approve a file before the bank releases it. Off at Timberland: the owner chose not to use it (2026-11-02).", source: "saoTwoPeople", href: "/admin/settings/banking/approvals" },
   { id: "token", term: "Token or text code", plain: "The one-time code that releases a file at Timberland. Report a lost phone or token at once.", source: "tbToken" },
   { id: "block", term: "ACH debit block", plain: "A bank setting that refuses ACH charges on an account that should never be debited.", source: "saoBlocks" },
   { id: "filter", term: "ACH filter (ACH positive pay)", plain: "A bank setting that only lets listed companies debit the account; anything else waits for the owner's review.", source: "saoFilter", href: "/admin/settings/banking/bank-watch" },
@@ -459,25 +474,28 @@ export function __runAchBankSetupCoreTests(): { passed: number; failed: number }
   t("ask items have questions", BANK_CHECKLIST.every((i) => i.status !== "ask" || i.ask.length > 0));
   t("no unanswered item is marked confirmed: block", BANK_CHECKLIST.find((i) => i.id === "debit-block")!.status === "ask");
   t("no unanswered item is marked confirmed: filter", BANK_CHECKLIST.find((i) => i.id === "filter")!.status === "ask");
-  t("dual approval is the owner's call", BANK_CHECKLIST.find((i) => i.id === "dual")!.status === "decide");
+  t("dual approval: the owner declined it", BANK_CHECKLIST.find((i) => i.id === "dual")!.status === "confirmed");
+  t("dual cites the owner's own words first", BANK_CHECKLIST.find((i) => i.id === "dual")!.said[0] === "ownerNoDual");
+  t("notices cite Brenda's sample", BANK_CHECKLIST.find((i) => i.id === "notices")!.said.includes("brPassword"));
   t("dual cites Brenda's off", BANK_CHECKLIST.find((i) => i.id === "dual")!.said.includes("brDualOff"));
   t("portal names the phone", BANK_CHECKLIST.find((i) => i.id === "portal")!.ask.some((a) => a.includes(TIMBERLAND_PHONE)));
   const cc = checklistCounts();
   t("counts add up", cc.ask + cc.decide + cc.confirmed === BANK_CHECKLIST.length);
   t("counts ask", cc.ask === 5);
-  t("counts decide", cc.decide === 1);
-  t("counts confirmed", cc.confirmed === 5);
+  t("counts decide", cc.decide === 0);
+  t("counts confirmed", cc.confirmed === 6);
   const mo = meetingOrder();
   t("meeting order keeps all", mo.length === BANK_CHECKLIST.length);
   t("meeting order asks first", mo[0].status === "ask" && mo[4].status === "ask");
-  t("meeting order decide next", mo[5].status === "decide");
+  t("meeting order settled after the questions", mo[5].status === "confirmed" && mo[5].id === "dual");
   t("meeting order confirmed last", mo[mo.length - 1].status === "confirmed");
   t("meeting order stable", mo[0].id === "testing" && mo[6].id === "limits");
   const sample: ChecklistItem[] = [
-    { ...BANK_CHECKLIST[6], id: "c1" },
-    { ...BANK_CHECKLIST[2], id: "d1" },
-    { ...BANK_CHECKLIST[0], id: "a1" },
+    { ...BANK_CHECKLIST[6], id: "c1", status: "confirmed" },
+    { ...BANK_CHECKLIST[2], id: "d1", status: "decide" },
+    { ...BANK_CHECKLIST[0], id: "a1", status: "ask" },
   ];
+  t("counts a sample with a decision", checklistCounts(sample).decide === 1 && checklistCounts(sample).ask === 1);
   t("meeting order sorts a sample", meetingOrder(sample).map((i) => i.id).join(",") === "a1,d1,c1");
   t("twenty glossary terms", ACH_GLOSSARY.length === 20);
   t("unique glossary ids", new Set(ACH_GLOSSARY.map((g) => g.id)).size === ACH_GLOSSARY.length);
@@ -493,7 +511,7 @@ export function __runAchBankSetupCoreTests(): { passed: number; failed: number }
   const sheet = meetingSheet("2026-10-22");
   t("sheet header", sheet.startsWith("GREENWAY MARIJUANA - ACH BANK-SIDE CHECKLIST"));
   t("sheet date", sheet.includes("Printed 2026-10-22 (Pacific)"));
-  t("sheet counts", sheet.includes("5 to ask, 1 for the owner to decide, 5 already confirmed"));
+  t("sheet counts", sheet.includes("5 to ask, 0 for the owner to decide, 6 already confirmed"));
   t("sheet first item", sheet.includes("1. [ASK BRENDA] Testing the system with Timberland"));
   t("sheet answer lines", sheet.split("Answer: ").length - 1 === BANK_CHECKLIST.filter((i) => i.ask.length).length);
   t("sheet tick boxes", sheet.split("[ ] ASK: ").length - 1 === BANK_CHECKLIST.reduce((a, i) => a + i.ask.length, 0));

@@ -1,0 +1,14 @@
+# Timberland Bank (Brenda, Cash Management): what an ACH return email looks like. REDACTED TEXT MIRROR
+Redactions (the repository is PUBLIC): the 9-digit number in the sender's display name is replaced with [REDACTED: 9 digits]. The Timberland signer's surname is not used (owner decision D-9). No account numbers or personal phones appear.
+Source: forwarded by the owner (Michael Lyman) into the developer chat on 2026-11-02, after his interview with Brenda. He wrote: "she did send me an example email of what the ach return looks like." Brenda's message is kept exactly as sent, typos included. The attached image (IMG_1239.png, not committed) shows one line: the From line of the email, transcribed below with the number redacted.
+
+===== BRENDA'S MESSAGE (as sent) =====
+When and if you ever receive an ACH return from non-Timberland Bank customers, you will receive an email that looks like the snippet below. You will need to create a password to open the document. The most comment return is invalid account.
+
+===== THE ATTACHED IMAGE (the From line, transcribed) =====
+encr_[REDACTED: 9 digits] encryptedmail.achedi.com <notification@achedi.com>
+
+===== OWNER'S NOTES, SAME DAY (not Brenda's words) =====
+Owner decision on dual approval: "I don't want dual approval."
+Owner on the test: "She wants to zoom call so she can watch it happen on our system."
+Owner on the debit block: "I will ask Brenda the debit block question tomorrow during the test."
