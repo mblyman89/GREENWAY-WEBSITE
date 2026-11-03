@@ -25,7 +25,8 @@ import { CHART_COLORS } from "@/components/admin/charts";
 
 export type ForecastChartRow = {
   date: string; // YYYY-MM-DD
-  actual?: number; // historical value (major units / counts)
+  actual?: number; // historical value (major units / counts) - Greenway's own figures
+  cultivera?: number; // CVB-9: historical value from Cultivera (imported), before the cut-over
   forecast?: number; // forecast mean
   lo80?: number; // lower 80 (for band base)
   band80?: number; // upper80 - lower80 (band height)
@@ -43,6 +44,7 @@ export function ForecastChart({
   forecastStartDate,
   valuePrefix = "",
   height = 300,
+  cutoverDate,
 }: {
   rows: ForecastChartRow[];
   title: string;
@@ -50,7 +52,10 @@ export function ForecastChart({
   forecastStartDate?: string;
   valuePrefix?: string;
   height?: number;
+  /** CVB-9: draw the cut-over (first Greenway day) as a dashed gold line when Cultivera history is shown. */
+  cutoverDate?: string;
 }) {
+  const hasCultivera = rows.some((r) => r.cultivera !== undefined);
   const data = rows.map((r) => ({ ...r, name: shortDay(r.date) }));
   const fmt = (v: number | string) =>
     `${valuePrefix}${typeof v === "number" ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : v}`;
@@ -81,7 +86,18 @@ export function ForecastChart({
             {forecastStartDate && (
               <ReferenceLine x={shortDay(forecastStartDate)} stroke="rgba(255,255,255,0.25)" strokeDasharray="3 3" />
             )}
-            <Line dataKey="actual" name="Actual" stroke={CHART_COLORS.green} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+            {hasCultivera && cutoverDate && rows.some((r) => r.date === cutoverDate) && (
+              <ReferenceLine
+                x={shortDay(cutoverDate)}
+                stroke={CHART_COLORS.gold}
+                strokeDasharray="6 4"
+                label={{ value: "Cut-over", fill: CHART_COLORS.gold, fontSize: 10, position: "insideTopLeft" }}
+              />
+            )}
+            <Line dataKey="actual" name={hasCultivera ? "Actual (Greenway)" : "Actual"} stroke={CHART_COLORS.green} strokeWidth={2} dot={false} connectNulls={!hasCultivera} isAnimationActive={false} />
+            {hasCultivera && (
+              <Line dataKey="cultivera" name="Actual (Cultivera, imported)" stroke={CHART_COLORS.orange} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+            )}
             <Line dataKey="forecast" name="Forecast" stroke={CHART_COLORS.gold} strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>

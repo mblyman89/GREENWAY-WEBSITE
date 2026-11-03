@@ -22,6 +22,10 @@ import {
   type DailyObservation,
   type ForecastResult,
 } from "@/lib/reports/forecast-core";
+import { combineSeries, type ForecastSource, type SourceInfo, type TaggedObs } from "@/lib/reports/forecast-source-core";
+import { cutoverDate } from "@/lib/reports/cultivera-benchmark-report-store";
+import { historyDays } from "@/lib/reports/cultivera-history-store";
+import { addPacificDays, pacificToday } from "@/lib/reports/timezone";
 
 export type ForecastMetric = "revenue" | "orders" | "units";
 
@@ -34,12 +38,14 @@ export type ForecastBundle = {
   revenue: ForecastResult; // minor units
   orders: ForecastResult; // count
   units: ForecastResult; // count
-  /** Recent daily actuals (for charting), tail of the lookback window. */
+  /** Recent daily actuals (for charting), tail of the lookback window; each day names its system (CVB-9). */
   recent: {
-    revenue: DailyObservation[];
-    orders: DailyObservation[];
-    units: DailyObservation[];
+    revenue: TaggedObs[];
+    orders: TaggedObs[];
+    units: TaggedObs[];
   };
+  /** CVB-9: which system(s) fed this forecast, the cut-over and a plain note (also given to the AI). */
+  source: SourceInfo;
 };
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -125,6 +131,7 @@ async function loadDailySeries(
 export async function getForecastBundle(
   horizon = 14,
   lookbackDays = 180,
+  source: ForecastSource = "greenway",
 ): Promise<ForecastBundle> {
   const empty: ForecastResult = {
     hasForecast: false,
@@ -140,18 +147,47 @@ export async function getForecastBundle(
 
   const emptyRecent = { revenue: [], orders: [], units: [] };
   if (!isSupabaseServiceConfigured) {
-    return { hasData: false, lookbackDays, horizon, revenue: empty, orders: empty, units: empty, recent: emptyRecent };
+    const info: SourceInfo = {
+      source: "greenway", cutover: null, greenwayDays: 0, cultiveraDays: 0, firstCultivera: null, lastCultivera: null,
+      note: "Data source: Greenway figures only (our completed orders).", warning: null,
+    };
+    return { hasData: false, lookbackDays, horizon, revenue: empty, orders: empty, units: empty, recent: emptyRecent, source: info };
   }
 
-  const series = await loadDailySeries(lookbackDays);
+  const ours = await loadDailySeries(lookbackDays);
+  // CVB-9: Cultivera history only when the owner chose it, only before the cut-over (never guessed).
+  let cutover: string | null = null;
+  let cult: Awaited<ReturnType<typeof historyDays>> = [];
+  let historyError: string | null = null;
+  const today = pacificToday();
+  if (source !== "greenway") {
+    try {
+      cutover = await cutoverDate();
+      if (cutover) {
+        const before = addPacificDays(cutover, -1);
+        cult = await historyDays(source === "blend" ? addPacificDays(today, -lookbackDays) : "2000-01-01", before);
+      }
+    } catch (e) {
+      historyError = e instanceof Error ? e.message : "unreadable";
+    }
+  }
+  const combined = combineSeries({ source, ours, cultivera: cult, cutover, today, lookbackDays, historyError });
+  const series = combined.series;
   const revenue = forecastDaily(series.revenue, horizon);
   const orders = forecastDaily(series.orders, horizon);
   const units = forecastDaily(series.units, horizon);
 
-  // Keep the last ~42 days (6 weeks) of contiguous actuals for charting context.
-  const tail = (obs: DailyObservation[], n = 42): DailyObservation[] => {
+  // Keep the last ~42 days (6 weeks) of contiguous actuals for charting context. A filled (no-sale) day takes
+  // the system of the day before it, so every charted day still names its source.
+  const tail = (obs: TaggedObs[], n = 42): TaggedObs[] => {
+    const src = new Map(obs.map((o) => [o.date, o.source]));
     const contiguous = buildContiguousSeries(obs);
-    return contiguous.slice(Math.max(0, contiguous.length - n));
+    let prev: TaggedObs["source"] = obs[0]?.source ?? "greenway";
+    const tagged = contiguous.map((o) => {
+      prev = src.get(o.date) ?? prev;
+      return { ...o, source: prev };
+    });
+    return tagged.slice(Math.max(0, tagged.length - n));
   };
 
   return {
@@ -166,6 +202,7 @@ export async function getForecastBundle(
       orders: tail(series.orders),
       units: tail(series.units),
     },
+    source: combined.info,
   };
 }
 
