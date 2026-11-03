@@ -1,0 +1,37 @@
+control (before) pass
+killed   originator unreadable counts as ready
+killed   account listed from files alone dropped
+killed   a test credit counts as a prenote
+killed   voided file counts
+killed   upload done from release alone
+killed   uploaded from released
+killed   approved from uploaded
+killed   pass done when gate unreadable
+killed   two nows
+killed   later shown as now
+killed   next ignores now
+killed   wrong button label
+killed   e-sign advice dropped
+killed   old-fields warning dropped
+killed   wait words dropped
+killed   effective from today
+killed   live from settlement
+killed   prenote code wrong
+killed   PPD dropped
+killed   dual asked again
+killed   sheet digit guard dropped
+killed   sheet tick inverted
+killed   sheet portal notes dropped
+killed   store: errored ops view used
+killed   store: errored ledger used
+killed   store: all file kinds
+killed   store: gate failure not null
+killed   staff page
+killed   page unknown shown as ready
+killed   page encryption check dropped
+killed   staff sheet
+killed   sheet cached
+killed   sheet not audited
+killed   tab dropped
+control (after) pass
+total 34 killed 34 survivors []
