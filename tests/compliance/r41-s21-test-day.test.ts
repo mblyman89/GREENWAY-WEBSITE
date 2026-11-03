@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import * as d from "@/lib/payments/ach-test-day-core";
 import { BANK_CHECKLIST, TIMBERLAND_PHONE } from "@/lib/payments/ach-bank-setup-core";
 import { earliestEffectiveDate, latestUploadAndApproval } from "@/lib/payments/timberland-deadline-core";
-import { prenoteLiveUploadDay } from "@/lib/payments/timberland-prenote-core";
+import { PRENOTE_WAIT_WORDS, prenoteLiveUploadDay } from "@/lib/payments/timberland-prenote-core";
 import { BANKING_HELP_TABS } from "@/app/admin/settings/banking/BankingHelpTabs";
 
 const ROOT = join(__dirname, "..", "..");
@@ -48,6 +48,7 @@ describe("S21 core: the steps follow the records", () => {
     expect(next({ ...sent, prenoteFiles: [{ ...f, status: "uploaded" }] })).toBe("mark-approved");
     const approved = { ...sent, prenoteFiles: [{ ...f, status: "bank_approved" }], gate: { open: false, stage: "waiting", line: "w" } };
     expect(next(approved)).toBe("pass");
+    expect(d.testDaySteps(approved).find((x) => x.id === "pass")!.detail).toContain(`Wait until Mon Nov 16 (${PRENOTE_WAIT_WORDS}).`);
     expect(next({ ...approved, gate: { open: true, line: "o" } })).toBeNull();
   });
   it("unreadable state is never done or ready", () => {
@@ -100,6 +101,8 @@ describe("S21 core: dates, file, Zoom, questions", () => {
     expect(sheet).toContain("[ ] 3. Start a prenote for your account (button: Start check)");
     for (const n of d.PORTAL_NOTES) expect(sheet).toContain(n);
     expect(/[0-9]{7,}/.test(sheet.split(TIMBERLAND_PHONE).join(""))).toBe(false);
+    // the last guard: the core refuses to return a sheet with a 7+ digit run
+    expect(read(CORE)).toContain('  if (hasLongDigitRun(text)) throw new Error("testDaySheet: a run of 7+ digits would be printed");');
   });
 });
 
@@ -113,7 +116,9 @@ describe("S21 page and sheet only read", () => {
     for (const id of ["ready", "steps", "timeline", "brenda-sees", "zoom", "questions"]) expect(pg).toContain(`id="${id}"`);
     expect(pg).toContain("DATA_ENCRYPTION_KEY");
     expect(pg).toContain("encryptionKeySet()");
-    expect(pg).toContain('r.ok === null ? "unknown"');
+    expect(pg).toContain('{r.ok === null ? "unknown" : r.ok ? "ready" : "fix"}');
+    expect(pg).toContain('data-ready={r.ok === null ? "unknown" : r.ok ? "yes" : "no"}');
+    expect(pg).toContain("{ ok: keySet, text: \"The server can read stored bank numbers (encryption key set)\"");
   });
   it("store: read only, unreadable becomes null", () => {
     const st = read(STORE);
