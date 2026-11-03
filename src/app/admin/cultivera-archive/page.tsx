@@ -15,7 +15,8 @@ import {
   type ArchivedFile,
   type ArchivedRun,
 } from "@/lib/reports/cultivera-benchmark-store";
-import { archiveRunAction, cancelArchiveAction, rebuildDaysAction, startArchiveAction } from "./actions";
+import { historyDaysSpan } from "@/lib/reports/cultivera-history-store";
+import { archiveRunAction, buildHistoryAction, cancelArchiveAction, rebuildDaysAction, startArchiveAction } from "./actions";
 
 /**
  * CVB-5 - Admin -> Cultivera Archive (owner only). Run the read-only harvest of Cultivera's back office, watch
@@ -44,6 +45,17 @@ export default async function CultiveraArchivePage({
     kept?: string;
     problems?: string;
     conflicts?: string;
+    history?: string;
+    hdays?: string;
+    hwritten?: string;
+    hkept?: string;
+    hmatch?: string;
+    hreturns?: string;
+    hmismatch?: string;
+    hnodaily?: string;
+    hproblems?: string;
+    hfirst?: string;
+    hlast?: string;
   }>;
 }) {
   await requirePermission("cultivera.benchmark");
@@ -64,12 +76,14 @@ export default async function CultiveraArchivePage({
   let storedFiles: ArchivedFile[] = [];
   let archived: ArchivedRun[] = [];
   let span: { first: string | null; last: string | null; days: number } = { first: null, last: null, days: 0 };
+  let hspan: { first: string | null; last: string | null; days: number } = { first: null, last: null, days: 0 };
   let dbError: string | null = null;
   try {
     archived = await listArchivedRuns();
     if (runId) stored = await getArchivedRun(runId);
     if (stored) storedFiles = await listArchivedFiles(stored.runId);
     span = await benchmarkDaysSpan();
+    hspan = await historyDaysSpan();
   } catch (e) {
     dbError = e instanceof Error ? e.message : "Could not read the archive tables.";
   }
@@ -94,6 +108,7 @@ export default async function CultiveraArchivePage({
               "When it says Finished, press Archive. Every file is downloaded, checked against the fingerprint (sha256) the crawler recorded, and stored in our private storage. A file is never overwritten.",
               "Archive also stores Cultivera's own daily sales figures (in cents) for Reports \u2192 Cultivera Benchmark.",
               "If Archive runs out of time it tells you how many files are left. Press it again to carry on.",
+              "Build report history rolls Cultivera's completed orders into one row per day and checks each day against Cultivera's own daily report. Reports show those days only before our cut-over, marked Cultivera (imported). It never touches the books.",
             ]}
           >
             <p>
@@ -124,6 +139,16 @@ export default async function CultiveraArchivePage({
             {n(Number(sp.kept ?? 0))} kept from a newer harvest.
             {Number(sp.problems ?? 0) > 0 && ` ${n(Number(sp.problems))} rows could not be read and were left out.`}
             {Number(sp.conflicts ?? 0) > 0 && ` ${n(Number(sp.conflicts))} days had two different answers and were left out.`}
+          </div>
+        )}
+
+        {sp.history && (
+          <div data-testid="cva-history" className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
+            Report history built: {n(Number(sp.hdays ?? 0))} days{sp.hfirst && sp.hlast ? ` (${sp.hfirst} to ${sp.hlast})` : ""}, {n(Number(sp.hwritten ?? 0))} stored,{" "}
+            {n(Number(sp.hkept ?? 0))} kept from a newer harvest. Checked against Cultivera&apos;s daily report: {n(Number(sp.hmatch ?? 0))} match to the cent,{" "}
+            {n(Number(sp.hreturns ?? 0))} differ on days with returns, {n(Number(sp.hmismatch ?? 0))} differ with no returns,{" "}
+            {n(Number(sp.hnodaily ?? 0))} have no daily report.
+            {Number(sp.hproblems ?? 0) > 0 && ` ${n(Number(sp.hproblems))} rows could not be read and were left out.`}
           </div>
         )}
 
@@ -166,6 +191,12 @@ export default async function CultiveraArchivePage({
                   <Button type="submit" variant="neutral">Rebuild daily figures</Button>
                 </form>
               )}
+              {stored && (
+                <form action={buildHistoryAction}>
+                  <input type="hidden" name="run_id" value={stored.runId} />
+                  <Button type="submit" variant="neutral">Build report history</Button>
+                </form>
+              )}
             </div>
           </div>
 
@@ -181,7 +212,7 @@ export default async function CultiveraArchivePage({
           </ol>
         </section>
 
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-5">
           <StatCard label="Datasets" value={n(rollup.length)} hint={stored ? "in our storage" : "in this harvest"} accent="muted" />
           <StatCard label="Rows" value={n(rollup.reduce((a, r) => a + (r.rows ?? 0), 0))} hint="as counted by the crawler" accent="muted" />
           <StatCard label="Size" value={formatBytes(totalBytes)} hint={stored ? `${n(stored.fileCount)} files stored` : "not stored yet"} accent={stored ? "green" : "gold"} />
@@ -190,6 +221,12 @@ export default async function CultiveraArchivePage({
             value={n(span.days)}
             hint={span.first && span.last ? `${span.first} to ${span.last}` : "none stored yet"}
             accent={span.days > 0 ? "green" : "muted"}
+          />
+          <StatCard
+            label="Report history"
+            value={n(hspan.days)}
+            hint={hspan.first && hspan.last ? `${hspan.first} to ${hspan.last}, shown as Cultivera (imported)` : "not built yet"}
+            accent={hspan.days > 0 ? "green" : "muted"}
           />
         </div>
 

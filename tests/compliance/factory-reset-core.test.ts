@@ -1353,7 +1353,8 @@ describe("D-65 — the connections survive the reset", () => {
     // CVL: +1 KEEP customer_cultivera_loyalty (0336; the old system's loyalty record, no FK into a wiped table).
     // CVB-3: +4 KEEP cultivera_archive_runs, cultivera_archive_files, cultivera_benchmark_days,
     // cultivera_payback_entries (0337; retained Cultivera history + the owner's payback ledger).
-    expect(plan.keep.length).toBe(194);
+    // CVB-8: +1 KEEP cultivera_history_days (0338; Cultivera report history, never the books).
+    expect(plan.keep.length).toBe(195);
     expect(plan.wipe.length).toBe(139);
   });
 

@@ -13,6 +13,8 @@
  *   4. Cultivera's daily figures are read back FROM THE BUCKET (not the crawler), checked against the
  *      registered sha256, converted to cents and stored (cvb_upsert_benchmark_days, batches of 1,000)
  *
+ * CVB-8 adds ingestHistory: the archived orders parts -> Cultivera report history per Pacific day (0338).
+ *
  * Step 4 runs on its own too ("Rebuild daily figures"), so it keeps working after the crawler's copy is pruned
  * or the Cultivera account is closed.
  */
@@ -35,7 +37,17 @@ import {
   registerArchiveRun,
   uploadArchiveFile,
   upsertBenchmarkDays,
+  benchmarkDays,
 } from "@/lib/reports/cultivera-benchmark-store";
+import {
+  HistoryRollup,
+  crossCheck,
+  historyFiles,
+  summarizeCheck,
+  type CheckSummary,
+  type CultiveraOrderRaw,
+} from "@/lib/reports/cultivera-history-core";
+import { upsertHistoryDays } from "@/lib/reports/cultivera-history-store";
 
 export type ArchiveStepResult =
   | { kind: "partial"; uploaded: number; remaining: number; total: number }
@@ -139,5 +151,63 @@ export async function ingestDailyFigures(runId: string): Promise<DaysIngestResul
     conflicts: norm.conflicts,
     first: norm.rows[0]?.day ?? null,
     last: norm.rows[norm.rows.length - 1]?.day ?? null,
+  };
+}
+
+export type HistoryIngestResult = {
+  files: number;
+  rows: number;
+  completed: number;
+  duplicates: number;
+  badLines: number;
+  problems: number;
+  problemSample: string[];
+  written: number;
+  keptNewer: number;
+  check: CheckSummary;
+};
+
+/**
+ * CVB-8: Cultivera's report history from an ARCHIVED run. Reads every orders.YYYY-MM part from the bucket (sha256
+ * checked against the register), one part at a time, rolls COMPLETED orders into Pacific days, cross-checks each
+ * day against Cultivera's daily report and stores the days (cvb_upsert_history_days). Never touches the books.
+ */
+export async function ingestHistory(runId: string): Promise<HistoryIngestResult> {
+  const reg = await getArchivedRun(runId);
+  if (!reg) throw new Error("This run is not archived yet; press Archive first.");
+  const parts = historyFiles(await listArchivedFiles(runId));
+  if (!parts.length) throw new Error("This archived run has no orders files, so there is no history to build.");
+  const rollup = new HistoryRollup();
+  let badLines = 0;
+  for (const f of parts) {
+    const b = await downloadArchiveFile(runId, f.name);
+    if (b.length !== f.bytes || sha256Hex(b) !== f.sha256) {
+      throw new Error(`${f.name} in storage does not match its registered sha256. Nothing was stored.`);
+    }
+    const parsed = parseJsonlRows(gunzipSync(b).toString("utf8"));
+    badLines += parsed.bad;
+    rollup.add(parsed.rows as CultiveraOrderRaw[]);
+  }
+  const days = rollup.days();
+  const daily = days.length ? await benchmarkDays(days[0].day, days[days.length - 1].day) : [];
+  const rows = crossCheck(days, daily);
+  let written = 0;
+  let keptNewer = 0;
+  for (const batch of dayBatches(rows)) {
+    const r = await upsertHistoryDays(runId, batch);
+    written += r.written;
+    keptNewer += r.keptNewer;
+  }
+  return {
+    files: parts.length,
+    rows: rollup.stats.rows,
+    completed: rollup.stats.completed,
+    duplicates: rollup.stats.duplicates,
+    badLines,
+    problems: rollup.stats.problems,
+    problemSample: rollup.stats.problemSample,
+    written,
+    keptNewer,
+    check: summarizeCheck(rows),
   };
 }

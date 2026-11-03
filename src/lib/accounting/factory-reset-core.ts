@@ -630,6 +630,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "cultivera_archive_runs", disposition: "KEEP", because: "Each Cultivera archive run kept in the private cultivera-archive bucket (CVB-3, 0337): run id, manifest sha256 and totals. The retained history of the old system the owner asked to keep safely; append-only, and the files stay in the bucket either way." },
   { table: "cultivera_archive_files", disposition: "KEEP", because: "Every file of an archived Cultivera run (CVB-3, 0337): bytes, sha256, rows and bucket path. The provenance of the retained Cultivera history; append-only, and wiping it would orphan the files in the bucket." },
   { table: "cultivera_benchmark_days", disposition: "KEEP", because: "Cultivera's own daily-sales figures in cents (CVB-3, 0337), the line the owner-only benchmark compares our days against. The old system's record, not test data." },
+  { table: "cultivera_history_days", disposition: "KEEP", because: "Cultivera's completed-order sales per Pacific day in cents (CVB-8, 0338), the report history shown as \"Cultivera (imported)\" before the cut-over. The old system's record, not test data." },
   { table: "cultivera_payback_entries", disposition: "KEEP", because: "The owner's append-only payback ledger against the $40,000 build cost (CVB-3, 0337): the build cost, savings such as the $5,500 saved on 2026-11-01, and outperformance credits. Real money decisions, not test data." },
 
   // ── Payroll, time and people ──────────────────────────────────────────────
