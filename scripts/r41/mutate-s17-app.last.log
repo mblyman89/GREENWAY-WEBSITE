@@ -3,6 +3,13 @@ killed   quote reworded
 killed   on by default
 killed   truthy string turns on
 killed   no typed confirmation
+killed   S20 Brenda sender not built in
+killed   S20 whole achedi.com trusted
+killed   S20 defaults back to Fed only
+killed   S20 fallback back to Fed only
+killed   S20 readiness always green
+killed   S20 password step dropped
+killed   S20 quote reworded
 killed   too many senders
 killed   lookback in minutes
 killed   look-alike sender matches
@@ -35,5 +42,4 @@ killed   cron every minute
 killed   ops hint dropped
 killed   tab dropped
 control (after) pass
-total 35 killed 35 survivors []
-EXIT 0
+total 42 killed 42 survivors []

@@ -5,8 +5,13 @@ killed   quote file swapped
 killed   owner note relabelled as Brenda
 killed   filter assumed confirmed
 killed   block given a fake said
-killed   dual made confirmed
+killed   dual back to undecided
 killed   dual loses Brenda off
+killed   dual loses the owner's words
+killed   owner decision relabelled as Brenda
+killed   owner's words reworded
+killed   notices lose the password fact
+killed   testing loses the Zoom note
 killed   limits question left in
 killed   testing loses test-file yes
 killed   phone dropped from portal ask
@@ -32,4 +37,4 @@ killed   ops hint dropped
 killed   ops glossary hint dropped
 killed   approvals hint dropped
 control (after) pass
-total 32 killed 32 survivors []
+total 37 killed 37 survivors []

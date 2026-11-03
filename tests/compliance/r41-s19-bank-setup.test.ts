@@ -71,6 +71,7 @@ describe("S19 nothing assumed", () => {
     expect(byId("dual").status).toBe("confirmed");
     expect(byId("dual").said[0]).toBe("ownerNoDual");
     expect(b.SETUP_QUOTES.ownerNoDual.text).toBe("I don't want dual approval.");
+    expect(b.SETUP_QUOTES.ownerNoDual.where).toBe("Owner's decision, 2026-11-02 (not Brenda's words)");
     expect(byId("dual").said).toEqual(expect.arrayContaining(["brDualOff", "brDualPrefer", "tbDualBox"]));
   });
   it("testing is first and quotes Brenda's yes to a test file", () => {
