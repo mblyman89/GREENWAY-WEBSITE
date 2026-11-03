@@ -383,6 +383,68 @@ export async function recordSecondCount(opts: {
   };
 }
 
+/** A saved second count's denomination table (owner D154). */
+export type SecondCountBreakdown = {
+  sessionId: string;
+  counts: DenomCounts;
+  totalMinor: number;
+  countedBy: string | null;
+  countedAt: string | null;
+};
+
+/**
+ * Owner D154 (2026-11-03): "The Second counter should have an option to see
+ * the numbers they input after submitting their count ... Read only."
+ *
+ * Reads the drawer_counts row recordSecondCount wrote (count_type "second")
+ * for one drawer. READ ONLY: nothing here writes. Returns null when there is
+ * no saved breakdown (not counted yet, or the row write failed at the time).
+ * Only the SECOND count's own table is returned: never the closer's count or
+ * the expected cash, so showing it cannot reveal anything the second counter
+ * did not type themselves.
+ */
+export async function getSecondCountBreakdown(sessionId: string): Promise<SecondCountBreakdown | null> {
+  if (!isSupabaseServiceConfigured || !sessionId) return null;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("drawer_counts")
+    .select(
+      "session_id, counted_by, counted_at, total_minor, pennies, nickels, dimes, quarters, half_dollars, dollar_coins, ones, twos, fives, tens, twenties, fifties, hundreds",
+    )
+    .eq("session_id", sessionId)
+    .eq("count_type", "second")
+    .order("counted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<Record<string, unknown>>();
+  if (error || !data) return null;
+  const n = (v: unknown) => {
+    const x = Number(v ?? 0);
+    return Number.isFinite(x) ? Math.max(0, Math.floor(x)) : 0;
+  };
+  const counts: DenomCounts = {
+    pennies: n(data.pennies),
+    nickels: n(data.nickels),
+    dimes: n(data.dimes),
+    quarters: n(data.quarters),
+    half_dollars: n(data.half_dollars),
+    dollar_coins: n(data.dollar_coins),
+    ones: n(data.ones),
+    twos: n(data.twos),
+    fives: n(data.fives),
+    tens: n(data.tens),
+    twenties: n(data.twenties),
+    fifties: n(data.fifties),
+    hundreds: n(data.hundreds),
+  };
+  return {
+    sessionId,
+    counts,
+    totalMinor: denomTotalMinor(counts),
+    countedBy: typeof data.counted_by === "string" ? data.counted_by : null,
+    countedAt: typeof data.counted_at === "string" ? data.counted_at : null,
+  };
+}
+
 /**
  * Reconcile a closed drawer (manager): reveal over/short.
  *
