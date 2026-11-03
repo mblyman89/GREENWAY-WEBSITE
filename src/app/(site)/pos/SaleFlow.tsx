@@ -3370,7 +3370,7 @@ function CartScreen({
     // the screen ever appears (a long banner/message, the iPad keyboard), the
     // shell PANS vertically instead of clipping it (owner request: "pan down
     // a little to clear a message").
-    <main className="pos-shell flex min-h-screen flex-col p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain">
+    <main className="pos-shell flex min-h-screen flex-col p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:p-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))] lg:h-dvh lg:min-h-0 lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain">
       {/* AO-4 — the customer band (owner-approved register.html mockup): the
           person owns the top of the screen. Name (or walk-in), ID✓age,
           MEDICAL and tier/points badges on the left; History / Hold / Cancel
@@ -4090,7 +4090,7 @@ function CartScreen({
           with search + category chips, favorites, keypad) on demand. A
           successful scan closes it so the cashier sees the item land. */}
       {browseOpen ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
           <div className="flex h-[92vh] w-full max-w-5xl flex-col">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Browse products</h2>
@@ -4551,7 +4551,7 @@ export function ProductInfoModal({
 
   const style = categoryStyle(info.category);
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -4829,7 +4829,7 @@ export function PriceLookupScreen({
 
   const secondsLeft = Math.ceil(remaining / 1000);
   return (
-    <div className="pos-shell fixed inset-0 z-40 flex flex-col bg-[var(--pos-canvas)] p-4 text-[var(--pos-text)]" role="dialog" aria-modal="true" aria-label="Price lookup">
+    <div className="pos-shell fixed inset-0 z-40 flex flex-col bg-[var(--pos-canvas)] p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] text-[var(--pos-text)]" role="dialog" aria-modal="true" aria-label="Price lookup">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Price lookup</h1>
@@ -5175,7 +5175,7 @@ function ScanUnlockModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Lift scan requirement</h2>
@@ -5303,7 +5303,7 @@ function PriceOverrideModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Price override</h2>
@@ -5481,7 +5481,7 @@ function DiscountAdjustModal({
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Adjust discount</h2>
@@ -6942,7 +6942,7 @@ function Frame({
   cancelLabel?: string;
 }) {
   return (
-    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
+    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
       <div className="mb-6 flex w-full max-w-lg items-center justify-between">
         <h1 className="text-lg font-semibold">{title}</h1>
         <button

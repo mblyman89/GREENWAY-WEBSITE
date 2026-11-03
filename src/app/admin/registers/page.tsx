@@ -170,6 +170,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/devices`} variant="neutral" size="sm">
               POS devices
             </Button>
+            <Button href={`${BASE}/ipad-setup`} variant="neutral" size="sm">
+              iPad setup &amp; lockdown
+            </Button>
             <Button href={`${BASE}/receipt`} variant="neutral" size="sm">
               Receipt design
             </Button>

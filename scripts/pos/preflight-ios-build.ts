@@ -32,6 +32,8 @@ import {
   type EncryptionDeclaration,
 } from "../../src/lib/pos/ios-build-config-core";
 import { auditStarPlist, STAR_EA_PROTOCOL } from "../../src/lib/pos/star-printer-core";
+import { computeRegisterFingerprint } from "./register-fingerprint";
+import { shortFingerprint } from "../../src/lib/pos/register-fingerprint-core";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const INFO_PLIST = path.join(repoRoot, "ios", "App", "App", "Info.plist");
@@ -289,6 +291,18 @@ function main(): void {
   } catch {
     console.log("  FAIL printer plugin");
     problems.push(`Cannot read ${PBXPROJ}.`);
+  }
+
+  // ── version fingerprint (D143, owner 2026-11-03: "a way for me to see or
+  // validate in some way I am on the latest version for my iPad registers") ──
+  const fp = computeRegisterFingerprint(repoRoot);
+  if (fp) {
+    console.log(`  OK   version fingerprint: this build will be ${shortFingerprint(fp)}`);
+    console.log("       After Xcode Run, the iPad lock screen must show the GREEN banner");
+    console.log("       \"NEWEST VERSION — ALL GOOD\". Back office → Registers → iPad setup shows the same code.");
+  } else {
+    console.log("  FAIL version fingerprint");
+    problems.push("Could not compute the register version fingerprint (src/app/(site)/pos/RegisterShell.tsx missing?).");
   }
 
   // ── verdict ──────────────────────────────────────────────────────────────

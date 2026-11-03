@@ -88,7 +88,11 @@ if (!container) {
 
     createRoot(container).render(
       <StrictMode>
-        <RegisterShell buildVersion={config.buildVersion} apiBase={config.apiBase} />
+        <RegisterShell
+          buildVersion={config.buildVersion}
+          apiBase={config.apiBase}
+          appFingerprint={__REGISTER_FINGERPRINT__ || null}
+        />
       </StrictMode>,
     );
   }

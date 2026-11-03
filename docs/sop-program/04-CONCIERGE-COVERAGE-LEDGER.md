@@ -756,3 +756,15 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | How do I rename Bronze or Gold? | CRM → Loyalty Program → **Member badge names** → type the name → Save. Badges are names only and give no discount (D139) |
 | The register refused an old points code | It is from the retired $0.10 program. Cancel it on the customer's profile (Cancel & return points), then use a 10% or 25% reward (D140) |
 | A sale with a reward was voided. Does the customer get the points back? | Yes, on a full void the reward's points go back automatically, once. A partial return does not return them (D141) |
+
+**iPad setup, lockdown and version (D142–D150) answers:**
+
+| Question | Answer (built, iPad lockdown) |
+|---|---|
+| How do I know an iPad is on the newest version? | Look at its lock screen: a bold **green "NEWEST VERSION — ALL GOOD"** banner. Red means rebuild it; grey or no banner means it runs a build from before the check, so rebuild it. Register Activity → iPad setup & lockdown shows the same thing per iPad (D143) |
+| I rebuilt in Xcode but it is still red | Run `npm ci` then `REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios` in the repo folder before pressing Run in Xcode. The command prints "this build will be <code>"; it must match the code on the iPad setup page (D143) |
+| How do I pin the app so it cannot be closed? | Guided Access: Settings → Accessibility → Guided Access ON, set a passcode only the owner knows, then in the app triple-click the top button → Start. Only that passcode ends it (D148) |
+| The lock screen says Guided Access is off | Ask the owner to triple-click the top button and Start Guided Access. If the owner set the policy to Block, PINs will not unlock until it is on (D146) |
+| Who can change the iPad lockdown settings or tick the checklist? | Only the owner (`registers.lockdown`). Managers can view the page (D146, D147) |
+| The time bar covers the register's top bar | Fixed in the newest build: the app hides the iPad status bar. Rebuild the iPad (D144) |
+| What is the Test iPad warning? | An active paired device with no contact for days. Revoke it on POS devices if it is not at a counter (D149) |

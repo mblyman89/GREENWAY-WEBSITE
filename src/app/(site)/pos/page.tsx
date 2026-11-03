@@ -57,5 +57,13 @@ export default function PosPage() {
   // app (which serves these files from capacitor://localhost) supplies an
   // absolute base, because there a relative path would point at the app
   // bundle instead of the server.
-  return <RegisterShell buildVersion={resolveBuildVersion(process.env)} apiBase="" />;
+  // D143 — the browser register is always built from the live deploy, so its
+  // fingerprint IS the server's (next.config.ts env REGISTER_FINGERPRINT).
+  return (
+    <RegisterShell
+      buildVersion={resolveBuildVersion(process.env)}
+      apiBase=""
+      appFingerprint={process.env.REGISTER_FINGERPRINT || null}
+    />
+  );
 }

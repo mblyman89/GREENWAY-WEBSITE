@@ -75,6 +75,7 @@ export type Permission =
   | "ach.act"
   | "ach.request"
   | "cultivera.benchmark"
+  | "registers.lockdown"
   | "staffing.manage"
   | "staffing.lifecycle"
   | "registers.warnings"
@@ -287,6 +288,12 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // Benchmark tab. Every 0337 table is service_role only; this gate is checked on every page and
   // every server action.
   "cultivera.benchmark": ["owner"],
+  // D146 (owner, 2026-11-03): "make the iPad behavior set in stone and
+  // something only I can undo." The iPad lockdown policy and the setup
+  // checklist on Registers → iPad setup. MUST stay ["owner"] alone (pinned by
+  // tests/compliance/d142-ipad-lockdown.test.ts); managers can VIEW the page
+  // through registers.view but cannot change anything on it.
+  "registers.lockdown": ["owner"],
   "staffing.manage": ["owner", "admin", "manager"],
   // Phase 0.3 (G-59, D74): Activate, Terminate and Rehire are owner and admin
   // only. Michael: "I would like to modify this to be owner admin only. No
@@ -348,6 +355,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "ach.act": "Change live ACH banking alone (owner only)",
   "ach.request": "Ask for ACH banking changes (owner approves)",
   "cultivera.benchmark": "Cultivera archive & benchmark, build-cost payback (owner only)",
+  "registers.lockdown": "iPad register lockdown policy & setup checklist (owner only)",
   "staffing.manage": "Manage employees, shifts & time clock",
   "staffing.lifecycle": "Activate, terminate & rehire employees (owner & admin)",
   "registers.warnings": "See over/short warnings over $5 (owner & admin)",
@@ -399,6 +407,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "ach.act",
   "ach.request",
   "cultivera.benchmark",
+  "registers.lockdown",
 ];
 
 /**

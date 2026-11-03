@@ -221,6 +221,19 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D143: the last time the live server CONFIRMED this app is the newest
+    // version ({ fingerprint, at }). Lets the lock screen keep its green
+    // "NEWEST VERSION — ALL GOOD" (with the time) through an outage or a
+    // restart while offline, instead of going blank. Only trusted when the
+    // stored fingerprint equals the running app's own.
+    key: "gw-pos-version-check",
+    what: "When the server last confirmed this app is the newest version.",
+    durability: "convenience",
+    sensitivity: "none",
+    tier: "preference",
+    degradesOnCorruption: true,
+  },
+  {
     key: "gw-pos-star-printer-model",
     what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
     durability: "convenience",
@@ -275,7 +288,7 @@ export type TierProblem = { key: string; code: string; message: string };
  *
  * These are deliberately expressed as rules over the data rather than as a
  * hand-written expected list, so that a FUTURE key added with a careless tier
- * is caught by the same logic that guards today's twelve.
+ * is caught by the same logic that guards today's thirteen.
  */
 export function auditKeyRegistry(specs: readonly PosStorageKeySpec[] = POS_STORAGE_KEYS): TierProblem[] {
   const problems: TierProblem[] = [];
@@ -585,7 +598,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 12, "the registry covers all twelve keys the register uses today");
+    ok(POS_STORAGE_KEYS.length === 13, "the registry covers all thirteen keys the register uses today");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",

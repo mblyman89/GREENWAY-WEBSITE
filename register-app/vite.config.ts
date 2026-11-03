@@ -36,6 +36,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
+import { computeRegisterFingerprint } from "../scripts/pos/register-fingerprint";
+
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 /**
@@ -100,6 +102,13 @@ export default defineConfig(({ mode }) => ({
         process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ??
         "dev",
     ),
+    // D143: the SOURCE fingerprint of everything the iPad app is made of
+    // (scripts/pos/register-fingerprint.ts). The live server computes the same
+    // recipe at deploy time; the lock screen compares the two and shows, in
+    // bold, "NEWEST VERSION — ALL GOOD" or "NOT THE NEWEST VERSION — REBUILD".
+    // Works from a downloaded ZIP (no git needed). "" = could not compute,
+    // which the lock screen shows as "cannot verify" — never a false green.
+    __REGISTER_FINGERPRINT__: JSON.stringify(computeRegisterFingerprint(here("..")) ?? ""),
   },
 
   // This app has no public/ folder of its own — see copyRegisterAssets() above

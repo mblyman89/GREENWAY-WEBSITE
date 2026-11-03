@@ -132,6 +132,22 @@ import {
 import { shouldRegisterServiceWorker } from "@/lib/pos/register-host-core";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
+import {
+  VERSION_CHECK_KEY,
+  parseVersionCheck,
+  registerVersionVerdict,
+  sanitizeFingerprint,
+  serializeVersionCheck,
+  type RegisterVersionVerdict,
+} from "@/lib/pos/register-fingerprint-core";
+import {
+  DEFAULT_LOCKDOWN_POLICY,
+  guidedAccessGate,
+  normalizeLockdownPolicy,
+  type IpadLockdownPolicy,
+  type NativeStatus,
+} from "@/lib/pos/ipad-setup-core";
+import { readNativeStatus, setKeepAwake } from "@/lib/pos/greenway-device";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -282,8 +298,17 @@ function loadCreds(): DeviceCreds | null {
 export function RegisterShell({
   buildVersion,
   apiBase,
+  appFingerprint,
 }: {
   buildVersion?: string;
+  /**
+   * D143 — the source fingerprint this register was BUILT from
+   * (register-app/vite.config.ts bakes it into the iPad app; the browser
+   * register passes the server's own). Compared with /api/pos/version's
+   * fingerprint to show, in bold on the lock screen, whether this iPad runs
+   * the newest version. Null = built without one ("cannot verify").
+   */
+  appFingerprint?: string | null;
   /**
    * AB-1 — where register requests are sent.
    *
@@ -422,6 +447,15 @@ export function RegisterShell({
   // until the first successful probe; compared to our baked-in buildVersion
   // via isBuildStale (dev on either side never reads as stale).
   const [serverVersion, setServerVersion] = useState<string | null>(null);
+  // D143 — the live server's register fingerprint (null until the first
+  // probe answers) and the last time it CONFIRMED this app is the newest
+  // (persisted under gw-pos-version-check, only for this exact fingerprint).
+  const [serverFingerprint, setServerFingerprint] = useState<string | null>(null);
+  const [versionConfirmedAt, setVersionConfirmedAt] = useState<number | null>(null);
+  // D145/D146 — the iPad's own status (native app only; null in a browser)
+  // and the owner's lockdown policy (delivered on every heartbeat).
+  const [nativeStatus, setNativeStatus] = useState<NativeStatus | null>(null);
+  const [lockdownPolicy, setLockdownPolicy] = useState<IpadLockdownPolicy>(DEFAULT_LOCKDOWN_POLICY);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   // GW-027 — mirror of the rejected list for flush() (same pattern as
@@ -551,6 +585,9 @@ export function RegisterShell({
     // Slice 5 — per-device medical test mode (parseMedicalTestMode fails safe
     // to OFF on any corruption, so a bad blob can never silently drop real tax).
     setMedicalTestMode(parseMedicalTestMode(posStorageGet(MEDICAL_TESTMODE_KEY)));
+    // D143 — the last confirmed "newest version" for THIS build (a rebuilt
+    // app never inherits the old build's green).
+    setVersionConfirmedAt(parseVersionCheck(posStorageGet(VERSION_CHECK_KEY), appFingerprint));
     // Cached menu bundle (offline sales use the last download until refresh).
     try {
       const rawMenu = posStorageGet(LS_MENU);
@@ -578,6 +615,8 @@ export function RegisterShell({
     return () => {
       cancelled = true;
     };
+    // appFingerprint is a build-time constant (Vite define / server env); boot runs once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── B44: apply + persist the display mode ──
@@ -640,9 +679,27 @@ export function RegisterShell({
       }
       posFetch("/api/pos/version", { cache: "no-store" })
         .then((res) => (res.ok ? res.json() : null))
-        .then((body: { version?: unknown } | null) => {
+        .then((body: { version?: unknown; fingerprint?: unknown } | null) => {
           if (!cancelled && body && typeof body.version === "string") {
             setServerVersion(body.version);
+          }
+          // D143 — the fingerprint verdict. A match is remembered (with the
+          // time) so the green banner survives an outage or an offline restart.
+          const serverFp = body ? sanitizeFingerprint(body.fingerprint) : null;
+          if (!cancelled && serverFp) {
+            setServerFingerprint(serverFp);
+            const mine = sanitizeFingerprint(appFingerprint);
+            if (mine && mine === serverFp) {
+              const at = Date.now();
+              setVersionConfirmedAt(at);
+              try {
+                posStorageSet(VERSION_CHECK_KEY, serializeVersionCheck(mine, at));
+              } catch {
+                // Preference only.
+              }
+            } else {
+              setVersionConfirmedAt(null);
+            }
           }
         })
         .catch(() => {
@@ -655,7 +712,26 @@ export function RegisterShell({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [screen]);
+  }, [screen, appFingerprint]);
+
+  // ── D145/D146: the iPad's own status + keep-awake ──
+  // Native app only (readNativeStatus answers null in a browser). Read every
+  // 60 s so the back office sees Guided Access / Low Power / charging, and
+  // apply the owner's keep-awake policy each time (iOS can reset it).
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      if (lockdownPolicy.keepAwake) await setKeepAwake(true);
+      const st = await readNativeStatus();
+      if (!cancelled) setNativeStatus(st);
+    };
+    void poll();
+    const t = setInterval(() => void poll(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [lockdownPolicy.keepAwake]);
 
   // AN-1 — auto-apply a parked worker while LOCKED. shouldAutoApplyUpdate is
   // lock-screen-only by contract (sw-core self-tested): locked means no sale
@@ -757,6 +833,33 @@ export function RegisterShell({
     [creds],
   );
 
+  // D145 — what this register tells the back office about itself on every
+  // heartbeat and flush. A ref so the stable callbacks always read fresh values.
+  const healthRef = useRef<() => Record<string, unknown>>(() => ({}));
+  useEffect(() => {
+    healthRef.current = () => {
+      const pendingRows = queueRef.current;
+      let oldest: string | null = null;
+      for (const r of pendingRows) if (r.queuedAt && (!oldest || r.queuedAt < oldest)) oldest = r.queuedAt;
+      let storageOk: boolean | null = null;
+      try {
+        storageOk = posStorageReadiness().mayRing;
+      } catch {
+        storageOk = null;
+      }
+      return {
+        fingerprint: appFingerprint ?? null,
+        buildVersion: buildVersion ?? null,
+        pending: pendingRows.length,
+        oldestPendingAt: oldest,
+        rejected: rejectedRef.current.length,
+        menuFetchedAt: menuBundle?.fetchedAt ?? null,
+        storageOk,
+        native: nativeStatus,
+      };
+    };
+  });
+
   const flush = useCallback(async () => {
     if (flushingRef.current || !creds) return;
     flushingRef.current = true;
@@ -779,7 +882,7 @@ export function RegisterShell({
           "x-pos-device-id": creds.deviceId,
           "x-pos-device-key": creds.deviceKey,
         },
-        body: JSON.stringify({ events: toSend, rejectedReport }),
+        body: JSON.stringify({ events: toSend, rejectedReport, health: healthRef.current() }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -886,10 +989,10 @@ export function RegisterShell({
             "x-pos-device-id": creds.deviceId,
             "x-pos-device-key": creds.deviceKey,
           },
-          body: JSON.stringify({ events: [] }),
+          body: JSON.stringify({ events: [], health: healthRef.current() }),
         });
         const body = (await res.json().catch(() => null)) as
-          | { device?: { name?: unknown; registerId?: unknown }; error?: unknown }
+          | { device?: { name?: unknown; registerId?: unknown }; error?: unknown; lockdown?: unknown }
           | null;
         if (cancelled) return;
         if (!res.ok) {
@@ -898,6 +1001,8 @@ export function RegisterShell({
           return;
         }
         setPairingProblem(null);
+        // D146 — the owner's lockdown policy rides every heartbeat answer.
+        if (body && body.lockdown) setLockdownPolicy(normalizeLockdownPolicy(body.lockdown));
         const healed = refreshedPairing(creds, body?.device);
         if (healed) {
           persistCreds(healed);
@@ -1348,7 +1453,7 @@ export function RegisterShell({
 
   if (screen === "loading") {
     return (
-      <main className="pos-shell flex min-h-screen flex-col items-center justify-center gap-4">
+      <main className="pos-shell flex min-h-screen flex-col items-center justify-center gap-4 pt-[env(safe-area-inset-top)]">
         {/* Plain <img>, NOT next/image: the /pos service worker caches /pos/*
             cache-first so the wordmark renders on OFFLINE boot; the
             /_next/image optimizer endpoint is never cached. */}
@@ -1410,6 +1515,14 @@ export function RegisterShell({
         banner={shownBanner}
         buildVersion={buildVersion ?? null}
         updateReady={!!updateWaiting || isBuildStale(buildVersion, serverVersion)}
+        versionVerdict={registerVersionVerdict({
+          appFingerprint,
+          serverFingerprint,
+          online,
+          lastConfirmedAt: versionConfirmedAt,
+          formatTime: (ms) => new Date(ms).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+        })}
+        guidedAccessNotice={guidedAccessGate(lockdownPolicy, nativeStatus)}
         onForceRefresh={forceRefresh}
         onClearBanner={() => setBanner(null)}
         lookupBundle={effectiveBundle}
@@ -2523,7 +2636,7 @@ function SetupScreen({
   const repairMsg = repair ? pairingProblemMessage(repair.problem) : null;
 
   return (
-    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
+    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark mb-6 h-9 w-auto opacity-90" />
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-8 shadow-[var(--pos-shadow)]">
@@ -2645,6 +2758,8 @@ function LockScreen({
   banner,
   buildVersion,
   updateReady,
+  versionVerdict,
+  guidedAccessNotice,
   onForceRefresh,
   onClearBanner,
   onUnlocked,
@@ -2659,6 +2774,10 @@ function LockScreen({
   banner: string | null;
   buildVersion: string | null;
   updateReady: boolean;
+  /** D143 — the bold "am I on the newest version?" answer. */
+  versionVerdict: RegisterVersionVerdict;
+  /** D146 — owner policy: Guided Access off on the native app. */
+  guidedAccessNotice: ReturnType<typeof guidedAccessGate>;
   onForceRefresh: () => void;
   onClearBanner: () => void;
   /** The cached menu bundle the price lookup browses (null = not downloaded yet). */
@@ -2727,6 +2846,13 @@ function LockScreen({
   const submit = async () => {
     if (pin.length < 4 || busy) return;
     if (mode === "clock") return submitClock();
+    // D146 — owner policy "block": no unlock while the iPad is not pinned to
+    // the register. Clock in/out and price lookup still work.
+    if (guidedAccessNotice.show && guidedAccessNotice.block) {
+      setError(guidedAccessNotice.detail);
+      setPin("");
+      return;
+    }
     setBusy(true);
     setError(null);
     setClockNotice(null);
@@ -2773,10 +2899,19 @@ function LockScreen({
   };
 
   return (
-    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
+    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark mb-5 h-10 w-auto opacity-90" />
       <StatusChips online={online} pendingCount={pendingCount} name={creds.name} />
+      {/* D143 — owner: "Please add to the lock screen of the app something
+          bold that says I am running the newest version and all is good." */}
+      <VersionBanner verdict={versionVerdict} />
+      {guidedAccessNotice.show ? (
+        <div role="alert" className="mb-4 w-full max-w-xl rounded-2xl border-2 border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-5 py-3 text-center text-[var(--pos-danger)]">
+          <p className="text-base font-extrabold tracking-wide">{guidedAccessNotice.headline}</p>
+          <p className="mt-1 text-sm">{guidedAccessNotice.detail}</p>
+        </div>
+      ) : null}
       {banner ? (
         <button type="button" onClick={onClearBanner} className="mb-4 max-w-md rounded-lg bg-[var(--pos-warn-soft)] px-4 py-2 text-sm text-[var(--pos-warn)]">
           {banner} <span className="underline">dismiss</span>
@@ -3046,7 +3181,7 @@ function HomeScreen({
       {/* AO-2 — navy chrome top bar (owner-approved mockup): brand + tabs on
           the left, who/where/status on the right. Chrome tokens keep this
           readable in BOTH themes (navy on light, near-black on dark). */}
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-0 bg-[var(--pos-chrome)] px-5 text-[var(--pos-chrome-ink)]">
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-0 bg-[var(--pos-chrome)] px-5 pt-[env(safe-area-inset-top)] text-[var(--pos-chrome-ink)]">
         {/* Opts OUT of the light-mode recolor (.pos-wordmark-on-chrome): the top
             bar is navy in BOTH themes, so the white mark is already correct
             here and must NOT be re-inked to navy-on-navy. */}
@@ -3606,7 +3741,7 @@ function NoSaleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">No sale — open drawer</h2>
@@ -3780,7 +3915,7 @@ function VoidSaleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Void a sale (today)</h2>
@@ -4182,7 +4317,7 @@ function ReturnsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Return an item</h2>
@@ -5002,7 +5137,7 @@ function PickupQueueModal({
   const detailTitle = detail ? (detail.displayName ?? "").trim() || detail.orderNumber : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-3 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] text-[var(--pos-text)]">
         {/* Header: title, search / scan, close */}
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--pos-border)] p-4">
@@ -5608,7 +5743,7 @@ function DayReportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Day report (X/Z)</h2>
@@ -5696,7 +5831,7 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
   const entries = boards ? (tab === "today" ? boards.today : boards.week) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-lg rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Leaderboard 🏆</h2>
@@ -5866,7 +6001,7 @@ function PrinterSetupModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="w-full max-w-lg rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Receipt printer 🖨</h2>
@@ -6252,7 +6387,7 @@ function TillModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{TITLES[mode]}</h2>
@@ -6580,6 +6715,33 @@ function TillModal({
 // ---------------------------------------------------------------------------
 // Shared status chips
 // ---------------------------------------------------------------------------
+
+/**
+ * D143 — the bold lock-screen answer to "am I on the newest version?".
+ * Green = this iPad was built from exactly the code the live server runs.
+ * Red = rebuild. Neutral = still checking / offline before any confirmation.
+ */
+function VersionBanner({ verdict }: { verdict: RegisterVersionVerdict }) {
+  const tone =
+    verdict.state === "current"
+      ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+      : verdict.state === "checking"
+        ? "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+        : "border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] text-[var(--pos-danger)]";
+  const icon = verdict.state === "current" ? "✅" : verdict.state === "checking" ? "⏳" : "⚠️";
+  return (
+    <div
+      role="status"
+      data-version-state={verdict.state}
+      className={`mb-4 w-full max-w-xl rounded-2xl border-2 px-5 py-3 text-center ${tone}`}
+    >
+      <p className={verdict.state === "checking" ? "text-base font-bold" : "text-xl font-extrabold tracking-wide"}>
+        {icon} {verdict.headline}
+      </p>
+      <p className="mt-1 text-xs leading-snug opacity-90">{verdict.detail}</p>
+    </div>
+  );
+}
 
 function StatusChips({ online, pendingCount, name }: { online: boolean; pendingCount: number; name: string | null }) {
   return (

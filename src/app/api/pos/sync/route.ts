@@ -24,6 +24,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice, ingestPosEvents, recordDeviceRejectedReport } from "@/lib/pos/sync-store";
 import { sanitizeRejectedReport } from "@/lib/pos/rejected-report-core";
+import { getIpadLockdownPolicy, recordDeviceHealth } from "@/lib/pos/ipad-setup-store";
 import type { PosEventEnvelope } from "@/lib/pos/sale-event-core";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
@@ -79,10 +80,19 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   // malformed or missing report never affects the flush itself.
   const rejectedReport = sanitizeRejectedReport((body as { rejectedReport?: unknown })?.rejectedReport);
   if (rejectedReport) await recordDeviceRejectedReport(auth.device.id, rejectedReport);
+  // D145 — the register's self-reported health (app fingerprint, unsent
+  // sales, Guided Access, battery...). Sanitized + throttled in the store and
+  // best-effort: it can never fail or block a flush.
+  const health = (body as { health?: unknown })?.health;
+  if (health !== undefined) await recordDeviceHealth(auth.device.id, health);
   // Empty batch = credential heartbeat (device setup screens verify their
   // key without submitting a fact; GW-027 reports also ride empty batches).
+  // D146 — the heartbeat answer also carries the owner's iPad lockdown
+  // policy (keep awake, Guided Access rule), so a change in the back office
+  // reaches every register within a minute.
   if (events.length === 0) {
-    return NextResponse.json({ acks: [], device: { name: auth.device.name, registerId: auth.device.register_id } });
+    const lockdown = await getIpadLockdownPolicy();
+    return NextResponse.json({ acks: [], device: { name: auth.device.name, registerId: auth.device.register_id }, lockdown });
   }
   if (events.length > MAX_BATCH) {
     return NextResponse.json(

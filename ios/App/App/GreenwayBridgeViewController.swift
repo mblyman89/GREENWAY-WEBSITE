@@ -136,5 +136,84 @@ public class GreenwayBridgeViewController: CAPBridgeViewController {
         // autoRegisterPlugins is true, which it always is here, so it would
         // look like a fix and change nothing.
         bridge?.registerPluginInstance(SocketScannerPlugin())
+
+        // D145 (owner, 2026-11-03: "make the iPad behavior set in stone"): the
+        // device-status plugin defined at the bottom of this file. It lets the
+        // register report Guided Access / Low Power / charging / keep-awake to
+        // the back office and keep the screen awake. Same registration rule as
+        // above: registerPluginInstance, in capacitorDidLoad.
+        bridge?.registerPluginInstance(GreenwayDevicePlugin())
+    }
+
+    // D144 (owner: "The iPad top menu bar with the time and such, collides
+    // with our apps top menu bar"): the register is a full-screen till, so the
+    // iPad status bar (clock, battery, Wi-Fi) is hidden. Belt and braces with
+    // Info.plist UIStatusBarHidden and capacitor.config plugins.SystemBars
+    // hidden, because CAPSystemBarsPlugin.load() would otherwise re-show it on
+    // launch. The web layout also respects the safe area (pos-tokens.css), so
+    // iPadOS window controls can never cover the top bar either.
+    override public var prefersStatusBarHidden: Bool {
+        return true
+    }
+}
+
+/// D145: what the register can learn about (and do to) the iPad itself.
+///
+/// Lives in this file on purpose: this file is already a member of the App
+/// target's Compile Sources (preflight check 6), so the plugin is compiled
+/// without touching project.pbxproj, and it is registered two lines above.
+/// Every method RESOLVES (never rejects) so a missing value can never surface
+/// as an error at the counter; unknown values are simply left out.
+@objc(GreenwayDevicePlugin)
+public class GreenwayDevicePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "GreenwayDevicePlugin"
+    public let jsName = "GreenwayDevice"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "getStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setKeepAwake", returnType: CAPPluginReturnPromise)
+    ]
+
+    /// Guided Access, Low Power Mode, battery, keep-awake, iPadOS and app
+    /// versions, free storage. UIKit state is read on the main thread.
+    @objc func getStatus(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let device = UIDevice.current
+            device.isBatteryMonitoringEnabled = true
+            var result: [String: Any] = [
+                "guidedAccess": UIAccessibility.isGuidedAccessEnabled,
+                "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
+                "keepAwake": UIApplication.shared.isIdleTimerDisabled,
+                "systemVersion": device.systemVersion
+            ]
+            let level = device.batteryLevel
+            if level >= 0 {
+                result["batteryLevel"] = Double(level)
+            }
+            let state = device.batteryState
+            if state != .unknown {
+                result["charging"] = (state == .charging || state == .full)
+            }
+            let info = Bundle.main.infoDictionary
+            let short = info?["CFBundleShortVersionString"] as? String ?? ""
+            let build = info?["CFBundleVersion"] as? String ?? ""
+            result["appVersion"] = "\(short) (\(build))"
+            let home = URL(fileURLWithPath: NSHomeDirectory())
+            if let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+               let bytes = values.volumeAvailableCapacityForImportantUsage {
+                result["freeDiskMb"] = Double(bytes) / 1_048_576.0
+            }
+            call.resolve(result)
+        }
+    }
+
+    /// Keep the screen awake while the register is open (owner lockdown
+    /// policy). iOS only honours this while the app is in the foreground,
+    /// which, under Guided Access, is always.
+    @objc func setKeepAwake(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? true
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = on
+            call.resolve(["keepAwake": on])
+        }
     }
 }
