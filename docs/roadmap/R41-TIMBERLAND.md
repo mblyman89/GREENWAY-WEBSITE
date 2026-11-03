@@ -36,6 +36,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | #1450 | 0291 |
 | S19 | Bank setup & glossary: the bank-side checklist for the meeting with Brenda (ask / owner decides / confirmed, each in her words; ACH debit block and ACH filter asked, not assumed), printable meeting sheet, 20-term sourced ACH glossary, glossary-backed hover help on Operations and Approvals | #1451 | none |
 | S20 | Brenda's sample return email: mirrored (number redacted); notification@achedi.com is a built-in notice sender (her sample's From address, which the Fed domain alone missed) with a readiness check; the owner's "I don't want dual approval." settles the last owner decision on the bank-setup checklist; notices and testing items carry her new facts | #1648 | none |
+| S21 | Test day runbook for the Zoom test with Brenda: live Ready list (company ACH details, encryption key, the owner's own account under Account checks, file ledger, notification@achedi.com sender), the eight prenote steps (done / next / later, only from records) with the exact Operations buttons, the dates for a release now, what Brenda sees in the file, the Zoom script, her open questions (debit block in, dual out) and a printable sheet; read only | #PR | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -309,3 +310,13 @@ Still to arrange: the testing session Brenda asked for.
 - **Bank setup.** The owner's same-day words "I don't want dual approval." settle the dual-approval item (now confirmed, his words first, labelled as his decision and not Brenda's). The notices item cites her sample; the testing item cites the Zoom note; the debit block stays a question (the owner asks during the test).
 - **No migration.**
 - **Tests.** `tests/compliance/r41-s19-bank-setup.test.ts` and `r41-s17-notice-mail.test.ts` updated; pure self-tests `ach-bank-setup-core` 47 and `ach-notice-mail-core` 63; `mutate-s19-app.py` and `mutate-s17-app.py` re-run. Manual test T-380.
+
+## S21 in detail
+
+The owner's interview with Brenda ended with a test set for the next day: she wants a Zoom call "so she can watch it happen on our system" (owner's note, 2026-11-02, mirrored in docs/authorities/ach/timberland-brenda-2026-11-02-return-email.txt). The test is a prenote to the owner's own account: $0, so no money moves, and it opens the first-file gate once Timberland approves it and the 6-banking-day wait (agreement section 6) passes with no return.
+
+The new page Banking > Test day (/admin/settings/banking/test-day, settings.manage) is a runbook, not a second set of buttons. It reads the same state ACH operations, the ACH files list, the first-file gate, My banking and Notice email already read (ach-test-day-store.ts, read only; any unreadable read becomes null) and the pure core ach-test-day-core.ts turns it into: a Ready list; eight steps (company details, the owner's account listed, Start check, Release the file, download/check/upload + Confirm sent, Mark uploaded, Mark approved, wait + Mark passed), each done only when its record exists, the first open one marked next; the dates for a release now from earliestEffectiveDate, latestUploadAndApproval and prenoteLiveUploadDay (released Tue Nov 3 2026 before 4:00 pm Pacific: effective Thu Nov 5, upload and approve by 3:30 pm that Tuesday, live from Mon Nov 16 with Veterans Day skipped); what Brenda will see in the file from the builder's constants (PPD, PAYROLL, codes 23/33, $0.00, GREENWAY MARIJUA); the Zoom script; and the open questions from the Bank setup checklist (the ACH debit block among them; dual approval not asked, the owner declined it). The printable sheet is test-day/sheet (audited as ach.test_day.sheet, no-store) and refuses to print any run of 7+ digits.
+
+The owner's account must come from a signed ACH authorization: the old bank fields on the employee record are not used by account checks, and the page says so when no account is listed.
+
+45 core self-tests; tests/compliance/r41-s21-test-day.test.ts; scripts/r41/mutate-s21-app.py (every mutant killed). Manual test T-381.

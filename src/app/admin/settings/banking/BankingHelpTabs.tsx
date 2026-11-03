@@ -24,6 +24,8 @@ export const BANKING_HELP_TABS = [
   { key: "policies", href: "/admin/settings/banking/policies", label: "Policies" },
   // R41 S19: the bank-side checklist for the meeting with Timberland Cash Management, and the ACH glossary.
   { key: "banksetup", href: "/admin/settings/banking/bank-setup", label: "Bank setup & glossary" },
+  // R41 S21: the first-file test with Timberland, live on a Zoom call (read only; the buttons stay on Operations).
+  { key: "testday", href: "/admin/settings/banking/test-day", label: "Test day" },
 ] as const;
 
 export type BankingHelpTabKey = (typeof BANKING_HELP_TABS)[number]["key"];

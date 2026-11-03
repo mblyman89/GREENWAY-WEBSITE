@@ -151,8 +151,9 @@ describe("S19 wiring", () => {
   });
   it("tab after Policies", () => {
     const keys = BANKING_HELP_TABS.map((t) => t.key);
-    expect(keys[keys.length - 1]).toBe("banksetup");
-    expect(keys[keys.length - 2]).toBe("policies");
+    // R41 S21 added Test day after it.
+    expect(keys[keys.indexOf("banksetup") - 1]).toBe("policies");
+    expect(keys[keys.indexOf("banksetup") + 1]).toBe("testday");
     expect(BANKING_HELP_TABS.find((t) => t.key === "banksetup")!.href).toBe("/admin/settings/banking/bank-setup");
   });
   it("every section heading on Operations and Approvals has a hover hint", () => {
