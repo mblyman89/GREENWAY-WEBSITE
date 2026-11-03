@@ -18,6 +18,10 @@ import {
 import { isAiConfigured } from "@/lib/reports/ai-insights";
 import { ReportInsightsPanel } from "@/components/admin/reports/ReportInsightsPanel";
 import { ExportButtons } from "@/components/admin/reports/ExportButtons";
+import { can } from "@/lib/auth/roles";
+import { addPacificDays, pacificToday } from "@/lib/reports/timezone";
+import { getLastYearComparison, type LastYearResult } from "@/lib/reports/last-year";
+import { LastYearPanel } from "@/components/admin/reports/LastYearPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -50,11 +54,14 @@ function Section({
 export default async function ReportsOverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; compare?: string }>;
 }) {
-  await requirePermission("reports.view");
+  const session = await requirePermission("reports.view");
   const sp = await searchParams;
   const days = [7, 30, 90].includes(Number(sp.range)) ? Number(sp.range) : 30;
+  // CVB-10: optional "Same period last year"; the Cultivera part is owner only (cultivera.benchmark).
+  const compare = sp.compare === "ly";
+  const canSeeCultivera = can(session.profile.role, "cultivera.benchmark");
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -66,11 +73,14 @@ export default async function ReportsOverviewPage({
     );
   }
 
-  const [orders, loyalty, inventory, promos] = await Promise.all([
+  const today = pacificToday();
+  const noComparison: LastYearResult = { comparison: null, error: null };
+  const [orders, loyalty, inventory, promos, lastYear] = await Promise.all([
     getOrdersReport(days),
     getLoyaltyReport(days),
     getInventoryHealthReport(),
     getPromotionsReport(),
+    compare ? getLastYearComparison(addPacificDays(today, -(days - 1)), today, canSeeCultivera) : Promise.resolve(noComparison),
   ]);
 
   return (
@@ -82,7 +92,7 @@ export default async function ReportsOverviewPage({
           {RANGES.map((r) => (
             <Link
               key={r.days}
-              href={`/admin/reports?range=${r.days}`}
+              href={`/admin/reports?range=${r.days}${compare ? "&compare=ly" : ""}`}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                 days === r.days
                   ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
@@ -93,8 +103,21 @@ export default async function ReportsOverviewPage({
             </Link>
           ))}
         </div>
-        <ExportButtons baseHref={`/admin/reports/export?range=${days}`} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            data-testid="compare-ly"
+            href={`/admin/reports?range=${days}${compare ? "" : "&compare=ly"}`}
+            className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
+              compare ? "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black" : "border-white/15 bg-white/5 text-white/60 hover:text-white"
+            }`}
+          >
+            {compare ? "Hide last year" : "Compare with last year"}
+          </Link>
+          <ExportButtons baseHref={`/admin/reports/export?range=${days}`} />
+        </div>
       </div>
+
+      {compare && <LastYearPanel comparison={lastYear.comparison} error={lastYear.error} />}
 
       {/* AI insights briefing */}
       <ReportInsightsPanel days={days} aiEnabled={isAiConfigured} />
