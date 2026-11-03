@@ -384,9 +384,37 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   // BLIND: no expected, no variance.
   // Fix Phase 6 (G-61, owner D84): closing does NOT clock anyone out.
   const pooled = till.tipPool ? splitTipPool(till.tipPool.poolMinor, till.tipPool.people) : null;
+
+  // Owner D151–D153 (2026-11-03): the details for the DRAWER CLOSED slip the
+  // iPad prints to leave with the till. WHO, WHICH register, WHEN, and a short
+  // drawer ref. Deliberately NO money: no counted total, no expected, no tips,
+  // so the slip cannot break the blind second count. Best-effort: a failed
+  // lookup never fails a close that already saved (the iPad falls back to
+  // what it knows).
+  let closeSlip: Record<string, string | null> | null = null;
+  try {
+    const [reg, opener] = await Promise.all([
+      getRegister(registerId),
+      session.opened_by && session.opened_by !== employee.id ? getEmployee(session.opened_by) : Promise.resolve(null),
+    ]);
+    closeSlip = {
+      sessionId: session.id,
+      registerName: reg?.name ?? auth.device.name ?? "Register",
+      closedByName: employee.full_name,
+      openedByName: session.opened_by === employee.id ? employee.full_name : (opener?.full_name ?? null),
+      businessDay: session.business_day ?? null,
+      openedAt: session.opened_at ?? null,
+      closedAt: new Date().toISOString(),
+      deviceName: auth.device.name ?? null,
+    };
+  } catch {
+    closeSlip = null;
+  }
+
   return NextResponse.json({
     ok: true,
     ...(pooled && pooled.ok ? { tipPool: { ...till.tipPool, sentence: tipPoolSentence(pooled) } } : {}),
+    ...(closeSlip ? { closeSlip } : {}),
   });
 }
 

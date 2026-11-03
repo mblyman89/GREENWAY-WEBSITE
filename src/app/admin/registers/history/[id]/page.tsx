@@ -9,6 +9,8 @@ import { compareCounts, secondCountSentence } from "@/lib/registers/second-count
 import { can } from "@/lib/auth/roles";
 import { OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
 import { correctReconciledDrawerAction } from "../../actions";
+import { getSecondCountBreakdown } from "@/lib/registers/store";
+import { countTableRows } from "@/lib/registers/drawer-close-slip-core";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,9 @@ export default async function TillSummaryPage({
   const data = await tillSummaryData(id);
   if (!data) notFound();
   const { session, registerName, openedByName, closedByName, secondCountedByName, drops, swaps } = data;
+  // Owner D154 (2026-11-03): the second count's bill-by-bill table, read only.
+  const secondTable =
+    session.second_count_minor != null ? await getSecondCountBreakdown(session.id).then((b) => (b ? countTableRows(b.counts) : null)) : null;
 
   const revealed = session.status === "reconciled" || session.status === "verified";
   const dropsTotal = drops.reduce((sum, d) => sum + d.amount_minor, 0);
@@ -173,6 +178,37 @@ export default async function TillSummaryPage({
           <p className="mt-1 text-[0.65rem] text-black/50">
             {secondCountSentence(compareCounts(session.closing_count_minor, session.second_count_minor))}
           </p>
+        ) : null}
+        {secondTable ? (
+          <div className="mt-3" data-testid="history-second-count-table">
+            <p className="text-[0.7rem] font-semibold">
+              Second count table{secondCountedByName ? ` (${secondCountedByName})` : ""}, read only
+            </p>
+            <table className="mt-1 w-full text-[0.7rem]">
+              <thead>
+                <tr className="text-left text-black/60">
+                  <th className="py-0.5">Bill / coin</th>
+                  <th className="py-0.5 text-right">Quantity</th>
+                  <th className="py-0.5 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {secondTable.rows.map((r) => (
+                  <tr key={r.key} className={r.qty > 0 ? "border-t border-black/10" : "border-t border-black/10 text-black/40"}>
+                    <td className="py-0.5">{r.label}</td>
+                    <td className="py-0.5 text-right tabular-nums">{r.qty}</td>
+                    <td className="py-0.5 text-right tabular-nums">{formatCents(r.subtotalMinor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-black/30 font-semibold">
+                  <td className="py-0.5" colSpan={2}>Second count total</td>
+                  <td className="py-0.5 text-right tabular-nums">{formatCents(secondTable.totalMinor)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         ) : null}
         {!revealed ? (
           <p className="mt-1 text-[0.65rem] text-black/50">

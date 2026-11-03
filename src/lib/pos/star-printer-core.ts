@@ -149,8 +149,12 @@ export type StarPrintJob = {
    * prove a pairing works. It is its own kind rather than being dressed up as
    * a "sale", so nothing downstream can mistake a setup test for money
    * changing hands.
+   *
+   * Owner D152 (2026-11-03) added "drawer_close": the DRAWER CLOSED slip
+   * printed after a blind close to leave with the till. The drawer was
+   * already opened for the count, so this slip must never pop it again.
    */
-  jobKind: "sale" | "reprint" | "refund" | "no_sale" | "test";
+  jobKind: "sale" | "reprint" | "refund" | "no_sale" | "test" | "drawer_close";
 };
 
 /**
@@ -208,6 +212,12 @@ export function validatePrintJob(job: StarPrintJob): string | null {
     // repeatedly. If it popped the drawer it would be an unattributed cash
     // exposure with no sale and no manager PIN behind it.
     return "A printer test must never open the cash drawer.";
+  }
+  if (job.jobKind === "drawer_close" && job.openDrawer) {
+    // Owner D152: the close slip is paper for the till, printed after the
+    // drawer was already opened (and audited) for the count. A second kick
+    // here would be an unrecorded drawer open.
+    return "A drawer close slip must never open the cash drawer.";
   }
   return null;
 }
@@ -673,6 +683,14 @@ export function __runStarPrinterCoreTests(): { passed: number; failed: number } 
   ok(
     validatePrintJob({ html: "<p>x</p>", openDrawer: true, jobKind: "no_sale" }) === null,
     "a no-sale opens the drawer on purpose",
+  );
+  ok(
+    validatePrintJob({ html: "<p>x</p>", openDrawer: true, jobKind: "drawer_close" }) !== null,
+    "a drawer close slip may NOT pop the drawer (owner D152)",
+  );
+  ok(
+    validatePrintJob({ html: "<p>x</p>", openDrawer: false, jobKind: "drawer_close" }) === null,
+    "a drawer close slip that leaves the drawer shut is fine",
   );
 
   // ── failures speak English and say what to DO ────────────────────────────

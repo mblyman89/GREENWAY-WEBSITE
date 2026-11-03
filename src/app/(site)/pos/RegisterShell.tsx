@@ -65,6 +65,13 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
+import {
+  buildDrawerCloseSlipHtml,
+  drawerRef,
+  fallbackCloseSlipInfo,
+  parseCloseSlipInfo,
+  type DrawerCloseSlipInfo,
+} from "@/lib/registers/drawer-close-slip-core";
 import { floatCheck, splitTipPool, tipPoolSentence, DEFAULT_TIP_POOL_PEOPLE, MAX_TIP_POOL_PEOPLE } from "@/lib/registers/shift-end-core";
 import { punchSuccessMessage, shouldQueueOffline } from "@/lib/pos/clock-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
@@ -361,6 +368,10 @@ export function RegisterShell({
   // B17 — the last frozen receipt snapshot (survives the post-sale auto-lock)
   // and the parked sale, both hydrated from localStorage at boot.
   const [lastReceipt, setLastReceipt] = useState<PosReceiptInput | null>(null);
+  // Owner D152 (2026-11-03): the last DRAWER CLOSED slip this iPad printed,
+  // kept in memory so MORE can reprint it if the paper jammed or got lost.
+  // It holds no money (D153), so keeping it costs nothing.
+  const [lastCloseSlip, setLastCloseSlip] = useState<DrawerCloseSlipInfo | null>(null);
   const [heldSale, setHeldSale] = useState<HeldSale | null>(null);
   // B17 — the cart a resumed hold seeds into the next SaleFlow mount.
   const [resumeCart, setResumeCart] = useState<PosCartEntry[] | null>(null);
@@ -2146,6 +2157,7 @@ export function RegisterShell({
         menuFetchedAt={menuBundle?.fetchedAt ?? null}
         lowStock={menuBundle ? lowStockCount(menuBundle.products) : 0}
         lastReceipt={lastReceipt}
+        lastCloseSlip={lastCloseSlip}
         heldSale={heldSale}
         onStartSale={() => {
           // SESSION RESUME — a deliberate fresh start clears any parked sale so
@@ -2216,6 +2228,16 @@ export function RegisterShell({
                 // Reprint NEVER pops the drawer — no cash moves on a reprint.
                 void printSlip(html, false, "reprint").then((msg) => {
                   if (msg) setBanner(msg);
+                });
+              }
+            : undefined
+        }
+        onReprintCloseSlip={
+          lastCloseSlip
+            ? () => {
+                // Owner D152: never pops the drawer.
+                void printSlip(buildDrawerCloseSlipHtml(lastCloseSlip, { reprint: true }), false, "drawer_close").then((msg) => {
+                  if (msg) setBanner(`The drawer close slip did not print: ${msg}`);
                 });
               }
             : undefined
@@ -2502,8 +2524,33 @@ export function RegisterShell({
           employeeName={employee.fullName}
           standardFloatMinor={standardFloatMinor}
           onClose={() => setTillMode(null)}
-          onDone={(mode, drawerInfo, message, actorEmployeeId) => {
+          onDone={(mode, drawerInfo, message, actorEmployeeId, closeSlipRaw) => {
             setTillMode(null);
+            if (mode === "close") {
+              // Owner D151–D153 (2026-11-03): print the DRAWER CLOSED slip to
+              // leave with the till, so the second counter knows whose till
+              // it is. No amounts on it (the close is blind). The drawer was
+              // already opened for the count, so this never pops it. Printing
+              // never blocks: the close is already saved.
+              const slip =
+                parseCloseSlipInfo(closeSlipRaw) ??
+                fallbackCloseSlipInfo({
+                  sessionId: drawer?.sessionId ?? null,
+                  registerName: creds.name,
+                  closedByName: employee.fullName,
+                  businessDay: drawer?.businessDay ?? null,
+                  openedAt: drawer?.openedAt ?? null,
+                  closedAt: new Date().toISOString(),
+                });
+              setLastCloseSlip(slip);
+              void printSlip(buildDrawerCloseSlipHtml(slip), false, "drawer_close").then((msg) => {
+                if (msg) {
+                  setBanner(
+                    `${message} The drawer close slip did not print: ${msg} Reprint it from MORE ▸ Reprint drawer close slip.`,
+                  );
+                }
+              });
+            }
             if (mode === "open") setDrawer(drawerInfo);
             if (mode === "close") setDrawer(null);
             // Fix Phase 6 (G-61, owner D84): keep the clock-out guard current.
@@ -3051,11 +3098,13 @@ function HomeScreen({
   menuFetchedAt,
   lowStock,
   lastReceipt,
+  lastCloseSlip,
   heldSale,
   onStartSale,
   onResumeHold,
   onDiscardHold,
   onReprintLast,
+  onReprintCloseSlip,
   onNoSale,
   onTill,
   onDayReport,
@@ -3096,6 +3145,8 @@ function HomeScreen({
   lowStock: number;
   /** B17 — the last frozen receipt (null until the first sale). */
   lastReceipt: PosReceiptInput | null;
+  /** Owner D152 — the last drawer close slip this iPad printed (null = none yet). */
+  lastCloseSlip: DrawerCloseSlipInfo | null;
   /** B17 — the parked sale (null = nothing on hold). */
   heldSale: HeldSale | null;
   onStartSale: () => void;
@@ -3105,6 +3156,8 @@ function HomeScreen({
   onDiscardHold?: () => void;
   /** B17 — reprint the last receipt (undefined until a sale exists). */
   onReprintLast?: () => void;
+  /** Owner D152 — reprint the last drawer close slip (undefined until a close). */
+  onReprintCloseSlip?: () => void;
   /** B17 — open the manager-approved no-sale drawer flow. */
   onNoSale: () => void;
   /** B21 — open a register-side till action (count-in / drop / blind close / safe swap). */
@@ -3226,6 +3279,22 @@ function HomeScreen({
                     {lastReceipt
                       ? `Receipt ${receiptNumber(lastReceipt.saleClientUuid)} — never pops the drawer`
                       : "Available after the first sale on this device"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onReprintCloseSlip?.();
+                  }}
+                  disabled={!onReprintCloseSlip}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
+                >
+                  🧾 Reprint drawer close slip
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">
+                    {lastCloseSlip
+                      ? `${lastCloseSlip.registerName}, ${lastCloseSlip.closedByName} (ref ${drawerRef(lastCloseSlip.sessionId)}) — no amounts, never pops the drawer`
+                      : "Available after a drawer is closed on this device"}
                   </span>
                 </button>
                 <button
@@ -6140,7 +6209,14 @@ function TillModal({
   standardFloatMinor: number | null;
   onClose: () => void;
   /** actorEmployeeId: whose PIN did it (the server says), for the clock-out guard (G-61). */
-  onDone: (mode: "open" | "drop" | "close" | "swap", drawer: DrawerInfo, message: string, actorEmployeeId: string | null) => void;
+  onDone: (
+    mode: "open" | "drop" | "close" | "swap",
+    drawer: DrawerInfo,
+    message: string,
+    actorEmployeeId: string | null,
+    /** Owner D152: the server's close details for the drawer close slip (close only; may be absent). */
+    closeSlip?: unknown,
+  ) => void;
 }) {
   const [denoms, setDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
   const [amount, setAmount] = useState("");
@@ -6343,6 +6419,8 @@ function TillModal({
             employeeId?: string;
             floatWarning?: string | null;
             tipPool?: { shareMinor: number; sentence: string };
+            /** Owner D152: who/which/when for the drawer close slip. Never money. */
+            closeSlip?: unknown;
           }
         | null;
       if (!res.ok || !resBody?.ok) {
@@ -6374,9 +6452,11 @@ function TillModal({
             : tips.trim() && tipsMinor !== null
               ? `Drawer closed with ${formatCents(tipsMinor)} in tips.`
               : "Drawer closed.") +
-            " The register is ready for the next cashier. The second count is done in the office." +
+            " The register is ready for the next cashier. Leave the printed drawer close slip with the till." +
+            " The second count is done in the office." +
             " You are still clocked in: you can clock out now on the lock screen (owner rules D84, D132).",
           null,
+          resBody.closeSlip ?? null,
         );
       }
     } catch {

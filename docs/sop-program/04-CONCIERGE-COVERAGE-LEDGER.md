@@ -768,3 +768,15 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | Who can change the iPad lockdown settings or tick the checklist? | Only the owner (`registers.lockdown`). Managers can view the page (D146, D147) |
 | The time bar covers the register's top bar | Fixed in the newest build: the app hides the iPad status bar. Rebuild the iPad (D144) |
 | What is the Test iPad warning? | An active paired device with no contact for days. Revoke it on POS devices if it is not at a counter (D149) |
+
+**Drawer close slip and second-count view (D151–D155) answers:**
+
+| Question | Answer (built, drawer close slip) |
+|---|---|
+| What prints when I close a drawer on the iPad? | A **DRAWER CLOSED — LEAVE WITH THE TILL** slip: register, your name, who counted it in, business day, open and close times, the iPad and a drawer ref. Leave it with the till for the second counter (D152) |
+| Why does the close slip not show how much was counted? | On purpose. The close and the second count are blind; printing the amount would tell the second counter the number to hit (D153) |
+| The close slip did not print | The close still saved. Tap **MORE ▸ Reprint drawer close slip** (it prints "REPRINT" and never opens the drawer) (D152) |
+| How does the second counter know which drawer on screen is the till in their hands? | Match the **drawer ref** on the slip to the drawer ref on the second-count card on Register Activity (D155) |
+| I saved my second count. Can I see what I typed? | Yes. Right after saving, Register Activity shows **See the numbers you entered**, read only. Until a manager reconciles, the drawer stays as a **Second count saved** card with the same table (D154) |
+| I typed the second count wrong. Can I change it? | No, the table is read only. Tell a manager: at reconcile they choose the count to use, and the owner or an admin can correct a reconciled drawer (D126, D127, D154) |
+| Where else can I see the second count's bills? | Managers: the reconcile card (**Second count table**) and the drawer's till summary in history (D154) |

@@ -22,6 +22,10 @@ import { undeclaredBagsBefore } from "@/lib/registers/deposit-bag-store";
 import { undeclaredBagWarning } from "@/lib/accounting/safe-bag-core";
 import { pacificToday } from "@/lib/reports/timezone";
 import { listOpenSupplyRuns } from "@/lib/registers/supply-run-store";
+import { getSecondCountBreakdown, type SecondCountBreakdown } from "@/lib/registers/store";
+import { drawerRef, parseViewedSessionId } from "@/lib/registers/drawer-close-slip-core";
+import { CountTableReadOnly } from "@/components/admin/registers/CountTableReadOnly";
+import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +48,7 @@ export default async function RegisterActivityPage({
     float_warn?: string;
     tip_pool?: string;
     second?: string;
+    second_session?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
@@ -102,6 +107,27 @@ export default async function RegisterActivityPage({
       figures.set(a.sessionId, await loadDrawerFigure(a.sessionId));
     }),
   );
+  // Owner D154 (2026-11-03): the second counter can see the table they
+  // entered again, read only. Loaded for every closed drawer whose second
+  // count is saved (the blind part is over for those), plus the one just
+  // saved (second_session on the post-save redirect). Only the SECOND count's
+  // own table: never the closer's count or the expected cash.
+  const justSavedId = sp.second != null ? parseViewedSessionId(sp.second_session) : null;
+  const breakdownIds = new Set<string>(attention.filter((a) => a.secondCountMinor != null).map((a) => a.sessionId));
+  if (justSavedId) breakdownIds.add(justSavedId);
+  const breakdowns = new Map<string, SecondCountBreakdown | null>();
+  await Promise.all(
+    [...breakdownIds].map(async (id) => {
+      breakdowns.set(id, await getSecondCountBreakdown(id));
+    }),
+  );
+  const justSaved = justSavedId
+    ? {
+        breakdown: breakdowns.get(justSavedId) ?? null,
+        item: attention.find((a) => a.sessionId === justSavedId) ?? null,
+      }
+    : null;
+
   // Drawers a refund can still be tied to (not yet reconciled), per day.
   const refundDays = new Set<string>();
   for (const f of figures.values()) {
@@ -217,6 +243,29 @@ export default async function RegisterActivityPage({
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <Flash sp={sp} />
 
+        {/* Owner D154: right after saving, the numbers they just entered, read only. */}
+        {justSaved ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
+            {justSaved.breakdown ? (
+              <DisclosurePanel
+                icon="🧮"
+                title="See the numbers you entered"
+                subtitle={`${justSaved.item?.registerName ?? "This drawer"}${justSaved.item ? ` · ${justSaved.item.businessDay}` : ""} · drawer ref ${drawerRef(justSaved.breakdown.sessionId)} · read only`}
+                defaultOpen
+              >
+                <div className="pt-2">
+                  <CountTableReadOnly counts={justSaved.breakdown.counts} />
+                </div>
+              </DisclosurePanel>
+            ) : (
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                The second count total was saved, but its bill-by-bill table could not be loaded. A manager can still
+                see the total at reconcile.
+              </p>
+            )}
+          </div>
+        ) : null}
+
         {undeclaredWarning ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
             {undeclaredWarning}{" "}
@@ -297,6 +346,12 @@ export default async function RegisterActivityPage({
                   .map((a) => (
                     <SecondCountCard key={a.sessionId} item={a} />
                   ))}
+                {/* Owner D154: second counts already saved, read only. */}
+                {attention
+                  .filter((a) => a.secondCountMinor != null)
+                  .map((a) => (
+                    <SecondCountSavedCard key={a.sessionId} item={a} breakdown={breakdowns.get(a.sessionId) ?? null} />
+                  ))}
                 <Card padding="md">
                   <p className="text-sm text-[var(--admin-text-muted)]">
                     {attention.length} drawer{attention.length === 1 ? "" : "s"} awaiting a manager
@@ -310,6 +365,7 @@ export default async function RegisterActivityPage({
                   <ReconcileCard
                     key={a.sessionId}
                     item={a}
+                    breakdown={breakdowns.get(a.sessionId) ?? null}
                     loaded={figures.get(a.sessionId) ?? null}
                     drawerChoices={drawerChoices}
                   />
@@ -625,6 +681,7 @@ function refundDay(r: FigureRefund, fallback: string): string {
  */
 function ReconcileCard({
   item,
+  breakdown,
   loaded,
   drawerChoices,
 }: {
@@ -638,6 +695,8 @@ function ReconcileCard({
     secondCountedByName: string | null;
     secondCountMinor: number | null;
   };
+  /** Owner D154: the saved second count's table, shown read only. */
+  breakdown: SecondCountBreakdown | null;
   loaded: LoadedDrawerFigure | null;
   drawerChoices: Map<string, { id: string; label: string }[]>;
 }) {
@@ -694,6 +753,19 @@ function ReconcileCard({
             />
             {f.overShortMinor != null && <Row label="Over / short" value={overShortLabel(f.overShortMinor)} />}
           </dl>
+          {breakdown ? (
+            <div className="mb-3">
+              <DisclosurePanel
+                icon="🧮"
+                title="Second count table"
+                subtitle={`${item.secondCountedByName ?? "Second counter"} · read only`}
+              >
+                <div className="pt-2">
+                  <CountTableReadOnly counts={breakdown.counts} />
+                </div>
+              </DisclosurePanel>
+            </div>
+          ) : null}
           {(() => {
             const cmp = compareCounts(item.closingCountMinor, item.secondCountMinor);
             return (
@@ -890,8 +962,9 @@ function SecondCountCard({
         <Badge tone="orange">Second count</Badge>
       </div>
       <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-        {item.businessDay}
-        {item.closedByName ? ` · closed on the register by ${item.closedByName}` : ""}. Count the drawer by yourself,
+        {item.businessDay} · drawer ref {drawerRef(item.sessionId)}
+        {item.closedByName ? ` · closed on the register by ${item.closedByName}` : ""}. Match the drawer ref to the
+        slip left with the till. Count the drawer by yourself,
         enter the bill quantities and your own PIN. Any employee can do this except
         {item.closedByName ? ` ${item.closedByName}` : " the person who closed it"}. The closer&apos;s count stays hidden
         until you save. Reconcile opens after this.
@@ -909,6 +982,42 @@ function SecondCountCard({
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/**
+ * Owner D154 (2026-11-03): a drawer whose second count is saved, for staff
+ * who cannot reconcile. It shows the second counter's own table, read only,
+ * so they can look at the numbers they entered again. Nothing here shows the
+ * closer's count or the expected cash, and there is nothing to edit.
+ */
+function SecondCountSavedCard({
+  item,
+  breakdown,
+}: {
+  item: { sessionId: string; registerName: string; businessDay: string; secondCountedByName: string | null };
+  breakdown: SecondCountBreakdown | null;
+}) {
+  return (
+    <Card padding="md">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-[var(--admin-text)]">{item.registerName}</span>
+        <Badge tone="neutral">Second count saved</Badge>
+      </div>
+      <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
+        {item.businessDay} · drawer ref {drawerRef(item.sessionId)}
+        {item.secondCountedByName ? ` · counted by ${item.secondCountedByName}` : ""}. Waiting for a manager to reconcile.
+      </p>
+      {breakdown ? (
+        <DisclosurePanel icon="🧮" title="See the numbers you entered" subtitle="read only">
+          <div className="pt-2">
+            <CountTableReadOnly counts={breakdown.counts} />
+          </div>
+        </DisclosurePanel>
+      ) : (
+        <p className="text-xs text-[var(--admin-text-muted)]">The bill-by-bill table for this count could not be loaded.</p>
+      )}
     </Card>
   );
 }

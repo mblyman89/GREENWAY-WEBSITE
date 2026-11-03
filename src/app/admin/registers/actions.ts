@@ -268,7 +268,11 @@ export async function secondCountAction(formData: FormData): Promise<void> {
     },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?second=1${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}`);
+  // Owner D154 (2026-11-03): carry the drawer id back so the page can offer
+  // "See the numbers you entered" (read only) right after saving.
+  redirect(
+    `${BASE}?second=1&second_session=${encodeURIComponent(sessionId)}${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}`,
+  );
 }
 
 /**
