@@ -140,7 +140,7 @@ const heldRow = (over: Record<string, unknown> = {}) => ({
 // === 1. Pure core =============================================================
 describe("S18 pure core", () => {
   it("self-tests pass with an exact count (a deleted check turns this red)", () => {
-    expect(__runCutoverGuardTests().passed).toBe(85);
+    expect(__runCutoverGuardTests().passed).toBe(101);
   });
   it("the version-copy core self-tests pass with an exact count (S18 added 7)", () => {
     const r = __runIntakeVersionCopyCoreTests();
@@ -264,6 +264,39 @@ describe("S18.5 guard unit test - the REAL module on a fake network", () => {
     expect(q(0).get("order")).toBe("created_at.desc");
     expect(q(0).get("limit")).toBe(String(CUTOVER_BLOCKER_READ_MAX));
     expect(CUTOVER_BLOCKER_READ_MAX).toBe(10);
+  });
+  it("D156: a staged re-press of the PUBLISHED upload's files never blocks; one bounded pos_imports read", async () => {
+    const { readCultiveraBlocker } = await import("@/lib/pos/cutover-guard");
+    const IMP = "5b8879c6-1f1f-4bd9-b4c6-862bb77bb13c";
+    const H1 = "e".repeat(64), H2 = "9".repeat(64);
+    net.replies = [
+      ok([{ id: "c5", import_id: IMP, status: "staged", is_test: false }]),
+      ok([
+        { id: "a474040b-0f1d-476e-b32d-99c5fe4bef50", status: "published", is_test: false, products_file_hash: H1, inventories_file_hash: H2 },
+        { id: IMP, status: "staged", is_test: false, products_file_hash: H1, inventories_file_hash: H2 },
+      ]),
+    ];
+    await expect(readCultiveraBlocker()).resolves.toBeNull();
+    expect(net.reqs).toHaveLength(2);
+    expect(net.reqs[1].url.pathname).toBe("/rest/v1/pos_imports");
+    expect(q(1).get("select")).toBe("id,status,is_test,products_file_hash,inventories_file_hash");
+    expect(q(1).get("or")).toBe(`(status.eq.published,id.in.(${IMP}))`);
+    expect(q(1).get("is_test")).toBe("eq.false");
+    expect(q(1).get("limit")).toBe("30");
+  });
+  it("D156: a different file pair still blocks; a failed hash read keeps the old rule (blocks)", async () => {
+    const { readCultiveraBlocker } = await import("@/lib/pos/cutover-guard");
+    const IMP = "5b8879c6-1f1f-4bd9-b4c6-862bb77bb13c";
+    net.replies = [
+      ok([{ id: "c5", import_id: IMP, status: "staged", is_test: false }]),
+      ok([
+        { id: "p", status: "published", is_test: false, products_file_hash: "a".repeat(64), inventories_file_hash: "b".repeat(64) },
+        { id: IMP, status: "staged", is_test: false, products_file_hash: "c".repeat(64), inventories_file_hash: "b".repeat(64) },
+      ]),
+    ];
+    await expect(readCultiveraBlocker()).resolves.toEqual({ versionIds: ["c5"] });
+    net.replies = [ok([{ id: "c5", import_id: IMP, status: "staged", is_test: false }]), fail()];
+    await expect(readCultiveraBlocker()).resolves.toEqual({ versionIds: ["c5"] });
   });
   it("guard holds while a real Cultivera version is staged (S18.6)", async () => {
     const { shouldHoldForCutover } = await import("@/lib/pos/cutover-guard");
@@ -581,7 +614,7 @@ describe("S18 test-the-tests", () => {
   it("the self-test counter is live: a broken core would throw, not silently pass", () => {
     expect(() => {
       const r = __runCutoverGuardTests();
-      if (r.passed !== 85) throw new Error("count moved");
+      if (r.passed !== 101) throw new Error("count moved");
     }).not.toThrow();
   });
 });

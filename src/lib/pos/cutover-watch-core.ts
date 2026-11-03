@@ -21,6 +21,9 @@
  *   - an import created in the last WATCH_IMPORT_LOOKBACK_HOURS:
  *       failed               -> critical, once per import
  *       stuck "processing"   -> warning, once per import
+ *   - D156: a receiving update held for cutover for HELD_TOO_LONG_MINUTES
+ *       -> warning, once per held version ("a Cultivera upload is still
+ *          staged and blocking receiving"; the two-day silent hold of Nov 1-3)
  */
 import type { CrawlerRun } from "@/lib/pos/cultivera-fetch-button-core";
 
@@ -165,6 +168,21 @@ function importAlert(i: WatchImportFact, nowMs: number): WatchAlert | null {
   return null;
 }
 
+/** D156: one warning per held receiving update that waited an hour or more. */
+export function heldAlerts(held: readonly { versionId: string; manifestId: string | null; minutes: number }[]): WatchAlert[] {
+  return held.map((h) => ({
+    dedupeKey: `cutover:held-too-long:${h.versionId}`,
+    stage: WATCH_STAGE,
+    weekKey: null,
+    urgency: "warning" as const,
+    subject: "Receiving updates are waiting on an unpublished Cultivera upload",
+    body: `A receiving update has waited ${h.minutes >= 120 ? `${Math.floor(h.minutes / 60)} hours` : `${h.minutes} min`} because a real Cultivera upload is still staged, so new products from that delivery have no price on the live menu. Open the cutover page: publish the newest Cultivera upload, or ask for the extra upload to be cleared, then press "Rebuild on the live menu".`,
+    linkPath: WATCH_LINK_CUTOVER,
+    linkLabel: "Open the cutover page",
+    footnote: FOOT,
+  }));
+}
+
 /** Every alert due now, critical first. Deterministic for the same facts. */
 export function planCutoverAlerts(input: {
   nowMs: number;
@@ -254,6 +272,7 @@ export function describeWatchLog(row: { dedupe_key: string; stage: string; chann
     "harvest-unreachable": "Crawler unreachable",
     "import-failed": "Import failed",
     "import-stuck": "Import stuck",
+    "held-too-long": "Receiving held too long",
     test: "Test alert",
   };
   const what = WHAT[kind] ?? "Alert";
@@ -356,5 +375,11 @@ export function __runCutoverWatchCoreTests(): { passed: number; failed: number }
   ok(describeWatchLog({ dedupe_key: "cutover:harvest-done:r", stage: WATCH_STAGE, channel: "email", recipients: WATCH_CLAIM_PENDING }, now, "2026-10-31T15:57:00Z").tone === "wait", "log: claimed 3 min ago = sending");
   ok(describeWatchLog({ dedupe_key: "cutover:harvest-done:r", stage: WATCH_STAGE, channel: "email", recipients: WATCH_CLAIM_PENDING }, now, "2026-10-31T15:54:00Z").tone === "bad", "log: claimed 6 min ago = interrupted");
   ok(describeWatchLog({ dedupe_key: "weird", stage: WATCH_STAGE, channel: "email", recipients: null }, now, T).what === "Alert", "log: unknown key named Alert");
+  // D156 held too long
+  const ha = heldAlerts([{ versionId: "v9", manifestId: "m", minutes: 61 }, { versionId: "v8", manifestId: null, minutes: 2900 }]);
+  ok(ha.length === 2 && ha[0].dedupeKey === "cutover:held-too-long:v9" && ha[0].urgency === "warning" && ha[0].linkPath === WATCH_LINK_CUTOVER, "held: one warning per version, cutover link");
+  ok(ha[0].body.includes("61 min") && ha[1].body.includes("48 hours"), "held: minutes then hours");
+  ok(heldAlerts([]).length === 0, "held: none -> silent");
+  ok(describeWatchLog({ dedupe_key: "cutover:held-too-long:v9", stage: WATCH_STAGE, channel: "email", recipients: "a" }, now, T).what === "Receiving held too long", "log: held named");
   return { passed, failed };
 }

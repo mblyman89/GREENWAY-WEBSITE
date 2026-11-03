@@ -2668,7 +2668,7 @@ __runLiquidVolumeTests();
   assertRan("barcode-match-core", __runBarcodeMatchCoreTests(), 34); // R50 A7: barcode-first inputs (shape, reads, own-lot exclusion)
   assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 120); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
   assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28); // R50 A3: dry-run preview copy + COA URL triage
-  assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37); // R50 A4: cutover failure-alert planner
+  assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 41); // R50 A4: cutover failure-alert planner
   assertRan("cutover-weekend-core", __runCutoverWeekendCoreTests(), 42); // R50 A5: the dated, timed cutover weekend on one page
   assertRan("cutover-drift-core", __runCutoverDriftCoreTests(), 48); // R50 A6: daily drift check 11/02-11/08 (on hand vs Cultivera + every recorded change)
   assertRan("image-recommend-core", __runImageRecommendCoreTests(), 18); // R51: onboarding image recommendations (memory > on record > name match, confidence %)

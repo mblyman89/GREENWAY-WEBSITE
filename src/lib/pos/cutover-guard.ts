@@ -22,8 +22,13 @@ import {
   HELD_READ_MAX,
   HELD_ROW_SELECT,
   TARGET_SELECT,
+  IMPORT_HASH_READ_MAX,
+  IMPORT_HASH_SELECT,
   blockingCultivera,
   cutoverDone,
+  dropPublishedCopies,
+  safeImportIds,
+  type ImportHashRow,
   cutoverGuardEnabled,
   decidePublish,
   manifestsToRelease,
@@ -62,10 +67,41 @@ export async function readCultiveraBlocker(): Promise<CutoverBlocking | null | "
       console.error("[cutover-guard] blocker read error:", error.message);
       return "unknown";
     }
-    return blockingCultivera((data as HeldRow[] | null) ?? []);
+    const rows = (data as HeldRow[] | null) ?? [];
+    if (blockingCultivera(rows) === null) return null;
+    return blockingCultivera(dropPublishedCopies(rows, await readImportHashes(rows)));
   } catch (err) {
     console.error("[cutover-guard] blocker read exception:", err);
     return "unknown";
+  }
+}
+
+/**
+ * D156: the pos_imports file hashes of the staged blockers plus the published
+ * real upload(s), so a re-press of the same export never blocks. One bounded
+ * read, named columns; ids are uuid-checked before they reach the filter.
+ * A failed read returns [] and every blocker keeps blocking (the old rule).
+ */
+async function readImportHashes(rows: readonly HeldRow[]): Promise<ImportHashRow[]> {
+  const ids = safeImportIds(rows);
+  if (ids.length === 0) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("pos_imports")
+      .select(IMPORT_HASH_SELECT)
+      .or(`status.eq.published,id.in.(${ids.join(",")})`)
+      .eq("is_test", false)
+      .order("created_at", { ascending: false })
+      .limit(IMPORT_HASH_READ_MAX);
+    if (error) {
+      console.error("[cutover-guard] import-hash read error:", error.message);
+      return [];
+    }
+    return (data as ImportHashRow[] | null) ?? [];
+  } catch (err) {
+    console.error("[cutover-guard] import-hash read exception:", err);
+    return [];
   }
 }
 

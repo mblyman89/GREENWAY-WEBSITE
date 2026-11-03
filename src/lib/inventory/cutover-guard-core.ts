@@ -124,6 +124,110 @@ export function blockingCultivera(
   return ids.length > 0 ? { versionIds: ids } : null;
 }
 
+// ---------------------------------------------------------------------------
+// 1b. Copies of an already-published upload never block (D156)
+// ---------------------------------------------------------------------------
+
+/** The pos_imports facts needed to recognise a re-press of the same files. */
+export type ImportHashRow = {
+  id?: unknown;
+  status?: unknown;
+  is_test?: unknown;
+  products_file_hash?: unknown;
+  inventories_file_hash?: unknown;
+};
+
+/** The select string for the import-hash read (pinned by the tests). */
+export const IMPORT_HASH_SELECT = "id, status, is_test, products_file_hash, inventories_file_hash";
+
+/** Most import rows read for the copy check (blockers + published, far above real use). */
+export const IMPORT_HASH_READ_MAX = 30;
+
+const HASH_RE = /^[0-9a-f]{16,128}$/i;
+function hashPair(r: ImportHashRow): string | null {
+  const a = typeof r.products_file_hash === "string" ? r.products_file_hash.trim().toLowerCase() : "";
+  const b = typeof r.inventories_file_hash === "string" ? r.inventories_file_hash.trim().toLowerCase() : "";
+  if (!HASH_RE.test(a) || !HASH_RE.test(b)) return null;
+  return a + "|" + b;
+}
+
+/**
+ * D156. The owner pressed Upload six times in two minutes (he thought the
+ * button did nothing). The 4th copy was published; copies 5 and 6 were
+ * created after it, so 0236 never archived them and they blocked receiving
+ * for two days. A staged real upload whose BOTH file hashes equal a
+ * PUBLISHED real upload's is the same export pressed again: publishing it
+ * could add nothing, so it must never hold receiving.
+ *
+ * Returns the blocking rows that are NOT such copies. Fail-safe in the old
+ * direction: a row whose import is missing, or whose hashes are absent or
+ * malformed, keeps blocking exactly as before (never guess).
+ */
+export function dropPublishedCopies<T extends CutoverRow>(
+  rows: readonly T[] | null | undefined,
+  imports: readonly ImportHashRow[] | null | undefined,
+): T[] {
+  const published = new Set<string>();
+  const byId = new Map<string, ImportHashRow>();
+  for (const r of imports ?? []) {
+    if (typeof r.id === "string") byId.set(r.id, r);
+    if (r.status === "published" && r.is_test !== true) {
+      const h = hashPair(r);
+      if (h) published.add(h);
+    }
+  }
+  return (rows ?? []).filter((row) => {
+    const imp = typeof row.import_id === "string" ? byId.get(row.import_id) : undefined;
+    if (!imp || imp.status === "published") return true;
+    const h = hashPair(imp);
+    return !(h && published.has(h));
+  });
+}
+
+/** UUID check for ids put into an `or=` filter (they come from our own rows; defence in depth). */
+export function safeImportIds(rows: readonly CutoverRow[] | null | undefined): string[] {
+  const out: string[] = [];
+  for (const r of rows ?? []) {
+    if (typeof r.import_id === "string" && UUID_RE_GUARD.test(r.import_id) && !out.includes(r.import_id)) out.push(r.import_id);
+  }
+  return out;
+}
+const UUID_RE_GUARD = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ---------------------------------------------------------------------------
+// 1c. Held too long (D156 alert)
+// ---------------------------------------------------------------------------
+
+/** A receiving update waiting this long for cutover gets one alert. */
+export const HELD_TOO_LONG_MINUTES = 60;
+
+/**
+ * The held receiving updates that have waited at least HELD_TOO_LONG_MINUTES
+ * (one per delivery, newest row). Garbage times never alert.
+ */
+export function heldTooLong(
+  rows: readonly HeldRow[] | null | undefined,
+  nowMs: number,
+): Array<{ versionId: string; manifestId: string | null; minutes: number }> {
+  const out: Array<{ versionId: string; manifestId: string | null; minutes: number }> = [];
+  const seenManifest = new Set<string>();
+  const sorted = [...(rows ?? [])].sort((a, b) => Date.parse(String(b.created_at ?? "")) - Date.parse(String(a.created_at ?? "")));
+  for (const r of sorted) {
+    if (!isHeldForCutover(r) || typeof r.id !== "string") continue;
+    const t = Date.parse(String(r.created_at ?? ""));
+    if (Number.isNaN(t)) continue;
+    const minutes = Math.floor((nowMs - t) / 60000);
+    if (minutes < HELD_TOO_LONG_MINUTES) continue;
+    const m = typeof r.manifest_id === "string" ? r.manifest_id : null;
+    if (m) {
+      if (seenManifest.has(m)) continue;
+      seenManifest.add(m);
+    }
+    out.push({ versionId: r.id, manifestId: m, minutes });
+  }
+  return out;
+}
+
 /**
  * Should a hand publish of `versionId` be refused? Only when a real Cultivera
  * upload is staged AND the version being published is not one of those
@@ -567,6 +671,36 @@ export function __runCutoverGuardTests(): { passed: number } {
   ok(!rebuildNote({ staged: true }).ok && rebuildNote({ staged: true }).text.includes("waiting under Admin"), "rebuild staged but waiting");
   ok(!rebuildNote({ reason: "no-new-items" }).ok && rebuildNote({ reason: "no-new-items" }).text.startsWith("Nothing to rebuild"), "nothing new");
   ok(!rebuildNote(null).ok && !rebuildNote({ reason: "exception" }).ok, "failure honest");
+
+  // D156: copies of a published upload never block.
+  const H1 = "a".repeat(64), H2 = "b".repeat(64), H3 = "c".repeat(64);
+  const pubImp = { id: "i-pub", status: "published", is_test: false, products_file_hash: H1, inventories_file_hash: H2 };
+  const dupImp = { id: "i-dup", status: "staged", is_test: false, products_file_hash: H1.toUpperCase(), inventories_file_hash: H2 };
+  const newImp = { id: "i-new", status: "staged", is_test: false, products_file_hash: H3, inventories_file_hash: H2 };
+  const vDup = { id: "v-dup", import_id: "i-dup", status: "staged", is_test: false };
+  const vNew = { id: "v-new", import_id: "i-new", status: "staged", is_test: false };
+  const vLost = { id: "v-lost", import_id: "i-lost", status: "staged", is_test: false };
+  ok(dropPublishedCopies([vDup], [pubImp, dupImp]).length === 0, "identical file pair of a published upload never blocks");
+  ok(dropPublishedCopies([vNew], [pubImp, newImp]).length === 1, "different products file still blocks");
+  ok(dropPublishedCopies([vLost], [pubImp]).length === 1, "import row missing -> keeps blocking (never guess)");
+  ok(dropPublishedCopies([vDup], [dupImp]).length === 1, "no published upload -> keeps blocking");
+  ok(dropPublishedCopies([vDup], [{ ...pubImp, is_test: true }, dupImp]).length === 1, "a published TEST upload proves nothing");
+  ok(dropPublishedCopies([vDup], [pubImp, { ...dupImp, products_file_hash: null }]).length === 1, "missing hash keeps blocking");
+  ok(dropPublishedCopies([vDup], [{ ...pubImp, products_file_hash: "x" }, dupImp]).length === 1, "malformed hash proves nothing");
+  ok(dropPublishedCopies(null, null).length === 0 && dropPublishedCopies([vNew], null).length === 1, "null-safe");
+  ok(blockingCultivera(dropPublishedCopies([vDup, vNew], [pubImp, dupImp, newImp]))!.versionIds.join() === "v-new", "only the real new upload blocks");
+  ok(safeImportIds([{ import_id: "5b8879c6-1f1f-4bd9-b4c6-862bb77bb13c" }, { import_id: "x),status.eq.y" }, { import_id: "5b8879c6-1f1f-4bd9-b4c6-862bb77bb13c" }]).length === 1, "only uuids reach the or= filter, once");
+  ok(IMPORT_HASH_SELECT === "id, status, is_test, products_file_hash, inventories_file_hash" && IMPORT_HASH_READ_MAX === 30, "import-hash read shape");
+
+  // D156: held too long.
+  const NOW = Date.parse("2026-11-03T20:00:00Z");
+  const heldRow = (id: string, at: string, m: string | null = "m1") => ({ id, import_id: null, status: "staged", origin: "intake", state: CUTOVER_OUTCOME, manifest_id: m, created_at: at });
+  ok(heldTooLong([heldRow("h1", "2026-11-03T19:01:00Z")], NOW).length === 0, "59 min: no alert");
+  const ht = heldTooLong([heldRow("h1", "2026-11-03T19:00:00Z"), heldRow("h2", "2026-11-03T18:00:00Z")], NOW);
+  ok(ht.length === 1 && ht[0].versionId === "h1" && ht[0].minutes === 60, "60 min: one alert per delivery, newest row");
+  ok(heldTooLong([heldRow("a", "2026-11-03T10:00:00Z", "m1"), heldRow("b", "2026-11-03T10:00:00Z", "m2"), heldRow("c", "2026-11-03T10:00:00Z", null)], NOW).length === 3, "each delivery alerts");
+  ok(heldTooLong([{ ...heldRow("x", "2026-11-03T10:00:00Z"), state: "held_for_fact_review" }, heldRow("y", "junk")], NOW).length === 0, "fact holds and garbage times never alert");
+  ok(HELD_TOO_LONG_MINUTES === 60, "one hour");
 
   // One-time.
   ok(cutoverDone("2026-01-01T00:00:00Z", 1), "published Cultivera + receiving after = done");

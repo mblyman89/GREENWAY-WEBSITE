@@ -22,6 +22,7 @@
  * channel exists (same rule as the compliance reminders).
  */
 import "server-only";
+import { HELD_READ_MAX, HELD_ROW_SELECT, heldTooLong, type HeldRow } from "@/lib/inventory/cutover-guard-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
@@ -39,6 +40,7 @@ import {
   WATCH_TEST_STAGE,
   alertHtml,
   planCutoverAlerts,
+  heldAlerts,
   plainText,
   runIdsToWatch,
   testAlert,
@@ -268,6 +270,22 @@ export async function runCutoverWatchTick(nowMs: number = Date.now()): Promise<W
   }
 
   const alerts = planCutoverAlerts({ nowMs, runs, imports: (impRows as WatchImportFact[] | null) ?? [], budgetSeconds: budgetSeconds() });
+
+  // 3) D156: receiving updates held for cutover for an hour or more. Fail-soft:
+  // a failed read only skips this check (the harvest/import alerts still go).
+  try {
+    const { data: heldRows, error: heldErr } = await admin
+      .from("menu_versions")
+      .select(HELD_ROW_SELECT)
+      .is("import_id", null)
+      .eq("status", "staged")
+      .order("created_at", { ascending: false })
+      .limit(HELD_READ_MAX);
+    if (heldErr) result.notes.push(`held read failed: ${heldErr.message}`);
+    else alerts.push(...heldAlerts(heldTooLong((heldRows as HeldRow[] | null) ?? [], nowMs)));
+  } catch (e) {
+    result.notes.push(`held read failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
   result.planned = alerts.length;
   if (alerts.length === 0) return result;
 
