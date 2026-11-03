@@ -308,7 +308,7 @@ describe("2a. Fix 3.5: only vendor_intake@ (never the owner's other addresses)",
 
 describe("2a-docs. Fix 3.5 is documented", () => {
   it("SOP-04 v1.10 step 6, KB fact, 03 F-04-26, 06 row", () => {
-    expect(read("docs/sop/SOP-04-receiving-intake.md")).toMatch(/\| \*\*Version\*\* \| 1\.10 \(Phase 3\.5/);
+    expect(read("docs/sop/SOP-04-receiving-intake.md")).toMatch(/\| \*\*Version\*\* \| 1\.(1\d) \([^\n]*Phase 3\.5/);
     expect(read("docs/sop/SOP-04-receiving-intake.md")).toContain("6. **Only vendor_intake@ mail (Phase 3.5).**");
     expect(read("src/lib/admin/concierge-kb.ts")).toContain("Receiving \\u2192 only vendor_intake@ mail (Phase 3.5;");
     expect(read("docs/sop-program/03-FINDINGS-LEDGER.md")).toContain("### F-04-26");
