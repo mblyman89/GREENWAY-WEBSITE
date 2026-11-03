@@ -564,6 +564,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Admin → Menu Imports is where you upload your POS PRODUCTS and INVENTORIES exports; the system stages them into a draft menu version for review.",
       "Nothing goes public until you Publish. You can roll back to a previous published version.",
       "Re-upload anytime your POS changes — each upload is a new staged version.",
+      "Intake unblock (owner rule D156\u2013D158, 2026-11-03: \"Please clear those out and unlock the system so I can start intaking the rest of the waiting manifests.\"): if new products from a delivery have no price, their menu update may be held. Open Admin \u2192 Menu Imports \u2192 Cutover; a delivery under Still to rebuild needs Rebuild on the live menu (it copies the live menu, including live stock, adds the delivery's products, and publishes). A copy of the same Cultivera files as the live upload never holds receiving (D157). A receiving update held for more than an hour sends one email/phone alert linking the cutover page (D158). The Cultivera upload page is being retired; nothing new is built for it.",
     ],
   },
 

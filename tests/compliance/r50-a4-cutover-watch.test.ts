@@ -139,8 +139,8 @@ async function tick() {
 describe("R50 A4 · the pure planner is wired and pinned", () => {
   it("self-tests pass at the pinned count, and the runner pins the same floor", async () => {
     const { __runCutoverWatchCoreTests } = await import("@/lib/pos/cutover-watch-core");
-    expect(__runCutoverWatchCoreTests()).toEqual({ passed: 37, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37)');
+    expect(__runCutoverWatchCoreTests()).toEqual({ passed: 41, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 41)');
   });
 });
 

@@ -780,3 +780,11 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | I saved my second count. Can I see what I typed? | Yes. Right after saving, Register Activity shows **See the numbers you entered**, read only. Until a manager reconciles, the drawer stays as a **Second count saved** card with the same table (D154) |
 | I typed the second count wrong. Can I change it? | No, the table is read only. Tell a manager: at reconcile they choose the count to use, and the owner or an admin can correct a reconciled drawer (D126, D127, D154) |
 | Where else can I see the second count's bills? | Managers: the reconcile card (**Second count table**) and the drawer's till summary in history (D154) |
+
+**Manifest intake unblock (D156–D158) answers:**
+
+| Question | Answer (built) |
+|---|---|
+| New products from a delivery have no price on the product page | Their menu update may be held. Open **Admin ▸ Menu Imports ▸ Cutover**: if a delivery is under *Still to rebuild*, press **Rebuild on the live menu** (D156) |
+| I pressed the Cultivera upload several times. Will the copies block receiving? | No. A copy of the same files as the live upload never holds receiving (D157) |
+| Will I know if receiving updates are stuck? | Yes. One email/phone alert per held update after an hour, linking the cutover page (D158) |
