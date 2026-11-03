@@ -213,7 +213,13 @@ export function looksLikeCertificate(text: string): boolean {
 export function readCertificate(text: string, docLabel: string, n: number): CoaCertificate {
   const key = `${docLabel}#${n}`;
   const ids = certificateIds(text);
-  const parsed = parseCoaPdfText(text);
+  const raw = parseCoaPdfText(text);
+  // D159: the general reader (any lab) is trusted here only on a page that
+  // already looks like ONE certificate - never on a manifest, invoice or list.
+  const parsed: typeof raw =
+    raw.ok && raw.doc.template === "generic" && !(looksLikeCertificate(text) && ids.length <= MAX_IDS_PER_CERT)
+      ? { ok: false, reason: "this text is not a lab certificate" }
+      : raw;
   if (!parsed.ok) {
     // A manifest / invoice prints GF ids too: text that is not a lab
     // certificate is NEVER a certificate (it would "match" every line by id).

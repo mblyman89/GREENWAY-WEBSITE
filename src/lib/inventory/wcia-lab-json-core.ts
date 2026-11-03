@@ -132,18 +132,37 @@ const TOTAL_ALIASES: Record<string, CannabinoidTotalKey> = {
   "total active delta(8)-tetrahydrocannabinol": "total-d8-thc",
   "total cannabinoids": "total-cannabinoids",
   "total-cannabinoids": "total-cannabinoids",
+  // D159: Medicine Creek Analytics (and any lab using the same plain words).
+  "activated total thc": "total-thc",
+  "activated total cbd": "total-cbd",
+  "total cannabinoid": "total-cannabinoids",
 };
+
+/** Sums a lab may print that are not one cannabinoid and not a total we use (never "unmapped"). */
+const IGNORED_SUMS = new Set(["total thc+cbd", "total thc + cbd", "total cbd+thc"]);
+
+/**
+ * D159: one spelling for every lab. Lower-case, Greek delta to "d", a leading
+ * "*" (accreditation footnote) dropped, "d9 thc-a" / "d9-thc-a" folded to
+ * "d9-thca". Unknown spellings still come back unknown (shown, never guessed).
+ */
+function foldName(raw: string): string {
+  let k = raw.trim().toLowerCase().replace(/\s+/g, " ").replace(/^\*+/, "");
+  k = k.replace(/[\u03b4\u0394]/g, "d").replace(/^delta[- ]?(\d)/, "d$1");
+  k = k.replace(/^d(\d) ?-? ?(thc|thcv)(?: ?-? ?a)$/, "d$1-$2a").replace(/^d(\d) ?-? ?(thc|thcv)$/, "d$1-$2");
+  return k;
+}
 
 /** Canonical key for a cannabinoid spelling, or null when unknown. */
 export function cannabinoidKey(raw: string): CannabinoidKey | null {
   const k = raw.trim().toLowerCase().replace(/\s+/g, " ");
-  return CANNABINOID_ALIASES[k] ?? null;
+  return CANNABINOID_ALIASES[k] ?? CANNABINOID_ALIASES[foldName(raw)] ?? null;
 }
 
 /** Canonical key for a cannabinoid TOTAL spelling, or null when unknown. */
 export function cannabinoidTotalKey(raw: string): CannabinoidTotalKey | null {
   const k = raw.trim().toLowerCase().replace(/\s+/g, " ");
-  return TOTAL_ALIASES[k] ?? null;
+  return TOTAL_ALIASES[k] ?? TOTAL_ALIASES[foldName(raw)] ?? null;
 }
 
 export type LabCannabinoid = { key: CannabinoidKey; name: string; pct: number };
@@ -212,8 +231,9 @@ const passFail = (v: unknown): "pass" | "fail" | null => {
   return s === "pass" ? "pass" : s === "fail" ? "fail" : null;
 };
 
-const isCannabinoidAssay = (t: string) => t === "cannabinoid assay" || t === "cannabinoids" || t === "potency";
-const isTerpeneAssay = (t: string) => t === "terpene assay" || t === "terpenes";
+// D159: any lab's wording ("Cannabinoid", "Cannabinoid Profile", "Potency Assay", "Terpene Profile").
+const isCannabinoidAssay = (t: string) => /\bcannabinoids?\b|\bpotency\b/.test(t);
+const isTerpeneAssay = (t: string) => /\bterpenes?\b|\bterpenoids?\b/.test(t);
 
 /**
  * Parse a WCIA Lab Result document (already JSON-parsed or as text).
@@ -276,6 +296,7 @@ export function parseWciaLabJson(input: unknown): WciaLabParse {
           continue;
         }
         const ck = cannabinoidKey(name);
+        if (!ck && IGNORED_SUMS.has(foldName(name))) continue;
         if (!ck) {
           unmapped.push(name);
           continue;
@@ -331,7 +352,7 @@ export function parseWciaLabJson(input: unknown): WciaLabParse {
       amendedDate: isoDate(root.amended_date),
       status: passFail(root.status),
       sampleId: str(sample.id),
-      sampleSourceId: str(sample.sample_source_id),
+      sampleSourceId: str(sample.sample_source_id) ?? str(sample.source_id),
       isMedical: med === 1 || med === "1" || med === true ? true : med === 0 || med === "0" || med === false ? false : null,
       cannabinoids,
       totals,
@@ -479,5 +500,32 @@ export function __runWciaLabJsonCoreTests(fixtures: Record<string, string>): { p
   ok(parseQom("0.1206") === 0.1206 && parseQom(" 5 ") === 5 && parseQom("-1") === null && parseQom("<0.1") === null, "parseQom");
   ok(cannabinoidKey("Delta(9)-Tetrahydrocannabinol") === "d9-thc" && cannabinoidKey("THCa") === "thca", "aliases case-insensitive");
   ok(cannabinoidKey("total-thc") === null && cannabinoidTotalKey("total-thc") === "total-thc", "a total is never an individual");
+  // D159: a lab never seen before (Medicine Creek Analytics, measured 2026-11-03).
+  const mc = parseWciaLabJson({
+    document_name: "WCIA Lab Result Schema", document_schema_version: "2.1.0", lab_name: "Medicine Creek Analytics",
+    lab_ccrs_license: "4160154835", sample: { id: "12074675516159269", source_id: "12074675516159269" }, labresult_id: "260811-008-LR",
+    status: "pass", coa: "https://laboratory-public-files.s3.us-west-2.amazonaws.com/260811-008/sample-report-260811-008.pdf",
+    metric_list: [
+      { test_type: "Cannabinoid", status: "pass", metrics: [
+        { name: "Activated Total CBD", qom: 0, uom: "pct" }, { name: "CBN", qom: 0, uom: "pct" },
+        { name: "\u03949 THC", qom: 70.6864, uom: "pct" }, { name: "\u03948 THC", qom: 0, uom: "pct" },
+        { name: "\u03949 THC-A", qom: 14.9981, uom: "pct" }, { name: "THCV", qom: 0, uom: "pct" },
+        { name: "Activated Total THC", qom: 83.8397, uom: "pct" }, { name: "Total Cannabinoid", qom: 85.6845, uom: "pct" },
+        { name: "Total THC+CBD", qom: 83.8397, uom: "pct" } ] },
+      { test_type: "Solvents", status: "pass", metrics: [{ name: "Acetone", qom: 0, uom: "ppm" }] },
+      { test_type: "Terpene Profile", status: null, metrics: [{ name: "Limonene", qom: 0.5, uom: "pct" }] },
+    ],
+  });
+  ok(mc.ok, "D159 Medicine Creek reads");
+  if (mc.ok) {
+    const d = mc.doc;
+    ok(pct(d, "d9-thc") === 70.6864 && pct(d, "thca") === 14.9981 && pct(d, "d8-thc") === 0, "D159 delta names fold (d9, d9-a, d8)");
+    ok(d.totals["total-thc"] === 83.8397 && d.totals["total-cbd"] === 0 && d.totals["total-cannabinoids"] === 85.6845, "D159 Activated Total THC/CBD + Total Cannabinoid");
+    ok(d.unmapped.length === 0, "D159 THC+CBD sum is not 'unmapped': " + d.unmapped.join());
+    ok(d.sampleId === "12074675516159269" && d.sampleSourceId === "12074675516159269", "D159 sample.source_id accepted");
+    ok(d.terpeneAssay && ppm(d, "limonene") === 5000, "D159 'Terpene Profile' is a terpene assay");
+  }
+  ok(cannabinoidKey("*CBDV") === "cbdv" && cannabinoidKey("Delta 9 THC") === "d9-thc" && cannabinoidKey("d9-THCV-A") === "thcva", "D159 footnote star / spaced delta / varin acid");
+  ok(cannabinoidKey("THC-X") === null && cannabinoidTotalKey("Total Mystery") === null, "D159 unknown names stay unknown");
   return { passed, failed };
 }

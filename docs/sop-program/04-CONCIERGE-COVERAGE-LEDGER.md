@@ -788,3 +788,10 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | New products from a delivery have no price on the product page | Their menu update may be held. Open **Admin ▸ Menu Imports ▸ Cutover**: if a delivery is under *Still to rebuild*, press **Rebuild on the live menu** (D156) |
 | I pressed the Cultivera upload several times. Will the copies block receiving? | No. A copy of the same files as the live upload never holds receiving (D157) |
 | Will I know if receiving updates are stuck? | Yes. One email/phone alert per held update after an hour, linking the cutover page (D158) |
+
+**Lab-agnostic certificates (D159) answers:**
+
+| Question | Answer (built) |
+|---|---|
+| A certificate is from a lab I have never heard of. Is the product blocked? | No. Every lab on a CCRS transfer is a certified lab. The general reader reads it, proves it is the same sample by its ids, and shows *"New lab layout … Please confirm these numbers against the PDF"*. The product is never held for it (D159) |
+| How do I re-read certificates received before this fix? | On the delivery press **Re-read every document in this delivery's email**, or on a lot press **Re-read lab certificate** (D159) |

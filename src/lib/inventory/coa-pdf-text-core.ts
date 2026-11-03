@@ -55,7 +55,13 @@
 import { cannabinoidKey, type CannabinoidKey } from "./wcia-lab-json-core";
 import { WA_ACID_FACTOR } from "./wa-total-cannabinoids-core";
 
-export type CoaTemplate = "confidence-8" | "confidence-7" | "ggl" | "testing-technologies";
+/**
+ * "generic" (D159): any other lab. The owner's rule: every lab a CCRS transfer
+ * names is a real WSLCB-certified lab, so an unfamiliar layout is read by a
+ * general reader that accepts only self-consistent rows and flags the result
+ * for the owner to confirm. It never blocks a product.
+ */
+export type CoaTemplate = "confidence-8" | "confidence-7" | "ggl" | "testing-technologies" | "generic";
 export type CoaTotalRow = "total-cannabinoids" | "total-thc" | "total-cbd";
 
 export type CoaPotencyRow = {
@@ -629,12 +635,175 @@ function parseTestingTech(text: string): CoaPdfDoc {
   };
 }
 
+// ---------------------------------------------------------------------------
+// D159: general reader for any lab's layout
+// ---------------------------------------------------------------------------
+
+/** Shown on every certificate the general reader read (never holds a product). */
+export const GENERIC_CONFIRM_NOTE =
+  "New lab layout - read by the general reader. Please confirm these numbers against the PDF; the product is not held.";
+
+const GEN_CELL = /^(?:\d+(?:\.\d+)?|ND|<LOQ|NT|N\/A|NA)$/;
+const LAB_STOP = new Set(["compliance", "pass", "fail", "passed", "failed", "certificate", "of", "analysis", "report", "sample", "results"]);
+
+/** Half a unit in the last printed place ("71" -> 0.5, "0.01" -> 0.005). */
+function halfUnit(tok: string): number {
+  const d = tok.includes(".") ? tok.split(".")[1].length : 0;
+  return 0.5 * Math.pow(10, -d);
+}
+
+/**
+ * Among the cells after a label, the % / mg-per-g pair: the LAST adjacent
+ * pair where mg/g = 10 x % within printed rounding (or both ND). No pair ->
+ * null: the row is not guessed.
+ */
+export function percentMgPair(cells: string[]): { pct: number | null; mgPerG: number | null; nd: boolean; loq: number | null } | null {
+  for (let i = cells.length - 2; i >= 0; i--) {
+    const a = cells[i];
+    const b = cells[i + 1];
+    const loqTok = i >= 1 ? cells[i - 1] : null;
+    const loq = loqTok && /^\d/.test(loqTok) ? Number(loqTok) : null;
+    if (a === "ND" && b === "ND") return { pct: 0, mgPerG: 0, nd: true, loq };
+    if (!/^\d/.test(a) || !/^\d/.test(b)) continue;
+    const pa = Number(a);
+    const pb = Number(b);
+    if (Math.abs(pb - 10 * pa) <= 10 * halfUnit(a) + halfUnit(b) + 1e-9) {
+      return { pct: pa, mgPerG: pb, nd: false, loq };
+    }
+  }
+  return null;
+}
+
+function parseGeneric(text: string): CoaPdfDoc {
+  const warnings: string[] = [];
+  const checks: CoaCheck[] = [];
+  const potency: CoaPotencyRow[] = [];
+  const toks = text.split(" ");
+  const seen = new Map<string, string>();
+  const halves = new Map<string, number>();
+  const conflicted = new Set<string>();
+  const add = (key: CannabinoidKey | CoaTotalRow, label: string, cells: string[]) => {
+    const p = percentMgPair(cells);
+    if (!p) return;
+    const sig = `${p.nd ? "ND" : p.pct}/${p.mgPerG}`;
+    const prev = seen.get(key);
+    if (prev !== undefined) {
+      if (prev !== sig) conflicted.add(key);
+      return;
+    }
+    seen.set(key, sig);
+    const idx = cells.findIndex((c, i) => i < cells.length - 1 && (p.nd ? c === "ND" && cells[i + 1] === "ND" : Number(c) === p.pct && Number(cells[i + 1]) === p.mgPerG));
+    if (idx >= 0 && !p.nd) halves.set(key, halfUnit(cells[idx]));
+    potency.push({ label, key, pct: p.pct, mgPerG: p.mgPerG, mgPerServing: null, mgPerPackage: null, loqPct: p.loq, nd: p.nd });
+  };
+  const cellsFrom = (j: number): string[] => {
+    const out: string[] = [];
+    while (j < toks.length && out.length < 4 && GEN_CELL.test(toks[j])) out.push(toks[j++]);
+    return out;
+  };
+  for (let i = 0; i < toks.length; i++) {
+    if (/^total$/i.test(toks[i]) && i + 1 < toks.length) {
+      const what = toks[i + 1].toLowerCase();
+      const key = TOTAL_LABELS[`total ${what}`];
+      if (!key) continue;
+      let j = i + 2;
+      if (toks[j]?.startsWith("(")) {
+        while (j < toks.length && !toks[j].endsWith(")") && j < i + 14) j++;
+        j++;
+      }
+      add(key, `Total ${toks[i + 1]}`, cellsFrom(j));
+      i = j - 1;
+      continue;
+    }
+    for (const span of [2, 1]) {
+      if (i + span > toks.length) continue;
+      const label = toks.slice(i, i + span).join(" ");
+      if (span === 2 && GEN_CELL.test(toks[i])) continue;
+      const key = cannabinoidKey(label.toLowerCase());
+      if (!key) continue;
+      const cells = cellsFrom(i + span);
+      if (cells.length >= 2) {
+        add(key, label.replace(/^[*^]+/, ""), cells);
+        i += span + cells.length - 1;
+      }
+      break;
+    }
+  }
+  for (const k of conflicted) {
+    const at = potency.findIndex((r) => r.key === k);
+    if (at >= 0) potency.splice(at, 1);
+    warnings.push(`${k}: printed more than once with different values - not read.`);
+  }
+  const pct = (k: CannabinoidKey | CoaTotalRow) => potency.find((r) => r.key === k)?.pct ?? null;
+  for (const [tot, neutral, acid] of [["total-thc", "d9-thc", "thca"], ["total-cbd", "cbd", "cbda"]] as const) {
+    const t = pct(tot);
+    const n = pct(neutral);
+    const a = pct(acid);
+    if (t === null || n === null || a === null) continue;
+    const exact = n + DECARB * a;
+    const tol = (halves.get(tot) ?? 0.005) + (halves.get(neutral) ?? 0.005) + DECARB * (halves.get(acid) ?? 0.005) + 1e-9;
+    checks.push({ what: `${tot} = ${neutral} + 0.877 x ${acid}`, ok: Math.abs(exact - t) <= tol, detail: `${n}% + 0.877 x ${a}% = ${round3(exact)}%; printed ${t}%` });
+  }
+  const labM = text.match(/(?:^|\s)((?:[A-Z][A-Za-z&'.-]+ ){1,3}(?:Analytics|Analytical|Laboratories|Laboratory|Labs|Lab|Testing))\b/);
+  let labName = "Unrecognised lab";
+  if (labM) {
+    const words = labM[1].split(" ");
+    while (words.length > 1 && LAB_STOP.has(words[0].toLowerCase())) words.shift();
+    labName = words.join(" ");
+  }
+  const sid = text.match(/\b(?:Lab )?Sample ID:? ([A-Z0-9][A-Z0-9-]{4,})/i);
+  const inv = text.match(/(?:External Inv(?:entory)? ID|Inventory ID|Source (?:Inventory )?ID|Lot ID|Batch ID)[^0-9]{0,40}?(\d{16,})/i);
+  const name = text.match(/\bSample(?: Name)?: (.{2,80}?) (?=Sample ID|Matrix|Batch|Lot|Strain|Client|Tested)/);
+  const matrix = text.match(/\bMatrix:? ([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)?) (?=Tested|Sample|Client|Lot|Batch|Received)/);
+  const passM = text.match(/\b(?:Compliance|Overall(?: Result)?|Batch Result|Final Result)[: ]+(Pass|Fail|Passed|Failed)\b/i);
+  const batchPass = passM ? (/^f/i.test(passM[1]) ? "fail" : "pass") : null;
+  if (potency.length > 0) warnings.unshift(GENERIC_CONFIRM_NOTE);
+  return {
+    template: "generic",
+    labName,
+    labSampleId: sid ? sid[1] : null,
+    batchId: inv ? inv[1] : null,
+    sampleName: name ? name[1].trim() : null,
+    productType: matrix ? matrix[1] : null,
+    matrixType: null,
+    servingWeightG: null,
+    packageWeightG: null,
+    batchPass,
+    auth: null,
+    templateVersion: null,
+    documentCreated: null,
+    potencyDate: null,
+    amended: null,
+    amendmentText: null,
+    potency,
+    summary: {
+      totalThcPct: pct("total-thc"),
+      totalThcMgPerServing: null,
+      totalThcMgPerG: potency.find((r) => r.key === "total-thc")?.mgPerG ?? null,
+      totalCbdPct: pct("total-cbd"),
+      totalCbdMgPerServing: null,
+      totalCbdMgPerG: potency.find((r) => r.key === "total-cbd")?.mgPerG ?? null,
+      totalCannabinoidsPct: pct("total-cannabinoids"),
+    },
+    terpenes: [],
+    totalTerpenesPpm: null,
+    terpeneSummary: { totalPct: null, top: [] },
+    potencyReadable: potency.some((r) => r.pct !== null),
+    checks,
+    warnings,
+  };
+}
+
 /** Parse COA text (unpdf, pdftotext -layout or LlamaParse markdown). */
 export function parseCoaPdfText(raw: string): CoaPdfParse {
   if (typeof raw !== "string" || raw.trim().length < 40) return { ok: false, reason: "The COA text is empty." };
   const text = normalizeCoaText(raw);
   const t = detectCoaTemplate(text);
   if (!t) {
+    // D159: any lab - the general reader, accepted only when it read at least
+    // one self-consistent potency row (mg/g = 10 x %).
+    const g = parseGeneric(text);
+    if (g.potencyReadable) return { ok: true, doc: g };
     return {
       ok: false,
       reason: "This certificate layout is not one the reader knows yet - its facts were not read. Enter them by hand or send it to the developer.",
@@ -789,7 +958,26 @@ export function __runCoaPdfTextCoreTests(fixtures: Record<string, string>): { pa
   // ---- refusals + ambiguity ------------------------------------------------
   ok(!parseCoaPdfText("").ok && !parseCoaPdfText("short").ok, "empty refused");
   const unk = parseCoaPdfText("Some Other Lab certificate of analysis THC 12% potency table here and more words");
-  ok(!unk.ok && unk.reason.includes("not one the reader knows"), "unknown lab refused honestly");
+  ok(!unk.ok && unk.reason.includes("not one the reader knows"), "unknown lab with no self-consistent rows refused honestly");
+  // ---- D159: general reader (Medicine Creek Analytics, real text) -----------
+  const mcText =
+    "260811-008 page 1 of 4 Compliance Pass Medicine Creek Analytics Certificate of Analysis Sample: Tropicana Cookies Sample ID 260811-008 #COC/INVOICE: 9828 Matrix Concentrate Tested for Sungrown LLC Lot or Batch # External Inv ID 12074675516159269 LOD % Analyte LOQ % Result % Result mg/g *CBDV 0.003 0.01 ND ND CBDA 0.003 0.01 ND ND CBD 0.003 0.01 ND ND *CBGA 0.003 0.01 ND ND *CBG 0.003 0.01 ND ND *THCV 0.003 0.01 ND ND *CBN 0.003 0.01 ND ND THCA 0.003 0.01 15 150 \u03949 THC 0.003 0.01 71 710 *\u03948 THC 0.003 0.01 ND ND *CBC 0.003 0.01 ND ND Total THC (THCa * 0.877 + THC) 84 840 Total CBD (CBDa * 0.877 + CBD) 0.00 0.00 Total Cannabinoids 86 860 Mycotoxins Pass Analyte Result ppb Aflatoxin B1 ND 7.2 7.2";
+  const mc = parseCoaPdfText(mcText);
+  ok(mc.ok && mc.doc.template === "generic", "D159 an unfamiliar lab is read by the general reader");
+  if (mc.ok) {
+    ok(mc.doc.labName === "Medicine Creek Analytics" && mc.doc.labSampleId === "260811-008" && mc.doc.batchId === "12074675516159269", "D159 lab, lab sample id, inventory id");
+    ok(potencyRow(mc.doc, "d9-thc")?.pct === 71 && potencyRow(mc.doc, "thca")?.pct === 15 && potencyRow(mc.doc, "d8-thc")?.nd === true, "D159 delta-9 / THCA / delta-8 rows");
+    ok(mc.doc.summary.totalThcPct === 84 && mc.doc.summary.totalCbdPct === 0 && mc.doc.summary.totalCannabinoidsPct === 86, "D159 totals past the printed formula");
+    ok(mc.doc.potency.length === 14 && mc.doc.checks.length === 2 && mc.doc.checks.every((c) => c.ok), "D159 14 rows, totals re-computed and agree");
+    ok(mc.doc.warnings[0] === GENERIC_CONFIRM_NOTE && mc.doc.batchPass === "pass" && mc.doc.sampleName === "Tropicana Cookies", "D159 confirm note, pass, sample name");
+  }
+  const mcBad = parseCoaPdfText(mcText.replace("THCA 0.003 0.01 15 150", "THCA 0.003 0.01 25 150"));
+  ok(mcBad.ok && potencyRow(mcBad.doc, "thca") === null, "D159 a row whose mg/g is not 10 x % is not read (never guessed)");
+  const mcTwice = parseCoaPdfText(mcText + " THCA 0.003 0.01 16 160");
+  ok(mcTwice.ok && potencyRow(mcTwice.doc, "thca") === null && mcTwice.doc.warnings.some((w) => w.includes("more than once")), "D159 a cannabinoid printed twice with different values is not read");
+  const mcOff = parseCoaPdfText(mcText.replace("Total THC (THCa * 0.877 + THC) 84 840", "Total THC (THCa * 0.877 + THC) 90 900"));
+  ok(mcOff.ok && mcOff.doc.checks.some((c) => !c.ok && c.what.startsWith("total-thc")), "D159 a printed total that does not add up fails its check");
+  ok(percentMgPair(["0.003", "0.01", "71", "710"])?.pct === 71 && percentMgPair(["0.003", "0.01"]) === null && percentMgPair(["0.003", "0.01", "ND", "ND"])?.nd === true, "D159 percentMgPair");
   const two = parseCoaPdfText(
     "Confidence Analytics Analyte Name % mg/g mg/serving mg/package LoQ (%) d9-thc 0.12 1.2 5.5 N/A 0.003 [End of Analytes] Serving / Package Wt: weights below 4.54g / N/A and 4.62g / N/A",
   );

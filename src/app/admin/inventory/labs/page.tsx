@@ -142,7 +142,7 @@ function LabTable({ labs, focusId }: { labs: LabRow[]; focusId: string | null })
                 ) : null}
               </td>
               <td className="px-2 py-2 text-xs text-[var(--admin-text-muted)]">
-                {l.lab_number !== null && READABLE_LAYOUTS[l.lab_number] ? READABLE_LAYOUTS[l.lab_number] : "Not yet - numbers are typed in by hand"}
+                {l.lab_number !== null && READABLE_LAYOUTS[l.lab_number] ? READABLE_LAYOUTS[l.lab_number] : "General reader - numbers are read and flagged for you to confirm (never blocks)"}
               </td>
             </tr>
           ))}

@@ -91,9 +91,25 @@ const sameUrl = (a: string | null, b: string | null): boolean => {
 export function rehostedCopyProof(
   labCoaUrl: string | null,
   pdf: Pick<CoaPdfDoc, "auth" | "labSampleId" | "template" | "batchId"> | null,
-  json: Pick<WciaLabDoc, "labResultId" | "sampleId"> | null = null,
+  json: (Pick<WciaLabDoc, "labResultId" | "sampleId"> & Partial<Pick<WciaLabDoc, "coaUrl" | "sampleSourceId">>) | null = null,
 ): { auth: string; sample: string } | null {
   if (!pdf) return null;
+  // D159: any other lab (general reader). Lab-agnostic proof, two parts, both
+  // required: (1) the 16+ digit WSLCB inventory id the PDF prints equals the
+  // lab JSON's sample id, and (2) the lab's own sample id the PDF prints is
+  // named by the lab JSON (labresult id starts with it, or its COA link
+  // carries it). Measured on Medicine Creek Analytics: PDF "Sample ID
+  // 260811-008 ... External Inv ID 12074675516159269"; JSON sample.id
+  // 12074675516159269, labresult_id 260811-008-LR.
+  if (pdf.template === "generic") {
+    const inv = pdf.batchId;
+    const lab = pdf.labSampleId;
+    if (!json || !inv || !/^\d{16,}$/.test(inv) || !lab || lab.length < 5) return null;
+    if (json.sampleId !== inv && json.sampleSourceId !== inv) return null;
+    const named = (json.labResultId !== null && (json.labResultId === lab || json.labResultId.startsWith(`${lab}-`))) || (typeof json.coaUrl === "string" && json.coaUrl.includes(lab));
+    if (!named) return null;
+    return { auth: `(none printed - lab sample ${lab})`, sample: inv };
+  }
   // Testing Technologies prints no auth code; its certificate names the
   // sample by its WSLCB inventory id, and the lab JSON carries the same id as
   // BOTH labresult_id and sample.id (measured on the 4 real certificates).
@@ -108,6 +124,19 @@ export function rehostedCopyProof(
   if (!m) return null;
   if (!pdf.auth.startsWith(m[1]) || pdf.labSampleId !== m[2]) return null;
   return { auth: pdf.auth, sample: pdf.labSampleId };
+}
+
+/**
+ * D159: the transfer's certificate link file name carries a 16+ digit WSLCB
+ * inventory id that equals the lab JSON's sample id -> that id; else null.
+ */
+export function transferNamesSample(transferCoaUrl: string | null, json: Pick<WciaLabDoc, "sampleId"> & Partial<Pick<WciaLabDoc, "sampleSourceId">>): string | null {
+  if (!transferCoaUrl) return null;
+  const file = transferCoaUrl.split(/[?#]/)[0].split("/").pop() ?? "";
+  const ids = file.match(/(?<!\d)\d{16,}(?!\d)/g) ?? [];
+  if (ids.length !== 1) return null;
+  const id = ids[0];
+  return json.sampleId === id || json.sampleSourceId === id ? id : null;
 }
 
 /** Stage 1: both documents, identity and agreement. */
@@ -149,12 +178,20 @@ export function assembleCoaExtract(input: {
     // sample id (WA-<auth>-<WA-yymmdd-nnn>), and the PDF that was actually read
     // must print BOTH. Measured on 31 real re-hosted Confidence certificates.
     const rehost = same ? null : rehostedCopyProof(json.coaUrl, pdf, json);
+    // D159: any lab, PDF unreadable or not provable - the transfer's own
+    // certificate link names the WSLCB inventory id (Cultivera:
+    // .../COA_<16+ digit id>.pdf) and the lab JSON's sample is that id.
+    const byInv = same || rehost ? null : transferNamesSample(input.transferCoaUrl, json);
     identity.push({
       what: "the lab JSON names the same COA as the transfer",
-      ok: same || rehost !== null,
+      ok: same || rehost !== null || byInv !== null,
       detail: rehost
-        ? `re-hosted copy of the lab's certificate: transfer coa ${input.transferCoaUrl}; the PDF prints auth ${rehost.auth} and sample ${rehost.sample}, the code and sample in the lab's link ${json.coaUrl}`
-        : `JSON coa ${json.coaUrl ?? "(none)"}; transfer coa ${input.transferCoaUrl}`,
+        ? pdf?.template === "generic"
+          ? `re-hosted copy of the lab's certificate: transfer coa ${input.transferCoaUrl}; the PDF prints inventory id ${rehost.sample} and ${rehost.auth.replace(/^\(none printed - |\)$/g, "")}, the same as the lab JSON (${json.coaUrl ?? "no lab link"})`
+          : `re-hosted copy of the lab's certificate: transfer coa ${input.transferCoaUrl}; the PDF prints auth ${rehost.auth} and sample ${rehost.sample}, the code and sample in the lab's link ${json.coaUrl}`
+        : byInv
+          ? `the transfer coa ${input.transferCoaUrl} names inventory id ${byInv}, the lab JSON's sample id`
+          : `JSON coa ${json.coaUrl ?? "(none)"}; transfer coa ${input.transferCoaUrl}`,
     });
   }
   if (pdf && json && pdf.labSampleId && json.labResultId && /^WA-\d{6}-\d{3}$/.test(json.labResultId)) {
@@ -906,5 +943,36 @@ export function __runCoaFactsCoreTests(fixtures: Record<string, string>): { pass
     ["trans-Nerolidol", "nerolidol"], ["myrcene", "myrcene"], [" Terpinolene ", "terpinolene"],
   ] as const) ok(kbTerpeneSlug(inp) === want, `kbTerpeneSlug(${inp}) -> ${want}`);
   for (const inp of ["alpha-bulnesene", "b-", "", "   ", "thca", null, 42, undefined]) ok(kbTerpeneSlug(inp) === null, `kbTerpeneSlug(${String(inp)}) -> null`);
+
+  // ---- D159: any lab (Medicine Creek Analytics, real figures) ----------------
+  {
+    const mcJson = JSON.stringify({
+      document_name: "WCIA Lab Result Schema", document_schema_version: "2.1.0", lab_name: "Medicine Creek Analytics",
+      sample: { id: "12074675516159269", source_id: "12074675516159269" }, labresult_id: "260811-008-LR", status: "pass",
+      coa: "https://laboratory-public-files.s3.us-west-2.amazonaws.com/260811-008/sample-report-260811-008.pdf",
+      metric_list: [{ test_type: "Cannabinoid", status: "pass", metrics: [
+        { name: "\u03949 THC", qom: "70.6864", uom: "pct" }, { name: "\u03949 THC-A", qom: "14.9981", uom: "pct" },
+        { name: "CBD", qom: "0", uom: "pct" }, { name: "Activated Total THC", qom: "83.8397", uom: "pct" },
+        { name: "Total Cannabinoid", qom: "85.6845", uom: "pct" }, { name: "Total THC+CBD", qom: "83.8397", uom: "pct" },
+      ] }],
+    });
+    const mcPdf = "260811-008 page 1 of 4 Compliance Pass Medicine Creek Analytics Certificate of Analysis Sample: Tropicana Cookies Sample ID 260811-008 Matrix Concentrate Tested for Sungrown LLC Lot or Batch # External Inv ID 12074675516159269 Cannabinoid Profile LOD % Analyte LOQ % Result % Result mg/g CBD 0.003 0.01 ND ND THCA 0.003 0.01 15 150 \u03949 THC 0.003 0.01 71 710 Total THC (THCa * 0.877 + THC) 84 840 Total CBD (CBDa * 0.877 + CBD) 0.00 0.00 Total Cannabinoids 86 860 Mycotoxins Pass";
+    const tUrl = "https://files.cultivera.com/435553542D5753313138/Coas/26/08/19/F4PN9QDFM2EJGR0S/COA_12074675516159269.pdf";
+    const mc = (o: Partial<{ json: string; pdf: string | null; transfer: string }>) =>
+      assembleCoaExtract({ jsonUrl: "j", coaUrl: o.transfer ?? tUrl, transferCoaUrl: o.transfer ?? tUrl, jsonText: o.json ?? mcJson, pdfText: o.pdf === undefined ? mcPdf : o.pdf, pdfVia: "unpdf", extractedAt: "2026-11-03T00:00:00Z" });
+    const a = mc({});
+    ok(a.pdf?.template === "generic" && a.identity.length === 1 && a.identity.every((c) => c.ok), "D159 new lab: identity proven by inventory id + lab sample id: " + JSON.stringify(a.identity));
+    ok(a.status === "ok" && a.agreement.length >= 3 && a.agreement.every((c) => c.ok), "D159 new lab: PDF agrees with JSON -> ok: " + a.summary);
+    ok(coaProfile(a) !== null, "D159 new lab: profile is produced (not 'nothing used')");
+    const noPdf = mc({ pdf: null });
+    ok(noPdf.identity.every((c) => c.ok) && noPdf.identity[0].detail.includes("names inventory id 12074675516159269"), "D159 PDF not read: the transfer link's inventory id proves identity");
+    const otherInv = mc({ pdf: mcPdf.replace("External Inv ID 12074675516159269", "External Inv ID 12074675516159999"), transfer: "https://files.cultivera.com/x/COA_12074675516159999.pdf" });
+    ok(otherInv.identity.some((c) => !c.ok) && otherInv.status === "partial", "D159 a different inventory id fails identity");
+    const otherLab = mc({ pdf: mcPdf.replace("Sample ID 260811-008", "Sample ID 260811-009"), transfer: "https://files.cultivera.com/x/COA.pdf" });
+    ok(otherLab.identity.some((c) => !c.ok), "D159 a different lab sample id is no proof");
+    ok(transferNamesSample(tUrl, { sampleId: "12074675516159269" }) === "12074675516159269" && transferNamesSample(tUrl, { sampleId: "1" }) === null && transferNamesSample("https://x/COA.pdf", { sampleId: "1" }) === null, "D159 transferNamesSample");
+    ok(transferNamesSample("https://x/COA_12074675516159269_12074675516159270.pdf", { sampleId: "12074675516159269" }) === null, "D159 two ids in a file name -> no proof");
+  }
+
   return { passed, failed };
 }
