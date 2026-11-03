@@ -73,7 +73,7 @@ describe("S17 quotes", () => {
 describe("S17 core: settings", () => {
   it("OFF by default, and anything malformed reads as OFF", () => {
     expect(n.DEFAULT_NOTICE_SETTINGS.enabled).toBe(false);
-    expect(n.DEFAULT_NOTICE_SETTINGS.senders).toEqual([n.FED_NOTICE_DOMAIN]);
+    expect(n.DEFAULT_NOTICE_SETTINGS.senders).toEqual([n.FED_NOTICE_DOMAIN, n.BRENDA_SAMPLE_SENDER]);
     expect(n.settingsFromJson(null).enabled).toBe(false);
     expect(n.settingsFromJson({ enabled: "true" }).enabled).toBe(false);
     expect(n.settingsFromJson({ enabled: true, senders: ["not a domain"] }).enabled).toBe(false);
@@ -97,6 +97,30 @@ describe("S17 core: settings", () => {
     expect(n.checkSettingsForm(form({ senders: "a.test", lookback_hours: "0" })).ok).toBe(false);
     expect(n.checkSettingsForm(form({ senders: "a.test", lookback_hours: String(n.MAX_NOTICE_LOOKBACK_HOURS + 1) })).ok).toBe(false);
     expect(n.checkSettingsForm(form({ senders: "a.test", lookback_hours: "1.5" })).ok).toBe(false);
+  });
+});
+
+describe("S20: Brenda's sample return email (2026-11-02)", () => {
+  it("her sample's From address is built in, exact (not the whole achedi.com), and quoted from the mirror", () => {
+    expect(n.BRENDA_SAMPLE_SENDER).toBe("notification@achedi.com");
+    expect(n.BUILT_IN_SENDERS).toEqual([n.FED_NOTICE_DOMAIN, n.BRENDA_SAMPLE_SENDER]);
+    expect(n.NOTICE_QUOTE_FILE.brendaSampleFrom).toBe(n.BRENDA_RETURN_FILE);
+    expect(n.NOTICE_MAIL_QUOTES.brendaSampleFrom).toContain(`<${n.BRENDA_SAMPLE_SENDER}>`);
+    expect(n.senderMatches("notification@achedi.com", n.DEFAULT_NOTICE_SETTINGS.senders)).toBe(true);
+    expect(n.senderMatches("other@achedi.com", n.DEFAULT_NOTICE_SETTINGS.senders)).toBe(false);
+    expect(n.settingsFromJson({ enabled: true, senders: [] }).senders).toEqual([...n.BUILT_IN_SENDERS]);
+  });
+  it("the Fed domain alone misses it; the readiness check says so", () => {
+    expect(n.catchesBrendaSample([n.FED_NOTICE_DOMAIN])).toBe(false);
+    expect(n.catchesBrendaSample(n.DEFAULT_NOTICE_SETTINGS.senders)).toBe(true);
+    const pg = read(PAGE);
+    expect(pg).toContain("ok: catchesBrendaSample(settings.senders),");
+    expect(pg).toContain("Add ${BRENDA_SAMPLE_SENDER} to the senders below and save.");
+    for (const q of ["brendaReturnEmail", "brendaSampleFrom", "brendaPassword", "brendaMostCommon"]) expect(pg).toContain(`<Quote id="${q}" />`);
+    expect(pg).toContain("create a password before the document opens");
+  });
+  it("the new mirror is listed in the authorities README", () => {
+    expect(read("docs/authorities/ach/README.md")).toContain("| timberland-brenda-2026-11-02-return-email.txt |");
   });
 });
 
@@ -182,7 +206,7 @@ describe("S17 core: row, plan, alert, mark", () => {
   });
   it("the pure self-test is registered with its floor", () => {
     expect(n.__runAchNoticeMailCoreTests().failed).toBe(0);
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ach-notice-mail-core", __runAchNoticeMailCoreTests(), 57)');
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ach-notice-mail-core", __runAchNoticeMailCoreTests(), 63)');
   });
 });
 

@@ -40,7 +40,8 @@ describe("S19 quotes", () => {
   });
   it("Brenda's words are labelled as hers; the owner's note is labelled as not hers", () => {
     for (const q of Object.values(b.SETUP_QUOTES)) {
-      if (q.file === b.BRENDA_FILE || q.file === b.BRENDA3_FILE) expect(q.where).toMatch(/^(Brenda|Owner's note)/);
+      if (q.file === b.BRENDA_FILE || q.file === b.BRENDA3_FILE || q.file === b.BRENDA4_FILE) expect(q.where).toMatch(/^(Brenda|Owner's note|Owner's decision)/);
+      if (q.where.startsWith("Owner's")) expect(q.where).toContain("not Brenda's words");
     }
     expect(b.SETUP_QUOTES.brTesting.where).toContain("not Brenda's words");
   });
@@ -55,7 +56,7 @@ describe("S19 nothing assumed", () => {
     for (const i of b.BANK_CHECKLIST.filter((x) => x.status === "confirmed")) {
       expect(i.said.length, i.id).toBeGreaterThan(0);
       expect(i.ask, i.id).toEqual([]);
-      for (const q of i.said) expect([b.BRENDA_FILE, b.BRENDA3_FILE, b.TIMBERLAND_FILE], `${i.id} ${q}`).toContain(b.SETUP_QUOTES[q].file);
+      for (const q of i.said) expect([b.BRENDA_FILE, b.BRENDA3_FILE, b.BRENDA4_FILE, b.TIMBERLAND_FILE], `${i.id} ${q}`).toContain(b.SETUP_QUOTES[q].file);
     }
   });
   it("the debit block and the filter are questions with no 'said' (not on record)", () => {
@@ -66,13 +67,22 @@ describe("S19 nothing assumed", () => {
       expect(byId(id).ask.some((a) => a.includes("fee"))).toBe(true);
     }
   });
-  it("dual approval is the owner's decision, quoting off today and Timberland's preference", () => {
-    expect(byId("dual").status).toBe("decide");
+  it("dual approval: the owner declined it (S20), quoting his words, off today and Timberland's preference", () => {
+    expect(byId("dual").status).toBe("confirmed");
+    expect(byId("dual").said[0]).toBe("ownerNoDual");
+    expect(b.SETUP_QUOTES.ownerNoDual.text).toBe("I don't want dual approval.");
     expect(byId("dual").said).toEqual(expect.arrayContaining(["brDualOff", "brDualPrefer", "tbDualBox"]));
   });
   it("testing is first and quotes Brenda's yes to a test file", () => {
     expect(b.meetingOrder()[0].id).toBe("testing");
     expect(byId("testing").said).toContain("brTestFile");
+    expect(byId("testing").said).toContain("ownerZoom");
+    expect(b.SETUP_QUOTES.ownerZoom.text).toBe("She wants to zoom call so she can watch it happen on our system.");
+  });
+  it("S20: notices carry Brenda's sample return email facts (password, most common return)", () => {
+    expect(byId("notices").said).toEqual(expect.arrayContaining(["brReturnEmail", "brPassword", "brMostCommon"]));
+    expect(b.SETUP_QUOTES.brMostCommon.text).toBe("The most comment return is invalid account.");
+    expect(byId("debit-block").why).toContain("ownerAskBlock");
   });
   it("every ask item has questions; every id resolves", () => {
     for (const i of b.BANK_CHECKLIST) {
@@ -83,15 +93,17 @@ describe("S19 nothing assumed", () => {
 });
 
 describe("S19 pure core", () => {
-  it("self-test passes (44)", () => {
-    expect(b.__runAchBankSetupCoreTests()).toEqual({ passed: 44, failed: 0 });
+  it("self-test passes (47)", () => {
+    expect(b.__runAchBankSetupCoreTests()).toEqual({ passed: 47, failed: 0 });
   });
   it("counts", () => {
-    expect(b.checklistCounts()).toEqual({ ask: 5, decide: 1, confirmed: 5 });
+    expect(b.checklistCounts()).toEqual({ ask: 5, decide: 0, confirmed: 6 });
   });
   it("meeting order: ask, decide, confirmed, stable within a status", () => {
     const ids = b.meetingOrder().map((i) => i.id);
     expect(ids).toEqual(["testing", "portal", "debit-block", "filter", "notices", "dual", "limits", "credits-only", "same-day", "reversal", "ofac"]);
+    const sample = [{ ...b.BANK_CHECKLIST[6], id: "c", status: "confirmed" as const }, { ...b.BANK_CHECKLIST[1], id: "d", status: "decide" as const }, { ...b.BANK_CHECKLIST[0], id: "a", status: "ask" as const }];
+    expect(b.meetingOrder(sample).map((i) => i.id)).toEqual(["a", "d", "c"]);
   });
   it("glossary: 20 unique terms, sourced, plain words short, links are real banking pages", () => {
     expect(b.ACH_GLOSSARY).toHaveLength(20);
@@ -111,12 +123,12 @@ describe("S19 pure core", () => {
   });
   it("sheet: header, counts, every question as a tick box, glossary, no long digits", () => {
     const s = b.meetingSheet("2026-10-22");
-    expect(s).toContain("Printed 2026-10-22 (Pacific). 5 to ask, 1 for the owner to decide, 5 already confirmed.");
+    expect(s).toContain("Printed 2026-10-22 (Pacific). 5 to ask, 0 for the owner to decide, 6 already confirmed.");
     for (const i of b.BANK_CHECKLIST) for (const a of i.ask) expect(s).toContain(`[ ] ASK: ${a}`);
     for (const g of b.ACH_GLOSSARY) expect(s).toContain(`  ${g.term}: ${g.plain}`);
     expect(b.hasLongDigitRun(s)).toBe(false);
-    expect(s.indexOf("[ASK BRENDA]")).toBeLessThan(s.indexOf("[OWNER DECIDES]"));
-    expect(s.indexOf("[OWNER DECIDES]")).toBeLessThan(s.indexOf("[CONFIRMED]"));
+    expect(s).not.toContain("[OWNER DECIDES]");
+    expect(s.lastIndexOf("[ASK BRENDA]")).toBeLessThan(s.indexOf("[CONFIRMED]"));
   });
 });
 
@@ -158,7 +170,26 @@ describe("S19 wiring", () => {
     expect(kb).toContain("Bank setup & glossary is /admin/settings/banking/bank-setup");
     expect(kb).toContain("Bank setup & glossary (R41 S19, /admin/settings/banking/bank-setup)");
     expect(read("tests/compliance/nav-gate-core.test.ts")).toContain('"/admin/settings/banking/bank-setup",');
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ach-bank-setup-core", __runAchBankSetupCoreTests(), 44)');
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ach-bank-setup-core", __runAchBankSetupCoreTests(), 47)');
+  });
+});
+
+describe("S20 docs", () => {
+  it("T-380 in the test plan and the manual; roadmap S20 row and detail", () => {
+    expect(read("docs/audit/TEST-PLAN.md")).toContain("- **T-380 (Brenda's sample return email and the owner's no-dual decision (R41 S20, no migration)):**");
+    const man = read("docs/audit/test-manual/index.html");
+    expect(man).toContain('data-test="T-380"');
+    expect(man).toContain('"T-380": "part-b--the-results-log"');
+    const rm = read("docs/roadmap/R41-TIMBERLAND.md");
+    expect(rm).toMatch(/\| S20 \|[^\n]*\| #\d+ \| none \|/);
+    expect(rm).toContain("## S20 in detail");
+    expect(rm).toContain("Manual test T-380.");
+  });
+  it("the new mirror keeps Brenda's words exactly and redacts the 9-digit number", () => {
+    const m = read(`docs/authorities/${b.BRENDA4_FILE}`);
+    expect(m).toContain("The most comment return is invalid account.");
+    expect(m).toContain("encr_[REDACTED: 9 digits] encryptedmail.achedi.com <notification@achedi.com>");
+    expect(/[0-9]{9,}/.test(m)).toBe(false);
   });
 });
 

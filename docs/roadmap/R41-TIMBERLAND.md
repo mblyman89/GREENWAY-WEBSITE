@@ -35,6 +35,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | #1449 | 0290 |
 | S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | #1450 | 0291 |
 | S19 | Bank setup & glossary: the bank-side checklist for the meeting with Brenda (ask / owner decides / confirmed, each in her words; ACH debit block and ACH filter asked, not assumed), printable meeting sheet, 20-term sourced ACH glossary, glossary-backed hover help on Operations and Approvals | #1451 | none |
+| S20 | Brenda's sample return email: mirrored (number redacted); notification@achedi.com is a built-in notice sender (her sample's From address, which the Fed domain alone missed) with a readiness check; the owner's "I don't want dual approval." settles the last owner decision on the bank-setup checklist; notices and testing items carry her new facts | #PR | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -300,3 +301,11 @@ Still to arrange: the testing session Brenda asked for.
 - **Hover help.** Every section heading on ACH operations and Banking approvals now has an InfoHint; the Returns, Account checks and ACH files hints come from the glossary (`glossaryHint`).
 - **No migration.**
 - **Tests.** `tests/compliance/r41-s19-bank-setup.test.ts`; pure self-test `ach-bank-setup-core` 44; `mutate-s19-app.py`. Manual test T-378.
+
+## S20 in detail
+
+- **Why.** After the interview, Brenda sent the owner a sample of the email that announces an ACH return (`timberland-brenda-2026-11-02-return-email.txt`, verbatim, the 9-digit number in the display name redacted). Its From line is `encryptedmail.achedi.com <notification@achedi.com>`: the display name carries the Fed's domain, but the address is at the base domain. The S17 watch matched `encryptedmail.achedi.com` and its sub-domains only, so it would have flagged her sample as an unknown sender.
+- **Notice email.** `BRENDA_SAMPLE_SENDER` (`notification@achedi.com`, an exact address, not the whole domain) joins the Fed domain as a built-in sender (`BUILT_IN_SENDERS`, used for the defaults and the fallback). Saved settings are not rewritten: the page shows a readiness line (`catchesBrendaSample`) that turns amber with the fix when the saved senders would miss it. Her two facts (a password is created to open the document; invalid account is the most common return) are on the page, quoted, with the reminder to log the R code printed on the document.
+- **Bank setup.** The owner's same-day words "I don't want dual approval." settle the dual-approval item (now confirmed, his words first, labelled as his decision and not Brenda's). The notices item cites her sample; the testing item cites the Zoom note; the debit block stays a question (the owner asks during the test).
+- **No migration.**
+- **Tests.** `tests/compliance/r41-s19-bank-setup.test.ts` and `r41-s17-notice-mail.test.ts` updated; pure self-tests `ach-bank-setup-core` 47 and `ach-notice-mail-core` 63; `mutate-s19-app.py` and `mutate-s17-app.py` re-run. Manual test T-380.

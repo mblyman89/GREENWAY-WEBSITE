@@ -33,10 +33,15 @@ M = [
     # --- nothing assumed ---
     ("filter assumed confirmed", CORE, '    id: "filter",\n    title: "ACH filter (ACH positive pay) on the Main account",\n    hint: "A filter lets only listed companies debit the account; anything else waits for review. Bank watch already catches unknown debits after they post; a bank filter stops them first.",\n    status: "ask",', '    id: "filter",\n    title: "ACH filter (ACH positive pay) on the Main account",\n    hint: "A filter lets only listed companies debit the account; anything else waits for review. Bank watch already catches unknown debits after they post; a bank filter stops them first.",\n    status: "confirmed",'),
     ("block given a fake said", CORE, '    onRecord: "Nothing on record. The State Auditor recommends blocks on any account not authorized for ACH.",\n    ask: [\n      "Does Timberland offer an ACH debit block? Which Greenway accounts could have one?",\n      "Is there a fee, and what form turns it on?",\n    ],\n    said: [],', '    onRecord: "Nothing on record. The State Auditor recommends blocks on any account not authorized for ACH.",\n    ask: [\n      "Does Timberland offer an ACH debit block? Which Greenway accounts could have one?",\n      "Is there a fee, and what form turns it on?",\n    ],\n    said: ["brDualPrefer"],'),
-    ("dual made confirmed", CORE, '    status: "decide",\n    onRecord: "Dual approval is off', '    status: "ask",\n    onRecord: "Dual approval is off'),
-    ("dual loses Brenda off", CORE, '    said: ["brDualOff", "brDualPrefer", "tbDualBox"],', '    said: ["brDualPrefer", "tbDualBox"],'),
+    ("dual back to undecided", CORE, '    status: "confirmed",\n    onRecord: "Dual approval stays off', '    status: "decide",\n    onRecord: "Dual approval stays off'),
+    ("dual loses Brenda off", CORE, '    said: ["ownerNoDual", "brDualOff", "tbDualBox", "brDualPrefer"],', '    said: ["ownerNoDual", "tbDualBox", "brDualPrefer"],'),
+    ("dual loses the owner's words", CORE, '    said: ["ownerNoDual", "brDualOff", "tbDualBox", "brDualPrefer"],', '    said: ["brDualOff", "tbDualBox", "brDualPrefer"],'),
+    ("owner decision relabelled as Brenda", CORE, 'where: "Owner\'s decision, 2026-11-02 (not Brenda\'s words)"', 'where: "Brenda, 2026-11-02"'),
+    ("owner's words reworded", CORE, 'text: "I don\'t want dual approval."', 'text: "We do not want dual approval."'),
+    ("notices lose the password fact", CORE, '    said: ["brNotices", "brReturnEmail", "brPassword", "brMostCommon"],', '    said: ["brNotices", "brReturnEmail", "brMostCommon"],'),
+    ("testing loses the Zoom note", CORE, '    said: ["brTestFile", "brTesting", "ownerZoom"],', '    said: ["brTestFile", "brTesting"],'),
     ("limits question left in", CORE, '    onRecord: "$50,000 per transaction and $100,000 per month (Schedule C). Daily is by upload day; monthly is by calendar month.",\n    ask: [],', '    onRecord: "$50,000 per transaction and $100,000 per month (Schedule C). Daily is by upload day; monthly is by calendar month.",\n    ask: ["Are the limits right?"],'),
-    ("testing loses test-file yes", CORE, '    said: ["brTestFile", "brTesting"],', '    said: ["brTesting"],'),
+    ("testing loses test-file yes", CORE, '    said: ["brTestFile", "brTesting", "ownerZoom"],', '    said: ["brTesting", "ownerZoom"],'),
     ("phone dropped from portal ask", CORE, '"Who do we call to turn off the login quickly if a phone or token is lost? (The agreement gives " + TIMBERLAND_PHONE + ".)",', '"Who do we call to turn off the login quickly if a phone or token is lost?",'),
     ("item dropped", CORE, '  {\n    id: "ofac",', '  {\n    id: "ofac2",'),
     # --- order / counts ---
