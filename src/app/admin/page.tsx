@@ -17,11 +17,9 @@ import { WorkspaceTour } from "@/components/admin/WorkspaceTour";
 import {
   formatMoneyMinor,
   peakHour,
-  toBars,
   buildAttentionFlags,
   type Delta,
 } from "@/lib/admin/cockpit-core";
-import { formatDateTime } from "@/lib/pos/format";
 import { ComparisonBasisPicker } from "@/components/admin/ComparisonBasisPicker";
 import { formatRate } from "@/lib/admin/refund-metrics-core";
 import type { MeasureComparison } from "@/lib/admin/comparison-data";
@@ -32,6 +30,9 @@ import { missingWebhookSecrets } from "@/lib/security/fail-closed";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import { getOverdueComplianceCount } from "@/lib/compliance/compliance-calendar-store";
 import { listAuditSessions } from "@/lib/inventory/audit-hub-store";
+import { loadCockpitLeafly, loadCockpitTaxes } from "@/lib/admin/cockpit-extras-server";
+import { hourWindow, leaflyTile } from "@/lib/admin/cockpit-extras-core";
+import { describeElapsed } from "@/lib/leafly/schedule-core";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,8 @@ export default async function AdminDashboardPage({
   // full count is not planned. Looked up only in December, owner only.
   const todayPacific = pacificToday();
   const wantsFullCountCheck = canReviewAudits && todayPacific.slice(5, 7) === "12";
-  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday, fullCountPlanned] = await Promise.all([
+  const canOpenLeafly = can(session.profile.role, "settings.manage");
+  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday, fullCountPlanned, taxes, leafly] = await Promise.all([
     getCockpitSnapshot(sp.basis),
     getSetupStatus(),
     canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
@@ -110,6 +112,10 @@ export default async function AdminDashboardPage({
     wantsFullCountCheck
       ? hasFullCountForYear(Number(todayPacific.slice(0, 4))).catch(() => null)
       : Promise.resolve(null),
+    // CVB-D18: today's excise / sales tax / after-tax sales, the Reports -> Tax engine. null = unreadable.
+    loadCockpitTaxes(),
+    // CVB-D20: the Leafly verdict the Leafly page shows. null = could not be worked out.
+    loadCockpitLeafly(),
   ]);
   const yearEndReminder =
     fullCountPlanned === null ? null : fullCountReminder({ todayPacific, hasCountForYear: fullCountPlanned });
@@ -156,8 +162,11 @@ export default async function AdminDashboardPage({
   ];
 
   const peak = peakHour(snap.today.byHour);
-  const hourBars = toBars(
-    snap.today.byHour.map((h) => ({ label: h.label, value: h.revenueMinorUnits })),
+  // CVB-D19: the old chart scaled each bar as a % of a column with no height of its own, so every bar
+  // collapsed to its 3 px minimum. hourWindow draws 8 AM to midnight (widened to any hour with a sale).
+  const hourBars = hourWindow(snap.today.byHour);
+  const leaflyCard = leaflyTile(leafly?.verdict ?? null, leafly?.lastCheckIso ?? null, (iso) =>
+    describeElapsed(iso, leafly?.nowIso ?? new Date().toISOString()),
   );
   const topSellers = snap.today.byProduct.slice(0, 6);
   const topCategories = snap.today.byCategory.slice(0, 5);
@@ -351,6 +360,54 @@ export default async function AdminDashboardPage({
           </div>
         </Section>
 
+        {/* ── CVB-D18: today's taxes and after-tax sales ──────────────────────────────────
+            Owner: "I want to see excise tax, sales tax, and after tax sales figures." Same engine and
+            basis as Reports -> Tax (completed orders, 37% excise on cannabis, 9.3% sales tax, medical
+            exemptions honoured). Unreadable = "Unavailable", never $0.00. */}
+        <Section
+          title="Today's taxes"
+          description="Completed sales today, worked out the same way as Reports → Tax. After-tax sales is what the store keeps once excise and sales tax are set aside."
+        >
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard
+              label="After-tax sales"
+              value={taxes ? formatMoneyMinor(taxes.afterTaxMinor) : "Unavailable"}
+              hint={taxes ? `${taxes.orders} completed order${taxes.orders === 1 ? "" : "s"} · ${formatMoneyMinor(taxes.withTaxMinor)} with tax` : "The tax figures could not be read"}
+              accent={taxes ? "green" : "orange"}
+              href="/admin/reports/tax"
+              icon="🧾"
+            />
+            <StatCard
+              label="Excise tax (37%)"
+              value={taxes ? formatMoneyMinor(taxes.exciseMinor) : "Unavailable"}
+              hint="Cannabis lines only · owed to the WSLCB"
+              accent={taxes ? "gold" : "orange"}
+              href="/admin/reports/excise"
+              icon="🏛️"
+            />
+            <StatCard
+              label="Sales tax"
+              value={taxes ? formatMoneyMinor(taxes.salesTaxMinor) : "Unavailable"}
+              hint="State + local · owed to the DOR"
+              accent={taxes ? "gold" : "orange"}
+              href="/admin/reports/tax"
+              icon="📋"
+            />
+            <StatCard
+              label="Total tax"
+              value={taxes ? formatMoneyMinor(taxes.exciseMinor + taxes.salesTaxMinor) : "Unavailable"}
+              hint={
+                taxes && taxes.medicalExemptLines > 0
+                  ? `${taxes.medicalExemptLines} medical-exempt line${taxes.medicalExemptLines === 1 ? "" : "s"} not taxed`
+                  : "Excise + sales tax"
+              }
+              accent={taxes ? "muted" : "orange"}
+              href="/admin/reports/tax"
+              icon="∑"
+            />
+          </div>
+        </Section>
+
         {/* ── SLICE 21: returns, voids and NET ─────────────────────────────
             Michael: "nowhere in the back office can I find anything related to
             returns or voids". The facts were recorded all along (voids in
@@ -434,17 +491,20 @@ export default async function AdminDashboardPage({
               }
             />
             <div className="p-5 pt-0">
-              {hourBars.some((b) => b.value > 0) ? (
-                <div className="flex h-40 items-end gap-1">
+              {hourBars.some((b) => b.revenueMinorUnits > 0) ? (
+                <div className="flex h-44 gap-1" role="img" aria-label="Revenue by hour today">
                   {hourBars.map((b) => (
-                    <div key={b.label} className="group flex flex-1 flex-col items-center justify-end">
-                      <div
-                        className="w-full rounded-t bg-[var(--admin-accent)]/70 transition group-hover:bg-[var(--admin-accent)]"
-                        style={{ height: `${b.heightPct}%`, minHeight: b.value > 0 ? "3px" : "0" }}
-                        title={`${b.label}: ${formatMoneyMinor(b.value)}`}
-                      />
+                    <div key={b.hour} className="group flex h-full min-w-0 flex-1 flex-col items-center">
+                      {/* The track has a real height (flex-1 of h-44), so the bar's % height works. */}
+                      <div className="flex w-full flex-1 items-end">
+                        <div
+                          className="w-full rounded-t bg-[var(--admin-accent)]/70 transition group-hover:bg-[var(--admin-accent)]"
+                          style={{ height: `${b.heightPct}%` }}
+                          title={`${b.label}: ${formatMoneyMinor(b.revenueMinorUnits)} · ${b.orders} order${b.orders === 1 ? "" : "s"}`}
+                        />
+                      </div>
                       <span className="mt-1 hidden text-[9px] text-[var(--admin-text-faint)] sm:block">
-                        {b.label.replace(/:00/, "").replace(/\s?(AM|PM)/, "")}
+                        {b.shortLabel}
                       </span>
                     </div>
                   ))}
@@ -583,12 +643,15 @@ export default async function AdminDashboardPage({
               href="/admin/purchasing"
               icon="📉"
             />
+            {/* CVB-D20: the one-time menu upload is done, so this tile is now Leafly's: the same verdict as
+                Integrations -> Leafly, when Leafly last got the menu, and the last automatic check. */}
             <StatCard
-              label="Last POS import"
-              value={snap.lastImportISO ? "✓" : "—"}
-              hint={snap.lastImportISO ? formatDateTime(snap.lastImportISO) : "Upload to begin"}
-              href="/admin/menu-imports"
-              icon="⬆️"
+              label="Leafly"
+              value={leaflyCard.value}
+              hint={leaflyCard.hint}
+              accent={leaflyCard.accent}
+              href={canOpenLeafly ? "/admin/integrations/leafly" : undefined}
+              icon="🍃"
             />
             <StatCard
               label="Loyalty signups"
