@@ -435,6 +435,12 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * a menu item: a tab of the Banking strip ("Bank setup & glossary").
        */
       "/admin/settings/banking/bank-setup",
+      /*
+       * R41 S21: the Test day runbook for the Zoom test with Timberland. Page
+       * gate settings.manage; READ ONLY (every button stays on ACH
+       * operations). Not a menu item: a tab of the Banking strip ("Test day").
+       */
+      "/admin/settings/banking/test-day",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

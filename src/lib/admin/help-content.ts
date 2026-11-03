@@ -793,6 +793,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/settings/banking/bank-setup",
       },
       {
+        q: "How do I run the ACH test with Timberland on a Zoom call?",
+        a: "Banking \u2192 Test day. First fix anything red under Ready (your company ACH details, the encryption key, your own account listed under Account checks, the Notice email sender). Then share the screen with Brenda and follow the steps: Start check (prenote) on your account, Release the file, Download it and drop it on File checker, upload and approve it in Timberland's portal, then Confirm sent, Mark uploaded and Mark approved. A prenote is $0, so no money moves. Release it before 3:30 pm Pacific on a banking day so it is effective two banking days later. After 6 banking days with no return, press Mark passed; live ACH can start then. Until then, payroll is paid by paper check. Print the test-day sheet for the questions to ask her.",
+        href: "/admin/settings/banking/test-day",
+      },
+      {
         q: "How do I confirm the money is in the account for an ACH file?",
         a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the owner also sees the Plaid balance beside the box as a hint; it can lag), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date, and Brenda confirmed that is when it must be there (Email 3, answer 5). Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",
