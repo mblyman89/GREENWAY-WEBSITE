@@ -169,7 +169,7 @@ export function RegisterLoyaltySignup({ api, verdict, scannedName, searchPrefill
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] *:my-auto"
       role="dialog"
       aria-modal="true"
       aria-label="Sign up for loyalty"

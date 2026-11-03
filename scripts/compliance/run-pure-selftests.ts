@@ -1266,6 +1266,8 @@ import { __runPromotionCopyTests } from "../../src/lib/promotions/promotion-copy
 import { __runPromotionCopyFormTests } from "../../src/lib/promotions/promotion-copy-form-core";
 import { __runPromotionGuideTests } from "../../src/lib/promotions/promotion-guide-core";
 import { __runLoyaltyRewardTests } from "../../src/lib/loyalty/loyalty-reward-core";
+import { __runRegisterFingerprintTests } from "../../src/lib/pos/register-fingerprint-core";
+import { __runIpadSetupTests } from "../../src/lib/pos/ipad-setup-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2729,6 +2731,8 @@ __runLiquidVolumeTests();
   assertRan("promotion-copy-form-core", __runPromotionCopyFormTests(), 11); // D135: live check reads the form exactly like buildConfig saves it
   assertRan("promotion-guide-core", __runPromotionGuideTests(), 18); // D136 ("make building promotions a bit easier ... clear explanations for what each section does"): which-sections table per deal type + field hover help, checked against what the engine reads
   assertRan("loyalty-reward-core", __runLoyaltyRewardTests(), 55); // D137/D138 ("one redemption per sale, and works exactly as you described in the proposed fix. no dollar cap on the 25% off ... the $0.10-per-point should be retired"): 150 pts = 10% off, 300 pts = 25% off, pre-tax, exactly 150/300 deducted, best-of deal-or-reward per item, legal floors, old codes refused, no dollars in any wording
+  assertRan("register-fingerprint-core", __runRegisterFingerprintTests(), 20); // D143 ("add to the lock screen of the app something bold that says I am running the newest version and all is good"): source fingerprint shared by the iPad build and the server, green/red/grey verdict
+  assertRan("ipad-setup-core", __runIpadSetupTests(), 30); // D145–D148 ("make the iPad behavior set in stone and something only I can undo"): checklist, owner lockdown policy, Guided Access gate, device health verdict
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

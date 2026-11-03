@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { buildSiteRedirects } from "./src/lib/site/site-domain-core";
+import { computeRegisterFingerprint } from "./scripts/pos/register-fingerprint";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
@@ -59,6 +60,11 @@ const nextConfig: NextConfig = {
   // "extractStrings is not a function" verify error (per SimpleWebAuthn docs).
   env: {
     CBOR_NATIVE_ACCELERATION_DISABLED: "true",
+    // D143: the register's source fingerprint for THIS deploy. /api/pos/version
+    // returns it so each iPad's lock screen can say, in bold, whether it was
+    // built from exactly the code the live server runs. Same recipe as the
+    // iPad build (register-app/vite.config.ts); "" if it could not be computed.
+    REGISTER_FINGERPRINT: computeRegisterFingerprint(process.cwd()) ?? "",
   },
   // The LIQ-1295 excise-return route reads the official .xlsx template at
   // runtime via fs. Next's tracer doesn't follow that dynamic read, so include

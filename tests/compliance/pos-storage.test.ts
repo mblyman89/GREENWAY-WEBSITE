@@ -148,7 +148,9 @@ describe("the key registry matches the code that actually runs", () => {
     expect(unregisteredKeys([...used])).toEqual([]);
   });
 
-  it("registers exactly the twelve keys in use — no stale entries", () => {
+  it("registers exactly the thirteen keys in use — no stale entries", () => {
+    // D143 added gw-pos-version-check (last server confirmation of the newest
+    // app version, so the lock screen stays green through an outage).
     // SLICE 11 added the last two. They are this iPad's paired receipt
     // printer: SLICE 10 stored that pairing under an UNREGISTERED key, and
     // plannedWrite() rejects unregistered keys, so the pairing could never
@@ -167,6 +169,7 @@ describe("the key registry matches the code that actually runs", () => {
         "gw-pos-star-printer",
         "gw-pos-star-printer-model",
         "gw-pos-theme",
+        "gw-pos-version-check",
       ].sort(),
     );
   });

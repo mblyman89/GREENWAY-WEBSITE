@@ -1010,7 +1010,7 @@ describe("N6 the top nav can actually render the new tabs", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("N7 owner-only is derived, not copied", () => {
-  it("names exactly the ten owner-only permissions in use today", () => {
+  it("names exactly the eleven owner-only permissions in use today", () => {
     // R41 S0 added `ach.act`. Michael's D-6 answer (Option B): only the owner
     // acts alone on vendor bank / ACH; Stephen (admin) holds `ach.request`
     // instead, so his live changes become requests Michael approves.
@@ -1033,6 +1033,10 @@ describe("N7 owner-only is derived, not copied", () => {
     // archive and benchmark: "This will be owner only access." It holds the
     // whole Cultivera history (PII datasets included) and the build-cost
     // payback ledger, so it is its own permission rather than finances.view.
+    // D146 added `registers.lockdown`. Michael, 2026-11-03: "make the iPad
+    // behavior set in stone and something only I can undo." It gates saving
+    // the iPad lockdown policy and ticking the iPad setup checklist; viewing
+    // the page stays staffing.manage.
     expect(ownerOnlyPermissions().sort()).toEqual(
       [
         "ach.act",
@@ -1045,6 +1049,7 @@ describe("N7 owner-only is derived, not copied", () => {
         "inventory.audit",
         "inventory.destruction.cancel",
         "inventory.vendor_return.cancel",
+        "registers.lockdown",
       ].sort(),
     );
   });

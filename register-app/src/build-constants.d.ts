@@ -11,3 +11,5 @@
  */
 declare const __REGISTER_API_BASE__: string;
 declare const __REGISTER_BUILD_VERSION__: string;
+/** D143: sha256 source fingerprint of the register app ("" if it could not be computed). */
+declare const __REGISTER_FINGERPRINT__: string;

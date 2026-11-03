@@ -19,6 +19,7 @@
  */
 import { resolveBuildVersion } from "@/lib/pos/sw-core";
 import { CAPACITOR_IOS_ORIGIN } from "@/lib/pos/cors-core";
+import { sanitizeFingerprint } from "@/lib/pos/register-fingerprint-core";
 
 export const dynamic = "force-static";
 
@@ -40,7 +41,11 @@ export const dynamic = "force-static";
 const VERSION_CORS_ORIGIN = CAPACITOR_IOS_ORIGIN;
 
 export function GET(): Response {
-  return new Response(JSON.stringify({ version: resolveBuildVersion(process.env) }), {
+  return new Response(JSON.stringify({
+      version: resolveBuildVersion(process.env),
+      // D143: register source fingerprint (next.config.ts env). Public, like the SHA.
+      fingerprint: sanitizeFingerprint(process.env.REGISTER_FINGERPRINT),
+    }), {
     headers: {
       "content-type": "application/json; charset=utf-8",
       // Same revalidation contract as /pos-sw.js — fixed per deploy, but

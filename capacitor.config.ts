@@ -141,6 +141,24 @@ const config: CapacitorConfig = {
     /** Same reasoning as the global setting; stated per-platform for clarity. */
     loggingBehavior: "debug",
   },
+
+  plugins: {
+    /**
+     * D144 (owner, 2026-11-03: "The iPad top menu bar with the time and such,
+     * collides with our apps top menu bar"). Capacitor's built-in SystemBars
+     * plugin runs load() at launch and would otherwise SHOW the status bar
+     * (its default is hidden: false). Hiding it here, together with Info.plist
+     * UIStatusBarHidden and GreenwayBridgeViewController.prefersStatusBarHidden,
+     * gives the register the whole screen like a dedicated till. It also
+     * auto-hides the home indicator. The web layout still respects the safe
+     * area (pos-tokens.css), so nothing can be covered even if iPadOS shows
+     * its window controls.
+     */
+    SystemBars: {
+      hidden: true,
+      style: "DEFAULT",
+    },
+  },
 };
 
 export default config;

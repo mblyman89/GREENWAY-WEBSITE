@@ -264,6 +264,19 @@ html[data-pos-theme="light"] {
   color-scheme: dark;
 }
 
+/* D144 SAFE AREA (owner, 2026-11-03: "The iPad top menu bar with the time
+   and such, collides with our apps top menu bar"). The packaged app paints
+   edge to edge (viewport-fit=cover, contentInset "never"), and nothing kept
+   the register's top bar out from under the iPad status bar or the iPadOS 26
+   window controls. Two fixes: the app now hides the status bar natively
+   (Info.plist + GreenwayBridgeViewController + SystemBars config), AND every
+   register screen pads its top by env(safe-area-inset-top) via utilities in
+   its own class list (the navy top bar, lock/setup screens, the sale screen,
+   every full-screen dialog; pinned by tests/compliance/pos-safe-area.test.ts).
+   Deliberately NOT a .pos-shell padding rule here: this file is unlayered, so
+   a padding rule would override every p-* utility on those screens. env()
+   resolves to 0 where there is no inset (browser, hidden status bar). */
+
 /* Light mode (B44, re-tuned in Task AO): the owner-approved Dutchie-style
    canvas is a clean cool grey-white with NO brand glow — white cards read
    crisply against it. Native controls flip to light so selects/inputs match. */
