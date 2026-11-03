@@ -35,7 +35,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | #1449 | 0290 |
 | S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | #1450 | 0291 |
 | S19 | Bank setup & glossary: the bank-side checklist for the meeting with Brenda (ask / owner decides / confirmed, each in her words; ACH debit block and ACH filter asked, not assumed), printable meeting sheet, 20-term sourced ACH glossary, glossary-backed hover help on Operations and Approvals | #1451 | none |
-| S20 | Brenda's sample return email: mirrored (number redacted); notification@achedi.com is a built-in notice sender (her sample's From address, which the Fed domain alone missed) with a readiness check; the owner's "I don't want dual approval." settles the last owner decision on the bank-setup checklist; notices and testing items carry her new facts | #PR | none |
+| S20 | Brenda's sample return email: mirrored (number redacted); notification@achedi.com is a built-in notice sender (her sample's From address, which the Fed domain alone missed) with a readiness check; the owner's "I don't want dual approval." settles the last owner decision on the bank-setup checklist; notices and testing items carry her new facts | #1648 | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
