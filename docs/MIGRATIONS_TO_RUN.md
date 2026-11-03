@@ -3628,3 +3628,29 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0337_cultivera_benchmark_archive.rollback.sql`.
   It removes the two functions; the retained history and the payback ledger stay (the statements to drop
   them are in the file, commented out).
+
+## CVB-8 — 0338 — Report history from Cultivera
+
+- [ ] `0338_cultivera_history_days.sql` (CVB-8, owner request 2026-11-02, decision CVB-D15). Apply it **after 0337**.
+  - **Why:** the owner asked to *"backfill our reports with Cultivera history"* and to *"clearly mark Cultivera
+    data wherever it is used."*
+  - **What it does:**
+    - adds `cultivera_history_days`: Cultivera's completed-order sales per Pacific day (cents, orders, units),
+      built from the archived `orders` files by **Cultivera Archive → Build report history**. Each day is
+      cross-checked against Cultivera's own daily report (match / returns / mismatch / no_daily);
+    - adds the server-only function `cvb_upsert_history_days`.
+
+    RLS on, service_role only, never deleted, KEPT by the factory reset. **Never written into the books.**
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) from information_schema.tables
+   where table_schema = 'public' and table_name = 'cultivera_history_days';          -- 1
+  select has_function_privilege('anon', 'public.cvb_upsert_history_days(text, jsonb)', 'EXECUTE'); -- false
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0338_cultivera_history_days.rollback.sql`.
+  It removes the function; the history table stays (the drop is in the file, commented out).

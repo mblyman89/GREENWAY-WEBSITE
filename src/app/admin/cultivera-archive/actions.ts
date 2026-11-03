@@ -9,6 +9,7 @@
  *                            against the manifest's sha256), register it, and store Cultivera's daily figures.
  *                            Resumable: if it runs out of time it says how far it got; press again to continue
  *   rebuildDaysAction     -> re-read the daily figures from the bucket copy (not the crawler)
+ *   buildHistoryAction    -> CVB-8: roll the archived orders into Cultivera report history per Pacific day
  *
  * Owner request 2026-11-01: "This will also allow me to retain Cultivera historical data safely in our system.
  * This will be owner only access."
@@ -19,7 +20,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { isValidArchiveRunId } from "@/lib/reports/cultivera-benchmark-core";
 import { cancelArchiveRun, startArchiveRun } from "@/lib/reports/cultivera-archive-client";
-import { archiveFinishedRun, ingestDailyFigures } from "@/lib/reports/cultivera-archive-runner";
+import { archiveFinishedRun, ingestDailyFigures, ingestHistory } from "@/lib/reports/cultivera-archive-runner";
 
 const PAGE = "/admin/cultivera-archive";
 const withRun = (id: string, q = "") => `${PAGE}?run=${id}${q}`;
@@ -123,5 +124,39 @@ export async function rebuildDaysAction(formData: FormData): Promise<void> {
   }
   revalidatePath(PAGE);
   revalidatePath("/admin/reports/cultivera-benchmark");
+  redirect(withRun(runId, q));
+}
+
+/**
+ * CVB-8: build Cultivera report history (cultivera_history_days) from the archived orders parts. Owner only,
+ * audited. Report history only ("Cultivera (imported)"); never written into the books.
+ */
+export async function buildHistoryAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("cultivera.benchmark");
+  const runId = String(formData.get("run_id") ?? "");
+  if (!isValidArchiveRunId(runId)) redirect(`${PAGE}?error=${encodeURIComponent("Unknown run.")}`);
+  let q = "";
+  try {
+    const h = await ingestHistory(runId);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "cultivera_archive.history_built",
+      entityType: "cultivera_archive_run",
+      entityId: runId,
+      after: { ...h, problemSample: undefined },
+    });
+    const c = h.check;
+    q =
+      `&history=1&hdays=${c.days}&hwritten=${h.written}&hkept=${h.keptNewer}&hmatch=${c.match}&hreturns=${c.returns}` +
+      `&hmismatch=${c.mismatch}&hnodaily=${c.noDaily}&hproblems=${h.problems + h.badLines}` +
+      (c.first ? `&hfirst=${c.first}&hlast=${c.last}` : "");
+  } catch (e) {
+    redirect(withRun(runId, err(msg(e, "Could not build the report history."))));
+  }
+  revalidatePath(PAGE);
+  revalidatePath("/admin/reports");
+  revalidatePath("/admin/reports/sales");
+  revalidatePath("/admin/reports/forecast");
   redirect(withRun(runId, q));
 }

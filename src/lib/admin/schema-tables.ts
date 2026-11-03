@@ -98,6 +98,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "cultivera_archive_files",
   "cultivera_archive_runs",
   "cultivera_benchmark_days",
+  "cultivera_history_days",
   "cultivera_mail_docs",
   "cultivera_menu_items",
   "cultivera_menu_snapshots",
