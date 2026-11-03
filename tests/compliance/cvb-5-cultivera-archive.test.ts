@@ -107,7 +107,7 @@ describe("cultivera.benchmark is owner only", () => {
     expect(page).toContain('await requirePermission("cultivera.benchmark")');
     const actions = read("src", "app", "admin", "cultivera-archive", "actions.ts");
     const exported = [...actions.matchAll(/export async function (\w+)/g)].map((m) => m[1]);
-    expect(exported.sort()).toEqual(["archiveRunAction", "cancelArchiveAction", "rebuildDaysAction", "startArchiveAction"]);
+    expect(exported.sort()).toEqual(["archiveRunAction", "buildHistoryAction", "cancelArchiveAction", "rebuildDaysAction", "startArchiveAction"]);
     for (const fn of exported) {
       const body = actions.slice(actions.indexOf(`export async function ${fn}`)).split("\nexport async function ")[0];
       expect(body, fn).toContain('requirePermission("cultivera.benchmark")');
