@@ -17,6 +17,10 @@ import { getSalesReport, type SalesGroupRow } from "@/lib/reports/sales";
 // SLICE 78: DB-backed category labels (owner renames propagate to reports).
 import { getCategoryLabeler } from "@/lib/pos/category-registry";
 import { ExportButtons } from "@/components/admin/reports/ExportButtons";
+import Link from "next/link";
+import { can } from "@/lib/auth/roles";
+import { getLastYearComparison, type LastYearResult } from "@/lib/reports/last-year";
+import { LastYearPanel } from "@/components/admin/reports/LastYearPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -77,11 +81,20 @@ const groupColumns = (labelHeader: string, prettify?: (s: string) => string): Re
 export default async function SalesReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string; compare?: string }>;
 }) {
-  await requirePermission("reports.view");
+  const session = await requirePermission("reports.view");
   const sp = await searchParams;
   const range = resolveRange(sp);
+  // CVB-10: optional "Same period last year"; the Cultivera part is owner only (cultivera.benchmark).
+  const compare = sp.compare === "ly";
+  const canSeeCultivera = can(session.profile.role, "cultivera.benchmark");
+  const keep = new URLSearchParams(
+    Object.entries({ from: sp.from, to: sp.to, range: sp.range, year: sp.year }).filter((e): e is [string, string] => typeof e[1] === "string"),
+  );
+  if (!compare) keep.set("compare", "ly");
+  const compareHref = `/admin/reports/sales${keep.toString() ? `?${keep.toString()}` : ""}`;
+  const noComparison: LastYearResult = { comparison: null, error: null };
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -93,7 +106,22 @@ export default async function SalesReportPage({
 
   // PERF2 round 4: the report and the category labels are read together.
   const categoryLabelP = getCategoryLabeler();
+  const lastYearP = compare ? getLastYearComparison(range.fromDate, range.toDate, canSeeCultivera) : Promise.resolve(noComparison);
   const report = await getSalesReport(range.fromISO, range.toISO);
+  const lastYear = await lastYearP;
+  const compareBar = (
+    <div className="flex justify-end">
+      <Link
+        data-testid="compare-ly"
+        href={compareHref}
+        className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
+          compare ? "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black" : "border-white/15 bg-white/5 text-white/60 hover:text-white"
+        }`}
+      >
+        {compare ? "Hide last year" : "Compare with last year"}
+      </Link>
+    </div>
+  );
   // SLICE 78: owner's live category labels (renames at Settings → Types show here).
   const categoryLabel = await categoryLabelP;
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
@@ -102,6 +130,8 @@ export default async function SalesReportPage({
     return (
       <div className="space-y-5">
         <DateRangePicker />
+        {compareBar}
+        {compare && <LastYearPanel comparison={lastYear.comparison} error={lastYear.error} />}
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 text-center">
           <p className="text-sm font-bold text-white/70">No sales in {range.label.toLowerCase()}.</p>
           <p className="mt-1 text-xs text-white/40">Adjust the date range above to see results.</p>
@@ -113,6 +143,8 @@ export default async function SalesReportPage({
   return (
     <div className="space-y-5">
       <DateRangePicker />
+      {compareBar}
+      {compare && <LastYearPanel comparison={lastYear.comparison} error={lastYear.error} />}
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
