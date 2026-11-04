@@ -808,6 +808,17 @@ export function offlineHealthCheck(h: OfflineHealth | null, policy: OfflineUnloc
 
 export type OfflineAuthKind = "unlock" | "approval" | "clock";
 
+/**
+ * What an offline manager/lead approval may be FOR. D170 widens the D161 pair
+ * (no sale, price override) one slice at a time; every purpose is re-judged at
+ * sync exactly like the first two.
+ */
+export const OFFLINE_APPROVAL_PURPOSES = ["no_sale", "price_override", "scan_unlock"] as const;
+export type OfflineApprovalPurpose = (typeof OFFLINE_APPROVAL_PURPOSES)[number];
+export function isOfflineApprovalPurpose(v: unknown): v is OfflineApprovalPurpose {
+  return typeof v === "string" && (OFFLINE_APPROVAL_PURPOSES as readonly string[]).includes(v);
+}
+
 export type OfflineAuthPayload = {
   kind: OfflineAuthKind;
   reason: OfflineReason;
@@ -817,7 +828,7 @@ export type OfflineAuthPayload = {
   rosterAt: string | null;
   keyId: string;
   /** approval only: what was approved. */
-  purpose?: "no_sale" | "price_override";
+  purpose?: OfflineApprovalPurpose;
   /** clock only. */
   intent?: "in" | "out";
 };
@@ -830,7 +841,7 @@ export function validateOfflineAuthPayload(p: Partial<OfflineAuthPayload> | null
   if (typeof p.armedAt !== "string" || !ISO_RE.test(p.armedAt)) errors.push("armedAt must be an ISO timestamp.");
   if (p.rosterAt !== null && p.rosterAt !== undefined && (typeof p.rosterAt !== "string" || !ISO_RE.test(p.rosterAt))) errors.push("rosterAt must be an ISO timestamp or null.");
   if (typeof p.keyId !== "string" || !KEYID_RE.test(p.keyId)) errors.push("keyId is malformed.");
-  if (p.kind === "approval" && p.purpose !== "no_sale" && p.purpose !== "price_override") errors.push('approval purpose must be "no_sale" or "price_override".');
+  if (p.kind === "approval" && !isOfflineApprovalPurpose(p.purpose)) errors.push(`approval purpose must be one of: ${OFFLINE_APPROVAL_PURPOSES.join(", ")}.`);
   if (p.kind === "clock" && p.intent !== "in" && p.intent !== "out") errors.push('clock intent must be "in" or "out".');
   return errors.length ? { ok: false, errors } : { ok: true };
 }
@@ -1037,6 +1048,9 @@ export function __runOfflineUnlockCoreTests(): { passed: number; failed: number 
   ok(validateOfflineAuthPayload(p).ok, "unlock payload valid");
   ok(!validateOfflineAuthPayload({ ...p, kind: "approval" }).ok, "approval needs purpose");
   ok(validateOfflineAuthPayload({ ...p, kind: "approval", purpose: "no_sale" }).ok, "approval with purpose valid");
+  ok(validateOfflineAuthPayload({ ...p, kind: "approval", purpose: "scan_unlock" }).ok, "D170 scan_unlock approval valid");
+  ok(!validateOfflineAuthPayload({ ...p, kind: "approval", purpose: "bogus" as never }).ok, "D170 unknown purpose refused");
+  ok(isOfflineApprovalPurpose("price_override") && !isOfflineApprovalPurpose("") && !isOfflineApprovalPurpose(null), "D170 purpose guard");
   ok(!validateOfflineAuthPayload({ ...p, kind: "clock" }).ok, "clock needs intent");
   ok(!validateOfflineAuthPayload({ ...p, reason: "magic" as OfflineReason }).ok, "unknown reason refused");
   ok(!validateOfflineAuthPayload(null).ok, "null payload refused");

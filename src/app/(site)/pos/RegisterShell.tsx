@@ -169,6 +169,7 @@ import {
   ONLINE_UNLOCK_TIMEOUT_MS,
   type OfflineAuthPayload,
   type OfflineReadiness,
+  type OfflineApprovalPurpose,
   type OfflineReason,
   type OfflineRecord,
 } from "@/lib/pos/offline-unlock-core";
@@ -882,7 +883,7 @@ export function RegisterShell({
   const approveOffline = useCallback(
     async (
       pin: string,
-      purpose: "no_sale" | "price_override",
+      purpose: OfflineApprovalPurpose,
       reason: OfflineReason,
     ): Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }> => {
       if (!offlineApprovalReady(loadOfflineVault(), Date.now())) {
@@ -1865,7 +1866,7 @@ export function RegisterShell({
             setHeldSale(null);
           }
         }}
-        onApprove={async (pin) => {
+        onApprove={async (pin, purpose) => {
           // POS B24 — manager PIN verify for a price override: the SAME
           // /api/pos/approve endpoint the no-sale flow uses (scrypt PIN +
           // shared throttle + manager/lead role gate). The PIN never rides in
@@ -1883,7 +1884,9 @@ export function RegisterShell({
             return { ok: true as const, approver: body.approver };
           }
           const reason = offlineReasonFor({ online: navigator.onLine, threw: r.threw, aborted: r.aborted, status: r.res?.status ?? null });
-          const off = await approveOffline(pin, "price_override", reason);
+          // D170 — the scan-required unlock (B41) uses this same approval, so
+          // it works offline too, audited with its own purpose.
+          const off = await approveOffline(pin, purpose ?? "price_override", reason);
           return off.ok ? { ok: true as const, approver: off.approver } : { ok: false as const, error: off.error };
         }}
         onOrderName={async (sourceOrderId) => {
