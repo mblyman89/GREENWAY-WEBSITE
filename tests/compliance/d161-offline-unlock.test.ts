@@ -192,7 +192,7 @@ describe("D161 wiring (source checks)", () => {
   it("the price-override modal no longer refuses before the offline fallback runs", () => {
     const sale = read("src/app/(site)/pos/SaleFlow.tsx");
     expect(sale).not.toMatch(/manager approval needs a connection to verify the PIN/);
-    expect(shell).toMatch(/approveOffline\(pin, "price_override"/);
+    expect(shell).toMatch(/approveOffline\(pin, purpose \?\? "price_override"/);
     expect(shell).toMatch(/approveOffline\(pin, "no_sale"/);
     expect(shell).toMatch(/noSaleBlockReason\(!!drawer, online \|\| offlineApprovalOk\)/);
   });

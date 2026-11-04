@@ -423,7 +423,7 @@ export type SaleFlowProps = {
    * /api/pos/approve endpoint the no-sale flow uses (scrypt + throttle +
    * manager/lead role gate); the PIN never leaves that call.
    */
-  onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onApprove?: (pin: string, purpose?: "price_override" | "scan_unlock") => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /**
    * SLICE 28 — employee-identity PIN check for the EMPLOYEE purchase
    * program. ONLINE-ONLY (a PIN can't be verified offline). The shell posts
@@ -2815,7 +2815,7 @@ function CartScreen({
   /** Names parsed off the scanned ID (signup prefill). */
   scannedName: { firstName: string | null; lastName: string | null } | null;
   /** B24 — manager PIN verify (ONLINE-ONLY; /api/pos/approve via the shell). */
-  onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onApprove?: (pin: string, purpose?: "price_override" | "scan_unlock") => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /** B42 — info-card photo resolve (ONLINE-ONLY via the shell). */
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
   /** Lot details (ONLINE-ONLY via the shell). */
@@ -5139,8 +5139,9 @@ function LotBlock({ lot, open, onToggle }: { lot: LotDetailView; open: boolean; 
  * POS B41 — manager unlock for scan-required mode. A manager or lead lifts
  * the scan requirement for THE CURRENT SALE ONLY (damaged label, scanner
  * down) with their PIN — verified server-side by /api/pos/approve (same
- * scrypt + throttle + role gate as the B24 price override), so this is
- * ONLINE-ONLY. The register locks after every sale, which unmounts the sale
+ * scrypt + throttle + role gate as the B24 price override). D170: offline, an
+ * armed manager/lead approves on this iPad (purpose "scan_unlock", queued as
+ * an offline_auth audit and re-judged at sync). The register locks after every sale, which unmounts the sale
  * screen — the unlock can never leak into the next customer.
  */
 function ScanUnlockModal({
@@ -5148,7 +5149,7 @@ function ScanUnlockModal({
   onClose,
   onUnlocked,
 }: {
-  onApprove: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onApprove: (pin: string, purpose?: "price_override" | "scan_unlock") => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   onClose: () => void;
   onUnlocked: () => void;
 }) {
@@ -5161,7 +5162,7 @@ function ScanUnlockModal({
     setBusy(true);
     setError(null);
     try {
-      const res = await onApprove(pin);
+      const res = await onApprove(pin, "scan_unlock");
       if (!res.ok) {
         setError(res.error);
         return;
@@ -5242,7 +5243,7 @@ function PriceOverrideModal({
 }: {
   product: PosMenuProduct;
   engineLine: PricedSaleLine;
-  onApprove: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onApprove: (pin: string, purpose?: "price_override" | "scan_unlock") => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   onClose: () => void;
   onApplied: (o: PosLineOverride) => void;
 }) {

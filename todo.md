@@ -3652,7 +3652,7 @@ Shared design rules for every item below. Build each one as its own PR.
       (it reads the lot from the back office)." (~2015, SaleFlow ~3165).
       Needs: the lot facts cached with the menu, and the fix queued and
       re-judged at sync.
-- [ ] O10 Scan unlock offline. Today: the scan-required unlock
+- [x] O10 Scan unlock offline (slice 1, approveOffline purpose "scan_unlock"). Today: the scan-required unlock
       (ScanUnlockModal, B41) uses the online approval. Needs: purpose
       "scan_unlock" added to approveOffline (an armed manager/lead), audited as
       offline_auth.
@@ -3667,5 +3667,18 @@ Shared design rules for every item below. Build each one as its own PR.
       (per-sale purchase limits) enforced from cached rules; the D161 offline
       window (default 168 h) against a multi-day outage; an outage drill in the
       checklist that covers O1–O11.
+- [ ] O14 Pickup / online orders offline (owner 2026-11-04: "Is it possible to
+      include online orders and pickup orders to the offline mode?"). New
+      website orders cannot reach an iPad with no internet; that needs a
+      backup internet path (cellular failover router, see the report). What we
+      build: the pickup queue already downloaded is kept on the iPad, so those
+      orders can be handed over and charged offline, with the hand-off queued
+      and re-judged at sync (an order cancelled online meanwhile goes to
+      Exceptions).
+- [ ] O15 Loyalty on the iPad (owner 2026-11-04: "Please add customer loyalty
+      to the iPad. Our data is safe. I want all features unlocked."). Cache the
+      member list (id, name, phone tail, points, tier) in the secure store,
+      refreshed while online; offline lookup, attach and redemption up to the
+      cached balance, re-judged at sync.
 - [ ] O13 Docs for each item: SOP-01 (§4.32 works-offline list, §4.40, section
       5), concierge, ledgers. Migration pins whenever an event type is added.
