@@ -3676,3 +3676,26 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0339_pos_offline_auth.rollback.sql`. It refuses to run while
   offline_auth rows exist.
+
+- [ ] `0340_pos_offline_till.sql` (D170 O1, owner request 2026-11-04: "finish all remaining offline mode tasks").
+  Apply it **after 0339**.
+  - **Why:** the drawer work (count-in, safe drop, change swap, open for the count, blind close) now also works
+    while the internet is down. The iPad checks the PINs against its offline vault and queues each action.
+  - **What it does:** widens the `pos_sale_events` event_type CHECK to also allow `till_action`. At sync the server
+    re-checks every till rule, re-judges each PIN (still active? still a manager, for a swap?), and writes the drawer
+    rows with the time the cash really moved. Doubtful ones go to Exceptions. No new tables.
+
+    Until it is applied, offline drawer actions are rejected at sync (kept on the iPad, with a hint naming this file)
+    and sales rung on an offline-opened drawer wait as exceptions until it is applied and they are re-sent.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select pg_get_constraintdef(oid) from pg_constraint
+   where conname = 'pos_sale_events_event_type_check';   -- the list ends with 'till_action'
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0340_pos_offline_till.rollback.sql`. It refuses to run while
+  till_action rows exist.

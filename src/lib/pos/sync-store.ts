@@ -38,6 +38,7 @@ import { isMarketplaceOrigin, toOrderOrigin } from "@/lib/orders/order-origin-co
 import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
 import { judgeOfflineAuth, offlineKeyId, validateOfflineAuthPayload, type OfflineAuthPayload } from "./offline-unlock-core";
 import { getOfflinePolicy } from "./offline-unlock-store";
+import { applyOfflineTill } from "./offline-till-store";
 import {
   validateSalePayload,
   validatePunchPayload,
@@ -401,6 +402,13 @@ async function ingestOne(
         reason: "Offline PIN audit events are not accepted yet — apply supabase/migrations/0339_pos_offline_auth.sql first.",
       };
     }
+    if (insertError.code === "23514" && envelope.eventType === "till_action") {
+      return {
+        clientUuid: envelope.clientUuid,
+        status: "rejected",
+        reason: "Offline drawer actions are not accepted yet — apply supabase/migrations/0340_pos_offline_till.sql first.",
+      };
+    }
     if (insertError.code === "23514" && envelope.eventType === "cart_adjustment") {
       return {
         clientUuid: envelope.clientUuid,
@@ -459,6 +467,13 @@ async function processEnvelope(
         return await processCartAdjustment(admin, envelope, ledgerId);
       case "offline_auth":
         return await processOfflineAuth(admin, envelope, ledgerId);
+      case "till_action": {
+        // D170 O1 — a drawer action done offline (offline-till-store).
+        const outcome = await applyOfflineTill(admin, envelope);
+        if (!outcome.ok) return await markException(admin, ledgerId, envelope.clientUuid, outcome.reason);
+        await markProcessed(admin, ledgerId);
+        return { clientUuid: envelope.clientUuid, status: "processed" };
+      }
       default:
         return await markException(admin, ledgerId, envelope.clientUuid, "Unknown event type.");
     }
