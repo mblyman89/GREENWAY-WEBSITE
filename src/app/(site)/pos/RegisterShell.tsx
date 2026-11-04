@@ -155,6 +155,32 @@ import {
   type NativeStatus,
 } from "@/lib/pos/ipad-setup-core";
 import { readNativeStatus, setKeepAwake } from "@/lib/pos/greenway-device";
+// D161 — offline PIN unlock (owner: "we cant ring a sale if we cant get past
+// the pin unlock page"). Decisions in offline-unlock-core; WebCrypto + vault
+// in offline-unlock.
+import {
+  cachedDrawerFor,
+  offlineApprovalReady,
+  offlineFallbackAllowed,
+  offlineHealthOf,
+  offlineReadiness,
+  offlineReasonFor,
+  OFFLINE_ROSTER_REFRESH_MS,
+  ONLINE_UNLOCK_TIMEOUT_MS,
+  type OfflineAuthPayload,
+  type OfflineReadiness,
+  type OfflineReason,
+  type OfflineRecord,
+} from "@/lib/pos/offline-unlock-core";
+import {
+  armOfflineFromOnline,
+  eraseOfflineVault,
+  loadOfflineVault,
+  noteOfflineClock,
+  noteOfflineDrawer,
+  refreshOfflineRoster,
+  verifyOfflinePin,
+} from "@/lib/pos/offline-unlock";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -418,6 +444,11 @@ export function RegisterShell({
   // Fix Phase 6 (G-62, owner D85): this register's standard float (from the
   // unlock), for the count-in warning. null = unknown, no warning.
   const [standardFloatMinor, setStandardFloatMinor] = useState<number | null>(null);
+  // D161 — offline unlock readiness for the lock-screen chip (recomputed on a
+  // timer and after every roster refresh; the vault itself is in the keychain).
+  const [offlineReady, setOfflineReady] = useState<OfflineReadiness | null>(null);
+  const [offlineTick, setOfflineTick] = useState(0);
+  const [offlineApprovalOk, setOfflineApprovalOk] = useState(false);
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
@@ -844,6 +875,33 @@ export function RegisterShell({
     [creds],
   );
 
+  // D161 — manager approval with the PIN checked on this iPad (server not
+  // reachable). Only a fresh manager/lead record can match; the approval is
+  // queued as an offline_auth event the server re-judges at sync (still a
+  // manager? still active?). The caller queues the approved action itself.
+  const approveOffline = useCallback(
+    async (
+      pin: string,
+      purpose: "no_sale" | "price_override",
+      reason: OfflineReason,
+    ): Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }> => {
+      if (!offlineApprovalReady(loadOfflineVault(), Date.now())) {
+        return { ok: false, error: "Offline — no manager or lead is set up to approve on this iPad. Approval needs a connection." };
+      }
+      const v = await verifyOfflinePin(pin, { requireApprover: true });
+      if (!v.ok) return { ok: false, error: `Offline approval: ${v.message}` };
+      enqueue(
+        "offline_auth",
+        offlineAuthPayload("approval", reason, v.record, v.vault.rosterAt, v.vault.keyId, { purpose }),
+        v.record.employeeId,
+      );
+      // The approver's PIN use is its own audit row; the approved action
+      // (no_sale / override) carries the approver id. Nothing about the PIN is queued.
+      return { ok: true, approver: { id: v.record.employeeId, fullName: v.record.fullName } };
+    },
+    [enqueue],
+  );
+
   // D145 — what this register tells the back office about itself on every
   // heartbeat and flush. A ref so the stable callbacks always read fresh values.
   const healthRef = useRef<() => Record<string, unknown>>(() => ({}));
@@ -867,6 +925,8 @@ export function RegisterShell({
         menuFetchedAt: menuBundle?.fetchedAt ?? null,
         storageOk,
         native: nativeStatus,
+        // D161 — offline unlock readiness (counts + timestamps only, no secrets).
+        offline: offlineHealthOf(loadOfflineVault(), Date.now()),
       };
     };
   });
@@ -1031,6 +1091,54 @@ export function RegisterShell({
       clearInterval(t1);
     };
   }, [creds, online, persistCreds, pairingRecheck]);
+
+  // ── D161: offline unlock roster refresh ──
+  // Every OFFLINE_ROSTER_REFRESH_MS while online (and at boot / reconnect),
+  // ask who may still unlock this iPad offline. Only a POSITIVE answer changes
+  // the vault (purges fired employees, changed PINs, an owner reset); a
+  // network error or 5xx leaves it untouched so a flaky connection can never
+  // lock the counter out. A definitive pairing refusal erases the vault: a
+  // revoked iPad must not unlock offline either.
+  useEffect(() => {
+    if (!creds || !online) return;
+    let cancelled = false;
+    const run = async () => {
+      const r = await refreshOfflineRoster(creds);
+      if (cancelled) return;
+      if (r.kind === "ok") {
+        if (r.reason && r.removed > 0) setBanner(r.reason);
+      } else if (r.kind === "refused" && classifyDeviceAuthFailure(r.status, r.error)) {
+        await eraseOfflineVault();
+      }
+      setOfflineTick((n) => n + 1);
+    };
+    const t0 = setTimeout(() => void run(), 1_500);
+    const t1 = setInterval(() => void run(), OFFLINE_ROSTER_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(t0);
+      clearInterval(t1);
+    };
+  }, [creds, online]);
+
+  // Lock-screen readiness chip + the home screen's offline-approval flag:
+  // recomputed every minute (records expire by time) and after anything that
+  // changes the vault (roster refresh, screen change, going offline).
+  useEffect(() => {
+    if (screen !== "locked" && screen !== "home") return;
+    const compute = () => {
+      const v = loadOfflineVault();
+      const now = Date.now();
+      setOfflineReady(offlineReadiness(v, now));
+      setOfflineApprovalOk(offlineApprovalReady(v, now));
+    };
+    const t0 = setTimeout(compute, 0);
+    const t1 = setInterval(compute, 60_000);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(t1);
+    };
+  }, [screen, offlineTick, online]);
 
   // ── menu bundle: refresh when online, cache for offline sales ──
   const refreshMenu = useCallback(async (): Promise<PosMenuBundle | false> => {
@@ -1517,6 +1625,56 @@ export function RegisterShell({
     );
   }
 
+  // ── unlock finish (shared by the online and the D161 offline path) ──
+  const finishUnlock = (emp: UnlockedEmployee, drawerInfo: DrawerInfo, registerId: string, defaultFloatMinor: number | null) => {
+    setEmployee(emp);
+    setDrawer(drawerInfo);
+    setStandardFloatMinor(defaultFloatMinor);
+    // GW-002 — the server is the source of truth for which register
+    // this device is bound to. When an unlock reveals a re-bind, the
+    // corrected creds must be PERSISTED (guarded write path), not just
+    // held in memory: otherwise the next restart boots the OLD register
+    // id, and lock-screen punches built before the next unlock carry a
+    // stale registerId the server rejects (checkEnvelopeForDevice) —
+    // an employee who "clocked in" is silently not clocked in.
+    if (creds && creds.registerId !== registerId) {
+      const next = { ...creds, registerId };
+      persistCreds(next);
+      setCreds(next);
+    }
+    setScreen("home");
+    // SESSION RESUME — if the idle auto-lock parked an in-progress sale,
+    // RE-VALIDATE it (age still >= 21, ID not expired, within TTL, medical
+    // card still valid) against the store's Pacific clock. On success the
+    // sale resumes PAST the age gate with the same customer's cart; on any
+    // doubt the snapshot is cleared and the sale starts fresh at the ID
+    // gate (the safe default). The cart itself is re-priced against the
+    // CURRENT bundle by SaleFlow's initialCart path (rebuildHeldCart).
+    try {
+      const parked = parseActiveSale(posStorageGet(ACTIVE_SALE_KEY));
+      const decision = evaluateResume(parked, pacificDayKey(new Date()), Date.now());
+      if (decision.resume) {
+        setResumeSnapshot(decision.snapshot);
+        setResumeCart(null);
+        setLoadedCart(null);
+        setLoadedMember(null);
+        // AM-D2 — a resumed sale that was loaded from a website order must
+        // still finalize THAT order on completion, so restore its id.
+        setLoadedOrderId(decision.snapshot.sourceOrderId);
+        setSaleActive(true);
+      } else {
+        posStorageRemove(ACTIVE_SALE_KEY);
+        setResumeSnapshot(null);
+        if (parked) {
+          setBanner(decision.reason);
+        }
+      }
+    } catch {
+      // Unreadable storage — start fresh, no resume.
+      setResumeSnapshot(null);
+    }
+  };
+
   if (screen === "locked") {
     return (
       <LockScreen
@@ -1540,53 +1698,54 @@ export function RegisterShell({
         onProductImage={fetchProductImage}
         onProductDetails={fetchProductDetails}
         onUnlocked={(emp, drawerInfo, registerId, defaultFloatMinor) => {
-          setEmployee(emp);
-          setDrawer(drawerInfo);
-          setStandardFloatMinor(defaultFloatMinor);
-          // GW-002 — the server is the source of truth for which register
-          // this device is bound to. When an unlock reveals a re-bind, the
-          // corrected creds must be PERSISTED (guarded write path), not just
-          // held in memory: otherwise the next restart boots the OLD register
-          // id, and lock-screen punches built before the next unlock carry a
-          // stale registerId the server rejects (checkEnvelopeForDevice) —
-          // an employee who "clocked in" is silently not clocked in.
-          if (creds && creds.registerId !== registerId) {
-            const next = { ...creds, registerId };
-            persistCreds(next);
-            setCreds(next);
-          }
-          setScreen("home");
-          // SESSION RESUME — if the idle auto-lock parked an in-progress sale,
-          // RE-VALIDATE it (age still >= 21, ID not expired, within TTL, medical
-          // card still valid) against the store's Pacific clock. On success the
-          // sale resumes PAST the age gate with the same customer's cart; on any
-          // doubt the snapshot is cleared and the sale starts fresh at the ID
-          // gate (the safe default). The cart itself is re-priced against the
-          // CURRENT bundle by SaleFlow's initialCart path (rebuildHeldCart).
-          try {
-            const parked = parseActiveSale(posStorageGet(ACTIVE_SALE_KEY));
-            const decision = evaluateResume(parked, pacificDayKey(new Date()), Date.now());
-            if (decision.resume) {
-              setResumeSnapshot(decision.snapshot);
-              setResumeCart(null);
-              setLoadedCart(null);
-              setLoadedMember(null);
-              // AM-D2 — a resumed sale that was loaded from a website order must
-              // still finalize THAT order on completion, so restore its id.
-              setLoadedOrderId(decision.snapshot.sourceOrderId);
-              setSaleActive(true);
-            } else {
-              posStorageRemove(ACTIVE_SALE_KEY);
-              setResumeSnapshot(null);
-              if (parked) {
-                setBanner(decision.reason);
-              }
-            }
-          } catch {
-            // Unreadable storage — start fresh, no resume.
-            setResumeSnapshot(null);
-          }
+          // D161 — remember today's drawer so an offline unlock can keep ringing.
+          void noteOfflineDrawer(drawerInfo);
+          void noteOfflineClock(emp.id, emp.clockedIn);
+          finishUnlock(emp, drawerInfo, registerId, defaultFloatMinor);
         }}
+        onUnlockedOffline={(rec, reason) => {
+          // D161 — the PIN was checked on this iPad. The register id comes
+          // from the stored pairing (the server bound it at the last online
+          // answer); the drawer is today's cached open drawer, if any.
+          if (!creds.registerId) {
+            setBanner("This iPad is not bound to a register yet. Unlocking needs the internet once.");
+            return;
+          }
+          const v = loadOfflineVault();
+          const cached = cachedDrawerFor(v, pacificDayKey(new Date()));
+          enqueue(
+            "offline_auth",
+            offlineAuthPayload("unlock", reason, rec, v?.rosterAt ?? null, v?.keyId ?? "e1"),
+            rec.employeeId,
+          );
+          finishUnlock(
+            {
+              id: rec.employeeId,
+              fullName: rec.fullName,
+              jobRole: rec.jobRole,
+              clockedIn: rec.clockedIn,
+              sawUsername: rec.sawUsername,
+            },
+            cached,
+            creds.registerId,
+            standardFloatMinor,
+          );
+          setBanner(
+            `Unlocked OFFLINE as ${rec.fullName} (PIN checked on this iPad). Sales save here and send when the internet returns.` +
+              (cached ? "" : " No open drawer is known for today, and counting in a drawer needs the internet."),
+          );
+        }}
+        onOfflinePunch={(rec, intent, reason) => {
+          // D161 — offline clock from the lock screen: the PIN was checked on
+          // this iPad; the punch (explicit intent) and its audit are queued.
+          const v = loadOfflineVault();
+          const a = enqueue("punch", { intent }, rec.employeeId);
+          if (!a) return null;
+          enqueue("offline_auth", offlineAuthPayload("clock", reason, rec, v?.rosterAt ?? null, v?.keyId ?? "e1", { intent }), rec.employeeId);
+          void noteOfflineClock(rec.employeeId, intent === "in");
+          return `${rec.fullName}: clocked ${intent} OFFLINE (PIN checked on this iPad). It sends when the internet returns. Check the time clock later.`;
+        }}
+        offlineReadiness={offlineReady}
         onPunched={(message) => setBanner(message)}
       />
     );
@@ -1709,31 +1868,23 @@ export function RegisterShell({
         onApprove={async (pin) => {
           // POS B24 — manager PIN verify for a price override: the SAME
           // /api/pos/approve endpoint the no-sale flow uses (scrypt PIN +
-          // shared throttle + manager/lead role gate). ONLINE-ONLY; the PIN
-          // never rides in any queue payload — only the approver's id does.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — manager approval needs a connection to verify the PIN." };
-          }
-          try {
-            const res = await posFetch("/api/pos/approve", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "x-pos-device-id": creds.deviceId,
-                "x-pos-device-key": creds.deviceKey,
-              },
-              body: JSON.stringify({ pin }),
-            });
-            const body = (await res.json().catch(() => null)) as
-              | { approver?: { id: string; fullName: string }; error?: string }
-              | null;
-            if (!res.ok || !body?.approver) {
+          // shared throttle + manager/lead role gate). The PIN never rides in
+          // any queue payload — only the approver's id does.
+          // D161 — when the server cannot be reached (or answers 5xx), a
+          // manager/lead armed on this iPad can approve OFFLINE; that use is
+          // queued as an offline_auth audit and re-judged at sync.
+          const r = await postPinRequest("/api/pos/approve", creds, { pin });
+          const body = r.body as { approver?: { id: string; fullName: string }; error?: string; offline?: unknown } | null;
+          if (r.res && !offlineFallbackAllowed({ threw: false, status: r.res.status })) {
+            if (!r.res.ok || !body?.approver) {
               return { ok: false as const, error: body?.error ?? "Approval failed." };
             }
+            void armOfflineFromOnline(pin, body.offline, null);
             return { ok: true as const, approver: body.approver };
-          } catch {
-            return { ok: false as const, error: "Could not reach the server — try again." };
           }
+          const reason = offlineReasonFor({ online: navigator.onLine, threw: r.threw, aborted: r.aborted, status: r.res?.status ?? null });
+          const off = await approveOffline(pin, "price_override", reason);
+          return off.ok ? { ok: true as const, approver: off.approver } : { ok: false as const, error: off.error };
         }}
         onOrderName={async (sourceOrderId) => {
           // SLICE 23 — draw ONE fun name from the shared pool for the receipt
@@ -2276,6 +2427,7 @@ export function RegisterShell({
         onClearBanner={() => setBanner(null)}
         onLock={lock}
         onSyncNow={() => void flush()}
+        offlineApprovalOk={offlineApprovalOk}
         onPunch={() => {
           if (!employee) return;
           const intent = employee.clockedIn ? "out" : "in";
@@ -2302,6 +2454,7 @@ export function RegisterShell({
               answered = b !== null;
               if (b?.ok && b.employee) {
                 setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: b.employee!.clockedIn } : cur));
+                void noteOfflineClock(employee.id, b.employee.clockedIn);
                 setBanner(b.action && b.at ? punchSuccessMessage(employee.fullName, b.action, b.at) : (b.message ?? "Done."));
                 return;
               }
@@ -2314,6 +2467,7 @@ export function RegisterShell({
             }
             if (shouldQueueOffline(answered, navigator.onLine)) {
               enqueue("punch", { intent }, employee.id);
+              void noteOfflineClock(employee.id, intent === "in");
               setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: !employee.clockedIn } : cur));
               setBanner(
                 `${employee.fullName}: no connection. Clock-${intent} saved on this register and will send when it reconnects. Check the back office time clock later.`,
@@ -2373,6 +2527,7 @@ export function RegisterShell({
         <NoSaleModal
           creds={creds}
           employeeName={employee.fullName}
+          onOfflineApprove={(pin, reason) => approveOffline(pin, "no_sale", reason)}
           onClose={() => setNoSaleOpen(false)}
           onApproved={(reason, approver) => {
             // Queue the audited no_sale event (validated + audited at sync),
@@ -2553,6 +2708,9 @@ export function RegisterShell({
             }
             if (mode === "open") setDrawer(drawerInfo);
             if (mode === "close") setDrawer(null);
+            // D161 — keep the offline cache's drawer in step.
+            if (mode === "open") void noteOfflineDrawer(drawerInfo);
+            if (mode === "close") void noteOfflineDrawer(null);
             // Fix Phase 6 (G-61, owner D84): keep the clock-out guard current.
             // Count-in under THIS employee's PIN adds the drawer; a close
             // removes it (whoever closed it). Closing does NOT clock out.
@@ -2795,6 +2953,73 @@ function SetupScreen({
 }
 
 // ---------------------------------------------------------------------------
+// D161 — offline PIN helpers
+// ---------------------------------------------------------------------------
+
+/** The audit payload queued with every offline PIN use (re-judged at sync). */
+function offlineAuthPayload(
+  kind: OfflineAuthPayload["kind"],
+  reason: OfflineReason,
+  rec: OfflineRecord,
+  rosterAt: string | null,
+  keyId: string,
+  extra: { purpose?: OfflineAuthPayload["purpose"]; intent?: OfflineAuthPayload["intent"] } = {},
+): Record<string, unknown> {
+  const p: OfflineAuthPayload = { kind, reason, armedAt: rec.armedAt, rosterAt, keyId, ...extra };
+  return p as unknown as Record<string, unknown>;
+}
+
+/**
+ * POST to a PIN endpoint with a hard timeout, reporting HOW it failed so the
+ * caller can apply offlineFallbackAllowed (throw/timeout/5xx → offline check;
+ * a 4xx "no" is final). The timeout matters: a captive Wi-Fi or a dead
+ * gateway can hang a request for a minute while a customer waits.
+ */
+async function postPinRequest(
+  path: string,
+  creds: DeviceCreds,
+  payload: Record<string, unknown>,
+): Promise<{ res: Response | null; body: unknown; threw: boolean; aborted: boolean }> {
+  const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), ONLINE_UNLOCK_TIMEOUT_MS) : null;
+  try {
+    const res = await posFetch(path, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pos-device-id": creds.deviceId,
+        "x-pos-device-key": creds.deviceKey,
+      },
+      body: JSON.stringify(payload),
+      signal: ctl?.signal,
+    });
+    const body = (await res.json().catch(() => null)) as unknown;
+    return { res, body, threw: false, aborted: false };
+  } catch {
+    return { res: null, body: null, threw: true, aborted: !!ctl?.signal.aborted };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Small lock-screen line: can this iPad be unlocked without the internet? */
+function OfflineReadyChip({ readiness }: { readiness: OfflineReadiness | null }) {
+  if (!readiness) return null;
+  const tone =
+    readiness.state === "ready"
+      ? "border-[var(--pos-accent-border)] text-[var(--pos-accent)]"
+      : readiness.state === "off"
+        ? "border-[var(--pos-border)] text-[var(--pos-text-muted)]"
+        : "border-[var(--pos-warn)] text-[var(--pos-warn)]";
+  return (
+    <p data-testid="offline-ready-chip" className={`mb-3 max-w-md rounded-full border px-3 py-1 text-center text-xs font-semibold ${tone}`}>
+      {readiness.state === "ready" ? "🔐 " : "⚠️ "}
+      {readiness.text}
+    </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Lock screen — PIN pad + clock in/out
 // ---------------------------------------------------------------------------
 
@@ -2810,6 +3035,9 @@ function LockScreen({
   onForceRefresh,
   onClearBanner,
   onUnlocked,
+  onUnlockedOffline,
+  onOfflinePunch,
+  offlineReadiness: offlineReady,
   onPunched,
   lookupBundle,
   onProductImage,
@@ -2834,6 +3062,12 @@ function LockScreen({
   onUnlocked: (emp: UnlockedEmployee, drawer: DrawerInfo, registerId: string, defaultFloatMinor: number | null) => void;
   /** Owner D124: the server's answer to a lock-screen clock in / out. */
   onPunched: (message: string) => void;
+  /** D161 — the PIN matched an armed record on this iPad (server unreachable). */
+  onUnlockedOffline: (rec: OfflineRecord, reason: OfflineReason) => void;
+  /** D161 — queue an offline clock punch; returns the message, or null if it could not queue. */
+  onOfflinePunch: (rec: OfflineRecord, intent: "in" | "out", reason: OfflineReason) => string | null;
+  /** D161 — the lock-screen chip ("Offline unlock ready: 9 people"). */
+  offlineReadiness: OfflineReadiness | null;
 }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -2849,45 +3083,65 @@ function LockScreen({
   // step, so nothing about unlocking can get in the way of a clock-out, and
   // the server's real answer (success or the exact refusal) is shown here.
   const [clockNotice, setClockNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  // D161 — offline clock: the PIN was checked on this iPad. The punch is
+  // queued with an EXPLICIT intent (the replay asserts it, never toggles).
+  const [offlineClockFor, setOfflineClockFor] = useState<{ rec: OfflineRecord; reason: OfflineReason } | null>(null);
   const submitClock = async () => {
     if (pin.length < 4 || busy) return;
     setBusy(true);
     setError(null);
     setClockNotice(null);
+    setOfflineClockFor(null);
+    const typed = pin;
     try {
-      const res = await posFetch("/api/pos/clock", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-pos-device-id": creds.deviceId,
-          "x-pos-device-key": creds.deviceKey,
-        },
-        body: JSON.stringify({ pin }),
-      });
-      const b = (await res.json().catch(() => null)) as
-        | { ok?: boolean; action?: "in" | "out"; at?: string | null; message?: string; error?: string; employee?: { fullName: string } }
+      const r = await postPinRequest("/api/pos/clock", creds, { pin: typed });
+      const b = r.body as
+        | { ok?: boolean; action?: "in" | "out"; at?: string | null; message?: string; error?: string; employee?: { fullName: string; clockedIn?: boolean }; offline?: unknown }
         | null;
-      setPin("");
-      if (b?.ok) {
-        const text =
-          b.action && b.at && b.employee ? punchSuccessMessage(b.employee.fullName, b.action, b.at) : (b.message ?? "Done.");
-        setClockNotice({ ok: true, text });
-        onPunched(text);
-        setMode("unlock");
+      if (r.res && !offlineFallbackAllowed({ threw: false, status: r.res.status })) {
+        setPin("");
+        if (b?.ok) {
+          // D161 — a PIN-proven punch also arms offline unlock.
+          void armOfflineFromOnline(typed, b.offline, typeof b.employee?.clockedIn === "boolean" ? b.employee.clockedIn : null);
+          const text =
+            b.action && b.at && b.employee ? punchSuccessMessage(b.employee.fullName, b.action, b.at) : (b.message ?? "Done.");
+          setClockNotice({ ok: true, text });
+          onPunched(text);
+          setMode("unlock");
+          return;
+        }
+        const who = b?.employee?.fullName ? `${b.employee.fullName}: ` : "";
+        setClockNotice({ ok: false, text: `${who}NOT clocked in or out. ${b?.error ?? "The server refused the punch."}` });
         return;
       }
-      const who = b?.employee?.fullName ? `${b.employee.fullName}: ` : "";
-      setClockNotice({ ok: false, text: `${who}NOT clocked in or out. ${b?.error ?? "The server refused the punch."}` });
-    } catch {
-      setClockNotice({
-        ok: false,
-        text: online
-          ? "Could not reach the server. Nothing was recorded. Try again."
-          : "Offline. Clocking in or out needs a connection. Nothing was recorded. Try again when the register is back online.",
-      });
+      // Server unreachable / timed out / 5xx → check the PIN on this iPad.
+      const reason = offlineReasonFor({ online, threw: r.threw, aborted: r.aborted, status: r.res?.status ?? null });
+      const v = await verifyOfflinePin(typed);
+      setPin("");
+      if (!v.ok) {
+        setClockNotice({
+          ok: false,
+          text: `Could not reach the server, and the offline PIN check said: ${v.message} Nothing was recorded.`,
+        });
+        return;
+      }
+      setOfflineClockFor({ rec: v.record, reason });
     } finally {
       setBusy(false);
     }
+  };
+  const confirmOfflineClock = (intent: "in" | "out") => {
+    const pending = offlineClockFor;
+    setOfflineClockFor(null);
+    if (!pending) return;
+    const msg = onOfflinePunch(pending.rec, intent, pending.reason);
+    if (!msg) {
+      setClockNotice({ ok: false, text: "This iPad is not bound to a register yet, so the punch could not be saved. Nothing was recorded." });
+      return;
+    }
+    setClockNotice({ ok: true, text: msg });
+    onPunched(msg);
+    setMode("unlock");
   };
 
   const submit = async () => {
@@ -2903,37 +3157,49 @@ function LockScreen({
     setBusy(true);
     setError(null);
     setClockNotice(null);
+    const typed = pin;
     try {
-      const res = await posFetch("/api/pos/unlock", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-pos-device-id": creds.deviceId,
-          "x-pos-device-key": creds.deviceKey,
-        },
-        body: JSON.stringify({ pin }),
-      });
-      const body = (await res.json().catch(() => null)) as
+      const r = await postPinRequest("/api/pos/unlock", creds, { pin: typed });
+      const body = r.body as
         | {
             employee?: UnlockedEmployee;
             register?: { id: string; defaultFloatMinor?: number | null };
             drawer?: DrawerInfo;
             error?: string;
+            offline?: unknown;
           }
         | null;
-      if (!res.ok || !body?.employee || !body.register) {
-        setError(body?.error ?? "Unlock failed.");
+      if (r.res && !offlineFallbackAllowed({ threw: false, status: r.res.status })) {
+        // The server ANSWERED. A "no" (wrong PIN, throttled, handbook, not
+        // bound) is final — the offline check is never a second chance.
+        if (!r.res.ok || !body?.employee || !body.register) {
+          setError(body?.error ?? "Unlock failed.");
+          setPin("");
+          return;
+        }
+        // D161 — arm this person for offline unlock (PIN → verifier on this
+        // iPad; the PIN itself is never stored). Never blocks the unlock.
+        void armOfflineFromOnline(typed, body.offline, body.employee.clockedIn);
+        onUnlocked(body.employee, body.drawer ?? null, body.register.id, body.register.defaultFloatMinor ?? null);
         setPin("");
         return;
       }
-      onUnlocked(body.employee, body.drawer ?? null, body.register.id, body.register.defaultFloatMinor ?? null);
+      // D161 — no answer (offline, timeout, network) or a 5xx: check the PIN
+      // on this iPad against the armed list.
+      const reason = offlineReasonFor({ online, threw: r.threw, aborted: r.aborted, status: r.res?.status ?? null });
+      const v = await verifyOfflinePin(typed);
       setPin("");
-    } catch {
-      setError(
-        online
-          ? "Could not reach the server."
-          : "Offline — unlock requires a connection in this build. (Offline PIN cache ships with the Capacitor app.)",
-      );
+      if (!v.ok) {
+        setError(
+          reason === "server_error"
+            ? `The server is having trouble. Offline check: ${v.message}`
+            : reason === "timeout"
+              ? `The server did not answer in time. Offline check: ${v.message}`
+              : `No internet. Offline check: ${v.message}`,
+        );
+        return;
+      }
+      onUnlockedOffline(v.record, reason);
     } finally {
       setBusy(false);
     }
@@ -2950,6 +3216,8 @@ function LockScreen({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark mb-5 h-10 w-auto opacity-90" />
       <StatusChips online={online} pendingCount={pendingCount} name={creds.name} />
+      {/* D161 — can this iPad be unlocked if the internet drops? */}
+      <OfflineReadyChip readiness={offlineReady} />
       {/* D143 — owner: "Please add to the lock screen of the app something
           bold that says I am running the newest version and all is good." */}
       <VersionBanner verdict={versionVerdict} />
@@ -2977,6 +3245,27 @@ function LockScreen({
           {clockNotice.ok ? "✅ " : "⚠️ "}
           {clockNotice.text} <span className="text-sm font-normal underline">ok</span>
         </button>
+      ) : null}
+      {offlineClockFor ? (
+        <div role="dialog" aria-label="Offline clock" className="mb-4 w-full max-w-md rounded-2xl border-2 border-[var(--pos-warn)] bg-[var(--pos-warn-soft)] p-4 text-center">
+          <p className="text-base font-bold text-[var(--pos-warn)]">
+            Offline: {offlineClockFor.rec.fullName}, are you clocking in or out?
+          </p>
+          <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+            PIN checked on this iPad. This iPad last saw you {offlineClockFor.rec.clockedIn ? "clocked IN" : "clocked OUT"}.
+          </p>
+          <div className="mt-3 flex justify-center gap-3">
+            <button type="button" onClick={() => confirmOfflineClock("in")} className="pos-tile min-h-12 rounded-xl bg-[var(--pos-accent)] px-5 py-2 font-bold text-[var(--pos-accent-ink)]">
+              Clock IN
+            </button>
+            <button type="button" onClick={() => confirmOfflineClock("out")} className="pos-tile min-h-12 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-2 font-bold">
+              Clock OUT
+            </button>
+            <button type="button" onClick={() => setOfflineClockFor(null)} className="text-sm underline">
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : null}
       <h1 className="text-2xl font-semibold">{mode === "unlock" ? "Enter PIN to unlock" : "⏱️ Enter PIN to clock in / out"}</h1>
       <div className="mt-4 flex gap-3" aria-label="PIN">
@@ -3130,6 +3419,7 @@ function HomeScreen({
   onLock,
   onSyncNow,
   onPunch,
+  offlineApprovalOk,
 }: {
   creds: DeviceCreds;
   employee: UnlockedEmployee;
@@ -3208,6 +3498,8 @@ function HomeScreen({
   onLock: () => void;
   onSyncNow: () => void;
   onPunch: () => void;
+  /** D161 — a manager/lead is armed to approve offline on this iPad. */
+  offlineApprovalOk: boolean;
 }) {
   // AN-2 — the FIRST blocking gate (drawer → clock-in → menu), or null when
   // the sale can start. Pure + self-tested; drives BOTH disabled states and
@@ -3219,7 +3511,9 @@ function HomeScreen({
   // manager PIN is verified server-side). The REASON renders visibly next
   // to both open-drawer affordances; a title tooltip alone never shows on
   // the iPad's touch screen.
-  const noSaleBlock = noSaleBlockReason(!!drawer, online);
+  // D161 — offline, a no-sale is still possible when a manager/lead is armed
+  // for offline approval on this iPad (their PIN is checked here, audited).
+  const noSaleBlock = noSaleBlockReason(!!drawer, online || offlineApprovalOk);
   const syncLabel = useMemo(() => {
     if (!lastSyncAt) return "never this session";
     return new Date(lastSyncAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -3754,11 +4048,17 @@ function NoSaleModal({
   employeeName,
   onClose,
   onApproved,
+  onOfflineApprove,
 }: {
   creds: DeviceCreds;
   employeeName: string;
   onClose: () => void;
   onApproved: (reason: string, approver: { id: string; fullName: string }) => void;
+  /** D161 — approve with the PIN checked on this iPad when the server is unreachable. */
+  onOfflineApprove: (
+    pin: string,
+    reason: OfflineReason,
+  ) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
 }) {
   const PRESETS = [
     "Change for a large bill",
@@ -3777,33 +4077,32 @@ function NoSaleModal({
 
   const approve = async () => {
     if (!reasonOk || pin.length < 4 || busy) return;
-    if (!navigator.onLine) {
-      setError("Offline — manager approval needs a connection to verify the PIN.");
-      return;
-    }
     setBusy(true);
     setError(null);
+    const typed = pin;
     try {
-      const res = await posFetch("/api/pos/approve", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-pos-device-id": creds.deviceId,
-          "x-pos-device-key": creds.deviceKey,
-        },
-        body: JSON.stringify({ pin }),
-      });
-      const body = (await res.json().catch(() => null)) as
-        | { approver?: { id: string; fullName: string }; error?: string }
-        | null;
-      if (!res.ok || !body?.approver) {
-        setError(body?.error ?? "Approval failed.");
-        setPin("");
+      const r = await postPinRequest("/api/pos/approve", creds, { pin: typed });
+      const body = r.body as { approver?: { id: string; fullName: string }; error?: string; offline?: unknown } | null;
+      if (r.res && !offlineFallbackAllowed({ threw: false, status: r.res.status })) {
+        if (!r.res.ok || !body?.approver) {
+          setError(body?.error ?? "Approval failed.");
+          setPin("");
+          return;
+        }
+        void armOfflineFromOnline(typed, body.offline, null);
+        onApproved(reason, body.approver);
         return;
       }
-      onApproved(reason, body.approver);
-    } catch {
-      setError("Could not reach the server — try again.");
+      // D161 — server unreachable: a manager/lead armed on this iPad may
+      // approve offline (audited, re-judged at sync).
+      const why = offlineReasonFor({ online: navigator.onLine, threw: r.threw, aborted: r.aborted, status: r.res?.status ?? null });
+      const off = await onOfflineApprove(typed, why);
+      setPin("");
+      if (!off.ok) {
+        setError(off.error);
+        return;
+      }
+      onApproved(reason, off.approver);
     } finally {
       setBusy(false);
     }

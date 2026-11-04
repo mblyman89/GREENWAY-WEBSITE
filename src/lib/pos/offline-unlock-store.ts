@@ -91,6 +91,23 @@ export async function getOfflinePolicy(): Promise<OfflineUnlockPolicy> {
   }
 }
 
+/**
+ * STRICT read for writes (the owner's reset bumps the epoch). Returns null on
+ * any database error instead of the default, so a hiccup can never turn
+ * "epoch 7 + 1" into "default 1 + 1" and silently UN-revoke old offline PINs.
+ */
+export async function getOfflinePolicyStrict(): Promise<OfflineUnlockPolicy | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.from("site_settings").select("value_json").eq("key", POS_OFFLINE_POLICY_KEY).maybeSingle();
+    if (error) return null;
+    return data?.value_json == null ? { ...DEFAULT_OFFLINE_POLICY } : normalizeOfflinePolicy(data.value_json);
+  } catch {
+    return null;
+  }
+}
+
 export async function saveOfflinePolicy(policy: OfflineUnlockPolicy, updatedBy: string): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database is not configured." };
   try {

@@ -1,9 +1,10 @@
 /**
  * pos/pos-secure-store — the ONE way the register reads or writes a secret.
  *
- * Two secrets exist:
+ * Three secrets exist:
  *   - the device pairing (`gw-pos-device`: device id + device key), and
- *   - the passphrase that unlocks the encrypted database (Phase 1.3).
+ *   - the passphrase that unlocks the encrypted database (Phase 1.3), and
+ *   - the offline unlock vault (D161: per-device key + PIN verifiers, never PINs).
  *
  * Both are classified `secure-enclave` in `pos-storage-core`'s registry. This
  * module is where that classification becomes real behaviour, exactly the way
@@ -364,6 +365,44 @@ export async function ensureDatabasePassphrase(databaseExists: boolean): Promise
 /** Is a usable passphrase already in memory? Diagnostics only. */
 export function hasDatabasePassphrase(): boolean {
   return isValidPassphrase(mirror.get("db-passphrase") ?? null);
+}
+
+// ---------------------------------------------------------------------------
+// The offline unlock vault (D161)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read the offline unlock vault (serialized JSON), or null.
+ *
+ * The vault holds a per-device key and one PBKDF2+HMAC verifier per armed
+ * employee — never a PIN. It is still classified secure: a verifier plus the
+ * key would let an attacker brute-force a 4-digit PIN off-device, so it gets
+ * the same this-device-only keychain treatment as the pairing.
+ */
+export function loadOfflineVaultRaw(): string | null {
+  return mirror.get("offline-unlock") ?? null;
+}
+
+/**
+ * Save the offline unlock vault. Mirror first (synchronous reads stay right),
+ * persist in the background. Never throws.
+ */
+export function saveOfflineVaultRaw(raw: string): boolean {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 256_000) return false;
+  mirror.set("offline-unlock", raw);
+  void backend.setItem(secureNameFor("offline-unlock"), raw).catch(() => {
+    writeAlert =
+      "This register could not save its offline sign-in list. Online sign-in still works; offline sign-in may need re-arming after a restart.";
+  });
+  return true;
+}
+
+/** Erase the offline unlock vault (reset, key rotation, or too many wrong PINs). */
+export function clearOfflineVault(): void {
+  mirror.delete("offline-unlock");
+  void backend.removeItem(secureNameFor("offline-unlock")).catch(() => {
+    writeAlert = "This register could not erase its offline sign-in list. Call a manager.";
+  });
 }
 
 // ---------------------------------------------------------------------------

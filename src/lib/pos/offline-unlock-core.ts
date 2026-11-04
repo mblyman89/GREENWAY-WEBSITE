@@ -220,7 +220,6 @@ export function b64urlByteLength(s: unknown): number {
 
 function cleanName(v: unknown, max = 80): string | null {
   if (typeof v !== "string") return null;
-  // eslint-disable-next-line no-control-regex
   const t = v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, max);
   return t || null;
 }
