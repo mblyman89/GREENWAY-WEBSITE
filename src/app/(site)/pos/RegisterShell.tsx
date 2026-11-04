@@ -2163,11 +2163,37 @@ export function RegisterShell({
         onWitness={async (pin, opts) => {
           // SLICE 28 — employee-identity PIN check for the EMPLOYEE purchase
           // program: /api/pos/witness (scrypt + shared throttle, NO role
-          // gate — any active employee counts). ONLINE-ONLY; the PIN never
-          // rides in any queue payload — only the employee's id does.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — employee PINs need a connection to verify." };
-          }
+          // gate — any active employee counts). The PIN never rides in any
+          // queue payload — only the employee's id does.
+          // D170 O4 — with no server (offline, a throw/timeout, or a 5xx)
+          // the PIN is checked on this iPad against the offline verifier
+          // vault, the same rules apply as far as the iPad can know them
+          // (a second person is never the cashier and must be clocked in by
+          // the last known state), and the use is queued as an offline_auth
+          // "witness" event. The sale carries both ids and is re-judged at
+          // sync (active employees, F&F 30-day cap re-counted from the ledger).
+          const witnessOffline = async (reason: OfflineReason) => {
+            const v = await verifyOfflinePin(pin);
+            if (!v.ok) {
+              return { ok: false as const, error: `Could not reach the server, and the offline PIN check said: ${v.message}` };
+            }
+            if (opts?.secondPersonFor) {
+              if (v.record.employeeId === opts.secondPersonFor) {
+                return { ok: false as const, error: "That's your own PIN — a second employee on duty must approve." };
+              }
+              if (!v.record.clockedIn) {
+                return { ok: false as const, error: `${v.record.fullName} is not clocked in on this iPad's last record — the approver must be on duty.` };
+              }
+            }
+            enqueue("offline_auth", offlineAuthPayload("witness", reason, v.record, v.vault.rosterAt, v.vault.keyId), v.record.employeeId);
+            return {
+              ok: true as const,
+              employee: { id: v.record.employeeId, fullName: v.record.fullName },
+              // Offline the 30-day count is unknown here; sync re-counts it.
+              ...(opts?.friendsFamilyCustomerId ? { friendsFamily: { usedLast30d: null, cap: null } } : {}),
+            };
+          };
+          if (!navigator.onLine) return witnessOffline("offline");
           try {
             const res = await posFetch("/api/pos/witness", {
               method: "POST",
@@ -2182,6 +2208,7 @@ export function RegisterShell({
                 ...(opts?.secondPersonFor ? { secondPersonFor: opts.secondPersonFor } : {}),
               }),
             });
+            if (res.status >= 500) return witnessOffline("server_error");
             const body = (await res.json().catch(() => null)) as
               | {
                   employee?: { id: string; fullName: string };
@@ -2198,7 +2225,7 @@ export function RegisterShell({
               ...(body.friendsFamily ? { friendsFamily: body.friendsFamily } : {}),
             };
           } catch {
-            return { ok: false as const, error: "Could not reach the server — try again." };
+            return witnessOffline(navigator.onLine ? "network" : "offline");
           }
         }}
         onStockFlag={async (productId, reason) => {

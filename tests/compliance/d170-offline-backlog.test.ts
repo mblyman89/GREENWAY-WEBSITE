@@ -303,3 +303,33 @@ describe("D170 O1 \u2014 drawer work offline (count-in, drop, swap, close, pop)"
     expect(shell).toMatch(/res\.status >= 500/);
   });
 });
+
+describe("D170 O4 — employee purchases and special discounts offline (witness PIN on the iPad)", () => {
+  const p = { kind: "witness" as const, reason: "offline" as const, armedAt: "2026-11-04T10:00:00.000Z", rosterAt: null, keyId: "e1" };
+
+  it("a witness PIN use is a valid offline_auth audit with no role gate", () => {
+    expect(validateOfflineAuthPayload(p).ok).toBe(true);
+    const ok = judgeOfflineAuth({ payload: p, employee: { active: true, jobRole: "budtender" }, currentKeyId: "e1" });
+    expect(ok.ok && ok.action).toBe("register.offline_witness");
+    expect(judgeOfflineAuth({ payload: p, employee: { active: false, jobRole: "budtender" }, currentKeyId: "e1" }).ok).toBe(false);
+    expect(judgeOfflineAuth({ payload: p, employee: { active: true, jobRole: "budtender" }, currentKeyId: "e2" }).ok).toBe(false);
+  });
+
+  it("the shell checks the PIN on the iPad offline, on a throw, or on a 5xx, and keeps the second-person rules", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).not.toMatch(/Offline — employee PINs need a connection to verify/);
+    expect(shell).toMatch(/const witnessOffline = async/);
+    expect(shell).toMatch(/offlineAuthPayload\("witness"/);
+    expect(shell).toMatch(/if \(res\.status >= 500\) return witnessOffline\("server_error"\)/);
+    expect(shell).toMatch(/v\.record\.employeeId === opts\.secondPersonFor/);
+    expect(shell).toMatch(/!v\.record\.clockedIn/);
+    const flow = read("src/app/(site)/pos/SaleFlow.tsx");
+    expect(flow).not.toMatch(/employee PINs can only be verified with a connection/);
+  });
+
+  it("sync still re-judges the discounted sale (programs, both employees active, F&F cap)", () => {
+    const sync = read("src/lib/pos/sync-store.ts");
+    expect(sync).toMatch(/checkSpecialDiscountAtRegister\(/);
+    expect(sync).toMatch(/sd\.kind === "friends_family"/);
+  });
+});
