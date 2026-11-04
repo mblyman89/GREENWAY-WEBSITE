@@ -253,6 +253,19 @@ import {
   serializeLotDetailsCache,
 } from "@/lib/pos/lot-details-cache-core";
 import { priceLookupUnavailableReason } from "@/lib/pos/price-lookup-core";
+import {
+  OUTBOX_ENDPOINT,
+  addToOutbox,
+  classifyOutboxAttempt,
+  dismissOutboxFailed,
+  dueOutboxEntries,
+  emptyOutbox,
+  outboxStatusLine,
+  parseOutbox,
+  settleOutboxEntry,
+  type Outbox,
+  type OutboxKind,
+} from "@/lib/pos/deferred-outbox-core";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
 import { rulesForSale, shouldAutoRefreshMenu } from "@/lib/pos/register-promo-day-core";
@@ -268,6 +281,7 @@ import { rulesForSale, shouldAutoRefreshMenu } from "@/lib/pos/register-promo-da
 const LS_QUEUE = "gw-pos-queue"; // serialized offline queue
 const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
 const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
+const LS_OUTBOX = "gw-pos-outbox"; // D170 O7/O8: stock flags + emailed receipts waiting to send
 // B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
 // ("gw-pos-held-sale") are defined in register-polish-core next to their
 // serialize/parse validators so the key and the shape can never drift apart.
@@ -518,6 +532,11 @@ export function RegisterShell({
   const rejectedRef = useRef<QueuedPosEvent[]>([]);
   const lastReportedRejectedRef = useRef<number | null>(null);
   const flushingRef = useRef(false);
+  // D170 O7/O8 — the send-later outbox (stock flags, emailed receipts made
+  // offline). Storage is the source of truth; the state only drives the
+  // home-screen status line.
+  const [outbox, setOutbox] = useState<Outbox>(() => emptyOutbox());
+  const outboxFlushingRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
   // the stable lock() callback can stamp it onto a parked snapshot without a
@@ -638,6 +657,8 @@ export function RegisterShell({
     // Slice 5 — per-device medical test mode (parseMedicalTestMode fails safe
     // to OFF on any corruption, so a bad blob can never silently drop real tax).
     setMedicalTestMode(parseMedicalTestMode(posStorageGet(MEDICAL_TESTMODE_KEY)));
+    // D170 O7/O8 — anything that was waiting to send survives a restart.
+    setOutbox(parseOutbox(posStorageGet(LS_OUTBOX)));
     // D143 — the last confirmed "newest version" for THIS build (a rebuilt
     // app never inherits the old build's green).
     setVersionConfirmedAt(parseVersionCheck(posStorageGet(VERSION_CHECK_KEY), appFingerprint));
@@ -1244,6 +1265,71 @@ export function RegisterShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds]);
 
+  // ── D170 O7/O8: send-later outbox ──
+  // Every change re-reads storage first (never a stale copy), applies one pure
+  // step, writes it back and mirrors it into state for the status line.
+  const updateOutbox = useCallback((step: (box: Outbox) => Outbox): Outbox => {
+    const next = step(parseOutbox(posStorageGet(LS_OUTBOX)));
+    try {
+      posStorageSet(LS_OUTBOX, JSON.stringify(next));
+    } catch {
+      // A failed write surfaces through the storage write alert.
+    }
+    setOutbox(next);
+    return next;
+  }, []);
+
+  const queueForLater = useCallback(
+    (kind: OutboxKind, body: Record<string, unknown>, label: string): { ok: true } | { ok: false; error: string } => {
+      const current = parseOutbox(posStorageGet(LS_OUTBOX));
+      const added = addToOutbox(current, { id: crypto.randomUUID(), kind, body, label }, Date.now());
+      if (!added.ok) return { ok: false, error: added.error };
+      updateOutbox(() => added.box);
+      return { ok: true };
+    },
+    [updateOutbox],
+  );
+
+  const flushOutbox = useCallback(async () => {
+    if (!creds || outboxFlushingRef.current || !navigator.onLine) return;
+    outboxFlushingRef.current = true;
+    try {
+      const due = dueOutboxEntries(parseOutbox(posStorageGet(LS_OUTBOX)), Date.now());
+      for (const entry of due) {
+        let attempt;
+        try {
+          const res = await posFetch(OUTBOX_ENDPOINT[entry.kind], {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-pos-device-id": creds.deviceId,
+              "x-pos-device-key": creds.deviceKey,
+            },
+            body: JSON.stringify(entry.body),
+          });
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          attempt = classifyOutboxAttempt({ threw: false, status: res.status, error: body?.error ?? null });
+        } catch {
+          attempt = classifyOutboxAttempt({ threw: true, status: null });
+        }
+        updateOutbox((box) => settleOutboxEntry(box, entry.id, attempt, Date.now()));
+        if (attempt.kind === "retry") break; // the connection is shaky — try the rest later
+      }
+    } finally {
+      outboxFlushingRef.current = false;
+    }
+  }, [creds, updateOutbox]);
+
+  useEffect(() => {
+    if (!creds || !online) return;
+    const t = setTimeout(() => void flushOutbox(), 0);
+    const id = setInterval(() => void flushOutbox(), 20_000);
+    return () => {
+      clearTimeout(t);
+      clearInterval(id);
+    };
+  }, [creds, online, flushOutbox]);
+
   // ── B30: one-time email-provider capability check (device-authed). When
   //    the provider isn't configured the email-receipt option never renders —
   //    no dead buttons at the counter. Deferred like the menu refresh.
@@ -1258,7 +1344,10 @@ export function RegisterShell({
         const body = (await res.json().catch(() => null)) as { configured?: boolean } | null;
         if (!cancelled) setEmailReceiptReady(res.ok && body?.configured === true);
       } catch {
-        if (!cancelled) setEmailReceiptReady(false);
+        // D170 O7 — an outage must not hide the email option that was working
+        // a minute ago (offline emails now wait in the outbox). Only an
+        // unknown answer becomes "no"; reconnecting asks again.
+        if (!cancelled) setEmailReceiptReady((prev) => prev ?? false);
       }
     };
     const t = setTimeout(() => void check(), 0);
@@ -1266,7 +1355,7 @@ export function RegisterShell({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [creds]);
+  }, [creds, online]);
 
   // ── B28: pickup-queue badge poll (unlocked + online only; 45s cadence).
   //    The badge itself is gated on `online` at render time, so no state
@@ -2037,23 +2126,10 @@ export function RegisterShell({
           // device's cached bundle immediately — the same exclusion the next
           // menu download would apply — and every other register drops it on
           // its next refresh.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — flagging stock needs a connection (it changes the shared menu)." };
-          }
-          try {
-            const res = await posFetch("/api/pos/stock-flag", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "x-pos-device-id": creds.deviceId,
-                "x-pos-device-key": creds.deviceKey,
-              },
-              body: JSON.stringify({ productId, reason, flaggedByName: employee?.fullName ?? "" }),
-            });
-            const body = (await res.json().catch(() => null)) as { flagged?: boolean; error?: string } | null;
-            if (!res.ok || !body?.flagged) {
-              return { ok: false as const, error: body?.error ?? "Could not flag the item — try again." };
-            }
+          // D170 O8 — offline (or the server unreachable) the item leaves THIS
+          // iPad's menu at once and the flag waits in the send-later outbox;
+          // the other registers drop it once it is delivered.
+          const hideLocally = () =>
             setMenuBundle((prev) => {
               if (!prev) return prev;
               const next = applyLocalStockFlag(prev, productId);
@@ -2064,9 +2140,33 @@ export function RegisterShell({
               }
               return next;
             });
+          const flagLater = () => {
+            const name = menuBundle?.products.find((p) => p.productId === productId)?.name ?? "item";
+            const q = queueForLater("stock_flag", { productId, reason, flaggedByName: employee?.fullName ?? "" }, `Out of stock: ${name}`);
+            if (!q.ok) return { ok: false as const, error: q.error };
+            hideLocally();
+            return { ok: true as const };
+          };
+          if (!navigator.onLine) return flagLater();
+          try {
+            const res = await posFetch("/api/pos/stock-flag", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify({ productId, reason, flaggedByName: employee?.fullName ?? "" }),
+            });
+            if (res.status >= 500) return flagLater();
+            const body = (await res.json().catch(() => null)) as { flagged?: boolean; error?: string } | null;
+            if (!res.ok || !body?.flagged) {
+              return { ok: false as const, error: body?.error ?? "Could not flag the item — try again." };
+            }
+            hideLocally();
             return { ok: true as const };
           } catch {
-            return { ok: false as const, error: "Could not reach the server — try again." };
+            return flagLater();
           }
         }}
         onFixAndSell={async (code) => {
@@ -2259,9 +2359,16 @@ export function RegisterShell({
             ? async (email, receipt) => {
                 // POS B30 — opt-in digital receipt. ONLINE-ONLY (an email
                 // can't leave an offline device; paper always works).
-                if (!navigator.onLine) {
-                  return { ok: false as const, error: "Offline — print the paper receipt instead." };
-                }
+                // D170 O7 — offline, the email waits in the send-later outbox
+                // and goes out when the internet returns (paper still works).
+                const emailLater = () => {
+                  const no = receiptNumber(receipt.saleClientUuid);
+                  // The label never carries the address (it is shown on the home screen).
+                  const q = queueForLater("email_receipt", { email, receipt }, `Emailed receipt ${no}`);
+                  if (!q.ok) return { ok: false as const, error: q.error };
+                  return { ok: true as const, receiptNumber: no, queued: true };
+                };
+                if (!navigator.onLine) return emailLater();
                 try {
                   const res = await posFetch("/api/pos/email-receipt", {
                     method: "POST",
@@ -2272,6 +2379,7 @@ export function RegisterShell({
                     },
                     body: JSON.stringify({ email, receipt }),
                   });
+                  if (res.status >= 500 && res.status !== 502) return emailLater();
                   const body = (await res.json().catch(() => null)) as
                     | { sent?: boolean; receiptNumber?: string; error?: string }
                     | null;
@@ -2280,7 +2388,7 @@ export function RegisterShell({
                   }
                   return { ok: true as const, receiptNumber: body.receiptNumber ?? "" };
                 } catch {
-                  return { ok: false as const, error: "Network error — print the paper receipt instead." };
+                  return emailLater();
                 }
               }
             : undefined
@@ -2366,6 +2474,8 @@ export function RegisterShell({
         online={online}
         pendingCount={pendingCount}
         rejectedCount={rejected.length}
+        outbox={outbox}
+        onDismissOutboxFailed={(id) => updateOutbox((box) => dismissOutboxFailed(box, id))}
         lastSyncAt={lastSyncAt}
         banner={shownBanner}
         menuReady={!!menuBundle}
@@ -3445,6 +3555,8 @@ function HomeScreen({
   online,
   pendingCount,
   rejectedCount,
+  outbox,
+  onDismissOutboxFailed,
   lastSyncAt,
   banner,
   menuReady,
@@ -3491,6 +3603,9 @@ function HomeScreen({
   online: boolean;
   pendingCount: number;
   rejectedCount: number;
+  /** D170 O7/O8 — stock flags / emailed receipts waiting to send. */
+  outbox: Outbox;
+  onDismissOutboxFailed: (id: string) => void;
   lastSyncAt: string | null;
   banner: string | null;
   menuReady: boolean;
@@ -4080,7 +4195,27 @@ function HomeScreen({
               {rejectedCount > 0 ? `${rejectedCount} rejected — kept on this register; back office has been notified` : "all clear"}
             </b>
           </span>
+          {outboxStatusLine(outbox) ? (
+            <span className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${outbox.failed.length > 0 ? "bg-[var(--pos-danger-solid)]" : "bg-[var(--pos-warn-dot)]"}`} aria-hidden />
+              SEND LATER: <b className="font-semibold text-[var(--pos-text)]">{outboxStatusLine(outbox)}</b>
+            </span>
+          ) : null}
         </div>
+        {outbox.failed.length > 0 ? (
+          <ul className="mx-auto mt-2 w-full max-w-6xl space-y-1 text-xs text-[var(--pos-danger)]">
+            {outbox.failed.map((f) => (
+              <li key={f.id} className="flex flex-wrap items-center justify-center gap-2">
+                <span>
+                  Could not send — {f.label}: {f.reason}
+                </span>
+                <button type="button" onClick={() => onDismissOutboxFailed(f.id)} className="font-semibold underline">
+                  Dismiss
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <p className="mx-auto mt-2 w-full max-w-6xl text-center text-[11px] text-[var(--pos-text-faint)]">
           Every action is tied to the person whose PIN unlocked the register. Sales re-run the full compliance gate on
           the server — an offline sale that fails there goes to the manager exception queue, never silently through.

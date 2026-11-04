@@ -3645,7 +3645,7 @@ Shared design rules for every item below. Build each one as its own PR.
       (~2228); emailed receipts (~2198) also. Needs: this register's recent
       sales from the local store (synced and queued, with a queued badge).
       Email is queued.
-- [ ] O8 Flag stock offline. Today: "Offline — flagging stock needs a
+- [x] O8 (DONE slice 3: send-later outbox gw-pos-outbox; emailed receipts also queue offline) Flag stock offline. Today: "Offline — flagging stock needs a
       connection (it changes the shared menu)." (~1977). Needs: a queued flag,
       applied on this iPad's menu at once and sent to the shared menu at sync.
 - [ ] O9 Fix & sell offline. Today: "Offline — Fix & sell needs a connection
