@@ -270,6 +270,17 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D170 O9: the Fix & sell lot index (every sellable lot with the facts
+    // /api/pos/fix-and-sell decides on), so Fix & sell works offline. Business
+    // data only; losing it costs one download.
+    key: "gw-pos-fix-index",
+    what: "The lot index for Fix & sell (status, stock, lab, recall), saved so Fix & sell works offline.",
+    durability: "convenience",
+    sensitivity: "business",
+    tier: "encrypted-db",
+    degradesOnCorruption: true,
+  },
+  {
     key: "gw-pos-star-printer-model",
     what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
     durability: "convenience",
@@ -634,7 +645,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 16, "the registry covers all sixteen keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox and gw-pos-member-book)");
+    ok(POS_STORAGE_KEYS.length === 17, "the registry covers all seventeen keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox, gw-pos-member-book and gw-pos-fix-index)");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",

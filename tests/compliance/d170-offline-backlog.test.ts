@@ -39,6 +39,9 @@ import {
   validateTillPayload,
 } from "../../src/lib/pos/offline-till-core";
 import { EMPTY_DENOMS } from "../../src/lib/registers/cash";
+import { findFixLots, fixIndexFromResponse, fixLotFromRow, parseFixIndex } from "../../src/lib/pos/fix-index-core";
+import { decideFixAndSell } from "../../src/lib/pos/register-fix-later-core";
+import { OUTBOX_ENDPOINT as OUTBOX_ENDPOINTS_O9 } from "../../src/lib/pos/deferred-outbox-core";
 
 /**
  * D170: the register works fully offline (owner message 2026-11-04).
@@ -331,5 +334,53 @@ describe("D170 O4 — employee purchases and special discounts offline (witness 
     const sync = read("src/lib/pos/sync-store.ts");
     expect(sync).toMatch(/checkSpecialDiscountAtRegister\(/);
     expect(sync).toMatch(/sd\.kind === "friends_family"/);
+  });
+});
+
+describe("D170 O9 — Fix & sell offline from the saved lot index", () => {
+  const base = { k: "GF1", x: "WA1", n: "Blue Dream 3.5g", s: "active", q: 3, g: "Flower", t: "Usable Marijuana", u: 900, w: 3.5, wu: "g", hl: true, lp: true, sm: false, r: false, d: false, e: false };
+
+  it("the offline decision is the route's own decideFixAndSell over the index rows", () => {
+    const idx = fixIndexFromResponse({ rows: [{ i: "L1", c: "LOT-A", ...base }] }, Date.now());
+    const lots = findFixLots(idx, "lot-a").map(fixLotFromRow);
+    expect(lots).toHaveLength(1);
+    expect(decideFixAndSell(lots, "lot-a").ok).toBe(true);
+  });
+
+  it("the real stops still refuse offline (recall, failed lab, destruction, expired edible)", () => {
+    for (const bad of [{ r: true }, { lp: false }, { d: true }]) {
+      const idx = fixIndexFromResponse({ rows: [{ i: "L1", c: "LOT-A", ...base, ...bad }] }, Date.now());
+      expect(decideFixAndSell(findFixLots(idx, "LOT-A").map(fixLotFromRow), "LOT-A").ok).toBe(false);
+    }
+    expect(decideFixAndSell([], "NOPE").ok).toBe(false);
+  });
+
+  it("a corrupt saved index degrades to none (no guessing)", () => {
+    expect(parseFixIndex("{oops")).toBeNull();
+    expect(parseFixIndex(JSON.stringify({ v: 99, at: 1, rows: [] }))).toBeNull();
+  });
+
+  it("the index is an encrypted register key and the fix rides the outbox to the route", () => {
+    expect(findKeySpec("gw-pos-fix-index")?.tier).toBe("encrypted-db");
+    expect(OUTBOX_ENDPOINTS_O9.fix_and_sell).toBe("/api/pos/fix-and-sell");
+  });
+
+  it("the index route reads the same facts as fix-and-sell, fail-closed", () => {
+    const route = read("src/app/api/pos/fix-index/route.ts");
+    expect(route).toMatch(/authenticateDevice\(/);
+    expect(route).toMatch(/recalledProductKeys\(\{ failClosed: true \}\)/);
+    expect(route).toMatch(/OPEN_DESTRUCTION_STATUSES/);
+    expect(route).toMatch(/expiryKindFor\(/);
+    expect(route).toMatch(/sellableQty\(/);
+    expect(route).toMatch(/status: 503/);
+  });
+
+  it("the shell falls back to the index offline, on a throw, or on a 5xx, and queues the audit", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).not.toMatch(/Fix & sell needs a connection \(it reads the lot/);
+    expect(shell).toMatch(/if \(!navigator\.onLine\) return fixOffline\(\)/);
+    expect(shell).toMatch(/if \(res\.status >= 500\) return fixOffline\(\)/);
+    expect(shell).toMatch(/queueForLater\(\s*"fix_and_sell"/);
+    expect(shell).toMatch(/"\/api\/pos\/fix-index"/);
   });
 });

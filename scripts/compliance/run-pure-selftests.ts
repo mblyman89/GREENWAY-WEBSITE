@@ -1278,6 +1278,7 @@ import { __runOfflineUnlockCoreTests } from "../../src/lib/pos/offline-unlock-co
 import { __runOfflineTillCoreTests } from "../../src/lib/pos/offline-till-core";
 import { __runLotDetailsCacheCoreTests } from "../../src/lib/pos/lot-details-cache-core";
 import { __runDeferredOutboxCoreTests } from "../../src/lib/pos/deferred-outbox-core";
+import { __runFixIndexCoreTests } from "../../src/lib/pos/fix-index-core";
 import { __runMemberBookCoreTests } from "../../src/lib/pos/member-book-core";
 import { __runDrawerCloseSlipTests } from "../../src/lib/registers/drawer-close-slip-core";
 
@@ -2754,7 +2755,8 @@ __runLiquidVolumeTests();
   assertRan("offline-unlock-core", __runOfflineUnlockCoreTests(), 93); // D161 ("allows my employees to unlock the ipad registers in offline mode"): per-device key, PBKDF2+HMAC verifiers, roster purge, throttle/wipe, clock-rollback + staleness gates, 4xx never falls back, offline_auth re-judged at sync
   assertRan("offline-till-core", __runOfflineTillCoreTests(), 25); // D170 O1 ("finish all remaining offline mode tasks"): drawer count-in / drop / swap / pop / close offline — same till-core rules on the iPad and at sync, PINs re-judged by id, swap approver must still be a manager
   assertRan("lot-details-cache-core", __runLotDetailsCacheCoreTests(), 18); // D170 O11 ("fully operational while internet is down"): lot details saved on the iPad, bounded, never erased by a hiccup, labelled with their age offline
-  assertRan("deferred-outbox-core", __runDeferredOutboxCoreTests(), 22); // D170 O7/O8: stock flags and emailed receipts made offline wait in a bounded outbox and are sent when the internet returns; refusals stay visible
+  assertRan("deferred-outbox-core", __runDeferredOutboxCoreTests(), 26); // D170 O7/O8: stock flags and emailed receipts made offline wait in a bounded outbox and are sent when the internet returns; refusals stay visible
+  assertRan("fix-index-core", __runFixIndexCoreTests(), 22); // D170 O9: the Fix & sell lot index lets the register fix and sell an unknown package offline with the same decideFixAndSell the route runs
   assertRan("member-book-core", __runMemberBookCoreTests(), 31); // D170 O15 + O15b offline rewards ("add customer loyalty to the iPad ... all features unlocked"): the encrypted member book answers lookup, scan attach and history offline with the server's own search and match rules, always saying how old it is
   assertRan("drawer-close-slip-core", __runDrawerCloseSlipTests(), 30); // D151–D155 ("print a short receipt with the employee name and register number ... see the table with the numbers in it again. Read only."): close slip with no amounts, read-only second-count table
   console.log("ALL PURE SELF-TESTS PASSED");

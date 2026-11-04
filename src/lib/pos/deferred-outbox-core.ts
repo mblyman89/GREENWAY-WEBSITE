@@ -29,12 +29,15 @@ export const OUTBOX_BACKOFF_BASE_MS = 30_000;
 export const OUTBOX_BACKOFF_MAX_MS = 10 * 60_000;
 export const OUTBOX_GIVE_UP_AFTER_MS = 7 * 24 * 3600_000;
 
-export type OutboxKind = "stock_flag" | "email_receipt";
+export type OutboxKind = "stock_flag" | "email_receipt" | "fix_and_sell";
 
 /** Where each kind is delivered (the existing online endpoint, unchanged). */
 export const OUTBOX_ENDPOINT: Record<OutboxKind, string> = {
   stock_flag: "/api/pos/stock-flag",
   email_receipt: "/api/pos/email-receipt",
+  // D170 O9: a Fix & sell decided offline from the lot index; the route
+  // writes the audit row that puts the lot on the Fix later page.
+  fix_and_sell: "/api/pos/fix-and-sell",
 };
 
 export type OutboxEntry = {
@@ -56,7 +59,7 @@ export function emptyOutbox(): Outbox {
   return { v: OUTBOX_VERSION, pending: [], failed: [] };
 }
 
-const KINDS: readonly OutboxKind[] = ["stock_flag", "email_receipt"];
+const KINDS: readonly OutboxKind[] = ["stock_flag", "email_receipt", "fix_and_sell"];
 
 function isKind(v: unknown): v is OutboxKind {
   return typeof v === "string" && (KINDS as readonly string[]).includes(v);
@@ -117,6 +120,12 @@ export function addToOutbox(
   if (entry.kind === "stock_flag") {
     const pid = entry.body.productId;
     if (box.pending.some((p) => p.kind === "stock_flag" && p.body.productId === pid)) return { ok: true, box, duplicate: true };
+  }
+  if (entry.kind === "fix_and_sell") {
+    const code = String(entry.body.code ?? "").toLowerCase();
+    if (box.pending.some((p) => p.kind === "fix_and_sell" && String(p.body.code ?? "").toLowerCase() === code)) {
+      return { ok: true, box, duplicate: true };
+    }
   }
   if (box.pending.length >= OUTBOX_MAX_PENDING) {
     return { ok: false, error: `This iPad already has ${OUTBOX_MAX_PENDING} items waiting to send. Reconnect first.` };
@@ -237,6 +246,15 @@ export function __runDeferredOutboxCoreTests(): { passed: number; failed: number
   if (old.ok) {
     const gone = settleOutboxEntry(old.box, "o", { kind: "retry", reason: "network" }, now + OUTBOX_GIVE_UP_AFTER_MS + 1);
     ok(gone.pending.length === 0 && /7 days/.test(gone.failed[0]?.reason ?? ""), "gives up after 7 days, visibly");
+  }
+  // D170 O9: an offline Fix & sell rides the outbox to /api/pos/fix-and-sell.
+  ok(OUTBOX_ENDPOINT.fix_and_sell === "/api/pos/fix-and-sell", "fix & sell posts to the fix-and-sell route");
+  const fx = addToOutbox(emptyOutbox(), { id: "fx1", kind: "fix_and_sell", body: { code: "ABC123", employeeName: "Sam" }, label: "Fix & sell: A" }, now);
+  ok(fx.ok && fx.box.pending.length === 1 && !fx.duplicate, "a fix & sell is queued");
+  if (fx.ok) {
+    const fxDup = addToOutbox(fx.box, { id: "fx2", kind: "fix_and_sell", body: { code: "abc123", employeeName: "Sam" }, label: "x" }, now);
+    ok(fxDup.ok && fxDup.duplicate && fxDup.box.pending.length === 1, "the same package code is not queued twice (any case)");
+    ok(parseOutbox(JSON.stringify(fx.box)).pending[0]?.kind === "fix_and_sell", "a queued fix & sell survives a round trip");
   }
   return { passed, failed };
 }

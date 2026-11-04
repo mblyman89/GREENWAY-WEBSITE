@@ -149,6 +149,7 @@ describe("the key registry matches the code that actually runs", () => {
   });
 
   it("registers exactly the keys in use — no stale entries", () => {
+    // D170 O9 added gw-pos-fix-index (the Fix & sell lot index for offline).
     // D170 O15 added gw-pos-member-book (loyalty on the iPad, encrypted).
     // D170 O7/O8 added gw-pos-outbox (stock flags / emailed receipts sent later).
     // D170 O11 added gw-pos-lot-details (lot details saved for offline).
@@ -163,6 +164,7 @@ describe("the key registry matches the code that actually runs", () => {
         "gw-pos-active-sale",
         "gw-pos-device",
         "gw-pos-favorites",
+        "gw-pos-fix-index",
         "gw-pos-held-sale",
         "gw-pos-last-receipt",
         "gw-pos-lot-details",
