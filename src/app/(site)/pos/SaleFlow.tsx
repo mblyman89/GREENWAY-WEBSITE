@@ -1249,6 +1249,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                     redemptionId: appliedLoyalty.redemptionId,
                     code: appliedLoyalty.code,
                     appliedMinor: loyaltyAdj.appliedMinor,
+                    // D170 O15b — minted offline from the saved member book:
+                    // the server issues the row at sync if the live balance
+                    // still covers it.
+                    ...(appliedLoyalty.offline && appliedLoyalty.rewardPoints
+                      ? { offlineIssued: { rewardPoints: appliedLoyalty.rewardPoints } }
+                      : {}),
                   },
                 }
               : {}),
@@ -5572,7 +5578,9 @@ function DiscountAdjustModal({
  * attached member's points in one tap (server sizes the value to what the
  * cart can legally absorb) or apply a code the customer brought. Applied
  * state shows the code + value with a remove button (points refunded).
- * ONLINE-ONLY via onLoyalty; hidden entirely when the bundle predates AM-B.
+ * D170 O15b: offline, the shell prices the reward on the iPad from the saved
+ * member book and the server issues it at sync. Hidden entirely when the
+ * bundle predates AM-B.
  */
 function LoyaltyRedeemPanel({
   bundle,
@@ -5609,6 +5617,8 @@ function LoyaltyRedeemPanel({
 
   const requestLines = () =>
     pricedLines.map((l) => ({
+      // The shell looks up cost by variantId from its menu bundle when
+      // it has to price a reward offline (D170 O15b).
       ...(l.variantId ? { variantId: l.variantId } : {}),
       productId: l.productId,
       category: l.category,
@@ -5628,6 +5638,7 @@ function LoyaltyRedeemPanel({
     perVariant: grant.perVariant,
     ...(grant.rewardPoints ? { rewardPoints: grant.rewardPoints } : {}),
     ...(grant.percentBps ? { percentBps: grant.percentBps } : {}),
+    ...(grant.offline ? { offline: true as const } : {}),
   });
 
   const redeemPoints = async (rewardPoints: number) => {

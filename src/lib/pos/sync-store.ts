@@ -98,6 +98,7 @@ import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-s
 import { toRecognitionCard, getMedTaxSettings } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
 import { maxRewardOffMinor, redemptionReward, rewardShortLabel } from "@/lib/loyalty/loyalty-reward-core";
+import { issueOfflineRedemption } from "@/lib/loyalty/loyalty-store";
 
 // ---------------------------------------------------------------------------
 // Schema guard (migration 0120 applied manually by the owner)
@@ -687,6 +688,27 @@ async function processSale(
   // per-line reductions sum to appliedMinor).
   let redemptionRow: { id: string; code: string; account_id: string; value_minor: number } | null = null;
   if (sale.loyaltyRedemption) {
+    // D170 O15b — a reward the register minted OFFLINE from its saved member
+    // book has no row yet: issue it now with the device's exact id + code,
+    // but ONLY if the member's LIVE balance still covers it (the same rule
+    // as an online redemption). Then the normal checks below run unchanged.
+    if (sale.loyaltyRedemption.offlineIssued && loyaltyCustomerId) {
+      const minted = await issueOfflineRedemption({
+        redemptionId: sale.loyaltyRedemption.redemptionId,
+        code: sale.loyaltyRedemption.code,
+        customerId: loyaltyCustomerId,
+        points: sale.loyaltyRedemption.offlineIssued.rewardPoints,
+        actorId: null,
+      });
+      if (!minted.ok) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Offline loyalty reward ${sale.loyaltyRedemption.code} could not be honored at sync: ${minted.error} The customer got $${(sale.loyaltyRedemption.appliedMinor / 100).toFixed(2)} off while the register was offline — review, then resolve this exception.`,
+        );
+      }
+    }
     const { data: row } = await admin
       .from("loyalty_redemptions")
       .select("id, code, status, value_minor, account_id, points")

@@ -27,6 +27,7 @@ import {
 import {
   __runMemberBookCoreTests,
   matchFromBook,
+  offlineRewardGrant,
   searchMemberBook,
   type MemberBook,
 } from "../../src/lib/pos/member-book-core";
@@ -159,7 +160,7 @@ describe("D170 O15 + O7 — loyalty members on the iPad (lookup, scan attach, hi
   it("the pure core passes its self-tests", () => {
     const r = __runMemberBookCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(25);
+    expect(r.passed).toBeGreaterThanOrEqual(31);
   });
 
   it("offline lookup uses the server's search rules and says how old the copy is", () => {
@@ -195,5 +196,52 @@ describe("D170 O15 + O7 — loyalty members on the iPad (lookup, scan attach, hi
     expect(shell).toMatch(/if \(!parsed\.next\) \{/);
     expect(shell).not.toMatch(/Offline — history needs a connection\./);
     expect(shell).not.toMatch(/Offline — ring the sale without the member, or reconnect first\./);
+  });
+});
+
+describe("D170 O15b — loyalty rewards work offline (priced on the iPad, issued at sync)", () => {
+  const lines = [
+    { variantId: "v1", productId: "p1", category: "flower", quantity: 1, unitPriceMinor: 4000, regularPriceMinor: 4000, costMinorUnits: 1000 },
+  ];
+  const id = "11111111-1111-4111-8111-111111111111";
+
+  it("prices a 10% reward exactly like the server and marks it offline", () => {
+    const r = offlineRewardGrant({ balancePoints: 320, rewardPoints: 150, lines, neverDiscountKeys: [], redemptionId: id });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.grant).toMatchObject({ redemptionId: id, appliedMinor: 400, pointsSpent: 150, offline: true, source: "points" });
+    expect(r.grant.code).toMatch(/^GW-/);
+  });
+
+  it("refuses when the saved balance does not cover the reward, and never touches never-discount items", () => {
+    expect(offlineRewardGrant({ balancePoints: 100, rewardPoints: 150, lines, neverDiscountKeys: [], redemptionId: id }).ok).toBe(false);
+    expect(offlineRewardGrant({ balancePoints: 320, rewardPoints: 150, lines, neverDiscountKeys: ["p1"], redemptionId: id }).ok).toBe(false);
+  });
+
+  it("the sale payload validator requires 150/300 and the member for an offline reward", () => {
+    const src = read("src/lib/pos/sale-event-core.ts");
+    expect(src).toMatch(/offlineIssued\?: \{ rewardPoints: number \}/);
+    expect(src).toMatch(/An offline-minted loyalty reward needs the member/);
+  });
+
+  it("sync issues the offline reward only if the LIVE balance covers it, else an exception", () => {
+    const sync = read("src/lib/pos/sync-store.ts");
+    expect(sync).toMatch(/sale\.loyaltyRedemption\.offlineIssued && loyaltyCustomerId/);
+    expect(sync).toMatch(/issueOfflineRedemption\(/);
+    expect(sync).toMatch(/could not be honored at sync/);
+    const store = read("src/lib/loyalty/loyalty-store.ts");
+    expect(store).toMatch(/export async function issueOfflineRedemption/);
+    expect(store).toMatch(/account\.balance_points < reward\.points/);
+    expect(store).toMatch(/id: opts\.redemptionId/);
+  });
+
+  it("the shell prices offline, deducts from the saved book, and gives points back locally on Remove", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).not.toMatch(/Offline — loyalty redemption needs a connection/);
+    expect(shell).toMatch(/offlineRewardGrant\(\{/);
+    expect(shell).toMatch(/saveBookPoints\(req\.customerId, -made\.grant\.pointsSpent\)/);
+    expect(shell).toMatch(/saveBookPoints\(held\.customerId, held\.points\)/);
+    const flow = read("src/app/(site)/pos/SaleFlow.tsx");
+    expect(flow).toMatch(/offlineIssued: \{ rewardPoints: appliedLoyalty\.rewardPoints \}/);
   });
 });

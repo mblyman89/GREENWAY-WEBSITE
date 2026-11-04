@@ -433,6 +433,71 @@ export async function issueRedemption(opts: {
 }
 
 /**
+ * D170 O15b — issue a reward the register MINTED OFFLINE from its saved
+ * member book. Same rules as issueRedemption (150 / 300 only, the LIVE
+ * balance must cover it, the points come off in the same step) but the row
+ * takes the device's exact id + code so the already-rung sale claims it.
+ * Idempotent: a replay that finds its own row (same id + code + account)
+ * returns ok without touching points twice.
+ */
+export async function issueOfflineRedemption(opts: {
+  redemptionId: string;
+  code: string;
+  customerId: string;
+  points: number;
+  actorId?: string | null;
+}): Promise<{ ok: true; accountId: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const reward = rewardForPoints(opts.points);
+  if (!reward) return { ok: false, error: "Only the 150-point and 300-point rewards can be issued." };
+  const account = await getAccountByCustomer(opts.customerId);
+  if (!account) return { ok: false, error: "The member has no loyalty account." };
+  const admin = createSupabaseAdminClient();
+  const { data: existing } = await admin
+    .from("loyalty_redemptions")
+    .select("id, code, account_id")
+    .eq("id", opts.redemptionId)
+    .maybeSingle<{ id: string; code: string; account_id: string }>();
+  if (existing) {
+    return existing.code === opts.code && existing.account_id === account.id
+      ? { ok: true, accountId: account.id }
+      : { ok: false, error: "A different reward already uses this id." };
+  }
+  if (account.balance_points < reward.points) {
+    return {
+      ok: false,
+      error: `The member's live balance is ${account.balance_points.toLocaleString("en-US")} points — not enough for ${rewardShortLabel(reward)} (the iPad's saved balance was out of date).`,
+    };
+  }
+  const cfg = await getConfig();
+  const { error } = await admin.from("loyalty_redemptions").insert({
+    id: opts.redemptionId,
+    account_id: account.id,
+    code: opts.code,
+    points: reward.points,
+    value_minor: 0,
+    status: "issued",
+    channel: "register",
+    expires_at: codeExpiry(new Date(), cfg),
+    issued_by: opts.actorId ?? null,
+  });
+  if (error) return { ok: false, error: `Could not issue the offline reward (${error.message}).` };
+  const ledger = await applyLedger({
+    accountId: account.id,
+    kind: "redeem",
+    points: -reward.points,
+    redemptionId: opts.redemptionId,
+    note: `Reward ${opts.code}: ${rewardShortLabel(reward)} (issued offline at the register)`,
+    actorId: opts.actorId ?? null,
+  });
+  if (!ledger.ok) {
+    await admin.from("loyalty_redemptions").update({ status: "cancelled" }).eq("id", opts.redemptionId).eq("status", "issued");
+    return { ok: false, error: "Could not deduct the points for the offline reward." };
+  }
+  return { ok: true, accountId: account.id };
+}
+
+/**
  * Cancel a still-unused code and give its points back (D141). Conditional on
  * status 'issued', so a code that was just used can't be refunded too.
  */

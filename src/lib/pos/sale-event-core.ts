@@ -330,6 +330,14 @@ export type PosSalePayload = {
     code: string;
     /** Σ per-line loyaltyDiscountMinor × quantity (server re-sums and must match). */
     appliedMinor: number;
+    /**
+     * D170 O15b — present when the register minted this reward OFFLINE from
+     * its saved member book (no row exists yet). At sync the server issues
+     * the row with this exact id + code ONLY if the member's LIVE balance
+     * still covers rewardPoints (150 or 300); otherwise the sale becomes an
+     * exception. Requires the payload's `loyalty` member block.
+     */
+    offlineIssued?: { rewardPoints: number };
   };
   /**
    * Present when a SPECIAL discount program was applied at the register
@@ -676,6 +684,15 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
         errors.push(
           "loyaltyRedemption.appliedMinor must equal the sum of per-line loyaltyDiscountMinor × quantity.",
         );
+      }
+      if (lr.offlineIssued !== undefined) {
+        const oi = lr.offlineIssued as { rewardPoints?: unknown } | null;
+        if (oi == null || typeof oi !== "object" || (oi.rewardPoints !== 150 && oi.rewardPoints !== 300)) {
+          errors.push("loyaltyRedemption.offlineIssued.rewardPoints must be 150 or 300.");
+        }
+        if (!p.loyalty || typeof p.loyalty !== "object") {
+          errors.push("An offline-minted loyalty reward needs the member (loyalty block) on the sale.");
+        }
       }
     }
   } else if (lineLoyaltySum > 0) {
@@ -1158,6 +1175,21 @@ export function __runPosSaleEventTests(): void {
   ok(
     !validateSalePayload({ ...redeemedSale, loyaltyRedemption: undefined }).ok,
     "orphaned per-line loyalty reductions (no block) refused",
+  );
+  // D170 O15b — offline-minted reward marker.
+  const lrBase = { redemptionId: U4, code: "GW-7K3M-92QF", appliedMinor: 200 };
+  const memberBlock = { customerId: U4, memberLabel: "Pat L" };
+  ok(
+    validateSalePayload({ ...redeemedSale, loyalty: memberBlock, loyaltyRedemption: { ...lrBase, offlineIssued: { rewardPoints: 150 } } }).ok,
+    "offline-minted reward with member + 150 pts passes",
+  );
+  ok(
+    !validateSalePayload({ ...redeemedSale, loyalty: memberBlock, loyaltyRedemption: { ...lrBase, offlineIssued: { rewardPoints: 200 } } }).ok,
+    "offline-minted reward with a non-reward point count refused",
+  );
+  ok(
+    !validateSalePayload({ ...redeemedSale, loyaltyRedemption: { ...lrBase, offlineIssued: { rewardPoints: 300 } } }).ok,
+    "offline-minted reward without the member block refused",
   );
   ok(
     !validateSalePayload({

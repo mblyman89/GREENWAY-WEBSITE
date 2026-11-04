@@ -268,6 +268,9 @@ import {
 } from "@/lib/pos/deferred-outbox-core";
 import {
   MEMBER_BOOK_MAX_PAGES,
+  adjustBookPoints,
+  bookRow,
+  offlineRewardGrant,
   bookHistorySummary,
   matchFromBook,
   memberBookDue,
@@ -553,6 +556,10 @@ export function RegisterShell({
   // D170 O15 — the member book (encrypted store). Kept in a ref: it is large
   // and nothing renders from it directly.
   const memberBookRef = useRef<MemberBook | null>(null);
+  // D170 O15b — rewards minted offline this session: redemptionId → whose
+  // points and how many, so Remove gives them back locally (the server never
+  // saw them).
+  const offlineGrantsRef = useRef(new Map<string, { customerId: string; points: number }>());
   const memberBookBusyRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
@@ -2279,11 +2286,56 @@ export function RegisterShell({
           }
         }}
         onLoyalty={async (req) => {
-          // Task AM-B — loyalty redemption at the register. ONLINE-ONLY:
-          // the server holds the live balance and the legal price floors.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — loyalty redemption needs a connection. Ring the sale without it, or reconnect." };
-          }
+          // Task AM-B — loyalty redemption at the register. Online the server
+          // holds the live balance and the legal price floors.
+          // D170 O15b — offline (or the server unreachable) a POINTS reward is
+          // priced right here with the server's own pure pricing, from the
+          // balance in the encrypted member book and the menu's costs. The
+          // sale carries an offline marker and the server issues the reward
+          // at sync only if the live balance still covers it. A brought code
+          // still needs the server (codes live there).
+          const saveBookPoints = (customerId: string, delta: number) => {
+            const book = memberBookRef.current;
+            if (!book) return;
+            const next = adjustBookPoints(book, customerId, delta);
+            memberBookRef.current = next;
+            try {
+              posStorageSet(LS_MEMBER_BOOK, JSON.stringify(next));
+            } catch {
+              // Non-fatal — the in-memory copy is already adjusted.
+            }
+          };
+          const offline = () => {
+            if (req.action === "release") {
+              const held = offlineGrantsRef.current.get(req.redemptionId);
+              if (held) {
+                offlineGrantsRef.current.delete(req.redemptionId);
+                saveBookPoints(held.customerId, held.points);
+              }
+              return { ok: true as const, grant: { redemptionId: "", code: "", valueMinor: 0, appliedMinor: 0, pointsSpent: 0, source: "points" as const, perVariant: {} } };
+            }
+            if (req.action === "apply-code") {
+              return { ok: false as const, error: "Offline — a reward code the customer brought needs a connection to check. Use their points instead, or reconnect." };
+            }
+            const row = bookRow(memberBookRef.current, req.customerId);
+            if (!row) {
+              return { ok: false as const, error: "Offline, and this member is not in the saved member book yet. Ring the sale without the reward, or reconnect." };
+            }
+            const costs = new Map((menuBundle?.products ?? []).map((p) => [p.variantId, p.costMinorUnits]));
+            const made = offlineRewardGrant({
+              balancePoints: row.bp,
+              rewardPoints: req.rewardPoints,
+              lines: req.lines.map((l) => ({ ...l, costMinorUnits: l.variantId ? (costs.get(l.variantId) ?? null) : null })),
+              neverDiscountKeys: [],
+              redemptionId: crypto.randomUUID(),
+            });
+            if (!made.ok) return { ok: false as const, error: made.error };
+            offlineGrantsRef.current.set(made.grant.redemptionId, { customerId: req.customerId, points: made.grant.pointsSpent });
+            saveBookPoints(req.customerId, -made.grant.pointsSpent);
+            return { ok: true as const, grant: made.grant };
+          };
+          if (!navigator.onLine) return offline();
+          if (req.action === "release" && offlineGrantsRef.current.has(req.redemptionId)) return offline();
           try {
             const res = await posFetch("/api/pos/loyalty", {
               method: "POST",
@@ -2294,6 +2346,7 @@ export function RegisterShell({
               },
               body: JSON.stringify(req),
             });
+            if (res.status >= 500 && req.action === "redeem-points") return offline();
             const body = (await res.json().catch(() => null)) as
               | (Partial<PosLoyaltyGrant> & { error?: string; released?: boolean })
               | null;
@@ -2325,6 +2378,7 @@ export function RegisterShell({
               },
             };
           } catch {
+            if (req.action === "redeem-points") return offline();
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
         }}

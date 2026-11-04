@@ -64,6 +64,10 @@ export type AppliedLoyalty = {
   rewardPoints?: number;
   /** D137: the reward's percent in basis points (1000 = 10%). */
   percentBps?: number;
+  /** D170 O15b: minted on this iPad while offline from the saved member
+   *  book; the server issues the row at sync after re-checking the live
+   *  balance. Release is local only (the server never saw it). */
+  offline?: true;
 };
 
 /** A priced cart line as the device sends it to /api/pos/loyalty. */
@@ -102,6 +106,8 @@ export type PosLoyaltyGrant = {
   rewardPoints?: number;
   /** D137: the reward's percent in basis points. */
   percentBps?: number;
+  /** D170 O15b: minted offline on this iPad (see AppliedLoyalty.offline). */
+  offline?: true;
 };
 
 // ---------------------------------------------------------------------------
