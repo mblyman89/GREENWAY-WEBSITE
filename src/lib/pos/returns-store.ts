@@ -118,7 +118,7 @@ function privacyLabel(first: string, last: string | null): string {
  * gate. Failures come back as the COMPLETE list so staff see the whole
  * picture (matches evaluateReturnEligibility's contract).
  */
-export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterReturnLookup> {
+export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string): Promise<CounterReturnLookup> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, errors: ["Supabase service role not configured."] };
   }
@@ -132,7 +132,9 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
   const admin = createSupabaseAdminClient();
   const policy = await getPosReturnPolicy();
 
-  const cutoff = new Date(Date.now() - lookupWindowDays(policy) * 86_400_000).toISOString();
+  // D170 O3: an offline return is judged as of when it happened.
+  const asOfMs = asOfIso ? Date.parse(asOfIso) : Date.now();
+  const cutoff = new Date(asOfMs - lookupWindowDays(policy) * 86_400_000).toISOString();
   type EventRow = { client_uuid: string; order_id: string; occurred_at: string };
   const rows = await pagedAll<EventRow>(async (from, to) => {
     const { data } = await admin
@@ -181,7 +183,7 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
     orderStatus: order.status,
     orderCustomerId: order.customer_id,
     purchasedAtIso,
-    nowIso: new Date().toISOString(),
+    nowIso: asOfIso ?? new Date().toISOString(),
     policy,
   });
   if (!verdict.ok) return { ok: false, errors: verdict.errors };
@@ -267,6 +269,8 @@ export type ProcessCounterReturnInput = {
   disposition: CustomerReturnDisposition;
   originalPackaging: boolean;
   lotIdLegible: boolean;
+  /** D170 O3: an offline return is judged as of when it happened. */
+  asOfIso?: string;
 };
 
 export type ProcessCounterReturnResult =
@@ -302,7 +306,7 @@ export async function processCounterReturn(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
 
   // ── Server-authoritative policy re-check ─────────────────────────────────
-  const lookup = await lookupSaleByReceipt(input.receiptNumber);
+  const lookup = await lookupSaleByReceipt(input.receiptNumber, input.asOfIso);
   if (!lookup.ok) return { ok: false, error: lookup.errors.join(" ") };
   const sale = lookup.sale;
 
@@ -401,7 +405,7 @@ export async function processCounterReturn(
   const config = normalizePosReceiptConfig(await getPosReceiptConfig());
   const receiptHtml = buildRefundReceiptHtml({
     originalSaleClientUuid: sale.saleClientUuid,
-    refundedAtIso: new Date().toISOString(),
+    refundedAtIso: input.asOfIso ?? new Date().toISOString(),
     headerText: config.headerText,
     footerText: config.footerText,
     addressLines: receiptAddressLines(config),

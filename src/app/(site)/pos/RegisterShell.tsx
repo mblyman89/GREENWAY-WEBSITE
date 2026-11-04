@@ -36,6 +36,7 @@ import type { PosCartEntry, PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale
 import {
   buildNoSaleSlipHtml,
   buildPosReceiptHtml,
+  buildRefundReceiptHtml,
   receiptNumber,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
@@ -203,7 +204,21 @@ import {
   refreshOfflineRoster,
   verifyOfflinePin,
 } from "@/lib/pos/offline-unlock";
-import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
+import { VOID_REASON_PRESETS, buildVoidSlipHtml } from "@/lib/pos/void-sale-core";
+import {
+  addSaleToBook,
+  entryFromSalePayload,
+  findBookSale,
+  markReturned,
+  markVoided,
+  offlineLineBlock,
+  offlineReturnCheck,
+  offlineVoidCheck,
+  parseSaleBook,
+  validateReversalPayload,
+  type PosReversalPayload,
+  type SaleBookEntry,
+} from "@/lib/pos/offline-reversal-core";
 import {
   offlineTillMessage,
   validateTillPayload,
@@ -326,6 +341,7 @@ const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the la
 const LS_MEMBER_BOOK = "gw-pos-member-book"; // D170 O15: encrypted member book for offline loyalty
 const LS_FIX_INDEX = "gw-pos-fix-index"; // D170 O9: encrypted lot index so Fix & sell works offline
 const LS_PICKUP_BOOK = "gw-pos-pickup-book"; // D170 O14: encrypted pickup orders for offline hand-off
+const LS_SALE_BOOK = "gw-pos-sale-book"; // D170 O2/O3: this iPad's recent sales, for offline voids and returns
 const LS_DAY_TALLY = "gw-pos-day-tally"; // D170 O6: today's sale totals for a provisional offline X
 const LS_OUTBOX = "gw-pos-outbox"; // D170 O7/O8: stock flags + emailed receipts waiting to send
 // B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
@@ -382,6 +398,18 @@ type UnlockedEmployee = {
   clockOutBlockedMessage?: string | null;
 };
 type DrawerInfo = { sessionId: string; openedAt: string | null; businessDay: string } | null;
+
+/** D170 O2/O3 — what the void and returns modals use with no server. */
+type OfflineReversalApi = {
+  find: (receipt: string) => SaleBookEntry | null;
+  policy: () => ReturnType<typeof normalizePosReturnPolicy>;
+  submit: (
+    pin: string,
+    reason: OfflineReason,
+    payload: Omit<PosReversalPayload, "approver" | "offlineReason" | "drawerSessionId">,
+    sale: SaleBookEntry,
+  ) => Promise<{ ok: true; html: string } | { ok: false; error: string }>;
+};
 
 type Screen = "setup" | "locked" | "home";
 
@@ -992,6 +1020,25 @@ export function RegisterShell({
           // Never let the tally touch a sale.
         }
       }
+      // D170 O2/O3 — every sale also lands in this iPad's sale book, so a
+      // same-day void or a return of it works with no internet. Best-effort.
+      if (eventType === "sale") {
+        try {
+          const entry = entryFromSalePayload(clientUuid, envelope.occurredAt, payload);
+          if (entry) {
+            const next = addSaleToBook(
+              parseSaleBook(posStorageGet(LS_SALE_BOOK)),
+              creds.registerId,
+              entry,
+              normalizePosReturnPolicy(menuBundleRef.current?.returnPolicy),
+              Date.now(),
+            );
+            posStorageSet(LS_SALE_BOOK, JSON.stringify(next));
+          }
+        } catch {
+          // Never let the book touch a sale.
+        }
+      }
       return clientUuid;
     },
     [creds],
@@ -1023,6 +1070,61 @@ export function RegisterShell({
     },
     [enqueue],
   );
+
+  // D170 O2/O3 — voids and returns with no server, from this iPad's own sale
+  // book. A manager/lead PIN is checked here (D161 vault), the reversal is
+  // queued (re-run by the real void/return machinery at sync, as of now),
+  // the book is marked so nothing is refunded twice, and the slip prints.
+  const offlineReversal: OfflineReversalApi = {
+    find: (receipt: string) => findBookSale(parseSaleBook(posStorageGet(LS_SALE_BOOK)), receipt),
+    policy: () => normalizePosReturnPolicy(menuBundleRef.current?.returnPolicy),
+    submit: async (pin, reason, payload, sale) => {
+      const appr = await approveOffline(pin, payload.kind === "void" ? "void" : "return", reason);
+      if (!appr.ok) return { ok: false, error: appr.error };
+      const full = { ...payload, approver: appr.approver, offlineReason: reason, drawerSessionId: drawer?.sessionId ?? null } as PosReversalPayload;
+      const v = validateReversalPayload(full);
+      if (!v.ok) return { ok: false, error: v.errors.join(" ") };
+      const queued = enqueue("reversal", full as unknown as Record<string, unknown>, employee?.id ?? appr.approver.id);
+      if (!queued) return { ok: false, error: "This iPad is not paired to a register, so nothing was recorded." };
+      const book = parseSaleBook(posStorageGet(LS_SALE_BOOK));
+      if (book) {
+        const next = full.kind === "void" ? markVoided(book, sale.id) : markReturned(book, sale.id, full.line!.index, full.line!.quantity);
+        posStorageSet(LS_SALE_BOOK, JSON.stringify(next));
+      }
+      const rc = menuBundleRef.current ? normalizePosReceiptConfig(menuBundleRef.current.receipt) : null;
+      const nowIso = new Date().toISOString();
+      const html =
+        full.kind === "void"
+          ? buildVoidSlipHtml({
+              receiptNumber: receiptNumber(sale.id),
+              orderNumber: "OFFLINE \u2014 syncs later",
+              voidedAtIso: nowIso,
+              reason: full.reason ?? "",
+              approvedByName: appr.approver.fullName,
+              processedByName: full.processedByName,
+              refundMinor: full.refundMinor,
+              lines: sale.lines.map((l) => ({ productName: l.productName, quantity: l.quantity })),
+              headerText: rc?.headerText ?? null,
+              addressLines: rc ? receiptAddressLines(rc) : [],
+            })
+          : buildRefundReceiptHtml({
+              originalSaleClientUuid: sale.id,
+              refundedAtIso: nowIso,
+              headerText: rc?.headerText ?? null,
+              footerText: rc?.footerText ?? null,
+              addressLines: rc ? receiptAddressLines(rc) : [],
+              memberLabel: sale.memberLabel ?? "Not a loyalty member",
+              lines: [{ productName: full.line!.productName, quantity: full.line!.quantity, refundMinor: full.refundMinor }],
+              refundTotalMinor: full.refundMinor,
+              disposition: full.disposition ?? "restock",
+              reason: full.returnReason ?? "other",
+              processedBy: full.processedByName,
+              pointsClawed: 0,
+            });
+      void flush();
+      return { ok: true, html };
+    },
+  };
 
   // D145 — what this register tells the back office about itself on every
   // heartbeat and flush. A ref so the stable callbacks always read fresh values.
@@ -2918,8 +3020,8 @@ export function RegisterShell({
         onNoSale={() => setNoSaleOpen(true)}
         onTill={(mode) => setTillMode(mode)}
         onDayReport={() => setDayReportOpen(true)}
-        onVoidSale={online ? () => setVoidOpen(true) : undefined}
-        onReturnSale={online ? () => setReturnsOpen(true) : undefined}
+        onVoidSale={() => setVoidOpen(true)}
+        onReturnSale={() => setReturnsOpen(true)}
         returnPolicyLabel={returnPolicyShortLabel(normalizePosReturnPolicy(menuBundle?.returnPolicy))}
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         onPrinterSetup={() => setPrinterSetupOpen(true)}
@@ -3101,6 +3203,7 @@ export function RegisterShell({
         <VoidSaleModal
           creds={creds}
           employeeName={employee.fullName}
+          offline={offlineReversal}
           onClose={() => setVoidOpen(false)}
           onVoided={(slipHtml, message) => {
             setVoidOpen(false);
@@ -3115,6 +3218,7 @@ export function RegisterShell({
       {returnsOpen && employee ? (
         <ReturnsModal
           creds={creds}
+          offline={offlineReversal}
           policyText={returnPolicySummary(normalizePosReturnPolicy(menuBundle?.returnPolicy))}
           employeeName={employee.fullName}
           onClose={() => setReturnsOpen(false)}
@@ -4748,11 +4852,13 @@ function NoSaleModal({
 function VoidSaleModal({
   creds,
   employeeName,
+  offline,
   onClose,
   onVoided,
 }: {
   creds: DeviceCreds;
   employeeName: string;
+  offline: OfflineReversalApi;
   onClose: () => void;
   onVoided: (slipHtml: string, message: string) => void;
 }) {
@@ -4772,6 +4878,33 @@ function VoidSaleModal({
 
   const reason = (preset ?? custom).trim();
   const reasonOk = reason.length >= 3 && reason.length <= 500;
+  // D170 O2 — the sale found in this iPad's own book (no server). Set
+  // together with `sale`, so processing knows to queue instead of call.
+  const [bookSale, setBookSale] = useState<{ entry: SaleBookEntry; reason: OfflineReason } | null>(null);
+
+  const findOffline = (code: string, why: OfflineReason) => {
+    const entry = offline.find(code);
+    if (!entry) {
+      setErrors([
+        "No connection, and this sale is not in this iPad's own sales (only sales rung on this register can be voided offline). Wait for the connection, or void it from the register that rang it.",
+      ]);
+      setSale(null);
+      return;
+    }
+    const verdict = offlineVoidCheck(entry, new Date().toISOString());
+    if (!verdict.ok) {
+      setErrors(verdict.errors);
+      setSale(null);
+      return;
+    }
+    setBookSale({ entry, reason: why });
+    setSale({
+      receiptNumber: receiptNumber(entry.id),
+      orderNumber: "offline",
+      totalMinor: entry.totalMinor,
+      lines: entry.lines.map((l) => ({ productName: l.productName, quantity: l.quantity })),
+    });
+  };
 
   const call = async (body: Record<string, unknown>) => {
     const res = await posFetch("/api/pos/void", {
@@ -4784,15 +4917,25 @@ function VoidSaleModal({
       body: JSON.stringify(body),
     });
     const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    return { ok: res.ok, json };
+    return { ok: res.ok, status: res.status, json };
   };
 
   const lookup = async () => {
     if (busy || receipt.trim().length < 4) return;
     setBusy(true);
     setErrors([]);
+    setBookSale(null);
+    if (!navigator.onLine) {
+      findOffline(receipt.trim(), "offline");
+      setBusy(false);
+      return;
+    }
     try {
-      const { ok, json } = await call({ receipt: receipt.trim() });
+      const { ok, status, json } = await call({ receipt: receipt.trim() });
+      if (status >= 500) {
+        findOffline(receipt.trim(), "server_error");
+        return;
+      }
       if (!ok || !json?.sale) {
         const errs = Array.isArray(json?.errors) ? (json.errors as string[]) : [String(json?.error ?? "Lookup failed.")];
         setErrors(errs);
@@ -4801,23 +4944,56 @@ function VoidSaleModal({
       }
       setSale(json.sale as typeof sale);
     } catch {
-      setErrors(["Could not reach the server — try again."]);
+      findOffline(receipt.trim(), "network");
     } finally {
       setBusy(false);
     }
+  };
+
+  const voidOffline = async (entry: SaleBookEntry, why: OfflineReason) => {
+    const r = await offline.submit(
+      pin,
+      why,
+      { kind: "void", saleClientUuid: entry.id, processedByName: employeeName, refundMinor: entry.totalMinor, reason },
+      entry,
+    );
+    if (!r.ok) {
+      setErrors([r.error]);
+      setPin("");
+      return;
+    }
+    onVoided(
+      r.html,
+      `Sale ${receiptNumber(entry.id)} voided OFFLINE \u2014 hand back ${formatCents(entry.totalMinor)} cash. Stock and points are reversed when the internet is back.`,
+    );
   };
 
   const processVoid = async () => {
     if (busy || !sale || !reasonOk || pin.length < 4) return;
     setBusy(true);
     setErrors([]);
+    if (bookSale) {
+      try {
+        await voidOffline(bookSale.entry, bookSale.reason);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
-      const { ok, json } = await call({
+      const { ok, status, json } = await call({
         receipt: sale.receiptNumber,
         reason,
         pin,
         processedByName: employeeName,
       });
+      if (status >= 500) {
+        const entry = offline.find(sale.receiptNumber);
+        if (entry && offlineVoidCheck(entry, new Date().toISOString()).ok) {
+          await voidOffline(entry, "server_error");
+          return;
+        }
+      }
       if (!ok || !json?.slipHtml) {
         setErrors([String(json?.error ?? "Void failed.")]);
         setPin("");
@@ -4830,6 +5006,11 @@ function VoidSaleModal({
         `Sale ${sale.receiptNumber} voided — hand back $${(refund / 100).toFixed(2)} cash${points > 0 ? `; ${points} points reversed` : ""}.`,
       );
     } catch {
+      const entry = offline.find(sale.receiptNumber);
+      if (entry && offlineVoidCheck(entry, new Date().toISOString()).ok) {
+        await voidOffline(entry, "network");
+        return;
+      }
       setErrors(["Could not reach the server — try again."]);
     } finally {
       setBusy(false);
@@ -4880,6 +5061,12 @@ function VoidSaleModal({
 
         {sale ? (
           <>
+            {bookSale ? (
+              <p className="mt-4 rounded-lg bg-[var(--pos-warn-soft,#fff4d6)] px-3 py-2 text-xs text-[var(--pos-text)]">
+                Offline void from this iPad&apos;s own sales. A manager or lead PIN is checked on this iPad; stock, points
+                and the order are reversed when the internet is back (anything doubtful goes to Exceptions).
+              </p>
+            ) : null}
             <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-4">
               <p className="text-sm font-semibold">
                 Order {sale.orderNumber} · {formatCents(sale.totalMinor)} cash back
@@ -5006,12 +5193,14 @@ type ReturnableSale = {
  */
 function ReturnsModal({
   creds,
+  offline,
   policyText,
   employeeName,
   onClose,
   onReturned,
 }: {
   creds: DeviceCreds;
+  offline: OfflineReversalApi;
   /** Fix 6F — the cached policy summary; the server's lookup summary wins once a sale is found. */
   policyText: string;
   employeeName: string;
@@ -5051,6 +5240,50 @@ function ReturnsModal({
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // D170 O3 — the sale found in this iPad's own book (no server). Its line
+  // ids are "book-<index>"; processing queues instead of calling.
+  const [bookSale, setBookSale] = useState<{ entry: SaleBookEntry; reason: OfflineReason } | null>(null);
+
+  const findOffline = (code: string, why: OfflineReason) => {
+    const entry = offline.find(code);
+    if (!entry) {
+      setErrors([
+        "No connection, and this sale is not in this iPad's own sales (only sales rung on this register can be returned offline). Wait for the connection, or take the return at the register that rang it.",
+      ]);
+      return;
+    }
+    const policy = offline.policy();
+    const verdict = offlineReturnCheck(entry, policy, new Date().toISOString());
+    if (!verdict.ok) {
+      setErrors(verdict.errors);
+      return;
+    }
+    setBookSale({ entry, reason: why });
+    const found: ReturnableSale = {
+      receiptNumber: receiptNumber(entry.id),
+      orderNumber: "offline",
+      purchasedAtIso: entry.at,
+      memberLabel: entry.memberLabel ?? (entry.hasMember ? "Loyalty member" : "Not a loyalty member"),
+      daysRemaining: verdict.daysRemaining,
+      orderTotalMinor: entry.totalMinor,
+      lines: entry.lines.map((l, i) => ({
+        lineId: `book-${i}`,
+        productName: l.productName,
+        quantity: l.quantity,
+        priceMinorUnits: l.unitPriceMinor,
+        alreadyReturned: l.reversed,
+        remainingReturnable: Math.max(0, l.quantity - l.reversed),
+        notReturnableReason: l.quantity - l.reversed > 0 ? offlineLineBlock(policy, l, 1) : null,
+      })),
+    };
+    setSale(found);
+    const returnable = found.lines.filter((l) => l.remainingReturnable > 0 && !l.notReturnableReason);
+    if (returnable.length === 1) {
+      setLineId(returnable[0].lineId);
+      setQuantity(1);
+    }
+  };
+
   const line = sale?.lines.find((l) => l.lineId === lineId) ?? null;
   const maxQty = line?.remainingReturnable ?? 0;
   const refundPreviewMinor = line ? line.priceMinorUnits * Math.min(quantity, maxQty) : 0;
@@ -5069,7 +5302,7 @@ function ReturnsModal({
       body: JSON.stringify(body),
     });
     const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    return { ok: res.ok, json };
+    return { ok: res.ok, status: res.status, json };
   };
 
   // SLICE 19 - load recent transactions so a return no longer depends on the
@@ -5182,8 +5415,18 @@ function ReturnsModal({
     setErrors([]);
     setSale(null);
     setLineId(null);
+    setBookSale(null);
+    if (!navigator.onLine) {
+      findOffline(code, "offline");
+      setBusy(false);
+      return;
+    }
     try {
-      const { ok, json } = await call({ receipt: code });
+      const { ok, status, json } = await call({ receipt: code });
+      if (status >= 500) {
+        findOffline(code, "server_error");
+        return;
+      }
       if (!ok || !json?.sale) {
         const errs = Array.isArray(json?.errors) ? (json.errors as string[]) : [String(json?.error ?? "Lookup failed.")];
         setErrors(errs);
@@ -5197,18 +5440,82 @@ function ReturnsModal({
         setQuantity(1);
       }
     } catch {
-      setErrors(["Could not reach the server — try again."]);
+      findOffline(code, "network");
     } finally {
       setBusy(false);
     }
+  };
+
+  const returnOffline = async (entry: SaleBookEntry, why: OfflineReason, index: number) => {
+    const bl = entry.lines[index];
+    const block = bl ? offlineLineBlock(offline.policy(), bl, quantity) : "That item is not on this sale.";
+    if (block || !bl || !reason || !disposition) {
+      setErrors([block ?? "Pick a reason and restock or destroy."]);
+      return;
+    }
+    const r = await offline.submit(
+      pin,
+      why,
+      {
+        kind: "return",
+        saleClientUuid: entry.id,
+        processedByName: employeeName,
+        refundMinor: bl.unitPriceMinor * quantity,
+        line: {
+          index,
+          productId: bl.productId,
+          ...(bl.variantId ? { variantId: bl.variantId } : {}),
+          productName: bl.productName,
+          unitPriceMinor: bl.unitPriceMinor,
+          quantity,
+        },
+        returnReason: reason as PosReversalPayload["returnReason"],
+        ...(detail.trim() ? { detail: detail.trim() } : {}),
+        disposition,
+        originalPackaging,
+        lotIdLegible,
+      },
+      entry,
+    );
+    if (!r.ok) {
+      setErrors([r.error]);
+      setPin("");
+      return;
+    }
+    onReturned(
+      r.html,
+      `Return taken OFFLINE \u2014 hand back ${formatCents(bl.unitPriceMinor * quantity)} cash. Stock, points and the state report update when the internet is back.${disposition === "destroy" ? " Product goes to the quarantine bin." : ""}`,
+    );
+  };
+
+  /** The book line index for the picked line, when the sale is in the book. */
+  const bookIndexFor = (entry: SaleBookEntry | undefined, picked: NonNullable<typeof line>): number => {
+    if (!entry) return -1;
+    if (picked.lineId.startsWith("book-")) return Number(picked.lineId.slice(5));
+    return entry.lines.findIndex((l) => l.productName === picked.productName && l.unitPriceMinor === picked.priceMinorUnits);
   };
 
   const processReturn = async () => {
     if (busy || !ready || !sale || !line) return;
     setBusy(true);
     setErrors([]);
+    if (bookSale) {
+      try {
+        await returnOffline(bookSale.entry, bookSale.reason, bookIndexFor(bookSale.entry, line));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    const fallback = async (why: OfflineReason): Promise<boolean> => {
+      const entry = offline.find(sale.receiptNumber);
+      const idx = entry ? bookIndexFor(entry, line) : -1;
+      if (!entry || idx < 0 || !offlineReturnCheck(entry, offline.policy(), new Date().toISOString()).ok) return false;
+      await returnOffline(entry, why, idx);
+      return true;
+    };
     try {
-      const { ok, json } = await call({
+      const { ok, status, json } = await call({
         receipt: sale.receiptNumber,
         orderLineId: line.lineId,
         quantity,
@@ -5220,6 +5527,7 @@ function ReturnsModal({
         pin,
         processedByName: employeeName,
       });
+      if (status >= 500 && (await fallback("server_error"))) return;
       if (!ok || !json?.receiptHtml) {
         setErrors([String(json?.error ?? "Return failed.")]);
         setPin("");
@@ -5232,6 +5540,7 @@ function ReturnsModal({
         `Return processed — hand back ${formatCents(refund)} cash${points > 0 ? `; ${points} points reversed` : ""}.${disposition === "destroy" ? " Product goes to the quarantine bin." : ""}`,
       );
     } catch {
+      if (await fallback("network")) return;
       setErrors(["Could not reach the server — try again."]);
     } finally {
       setBusy(false);
@@ -5247,6 +5556,12 @@ function ReturnsModal({
             Cancel
           </button>
         </div>
+        {bookSale ? (
+          <p className="mt-2 rounded-lg bg-[var(--pos-warn-soft,#fff4d6)] px-3 py-2 text-xs text-[var(--pos-text)]">
+            Offline return from this iPad&apos;s own sales. A manager or lead PIN is checked on this iPad; stock, points
+            and the state report update when the internet is back (anything doubtful goes to Exceptions).
+          </p>
+        ) : null}
         <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
           {sale?.policySummary ?? policyText} The refund is the exact price paid on the receipt —
           nothing is typed by hand. Product must be in its original packaging with the lot ID fully legible

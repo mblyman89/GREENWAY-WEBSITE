@@ -3699,3 +3699,27 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0340_pos_offline_till.rollback.sql`. It refuses to run while
   till_action rows exist.
+
+- [ ] `0341_pos_offline_reversal.sql` (D170 O2/O3, owner request 2026-11-04: "finish all remaining offline mode
+  tasks"). Apply it **after 0340**.
+  - **Why:** a same-day void and a return of a sale rung on that iPad now also work while the internet is down. The
+    iPad checks the manager or lead PIN against its offline vault, hands the cash back, and queues the reversal.
+  - **What it does:** widens the `pos_sale_events` event_type CHECK to also allow `reversal`. At sync the server runs
+    the real void / return (restock or destroy, loyalty clawback, CCRS correction, drawer tie) as of the time the cash
+    moved, and re-checks that the approver is still an active manager or lead. Doubtful ones go to Exceptions. No new
+    tables.
+
+    Until it is applied, offline voids and returns are rejected at sync (kept on the iPad, with a hint naming this
+    file).
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select pg_get_constraintdef(oid) from pg_constraint
+   where conname = 'pos_sale_events_event_type_check';   -- the list ends with 'reversal'
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0341_pos_offline_reversal.rollback.sql`. It refuses to run while
+  reversal rows exist.

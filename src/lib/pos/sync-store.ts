@@ -38,6 +38,7 @@ import { isMarketplaceOrigin, toOrderOrigin } from "@/lib/orders/order-origin-co
 import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
 import { judgeOfflineAuth, offlineKeyId, validateOfflineAuthPayload, type OfflineAuthPayload } from "./offline-unlock-core";
 import { getOfflinePolicy } from "./offline-unlock-store";
+import { applyOfflineReversal } from "./offline-reversal-store";
 import { applyOfflineTill } from "./offline-till-store";
 import {
   validateSalePayload,
@@ -409,6 +410,13 @@ async function ingestOne(
         reason: "Offline drawer actions are not accepted yet — apply supabase/migrations/0340_pos_offline_till.sql first.",
       };
     }
+    if (insertError.code === "23514" && envelope.eventType === "reversal") {
+      return {
+        clientUuid: envelope.clientUuid,
+        status: "rejected",
+        reason: "Offline voids and returns are not accepted yet — apply supabase/migrations/0341_pos_offline_reversal.sql first.",
+      };
+    }
     if (insertError.code === "23514" && envelope.eventType === "cart_adjustment") {
       return {
         clientUuid: envelope.clientUuid,
@@ -470,6 +478,13 @@ async function processEnvelope(
       case "till_action": {
         // D170 O1 — a drawer action done offline (offline-till-store).
         const outcome = await applyOfflineTill(admin, envelope);
+        if (!outcome.ok) return await markException(admin, ledgerId, envelope.clientUuid, outcome.reason);
+        await markProcessed(admin, ledgerId);
+        return { clientUuid: envelope.clientUuid, status: "processed" };
+      }
+      case "reversal": {
+        // D170 O2/O3 — a void or return done offline (offline-reversal-store).
+        const outcome = await applyOfflineReversal(admin, envelope);
         if (!outcome.ok) return await markException(admin, ledgerId, envelope.clientUuid, outcome.reason);
         await markProcessed(admin, ledgerId);
         return { clientUuid: envelope.clientUuid, status: "processed" };
