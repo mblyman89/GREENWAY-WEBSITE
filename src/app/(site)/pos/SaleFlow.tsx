@@ -5065,7 +5065,7 @@ function LotDetailsPanel({
         <div className="mt-2 h-16 animate-pulse rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)]" />
       ) : state === "failed" ? (
         <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
-          Lot details need a connection to the back office. Everything above is from this register&apos;s saved menu.
+          Lot details for this item are not saved on this iPad yet, and the back office cannot be reached. Everything above is from this register&apos;s saved menu.
         </p>
       ) : details ? (
         <>

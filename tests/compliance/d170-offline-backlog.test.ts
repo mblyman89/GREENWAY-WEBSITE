@@ -9,6 +9,15 @@ import {
   OFFLINE_APPROVAL_PURPOSES,
   validateOfflineAuthPayload,
 } from "../../src/lib/pos/offline-unlock-core";
+import {
+  __runLotDetailsCacheCoreTests,
+  cachedLotDetails,
+  lotDetailsKey,
+  parseLotDetailsCache,
+  putLotDetails,
+  serializeLotDetailsCache,
+} from "../../src/lib/pos/lot-details-cache-core";
+import { findKeySpec, auditKeyRegistry } from "../../src/lib/pos/pos-storage-core";
 
 /**
  * D170: the register works fully offline (owner message 2026-11-04).
@@ -50,5 +59,39 @@ describe("O10 scan unlock offline", () => {
     expect(shell).toMatch(/onApprove=\{async \(pin, purpose\) =>/);
     expect(shell).toMatch(/approveOffline\(pin, purpose \?\? "price_override", reason\)/);
     expect(shell).toMatch(/purpose: OfflineApprovalPurpose,/);
+  });
+});
+
+describe("O11 lot details offline", () => {
+  const lot = { lotId: "L9", headline: "Lot 9", summary: "", sellable: true, sections: [], terpenes: [], coaUrl: "https://lab.example/coa.pdf" };
+
+  it("self-tests pass", () => {
+    const r = __runLotDetailsCacheCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(18);
+  });
+
+  it("a saved answer comes back offline with an honest age note", () => {
+    const now = Date.UTC(2026, 10, 4, 18);
+    const c = putLotDetails(parseLotDetailsCache(null), lotDetailsKey("p", "v"), { lots: [lot], lotCount: 1, warnings: [] }, now);
+    const back = cachedLotDetails(parseLotDetailsCache(serializeLotDetailsCache(c)), lotDetailsKey("p", "v"), now + 2 * 3600_000);
+    expect(back?.lots[0].coaUrl).toBe("https://lab.example/coa.pdf");
+    expect(back?.warnings[0]).toMatch(/^Offline: these lot details were saved on this iPad 2 h ago/);
+  });
+
+  it("the storage key is registered encrypted and passes the registry audit", () => {
+    const spec = findKeySpec("gw-pos-lot-details");
+    expect(spec?.tier).toBe("encrypted-db");
+    expect(auditKeyRegistry()).toEqual([]);
+  });
+
+  it("the shell saves every answer, falls back to the saved copy and warms while idle (never mid-sale)", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toMatch(/putLotDetails\(/);
+    expect(shell).toMatch(/return cachedLotDetails\(/);
+    expect(shell).toMatch(/nextLotDetailsToWarm\(/);
+    expect(shell).toMatch(/screen !== "home" && screen !== "locked"/);
+    const sale = read("src/app/(site)/pos/SaleFlow.tsx");
+    expect(sale).not.toMatch(/Lot details need a connection to the back office/);
   });
 });
