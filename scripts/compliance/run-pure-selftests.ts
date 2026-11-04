@@ -722,6 +722,7 @@ import { __runAttachPlanCoreTests } from "../../src/lib/catalog/attach-plan-core
 import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-list-core";
 import { __runGeminiBatchCoreTests } from "../../src/lib/ai/gemini-batch-core";
 import { __runBatchConsoleCoreTests } from "../../src/lib/ai/batch-console-core";
+import { __runOnboardingBatchSendCoreTests } from "../../src/lib/ai/onboarding-batch-send-core";
 import { __runCultiveraConfidenceCoreTests } from "../../src/lib/catalog/cultivera-confidence-core";
 import { __runCcrsHeldBackTests } from "../../src/lib/compliance/ccrs-held-back-core";
 import { __runCcrsRecordsCompareTests } from "../../src/lib/compliance/ccrs-records-compare-core";
@@ -2473,6 +2474,7 @@ __runLiquidVolumeTests();
   { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 164) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
   { const r = __runGeminiBatchCoreTests(); if (r.failed > 0 || r.passed < 23) throw new Error(`gemini-batch-core: ${r.failed} failed, ${r.passed} passed`); console.log(`gemini-batch-core: ${r.passed} assertions passed`); }
   { const r = __runBatchConsoleCoreTests(); if (r.failed > 0 || r.passed < 27) throw new Error(`batch-console-core: ${r.failed} failed, ${r.passed} passed`); console.log(`batch-console-core: ${r.passed} assertions passed`); }
+  { const r = __runOnboardingBatchSendCoreTests(); if (r.failed > 0 || r.passed < 38) throw new Error(`onboarding-batch-send-core: ${r.failed} failed, ${r.passed} passed`); console.log(`onboarding-batch-send-core: ${r.passed} assertions passed`); } // R74 S53 (owner Round 34): onboarding lookups auto-send to Google, live stage + ETA, attach with strain type
   { const r = __runCultiveraConfidenceCoreTests(); if (r.failed > 0 || r.passed < 27) throw new Error(`cultivera-confidence-core: ${r.failed} failed, ${r.passed} passed`); console.log(`cultivera-confidence-core: ${r.passed} assertions passed`); }
   { const r = __runCcrsHeldBackTests(); if (r.failed > 0 || r.passed < 10) throw new Error(`ccrs-held-back-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-held-back-core: ${r.passed} assertions passed`); }
   { const r = __runCcrsRecordsCompareTests(); if (r.failed > 0 || r.passed < 13) throw new Error(`ccrs-records-compare-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-records-compare-core: ${r.passed} assertions passed`); }

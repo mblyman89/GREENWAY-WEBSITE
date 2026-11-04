@@ -73,7 +73,13 @@ import { fieldSourcesLine } from "@/lib/inventory/cultivera-survivorship-core";
 import { CATEGORY_HOLD_ROW_NOTE, CATEGORY_HOLD_UNREAD_NOTE } from "@/lib/inventory/cultivera-category-gate-core";
 import { loadHeldKeysForPage } from "@/lib/inventory/cultivera-category-gate";
 import { AI_LOOKUP_ENGINE_ENV, lookupEngine } from "@/lib/ai/gemini-batch-core";
-import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, startCultiveraVendorAction, lookupCultiveraVendorAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, startCultiveraVendorAction, lookupCultiveraVendorAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction, lookupVendorFromOnboardingAction, sendToGoogleNowAction, attachOnboardingConfidenceAction } from "./actions";
+// R74 S53 (owner Round 34): the onboarding batch lookup, connected to Google -
+// auto-send, the live stage + ETA, the vendor button and the attach buttons.
+import { loadOnboardingBatchStage, loadVendorLookupScope } from "@/lib/ai/onboarding-batch-send-server";
+import { loadDeliveryConfidence } from "@/lib/catalog/onboarding-confidence-server";
+import { deliveryLookupHeader, onboardingLookupBanner, vendorButtonLabel } from "@/lib/ai/onboarding-batch-send-core";
+import { CULTIVERA_AUTO_ATTACH_MIN } from "@/lib/catalog/cultivera-confidence-core";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -247,7 +253,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; cv_vendor?: string; cv_vendors?: string; cvv?: string; cvv_msg?: string; cvv_next?: string; cvl?: string; cvl_msg?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; cv_vendor?: string; cv_vendors?: string; cvv?: string; cvv_msg?: string; cvv_next?: string; cvl?: string; cvl_msg?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string; tools?: string; obl?: string; obl_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -304,6 +310,11 @@ export default async function CatalogDraftsPage({
     p.catch(() => {}); // awaited below; never an unhandled rejection
     return p;
   };
+  // R74 S53 (owner: "On onboarding page, I want the only Gemini options to be
+  // batch lookup manifest, or all products from that vendor, or the
+  // individual lookup in the product row. Everything else should be removed
+  // or hidden."): the older AI / Cultivera tools sit behind "More tools".
+  const showTools = sp.tools === "1";
   const earlyCvParam = parseVendorParam(sp.cv_vendor);
   const earlyWantVendors = !focus.draftId && !focus.manifestId && (Boolean(earlyCvParam) || sp.cv_vendors === "1");
   const earlyBatchOn = Boolean(focus.manifestId) && view === "draft" && lookupJobsOn() && isAiConfigured;
@@ -312,6 +323,14 @@ export default async function CatalogDraftsPage({
   const cvVendorsP = early(() => (earlyWantVendors ? loadCultiveraVendors() : null));
   const pricingP = early(() => getPricingSettings());
   const batchLookupP = early(() => (earlyBatchOn && focus.manifestId ? loadManifestLookup(focus.manifestId) : null));
+  // R74 S53: the vendor button's scope, and the attach panel's scores once
+  // this delivery has finished lookups (both best effort; null hides them).
+  const vendorScopeP = early(() => (earlyBatchOn && focus.manifestId ? loadVendorLookupScope(focus.manifestId) : null));
+  const deliveryConfP = early(async () => {
+    if (!earlyBatchOn || !focus.manifestId) return null;
+    const b = await batchLookupP;
+    return b && (b.state === "job" || b.state === "none") && b.doneDraftIds.size > 0 ? loadDeliveryConfidence(focus.manifestId) : null;
+  });
   const brandCtxP = early(() => (focus.manifestId && view !== "dismissed" ? loadDeliveryBrandContext(focus.manifestId) : null));
   const resolveP = early(() =>
     resolveWebsiteCategoriesWithLiveKeys(
@@ -335,7 +354,9 @@ export default async function CatalogDraftsPage({
     // R74 S37 (speed): the collapsed list of every Cultivera manifest is not
     // read while working ONE delivery (it re-read every lot of 25 manifests
     // on each page load and auto-refresh); it shows on the overview.
-    focus.draftId || (focus.manifestId && !sp.cv_page) ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
+    // R74 S53: and, now every Cultivera manifest is looked up, only under
+    // "More tools" (or when a backfill result comes back with cv_page).
+    focus.draftId || !(sp.cv_page || (showTools && !focus.manifestId)) ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
   ]);
   // R74 S11: Cultivera manifests by vendor. Loaded only when asked for (a
   // vendor link, "Show vendors", or a by-vendor button's result), so the
@@ -420,6 +441,17 @@ export default async function CatalogDraftsPage({
         )
       : [];
   const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg) ?? waitingResultBanner(sp.wf, sp.wf_msg) ?? imageResultBanner(sp.img, sp.img_msg);
+  // R74 S53: where THIS delivery's lookup is at Google right now (Batch
+  // engine only - the live engine has no batches), the vendor button, the
+  // attach panel and the result of those presses.
+  const obStage = batchSlowRefresh && batchLookupJob ? await loadOnboardingBatchStage(batchLookupJob.jobId, batchLookupActive, now.getTime()) : null;
+  const vendorScope = batchEntry.kind !== "hidden" ? await vendorScopeP : null;
+  const deliveryConfRead = batchEntry.kind !== "hidden" && !batchLookupActive ? await deliveryConfP : null;
+  const deliveryConf = deliveryConfRead && !("error" in deliveryConfRead) && deliveryConfRead.scorecard.scored > 0 ? deliveryConfRead : null;
+  const oblBanner = onboardingLookupBanner(sp.obl, sp.obl_msg);
+  const lookupHeader = deliveryLookupHeader(focusManifest?.vendor_label ?? vendorScope?.vendor ?? (drafts.find((d) => (d.vendor_name ?? "").trim())?.vendor_name ?? null), focusManifest?.manifest_number ?? null);
+  const sprintStatus = loadSprintStatus();
+  const toolsHref = (on: boolean) => draftsHref({ status: view, manifestId: focus.manifestId, extra: on ? { tools: "1" } : {} });
   // R37 S4: the outcome of "Re-read lab certificates (LlamaParse)".
   const coaAllBanner = deliveryCoaBanner(sp as Record<string, unknown>);
   // R37 S5: the delivery brand field + its result banner.
@@ -831,8 +863,9 @@ export default async function CatalogDraftsPage({
         {/* W4: one plain-English next action for the tab you're on. */}
         <WhatDoIDoHere action={draftsWhatDoIDoHere(view, counts)} />
 
-        {/* R74 S21: is Gemini sprint set correctly? (Vercel values only; keys never shown.) */}
-        <GeminiSprintStatus status={loadSprintStatus()} />
+        {/* R74 S21: is Gemini sprint set correctly? (Vercel values only; keys never shown.)
+            R74 S53: shown only when something is wrong, or under "More tools". */}
+        {(showTools || sprintStatus.tone === "bad") && <GeminiSprintStatus status={loadSprintStatus()} />}
 
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Needs review" value={counts.draft} accent={counts.draft > 0 ? "gold" : "muted"} href="/admin/inventory/drafts?status=draft" />
@@ -871,6 +904,20 @@ export default async function CatalogDraftsPage({
             }
           >
             {lookupResult.text}
+          </div>
+        )}
+        {/* R74 S53: result of Look up all from the vendor / Send to Google now / the attach buttons (closed set, onboardingLookupBanner). */}
+        {oblBanner && (
+          <div
+            role={oblBanner.tone === "error" ? "alert" : "status"}
+            data-testid="onboarding-lookup-result"
+            className={
+              oblBanner.tone === "error"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            {oblBanner.text}
           </div>
         )}
 
@@ -931,9 +978,11 @@ export default async function CatalogDraftsPage({
             </Link>
             {/* S22 (F-008): the enrichment list filtered to THIS delivery,
                 newest first - by manifest, not by a name search. */}
-            <Link href={enrichDeliveryHref(focus.manifestId)} className="font-semibold underline" data-testid="enrich-this-delivery">
-              ✨ Enrich this delivery&apos;s products →
-            </Link>
+            {showTools && (
+              <Link href={enrichDeliveryHref(focus.manifestId)} className="font-semibold underline" data-testid="enrich-this-delivery">
+                ✨ Enrich this delivery&apos;s products →
+              </Link>
+            )}
           </div>
         )}
         {/* R13a: the flagged-facts worklist. The Keep / Correct / Take off
@@ -984,10 +1033,15 @@ export default async function CatalogDraftsPage({
                 it more obvious it's there and what it is meant to do"). The
                 engine is named from the configured model - "Google Gemini"
                 only when it really is Gemini. */}
-            <p id="batch-lookup-title" className="text-base font-semibold text-[var(--admin-text)]">{"\u{1F50E} "}{harvestBarTitle(productLookupModelId)}</p>
-            <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-purpose">{HARVEST_BAR_PURPOSE}</p>
-            {/* R37 S6: what past searches found, before paying for another. */}
-            {harvest && harvest.total > 0 && (
+            {/* R74 S53 (owner: "I want it to be more obvious on the onboarding
+                page that we are doing a batch lookup for this one new manifest
+                we are intaking"): the box names the delivery it works on. */}
+            <p id="batch-lookup-title" className="text-base font-semibold text-[var(--admin-text)]" data-testid="onboarding-lookup-header">{"\u{1F50E} "}{focus.manifestId ? lookupHeader : harvestBarTitle(productLookupModelId)}</p>
+            {focus.manifestId && <p className="text-xs font-semibold text-[var(--admin-text-muted)]">{harvestBarTitle(productLookupModelId)}</p>}
+            <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-purpose">{HARVEST_BAR_PURPOSE}{batchSlowRefresh ? " Pressing the button sends it to Google straight away - nothing to press in Batch Lookups." : ""}</p>
+            {/* R37 S6: what past searches found, before paying for another.
+                R74 S53: under "More tools" (the main button already skips what is done). */}
+            {showTools && harvest && harvest.total > 0 && (
               <div
                 data-testid="harvest-verdict"
                 data-tone={harvest.tone}
@@ -1057,10 +1111,46 @@ export default async function CatalogDraftsPage({
                   {progressLine(batchLookupJob.summary)}
                   {batchLookupProgress ? ` \u00b7 ${batchLookupProgress.percent}%` : ""}
                 </p>
-                {batchLookupProgress && etaLine(batchLookupProgress, batchLookupActive) && (
+                {/* R74 S53: the live stage at Google - queued, sent, searching,
+                    saving, done - with the counter and an honest time left. */}
+                {obStage && (
+                  <div data-testid="onboarding-batch-stage" data-stage={obStage.key} data-hold={obStage.hold ?? ""} className="my-1 flex flex-col gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-purple)]/40 bg-[var(--admin-purple-soft)] px-3 py-2">
+                    <ol className="flex flex-wrap items-center gap-1 text-[11px]" aria-label="Batch lookup steps">
+                      {obStage.steps.map((st, i) => (
+                        <li key={st.key} data-state={st.state} className="flex items-center gap-1">
+                          {i > 0 && <span aria-hidden="true" className="text-[var(--admin-text-faint)]">{"\u2192"}</span>}
+                          <span
+                            className={
+                              st.state === "current"
+                                ? "rounded-full bg-[var(--admin-purple)] px-2 py-0.5 font-bold text-black"
+                                : st.state === "done"
+                                  ? "rounded-full px-2 py-0.5 font-semibold text-[var(--admin-accent)]"
+                                  : "rounded-full px-2 py-0.5 text-[var(--admin-text-faint)]"
+                            }
+                          >
+                            {st.state === "done" ? "\u2713 " : ""}
+                            {st.label}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="font-semibold text-[var(--admin-text)]" data-testid="onboarding-batch-headline">{obStage.headline}</p>
+                    <p className="text-xs text-[var(--admin-text)]" data-testid="onboarding-batch-counter">{obStage.counter}</p>
+                    {obStage.etaLine && <p className="text-xs text-[var(--admin-text)]" data-testid="onboarding-batch-eta">{obStage.etaLine}</p>}
+                    <p className="text-xs text-[var(--admin-text-muted)]">{obStage.detail}</p>
+                    {obStage.hold && focus.manifestId && (
+                      <form action={sendToGoogleNowAction.bind(null, batchLookupJob.jobId)} className="flex flex-wrap items-center gap-3" data-testid="onboarding-send-now">
+                        <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                        <Button type="submit" variant="special" size="sm" data-testid="onboarding-send-now-button">{"\u{1F680} "}Send to Google now</Button>
+                        <span className="text-xs text-[var(--admin-text-muted)]">Allows only the batches this delivery needs and puts it first in line.</span>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {!obStage && batchLookupProgress && etaLine(batchLookupProgress, batchLookupActive) && (
                   <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-eta">{etaLine(batchLookupProgress, batchLookupActive)}</p>
                 )}
-                <BatchLookupAutoRefresh active={batchLookupActive} everyMs={batchSlowRefresh ? 120_000 : undefined} />
+                <BatchLookupAutoRefresh active={batchLookupActive} everyMs={obStage ? obStage.refreshMs || undefined : batchSlowRefresh ? 120_000 : undefined} />
                 <Link href="/admin/inventory/batch-lookups?tab=monitor" className="text-[11px] text-[var(--admin-accent)] hover:underline">Open Batch Lookups (all batches, ETA, cost) →</Link>
                 <p className="text-xs text-[var(--admin-text-muted)]">{costLine(batchLookupJob.summary, batchLookupJob.model)}</p>
                 {batchLookupJob.summary.failed > 0 && (
@@ -1112,6 +1202,67 @@ export default async function CatalogDraftsPage({
                 </span>
               </form>
             ) : null}
+            {/* R74 S53 (owner: "batch lookup manifest, or all products from
+                that vendor"): every delivery of this vendor still in review,
+                queued and sent to Google with one press. */}
+            {focus.manifestId && vendorScope && vendorScope.manifestIds.some((id) => id !== focus.manifestId) && (batchLookup?.state === "job" || batchLookup?.state === "none") && (
+              <form action={lookupVendorFromOnboardingAction.bind(null, focus.manifestId)} className="flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-2" data-testid="onboarding-vendor-lookup">
+                <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                <Button type="submit" variant="special" size="sm" data-testid="onboarding-vendor-lookup-button">
+                  {"\u{1F4E6} "}{vendorButtonLabel(vendorScope.vendor, vendorScope.manifestIds.length, vendorScope.products)}
+                </Button>
+                <span className="text-xs text-[var(--admin-text-muted)]">
+                  Queues every delivery from this vendor that still has products in Needs review (this one first) and sends them to Google. Products already looked up are skipped.
+                </span>
+              </form>
+            )}
+            {/* R74 S53 (owner: "I also want the attach all facts buttons from
+                the vendor confidence screen to be in onboarding, and I want it
+                to actually attach strain types too if it finds them"). Facts
+                go on as your confirmed answer, the strain type only where no
+                one picked one and the records agree. Nothing is approved. */}
+            {focus.manifestId && deliveryConf && (
+              <form action={attachOnboardingConfidenceAction.bind(null, focus.manifestId)} className="flex flex-col gap-2 border-t border-[var(--admin-border)] pt-2" data-testid="onboarding-attach">
+                <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                <p className="text-xs font-semibold text-[var(--admin-text)]">
+                  {"\u{1F3AF} "}Attach what the lookup found: {deliveryConf.scorecard.scored} of {deliveryConf.scorecard.products} product{deliveryConf.scorecard.products === 1 ? "" : "s"} looked up
+                  {deliveryConf.scorecard.confidence !== null ? ` \u00b7 average confidence ${deliveryConf.scorecard.confidence}%` : ""}
+                  {` \u00b7 ${deliveryConf.scorecard.factsAtBar} of ${deliveryConf.scorecard.factsTotal} facts at ${CULTIVERA_AUTO_ATTACH_MIN}%+`}
+                  {` \u00b7 ${deliveryConf.strainsFindable} strain type${deliveryConf.strainsFindable === 1 ? "" : "s"} found`}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="submit" name="mode" value="confident" variant="save" size="sm" data-testid="onboarding-attach-confident">
+                    Attach confident facts ({CULTIVERA_AUTO_ATTACH_MIN}%+) + strain types
+                  </Button>
+                  <Button type="submit" name="mode" value="all" variant="special" size="sm" data-testid="onboarding-attach-all">
+                    Attach every fact found + strain types
+                  </Button>
+                </div>
+                <details className="text-xs" data-testid="onboarding-attach-pick">
+                  <summary className="cursor-pointer font-semibold text-[var(--admin-text)]">Or tick products and attach every fact for just those</summary>
+                  <ul className="mt-2 flex max-h-64 flex-col gap-1 overflow-auto">
+                    {deliveryConf.products.filter((p) => p.scored).map((p) => (
+                      <li key={p.draftId}>
+                        <label className="flex items-baseline gap-2">
+                          <input type="checkbox" name="pick" value={p.draftId} />
+                          <span className="font-semibold text-[var(--admin-text)]">{p.name || "Unnamed product"}</span>
+                          <span className="text-[var(--admin-text-muted)]">
+                            {p.score !== null ? `${p.score}% lowest fact` : "no scores"} \u00b7 {p.facts.length} fact{p.facts.length === 1 ? "" : "s"}
+                            {p.chosen ? ` \u00b7 strain: ${p.chosen} (your pick, kept)` : p.strain ? ` \u00b7 strain: ${p.strain}` : ""}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button type="submit" name="mode" value="selected" variant="neutral" size="sm" className="mt-2" data-testid="onboarding-attach-selected">
+                    Attach every fact for the ticked products
+                  </Button>
+                </details>
+                <span className="text-xs text-[var(--admin-text-muted)]">
+                  Nothing is approved - each row still needs its own Approve. A strain type you picked is never replaced; when the strain library or manifest disagrees with the lookup, the row waits for you.
+                </span>
+              </form>
+            )}
             {/* R37 S5: ONE brand for the whole delivery (rows below can
                 override). Remembered for the vendor (0257). */}
             {focus.manifestId && brandPrefill && (
@@ -1198,6 +1349,15 @@ export default async function CatalogDraftsPage({
           </div>
         )}
 
+        {/* R74 S53: the older AI / Cultivera tools (sprint check, search
+            history, enrichment link, Cultivera manifests + backfills) live
+            behind one switch so the page shows only the three lookups. */}
+        <p className="text-[11px] text-[var(--admin-text-muted)]" data-testid="onboarding-more-tools">
+          <Link href={toolsHref(!showTools)} className="font-semibold text-[var(--admin-accent)] underline">
+            {showTools ? "Hide the extra tools" : "More tools"}
+          </Link>
+          {showTools ? " (Gemini setup check, search history, enrichment, Cultivera manifests and backfills are showing)." : " - Gemini setup check, search history, enrichment and the Cultivera manifest tools."}
+        </p>
         {/* R50 A1: result of "Yes, same product" / "Forget this choice" (closed set, aliasBanner). */}
         {aliasNote && (
           <div
@@ -1228,7 +1388,7 @@ export default async function CatalogDraftsPage({
             {cvBanner.text}
           </div>
         )}
-        {focusIsRebuilt && focus.manifestId && (
+        {showTools && focusIsRebuilt && focus.manifestId && (
           <form
             action={startCultiveraOnboardingAction.bind(null, focus.manifestId)}
             className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-xs text-[var(--admin-text-muted)]"
@@ -1257,7 +1417,7 @@ export default async function CatalogDraftsPage({
             lookupAction={lookupCultiveraVendorAction}
             open
           />
-        ) : !focus.draftId && !focus.manifestId ? (
+        ) : showTools && !focus.draftId && !focus.manifestId ? (
           <div
             className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-xs text-[var(--admin-text-muted)]"
             data-testid="cultivera-vendor-open"

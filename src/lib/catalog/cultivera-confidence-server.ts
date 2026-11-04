@@ -41,7 +41,7 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 const PAGE = 500;
 const CHUNK = 100;
 
-type DraftRow = { id: string; name: string; manifest_id: string; chosen_strain_type: string | null; strain_name: string | null; lot_id: string | null; attached_facts?: unknown };
+export type DraftRow = { id: string; name: string; manifest_id: string; chosen_strain_type: string | null; strain_name: string | null; lot_id: string | null; attached_facts?: unknown };
 
 export type VendorConfidence = {
   vendor: string;
@@ -54,7 +54,7 @@ export type ConfidenceOverview =
   | { ok: true; vendors: VendorRollup[]; selected: VendorConfidence | null }
   | { ok: false; error: string };
 
-async function readDrafts(admin: Admin, manifestIds: string[]): Promise<DraftRow[]> {
+export async function readDrafts(admin: Admin, manifestIds: string[]): Promise<DraftRow[]> {
   const out: DraftRow[] = [];
   for (let i = 0; i < manifestIds.length; i += CHUNK) {
     const ids = manifestIds.slice(i, i + CHUNK);
@@ -76,7 +76,7 @@ async function readDrafts(admin: Admin, manifestIds: string[]): Promise<DraftRow
 }
 
 /** The newest finished lookup per draft: its compact v2 facts (snapshot.facts.f). */
-async function readFacts(admin: Admin, draftIds: string[]): Promise<Map<string, unknown>> {
+export async function readFacts(admin: Admin, draftIds: string[]): Promise<Map<string, unknown>> {
   const out = new Map<string, unknown>();
   for (let i = 0; i < draftIds.length; i += CHUNK) {
     const ids = draftIds.slice(i, i + CHUNK);
@@ -146,7 +146,7 @@ export async function loadConfidenceOverview(vendor: string): Promise<Confidence
   return { ok: true, vendors: load.vendors, selected: sel };
 }
 
-function rawFor(attach: readonly ScoredValue[]): RawProductLookup {
+export function rawFor(attach: readonly ScoredValue[]): RawProductLookup {
   const get = (f: string) => attach.find((a) => a.field === f)?.value;
   const list = (f: string) => (Array.isArray(get(f)) ? (get(f) as string[]) : []);
   const text = (f: string) => (typeof get(f) === "string" ? (get(f) as string) : "");

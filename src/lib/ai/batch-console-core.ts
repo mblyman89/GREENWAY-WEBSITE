@@ -26,17 +26,23 @@ export const DEFAULT_TARGET_DATE = "2026-11-30";
  * queue is empty.
  */
 export type BatchMode = "manual" | "auto";
-export type BatchControl = { paused: boolean; pausedJobIds: string[]; note: string | null; at: string | null; by: string | null; mode: BatchMode; budget: number };
-export const OPEN_CONTROL: BatchControl = { paused: false, pausedJobIds: [], note: null, at: null, by: null, mode: "manual", budget: 0 };
+/**
+ * R74 S53: priorityJobIds = jobs started from Product Onboarding, sent before
+ * any older queued work (newest press first; onboarding-batch-send-core).
+ */
+export type BatchControl = { paused: boolean; pausedJobIds: string[]; priorityJobIds: string[]; note: string | null; at: string | null; by: string | null; mode: BatchMode; budget: number };
+export const OPEN_CONTROL: BatchControl = { paused: false, pausedJobIds: [], priorityJobIds: [], note: null, at: null, by: null, mode: "manual", budget: 0 };
 export const MAX_BUDGET = 20;
 
 export function parseBatchControl(raw: unknown): BatchControl {
   if (!raw || typeof raw !== "object") return { ...OPEN_CONTROL };
   const o = raw as Record<string, unknown>;
   const ids = Array.isArray(o.pausedJobIds) ? o.pausedJobIds.filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)) : [];
+  const prio = Array.isArray(o.priorityJobIds) ? o.priorityJobIds.filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)) : [];
   return {
     paused: o.paused === true,
     pausedJobIds: [...new Set(ids)].slice(0, 500),
+    priorityJobIds: [...new Set(prio)].slice(0, 50),
     note: typeof o.note === "string" ? o.note.slice(0, 200) : null,
     at: typeof o.at === "string" ? o.at : null,
     by: typeof o.by === "string" ? o.by : null,
