@@ -256,6 +256,20 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D170 O15 (owner: "Please add customer loyalty to the iPad. Our data is
+    // safe. I want all features unlocked."): the member book (every customer
+    // with points and tier) for offline lookup, scan attach and rewards.
+    // Holds birthdates and the medical flag, so it is classed with patient
+    // data: encrypted at rest and erased from the browser after migration.
+    // Losing it costs one download.
+    key: "gw-pos-member-book",
+    what: "The loyalty member book (names, points, tier) saved for offline member lookup and rewards.",
+    durability: "convenience",
+    sensitivity: "phi",
+    tier: "encrypted-db",
+    degradesOnCorruption: true,
+  },
+  {
     key: "gw-pos-star-printer-model",
     what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
     durability: "convenience",
@@ -620,7 +634,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 15, "the registry covers all fifteen keys the register uses today (D170 added gw-pos-lot-details and gw-pos-outbox)");
+    ok(POS_STORAGE_KEYS.length === 16, "the registry covers all sixteen keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox and gw-pos-member-book)");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",
@@ -665,6 +679,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
       "the parked sale must be encrypted (it stores the whole medical card capture)",
     );
     ok(enc.includes("gw-pos-device"), "the device pairing must be encrypted");
+    ok(enc.includes("gw-pos-member-book"), "the member book must be encrypted (birthdates, medical flag)");
     ok(!enc.includes("gw-pos-theme"), "a screen preference does not need encryption");
     ok(!enc.includes("gw-pos-favorites"), "pinned products do not need encryption");
     ok(findKeySpec("gw-pos-device")!.tier === "secure-enclave", "the device pairing goes to the keychain");

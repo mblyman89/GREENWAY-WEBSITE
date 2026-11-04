@@ -24,7 +24,13 @@ import {
   emptyOutbox,
   settleOutboxEntry,
 } from "../../src/lib/pos/deferred-outbox-core";
-import { findKeySpec, auditKeyRegistry } from "../../src/lib/pos/pos-storage-core";
+import {
+  __runMemberBookCoreTests,
+  matchFromBook,
+  searchMemberBook,
+  type MemberBook,
+} from "../../src/lib/pos/member-book-core";
+import { findKeySpec, auditKeyRegistry, keysRequiringEncryption } from "../../src/lib/pos/pos-storage-core";
 
 /**
  * D170: the register works fully offline (owner message 2026-11-04).
@@ -136,5 +142,58 @@ describe("D170 O7/O8 — flag stock and emailed receipts work offline (send-late
     expect(shell).toMatch(/SEND LATER:/);
     const sale = read("src/app/(site)/pos/SaleFlow.tsx");
     expect(sale).toMatch(/will be emailed as soon as this iPad is back online/);
+  });
+});
+
+describe("D170 O15 + O7 — loyalty members on the iPad (lookup, scan attach, history offline)", () => {
+  const now = 1_800_000_000_000;
+  const book: MemberBook = {
+    v: 1,
+    at: now - 3 * 3600_000,
+    tiers: [{ name: "Silver", minPoints: 500 }],
+    rows: [
+      { i: "a", f: "Bill", l: "McClendon", p: "3608093778", e: "bill@x.co", b: "1980-04-02", x: "13", m: false, s: 0, o: 29120, v: null, lp: null, bp: 320, lt: 900 },
+    ],
+  };
+
+  it("the pure core passes its self-tests", () => {
+    const r = __runMemberBookCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(25);
+  });
+
+  it("offline lookup uses the server's search rules and says how old the copy is", () => {
+    const r = searchMemberBook(book, "mcc bill", now);
+    expect(r.members[0]).toMatchObject({ customerId: "a", label: "Bill M.", points: 320, tierName: "Silver" });
+    expect(r.note).toMatch(/saved on this iPad 3 h ago\. Points may have changed since\./);
+  });
+
+  it("offline scan attach needs exact name + birthdate", () => {
+    expect(matchFromBook(book, { firstName: "Bill", lastName: "McClendon", dateOfBirth: "1980-04-02" })?.customerId).toBe("a");
+    expect(matchFromBook(book, { firstName: "Bill", lastName: "McClendon", dateOfBirth: "1980-04-01" })).toBeNull();
+  });
+
+  it("the member book is encrypted at rest (birthdates, medical flag)", () => {
+    expect(findKeySpec("gw-pos-member-book")?.tier).toBe("encrypted-db");
+    expect(keysRequiringEncryption()).toContain("gw-pos-member-book");
+    expect(auditKeyRegistry()).toEqual([]);
+  });
+
+  it("the route pages by id, is device-authed and keeps notes out", () => {
+    const route = read("src/app/api/pos/member-book/route.ts");
+    expect(route).toMatch(/authenticateDevice\(/);
+    expect(route).toMatch(/\.order\("id", \{ ascending: true \}\)/);
+    expect(route).not.toMatch(/staff_note/);
+    expect(route).toMatch(/status: 503/);
+  });
+
+  it("the shell falls back to the book for lookup, scan attach and history, and swaps a full copy only", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toMatch(/searchMemberBook\(book, q, Date\.now\(\)\)/);
+    expect(shell).toMatch(/matchFromBook\(memberBookRef\.current, identity\)/);
+    expect(shell).toMatch(/bookHistorySummary\(/);
+    expect(shell).toMatch(/if \(!parsed\.next\) \{/);
+    expect(shell).not.toMatch(/Offline — history needs a connection\./);
+    expect(shell).not.toMatch(/Offline — ring the sale without the member, or reconnect first\./);
   });
 });

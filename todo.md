@@ -3641,7 +3641,7 @@ Shared design rules for every item below. Build each one as its own PR.
       a manager PIN from the vault, and a local X report from this iPad's own
       synced and queued events, clearly marked *provisional (offline)*. The
       final Z stays server-side.
-- [ ] O7 History offline. Today: "Offline — history needs a connection."
+- [x] O7 History offline (slice 4: member-book summary offline; emailed receipts queue via slice 3). Today: "Offline — history needs a connection."
       (~2228); emailed receipts (~2198) also. Needs: this register's recent
       sales from the local store (synced and queued, with a queued badge).
       Email is queued.
@@ -3680,5 +3680,10 @@ Shared design rules for every item below. Build each one as its own PR.
       member list (id, name, phone tail, points, tier) in the secure store,
       refreshed while online; offline lookup, attach and redemption up to the
       cached balance, re-judged at sync.
+      - [x] O15a (slice 4) member book (/api/pos/member-book, encrypted
+            gw-pos-member-book): offline lookup, scan auto-attach, history
+            summary. Attach re-checked at sync (B14).
+      - [ ] O15b offline reward redemption (150/300 pts) against the saved
+            balance, re-judged at sync.
 - [ ] O13 Docs for each item: SOP-01 (§4.32 works-offline list, §4.40, section
       5), concierge, ledgers. Migration pins whenever an event type is added.
