@@ -34,6 +34,7 @@ vi.mock("@/lib/pos/pickup-store", () => ({
   listRegisterPickupQueue: async () => ({ ok: true, queue: [] }),
   getRegisterPickupOrder: async () => ({ ok: true, order: {} }),
   loadOrderIntoRegister: async () => ({ ok: false, error: "unused" }),
+  getRegisterPickupPack: async () => ({ ok: false, error: "unused" }),
   cancelPickupAtRegister: async (input: Record<string, unknown>) => {
     cancelCalls.push(input);
     return cancelResult;

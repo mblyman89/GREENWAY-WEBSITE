@@ -1431,6 +1431,29 @@ async function processSale(
             },
           });
         }
+      } else if (source) {
+        // D170 O14 — the order was already closed when this sale arrived
+        // (cancelled online, or picked up on another register) — typically
+        // an offline hand-off from the saved pickup book. The sale stands:
+        // the customer paid for real goods and the completion gate passed.
+        // The manager is told, so a refund or a Leafly note can follow.
+        await recordAudit({
+          actorId: null,
+          actorEmail: `pos-device:${device.id}`,
+          action: "order.pickup_closed_before_sync",
+          entityType: "order",
+          entityId: source.id,
+          after: {
+            orderNumber: source.order_number,
+            statusAtSync: source.status,
+            origin: source.origin ?? null,
+            registerOrderId: order.id,
+            registerOrderNumber: order.order_number,
+            employee: employeeName,
+            clientUuid: envelope.clientUuid,
+            occurredAt: envelope.occurredAt,
+          },
+        });
       }
     } catch {
       // Never let a source-order lookup/cancel failure touch the completed sale.

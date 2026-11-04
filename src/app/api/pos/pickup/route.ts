@@ -71,6 +71,7 @@ import {
   listRegisterPickupQueue,
   getRegisterPickupOrder,
   loadOrderIntoRegister,
+  getRegisterPickupPack,
 } from "@/lib/pos/pickup-store";
 import {
   isRetiredAttestationCompletion,
@@ -124,6 +125,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     orderId?: unknown;
     complete?: { employeeId?: unknown; tenderedMinor?: unknown; idConfirmed?: unknown; drawerSessionId?: unknown };
     load?: { employeeName?: unknown };
+    pack?: unknown;
     cancel?: { pin?: unknown; reason?: unknown; employeeName?: unknown };
     advance?: { to?: unknown; employeeName?: unknown };
     cartLoad?: unknown;
@@ -136,6 +138,15 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   }
   if (!isUuid(body.orderId)) {
     return NextResponse.json({ error: "orderId must be a UUID." }, { status: 400 });
+  }
+
+  // ── Pack mode (D170 O14): the read-only offline copy of one order ───────
+  //    The register saves it so the order can be shown and loaded into a
+  //    sale with no internet. Read only: no timeline note, no Leafly claim.
+  if (body.pack === true) {
+    const pack = await getRegisterPickupPack(body.orderId);
+    if (!pack.ok) return NextResponse.json({ error: pack.error }, { status: 422 });
+    return NextResponse.json({ pack: { detail: pack.detail, loaded: pack.loaded } });
   }
 
   // ── Load mode (AM-D): supersede the order and hand back its lines ────────

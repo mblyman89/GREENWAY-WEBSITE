@@ -3667,7 +3667,7 @@ Shared design rules for every item below. Build each one as its own PR.
       (per-sale purchase limits) enforced from cached rules; the D161 offline
       window (default 168 h) against a multi-day outage; an outage drill in the
       checklist that covers O1–O11.
-- [ ] O14 Pickup / online orders offline (owner 2026-11-04: "Is it possible to
+- [x] O14 (slice 9: encrypted gw-pos-pickup-book = queue + read-only pack per order via /api/pos/pickup {pack:true}; offline queue/detail/load from the book; sync audits order.pickup_closed_before_sync) Pickup / online orders offline (owner 2026-11-04: "Is it possible to
       include online orders and pickup orders to the offline mode?"). New
       website orders cannot reach an iPad with no internet; that needs a
       backup internet path (cellular failover router, see the report). What we

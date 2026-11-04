@@ -41,6 +41,15 @@ import {
 import { EMPTY_DENOMS } from "../../src/lib/registers/cash";
 import { findFixLots, fixIndexFromResponse, fixLotFromRow, parseFixIndex } from "../../src/lib/pos/fix-index-core";
 import { decideFixAndSell } from "../../src/lib/pos/register-fix-later-core";
+import {
+  applyQueueRead,
+  markHandedOver,
+  offlineQueue,
+  packFromResponse,
+  parsePickupBook,
+  pickupBookAgeNote,
+  withPack,
+} from "../../src/lib/pos/pickup-offline-core";
 import { OUTBOX_ENDPOINT as OUTBOX_ENDPOINTS_O9 } from "../../src/lib/pos/deferred-outbox-core";
 
 /**
@@ -382,5 +391,61 @@ describe("D170 O9 — Fix & sell offline from the saved lot index", () => {
     expect(shell).toMatch(/if \(res\.status >= 500\) return fixOffline\(\)/);
     expect(shell).toMatch(/queueForLater\(\s*"fix_and_sell"/);
     expect(shell).toMatch(/"\/api\/pos\/fix-index"/);
+  });
+});
+
+describe("D170 O14 — pickup orders already waiting can be handed over offline", () => {
+  const queue = [{ orderId: "o1", orderNumber: "GWY-1", displayName: "Happy Otter", customerLabel: "Sam K." }];
+  const pack = {
+    pack: {
+      detail: { orderId: "o1", orderNumber: "GWY-1", totalMinor: 2500 },
+      loaded: { orderId: "o1", orderNumber: "GWY-1", customerLabel: "Sam K.", customerNote: null, lines: [{ productId: "p", variantId: "v", productName: "A", quantity: 1 }], member: null },
+    },
+  };
+
+  it("the book keeps the queue and each order's pack, and survives a restart", () => {
+    const book = withPack(applyQueueRead(null, queue, 1000)!, packFromResponse(pack, 1000)!);
+    const round = parsePickupBook(JSON.stringify(book))!;
+    expect(round.queue).toHaveLength(1);
+    expect(round.packs.o1.loaded.lines).toHaveLength(1);
+  });
+
+  it("an order handed over here is not offered twice, until the server stops listing it", () => {
+    const book = markHandedOver(withPack(applyQueueRead(null, queue, 1000)!, packFromResponse(pack, 1000)!), "o1");
+    expect(offlineQueue(book)).toHaveLength(0);
+    expect(applyQueueRead(book, [], 2000)!.handedOver).toHaveLength(0);
+  });
+
+  it("the age note tells the cashier new orders cannot arrive offline", () => {
+    expect(pickupBookAgeNote(applyQueueRead(null, queue, 1000)!, 10 * 60_000)).toMatch(/cannot reach this iPad/);
+  });
+
+  it("the book is an encrypted register key (customer names and notes)", () => {
+    expect(findKeySpec("gw-pos-pickup-book")?.tier).toBe("encrypted-db");
+    expect(keysRequiringEncryption()).toContain("gw-pos-pickup-book");
+  });
+
+  it("the route serves a read-only pack (no timeline note, no claim)", () => {
+    const route = read("src/app/api/pos/pickup/route.ts");
+    expect(route).toMatch(/body\.pack === true/);
+    const store = read("src/lib/pos/pickup-store.ts");
+    expect(store).toMatch(/export async function getRegisterPickupPack/);
+    expect(store).toMatch(/audit: false/);
+    expect(store).toMatch(/if \(input\.audit !== false\) await recordAudit/);
+  });
+
+  it("the modal falls back to the book offline, on a throw, or on a 5xx; cancel/confirm/change stay online", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toMatch(/if \(!navigator\.onLine\) return fromBook\(\)/);
+    expect(shell).toMatch(/if \(res\.status >= 500\) return fromBook\(\)/);
+    expect(shell).toMatch(/const loadFromBook = \(\): boolean =>/);
+    expect(shell).toMatch(/disabled=\{busy \|\| offlineMode\}/);
+    expect(shell).toMatch(/markHandedOver\(pickupBookRef\.current, loadedOrderIdRef\.current\)/);
+    expect(shell).toMatch(/pickupCount=\{online \? pickupCount : offlinePickupCount\}/);
+  });
+
+  it("sync closes the order only if still active, and tells the manager otherwise", () => {
+    const sync = read("src/lib/pos/sync-store.ts");
+    expect(sync).toMatch(/"order\.pickup_closed_before_sync"/);
   });
 });
