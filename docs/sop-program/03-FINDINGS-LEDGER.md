@@ -1093,3 +1093,6 @@ State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-
 
 
 **Offline PIN unlock (owner message 2026-11-04, D161–D168).** Observed read-only: unlock was server-only, so a register that reached the lock screen during an outage could not ring a sale although the offline sale queue works (F-04-31, S1, FIXED: device-bound offline PIN verifiers armed at each online PIN proof, roster re-check every 10 minutes, 4xx-is-final fallback, throttle and wipe, clock-rollback and offline-window limits, owner policy and reset; GW-007 RESOLVED). The price-override window refused offline before any fallback could run (F-04-32, S2, FIXED: the shell decides, an armed manager/lead approves offline, audited). Offline PIN use left no server trace (F-04-33, S2, FIXED: `offline_auth` events re-judged at sync, migration 0339).
+
+
+**Vendor-menu descriptions never saved (owner message 2026-11-04, D169).** Observed read-only: every **Save all assets** run saved the images but 0 descriptions (`kbWriteFailed` 19 of 19), because the menu identity carries U+0000 and PostgreSQL text refuses it (22P05). The error was swallowed (F-04-34, S2, FIXED: menu identities stored as a NULL POS key, text cleaned, refusal reason shown). The same key silently dropped every menu `media_usages` row (F-04-35, S3, FIXED: stored as `brand/product/variant`).

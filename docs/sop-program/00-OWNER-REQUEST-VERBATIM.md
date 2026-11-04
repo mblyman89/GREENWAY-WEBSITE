@@ -980,3 +980,23 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 | D166 | **Every offline PIN use is audited and re-judged.** It is queued as an `offline_auth` event (migration 0339) and re-checked at sync: unknown or inactive employee, approver no longer a manager/lead, or a key from before an owner reset goes to Exceptions. | *"enterprise grade"* |
 | D167 | **Owner-only control and an emergency reset.** Register Activity → iPad setup & lockdown → Offline unlock (`registers.lockdown`, audited): on/off, the two limits, offline approvals, and **Reset offline PINs** (typed RESET) which bumps the epoch so every iPad erases every verifier at its next check-in. A failed settings read never moves the epoch backward. | *"something only I can undo"* (D142 standard) |
 | D168 | **Visible readiness.** The lock screen shows *Offline unlock ready: N people*; each iPad's health report carries offline readiness (armed count, approvers, failures, wipes, key) and the iPad setup page judges it; the checklist gains a device-verified **Offline PIN unlock drill passed (D161)**. | *"works no matter the situation"* |
+
+
+## Owner request, 2026-11-04 (recorded verbatim, D169: vendor-menu descriptions save; D170: the offline backlog)
+
+> Please add all of these things to the todo list so we can be fully operational while internet is down. It’s fine if online orders don’t make it to the registers. Everything else should work though. But before we work on that, I need your help with an issue I’m having with saving the descriptions from fetched menus for purchase orders via the web crawler. Please log in to supabase again, and look at the recent activity from those tests I did earlier today. I can fetch the menu items, and I can save the images. It fails to save the descriptions, it says so under the save all assets button. Please help me fix this so I can start attaching descriptions to my products. Follow the standing rules. Thank you!
+
+### What production showed (read-only, 2026-11-04)
+
+- `audit_logs` `cultivera.kb.strains_saved` (01:09 and 01:11 UTC, snapshot `f3f5e79b…`): 19 images saved, **descriptionsSaved 0, kbWriteFailed 19**, reason *"The Knowledge Base write did not complete."* `cultivera.media.bulk_saved`: 20 images. So images landed and every description write was refused.
+- Vendor-menu KB identities are built as brand, product and variant joined with the character U+0000 (`kbIdentityForItem` in the Cultivera, GrowFlow and LeafLink link cores) and that value was sent as `kb_products.pos_product_key`.
+- A live probe showed PostgreSQL refuses it: *"22P05 unsupported Unicode escape sequence: \u0000 cannot be converted to text"*. The upsert failed, its error was discarded, and the button could only say the write did not complete.
+- The same key made every `media_usages` row for `kb_product` / `cultivera_strain` fail silently (0 such rows in production).
+- Ruled out: table grants, the actor's staff row, the unique index (brand_slug, product_slug, variant_label). Crawler rows (218) already have a NULL key; real POS keys are digits.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D169 | **A vendor-menu description is saved into the Knowledge Base.** A menu identity is not a POS key: `pos_product_key` keeps an existing key, else stores a real key, else NULL. The row is still found by brand + product + variant. Every free-text field is cleaned of U+0000 before writing. The media usage ledger stores menu identities as `brand/product/variant`. A refused Knowledge Base write now shows the database's own reason under the button (code and message), never only *"did not complete"*. Re-running **Save all assets** is safe: images de-duplicate, and descriptions fill empty slots only (curated text is kept). | *"It fails to save the descriptions, it says so under the save all assets button. Please help me fix this so I can start attaching descriptions to my products."* |
+| D170 | **The register must work fully offline except online/pickup orders.** Every action still marked online-only is logged as a build item in `todo.md` (section *OFFLINE BACKLOG*), each with the reason it needs the server today. | *"Please add all of these things to the todo list so we can be fully operational while internet is down. It’s fine if online orders don’t make it to the registers. Everything else should work though."* |

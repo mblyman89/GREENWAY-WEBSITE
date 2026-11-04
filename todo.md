@@ -3585,3 +3585,87 @@ Its own self-test caught it on the first run, before anything shipped.
 - [x] Only three Gemini options on onboarding; the rest behind "More tools"
 - [x] Batch Lookups cleanup (retired tabs, note, manual Send kept)
 - [x] Gates: tsc (scoped, sandbox RAM), eslint 0, full vitest 1082 files green, db-contract; next build verified on Vercel
+
+## OFFLINE BACKLOG (D170): every register action works with the internet down (owner message 2026-11-04)
+Owner, verbatim: "Please add all of these things to the todo list so we can be
+fully operational while internet is down. It's fine if online orders don't make
+it to the registers. Everything else should work though."
+
+Already offline (D161, PR #1661): PIN unlock, lock-screen clock in/out, cash
+sales on an open drawer, price override and no sale approvals (an armed
+manager/lead), reprint last receipt, printing.
+EXCUSED by the owner: online/pickup orders ("Pickup orders need a connection").
+
+Shared design rules for every item below. Build each one as its own PR.
+- Same pattern as D161. The iPad decides offline only when the request throws,
+  times out or gets a 5xx; a 4xx is final. Each action is queued as a signed
+  sale event, and the server re-judges it at sync. Anything it rejects goes to
+  Exceptions; nothing is silently dropped.
+- PINs are checked only against the offline verifier vault (never a PIN or a
+  hash on the iPad). Approvals need an armed manager or lead, and keep the
+  two-person / on-duty rules as far as the iPad can know them.
+- Money stays in integer cents. A drawer's expected cash must equal the server
+  figure after sync (no drift), proven by a test that replays the queue.
+- Before building, read production (read-only) for each item's current server
+  route, tables and checks. Never guess.
+
+- [ ] O1 Drawer count-in, drop, swap, close offline. Today: "Offline — drawer
+      actions need a connection to verify your PIN and record the cash."
+      (RegisterShell ~6660) and the blind-count pop "can only be opened for the
+      count online" (~6596). Needs: an offline PIN check, an offline drawer
+      session id, queued count/drop/swap/close events with idempotent sync, the
+      float check from the cached policy, and an offline drawer kick for the
+      blind count (D129–D131 limits).
+- [ ] O2 Voids offline. Today the manager approval for a void needs the server.
+      Needs: an armed manager/lead approves, the void of a queued or synced sale
+      is queued and reconciled at sync (a void of a sale the server never saw
+      must cancel cleanly).
+- [ ] O3 Returns offline. Today: online-only (reads the original sale and its
+      lots from the server). Needs: a local recent-sales cache for this
+      register (receipt lookup), an approval by an armed manager/lead, a queued
+      refund event, and a stock and CCRS adjustment at sync. A return of a sale
+      from another register stays online-only unless cached.
+- [ ] O4 Employee purchases and special discounts offline. Today: "Offline —
+      employee PINs can only be verified with a connection." (SaleFlow ~5904)
+      and "employee PINs need a connection to verify" (RegisterShell ~1935).
+      Needs: a witness/employee PIN against the vault, the cached discount
+      rules, and a monthly-limit check re-judged at sync.
+- [ ] O5 Loyalty redemption offline. Today: "Offline — loyalty redemption
+      needs a connection." (~2053); member lookup (~2104), loyalty signup
+      (~2133) and scan auto-attach (~2174) are online-only and no customer book
+      is cached (privacy). Needs an owner decision on caching a minimal member
+      list (id, name, points) on the iPad. Otherwise: queue "points owed" and
+      apply them at sync, with no redemption over the last-known balance.
+- [ ] O6 Day report offline. Today: "Offline — the day report needs a
+      connection to verify the PIN and read the day's ledger." (~6052). Needs:
+      a manager PIN from the vault, and a local X report from this iPad's own
+      synced and queued events, clearly marked *provisional (offline)*. The
+      final Z stays server-side.
+- [ ] O7 History offline. Today: "Offline — history needs a connection."
+      (~2228); emailed receipts (~2198) also. Needs: this register's recent
+      sales from the local store (synced and queued, with a queued badge).
+      Email is queued.
+- [ ] O8 Flag stock offline. Today: "Offline — flagging stock needs a
+      connection (it changes the shared menu)." (~1977). Needs: a queued flag,
+      applied on this iPad's menu at once and sent to the shared menu at sync.
+- [ ] O9 Fix & sell offline. Today: "Offline — Fix & sell needs a connection
+      (it reads the lot from the back office)." (~2015, SaleFlow ~3165).
+      Needs: the lot facts cached with the menu, and the fix queued and
+      re-judged at sync.
+- [ ] O10 Scan unlock offline. Today: the scan-required unlock
+      (ScanUnlockModal, B41) uses the online approval. Needs: purpose
+      "scan_unlock" added to approveOffline (an armed manager/lead), audited as
+      offline_auth.
+- [ ] O11 Lot details offline. Today: "Lot details need a connection to the
+      back office." (SaleFlow ~5068; fetchProductDetails returns null offline,
+      RegisterShell ~1542/1559). Needs: the lot/COA summary cached with the
+      menu download.
+- [ ] O12 Resilience checks for a long outage (verify first, then fix what
+      fails): menu and price freshness while offline (how old, warn the
+      cashier); queue size and storage limits on the iPad; receipt numbering
+      with no collisions across iPads offline; CCRS / compliance limits
+      (per-sale purchase limits) enforced from cached rules; the D161 offline
+      window (default 168 h) against a multi-day outage; an outage drill in the
+      checklist that covers O1–O11.
+- [ ] O13 Docs for each item: SOP-01 (§4.32 works-offline list, §4.40, section
+      5), concierge, ledgers. Migration pins whenever an event type is added.

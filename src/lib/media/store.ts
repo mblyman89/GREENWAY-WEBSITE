@@ -17,6 +17,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { probeImageDimensions } from "./image-dimensions";
+import { usageEntityId } from "@/lib/ai/kb/writeback-text-core";
 import { makeBlurDataUrl, saveBlurForAsset } from "./blur-server";
 import { optimizeImageBuffer } from "./image-optimize-server";
 
@@ -243,7 +244,10 @@ export async function updateMediaMeta(
 }
 
 /** Record that an asset is used by an entity (vendor/brand/etc.) at a field. */
-export async function recordUsage(mediaAssetId: string, entityType: string, entityId: string, fieldKey: string): Promise<void> {
+export async function recordUsage(mediaAssetId: string, entityType: string, rawEntityId: string, fieldKey: string): Promise<void> {
+  // Vendor-menu KB identities are NUL-joined; PostgreSQL text refuses U+0000,
+  // so these inserts used to fail silently (2026-11-04). Store "a/b/c" instead.
+  const entityId = usageEntityId(rawEntityId);
   const admin = createSupabaseAdminClient();
   // Clear any prior usage for this exact slot, then record the new one.
   await admin.from("media_usages").delete().match({ entity_type: entityType, entity_id: entityId, field_key: fieldKey });
@@ -251,7 +255,8 @@ export async function recordUsage(mediaAssetId: string, entityType: string, enti
 }
 
 /** SLICE 71: clear the usage ledger for a slot (e.g. a product removed its last image). */
-export async function clearUsage(entityType: string, entityId: string, fieldKey: string): Promise<void> {
+export async function clearUsage(entityType: string, rawEntityId: string, fieldKey: string): Promise<void> {
+  const entityId = usageEntityId(rawEntityId);
   const admin = createSupabaseAdminClient();
   await admin.from("media_usages").delete().match({ entity_type: entityType, entity_id: entityId, field_key: fieldKey });
 }

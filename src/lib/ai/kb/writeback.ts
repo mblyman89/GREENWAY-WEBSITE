@@ -35,6 +35,7 @@ import {
   decideDescriptionOutcome,
   type DescriptionSaveOutcome,
 } from "@/lib/purchasing/save-assets-core";
+import { hasNul, kbWriteErrorReason, pgSafeText, posKeyForStorage } from "@/lib/ai/kb/writeback-text-core";
 
 /** Dashed slug (brands/products): lowercase, non-alnum → dash. */
 function slugifyDashed(value: string): string {
@@ -237,6 +238,20 @@ export async function writeBackProductFacts(
   // SLICE 90 — description visibility: remember whether a description was
   // offered and whether the compliance gate stripped it, so the result can say
   // exactly what happened to the prose (it used to be a silent side effect).
+  // 2026-11-04 fix: PostgreSQL text refuses U+0000. Vendor-menu identities are
+  // NUL-joined, so strip NUL from every free-text field up front (the key is
+  // handled at the row below). Without this every menu description write was
+  // refused with 22P05 and reported only as "did not complete".
+  facts = {
+    ...facts,
+    productName: pgSafeText(facts.productName) ?? "",
+    brandName: pgSafeText(facts.brandName),
+    category: pgSafeText(facts.category),
+    description: pgSafeText(facts.description),
+    short_description: pgSafeText(facts.short_description),
+    variantLabel: pgSafeText(facts.variantLabel),
+    strainName: pgSafeText(facts.strainName),
+  };
   const descriptionProvided = !!(facts.description ?? "").trim();
   let descriptionBlocked = false;
   const result: WritebackResult = {
@@ -392,7 +407,7 @@ export async function writeBackProductFacts(
     (existing?.total_thc_pct as number | null) != null ||
     (existing?.total_cbd_pct as number | null) != null;
   const measured =
-    potencyColsPresent && !existingHasPotency
+    potencyColsPresent && !existingHasPotency && !hasNul(facts.posProductKey)
       ? await loadMeasuredPotency(facts.posProductKey)
       : null;
 
@@ -434,7 +449,10 @@ export async function writeBackProductFacts(
     product_slug: productSlug,
     variant_label: variantLabel,
     display_name: gapStr(existing?.display_name as string | null, null) ?? (fallbackName || facts.productName),
-    pos_product_key: (existing?.pos_product_key as string | null) ?? facts.posProductKey,
+    // A NUL-joined vendor-menu identity is not a POS key and cannot be stored
+    // in text: keep the existing key, else store the real key or NULL. The row
+    // is identified by (brand_slug, product_slug, variant_label).
+    pos_product_key: posKeyForStorage((existing?.pos_product_key as string | null) ?? facts.posProductKey),
     category: gapStr((existing?.category as string | null) ?? null, facts.category ?? null),
     aroma_notes: unionNotes(existing?.aroma_notes as string[], facts.aroma_notes),
     flavor_notes: unionNotes(existing?.flavor_notes as string[], facts.flavor_notes),
@@ -471,6 +489,8 @@ export async function writeBackProductFacts(
     .from("kb_products")
     .upsert(row, { onConflict: "brand_slug,product_slug,variant_label" });
   if (!error) result.wroteProduct = true;
+  // Never again a silent failure: carry the database's reason to the button.
+  else result.skippedReason = kbWriteErrorReason(error);
 
   result.ok = result.wroteProduct || result.wroteStrain;
   // SLICE 90 — say what happened to the description: saved into an empty slot,
