@@ -102,6 +102,7 @@ export async function applyOfflineReversal(admin: Admin, envelope: PosEventEnvel
       drawerSessionId,
       asOfIso: envelope.occurredAt,
       offlineClientUuid: envelope.clientUuid,
+      saleClientUuid: p.saleClientUuid,
     });
     if (!r.ok) return fail(r.error);
     if (r.refundMinor !== p.refundMinor) {
@@ -114,7 +115,7 @@ export async function applyOfflineReversal(admin: Admin, envelope: PosEventEnvel
   const line = p.line!;
   const { data: dupe } = await admin.from("customer_returns").select("id").like("detail", `%${tag}%`).limit(1);
   if (dupe && dupe.length > 0) return { ok: true };
-  const lookup = await lookupSaleByReceipt(receipt, envelope.occurredAt);
+  const lookup = await lookupSaleByReceipt(receipt, envelope.occurredAt, p.saleClientUuid);
   if (!lookup.ok) return fail(lookup.errors.join(" "));
   const target = matchOrderLine(
     lookup.sale.lines.map((l) => ({ id: l.lineId, product_id: l.productId, variant_id: null, price_minor_units: l.priceMinorUnits, remaining: l.remainingReturnable })),
@@ -132,6 +133,7 @@ export async function applyOfflineReversal(admin: Admin, envelope: PosEventEnvel
       originalPackaging: p.originalPackaging === true,
       lotIdLegible: p.lotIdLegible === true,
       asOfIso: envelope.occurredAt,
+      saleClientUuid: p.saleClientUuid,
     },
     emp.staff_id,
     p.processedByName || "Register",

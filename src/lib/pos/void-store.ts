@@ -51,6 +51,7 @@ import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 // R74 S31: a void restocks the lot of the size that was sold (pickRestockLot).
 import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
 import { receiptLookupSuffix, clientUuidMatchesReceipt } from "@/lib/pos/returns-core";
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import { receiptNumber } from "@/lib/pos/receipt-core";
 // Fix Phase 4 (G-29 item 3): a void puts Other Inventory units back on the catalog.
 import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
@@ -89,7 +90,7 @@ export type VoidLookupResult = { ok: true; sale: VoidableSale } | { ok: false; e
  * gate. Failures come back as the complete list (manager sees the whole
  * picture, same contract as the returns desk).
  */
-export async function lookupVoidableSale(rawReceipt: string, asOfIso?: string): Promise<VoidLookupResult> {
+export async function lookupVoidableSale(rawReceipt: string, asOfIso?: string, exactSaleClientUuid?: string): Promise<VoidLookupResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, errors: ["Supabase service role not configured."] };
   const suffix = receiptLookupSuffix(rawReceipt);
   if (!suffix) {
@@ -102,18 +103,27 @@ export async function lookupVoidableSale(rawReceipt: string, asOfIso?: string): 
   // D170 O2: an offline void is judged at the time the cash really moved.
   const nowIso = asOfIso ?? new Date().toISOString();
 
-  const { data: events } = await admin
-    .from("pos_sale_events")
-    .select("client_uuid, order_id, occurred_at")
-    .eq("event_type", "sale")
-    .eq("status", "processed")
-    .not("order_id", "is", null)
-    .gte("occurred_at", pacificWallTimeToUtcISO(asOfIso ? pacificDayKey(asOfIso) : pacificToday(), "start"))
-    .order("occurred_at", { ascending: false })
-    .limit(500);
-  const rows = (events as { client_uuid: string; order_id: string }[] | null) ?? [];
+  // D170 O12: every sale of the day, paged (a busy day can exceed one page).
+  const dayStart = pacificWallTimeToUtcISO(asOfIso ? pacificDayKey(asOfIso) : pacificToday(), "start");
+  const rows = await pagedAll<{ client_uuid: string; order_id: string }>(async (from, to) => {
+    const { data } = await admin
+      .from("pos_sale_events")
+      .select("client_uuid, order_id, occurred_at")
+      .eq("event_type", "sale")
+      .eq("status", "processed")
+      .not("order_id", "is", null)
+      .gte("occurred_at", dayStart)
+      .order("occurred_at", { ascending: false })
+      .order("client_uuid", { ascending: true })
+      .range(from, to);
+    return (data as { client_uuid: string; order_id: string }[] | null) ?? [];
+  });
   const wanted = suffix.toUpperCase();
-  const match = rows.find((r) => clientUuidMatchesReceipt(r.client_uuid, wanted));
+  // D170 O12: an offline void knows the exact sale (two iPads offline can, very
+  // rarely, print the same 8-character receipt), so it never matches a twin.
+  const match = exactSaleClientUuid
+    ? rows.find((r) => r.client_uuid === exactSaleClientUuid)
+    : rows.find((r) => clientUuidMatchesReceipt(r.client_uuid, wanted));
   if (!match) {
     return {
       ok: false,
@@ -360,6 +370,8 @@ export type ProcessVoidInput = {
    */
   asOfIso?: string;
   offlineClientUuid?: string;
+  /** D170 O12: the exact sale (offline path) \u2014 never a receipt twin. */
+  saleClientUuid?: string;
 };
 
 export type ProcessVoidResult =
@@ -386,7 +398,7 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
   if (!request.ok) return request;
 
   // ── Server-authoritative lookup + eligibility ─────────────────────────────
-  const lookup = await lookupVoidableSale(input.receiptNumber, input.asOfIso);
+  const lookup = await lookupVoidableSale(input.receiptNumber, input.asOfIso, input.saleClientUuid);
   if (!lookup.ok) return { ok: false, error: lookup.errors.join(" ") };
   const sale = lookup.sale;
 

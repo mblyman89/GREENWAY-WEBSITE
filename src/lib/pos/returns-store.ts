@@ -118,7 +118,7 @@ function privacyLabel(first: string, last: string | null): string {
  * gate. Failures come back as the COMPLETE list so staff see the whole
  * picture (matches evaluateReturnEligibility's contract).
  */
-export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string): Promise<CounterReturnLookup> {
+export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, exactSaleClientUuid?: string): Promise<CounterReturnLookup> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, errors: ["Supabase service role not configured."] };
   }
@@ -150,7 +150,11 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string):
     return (data as EventRow[] | null) ?? [];
   });
   const wanted = suffix.toUpperCase();
-  const match = rows.find((r) => clientUuidMatchesReceipt(r.client_uuid, wanted));
+  // D170 O12: an offline return knows the exact sale, so it never matches a
+  // receipt twin from another iPad.
+  const match = exactSaleClientUuid
+    ? rows.find((r) => r.client_uuid === exactSaleClientUuid)
+    : rows.find((r) => clientUuidMatchesReceipt(r.client_uuid, wanted));
   if (!match) {
     return {
       ok: false,
@@ -271,6 +275,8 @@ export type ProcessCounterReturnInput = {
   lotIdLegible: boolean;
   /** D170 O3: an offline return is judged as of when it happened. */
   asOfIso?: string;
+  /** D170 O12: the exact sale (offline path) \u2014 never a receipt twin. */
+  saleClientUuid?: string;
 };
 
 export type ProcessCounterReturnResult =
@@ -306,7 +312,7 @@ export async function processCounterReturn(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
 
   // ── Server-authoritative policy re-check ─────────────────────────────────
-  const lookup = await lookupSaleByReceipt(input.receiptNumber, input.asOfIso);
+  const lookup = await lookupSaleByReceipt(input.receiptNumber, input.asOfIso, input.saleClientUuid);
   if (!lookup.ok) return { ok: false, error: lookup.errors.join(" ") };
   const sale = lookup.sale;
 
