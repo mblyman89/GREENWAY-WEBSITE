@@ -1055,3 +1055,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Why:** the NUL-joined menu identity was written to `kb_products.pos_product_key`; PostgreSQL refused it (22P05) and the reason was discarded (F-04-34, F-04-35).
 - **Built:** `src/lib/ai/kb/writeback-text-core.ts` (pure, 17 self-tests: `hasNul`, `pgSafeText`, `posKeyForStorage`, `usageEntityId`, `kbWriteErrorReason`); `writeback.ts` cleans text, stores a safe key and surfaces the database reason; `media/store.ts` `recordUsage` / `clearUsage` normalise the entity id. Vitest `menu-description-nul-fix.test.ts` (FakePostgrest refusing U+0000 like Postgres; fails on the old code). No migration.
 - **Owner action:** open the menu again and press **Save all assets**; the line under the button should read that the descriptions were saved.
+
+
+## The register works offline (FIXED, owner messages 2026-11-04, D171–D176) — S1
+
+- **Owner basis:** *"finish all remaining offline mode tasks"*, *"I want all features unlocked"*, *"fully hardened and prepared for any situation"*.
+- **Why:** every action except sales and unlock refused offline (F-04-36); receipt twins and a 500-row void lookup (F-04-37); no long-outage warning (F-04-38).
+- **Built:** O1 drawers (`offline-till-core/store`, migration 0340); O2/O3 voids and returns (`offline-reversal-core/store`, migration 0341); O4 witness PIN; O6 provisional X (`day-tally-core`); O7/O8 send-later outbox; O9 Fix & sell index; O10 scan unlock; O11 lot details cache; O12 `outage-resilience-core`; O14 pickup book (`pickup-offline-core`); O15 member book (`member-book-core`). Encrypted storage keys registered in `pos-storage-core`. SOP-01 §4.32 / §4.40 / section 5; concierge entry.
+- **Owner action:** apply migrations 0340 and 0341 (0339 is already applied in production); set `POS_OFFLINE_SECRET` in Vercel if not set and redeploy; rebuild every iPad; run the outage drill. For new online orders during an outage, consider a cellular failover router.

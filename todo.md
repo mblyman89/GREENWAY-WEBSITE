@@ -3685,5 +3685,5 @@ Shared design rules for every item below. Build each one as its own PR.
             summary. Attach re-checked at sync (B14).
       - [x] O15b offline reward redemption (150/300 pts) against the saved
             balance, re-judged at sync.
-- [ ] O13 Docs for each item: SOP-01 (§4.32 works-offline list, §4.40, section
+- [x] O13 (slice 13: SOP-01 v1.22 §4.32 offline table + backup internet + drill, §4.40, section 5 rows; concierge Offline everything entry; ledgers D171–D176, F-04-36–F-04-38) Docs for each item: SOP-01 (§4.32 works-offline list, §4.40, section
       5), concierge, ledgers. Migration pins whenever an event type is added.
