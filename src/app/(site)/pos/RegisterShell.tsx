@@ -266,6 +266,18 @@ import {
   type Outbox,
   type OutboxKind,
 } from "@/lib/pos/deferred-outbox-core";
+import {
+  MEMBER_BOOK_MAX_PAGES,
+  bookHistorySummary,
+  matchFromBook,
+  memberBookDue,
+  parseBookPage,
+  parseMemberBook,
+  searchMemberBook,
+  type BookRow,
+  type BookTier,
+  type MemberBook,
+} from "@/lib/pos/member-book-core";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
 import { rulesForSale, shouldAutoRefreshMenu } from "@/lib/pos/register-promo-day-core";
@@ -281,6 +293,7 @@ import { rulesForSale, shouldAutoRefreshMenu } from "@/lib/pos/register-promo-da
 const LS_QUEUE = "gw-pos-queue"; // serialized offline queue
 const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
 const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
+const LS_MEMBER_BOOK = "gw-pos-member-book"; // D170 O15: encrypted member book for offline loyalty
 const LS_OUTBOX = "gw-pos-outbox"; // D170 O7/O8: stock flags + emailed receipts waiting to send
 // B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
 // ("gw-pos-held-sale") are defined in register-polish-core next to their
@@ -537,6 +550,10 @@ export function RegisterShell({
   // home-screen status line.
   const [outbox, setOutbox] = useState<Outbox>(() => emptyOutbox());
   const outboxFlushingRef = useRef(false);
+  // D170 O15 — the member book (encrypted store). Kept in a ref: it is large
+  // and nothing renders from it directly.
+  const memberBookRef = useRef<MemberBook | null>(null);
+  const memberBookBusyRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
   // the stable lock() callback can stamp it onto a parked snapshot without a
@@ -659,6 +676,8 @@ export function RegisterShell({
     setMedicalTestMode(parseMedicalTestMode(posStorageGet(MEDICAL_TESTMODE_KEY)));
     // D170 O7/O8 — anything that was waiting to send survives a restart.
     setOutbox(parseOutbox(posStorageGet(LS_OUTBOX)));
+    // D170 O15 — the saved member book (null = not downloaded yet).
+    memberBookRef.current = parseMemberBook(posStorageGet(LS_MEMBER_BOOK));
     // D143 — the last confirmed "newest version" for THIS build (a rebuilt
     // app never inherits the old build's green).
     setVersionConfirmedAt(parseVersionCheck(posStorageGet(VERSION_CHECK_KEY), appFingerprint));
@@ -1329,6 +1348,55 @@ export function RegisterShell({
       clearInterval(id);
     };
   }, [creds, online, flushOutbox]);
+
+  // ── D170 O15: member book download (online, every 30 min) ──
+  // Pages are collected in memory and swapped in only when the LAST page
+  // arrives, so a dropped connection keeps the previous copy whole.
+  const refreshMemberBook = useCallback(async () => {
+    if (!creds || memberBookBusyRef.current || !navigator.onLine) return;
+    if (!memberBookDue(memberBookRef.current, Date.now())) return;
+    memberBookBusyRef.current = true;
+    try {
+      const rows: BookRow[] = [];
+      let tiers: BookTier[] = [];
+      let after = "";
+      for (let page = 0; page < MEMBER_BOOK_MAX_PAGES; page++) {
+        const res = await posFetch(`/api/pos/member-book${after ? `?after=${encodeURIComponent(after)}` : ""}`, {
+          headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+        });
+        if (!res.ok) return;
+        const parsed = parseBookPage(await res.json().catch(() => null));
+        if (!parsed) return;
+        if (parsed.tiers) tiers = parsed.tiers;
+        rows.push(...parsed.rows);
+        if (!parsed.next) {
+          const book: MemberBook = { v: 1, at: Date.now(), tiers, rows };
+          memberBookRef.current = book;
+          try {
+            posStorageSet(LS_MEMBER_BOOK, JSON.stringify(book));
+          } catch {
+            // The in-memory copy still serves this session.
+          }
+          return;
+        }
+        after = parsed.next;
+      }
+    } catch {
+      // Network hiccup — keep the old copy; the next tick retries.
+    } finally {
+      memberBookBusyRef.current = false;
+    }
+  }, [creds]);
+
+  useEffect(() => {
+    if (!creds || !online) return;
+    const t = setTimeout(() => void refreshMemberBook(), 4_000);
+    const id = setInterval(() => void refreshMemberBook(), 5 * 60_000);
+    return () => {
+      clearTimeout(t);
+      clearInterval(id);
+    };
+  }, [creds, online, refreshMemberBook]);
 
   // ── B30: one-time email-provider capability check (device-authed). When
   //    the provider isn't configured the email-receipt option never renders —
@@ -2263,11 +2331,18 @@ export function RegisterShell({
         onProductImage={fetchProductImage}
         onProductDetails={fetchProductDetails}
         onMemberLookup={async (q) => {
-          // POS B14 — member lookup is ONLINE-ONLY (no customer book is ever
-          // cached on the iPad). Offline: ring the sale without the member.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — ring the sale without the member, or reconnect first." };
-          }
+          // POS B14 — member lookup. D170 O15: offline (or the server
+          // unreachable) it searches the encrypted member book saved on this
+          // iPad with the server's own search rules, and says how old it is.
+          const fromBook = () => {
+            const book = memberBookRef.current;
+            if (!book) {
+              return { ok: false as const, error: "Offline, and the member book has not been saved on this iPad yet. Ring the sale without the member, or reconnect." };
+            }
+            const found = searchMemberBook(book, q, Date.now());
+            return { ok: true as const, members: found.members, note: found.note };
+          };
+          if (!navigator.onLine) return fromBook();
           try {
             const res = await posFetch(`/api/pos/member?q=${encodeURIComponent(q)}`, {
               headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
@@ -2279,13 +2354,14 @@ export function RegisterShell({
                   error?: string;
                 }
               | null;
+            if (res.status >= 500) return fromBook();
             if (!res.ok || !body?.members) {
               return { ok: false as const, error: body?.error ?? "Lookup failed — try again." };
             }
             // G-75: full name + detail line are shown in the results only.
             return { ok: true as const, members: body.members, note: body.note ?? null };
           } catch {
-            return { ok: false as const, error: "Network error — try again or ring without the member." };
+            return fromBook();
           }
         }}
         onLoyaltySignup={{
@@ -2334,8 +2410,10 @@ export function RegisterShell({
           // AO-3 — scan auto-attach: parsed name + DOB (already in hand from
           // the physical card) go to the server-side matcher; an unambiguous
           // single match returns the same privacy-lean hit as manual lookup.
-          // Best-effort + ONLINE-ONLY: any failure = no attach, nothing else.
-          if (!navigator.onLine) return null;
+          // Best-effort: any failure = no attach, nothing else. D170 O15:
+          // offline the same one-match-only rule runs on the saved book.
+          const fromBook = () => (memberBookRef.current ? matchFromBook(memberBookRef.current, identity) : null);
+          if (!navigator.onLine) return fromBook();
           try {
             const res = await posFetch("/api/pos/member-match", {
               method: "POST",
@@ -2349,9 +2427,10 @@ export function RegisterShell({
             const body = (await res.json().catch(() => null)) as
               | { member?: { customerId: string; label: string; points: number; tierName: string | null } | null }
               | null;
+            if (res.status >= 500) return fromBook();
             return res.ok ? (body?.member ?? null) : null;
           } catch {
-            return null;
+            return fromBook();
           }
         }}
         onEmailReceipt={
@@ -2395,10 +2474,13 @@ export function RegisterShell({
         }
         onMemberHistory={async (customerId) => {
           // POS B29 — privacy-budgeted purchase history for the attached
-          // member ("the usual?"). ONLINE-ONLY, same discipline as lookup.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — history needs a connection." };
-          }
+          // member ("the usual?"). D170 O7: offline, the saved summary from
+          // the member book (last purchase, total spent, points) instead.
+          const fromBook = () => {
+            const line = memberBookRef.current ? bookHistorySummary(memberBookRef.current, customerId, Date.now()) : null;
+            return { ok: false as const, error: line ?? "Offline — the purchase list needs a connection." };
+          };
+          if (!navigator.onLine) return fromBook();
           try {
             const res = await posFetch(`/api/pos/member-history?customerId=${encodeURIComponent(customerId)}`, {
               headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
@@ -2406,12 +2488,13 @@ export function RegisterShell({
             const body = (await res.json().catch(() => null)) as
               | { history?: MemberHistory; error?: string }
               | null;
+            if (res.status >= 500) return fromBook();
             if (!res.ok || !body?.history) {
               return { ok: false as const, error: body?.error ?? "Could not load history." };
             }
             return { ok: true as const, history: body.history };
           } catch {
-            return { ok: false as const, error: "Network error — try again." };
+            return fromBook();
           }
         }}
         onEnqueue={(eventType, payload) => {
