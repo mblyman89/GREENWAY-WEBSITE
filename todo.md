@@ -3648,7 +3648,7 @@ Shared design rules for every item below. Build each one as its own PR.
 - [x] O8 (DONE slice 3: send-later outbox gw-pos-outbox; emailed receipts also queue offline) Flag stock offline. Today: "Offline — flagging stock needs a
       connection (it changes the shared menu)." (~1977). Needs: a queued flag,
       applied on this iPad's menu at once and sent to the shared menu at sync.
-- [ ] O9 Fix & sell offline. Today: "Offline — Fix & sell needs a connection
+- [x] O9 (slice 8: /api/pos/fix-index lot index in encrypted gw-pos-fix-index, same decideFixAndSell offline, fix queued to the outbox) Fix & sell offline. Today: "Offline — Fix & sell needs a connection
       (it reads the lot from the back office)." (~2015, SaleFlow ~3165).
       Needs: the lot facts cached with the menu, and the fix queued and
       re-judged at sync.

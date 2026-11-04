@@ -2832,7 +2832,7 @@ function CartScreen({
   onProductDetails?: ProductDetailsFn;
   /** B43 — out-of-stock quick-flag (ONLINE-ONLY via the shell; one-way). */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
-  /** register-sell-everything-fix-later — Fix & sell a scanned lot (ONLINE-ONLY via the shell). */
+  /** register-sell-everything-fix-later — Fix & sell a scanned lot (online via the server; D170 O9 offline from the saved lot index). */
   onFixAndSell?: FixAndSellFn;
   /** AM-B — loyalty redemption via /api/pos/loyalty (ONLINE-ONLY via the shell). */
   onLoyalty?: (
@@ -3172,7 +3172,7 @@ function CartScreen({
     setFixBusy(true);
     const res = await onFixAndSell(missCode).catch(() => ({
       ok: false as const,
-      error: "Fix & sell needs a connection. Check the internet and try again.",
+      error: "Could not Fix & sell that package. Try again.",
     }));
     setFixBusy(false);
     if (!res.ok) {

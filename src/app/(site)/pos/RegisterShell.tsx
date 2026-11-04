@@ -77,7 +77,16 @@ import { punchSuccessMessage, shouldQueueOffline } from "@/lib/pos/clock-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 // register-sell-everything-fix-later: a Fix & sell line joins the cached menu.
-import { addFixLaterProduct } from "@/lib/pos/register-fix-later-core";
+import { addFixLaterProduct, decideFixAndSell, fixAndSellMessage } from "@/lib/pos/register-fix-later-core";
+import {
+  findFixLots,
+  fixIndexAgeNote,
+  fixIndexDue,
+  fixIndexFromResponse,
+  fixLotFromRow,
+  parseFixIndex,
+  type FixIndex,
+} from "@/lib/pos/fix-index-core";
 import { interpretSignupFormResponse, interpretSignupResponse } from "@/lib/pos/register-loyalty-signup-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import {
@@ -303,6 +312,7 @@ const LS_QUEUE = "gw-pos-queue"; // serialized offline queue
 const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
 const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
 const LS_MEMBER_BOOK = "gw-pos-member-book"; // D170 O15: encrypted member book for offline loyalty
+const LS_FIX_INDEX = "gw-pos-fix-index"; // D170 O9: encrypted lot index so Fix & sell works offline
 const LS_OUTBOX = "gw-pos-outbox"; // D170 O7/O8: stock flags + emailed receipts waiting to send
 // B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
 // ("gw-pos-held-sale") are defined in register-polish-core next to their
@@ -567,6 +577,9 @@ export function RegisterShell({
   // saw them).
   const offlineGrantsRef = useRef(new Map<string, { customerId: string; points: number }>());
   const memberBookBusyRef = useRef(false);
+  // D170 O9 — the Fix & sell lot index (encrypted store), kept in a ref.
+  const fixIndexRef = useRef<FixIndex | null>(null);
+  const fixIndexBusyRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
   // the stable lock() callback can stamp it onto a parked snapshot without a
@@ -691,6 +704,8 @@ export function RegisterShell({
     setOutbox(parseOutbox(posStorageGet(LS_OUTBOX)));
     // D170 O15 — the saved member book (null = not downloaded yet).
     memberBookRef.current = parseMemberBook(posStorageGet(LS_MEMBER_BOOK));
+    // D170 O9 — the saved Fix & sell lot index (null = not downloaded yet).
+    fixIndexRef.current = parseFixIndex(posStorageGet(LS_FIX_INDEX));
     // D143 — the last confirmed "newest version" for THIS build (a rebuilt
     // app never inherits the old build's green).
     setVersionConfirmedAt(parseVersionCheck(posStorageGet(VERSION_CHECK_KEY), appFingerprint));
@@ -1410,6 +1425,43 @@ export function RegisterShell({
       clearInterval(id);
     };
   }, [creds, online, refreshMemberBook]);
+
+  // ── D170 O9: Fix & sell lot index download (online, every 30 min) ──
+  // One response; saved only when it parses whole, so a failed download
+  // keeps the previous copy.
+  const refreshFixIndex = useCallback(async () => {
+    if (!creds || fixIndexBusyRef.current || !navigator.onLine) return;
+    if (!fixIndexDue(fixIndexRef.current, Date.now())) return;
+    fixIndexBusyRef.current = true;
+    try {
+      const res = await posFetch("/api/pos/fix-index", {
+        headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+      });
+      if (!res.ok) return;
+      const idx = fixIndexFromResponse(await res.json().catch(() => null), Date.now());
+      if (!idx) return;
+      fixIndexRef.current = idx;
+      try {
+        posStorageSet(LS_FIX_INDEX, JSON.stringify(idx));
+      } catch {
+        // The in-memory copy still serves this session.
+      }
+    } catch {
+      // Network hiccup — keep the old copy; the next tick retries.
+    } finally {
+      fixIndexBusyRef.current = false;
+    }
+  }, [creds]);
+
+  useEffect(() => {
+    if (!creds || !online) return;
+    const t = setTimeout(() => void refreshFixIndex(), 9_000);
+    const id = setInterval(() => void refreshFixIndex(), 5 * 60_000);
+    return () => {
+      clearTimeout(t);
+      clearInterval(id);
+    };
+  }, [creds, online, refreshFixIndex]);
 
   // ── B30: one-time email-provider capability check (device-authed). When
   //    the provider isn't configured the email-receipt option never renders —
@@ -2280,29 +2332,14 @@ export function RegisterShell({
         onFixAndSell={async (code) => {
           // register-sell-everything-fix-later — the owner: "let the system
           // fix it for me so it can be sold, then set that item aside so I
-          // can fix it properly". ONLINE-ONLY: the server reads the lot,
-          // refuses only a recall / failed lab / destruction / expired
-          // edible, and lists the lot on the back office Fix later page.
-          if (!navigator.onLine) {
-            return { ok: false as const, error: "Offline — Fix & sell needs a connection (it reads the lot from the back office)." };
-          }
-          try {
-            const res = await posFetch("/api/pos/fix-and-sell", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "x-pos-device-id": creds.deviceId,
-                "x-pos-device-key": creds.deviceKey,
-              },
-              body: JSON.stringify({ code, employeeName: employee?.fullName ?? "" }),
-            });
-            const body = (await res.json().catch(() => null)) as
-              | { fixed?: boolean; product?: PosMenuProduct; message?: string; error?: string }
-              | null;
-            if (!res.ok || !body?.fixed || !body.product) {
-              return { ok: false as const, error: body?.error ?? "Could not fix that package — try again." };
-            }
-            const product = body.product;
+          // can fix it properly". Online the server reads the lot, refuses
+          // only a recall / failed lab / destruction / expired edible, and
+          // lists the lot on the back office Fix later page.
+          // D170 O9 — offline (or the server unreachable / 5xx) the SAME
+          // pure decideFixAndSell runs on the saved lot index, and the fix is
+          // queued in the send-later outbox to /api/pos/fix-and-sell, which
+          // writes the Fix later audit row when the internet returns.
+          const addToMenu = (product: PosMenuProduct) => {
             setMenuBundle((prev) => {
               if (!prev) return prev;
               const next = addFixLaterProduct(prev, product, code);
@@ -2313,9 +2350,55 @@ export function RegisterShell({
               }
               return next;
             });
+          };
+          const fixOffline = () => {
+            const idx = fixIndexRef.current;
+            if (!idx) {
+              return {
+                ok: false as const,
+                error: "Offline — this iPad has not saved the lot list yet, so it cannot Fix & sell. It downloads it the next time it is online.",
+              };
+            }
+            const decision = decideFixAndSell(findFixLots(idx, code).map(fixLotFromRow), code);
+            if (!decision.ok) {
+              return { ok: false as const, error: `${decision.message} (${fixIndexAgeNote(idx, Date.now())})` };
+            }
+            const q = queueForLater(
+              "fix_and_sell",
+              { code, employeeName: employee?.fullName ?? "" },
+              `Fix & sell: ${decision.product.name}`.slice(0, 160),
+            );
+            if (!q.ok) return { ok: false as const, error: q.error };
+            addToMenu(decision.product);
+            return {
+              ok: true as const,
+              product: decision.product,
+              message: `${fixAndSellMessage(decision.product)} ${fixIndexAgeNote(idx, Date.now())}`,
+            };
+          };
+          if (!navigator.onLine) return fixOffline();
+          try {
+            const res = await posFetch("/api/pos/fix-and-sell", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify({ code, employeeName: employee?.fullName ?? "" }),
+            });
+            if (res.status >= 500) return fixOffline();
+            const body = (await res.json().catch(() => null)) as
+              | { fixed?: boolean; product?: PosMenuProduct; message?: string; error?: string }
+              | null;
+            if (!res.ok || !body?.fixed || !body.product) {
+              return { ok: false as const, error: body?.error ?? "Could not fix that package — try again." };
+            }
+            const product = body.product;
+            addToMenu(product);
             return { ok: true as const, product, message: body.message ?? `Fixed: ${product.name}` };
           } catch {
-            return { ok: false as const, error: "Could not reach the server — try again." };
+            return fixOffline();
           }
         }}
         onLoyalty={async (req) => {
