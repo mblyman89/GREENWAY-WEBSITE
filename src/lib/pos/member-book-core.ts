@@ -38,6 +38,8 @@ import {
   type SearchableCustomer,
 } from "../customers/customer-search-core";
 import { matchScannedCustomer, type ScannedIdentity } from "./member-match-core";
+import { applyRewardPricing, chooseReward } from "../loyalty/loyalty-reward-core";
+import { generateRedemptionCode } from "../loyalty/engine";
 
 export const MEMBER_BOOK_VERSION = 1;
 /** Rows per page from /api/pos/member-book (PostgREST returns at most 1,000). */
@@ -280,6 +282,92 @@ export function bookRow(book: MemberBook | null, customerId: string): BookRow | 
 }
 
 // ---------------------------------------------------------------------------
+// D170 O15b — a reward used OFFLINE
+// ---------------------------------------------------------------------------
+
+/** One priced cart line with what the floor needs (cost from the menu). */
+export type OfflineRewardLine = {
+  variantId?: string;
+  productId: string;
+  category: string;
+  quantity: number;
+  unitPriceMinor: number;
+  regularPriceMinor: number;
+  costMinorUnits: number | null;
+};
+
+export type OfflineRewardGrant = {
+  redemptionId: string;
+  code: string;
+  valueMinor: number;
+  appliedMinor: number;
+  pointsSpent: number;
+  source: "points";
+  perVariant: Record<string, number>;
+  rewardPoints: number;
+  percentBps: number;
+  offline: true;
+};
+
+/**
+ * Price a 150 / 300 point reward on this iPad, against the member's SAVED
+ * balance, with the very same pure pricing the server uses
+ * (applyRewardPricing: percent off the regular price, better-of with the
+ * day's deal, legal floor, never-discount items untouched). The redemption id
+ * and code are minted here; at sync the server issues exactly that
+ * redemption only if the LIVE balance still covers it, otherwise the sale
+ * goes to the exception queue (never silently honoured).
+ */
+export function offlineRewardGrant(input: {
+  balancePoints: number;
+  rewardPoints: unknown;
+  lines: OfflineRewardLine[];
+  neverDiscountKeys: readonly string[];
+  redemptionId: string;
+  rand?: () => number;
+}): { ok: true; grant: OfflineRewardGrant } | { ok: false; error: string } {
+  const chosen = chooseReward(input.balancePoints, input.rewardPoints);
+  if (!chosen.ok) return { ok: false, error: `${chosen.error} (saved balance on this iPad)` };
+  if (input.balancePoints < chosen.reward.points) {
+    return { ok: false, error: `Not enough points on the saved balance (${input.balancePoints}).` };
+  }
+  if (input.lines.length === 0) return { ok: false, error: "Add items first." };
+  const never = new Set(input.neverDiscountKeys.map((k) => k.trim().toLowerCase()));
+  const key = (l: OfflineRewardLine) => l.variantId ?? l.productId;
+  const exclude = new Set(input.lines.filter((l) => never.has(l.productId.trim().toLowerCase())).map(key));
+  const priced = applyRewardPricing(
+    input.lines.map((l) => ({
+      lineId: key(l),
+      category: l.category,
+      quantity: l.quantity,
+      unitPriceMinorUnits: l.unitPriceMinor,
+      regularPriceMinorUnits: l.regularPriceMinor,
+      costMinorUnits: l.costMinorUnits,
+    })),
+    chosen.reward,
+    { excludeLineIds: exclude },
+  );
+  if (!priced.ok) return { ok: false, error: priced.message };
+  const perVariant: Record<string, number> = {};
+  for (const l of priced.lines) if (l.loyaltyDiscountMinorUnits > 0) perVariant[l.lineId] = l.loyaltyDiscountMinorUnits;
+  return {
+    ok: true,
+    grant: {
+      redemptionId: input.redemptionId,
+      code: generateRedemptionCode(input.rand),
+      valueMinor: priced.appliedMinorUnits,
+      appliedMinor: priced.appliedMinorUnits,
+      pointsSpent: chosen.reward.points,
+      source: "points",
+      perVariant,
+      rewardPoints: chosen.reward.points,
+      percentBps: chosen.reward.percentBps,
+      offline: true,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
 
@@ -339,5 +427,20 @@ export function __runMemberBookCoreTests(): { passed: number; failed: number } {
   ok(page?.rows.length === 1 && page.next === "q" && page.tiers?.length === 1, "page parse");
   ok(parseBookPage({ rows: [], next: "" })?.next === null, "last page");
   ok(parseBookPage({ nope: true }) === null, "malformed page abandons the download");
+  // O15b — offline reward
+  const lines: OfflineRewardLine[] = [
+    { variantId: "v1", productId: "p1", category: "flower", quantity: 1, unitPriceMinor: 4000, regularPriceMinor: 4000, costMinorUnits: 1000 },
+    { variantId: "v2", productId: "p2", category: "flower", quantity: 2, unitPriceMinor: 2000, regularPriceMinor: 2000, costMinorUnits: 500 },
+  ];
+  const g = offlineRewardGrant({ balancePoints: 320, rewardPoints: 300, lines, neverDiscountKeys: [], redemptionId: "r1", rand: () => 0 });
+  ok(g.ok && g.grant.pointsSpent === 300 && g.grant.percentBps === 2500 && g.grant.offline, "300 pts = 25% off, offline");
+  ok(g.ok && g.grant.appliedMinor === 2000 && g.grant.perVariant.v1 === 1000 && g.grant.perVariant.v2 === 500, "25% of regular per unit");
+  ok(g.ok && /^GW-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(g.grant.code), "code minted in the normal shape");
+  const poor = offlineRewardGrant({ balancePoints: 200, rewardPoints: 300, lines, neverDiscountKeys: [], redemptionId: "r2" });
+  ok(!poor.ok && /saved balance/.test(poor.ok ? "" : poor.error), "saved balance too low refuses");
+  const never = offlineRewardGrant({ balancePoints: 320, rewardPoints: 150, lines, neverDiscountKeys: ["P1"], redemptionId: "r3" });
+  ok(never.ok && !never.grant.perVariant.v1 && never.grant.perVariant.v2 === 200, "never-discount items keep their price");
+  const none = offlineRewardGrant({ balancePoints: 320, rewardPoints: 150, lines: [{ ...lines[0], unitPriceMinor: 1000 }], neverDiscountKeys: [], redemptionId: "r4" });
+  ok(!none.ok, "no savings, no points used");
   return { passed, failed };
 }
