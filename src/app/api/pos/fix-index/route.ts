@@ -99,14 +99,17 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   }
 
   const destruction = new Set<string>();
-  {
+  for (let from = 0; from < FIX_INDEX_MAX_ROWS; from += PAGE) {
     const { data, error } = await admin
       .from("destruction_events")
-      .select("lot_id")
+      .select("id, lot_id")
       .in("status", [...OPEN_DESTRUCTION_STATUSES])
-      .limit(10_000);
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
     if (error) return unavailable("the destruction status");
-    for (const d of (data as { lot_id: string | null }[] | null) ?? []) if (d.lot_id) destruction.add(d.lot_id);
+    const page = (data as { lot_id: string | null }[] | null) ?? [];
+    for (const d of page) if (d.lot_id) destruction.add(d.lot_id);
+    if (page.length < PAGE) break;
   }
 
   const labIds = [...new Set(lots.map((r) => r.lab_result_id).filter((v): v is string => !!v))];

@@ -149,6 +149,7 @@ describe("the key registry matches the code that actually runs", () => {
   });
 
   it("registers exactly the keys in use — no stale entries", () => {
+    // D170 O6 added gw-pos-day-tally (provisional offline X).
     // D170 O14 added gw-pos-pickup-book (saved pickup orders, encrypted).
     // D170 O9 added gw-pos-fix-index (the Fix & sell lot index for offline).
     // D170 O15 added gw-pos-member-book (loyalty on the iPad, encrypted).
@@ -163,6 +164,7 @@ describe("the key registry matches the code that actually runs", () => {
     expect(allStorageKeys().sort()).toEqual(
       [
         "gw-pos-active-sale",
+        "gw-pos-day-tally",
         "gw-pos-device",
         "gw-pos-favorites",
         "gw-pos-fix-index",

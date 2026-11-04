@@ -3636,7 +3636,7 @@ Shared design rules for every item below. Build each one as its own PR.
       is cached (privacy). Needs an owner decision on caching a minimal member
       list (id, name, points) on the iPad. Otherwise: queue "points owed" and
       apply them at sync, with no redemption over the last-known balance.
-- [ ] O6 Day report offline. Today: "Offline — the day report needs a
+- [x] O6 (slice 10: encrypted gw-pos-day-tally fed by enqueue; manager PIN on the iPad prints a PROVISIONAL X through summarizeDayEvents; no drawer cash) Day report offline. Today: "Offline — the day report needs a
       connection to verify the PIN and read the day's ledger." (~6052). Needs:
       a manager PIN from the vault, and a local X report from this iPad's own
       synced and queued events, clearly marked *provisional (offline)*. The
