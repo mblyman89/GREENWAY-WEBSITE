@@ -3675,7 +3675,7 @@ Shared design rules for every item below. Build each one as its own PR.
       orders can be handed over and charged offline, with the hand-off queued
       and re-judged at sync (an order cancelled online meanwhile goes to
       Exceptions).
-- [ ] O15 Loyalty on the iPad (owner 2026-11-04: "Please add customer loyalty
+- [x] O15 Loyalty on the iPad (owner 2026-11-04: "Please add customer loyalty
       to the iPad. Our data is safe. I want all features unlocked."). Cache the
       member list (id, name, phone tail, points, tier) in the secure store,
       refreshed while online; offline lookup, attach and redemption up to the
@@ -3683,7 +3683,7 @@ Shared design rules for every item below. Build each one as its own PR.
       - [x] O15a (slice 4) member book (/api/pos/member-book, encrypted
             gw-pos-member-book): offline lookup, scan auto-attach, history
             summary. Attach re-checked at sync (B14).
-      - [ ] O15b offline reward redemption (150/300 pts) against the saved
+      - [x] O15b offline reward redemption (150/300 pts) against the saved
             balance, re-judged at sync.
 - [ ] O13 Docs for each item: SOP-01 (§4.32 works-offline list, §4.40, section
       5), concierge, ledgers. Migration pins whenever an event type is added.
