@@ -1279,6 +1279,7 @@ import { __runOfflineTillCoreTests } from "../../src/lib/pos/offline-till-core";
 import { __runLotDetailsCacheCoreTests } from "../../src/lib/pos/lot-details-cache-core";
 import { __runDeferredOutboxCoreTests } from "../../src/lib/pos/deferred-outbox-core";
 import { __runFixIndexCoreTests } from "../../src/lib/pos/fix-index-core";
+import { __runPickupOfflineCoreTests } from "../../src/lib/pos/pickup-offline-core";
 import { __runMemberBookCoreTests } from "../../src/lib/pos/member-book-core";
 import { __runDrawerCloseSlipTests } from "../../src/lib/registers/drawer-close-slip-core";
 
@@ -2757,6 +2758,7 @@ __runLiquidVolumeTests();
   assertRan("lot-details-cache-core", __runLotDetailsCacheCoreTests(), 18); // D170 O11 ("fully operational while internet is down"): lot details saved on the iPad, bounded, never erased by a hiccup, labelled with their age offline
   assertRan("deferred-outbox-core", __runDeferredOutboxCoreTests(), 26); // D170 O7/O8: stock flags and emailed receipts made offline wait in a bounded outbox and are sent when the internet returns; refusals stay visible
   assertRan("fix-index-core", __runFixIndexCoreTests(), 22); // D170 O9: the Fix & sell lot index lets the register fix and sell an unknown package offline with the same decideFixAndSell the route runs
+  assertRan("pickup-offline-core", __runPickupOfflineCoreTests(), 22); // D170 O14: the pickup book keeps the waiting online orders on the iPad so they can be handed over offline; the sync closes each only if still active
   assertRan("member-book-core", __runMemberBookCoreTests(), 31); // D170 O15 + O15b offline rewards ("add customer loyalty to the iPad ... all features unlocked"): the encrypted member book answers lookup, scan attach and history offline with the server's own search and match rules, always saying how old it is
   assertRan("drawer-close-slip-core", __runDrawerCloseSlipTests(), 30); // D151–D155 ("print a short receipt with the employee name and register number ... see the table with the numbers in it again. Read only."): close slip with no amounts, read-only second-count table
   console.log("ALL PURE SELF-TESTS PASSED");

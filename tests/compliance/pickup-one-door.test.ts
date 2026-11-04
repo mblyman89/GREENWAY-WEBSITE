@@ -58,6 +58,7 @@ vi.mock("@/lib/pos/pickup-store", () => ({
     loadCalls.push(input);
     return loadResult;
   },
+  getRegisterPickupPack: async () => ({ ok: false, error: "unused" }),
 }));
 
 vi.mock("@/lib/pos/cors", () => ({

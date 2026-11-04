@@ -281,6 +281,18 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D170 O14: the pickup book (the online-order queue as last read, plus a
+    // read-only copy of each order's detail and load lines), so orders that
+    // were already waiting can be handed over offline. Customer names, notes
+    // and the linked member: classed with patient data, encrypted.
+    key: "gw-pos-pickup-book",
+    what: "The online pickup orders as last read (names, items, notes), saved so they can be handed over offline.",
+    durability: "convenience",
+    sensitivity: "phi",
+    tier: "encrypted-db",
+    degradesOnCorruption: true,
+  },
+  {
     key: "gw-pos-star-printer-model",
     what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
     durability: "convenience",
@@ -645,7 +657,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 17, "the registry covers all seventeen keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox, gw-pos-member-book and gw-pos-fix-index)");
+    ok(POS_STORAGE_KEYS.length === 18, "the registry covers all eighteen keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox, gw-pos-member-book, gw-pos-fix-index and gw-pos-pickup-book)");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",

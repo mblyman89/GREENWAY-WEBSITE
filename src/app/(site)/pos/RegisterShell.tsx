@@ -87,6 +87,17 @@ import {
   parseFixIndex,
   type FixIndex,
 } from "@/lib/pos/fix-index-core";
+import {
+  applyQueueRead,
+  markHandedOver,
+  offlineQueue,
+  packFromResponse,
+  packsToFetch,
+  parsePickupBook,
+  pickupBookAgeNote,
+  withPack,
+  type PickupBook,
+} from "@/lib/pos/pickup-offline-core";
 import { interpretSignupFormResponse, interpretSignupResponse } from "@/lib/pos/register-loyalty-signup-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import {
@@ -313,6 +324,7 @@ const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
 const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
 const LS_MEMBER_BOOK = "gw-pos-member-book"; // D170 O15: encrypted member book for offline loyalty
 const LS_FIX_INDEX = "gw-pos-fix-index"; // D170 O9: encrypted lot index so Fix & sell works offline
+const LS_PICKUP_BOOK = "gw-pos-pickup-book"; // D170 O14: encrypted pickup orders for offline hand-off
 const LS_OUTBOX = "gw-pos-outbox"; // D170 O7/O8: stock flags + emailed receipts waiting to send
 // B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
 // ("gw-pos-held-sale") are defined in register-polish-core next to their
@@ -580,6 +592,12 @@ export function RegisterShell({
   // D170 O9 — the Fix & sell lot index (encrypted store), kept in a ref.
   const fixIndexRef = useRef<FixIndex | null>(null);
   const fixIndexBusyRef = useRef(false);
+  // D170 O14 — the pickup book (encrypted store): the queue as last read and
+  // a read-only pack per order, so waiting orders can be handed over offline.
+  const pickupBookRef = useRef<PickupBook | null>(null);
+  const pickupPacksBusyRef = useRef(false);
+  /** Orders the saved book can show offline (null = no book saved yet). */
+  const [offlinePickupCount, setOfflinePickupCount] = useState<number | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
   // the stable lock() callback can stamp it onto a parked snapshot without a
@@ -706,6 +724,12 @@ export function RegisterShell({
     memberBookRef.current = parseMemberBook(posStorageGet(LS_MEMBER_BOOK));
     // D170 O9 — the saved Fix & sell lot index (null = not downloaded yet).
     fixIndexRef.current = parseFixIndex(posStorageGet(LS_FIX_INDEX));
+    // D170 O14 — the saved pickup book (null = not saved yet).
+    {
+      const pb = parsePickupBook(posStorageGet(LS_PICKUP_BOOK));
+      pickupBookRef.current = pb;
+      setOfflinePickupCount(pb ? offlineQueue(pb).length : null);
+    }
     // D143 — the last confirmed "newest version" for THIS build (a rebuilt
     // app never inherits the old build's green).
     setVersionConfirmedAt(parseVersionCheck(posStorageGet(VERSION_CHECK_KEY), appFingerprint));
@@ -1490,6 +1514,45 @@ export function RegisterShell({
     };
   }, [creds, online]);
 
+  // ── D170 O14: the saved pickup book ──
+  const savePickupBook = useCallback((book: PickupBook) => {
+    pickupBookRef.current = book;
+    setOfflinePickupCount(offlineQueue(book).length);
+    try {
+      posStorageSet(LS_PICKUP_BOOK, JSON.stringify(book));
+    } catch {
+      // The in-memory copy still serves this session.
+    }
+  }, []);
+
+  const refreshPickupPacks = useCallback(async () => {
+    if (!creds || pickupPacksBusyRef.current || !navigator.onLine) return;
+    const ids = packsToFetch(pickupBookRef.current, Date.now());
+    if (ids.length === 0) return;
+    pickupPacksBusyRef.current = true;
+    try {
+      for (const orderId of ids) {
+        const res = await posFetch("/api/pos/pickup", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-pos-device-id": creds.deviceId,
+            "x-pos-device-key": creds.deviceKey,
+          },
+          body: JSON.stringify({ orderId, pack: true }),
+        });
+        if (res.status >= 500) break; // the server is struggling — next round
+        const pack = packFromResponse(await res.json().catch(() => null), Date.now());
+        const book = pickupBookRef.current;
+        if (pack && book) savePickupBook(withPack(book, pack));
+      }
+    } catch {
+      // Network hiccup — keep what was saved; the next poll retries.
+    } finally {
+      pickupPacksBusyRef.current = false;
+    }
+  }, [creds, savePickupBook]);
+
   // ── B28: pickup-queue badge poll (unlocked + online only; 45s cadence).
   //    The badge itself is gated on `online` at render time, so no state
   //    reset is needed here when connectivity drops.
@@ -1503,6 +1566,13 @@ export function RegisterShell({
         });
         const body = (await res.json().catch(() => null)) as { queue?: unknown[] } | null;
         if (!cancelled) setPickupCount(res.ok && Array.isArray(body?.queue) ? body.queue.length : null);
+        // D170 O14 — the same read refreshes the saved pickup book, then
+        // tops up the per-order packs a few at a time.
+        if (res.ok && Array.isArray(body?.queue)) {
+          const next = applyQueueRead(pickupBookRef.current, body.queue, Date.now());
+          if (next) savePickupBook(next);
+          void refreshPickupPacks();
+        }
       } catch {
         if (!cancelled) setPickupCount(null);
       }
@@ -1514,7 +1584,7 @@ export function RegisterShell({
       clearTimeout(t0);
       clearInterval(t);
     };
-  }, [screen, creds, online]);
+  }, [screen, creds, online, savePickupBook, refreshPickupPacks]);
 
   // ── SLICE L-14: the blocking interrupt channel ────────────────────────
   //
@@ -2689,6 +2759,12 @@ export function RegisterShell({
           setResumeSnapshot(null);
           // AM-D2 — the sale completed; its source order (if any) is superseded
           // by the sync. Drop the local pointer so the next sale is clean.
+          // D170 O14 — hide it from the saved pickup book until the server
+          // stops listing it (the sync closes it), so an offline hand-off is
+          // never offered twice on this iPad.
+          if (loadedOrderIdRef.current && pickupBookRef.current) {
+            savePickupBook(markHandedOver(pickupBookRef.current, loadedOrderIdRef.current));
+          }
           setLoadedOrderId(null);
           lock();
           void flush();
@@ -2829,8 +2905,8 @@ export function RegisterShell({
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         onPrinterSetup={() => setPrinterSetupOpen(true)}
         printerMenuNote={printerNote}
-        pickupCount={online ? pickupCount : null}
-        onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
+        pickupCount={online ? pickupCount : offlinePickupCount}
+        onPickupQueue={drawer && (online || offlinePickupCount !== null) ? () => setPickupOpen(true) : undefined}
         themeLabel={themeToggleLabel(theme)}
         onToggleTheme={() => setTheme((t) => toggleTheme(t))}
         medicalTestMode={medicalTestMode}
@@ -3035,6 +3111,7 @@ export function RegisterShell({
         <PickupQueueModal
           creds={creds}
           employee={employee}
+          getBook={() => pickupBookRef.current}
           onClose={() => setPickupOpen(false)}
           onCancelled={(queueLength) => {
             // SLICE L-36 - the modal re-read the queue after the cancel; its
@@ -3974,7 +4051,7 @@ function HomeScreen({
             type="button"
             onClick={onPickupQueue}
             disabled={!onPickupQueue}
-            title={onPickupQueue ? undefined : !drawer ? "Open a drawer first — pickup orders take cash" : "Pickup orders need a connection"}
+            title={onPickupQueue ? undefined : !drawer ? "Open a drawer first — pickup orders take cash" : "No pickup orders saved on this iPad yet — they download while online"}
             className="relative px-3 py-4 text-[var(--pos-chrome-muted)] disabled:opacity-40"
           >
             PICKUP
@@ -4346,18 +4423,20 @@ function HomeScreen({
           </h2>
           <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
             {typeof pickupCount === "number"
-              ? pickupCount === 0
-                ? "No website orders waiting."
-                : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting — ID check at handover.`
+              ? !online
+                ? `Offline — ${pickupCount} saved order${pickupCount === 1 ? "" : "s"} can be handed over. New orders arrive when the internet is back.`
+                : pickupCount === 0
+                  ? "No website orders waiting."
+                  : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting — ID check at handover.`
               : online
                 ? "Website orders — ID check at handover."
-                : "Offline — the pickup queue lives on the server."}
+                : "Offline — no pickup orders were saved on this iPad yet."}
           </p>
           <button
             type="button"
             onClick={onPickupQueue}
             disabled={!onPickupQueue}
-            title={onPickupQueue ? undefined : !drawer ? "Open a drawer first — pickup orders take cash" : "Pickup orders need a connection"}
+            title={onPickupQueue ? undefined : !drawer ? "Open a drawer first — pickup orders take cash" : "No pickup orders saved on this iPad yet — they download while online"}
             className="pos-tile mt-4 rounded-lg bg-[var(--pos-chrome)] px-4 py-3 text-sm font-bold text-[var(--pos-chrome-ink)] disabled:opacity-40"
           >
             Open pickup queue →
@@ -5692,12 +5771,15 @@ function PickupOriginBadge({
 function PickupQueueModal({
   creds,
   employee,
+  getBook,
   onClose,
   onLoaded,
   onCancelled,
 }: {
   creds: DeviceCreds;
   employee: UnlockedEmployee;
+  /** D170 O14 — the saved pickup book (read when there is no server). */
+  getBook: () => PickupBook | null;
   onClose: () => void;
   /**
    * AM-D2 — the order stays ACTIVE on load (NOT superseded); its raw lines +
@@ -5731,6 +5813,8 @@ function PickupQueueModal({
   const [cancelPin, setCancelPin] = useState("");
   // SLICE L-48 - the Change items editor is open for the selected order.
   const [cartOpen, setCartOpen] = useState(false);
+  // D170 O14 — true while the queue is being served from the saved book.
+  const [offlineMode, setOfflineMode] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const headers = useMemo(
@@ -5742,23 +5826,36 @@ function PickupQueueModal({
     [creds],
   );
 
+  // D170 O14 — with no server (offline, a throw, or a 5xx) the queue opens
+  // from the saved pickup book, with its age. Orders handed over here
+  // already are hidden until the server agrees.
+  const fromBook = useCallback((): PickupQueueEntry[] | null => {
+    const book = getBook();
+    setOfflineMode(true);
+    setNotice(pickupBookAgeNote(book, Date.now()));
+    const list = offlineQueue(book) as unknown as PickupQueueEntry[];
+    setQueue(list);
+    return book ? list : null;
+  }, [getBook]);
+
   const loadQueue = useCallback(async (): Promise<PickupQueueEntry[] | null> => {
+    if (!navigator.onLine) return fromBook();
     try {
       const res = await posFetch("/api/pos/pickup", { headers });
+      if (res.status >= 500) return fromBook();
       const body = (await res.json().catch(() => null)) as { queue?: PickupQueueEntry[]; error?: string } | null;
       if (!res.ok || !Array.isArray(body?.queue)) {
         setErrors([body?.error ?? "Could not load the pickup queue."]);
         setQueue([]);
         return null;
       }
+      setOfflineMode(false);
       setQueue(body.queue);
       return body.queue;
     } catch {
-      setErrors(["Could not reach the server — try again."]);
-      setQueue([]);
-      return null;
+      return fromBook();
     }
-  }, [headers]);
+  }, [headers, fromBook]);
 
   useEffect(() => {
     // Deferred a tick (same pattern as the shell's menu refresh) so the
@@ -5785,8 +5882,26 @@ function PickupQueueModal({
     setCartOpen(false);
     setCancelPin("");
     setCancelReason("");
+    // D170 O14 — the saved copy of this order, when there is no server.
+    const detailFromBook = () => {
+      const pack = getBook()?.packs[orderId];
+      if (!pack) {
+        setErrors(["Offline — this order's items were not saved on this iPad before the internet went down, so it cannot be handed over until the internet is back."]);
+        return;
+      }
+      setOfflineMode(true);
+      setDetail(pack.detail as unknown as PickupDetail);
+    };
     try {
+      if (offlineMode || !navigator.onLine) {
+        detailFromBook();
+        return;
+      }
       const res = await posFetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) });
+      if (res.status >= 500) {
+        detailFromBook();
+        return;
+      }
       const body = (await res.json().catch(() => null)) as { order?: PickupDetail; error?: string } | null;
       if (!res.ok || !body?.order) {
         setErrors([body?.error ?? "Could not load the order."]);
@@ -5794,7 +5909,7 @@ function PickupQueueModal({
       }
       setDetail(body.order);
     } catch {
-      setErrors(["Could not reach the server — try again."]);
+      detailFromBook();
     } finally {
       setBusy(false);
     }
@@ -5832,6 +5947,24 @@ function PickupQueueModal({
     if (!detail || busy) return;
     setBusy(true);
     setErrors([]);
+    // D170 O14 — offline, the sale is built from the saved pack exactly as
+    // an online load: it carries the order id, the ID gate runs, it is paid
+    // and queued like any offline sale, and the sync closes the order only
+    // if it is still active (otherwise the manager is told).
+    const loadFromBook = (): boolean => {
+      const pack = getBook()?.packs[detail.orderId];
+      if (!pack) {
+        setErrors(["Offline — this order's items were not saved on this iPad, so it cannot be loaded until the internet is back."]);
+        return false;
+      }
+      onLoaded({ ...pack.loaded, member: pack.loaded.member as PosMemberHit | null });
+      return true;
+    };
+    if (offlineMode || !navigator.onLine) {
+      loadFromBook();
+      setBusy(false);
+      return;
+    }
     try {
       const res = await posFetch("/api/pos/pickup", {
         method: "POST",
@@ -5858,13 +5991,17 @@ function PickupQueueModal({
             error?: string;
           }
         | null;
+      if (res.status >= 500) {
+        loadFromBook();
+        return;
+      }
       if (!res.ok || !body?.loaded) {
         setErrors([body?.error ?? "Could not load the order into a sale."]);
         return;
       }
       onLoaded(body.loaded);
     } catch {
-      setErrors(["Could not reach the server — try again."]);
+      loadFromBook();
     } finally {
       setBusy(false);
     }
@@ -6290,7 +6427,7 @@ function PickupQueueModal({
                         <button
                           type="button"
                           onClick={() => void advanceOrder("acknowledged")}
-                          disabled={busy || cancelOpen || step !== "acknowledged"}
+                          disabled={busy || cancelOpen || offlineMode || step !== "acknowledged"}
                           className={`pos-tile rounded-xl py-3 text-base font-semibold disabled:opacity-40 ${
                             step === "acknowledged"
                               ? "bg-[var(--pos-info-solid)] text-white"
@@ -6302,7 +6439,7 @@ function PickupQueueModal({
                         <button
                           type="button"
                           onClick={() => void advanceOrder("ready")}
-                          disabled={busy || cancelOpen || step === null}
+                          disabled={busy || cancelOpen || offlineMode || step === null}
                           className={`pos-tile rounded-xl py-3 text-base font-semibold disabled:opacity-40 ${
                             step === "ready"
                               ? "bg-[var(--pos-info-solid)] text-white"
@@ -6361,7 +6498,7 @@ function PickupQueueModal({
                         setErrors([]);
                         setNotice(null);
                       }}
-                      disabled={busy || cancelOpen}
+                      disabled={busy || cancelOpen || offlineMode}
                       className="mt-3 pos-tile w-full rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] py-2.5 text-sm font-semibold text-[var(--pos-info)] disabled:opacity-40"
                     >
                       ✏️ Change items (swap, add, remove, quantity)…
@@ -6391,6 +6528,12 @@ function PickupQueueModal({
                   Items reprice at today&rsquo;s menu prices. The online order stays open until this sale completes,
                   so nothing is lost if the customer walks away.
                 </p>
+                {offlineMode ? (
+                  <p data-testid="pos-pickup-offline-note" className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+                    Offline copy. The sale is checked again when the internet is back; if this order was cancelled
+                    online meanwhile, the manager is told. Cancel, confirm and change items need the internet.
+                  </p>
+                ) : null}
 
                 {/* SLICE L-36 — cancel from the register */}
                 {!cancelOpen ? (
@@ -6401,7 +6544,7 @@ function PickupQueueModal({
                       setCartOpen(false);
                       setErrors([]);
                     }}
-                    disabled={busy}
+                    disabled={busy || offlineMode}
                     className="mt-4 pos-tile w-full rounded-xl border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] py-2.5 text-sm font-semibold text-[var(--pos-danger)] disabled:opacity-40"
                   >
                     Cancel this order…

@@ -827,6 +827,8 @@ export async function loadOrderIntoRegister(input: {
   orderId: string;
   deviceName: string;
   employeeName: string;
+  /** D170 O14: false = read only (the offline pack), no timeline note. */
+  audit?: boolean;
 }): Promise<LoadOrderResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
 
@@ -844,7 +846,7 @@ export async function loadOrderIntoRegister(input: {
   //    is only superseded when the register sale COMPLETES (sync-store), so a
   //    loaded-but-abandoned order is never lost. Leave a quiet timeline note
   //    that it was loaded so the timeline explains what happened next. ───────
-  await recordAudit({
+  if (input.audit !== false) await recordAudit({
     actorId: null,
     actorEmail: `pos-load:${input.deviceName}`,
     action: "order.loaded_into_register",
@@ -933,4 +935,27 @@ export async function loadOrderIntoRegister(input: {
     originLabel: orderOriginLabel(loadedOrigin),
     isMarketplace: loadedIsMarketplace,
   };
+}
+
+// ---------------------------------------------------------------------------
+// D170 O14 — the offline pack for one queued order
+// ---------------------------------------------------------------------------
+
+export type PickupPackResult =
+  | { ok: true; detail: PickupOrderDetail; loaded: Extract<LoadOrderResult, { ok: true }> }
+  | { ok: false; error: string };
+
+/**
+ * Everything the register needs to show and load ONE queued order with no
+ * internet: the counter detail and the load lines + linked member. READ
+ * ONLY: no timeline note, no Leafly claim (those happen on a real online
+ * load; an offline hand-off is settled by the sync supersede when the sale
+ * completes, exactly like an online load).
+ */
+export async function getRegisterPickupPack(orderId: string): Promise<PickupPackResult> {
+  const detail = await getRegisterPickupOrder(orderId);
+  if (!detail.ok) return { ok: false, error: detail.error };
+  const loaded = await loadOrderIntoRegister({ orderId, deviceName: "", employeeName: "", audit: false });
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+  return { ok: true, detail: detail.order, loaded };
 }
