@@ -29,6 +29,9 @@ import { returnWindowVerdict } from "./returns-core";
 export const SALE_BOOK_VERSION = 1;
 /** A busy week is a few thousand sales; the copy is bounded well above. */
 export const SALE_BOOK_MAX_SALES = 6000;
+/** D170 O12: never let the book crowd out the sale queue on a browser-storage
+ * fallback (~5 MB): past this size the oldest sales drop first. */
+export const SALE_BOOK_MAX_CHARS = 1_500_000;
 
 export type SaleBookLine = {
   productId: string;
@@ -103,7 +106,9 @@ export function addSaleToBook(
   const cutoff = nowMs - (lookupWindowDays(policy) + 1) * 86_400_000;
   const kept = base.sales.filter((s) => Date.parse(s.at) >= cutoff && s.id !== entry.id);
   const sales = [...kept, entry];
-  return { v: SALE_BOOK_VERSION, registerId, sales: sales.slice(Math.max(0, sales.length - SALE_BOOK_MAX_SALES)) };
+  let out = sales.slice(Math.max(0, sales.length - SALE_BOOK_MAX_SALES));
+  while (out.length > 1 && JSON.stringify(out).length > SALE_BOOK_MAX_CHARS) out = out.slice(Math.ceil(out.length / 10));
+  return { v: SALE_BOOK_VERSION, registerId, sales: out };
 }
 
 export function parseSaleBook(raw: string | null | undefined): SaleBook | null {
@@ -355,5 +360,18 @@ export function __runOfflineReversalCoreTests(): { passed: number; failed: numbe
   ok(matchOrderLine(rows, rp.line)?.id === "b", "matches product + price with units left");
   ok(matchOrderLine(rows, { ...rp.line, productId: "zz" }) === null, "no match is null");
   ok(reversalTag("u") === "[offline u]" && /already handed back/.test(reversalExceptionReason(v.ok ? v.payload : (null as never), "x.")), "tag and exception text");
+  {
+    const big = Array.from({ length: 30 }, (_, k) => ({
+      id: `00000000-0000-0000-0000-${String(k).padStart(12, "0")}`,
+      at: new Date(Date.parse("2026-11-04T18:00:00.000Z") + k * 1000).toISOString(),
+      totalMinor: 100,
+      memberLabel: "x".repeat(60_000),
+      hasMember: true,
+      lines: [],
+    }));
+    let b: SaleBook | null = null;
+    for (const e of big) b = addSaleToBook(b, "r1", e, { windowDays: 30, loyaltyRequired: false, excludedCategories: [] }, Date.parse("2026-11-04T19:00:00.000Z"));
+    ok(JSON.stringify(b!.sales).length <= SALE_BOOK_MAX_CHARS && b!.sales[b!.sales.length - 1].id === big[29].id, "O12: the book is size-capped, newest kept");
+  }
   return { passed, failed };
 }

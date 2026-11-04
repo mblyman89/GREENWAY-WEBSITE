@@ -219,6 +219,7 @@ import {
   type PosReversalPayload,
   type SaleBookEntry,
 } from "@/lib/pos/offline-reversal-core";
+import { outageWarning } from "@/lib/pos/outage-resilience-core";
 import {
   offlineTillMessage,
   validateTillPayload,
@@ -481,6 +482,12 @@ export function RegisterShell({
   const [saleActive, setSaleActive] = useState(false);
   const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
+  // D170 O12: a slow clock for the long-outage warnings (once a minute).
+  const [outageNow, setOutageNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setOutageNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   // D133: signature of the deals active right now (day + rule ids), the
   // instant it was taken, and the stale-bundle warning (if any).
   const [promoClock, setPromoClock] = useState<{ sig: string; at: number; warning: string | null }>({
@@ -1933,7 +1940,19 @@ export function RegisterShell({
     queueDepthWarning(pendingCount);
   // D133: an old cached bundle (no schedule) on a later day applies no deal;
   // say so instead of quietly charging full price or yesterday's deal.
-  const shownBanner = persistentAlert ?? promoClock.warning ?? banner;
+  // D170 O12: on a long outage, say how old the saved menu is and warn a day
+  // before offline PIN unlock stops. Lowest priority: never hides a message.
+  const outageLine = useMemo(() => {
+    if (online) return null;
+    const v = loadOfflineVault();
+    return outageWarning(
+      { fetchedAt: menuBundle?.fetchedAt ?? null, online, nowMs: outageNow },
+      v
+        ? { online, enabled: v.policy.enabled, maxOfflineHours: v.policy.maxOfflineHours, rosterAt: v.rosterAt, serverTimeMs: v.serverTimeMs, nowMs: outageNow }
+        : null,
+    );
+  }, [online, menuBundle?.fetchedAt, outageNow]);
+  const shownBanner = persistentAlert ?? promoClock.warning ?? banner ?? outageLine;
 
   // Slice 5 — the bundle SaleFlow/rebuilds price against. When medical test
   // mode is ON, force medical.endorsed=true so the owner can rehearse the
@@ -5067,7 +5086,7 @@ function VoidSaleModal({
         {sale ? (
           <>
             {bookSale ? (
-              <p className="mt-4 rounded-lg bg-[var(--pos-warn-soft,#fff4d6)] px-3 py-2 text-xs text-[var(--pos-text)]">
+              <p className="mt-4 rounded-lg bg-[var(--pos-warn-soft)] px-3 py-2 text-xs text-[var(--pos-text)]">
                 Offline void from this iPad&apos;s own sales. A manager or lead PIN is checked on this iPad; stock, points
                 and the order are reversed when the internet is back (anything doubtful goes to Exceptions).
               </p>
@@ -5562,7 +5581,7 @@ function ReturnsModal({
           </button>
         </div>
         {bookSale ? (
-          <p className="mt-2 rounded-lg bg-[var(--pos-warn-soft,#fff4d6)] px-3 py-2 text-xs text-[var(--pos-text)]">
+          <p className="mt-2 rounded-lg bg-[var(--pos-warn-soft)] px-3 py-2 text-xs text-[var(--pos-text)]">
             Offline return from this iPad&apos;s own sales. A manager or lead PIN is checked on this iPad; stock, points
             and the state report update when the internet is back (anything doubtful goes to Exceptions).
           </p>

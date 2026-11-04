@@ -3660,7 +3660,7 @@ Shared design rules for every item below. Build each one as its own PR.
       back office." (SaleFlow ~5068; fetchProductDetails returns null offline,
       RegisterShell ~1542/1559). Needs: the lot/COA summary cached with the
       menu download.
-- [ ] O12 Resilience checks for a long outage (verify first, then fix what
+- [x] O12 (slice 12: offline banner shows menu age + a 24 h countdown before D161 unlock stops; offline reversals pinned to the exact sale uuid (receipt twins impossible); void lookup paged; sale book size-capped; limits verified judged on-iPad from bundle.limits; queue depth warning at 200 + quota alerts verified; drill in SOP-01) Resilience checks for a long outage (verify first, then fix what
       fails): menu and price freshness while offline (how old, warn the
       cashier); queue size and storage limits on the iPad; receipt numbering
       with no collisions across iPads offline; CCRS / compliance limits

@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 import { POS_EVENT_TYPES as POS_EVENT_TYPES_O2 } from "../../src/lib/pos/sale-event-core";
 import { normalizePosReturnPolicy } from "../../src/lib/pos/return-policy-core";
 
+import { __runOutageResilienceCoreTests } from "../../src/lib/pos/outage-resilience-core";
 import {
   __runOfflineReversalCoreTests,
+  SALE_BOOK_MAX_CHARS,
   addSaleToBook,
   findBookSale,
   markVoided,
@@ -526,7 +528,7 @@ describe("D170 O2/O3 \u2014 voids and returns offline from this iPad's own sale 
   it("the reversal core self-tests pass", () => {
     const r = __runOfflineReversalCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(28);
+    expect(r.passed).toBeGreaterThanOrEqual(29);
   });
 
   it("void and return are offline approval purposes; reversal is a queued event type", () => {
@@ -563,6 +565,7 @@ describe("D170 O2/O3 \u2014 voids and returns offline from this iPad's own sale 
     expect(store).toMatch(/processVoidSale\(/);
     expect(store).toMatch(/processCounterReturn\(/);
     expect(store).toMatch(/asOfIso: envelope\.occurredAt/);
+    expect(store).toMatch(/saleClientUuid: p\.saleClientUuid/);
     expect(read("src/lib/pos/sync-store.ts")).toMatch(/case "reversal"/);
     expect(read("supabase/migrations/0341_pos_offline_reversal.sql")).toContain("'reversal'");
   });
@@ -574,5 +577,33 @@ describe("D170 O2/O3 \u2014 voids and returns offline from this iPad's own sale 
     expect(shell).not.toMatch(/onVoidSale=\{online \?/);
     expect(read("src/app/api/pos/void/route.ts")).not.toContain("ONLINE-ONLY");
     expect(read("src/app/api/pos/returns/route.ts")).not.toContain("ONLINE-ONLY");
+  });
+});
+
+describe("D170 O12 \u2014 long-outage resilience", () => {
+  it("the outage core self-tests pass", () => {
+    const r = __runOutageResilienceCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(16);
+  });
+
+  it("the register shows menu age and the offline-window countdown as its lowest-priority line", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toMatch(/const shownBanner = persistentAlert \?\? promoClock\.warning \?\? banner \?\? outageLine;/);
+    expect(shell).toMatch(/outageWarning\(/);
+  });
+
+  it("an offline reversal is pinned to the exact sale, never a receipt twin from another iPad", () => {
+    expect(read("src/lib/pos/void-store.ts")).toMatch(/r\.client_uuid === exactSaleClientUuid/);
+    expect(read("src/lib/pos/returns-store.ts")).toMatch(/r\.client_uuid === exactSaleClientUuid/);
+    expect(read("src/lib/pos/void-store.ts")).not.toMatch(/\.limit\(500\)/);
+  });
+
+  it("the sale book is size-capped so it cannot crowd out the sale queue", () => {
+    expect(SALE_BOOK_MAX_CHARS).toBeLessThanOrEqual(2_000_000);
+  });
+
+  it("purchase limits are judged on the iPad from the saved menu bundle (works offline)", () => {
+    expect(read("src/app/(site)/pos/SaleFlow.tsx")).toMatch(/judgeLimits\(limitLinesFor\(priced\.lines\), carded \? "medical" : "recreational", bundle\.limits\)/);
   });
 });
