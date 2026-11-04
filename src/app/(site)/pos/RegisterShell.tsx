@@ -242,6 +242,16 @@ import type { PosCardCapture } from "@/lib/pos/medical-pos-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { PriceLookupScreen, SaleFlow, type PosMemberHit } from "./SaleFlow";
 import { parseProductDetailsResponse, type ProductDetailsFn } from "@/lib/pos/product-detail-view-core";
+// D170 O11 — lot details saved on the iPad so the info card works offline.
+import {
+  cachedLotDetails,
+  lotDetailsKey,
+  LOT_DETAILS_WARM_INTERVAL_MS,
+  nextLotDetailsToWarm,
+  parseLotDetailsCache,
+  putLotDetails,
+  serializeLotDetailsCache,
+} from "@/lib/pos/lot-details-cache-core";
 import { priceLookupUnavailableReason } from "@/lib/pos/price-lookup-core";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
@@ -1533,13 +1543,16 @@ export function RegisterShell({
   const medicalTestModeAvailable = medicalTestModeOffered(menuBundle);
 
   // Lot details for the info card (owner: "every detail available, vendor
-  // lot number, everything"). ONLINE-ONLY, device-authenticated, best-effort:
-  // offline / failed = null and the card says lot details need a connection.
-  // Shared by the sale screen AND the lock-screen price lookup.
+  // lot number, everything"). Device-authenticated, best-effort. D170 O11:
+  // every answer is saved on this iPad (gw-pos-lot-details, bounded) and the
+  // idle warmer below fills it for in-stock products, so OFFLINE the card shows
+  // the saved copy with its age instead of "needs a connection". A saved copy
+  // is never shown as live. Shared by the sale screen AND the lock-screen lookup.
   const deviceId = creds?.deviceId ?? "";
   const deviceKey = creds?.deviceKey ?? "";
-  const fetchProductDetails = useCallback<ProductDetailsFn>(
-    async (productId, variantId) => {
+  const LOT_DETAILS_KEY = "gw-pos-lot-details";
+  const fetchLotDetailsOnline = useCallback(
+    async (productId: string, variantId: string) => {
       if (!deviceId || !deviceKey || !navigator.onLine) return null;
       try {
         const res = await posFetch(
@@ -1547,13 +1560,61 @@ export function RegisterShell({
           { headers: { "x-pos-device-id": deviceId, "x-pos-device-key": deviceKey } },
         );
         if (!res.ok) return null;
-        return parseProductDetailsResponse(await res.json().catch(() => null));
+        const d = parseProductDetailsResponse(await res.json().catch(() => null));
+        if (d) {
+          try {
+            const next = putLotDetails(parseLotDetailsCache(posStorageGet(LOT_DETAILS_KEY)), lotDetailsKey(productId, variantId), d, Date.now());
+            posStorageSet(LOT_DETAILS_KEY, serializeLotDetailsCache(next));
+          } catch {
+            // Saving for offline is best-effort; the live answer still shows.
+          }
+        }
+        return d;
       } catch {
         return null;
       }
     },
     [deviceId, deviceKey],
   );
+  const fetchProductDetails = useCallback<ProductDetailsFn>(
+    async (productId, variantId) => {
+      const live = await fetchLotDetailsOnline(productId, variantId);
+      if (live) return live;
+      // Offline / server down: the copy saved on this iPad, labelled with its age.
+      return cachedLotDetails(parseLotDetailsCache(posStorageGet(LOT_DETAILS_KEY)), lotDetailsKey(productId, variantId), Date.now());
+    },
+    [fetchLotDetailsOnline],
+  );
+  // D170 O11 — idle warmer: while online and on the home or lock screen, fetch
+  // one in-stock product's lot details every few seconds until each has a
+  // copy (then refresh copies older than a day). Never during a sale.
+  const warmProducts = useMemo(
+    () =>
+      (menuBundle?.products ?? []).map((p) => ({
+        productId: p.productId,
+        variantId: p.variantId,
+        inStock: p.inventoryStatus !== "unavailable",
+      })),
+    [menuBundle],
+  );
+  useEffect(() => {
+    if (!online || !deviceId || !deviceKey || (screen !== "home" && screen !== "locked") || warmProducts.length === 0) return;
+    let cancelled = false;
+    let busy = false;
+    const t = setInterval(() => {
+      if (cancelled || busy) return;
+      const next = nextLotDetailsToWarm(warmProducts, parseLotDetailsCache(posStorageGet(LOT_DETAILS_KEY)), Date.now());
+      if (!next) return;
+      busy = true;
+      void fetchLotDetailsOnline(next.productId, next.variantId).finally(() => {
+        busy = false;
+      });
+    }, LOT_DETAILS_WARM_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [online, deviceId, deviceKey, screen, warmProducts, fetchLotDetailsOnline]);
   const fetchProductImage = useCallback(
     async (productId: string): Promise<{ url: string; isFallback: boolean } | null> => {
       // POS B42 — the info card's photo, ONLINE-ONLY and best-effort.

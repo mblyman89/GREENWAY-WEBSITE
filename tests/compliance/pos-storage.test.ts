@@ -148,7 +148,8 @@ describe("the key registry matches the code that actually runs", () => {
     expect(unregisteredKeys([...used])).toEqual([]);
   });
 
-  it("registers exactly the thirteen keys in use — no stale entries", () => {
+  it("registers exactly the keys in use — no stale entries", () => {
+    // D170 O11 added gw-pos-lot-details (lot details saved for offline).
     // D143 added gw-pos-version-check (last server confirmation of the newest
     // app version, so the lock screen stays green through an outage).
     // SLICE 11 added the last two. They are this iPad's paired receipt
@@ -162,6 +163,7 @@ describe("the key registry matches the code that actually runs", () => {
         "gw-pos-favorites",
         "gw-pos-held-sale",
         "gw-pos-last-receipt",
+        "gw-pos-lot-details",
         "gw-pos-medical-testmode",
         "gw-pos-menu",
         "gw-pos-queue",

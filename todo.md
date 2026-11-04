@@ -3656,7 +3656,7 @@ Shared design rules for every item below. Build each one as its own PR.
       (ScanUnlockModal, B41) uses the online approval. Needs: purpose
       "scan_unlock" added to approveOffline (an armed manager/lead), audited as
       offline_auth.
-- [ ] O11 Lot details offline. Today: "Lot details need a connection to the
+- [x] O11 Lot details offline (slice 2: gw-pos-lot-details cache, idle warmer, age note). Today: "Lot details need a connection to the
       back office." (SaleFlow ~5068; fetchProductDetails returns null offline,
       RegisterShell ~1542/1559). Needs: the lot/COA summary cached with the
       menu download.

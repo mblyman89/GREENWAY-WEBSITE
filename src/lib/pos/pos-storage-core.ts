@@ -234,6 +234,17 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D170 O11: lot details (vendor lot, CCRS id, lab result, COA) saved from
+    // every info-card answer and warmed while idle, so the card still shows
+    // them during an outage. Bounded by lot-details-cache-core.
+    key: "gw-pos-lot-details",
+    what: "Saved lot details for the info card (vendor lot, lab result, COA), so they show offline.",
+    durability: "convenience",
+    sensitivity: "business",
+    tier: "encrypted-db",
+    degradesOnCorruption: true,
+  },
+  {
     key: "gw-pos-star-printer-model",
     what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
     durability: "convenience",
@@ -598,7 +609,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 13, "the registry covers all thirteen keys the register uses today");
+    ok(POS_STORAGE_KEYS.length === 14, "the registry covers all fourteen keys the register uses today (D170 added gw-pos-lot-details)");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",
