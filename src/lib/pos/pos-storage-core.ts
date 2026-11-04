@@ -245,6 +245,17 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D170 O7/O8: the send-later outbox. Stock flags and emailed receipts
+    // made while offline wait here and are sent when the internet returns.
+    // Never money, never PINs (those ride the signed sale-event queue).
+    key: "gw-pos-outbox",
+    what: "Stock flags and emailed receipts made offline, waiting to send when the internet returns.",
+    durability: "important",
+    sensitivity: "business",
+    tier: "encrypted-db",
+    degradesOnCorruption: true,
+  },
+  {
     key: "gw-pos-star-printer-model",
     what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
     durability: "convenience",
@@ -609,7 +620,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 14, "the registry covers all fourteen keys the register uses today (D170 added gw-pos-lot-details)");
+    ok(POS_STORAGE_KEYS.length === 15, "the registry covers all fifteen keys the register uses today (D170 added gw-pos-lot-details and gw-pos-outbox)");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",

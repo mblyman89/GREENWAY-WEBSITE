@@ -416,7 +416,7 @@ export type SaleFlowProps = {
   onEmailReceipt?: (
     email: string,
     receipt: PosReceiptInput,
-  ) => Promise<{ ok: true; receiptNumber: string } | { ok: false; error: string }>;
+  ) => Promise<{ ok: true; receiptNumber: string; queued?: boolean } | { ok: false; error: string }>;
   /**
    * B24 — manager PIN approval for a price override. ONLINE-ONLY (a PIN
    * can't be verified offline). The shell implements it with the SAME
@@ -1554,12 +1554,16 @@ function EmailReceiptPanel({
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  // D170 O7 — "queued" = offline; the email waits on this iPad and goes out
+  // when the internet returns.
+  const [sent, setSent] = useState<false | "sent" | "queued">(false);
 
   if (sent) {
     return (
       <p className="mt-4 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-4 py-3 text-sm text-[var(--pos-accent)]">
-        Receipt emailed. The address was used once and not saved.
+        {sent === "queued"
+          ? "Offline — the receipt will be emailed as soon as this iPad is back online. The address is kept only until then. Offer paper too if they want it now."
+          : "Receipt emailed. The address was used once and not saved."}
       </p>
     );
   }
@@ -1593,7 +1597,7 @@ function EmailReceiptPanel({
     setBusy(false);
     if (result.ok) {
       setEmail("");
-      setSent(true);
+      setSent(result.queued ? "queued" : "sent");
     } else {
       setNote(result.error);
     }

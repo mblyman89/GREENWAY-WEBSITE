@@ -17,6 +17,13 @@ import {
   putLotDetails,
   serializeLotDetailsCache,
 } from "../../src/lib/pos/lot-details-cache-core";
+import {
+  __runDeferredOutboxCoreTests,
+  addToOutbox,
+  classifyOutboxAttempt,
+  emptyOutbox,
+  settleOutboxEntry,
+} from "../../src/lib/pos/deferred-outbox-core";
 import { findKeySpec, auditKeyRegistry } from "../../src/lib/pos/pos-storage-core";
 
 /**
@@ -93,5 +100,41 @@ describe("O11 lot details offline", () => {
     expect(shell).toMatch(/screen !== "home" && screen !== "locked"/);
     const sale = read("src/app/(site)/pos/SaleFlow.tsx");
     expect(sale).not.toMatch(/Lot details need a connection to the back office/);
+  });
+});
+
+describe("D170 O7/O8 — flag stock and emailed receipts work offline (send-later outbox)", () => {
+  it("the pure core passes its self-tests", () => {
+    const r = __runDeferredOutboxCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(22);
+  });
+
+  it("a network failure retries; a server refusal is kept visible, never retried", () => {
+    const a = addToOutbox(emptyOutbox(), { id: "x", kind: "stock_flag", body: { productId: "p" }, label: "Out of stock: P" }, 1000);
+    expect(a.ok).toBe(true);
+    if (!a.ok) return;
+    const retried = settleOutboxEntry(a.box, "x", classifyOutboxAttempt({ threw: true, status: null }), 2000);
+    expect(retried.pending).toHaveLength(1);
+    const refused = settleOutboxEntry(a.box, "x", classifyOutboxAttempt({ threw: false, status: 404, error: "Item not found" }), 2000);
+    expect(refused.pending).toHaveLength(0);
+    expect(refused.failed[0]?.reason).toBe("Item not found");
+  });
+
+  it("the outbox key is registered encrypted", () => {
+    expect(findKeySpec("gw-pos-outbox")?.tier).toBe("encrypted-db");
+    expect(auditKeyRegistry()).toEqual([]);
+  });
+
+  it("the shell queues offline instead of refusing, flushes when online and shows the status", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).not.toMatch(/flagging stock needs a connection/);
+    expect(shell).not.toMatch(/Offline — print the paper receipt instead\./);
+    expect(shell).toMatch(/queueForLater\("stock_flag"/);
+    expect(shell).toMatch(/queueForLater\("email_receipt"/);
+    expect(shell).toMatch(/OUTBOX_ENDPOINT\[entry\.kind\]/);
+    expect(shell).toMatch(/SEND LATER:/);
+    const sale = read("src/app/(site)/pos/SaleFlow.tsx");
+    expect(sale).toMatch(/will be emailed as soon as this iPad is back online/);
   });
 });
