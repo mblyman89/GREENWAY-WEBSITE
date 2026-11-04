@@ -163,22 +163,29 @@ async function settleJobs(admin: Admin, jobIds: Iterable<string>): Promise<void>
 
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
-async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set()): Promise<{ families: number; items: number; refused?: boolean } | null> {
+async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set(), priorityJobs: readonly string[] = []): Promise<{ families: number; items: number; refused?: boolean } | null> {
   // Oldest queued products of open jobs; never a job whose live lease is held.
   const { data: jobs } = await admin.from("lookup_jobs").select("id, lease_until").in("status", ["queued", "running"]).order("created_at").limit(200);
   const now = Date.now();
   const jobIds = ((jobs as { id: string; lease_until: string | null }[] | null) ?? []).filter((j) => (!j.lease_until || Date.parse(j.lease_until) < now) && !pausedJobs.has(j.id)).map((j) => j.id);
   if (jobIds.length === 0) return null;
-  const { data: q } = await admin
-    .from("lookup_job_items")
-    .select("id, job_id, draft_id, attempts, result_json")
-    .in("job_id", jobIds)
-    .eq("status", "queued")
-    .is("batch_id", null)
-    .order("job_id")
-    .order("position")
-    .limit(BATCH_SCAN_ITEMS);
-  const queued = (q as QueuedItem[] | null) ?? [];
+  const scan = async (ids: string[]) => {
+    const { data } = await admin
+      .from("lookup_job_items")
+      .select("id, job_id, draft_id, attempts, result_json")
+      .in("job_id", ids)
+      .eq("status", "queued")
+      .is("batch_id", null)
+      .order("job_id")
+      .order("position")
+      .limit(BATCH_SCAN_ITEMS);
+    return (data as QueuedItem[] | null) ?? [];
+  };
+  // R74 S53: a delivery started from Product Onboarding goes first.
+  const open = new Set(jobIds.map((j) => j.toLowerCase()));
+  const first = priorityJobs.filter((j) => open.has(j.toLowerCase()));
+  let queued = first.length ? await scan(first) : [];
+  if (queued.length === 0) queued = await scan(jobIds);
   if (queued.length === 0) return null;
 
   const draftIds = [...new Set(queued.map((i) => i.draft_id))];
@@ -538,7 +545,7 @@ export async function runGeminiBatchTick(deps: { budgetMs?: number } = {}): Prom
     if (!d.send) return { ...out, skipped: d.why };
     const pausedJobs = new Set(control.pausedJobIds);
     for (let tries = 0; tries < 10 && Date.now() < deadline; tries += 1) {
-      const s = await submitOne(admin, pausedJobs);
+      const s = await submitOne(admin, pausedJobs, control.priorityJobIds);
       if (!s || s.refused) break;
       if (s.items === 0) continue; // every product was already known (KB first): look further
       out.submitted += 1;

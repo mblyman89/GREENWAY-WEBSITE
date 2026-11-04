@@ -3575,3 +3575,13 @@ Its own self-test caught it on the first run, before anything shipped.
       every total still correct and every existing test still green. A missing
       column is therefore a FAILED READ (rule 46), not an empty value, and a
       mutation probe severs the query to prove it.
+
+## R74 S53 - Onboarding batch lookup auto-send (Round 34)
+- [x] Recon: why "Look up all" sat as pending (manual mode, budget 0 -> tick skipped)
+- [x] Pure core onboarding-batch-send-core (38 self-tests) + priorityJobIds in the batch control
+- [x] Auto-send from Look up all / Search again / vendor button; Send-to-Google-now when held
+- [x] Live stage strip, counter, ETA, self-refresh; delivery header
+- [x] Attach confident / every / ticked facts on onboarding + strain types (never approves)
+- [x] Only three Gemini options on onboarding; the rest behind "More tools"
+- [x] Batch Lookups cleanup (retired tabs, note, manual Send kept)
+- [x] Gates: tsc (scoped, sandbox RAM), eslint 0, full vitest 1082 files green, db-contract; next build verified on Vercel

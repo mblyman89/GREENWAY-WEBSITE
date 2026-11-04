@@ -37,6 +37,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 type Tab = "mission" | "smart" | "monitor" | "costs" | "confidence";
+// R74 S53 (owner Round 34: "I want to cleanup the batch lookup now that I've
+// finished looking up all Cultivera manifests. It should have a manual
+// initiate button still."): the everyday tabs are Mission Control (with the
+// manual Send), Monitor and Costs. The Cultivera-era tabs (Smart batching,
+// Vendor confidence) are retired from the tab bar; their links still open
+// (?tab=smart / ?tab=confidence) under "Older tools".
+const RETIRED: ReadonlySet<Tab> = new Set<Tab>(["smart", "confidence"]);
 const TABS: readonly TabSpec<Tab>[] = [
   { key: "mission", label: "Mission Control", icon: "\ud83d\udef0\ufe0f", blurb: "Stop, send a test batch, ask Google, read every message" },
   { key: "smart", label: "Smart batching", icon: "\ud83c\udf81", blurb: "Plan and send batches of 200 products" },
@@ -58,7 +65,9 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
   await requirePermission("inventory.manage");
   const sp = await searchParams;
   const tab = resolveTab(TABS, sp, "mission");
+  const visibleTabs = TABS.filter((t) => !RETIRED.has(t.key) || t.key === tab);
   const c = await loadBatchConsole();
+  // eslint-disable-next-line react-hooks/purity -- server component; one timestamp per request
   const now = Date.now();
   const target = /^\d{4}-\d{2}-\d{2}$/.test(sp.target ?? "") ? (sp.target as string) : DEFAULT_TARGET_DATE;
   const vendorFilter = (sp.vendor ?? "").trim();
@@ -117,7 +126,19 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
       </div>
       {c.engine !== "batch" && <p className="text-sm text-amber-300">The Batch engine is off: set <code>AI_LOOKUP_ENGINE=batch</code> in Vercel and redeploy. Until then queued products run through the live (full price) lookup.</p>}
 
-      <PageTabs base={BATCH_CONSOLE_PATH} tabs={TABS} active={tab} ariaLabel="Batch lookup views" />
+      {/* R74 S53: onboarding presses send by themselves now. */}
+      <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-2 text-sm text-[var(--admin-text-muted)]" data-testid="batch-onboarding-note">
+        {"\u2728 "}Lookups started on <Link href="/admin/inventory/drafts" className="font-semibold text-[var(--admin-accent)] underline">Product Onboarding</Link> (one delivery, or every delivery from its vendor) go to Google automatically and show their progress and time left in the Gemini box there - nothing to press here. Use Mission Control&apos;s Send buttons only to send queued work by hand.
+      </p>
+
+      <PageTabs base={BATCH_CONSOLE_PATH} tabs={visibleTabs} active={tab} ariaLabel="Batch lookup views" />
+      <p className="text-[11px] text-[var(--admin-text-muted)]" data-testid="batch-older-tools">
+        Older tools (Cultivera catch-up):{" "}
+        <Link href={`${BATCH_CONSOLE_PATH}?tab=smart`} className="underline">Smart batching</Link>
+        {" \u00b7 "}
+        <Link href={`${BATCH_CONSOLE_PATH}?tab=confidence`} className="underline">Vendor confidence</Link>
+        {" - their attach buttons now live on each delivery in Product Onboarding."}
+      </p>
 
       {tab === "mission" && <MissionTab c={c} now={now} eventId={sp.event ?? null} />}
 
@@ -262,7 +283,7 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
                       </tr>
                     );
                   })}
-                  {openJobs.length === 0 && <tr><td className={td} colSpan={9}>Nothing queued. Send a wave from Smart batching.</td></tr>}
+                  {openJobs.length === 0 && <tr><td className={td} colSpan={9}>Nothing queued. Start a lookup from Product Onboarding (it sends by itself), or send by hand in Mission Control.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -323,7 +344,7 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
           <div className="grid gap-5 xl:grid-cols-2">
             <section className="rounded-[var(--admin-radius-md,8px)] border border-[var(--admin-border)]">
               <h2 className="border-b border-[var(--admin-border)] p-3 text-base font-bold">Cost ledger by vendor</h2>
-              <p className="px-3 pt-2 text-xs text-[var(--admin-text-muted)]">Exact = priced from Google&apos;s own token and search counts for each product (Batch prices). "est." = live lookups or older rows, priced at the average per product.</p>
+              <p className="px-3 pt-2 text-xs text-[var(--admin-text-muted)]">Exact = priced from Google&apos;s own token and search counts for each product (Batch prices). &ldquo;est.&rdquo; = live lookups or older rows, priced at the average per product.</p>
               <div className="max-h-[26rem] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-[var(--admin-surface)]"><tr><th className={th}>Vendor</th><th className={th}>Lots</th><th className={th}>Paid questions</th><th className={th}>Answered</th><th className={th}>Failed</th><th className={th}>Cost</th></tr></thead>
