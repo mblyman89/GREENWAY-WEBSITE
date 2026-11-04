@@ -1275,6 +1275,7 @@ import { __runLoyaltyRewardTests } from "../../src/lib/loyalty/loyalty-reward-co
 import { __runRegisterFingerprintTests } from "../../src/lib/pos/register-fingerprint-core";
 import { __runIpadSetupTests } from "../../src/lib/pos/ipad-setup-core";
 import { __runOfflineUnlockCoreTests } from "../../src/lib/pos/offline-unlock-core";
+import { __runOfflineTillCoreTests } from "../../src/lib/pos/offline-till-core";
 import { __runLotDetailsCacheCoreTests } from "../../src/lib/pos/lot-details-cache-core";
 import { __runDeferredOutboxCoreTests } from "../../src/lib/pos/deferred-outbox-core";
 import { __runMemberBookCoreTests } from "../../src/lib/pos/member-book-core";
@@ -2751,6 +2752,7 @@ __runLiquidVolumeTests();
   assertRan("register-fingerprint-core", __runRegisterFingerprintTests(), 20); // D143 ("add to the lock screen of the app something bold that says I am running the newest version and all is good"): source fingerprint shared by the iPad build and the server, green/red/grey verdict
   assertRan("ipad-setup-core", __runIpadSetupTests(), 30); // D145–D148 ("make the iPad behavior set in stone and something only I can undo"): checklist, owner lockdown policy, Guided Access gate, device health verdict
   assertRan("offline-unlock-core", __runOfflineUnlockCoreTests(), 90); // D161 ("allows my employees to unlock the ipad registers in offline mode"): per-device key, PBKDF2+HMAC verifiers, roster purge, throttle/wipe, clock-rollback + staleness gates, 4xx never falls back, offline_auth re-judged at sync
+  assertRan("offline-till-core", __runOfflineTillCoreTests(), 25); // D170 O1 ("finish all remaining offline mode tasks"): drawer count-in / drop / swap / pop / close offline — same till-core rules on the iPad and at sync, PINs re-judged by id, swap approver must still be a manager
   assertRan("lot-details-cache-core", __runLotDetailsCacheCoreTests(), 18); // D170 O11 ("fully operational while internet is down"): lot details saved on the iPad, bounded, never erased by a hiccup, labelled with their age offline
   assertRan("deferred-outbox-core", __runDeferredOutboxCoreTests(), 22); // D170 O7/O8: stock flags and emailed receipts made offline wait in a bounded outbox and are sent when the internet returns; refusals stay visible
   assertRan("member-book-core", __runMemberBookCoreTests(), 31); // D170 O15 + O15b offline rewards ("add customer loyalty to the iPad ... all features unlocked"): the encrypted member book answers lookup, scan attach and history offline with the server's own search and match rules, always saying how old it is

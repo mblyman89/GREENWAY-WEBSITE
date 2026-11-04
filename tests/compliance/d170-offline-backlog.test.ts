@@ -32,6 +32,13 @@ import {
   type MemberBook,
 } from "../../src/lib/pos/member-book-core";
 import { findKeySpec, auditKeyRegistry, keysRequiringEncryption } from "../../src/lib/pos/pos-storage-core";
+import {
+  __runOfflineTillCoreTests,
+  judgeTillPins,
+  offlineTillNote,
+  validateTillPayload,
+} from "../../src/lib/pos/offline-till-core";
+import { EMPTY_DENOMS } from "../../src/lib/registers/cash";
 
 /**
  * D170: the register works fully offline (owner message 2026-11-04).
@@ -243,5 +250,56 @@ describe("D170 O15b — loyalty rewards work offline (priced on the iPad, issued
     expect(shell).toMatch(/saveBookPoints\(held\.customerId, held\.points\)/);
     const flow = read("src/app/(site)/pos/SaleFlow.tsx");
     expect(flow).toMatch(/offlineIssued: \{ rewardPoints: appliedLoyalty\.rewardPoints \}/);
+  });
+});
+
+describe("D170 O1 \u2014 drawer work offline (count-in, drop, swap, close, pop)", () => {
+  const A = { employeeId: "11111111-1111-4111-8111-111111111111", armedAt: "2026-11-04T10:00:00.000Z", keyId: "e1" };
+  const B = { employeeId: "22222222-2222-4222-8222-222222222222", armedAt: "2026-11-04T10:00:00.000Z", keyId: "e1" };
+  const ref = "33333333-3333-4333-8333-333333333333";
+
+  it("the pure core self-tests pass", () => {
+    const r = __runOfflineTillCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(25);
+  });
+
+  it("offline uses the SAME till validator: no self-witness, swap needs another approver", () => {
+    expect(validateTillPayload({ action: "open", drawerRef: ref, reason: "offline", actor: A, denoms: { ...EMPTY_DENOMS, twenties: 5 } }, A.employeeId).ok).toBe(true);
+    expect(validateTillPayload({ action: "drop", drawerRef: ref, reason: "offline", actor: A, witness: A, amountMinor: 10000, window: "night" }).ok).toBe(false);
+    expect(validateTillPayload({ action: "swap", drawerRef: ref, reason: "offline", actor: A, amountMinor: 10000, inDenoms: EMPTY_DENOMS, outDenoms: EMPTY_DENOMS }).ok).toBe(false);
+    expect(validateTillPayload({ action: "pop", drawerRef: ref, reason: "offline", actor: A, popNumber: 2 }).ok).toBe(false);
+    expect(validateTillPayload({ action: "open", drawerRef: ref, reason: "offline", actor: A, denoms: EMPTY_DENOMS }, B.employeeId).ok).toBe(false);
+  });
+
+  it("sync re-judges every PIN by who the employee is NOW", () => {
+    const payload = { action: "swap" as const, drawerRef: ref, reason: "offline" as const, actor: A, approver: B };
+    expect(judgeTillPins({ payload, people: { [A.employeeId]: { active: true, jobRole: "budtender" }, [B.employeeId]: { active: true, jobRole: "manager" } }, currentKeyId: "e1" }).ok).toBe(true);
+    expect(judgeTillPins({ payload, people: { [A.employeeId]: { active: true, jobRole: "budtender" }, [B.employeeId]: { active: true, jobRole: "budtender" } }, currentKeyId: "e1" }).ok).toBe(false);
+    expect(judgeTillPins({ payload, people: { [A.employeeId]: { active: true, jobRole: "budtender" }, [B.employeeId]: { active: true, jobRole: "manager" } }, currentKeyId: "e2" }).ok).toBe(false);
+    expect(offlineTillNote(ref, "x")).toBe(`x [offline ${ref}]`);
+  });
+
+  it("till_action is a sale event, handled at sync, with migration 0340 widening the CHECK", () => {
+    expect(read("src/lib/pos/sale-event-core.ts")).toMatch(/"till_action"/);
+    const sync = read("src/lib/pos/sync-store.ts");
+    expect(sync).toMatch(/case "till_action"/);
+    expect(sync).toMatch(/applyOfflineTill\(/);
+    const mig = read("supabase/migrations/0340_pos_offline_till.sql");
+    expect(mig).toMatch(/'till_action'/);
+    expect(mig).toMatch(/'offline_auth'/);
+    const store = read("src/lib/pos/offline-till-store.ts");
+    expect(store).toMatch(/register_offline/);
+  });
+
+  it("the drawer modal falls back offline instead of refusing", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).not.toMatch(/drawer actions need a connection to verify your PIN/);
+    expect(shell).not.toMatch(/the drawer can only be opened for the count online/);
+    expect(shell).toMatch(/enqueue\("till_action"/);
+    expect(shell).toMatch(/const offlineSubmit = async/);
+    expect(shell).toMatch(/const offlinePop = async/);
+    expect(shell).toMatch(/proveOffline\(approverPin, "approver", true\)/);
+    expect(shell).toMatch(/res\.status >= 500/);
   });
 });

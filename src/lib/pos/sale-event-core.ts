@@ -102,6 +102,13 @@ export const POS_EVENT_TYPES = [
    * doubtful becomes a manager exception. Requires 0339.
    */
   "offline_auth",
+  /**
+   * D170 O1 — a drawer action done with NO server: count-in, safe drop,
+   * change swap, blind close or the open-for-count pop. PINs were checked on
+   * the iPad (D161 vault) and are re-judged at sync; the same till-core
+   * validator runs on both sides. Requires 0340.
+   */
+  "till_action",
 ] as const;
 export type PosEventType = (typeof POS_EVENT_TYPES)[number];
 

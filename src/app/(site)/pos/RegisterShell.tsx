@@ -183,6 +183,12 @@ import {
   verifyOfflinePin,
 } from "@/lib/pos/offline-unlock";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
+import {
+  offlineTillMessage,
+  validateTillPayload,
+  type OfflineTillPin,
+  type PosTillPayload,
+} from "@/lib/pos/offline-till-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import {
@@ -2989,6 +2995,8 @@ export function RegisterShell({
           mode={tillMode}
           employeeName={employee.fullName}
           standardFloatMinor={standardFloatMinor}
+          drawerSessionId={drawer?.sessionId ?? null}
+          queueOffline={(payload, actorId) => enqueue("till_action", payload as unknown as Record<string, unknown>, actorId)}
           onClose={() => setTillMode(null)}
           onDone={(mode, drawerInfo, message, actorEmployeeId, closeSlipRaw) => {
             setTillMode(null);
@@ -6834,6 +6842,8 @@ function TillModal({
   mode,
   employeeName,
   standardFloatMinor,
+  drawerSessionId,
+  queueOffline,
   onClose,
   onDone,
 }: {
@@ -6842,6 +6852,10 @@ function TillModal({
   employeeName: string;
   /** Fix Phase 6 (G-62, owner D85): the register's standard float; null = unknown. */
   standardFloatMinor: number | null;
+  /** D170 O1: the drawer this register has open (offline drop/swap/close/pop name it). */
+  drawerSessionId: string | null;
+  /** D170 O1: queue an offline till_action (PINs already checked on this iPad); returns the event id or null. */
+  queueOffline: (payload: PosTillPayload, actorEmployeeId: string) => string | null;
   onClose: () => void;
   /** actorEmployeeId: whose PIN did it (the server says), for the clock-out guard (G-61). */
   onDone: (
@@ -6930,14 +6944,23 @@ function TillModal({
   const popForCount = async () => {
     if (popBusy || busy || pin.length < 4) return;
     if (!navigator.onLine) {
-      setError("Offline \u2014 the drawer can only be opened for the count online, so your PIN can be checked.");
+      setPopBusy(true);
+      setError(null);
+      setPopNote(null);
+      try {
+        await offlinePop("offline");
+      } finally {
+        setPopBusy(false);
+      }
       return;
     }
     setPopBusy(true);
     setError(null);
     setPopNote(null);
     try {
-      const res = await posFetch("/api/pos/till", {
+      let res: Response;
+      try {
+        res = await posFetch("/api/pos/till", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -6945,7 +6968,16 @@ function TillModal({
           "x-pos-device-key": creds.deviceKey,
         },
         body: JSON.stringify({ action: "pop", pin, ...(popReason.trim() ? { reason: popReason.trim() } : {}) }),
-      });
+        });
+      } catch {
+        // D170 O1 — server unreachable: check the PIN on this iPad.
+        await offlinePop(navigator.onLine ? "network" : "offline");
+        return;
+      }
+      if (res.status >= 500) {
+        await offlinePop("server_error");
+        return;
+      }
       const resBody = (await res.json().catch(() => null)) as
         | { ok?: boolean; error?: string; code?: string; popNumber?: number; repeat?: boolean; employeeName?: string }
         | null;
@@ -6957,26 +6989,155 @@ function TillModal({
       setPopped(resBody.popNumber ?? popped + 1);
       setPopNeedsReason(true); // any further open needs a reason (D131)
       setPopReason("");
-      const kick = await openCashDrawer(getPairedPrinterIdentifier());
-      if (kick.ok) {
-        setPopNote(resBody.repeat ? "Drawer opened again. The owner sees this, with your reason." : "Drawer open. Count the bills, then finish below.");
-      } else {
-        // The packaged app is the only way to open the drawer without paper;
-        // anywhere else, a short slip carries the kick (it is already audited).
-        const html = buildNoSaleSlipHtml({
-          registerLabel: creds.name,
-          openedAtIso: new Date().toISOString(),
-          reason: "Close drawer: opened for the blind count",
-          openedByName: resBody.employeeName ?? employeeName,
-          approvedByName: "Own drawer (owner rule D130)",
-        });
-        const msg = await printSlip(html, true, "no_sale");
-        setPopNote(msg ? `${kick.message} ${msg}` : "Drawer open (a short slip printed). Count the bills, then finish below.");
-      }
+      await kickForCount(resBody.employeeName ?? employeeName, resBody.repeat === true ? "Drawer opened again. The owner sees this, with your reason." : "Drawer open. Count the bills, then finish below.");
     } catch {
       setError("Could not reach the server \u2014 try again.");
     } finally {
       setPopBusy(false);
+    }
+  };
+
+  // The kick itself (online or offline): the packaged app opens the drawer
+  // without paper; anywhere else a short slip carries the kick (it is audited).
+  const kickForCount = async (openedByName: string, okNote: string) => {
+    const kick = await openCashDrawer(getPairedPrinterIdentifier());
+    if (kick.ok) {
+      setPopNote(okNote);
+      return;
+    }
+    const html = buildNoSaleSlipHtml({
+      registerLabel: creds.name,
+      openedAtIso: new Date().toISOString(),
+      reason: "Close drawer: opened for the blind count",
+      openedByName,
+      approvedByName: "Own drawer (owner rule D130)",
+    });
+    const msg = await printSlip(html, true, "no_sale");
+    setPopNote(msg ? `${kick.message} ${msg}` : "Drawer open (a short slip printed). Count the bills, then finish below.");
+  };
+
+  // D170 O1 — offline PIN proof: the vault record, never the PIN.
+  const proveOffline = async (
+    typed: string,
+    who: string,
+    requireApprover = false,
+  ): Promise<{ ok: true; pin: OfflineTillPin; name: string } | { ok: false; error: string }> => {
+    const v = await verifyOfflinePin(typed, { requireApprover });
+    if (!v.ok) return { ok: false, error: `Could not reach the server, and the offline ${who} PIN check said: ${v.message} Nothing was recorded.` };
+    return { ok: true, pin: { employeeId: v.record.employeeId, armedAt: v.record.armedAt, keyId: v.vault.keyId }, name: v.record.fullName };
+  };
+
+  // D170 O1 — open-for-count with no server: the PIN is checked on this
+  // iPad, the open is queued (re-judged at sync), then the drawer kicks.
+  const offlinePop = async (reason: OfflineReason) => {
+    if (!drawerSessionId) {
+      setError("Offline \u2014 this iPad does not know which drawer is open, so it cannot open it for the count. Wait for the connection.");
+      return;
+    }
+    const a = await proveOffline(pin, "cashier");
+    if (!a.ok) {
+      setError(a.error);
+      return;
+    }
+    const popNumber = popped + 1;
+    const payload: PosTillPayload = {
+      action: "pop",
+      drawerRef: drawerSessionId,
+      reason,
+      actor: a.pin,
+      popNumber,
+      ...(popReason.trim() ? { popReason: popReason.trim() } : {}),
+    };
+    const v = validateTillPayload(payload, a.pin.employeeId);
+    if (!v.ok) {
+      if (popNumber > 1) setPopNeedsReason(true);
+      setError(v.errors.join(" "));
+      return;
+    }
+    if (!queueOffline(payload, a.pin.employeeId)) {
+      setError("This iPad could not save the drawer open \u2014 nothing was opened. Try again.");
+      return;
+    }
+    setPopped(popNumber);
+    setPopNeedsReason(true);
+    setPopReason("");
+    await kickForCount(a.name, offlineTillMessage("pop", ""));
+  };
+
+  // D170 O1 — count-in / drop / swap / close with no server. Same fields
+  // and the same validator as /api/pos/till; every PIN is checked on this
+  // iPad and re-judged by employee id at sync.
+  const offlineSubmit = async (reason: OfflineReason) => {
+    if (mode !== "open" && !drawerSessionId) {
+      setError("Offline \u2014 this iPad does not know which drawer is open. Wait for the connection.");
+      return;
+    }
+    const a = await proveOffline(pin, "cashier");
+    if (!a.ok) {
+      setError(a.error);
+      setPin("");
+      return;
+    }
+    let witness: OfflineTillPin | undefined;
+    let approver: OfflineTillPin | undefined;
+    if (mode === "drop" && witnessPin) {
+      const w = await proveOffline(witnessPin, "witness");
+      if (!w.ok) {
+        setError(w.error);
+        setWitnessPin("");
+        return;
+      }
+      witness = w.pin;
+    }
+    if (mode === "swap") {
+      const m = await proveOffline(approverPin, "approver", true);
+      if (!m.ok) {
+        setError(m.error);
+        setApproverPin("");
+        return;
+      }
+      approver = m.pin;
+    }
+    const drawerRef = mode === "open" ? crypto.randomUUID() : (drawerSessionId as string);
+    const payload: PosTillPayload =
+      mode === "drop"
+        ? { action: "drop", drawerRef, reason, actor: a.pin, amountMinor: amountMinor ?? 0, window: dropWindow, ...(witness ? { witness } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) }
+        : mode === "swap"
+          ? { action: "swap", drawerRef, reason, actor: a.pin, ...(approver ? { approver } : {}), amountMinor: amountMinor ?? 0, inDenoms: swapIn, outDenoms: swapOut, ...(notes.trim() ? { notes: notes.trim() } : {}) }
+          : mode === "close"
+            ? {
+                action: "close",
+                drawerRef,
+                reason,
+                actor: a.pin,
+                denoms,
+                ...(countedMinor === 0 && confirmEmpty ? { confirmEmpty: true as const } : {}),
+                ...(tips.trim() && tipsMinor !== null
+                  ? tipMode === "pool"
+                    ? { tipPool: { poolMinor: tipsMinor, people: tipPeopleN } }
+                    : { tipsMinor }
+                  : {}),
+              }
+            : { action: "open", drawerRef, reason, actor: a.pin, denoms };
+    const v = validateTillPayload(payload, a.pin.employeeId);
+    if (!v.ok) {
+      setError(v.errors.join(" "));
+      return;
+    }
+    if (!queueOffline(payload, a.pin.employeeId)) {
+      setError("This iPad could not save the drawer action \u2014 nothing was recorded. Try again.");
+      return;
+    }
+    const words = formatCents(mode === "open" || mode === "close" ? countedMinor : (amountMinor ?? 0));
+    if (mode === "open") {
+      onDone(
+        "open",
+        { sessionId: drawerRef, openedAt: new Date().toISOString(), businessDay: pacificDayKey(new Date()) },
+        offlineTillMessage("open", words) + (floatWarn && floatWarn.sentence ? ` WARNING: ${floatWarn.sentence}` : ""),
+        a.pin.employeeId,
+      );
+    } else {
+      onDone(mode, null, offlineTillMessage(mode, words), null);
     }
   };
 
@@ -6994,7 +7155,13 @@ function TillModal({
   const submit = async () => {
     if (!ready || busy) return;
     if (!navigator.onLine) {
-      setError("Offline — drawer actions need a connection to verify your PIN and record the cash.");
+      setBusy(true);
+      setError(null);
+      try {
+        await offlineSubmit("offline");
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     setBusy(true);
@@ -7037,15 +7204,26 @@ function TillModal({
                   : {}),
               }
             : { action: mode, pin, denoms };
-      const res = await posFetch("/api/pos/till", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-pos-device-id": creds.deviceId,
-          "x-pos-device-key": creds.deviceKey,
-        },
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await posFetch("/api/pos/till", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-pos-device-id": creds.deviceId,
+            "x-pos-device-key": creds.deviceKey,
+          },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        // D170 O1 — server unreachable: check the PINs on this iPad.
+        await offlineSubmit(navigator.onLine ? "network" : "offline");
+        return;
+      }
+      if (res.status >= 500) {
+        await offlineSubmit("server_error");
+        return;
+      }
       const resBody = (await res.json().catch(() => null)) as
         | {
             ok?: boolean;
