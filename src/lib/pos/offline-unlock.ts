@@ -298,6 +298,9 @@ export async function refreshOfflineRoster(creds: { deviceId: string; deviceKey:
     }
     return { kind: "unreachable" };
   }
+  // Only a fully parsed 200 may merge (and therefore purge). A 5xx, a proxy
+  // error page, or a truncated body is treated as "unreachable".
+  // We never purge on a hiccup: a flaky network must not erase the vault meant for it.
   const roster = parseRoster(body);
   if (!roster) return { kind: "unreachable" };
   return serialized(async (): Promise<RosterRefreshResult> => {

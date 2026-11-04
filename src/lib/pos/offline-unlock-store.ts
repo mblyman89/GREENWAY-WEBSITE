@@ -35,6 +35,7 @@ import { openSessionForRegister } from "@/lib/registers/store";
 import {
   DEFAULT_OFFLINE_POLICY,
   OFFLINE_APPROVER_ROLES,
+  OFFLINE_MAX_RECORDS,
   normalizeOfflinePolicy,
   offlineKeyId,
   type CachedDrawer,
@@ -208,6 +209,9 @@ export async function buildOfflineRoster(device: DeviceLike): Promise<RosterResu
         return { ok: false, status: 503, error: e instanceof Error ? e.message : "Handbook check failed." };
       }
       if (!gate.ok) continue;
+      // The iPad refuses a roster longer than OFFLINE_MAX_RECORDS (bounded
+      // parsing), so never send one: the first N are kept.
+      if (employees.length >= OFFLINE_MAX_RECORDS) break;
       employees.push({
         id: r.id,
         fullName: r.full_name,
