@@ -968,7 +968,8 @@ describe("S13 wiring", () => {
     // R50 A1: acceptCardAliasAction + forgetCardAliasAction too (11 in total).
     // R50 A3: previewWciaBackfillAction + previewCoaArchiveBackfillAction too (13 in total).
     // R74 S11: startCultiveraVendorAction + lookupCultiveraVendorAction too (15 in total).
-    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(15);
+    // R74 S53: lookupVendorFromOnboardingAction + sendToGoogleNowAction + attachOnboardingConfidenceAction too (18 in total).
+    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(18);
   });
   it("lookupAllAction (behavioural): enqueues and redirects with lookup=started, then lookup=exists", async () => {
     seedDrafts(state.db, 2);

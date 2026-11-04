@@ -197,7 +197,10 @@ describe("R66 page: bar, time left, auto-refresh", () => {
     expect(block).toMatch(/data-testid="batch-lookup-bar"/);
     expect(block).toMatch(/style=\{\{ width: `\$\{batchLookupProgress\.percent\}%` \}\}/);
     expect(block).toMatch(/data-testid="batch-lookup-eta"/);
-    expect(block).toMatch(/<BatchLookupAutoRefresh active=\{batchLookupActive\} everyMs=\{batchSlowRefresh \? 120_000 : undefined\} \/>/);
+    // R74 S53 (pin updated on purpose): with the Batch engine the box re-reads
+    // at the pace of its live stage (15 s while queued / sending / saving,
+    // 60 s while Google searches, never once done); otherwise as before.
+    expect(block).toMatch(/<BatchLookupAutoRefresh active=\{batchLookupActive\} everyMs=\{obStage \? obStage\.refreshMs \|\| undefined : batchSlowRefresh \? 120_000 : undefined\} \/>/);
   });
   it("the estimate is built from the real job read with the page's one clock", () => {
     expect(page).toMatch(/batchProgress\(\{ items: \[\.\.\.batchLookupJob\.items\.values\(\)\], jobStartedAt: batchLookupJob\.startedAt, nowMs: now\.getTime\(\) \}\)/);

@@ -396,6 +396,22 @@ export async function resolveIntakeFactReview(formData: FormData) {
 }
 
 /**
+ * R74 S53: send a just-queued onboarding lookup to Google (Mission Control
+ * switch + one tick after the response). Never throws; returns the result
+ * params for the redirect (obl=sent | obl_msg when it could not be sent).
+ */
+async function sendFromOnboarding(jobIds: string[], session: { userId: string | null; email: string | null }): Promise<Record<string, string>> {
+  try {
+    const { autoSendForOnboarding } = await import("@/lib/ai/onboarding-batch-send-server");
+    const r = await autoSendForOnboarding(jobIds, { userId: session.userId, email: session.email });
+    return r.sent ? { obl: "sent", obl_msg: r.sentence } : {};
+  } catch (err) {
+    console.error("[drafts] onboarding auto-send failed:", err);
+    return {};
+  }
+}
+
+/**
  * R19 S13 (bible S13.4): "Look up all N products on this manifest". The
  * manifest id is bound server-side from the validated page focus (same as
  * S17's Approve all). This only WRITES the job; the every-minute worker
@@ -406,7 +422,9 @@ export async function lookupAllAction(manifestId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const res = await enqueueManifestLookup(manifestId, { userId: session.userId, email: session.email });
   revalidatePath("/admin/inventory/drafts");
-  if (res.ok) redirect(await backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
+  // R74 S53 (owner Round 34): "when on onboarding and I start a batch lookup,
+  // I need it to get sent to google automatically" - no trip to Mission Control.
+  if (res.ok) redirect(await backTo(formData, { lookup: res.kind === "created" ? "started" : "exists", ...(await sendFromOnboarding([res.jobId], session)) }));
   if (res.code === "migration") redirect(await backTo(formData, { lookup: "migration" }));
   if (res.code === "nothing") redirect(await backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
   redirect(await backTo(formData, { lookup: "error", lookup_msg: res.message }));
@@ -426,7 +444,7 @@ export async function lookupAgainAction(manifestId: string, formData?: FormData)
   const ids = formData ? formData.getAll("again_id") : [];
   const res = await enqueueManifestLookup(manifestId, { userId: session.userId, email: session.email }, { againDraftIds: ids });
   revalidatePath("/admin/inventory/drafts");
-  if (res.ok) redirect(await backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
+  if (res.ok) redirect(await backTo(formData, { lookup: res.kind === "created" ? "started" : "exists", ...(await sendFromOnboarding([res.jobId], session)) }));
   if (res.code === "migration") redirect(await backTo(formData, { lookup: "migration" }));
   if (res.code === "nothing") redirect(await backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
   redirect(await backTo(formData, { lookup: "error", lookup_msg: res.message }));
@@ -886,4 +904,61 @@ export async function lookupCultiveraVendorAction(formData: FormData) {
   }
   revalidatePath("/admin/inventory/drafts");
   redirect(`${draftsHref({ extra })}#cultivera-vendor`);
+}
+
+// ─── R74 S53 (owner Round 34): the onboarding batch lookup, connected ─────────
+// "On onboarding page, I want the only Gemini options to be batch lookup
+// manifest, or all products from that vendor, or the individual lookup in the
+// product row." + "I also want the attach all facts buttons from the vendor
+// confidence screen to be in onboarding, and I want it to actually attach
+// strain types too if it finds them." Every action below needs
+// inventory.manage, binds the delivery server-side and returns a closed-set
+// `obl` banner code. None of them approves anything.
+
+/** "Look up all products from <vendor>": queue every delivery of the vendor still in review, then send. */
+export async function lookupVendorFromOnboardingAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  if (!isUuid(manifestId)) redirect(await backTo(formData, { obl: "vendor_error", obl_msg: "That delivery link is not valid." }));
+  const { enqueueVendorFromOnboarding } = await import("@/lib/ai/onboarding-batch-send-server");
+  const r = await enqueueVendorFromOnboarding(manifestId, { userId: session.userId, email: session.email });
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/inventory/batch-lookups");
+  if (r.ok) redirect(await backTo(formData, { obl: "vendor_started", obl_msg: r.sentence }));
+  redirect(await backTo(formData, { obl: r.code === "nothing" ? "vendor_nothing" : "vendor_error", obl_msg: r.sentence }));
+}
+
+/** "Send to Google now": release a hold / allow the batches this delivery needs (the box's button when it is waiting). */
+export async function sendToGoogleNowAction(jobId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  if (!isUuid(jobId)) redirect(await backTo(formData, { obl: "send_error", obl_msg: "That lookup link is not valid." }));
+  let params: Record<string, string> = { obl: "send_error" };
+  try {
+    const { autoSendForOnboarding } = await import("@/lib/ai/onboarding-batch-send-server");
+    const r = await autoSendForOnboarding([jobId], { userId: session.userId, email: session.email });
+    params = { obl: r.sent ? "sent" : "send_nothing", obl_msg: r.sentence };
+  } catch (err) {
+    params = { obl: "send_error", obl_msg: String(err instanceof Error ? err.message : err).slice(0, 200) };
+  }
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/inventory/batch-lookups");
+  redirect(await backTo(formData, params));
+}
+
+/** The confidence attach buttons, for this delivery (facts + strain type; never approves). */
+export async function attachOnboardingConfidenceAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { parseAttachMode } = await import("@/lib/catalog/cultivera-confidence-core");
+  const mode = parseAttachMode(formData?.get("mode"));
+  if (!isUuid(manifestId) || !mode) redirect(await backTo(formData, { obl: "attach_error", obl_msg: "Pick one of the attach buttons." }));
+  let params: Record<string, string> = { obl: "attach_error" };
+  try {
+    const { runManifestConfidenceAttach } = await import("@/lib/catalog/onboarding-confidence-server");
+    const ids = (formData?.getAll("pick") ?? []).filter((x): x is string => typeof x === "string").slice(0, 2000);
+    const r = await runManifestConfidenceAttach({ manifestId, mode: mode!, draftIds: ids, actor: { userId: session.userId, email: session.email } });
+    params = { obl: r.ok ? "attach_done" : "attach_error", obl_msg: r.sentence };
+  } catch (err) {
+    params = { obl: "attach_error", obl_msg: String(err instanceof Error ? err.message : err).slice(0, 200) };
+  }
+  revalidatePath("/admin/inventory/drafts");
+  redirect(await backTo(formData, params));
 }

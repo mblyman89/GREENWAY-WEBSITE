@@ -607,6 +607,7 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'gold\u2192: brandBanner.tone === "warn"', // R37 S5: brand set but memory/cards partly saved
     'gold\u2192aliasNote.tone === "warn"', // R50 A1: result of Yes, same product / Forget this choice (closed set, aliasBanner)
     'danger\u2192cvBanner.tone === "bad"', // R50 S3: result of pressing Start on a Cultivera manifest (closed set, cultiveraStartBanner)
+    'danger\u2192oblBanner.tone === "error"', // R74 S53: result of Look up all from the vendor / Send to Google now / the attach buttons (closed set, onboardingLookupBanner)
     'gold\u2192: harvest.tone === "wait"', // R37 S6: the search-history verdict "not worth paying for again yet" (closed set, summarizeDeliveryHarvest)
   ],
 };
