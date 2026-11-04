@@ -1081,7 +1081,12 @@ export function RegisterShell({
     submit: async (pin, reason, payload, sale) => {
       const appr = await approveOffline(pin, payload.kind === "void" ? "void" : "return", reason);
       if (!appr.ok) return { ok: false, error: appr.error };
-      const full = { ...payload, approver: appr.approver, offlineReason: reason, drawerSessionId: drawer?.sessionId ?? null } as PosReversalPayload;
+      const full: PosReversalPayload = {
+        ...payload,
+        approver: { employeeId: appr.approver.id, fullName: appr.approver.fullName },
+        offlineReason: reason,
+        drawerSessionId: drawer?.sessionId ?? null,
+      };
       const v = validateReversalPayload(full);
       if (!v.ok) return { ok: false, error: v.errors.join(" ") };
       const queued = enqueue("reversal", full as unknown as Record<string, unknown>, employee?.id ?? appr.approver.id);

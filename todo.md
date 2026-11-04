@@ -3616,11 +3616,11 @@ Shared design rules for every item below. Build each one as its own PR.
       session id, queued count/drop/swap/close events with idempotent sync, the
       float check from the cached policy, and an offline drawer kick for the
       blind count (D129–D131 limits).
-- [ ] O2 Voids offline. Today the manager approval for a void needs the server.
+- [x] O2 (slice 11: encrypted gw-pos-sale-book; manager PIN on the iPad; one queued reversal event re-run by processVoidSale at sync as of when cash moved; migration 0341) Voids offline. Today the manager approval for a void needs the server.
       Needs: an armed manager/lead approves, the void of a queued or synced sale
       is queued and reconciled at sync (a void of a sale the server never saw
       must cancel cleanly).
-- [ ] O3 Returns offline. Today: online-only (reads the original sale and its
+- [x] O3 (slice 11: same sale book + reversal event; processCounterReturn at sync; refund must match) Returns offline. Today: online-only (reads the original sale and its
       lots from the server). Needs: a local recent-sales cache for this
       register (receipt lookup), an approval by an armed manager/lead, a queued
       refund event, and a stock and CCRS adjustment at sync. A return of a sale
