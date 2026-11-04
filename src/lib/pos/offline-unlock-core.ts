@@ -819,7 +819,7 @@ export type OfflineAuthKind = "unlock" | "approval" | "clock" | "witness";
  * (no sale, price override) one slice at a time; every purpose is re-judged at
  * sync exactly like the first two.
  */
-export const OFFLINE_APPROVAL_PURPOSES = ["no_sale", "price_override", "scan_unlock"] as const;
+export const OFFLINE_APPROVAL_PURPOSES = ["no_sale", "price_override", "scan_unlock", "day_report", "void", "return"] as const;
 export type OfflineApprovalPurpose = (typeof OFFLINE_APPROVAL_PURPOSES)[number];
 export function isOfflineApprovalPurpose(v: unknown): v is OfflineApprovalPurpose {
   return typeof v === "string" && (OFFLINE_APPROVAL_PURPOSES as readonly string[]).includes(v);
@@ -1064,6 +1064,7 @@ export function __runOfflineUnlockCoreTests(): { passed: number; failed: number 
   ok(validateOfflineAuthPayload({ ...p, kind: "approval", purpose: "scan_unlock" }).ok, "D170 scan_unlock approval valid");
   ok(!validateOfflineAuthPayload({ ...p, kind: "approval", purpose: "bogus" as never }).ok, "D170 unknown purpose refused");
   ok(isOfflineApprovalPurpose("price_override") && !isOfflineApprovalPurpose("") && !isOfflineApprovalPurpose(null), "D170 purpose guard");
+  ok(["day_report", "void", "return"].every((x) => validateOfflineAuthPayload({ ...p, kind: "approval", purpose: x as OfflineApprovalPurpose }).ok), "D170 O6/O2/O3 approval purposes valid");
   ok(!validateOfflineAuthPayload({ ...p, kind: "clock" }).ok, "clock needs intent");
   ok(!validateOfflineAuthPayload({ ...p, reason: "magic" as OfflineReason }).ok, "unknown reason refused");
   ok(!validateOfflineAuthPayload(null).ok, "null payload refused");

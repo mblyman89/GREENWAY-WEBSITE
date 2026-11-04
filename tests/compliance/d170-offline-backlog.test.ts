@@ -51,6 +51,8 @@ import {
   withPack,
 } from "../../src/lib/pos/pickup-offline-core";
 import { OUTBOX_ENDPOINT as OUTBOX_ENDPOINTS_O9 } from "../../src/lib/pos/deferred-outbox-core";
+import { __runDayTallyCoreTests, parseDayTally, provisionalDaySummary, tallyEvent } from "../../src/lib/pos/day-tally-core";
+import { buildDayReportSlipHtml } from "../../src/lib/pos/day-report-core";
 
 /**
  * D170: the register works fully offline (owner message 2026-11-04).
@@ -447,5 +449,62 @@ describe("D170 O14 — pickup orders already waiting can be handed over offline"
   it("sync closes the order only if still active, and tells the manager otherwise", () => {
     const sync = read("src/lib/pos/sync-store.ts");
     expect(sync).toMatch(/"order\.pickup_closed_before_sync"/);
+  });
+});
+
+describe("D170 O6 \u2014 provisional X report offline from this register's day tally", () => {
+  it("the tally core self-tests pass", () => {
+    const r = __runDayTallyCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(17);
+  });
+
+  it("sales and no-sales are tallied once, a new day starts fresh, and the summary uses the server summarizer", () => {
+    let t = tallyEvent(null, { day: "2026-11-04", registerId: "r1", eventType: "sale", clientUuid: "a", payload: { totalMinor: 1000, subtotalMinor: 900, taxMinor: 100, paymentMethod: "cash" } });
+    t = tallyEvent(t, { day: "2026-11-04", registerId: "r1", eventType: "sale", clientUuid: "a", payload: { totalMinor: 1000 } });
+    t = tallyEvent(t, { day: "2026-11-04", registerId: "r1", eventType: "no_sale", clientUuid: "b", payload: {} });
+    t = tallyEvent(t, { day: "2026-11-04", registerId: "r1", eventType: "drawer_drop", clientUuid: "c", payload: {} });
+    const round = parseDayTally(JSON.stringify(t))!;
+    expect(round.rows).toHaveLength(2);
+    const s = provisionalDaySummary(round, "2026-11-04", "r1", 3);
+    expect(s.pendingCount).toBe(3);
+    expect(provisionalDaySummary(round, "2026-11-05", "r1", 0).pendingCount).toBe(0);
+    expect(tallyEvent(round, { day: "2026-11-05", registerId: "r1", eventType: "no_sale", clientUuid: "d", payload: {} }).rows).toHaveLength(1);
+  });
+
+  it("the provisional slip is labelled and prints no drawer cash", () => {
+    const html = buildDayReportSlipHtml({
+      kind: "X",
+      registerLabel: "Register 1",
+      businessDay: "2026-11-04",
+      printedAtIso: "2026-11-04T20:00:00.000Z",
+      requestedByName: "Pat",
+      summary: provisionalDaySummary(null, "2026-11-04", "r1", 0),
+      drawer: null,
+      refunds: null,
+      headerText: null,
+      addressLines: [],
+      provisional: true,
+    });
+    expect(html).toContain("PROVISIONAL X");
+    expect(html).not.toContain("CASH DRAWER");
+  });
+
+  it("the tally is an encrypted register key", () => {
+    expect(findKeySpec("gw-pos-day-tally")?.tier).toBe("encrypted-db");
+  });
+
+  it("day_report is an offline approval purpose", () => {
+    expect(isOfflineApprovalPurpose("day_report")).toBe(true);
+  });
+
+  it("the modal falls back offline, on a throw, or on a 5xx, behind a manager PIN checked on the iPad", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toMatch(/const runOffline = async \(reason: OfflineReason\) =>/);
+    expect(shell).toMatch(/approveOffline\(pin, "day_report", reason\)/);
+    expect(shell).toMatch(/await runOffline\("server_error"\)/);
+    expect(shell).toMatch(/await runOffline\("network"\)/);
+    expect(shell).toMatch(/tallyEvent\(parseDayTally\(posStorageGet\(LS_DAY_TALLY\)\)/);
+    expect(shell).not.toMatch(/day report needs a connection/i);
   });
 });

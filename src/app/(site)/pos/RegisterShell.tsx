@@ -98,6 +98,7 @@ import {
   withPack,
   type PickupBook,
 } from "@/lib/pos/pickup-offline-core";
+import { parseDayTally, provisionalDaySummary, tallyEvent } from "@/lib/pos/day-tally-core";
 import { interpretSignupFormResponse, interpretSignupResponse } from "@/lib/pos/register-loyalty-signup-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import {
@@ -325,6 +326,7 @@ const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the la
 const LS_MEMBER_BOOK = "gw-pos-member-book"; // D170 O15: encrypted member book for offline loyalty
 const LS_FIX_INDEX = "gw-pos-fix-index"; // D170 O9: encrypted lot index so Fix & sell works offline
 const LS_PICKUP_BOOK = "gw-pos-pickup-book"; // D170 O14: encrypted pickup orders for offline hand-off
+const LS_DAY_TALLY = "gw-pos-day-tally"; // D170 O6: today's sale totals for a provisional offline X
 const LS_OUTBOX = "gw-pos-outbox"; // D170 O7/O8: stock flags + emailed receipts waiting to send
 // B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
 // ("gw-pos-held-sale") are defined in register-polish-core next to their
@@ -973,6 +975,23 @@ export function RegisterShell({
       });
       seqRef.current = nextSequence;
       setQueue((q) => [...q, envelope]);
+      // D170 O6 — every sale and no-sale also lands in today's tally, so a
+      // manager can print a provisional X with no internet. Best-effort:
+      // the queue above is the record; the tally is a convenience.
+      if (eventType === "sale" || eventType === "no_sale") {
+        try {
+          const next = tallyEvent(parseDayTally(posStorageGet(LS_DAY_TALLY)), {
+            day: pacificDayKey(new Date()),
+            registerId: creds.registerId,
+            eventType,
+            clientUuid,
+            payload,
+          });
+          posStorageSet(LS_DAY_TALLY, JSON.stringify(next));
+        } catch {
+          // Never let the tally touch a sale.
+        }
+      }
       return clientUuid;
     },
     [creds],
@@ -3059,6 +3078,8 @@ export function RegisterShell({
         <DayReportModal
           creds={creds}
           receiptConfig={menuBundle ? normalizePosReceiptConfig(menuBundle.receipt) : null}
+          unsentCount={queue.filter((e) => !e.rejectedReason).length}
+          approveOffline={(pin, reason) => approveOffline(pin, "day_report", reason)}
           onClose={() => setDayReportOpen(false)}
         />
       ) : null}
@@ -6634,24 +6655,71 @@ function PickupQueueModal({
 function DayReportModal({
   creds,
   receiptConfig,
+  unsentCount,
+  approveOffline,
   onClose,
 }: {
   creds: DeviceCreds;
   receiptConfig: ReturnType<typeof normalizePosReceiptConfig> | null;
+  /** D170 O6 — events still waiting in this iPad's queue. */
+  unsentCount: number;
+  /** D170 O6 — a manager/lead PIN checked on this iPad (queued as offline_auth). */
+  approveOffline: (
+    pin: string,
+    reason: OfflineReason,
+  ) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   onClose: () => void;
 }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const run = async () => {
-    if (pin.length < 4 || busy) return;
-    if (!navigator.onLine) {
-      setError("Offline — the day report needs a connection to verify the PIN and read the day's ledger.");
+  // D170 O6 — with no server (offline, a throw, or a 5xx) a manager or
+  // lead PIN checked on this iPad prints a PROVISIONAL X from this
+  // register's own day tally, through the server's own summarizer. No
+  // drawer cash, no refunds, no other registers; the slip says so.
+  const runOffline = async (reason: OfflineReason) => {
+    const ok = await approveOffline(pin, reason);
+    if (!ok.ok) {
+      setError(ok.error);
+      setPin("");
       return;
     }
+    const day = pacificDayKey(new Date());
+    const tally = parseDayTally(posStorageGet(LS_DAY_TALLY));
+    const html = buildDayReportSlipHtml({
+      kind: "X",
+      registerLabel: creds.name,
+      businessDay: day,
+      printedAtIso: new Date().toISOString(),
+      requestedByName: ok.approver.fullName,
+      summary: provisionalDaySummary(tally, day, creds.registerId ?? "", unsentCount),
+      drawer: null,
+      refunds: null,
+      headerText: receiptConfig?.headerText ?? null,
+      addressLines: receiptConfig ? receiptAddressLines(receiptConfig) : [],
+      provisional: true,
+    });
+    const printNote = await printSlip(html, false, "reprint");
+    if (printNote) {
+      setError(printNote);
+      return;
+    }
+    onClose();
+  };
+
+  const run = async () => {
+    if (pin.length < 4 || busy) return;
     setBusy(true);
     setError(null);
+    if (!navigator.onLine) {
+      try {
+        await runOffline("offline");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const res = await posFetch("/api/pos/day-report", {
         method: "POST",
@@ -6662,6 +6730,10 @@ function DayReportModal({
         },
         body: JSON.stringify({ pin }),
       });
+      if (res.status >= 500) {
+        await runOffline("server_error");
+        return;
+      }
       const body = (await res.json().catch(() => null)) as
         | {
             ok?: boolean;
@@ -6701,7 +6773,7 @@ function DayReportModal({
       }
       onClose();
     } catch {
-      setError("Could not reach the server — try again.");
+      await runOffline("network");
     } finally {
       setBusy(false);
     }

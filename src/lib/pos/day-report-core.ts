@@ -275,6 +275,12 @@ export type DayReportSlipInput = {
   refunds?: RefundSummary | null;
   headerText: string | null;
   addressLines: string[];
+  /**
+   * D170 O6: printed from this iPad's own tally with no internet. The slip
+   * says PROVISIONAL, lists only this register's sales and no-sales, and
+   * prints no drawer or refund figures (those need the back office).
+   */
+  provisional?: boolean;
 };
 
 const DEFAULT_HEADER = "GREENWAY MARIJUANA";
@@ -292,7 +298,11 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
   const header = escapeReceiptHtml((input.headerText ?? DEFAULT_HEADER).trim() || DEFAULT_HEADER);
   const s = input.summary;
   const d = input.drawer;
-  const kindLabel = input.kind === "Z" ? "Z REPORT — END OF DAY" : "X REPORT — MID-DAY SNAPSHOT";
+  const kindLabel = input.provisional
+    ? "PROVISIONAL X — OFFLINE"
+    : input.kind === "Z"
+      ? "Z REPORT — END OF DAY"
+      : "X REPORT — MID-DAY SNAPSHOT";
 
   const salesRows = [
     row("Sales completed", String(s.saleCount)),
@@ -383,11 +393,18 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
     "<hr>",
     '<p class="sec">REGISTER ACTIVITY</p>',
     `<table>${activityRows}</table>`,
-    "<hr>",
-    '<p class="sec">CASH DRAWER</p>',
-    `<table>${drawerRows}</table>`,
-    "<hr>",
-    '<p class="sub">Cash counts stay blind until a manager reconciles in the back office.</p>',
+    ...(input.provisional
+      ? [
+          "<hr>",
+          '<p class="sub">Printed with no internet from this iPad&rsquo;s own sales. Not final: no other registers, no refunds, no drawer cash. Sales the server later rejects drop off the real report. Print the real X/Z when the internet is back.</p>',
+        ]
+      : [
+          "<hr>",
+          '<p class="sec">CASH DRAWER</p>',
+          `<table>${drawerRows}</table>`,
+          "<hr>",
+          '<p class="sub">Cash counts stay blind until a manager reconciles in the back office.</p>',
+        ]),
     "</body></html>",
   ].join("");
 }
@@ -597,6 +614,22 @@ export function __runDayReportCoreTests(): void {
     addressLines: [],
   });
   ok(slipNoDrawer.includes("no session this day"), "drawerless day prints explicitly");
+
+  // D170 O6 — the provisional offline X says so and prints no drawer cash.
+  const slipProv = buildDayReportSlipHtml({
+    kind: "X",
+    registerLabel: "Register 1",
+    businessDay: "2026-07-16",
+    printedAtIso: "2026-07-16T20:00:00.000Z",
+    requestedByName: "A",
+    summary: summarizeDayEvents([]),
+    drawer: null,
+    headerText: null,
+    addressLines: [],
+    provisional: true,
+  });
+  ok(slipProv.includes("PROVISIONAL X") && slipProv.includes("Not final"), "provisional slip is labelled");
+  ok(!slipProv.includes("CASH DRAWER") && !slipProv.includes("no session this day"), "provisional slip prints no drawer section");
 
   console.log("day-report-core self-tests passed");
 }
