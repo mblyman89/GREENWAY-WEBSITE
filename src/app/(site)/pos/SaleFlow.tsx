@@ -5916,10 +5916,8 @@ function SpecialDiscountPanel({
       setError("PIN checks need the register shell — restart the app.");
       return null;
     }
-    if (!navigator.onLine) {
-      setError("Offline — employee PINs can only be verified with a connection.");
-      return null;
-    }
+    // D170 O4 — offline, the shell checks the PIN on this iPad (the
+    // offline verifier vault) and the sale is re-judged at sync.
     setBusy(true);
     setError(null);
     const res = await onWitness(pinInput, opts);

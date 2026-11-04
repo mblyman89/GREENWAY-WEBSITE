@@ -3625,7 +3625,7 @@ Shared design rules for every item below. Build each one as its own PR.
       register (receipt lookup), an approval by an armed manager/lead, a queued
       refund event, and a stock and CCRS adjustment at sync. A return of a sale
       from another register stays online-only unless cached.
-- [ ] O4 Employee purchases and special discounts offline. Today: "Offline —
+- [x] O4 (slice 7: witness PIN checked on the iPad, offline_auth kind "witness", sale re-judged at sync) Employee purchases and special discounts offline. Today: "Offline —
       employee PINs can only be verified with a connection." (SaleFlow ~5904)
       and "employee PINs need a connection to verify" (RegisterShell ~1935).
       Needs: a witness/employee PIN against the vault, the cached discount

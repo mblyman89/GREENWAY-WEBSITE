@@ -806,7 +806,13 @@ export function offlineHealthCheck(h: OfflineHealth | null, policy: OfflineUnloc
 // 8. The audit event (`offline_auth`, validated at sync)
 // ---------------------------------------------------------------------------
 
-export type OfflineAuthKind = "unlock" | "approval" | "clock";
+/**
+ * D170 O4 adds "witness": an employee-identity PIN (the employee purchase
+ * program's buyer + witness, the friends & family sponsor, the two-person
+ * discount adjust). Like /api/pos/witness there is NO role gate: any active
+ * employee counts. The sale itself carries both ids and is re-judged at sync.
+ */
+export type OfflineAuthKind = "unlock" | "approval" | "clock" | "witness";
 
 /**
  * What an offline manager/lead approval may be FOR. D170 widens the D161 pair
@@ -836,7 +842,7 @@ export type OfflineAuthPayload = {
 export function validateOfflineAuthPayload(p: Partial<OfflineAuthPayload> | null | undefined): { ok: true } | { ok: false; errors: string[] } {
   const errors: string[] = [];
   if (!p || typeof p !== "object") return { ok: false, errors: ["payload must be an object."] };
-  if (p.kind !== "unlock" && p.kind !== "approval" && p.kind !== "clock") errors.push('kind must be "unlock", "approval" or "clock".');
+  if (p.kind !== "unlock" && p.kind !== "approval" && p.kind !== "clock" && p.kind !== "witness") errors.push('kind must be "unlock", "approval", "clock" or "witness".');
   if (p.reason !== "offline" && p.reason !== "timeout" && p.reason !== "network" && p.reason !== "server_error") errors.push("reason is not recognized.");
   if (typeof p.armedAt !== "string" || !ISO_RE.test(p.armedAt)) errors.push("armedAt must be an ISO timestamp.");
   if (p.rosterAt !== null && p.rosterAt !== undefined && (typeof p.rosterAt !== "string" || !ISO_RE.test(p.rosterAt))) errors.push("rosterAt must be an ISO timestamp or null.");
@@ -869,7 +875,14 @@ export function judgeOfflineAuth(input: {
   if (Number.isFinite(used) && Number.isFinite(cur) && used < cur) {
     return { ok: false, reason: "An offline PIN from before the owner's reset was used (the iPad had not checked in yet). Review it." };
   }
-  const action = payload.kind === "unlock" ? "register.unlocked_offline" : payload.kind === "approval" ? "register.offline_approval" : "register.offline_clock";
+  const action =
+    payload.kind === "unlock"
+      ? "register.unlocked_offline"
+      : payload.kind === "approval"
+        ? "register.offline_approval"
+        : payload.kind === "witness"
+          ? "register.offline_witness"
+          : "register.offline_clock";
   return { ok: true, action };
 }
 
@@ -1061,6 +1074,11 @@ export function __runOfflineUnlockCoreTests(): { passed: number; failed: number 
   ok(!judgeOfflineAuth({ payload: p, employee: { active: true, jobRole: "sales" }, currentKeyId: "e2" }).ok, "pre-revoke PIN flagged");
   const j = judgeOfflineAuth({ payload: { ...p, kind: "clock", intent: "in" }, employee: { active: true, jobRole: "sales" }, currentKeyId: "e1" });
   ok(j.ok && j.action === "register.offline_clock", "clock action name");
+  // D170 O4 — employee-identity (witness) PIN offline: no role gate.
+  ok(validateOfflineAuthPayload({ ...p, kind: "witness" }).ok, "D170 witness payload valid");
+  const wj = judgeOfflineAuth({ payload: { ...p, kind: "witness" }, employee: { active: true, jobRole: "sales" }, currentKeyId: "e1" });
+  ok(wj.ok && wj.action === "register.offline_witness", "D170 witness needs no manager role");
+  ok(!judgeOfflineAuth({ payload: { ...p, kind: "witness" }, employee: { active: false, jobRole: "sales" }, currentKeyId: "e1" }).ok, "D170 inactive witness flagged");
 
   ok(OFFLINE_PBKDF2_ITERATIONS >= 600_000, "work factor meets OWASP PBKDF2-SHA256 figure");
   ok(OFFLINE_APPROVER_ROLES.join() === "manager,lead", "approver roles match /api/pos/approve");
