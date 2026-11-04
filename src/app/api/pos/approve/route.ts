@@ -20,6 +20,7 @@ import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+import { offlineArmFor } from "@/lib/pos/offline-unlock-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   // so one drawer open never produces two competing audit trails.
   return NextResponse.json({
     approver: { id: employee.id, fullName: employee.full_name },
+    // D161 — arms this manager for OFFLINE approval on this iPad.
+    offline: await offlineArmFor(auth.device, employee),
   });
 }
 

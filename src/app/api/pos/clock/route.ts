@@ -37,6 +37,7 @@ import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } fr
 import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { decideRegisterPunch } from "@/lib/pos/clock-core";
+import { offlineArmFor } from "@/lib/pos/offline-unlock-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,6 +89,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Enter your PIN." }, { status: 400 });
   }
 
+  // D161 — a PIN-proven punch also arms offline unlock (PIN path only).
+  const offline = pin ? await offlineArmFor(auth.device, employee) : null;
   const open = await openWorkPunch(employee.id);
   const decision = decideRegisterPunch(intent, !!open);
   if (decision.kind === "already") {
@@ -97,6 +100,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       already: true,
       employee: { id: employee.id, fullName: employee.full_name, clockedIn: decision.state === "in" },
       message: `${employee.full_name}: ${decision.message}`,
+      offline,
     });
   }
 
@@ -134,5 +138,6 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     employee: { id: employee.id, fullName: employee.full_name, clockedIn: result.action === "in" },
     at: result.action === "in" ? result.punch.clock_in_at : result.punch.clock_out_at,
     message: `${employee.full_name}: clocked ${result.action === "in" ? "IN" : "OUT"}.`,
+    offline,
   });
 }

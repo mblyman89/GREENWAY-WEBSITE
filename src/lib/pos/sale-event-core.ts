@@ -95,6 +95,13 @@ export const POS_EVENT_TYPES = [
    * owner can see who reduces carts, when, and how often. Requires 0301.
    */
   "cart_adjustment",
+  /**
+   * D161 — an employee PIN was verified ON THE IPAD (no server reachable):
+   * an offline unlock, an offline manager approval, or an offline clock PIN.
+   * Re-judged at sync against who is active / a manager NOW; anything
+   * doubtful becomes a manager exception. Requires 0339.
+   */
+  "offline_auth",
 ] as const;
 export type PosEventType = (typeof POS_EVENT_TYPES)[number];
 
