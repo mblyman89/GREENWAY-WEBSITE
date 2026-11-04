@@ -778,6 +778,7 @@ import { __runDescriptionQualityCoreTests } from "../../src/lib/purchasing/descr
 import { __runStrainDescriptionChoiceCoreTests } from "../../src/lib/purchasing/strain-description-choice-core";
 import { __runMenuReadinessCoreTests } from "../../src/lib/purchasing/menu-readiness-core";
 import { __runSaveAssetsCoreTests } from "../../src/lib/purchasing/save-assets-core";
+import { __runWritebackTextCoreTests } from "../../src/lib/ai/kb/writeback-text-core";
 import { __runCultiveraKbLinkCoreTests } from "../../src/lib/purchasing/cultivera-kb-link-core";
 import { __runGrowflowMenuUiCoreTests } from "../../src/lib/purchasing/growflow-menu-ui-core";
 import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-autosave-core";
@@ -1856,6 +1857,7 @@ __runLiquidVolumeTests();
   __runStrainDescriptionChoiceCoreTests();
   __runMenuReadinessCoreTests();
   __runSaveAssetsCoreTests();
+  assertRan("writeback-text-core", __runWritebackTextCoreTests(), 17);
   __runCultiveraKbLinkCoreTests();
   __runGrowflowMenuUiCoreTests();
   __runMediaAutosaveCoreTests();
