@@ -3,6 +3,19 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { POS_EVENT_TYPES as POS_EVENT_TYPES_O2 } from "../../src/lib/pos/sale-event-core";
+import { normalizePosReturnPolicy } from "../../src/lib/pos/return-policy-core";
+
+import {
+  __runOfflineReversalCoreTests,
+  addSaleToBook,
+  findBookSale,
+  markVoided,
+  offlineVoidCheck,
+  parseSaleBook,
+  reversalTag,
+  validateReversalPayload,
+} from "../../src/lib/pos/offline-reversal-core";
 import {
   isOfflineApprovalPurpose,
   judgeOfflineAuth,
@@ -506,5 +519,60 @@ describe("D170 O6 \u2014 provisional X report offline from this register's day t
     expect(shell).toMatch(/await runOffline\("network"\)/);
     expect(shell).toMatch(/tallyEvent\(parseDayTally\(posStorageGet\(LS_DAY_TALLY\)\)/);
     expect(shell).not.toMatch(/day report needs a connection/i);
+  });
+});
+
+describe("D170 O2/O3 \u2014 voids and returns offline from this iPad's own sale book", () => {
+  it("the reversal core self-tests pass", () => {
+    const r = __runOfflineReversalCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(28);
+  });
+
+  it("void and return are offline approval purposes; reversal is a queued event type", () => {
+    expect(OFFLINE_APPROVAL_PURPOSES).toContain("void");
+    expect(OFFLINE_APPROVAL_PURPOSES).toContain("return");
+    expect(POS_EVENT_TYPES_O2).toContain("reversal");
+  });
+
+  it("the sale book is encrypted and an offline voided sale cannot be voided twice", () => {
+    expect(findKeySpec("gw-pos-sale-book")?.tier).toBe("encrypted-db");
+    const sale = {
+      id: "11111111-2222-3333-4444-55556666abcd",
+      at: "2026-11-04T18:00:00.000Z",
+      totalMinor: 2000,
+      memberLabel: null,
+      hasMember: false,
+      lines: [{ productId: "p1", productName: "Flower", category: null, quantity: 1, unitPriceMinor: 2000, reversed: 0 }],
+    };
+    const book = parseSaleBook(JSON.stringify(addSaleToBook(null, "r1", sale, normalizePosReturnPolicy(null), Date.parse(sale.at))))!;
+    const found = findBookSale(book, "6666ABCD")!;
+    expect(found.id).toBe(sale.id);
+    expect(offlineVoidCheck(found, "2026-11-04T20:00:00.000Z").ok).toBe(true);
+    const voided = findBookSale(markVoided(book, sale.id), "6666ABCD")!;
+    expect(offlineVoidCheck(voided, "2026-11-04T20:00:00.000Z").ok).toBe(false);
+  });
+
+  it("a reversal payload must carry an approver and a refund that matches", () => {
+    expect(validateReversalPayload({}).ok).toBe(false);
+    expect(reversalTag("u-1")).toBe("[offline u-1]");
+  });
+
+  it("sync re-runs the real machinery as of when the cash moved and re-checks the approver", () => {
+    const store = read("src/lib/pos/offline-reversal-store.ts");
+    expect(store).toMatch(/processVoidSale\(/);
+    expect(store).toMatch(/processCounterReturn\(/);
+    expect(store).toMatch(/asOfIso: envelope\.occurredAt/);
+    expect(read("src/lib/pos/sync-store.ts")).toMatch(/case "reversal"/);
+    expect(read("supabase/migrations/0341_pos_offline_reversal.sql")).toContain("'reversal'");
+  });
+
+  it("the register no longer hides void/return offline and checks a manager PIN on the iPad", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toMatch(/approveOffline\(pin, payload\.kind === "void" \? "void" : "return", reason\)/);
+    expect(shell).toMatch(/offline=\{offlineReversal\}/);
+    expect(shell).not.toMatch(/onVoidSale=\{online \?/);
+    expect(read("src/app/api/pos/void/route.ts")).not.toContain("ONLINE-ONLY");
+    expect(read("src/app/api/pos/returns/route.ts")).not.toContain("ONLINE-ONLY");
   });
 });

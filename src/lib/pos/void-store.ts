@@ -55,7 +55,7 @@ import { receiptNumber } from "@/lib/pos/receipt-core";
 // Fix Phase 4 (G-29 item 3): a void puts Other Inventory units back on the catalog.
 import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
 import { moveNcStockForOrder } from "@/lib/noncannabis/register-stock";
-import { pacificToday, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { pacificDayKey, pacificToday, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import {
@@ -89,7 +89,7 @@ export type VoidLookupResult = { ok: true; sale: VoidableSale } | { ok: false; e
  * gate. Failures come back as the complete list (manager sees the whole
  * picture, same contract as the returns desk).
  */
-export async function lookupVoidableSale(rawReceipt: string): Promise<VoidLookupResult> {
+export async function lookupVoidableSale(rawReceipt: string, asOfIso?: string): Promise<VoidLookupResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, errors: ["Supabase service role not configured."] };
   const suffix = receiptLookupSuffix(rawReceipt);
   if (!suffix) {
@@ -99,7 +99,8 @@ export async function lookupVoidableSale(rawReceipt: string): Promise<VoidLookup
     };
   }
   const admin = createSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
+  // D170 O2: an offline void is judged at the time the cash really moved.
+  const nowIso = asOfIso ?? new Date().toISOString();
 
   const { data: events } = await admin
     .from("pos_sale_events")
@@ -107,7 +108,7 @@ export async function lookupVoidableSale(rawReceipt: string): Promise<VoidLookup
     .eq("event_type", "sale")
     .eq("status", "processed")
     .not("order_id", "is", null)
-    .gte("occurred_at", pacificWallTimeToUtcISO(pacificToday(), "start"))
+    .gte("occurred_at", pacificWallTimeToUtcISO(asOfIso ? pacificDayKey(asOfIso) : pacificToday(), "start"))
     .order("occurred_at", { ascending: false })
     .limit(500);
   const rows = (events as { client_uuid: string; order_id: string }[] | null) ?? [];
@@ -352,6 +353,13 @@ export type ProcessVoidInput = {
    * drawer's figure subtracts it. Null = not tied (a manager ties it).
    */
   drawerSessionId?: string | null;
+  /**
+   * D170 O2: a void done OFFLINE is judged as of when it happened (same
+   * Pacific day as the sale), and its audit row names that time and the
+   * queued event. Omitted = now (the online path).
+   */
+  asOfIso?: string;
+  offlineClientUuid?: string;
 };
 
 export type ProcessVoidResult =
@@ -378,7 +386,7 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
   if (!request.ok) return request;
 
   // ── Server-authoritative lookup + eligibility ─────────────────────────────
-  const lookup = await lookupVoidableSale(input.receiptNumber);
+  const lookup = await lookupVoidableSale(input.receiptNumber, input.asOfIso);
   if (!lookup.ok) return { ok: false, error: lookup.errors.join(" ") };
   const sale = lookup.sale;
 
@@ -500,6 +508,7 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
       refundMinor: refund.refundMinor,
       // Fix Phase 2.1: which drawer paid the cash out (null = not tied yet).
       drawerSessionId: input.drawerSessionId ?? null,
+      ...(input.offlineClientUuid ? { via: "register_offline", clientUuid: input.offlineClientUuid, occurredAt: input.asOfIso ?? null } : {}),
       pointsClawed,
       rewardPointsReturned,
       ...(rewardNote ? { rewardError: rewardNote.trim() } : {}),
@@ -512,7 +521,7 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
   const slipHtml = buildVoidSlipHtml({
     receiptNumber: receiptNumber(sale.saleClientUuid),
     orderNumber: sale.orderNumber,
-    voidedAtIso: new Date().toISOString(),
+    voidedAtIso: input.asOfIso ?? new Date().toISOString(),
     reason: request.reason,
     approvedByName: input.approver.fullName,
     processedByName: input.processedByName,

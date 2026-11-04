@@ -149,6 +149,7 @@ describe("the key registry matches the code that actually runs", () => {
   });
 
   it("registers exactly the keys in use — no stale entries", () => {
+    // D170 O2/O3 added gw-pos-sale-book (offline voids and returns, encrypted).
     // D170 O6 added gw-pos-day-tally (provisional offline X).
     // D170 O14 added gw-pos-pickup-book (saved pickup orders, encrypted).
     // D170 O9 added gw-pos-fix-index (the Fix & sell lot index for offline).
@@ -177,6 +178,7 @@ describe("the key registry matches the code that actually runs", () => {
         "gw-pos-outbox",
         "gw-pos-pickup-book",
         "gw-pos-queue",
+        "gw-pos-sale-book",
         "gw-pos-seq",
         "gw-pos-star-printer",
         "gw-pos-star-printer-model",

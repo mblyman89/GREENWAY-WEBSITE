@@ -293,6 +293,17 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     degradesOnCorruption: true,
   },
   {
+    // D170 O2/O3: this iPad's own recent sales (lines, prices, member label),
+    // kept for the return look-back so a same-day void or a return works
+    // offline. Member names: classed with patient data, encrypted.
+    key: "gw-pos-sale-book",
+    what: "This register's own recent sales (items, prices, member name), so voids and returns work offline.",
+    durability: "convenience",
+    sensitivity: "phi",
+    tier: "encrypted-db",
+    degradesOnCorruption: true,
+  },
+  {
     // D170 O6: today's tally of this register's sales and no-sales (totals
     // only, no customers), so a manager can print a provisional X offline.
     key: "gw-pos-day-tally",
@@ -667,7 +678,7 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 19, "the registry covers all nineteen keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox, gw-pos-member-book, gw-pos-fix-index, gw-pos-pickup-book and gw-pos-day-tally)");
+    ok(POS_STORAGE_KEYS.length === 20, "the registry covers all twenty keys the register uses today (D170 added gw-pos-lot-details, gw-pos-outbox, gw-pos-member-book, gw-pos-fix-index, gw-pos-pickup-book, gw-pos-day-tally and gw-pos-sale-book)");
     ok(
       POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
       "the paired receipt printer is registered, so the pairing can actually persist",

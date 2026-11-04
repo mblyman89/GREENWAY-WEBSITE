@@ -12,9 +12,12 @@
  *                                      of policy failures.
  *   { receipt, reason, pin, processedByName } → process the void.
  *
- * ONLINE-ONLY by design: a void reverses durable server facts (order,
- * inventory, loyalty) — there is nothing sensible to queue offline. The
- * register hides the action while offline, matching /api/pos/member.
+ * This route is the ONLINE path. D170 O2: when the server is unreachable
+ * the register voids a sale rung on THIS iPad from its encrypted sale book,
+ * behind a manager/lead PIN checked against the D161 vault, and queues one
+ * `reversal` event. At sync offline-reversal-store.ts re-runs this same
+ * machinery (processVoidSale) as of when the cash moved, re-checks the
+ * approver, and refuses anything doubtful to the exception queue.
  *
  * See void-sale-core.ts for the policy and void-store.ts for the reversal
  * machinery (lifecycle → restock → loyalty clawback → medical ledger →

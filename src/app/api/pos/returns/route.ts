@@ -26,9 +26,12 @@
  *     originalPackaging, lotIdLegible, pin, processedByName }
  *                            → process the return.
  *
- * ONLINE-ONLY by design: a return reverses durable server facts (inventory,
- * loyalty, CCRS queue) — there is nothing sensible to queue offline. The
- * register hides the action while offline, matching /api/pos/void.
+ * This route is the ONLINE path. D170 O3: when the server is unreachable
+ * the register returns a line from a sale rung on THIS iPad (encrypted sale
+ * book), behind a manager/lead PIN, and queues one `reversal` event. At sync
+ * offline-reversal-store.ts re-runs processCounterReturn as of when the cash
+ * moved, re-checks the approver and the refund amount, and refuses anything
+ * doubtful to the exception queue.
  *
  * Money in MINOR UNITS (cents) everywhere.
  */

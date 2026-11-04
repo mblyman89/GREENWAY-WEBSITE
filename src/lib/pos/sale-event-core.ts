@@ -109,6 +109,13 @@ export const POS_EVENT_TYPES = [
    * validator runs on both sides. Requires 0340.
    */
   "till_action",
+  /**
+   * D170 O2/O3 — a same-day VOID or a RETURN done with NO server, from this
+   * iPad's own sale book. A manager/lead PIN was checked on the iPad; at sync
+   * the real void / return machinery runs as of when the cash moved, and the
+   * approver is re-judged. Requires 0341.
+   */
+  "reversal",
 ] as const;
 export type PosEventType = (typeof POS_EVENT_TYPES)[number];
 
