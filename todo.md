@@ -3609,7 +3609,7 @@ Shared design rules for every item below. Build each one as its own PR.
 - Before building, read production (read-only) for each item's current server
   route, tables and checks. Never guess.
 
-- [ ] O1 Drawer count-in, drop, swap, close offline. Today: "Offline — drawer
+- [x] O1 (slice 6: till_action event, migration 0340, offline-till-core/store) Drawer count-in, drop, swap, close offline. Today: "Offline — drawer
       actions need a connection to verify your PIN and record the cash."
       (RegisterShell ~6660) and the blind-count pop "can only be opened for the
       count online" (~6596). Needs: an offline PIN check, an offline drawer
@@ -3630,7 +3630,7 @@ Shared design rules for every item below. Build each one as its own PR.
       and "employee PINs need a connection to verify" (RegisterShell ~1935).
       Needs: a witness/employee PIN against the vault, the cached discount
       rules, and a monthly-limit check re-judged at sync.
-- [ ] O5 Loyalty redemption offline. Today: "Offline — loyalty redemption
+- [x] O5 (covered by O15a/O15b, owner: "I want all features unlocked") Loyalty redemption offline. Today: "Offline — loyalty redemption
       needs a connection." (~2053); member lookup (~2104), loyalty signup
       (~2133) and scan auto-attach (~2174) are online-only and no customer book
       is cached (privacy). Needs an owner decision on caching a minimal member
