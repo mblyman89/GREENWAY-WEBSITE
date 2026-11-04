@@ -108,7 +108,7 @@ findings it closes:
    with the Capacitor app" (ch. 01). A scrypt-hashed PIN cache on-device,
    protected by the iOS Keychain, lets a locked register unlock with no server.
    This single feature converts "outage = frozen register in 2 minutes" into
-   "outage = business as usual."
+   "outage = business as usual." **Built 2026-11-04 (D161–D168, H-103).**
 2. **Device key in the iOS Keychain instead of plaintext localStorage**
    (GW-006) — hardware-backed secret storage.
 3. **Durable storage instead of localStorage** (GW-001) — native SQLite/file
@@ -371,7 +371,7 @@ need different hands (mirroring the cutover checklist's 👤/🤝 split).
 |---|---|---|---|
 | (existing queue) | GW-010 critical tax fix, then the moderates per FINDINGS order | — | first, unchanged |
 | H-102 | Capacitor shell for `/pos` (same code, native wrapper) | GW-006 (Keychain), GW-001 (durable storage) | with the fix phase — pre-launch |
-| H-103 | Offline PIN unlock (scrypt cache in Keychain-protected storage) | GW-007; pillar A keystone | right after H-102 |
+| H-103 | Offline PIN unlock (scrypt cache in Keychain-protected storage) | GW-007; pillar A keystone | **DONE 2026-11-04 (D161–D168)**: PBKDF2 600k + per-device HMAC verifiers in a this-device-only keychain item; see SOP-01 §4.40 |
 | H-104 | Queue storage migration localStorage → native SQLite/file (Capacitor) with one-time migration of any pending queue | GW-001 fully | with H-102 |
 | H-105 | LAN fallback receipt printing via Star SDK from the native app | receipts survive Vercel outage | pre-launch if time allows; else first post-launch |
 | H-120 | Nightly `pg_dump` → encrypted → R2/S3 (cron on crawler VM or Vercel) | provider-independence | before cutover Stage 6 |

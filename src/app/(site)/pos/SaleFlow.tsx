@@ -5275,10 +5275,9 @@ function PriceOverrideModal({
 
   const approve = async () => {
     if (!ready || newUnitMinor === null) return;
-    if (!navigator.onLine) {
-      setError("Offline — manager approval needs a connection to verify the PIN.");
-      return;
-    }
+    // D161 — no early "offline" refusal here: onApprove tries the server first
+    // and, when it cannot be reached, falls back to a manager/lead PIN armed on
+    // this iPad (audited as offline_auth). It returns a plain error otherwise.
     setBusy(true);
     setError(null);
     try {

@@ -135,9 +135,14 @@ export const KEYCHAIN_PREFIX = "gw-pos-secure_";
 export const PLUGIN_DEFAULT_KEY_PREFIX: string = "capacitor-storage_";
 
 /** The keychain item names this app is allowed to use. */
-export type SecureItemName = "device-pairing" | "db-passphrase";
+/**
+ * D161 added "offline-unlock": the offline PIN vault (device-bound verifiers,
+ * never a PIN). It is a secret for the same reason the pairing is: with it a
+ * person could grind PINs offline, so it is keychain-only and never synced.
+ */
+export type SecureItemName = "device-pairing" | "db-passphrase" | "offline-unlock";
 
-export const SECURE_ITEM_NAMES: readonly SecureItemName[] = ["device-pairing", "db-passphrase"] as const;
+export const SECURE_ITEM_NAMES: readonly SecureItemName[] = ["device-pairing", "db-passphrase", "offline-unlock"] as const;
 
 /** Fully-qualified keychain item name for a logical secret. */
 export function keychainItemName(item: SecureItemName): string {
@@ -163,7 +168,9 @@ export function keychainItemPolicy(item: SecureItemName): KeychainItemPolicy {
     what:
       item === "device-pairing"
         ? "This register's pairing with the server (its id and key)."
-        : "The passphrase that unlocks this register's encrypted database.",
+        : item === "db-passphrase"
+          ? "The passphrase that unlocks this register's encrypted database."
+          : "The offline PIN vault: device-bound PIN verifiers (never a PIN) so staff can unlock during an outage.",
   };
 }
 
@@ -521,7 +528,8 @@ export function secretMayBeWrittenTo(item: SecureItemName, destination: SecretDe
 /** Plain-English explanation for a refused destination. */
 export function destinationRefusal(item: SecureItemName, destination: SecretDestination): string | null {
   if (secretMayBeWrittenTo(item, destination)) return null;
-  const what = item === "device-pairing" ? "the register's pairing" : "the database passphrase";
+  const what =
+    item === "device-pairing" ? "the register's pairing" : item === "db-passphrase" ? "the database passphrase" : "the offline PIN vault";
   switch (destination) {
     case "encrypted-db":
       return item === "db-passphrase"
@@ -619,7 +627,7 @@ export function __runPosSecureStoreCoreTests(): { passed: number; failed: number
     ok(REQUIRE_ICLOUD_SYNC_OFF, "iCloud Keychain sync is required to stay off");
 
     ok(auditKeychainPolicies().length === 0, "the shipping keychain policy has no problems");
-    ok(SECURE_ITEM_NAMES.length === 2, "exactly two secrets are declared");
+    ok(SECURE_ITEM_NAMES.length === 3, "exactly three secrets are declared (D161 added the offline PIN vault)");
     ok(
       SECURE_ITEM_NAMES.every((n) => keychainItemName(n).startsWith(KEYCHAIN_PREFIX)),
       "every keychain item carries the Greenway prefix",

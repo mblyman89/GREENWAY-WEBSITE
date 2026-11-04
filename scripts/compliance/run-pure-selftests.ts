@@ -1273,6 +1273,7 @@ import { __runPromotionGuideTests } from "../../src/lib/promotions/promotion-gui
 import { __runLoyaltyRewardTests } from "../../src/lib/loyalty/loyalty-reward-core";
 import { __runRegisterFingerprintTests } from "../../src/lib/pos/register-fingerprint-core";
 import { __runIpadSetupTests } from "../../src/lib/pos/ipad-setup-core";
+import { __runOfflineUnlockCoreTests } from "../../src/lib/pos/offline-unlock-core";
 import { __runDrawerCloseSlipTests } from "../../src/lib/registers/drawer-close-slip-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
@@ -2744,6 +2745,7 @@ __runLiquidVolumeTests();
   assertRan("loyalty-reward-core", __runLoyaltyRewardTests(), 55); // D137/D138 ("one redemption per sale, and works exactly as you described in the proposed fix. no dollar cap on the 25% off ... the $0.10-per-point should be retired"): 150 pts = 10% off, 300 pts = 25% off, pre-tax, exactly 150/300 deducted, best-of deal-or-reward per item, legal floors, old codes refused, no dollars in any wording
   assertRan("register-fingerprint-core", __runRegisterFingerprintTests(), 20); // D143 ("add to the lock screen of the app something bold that says I am running the newest version and all is good"): source fingerprint shared by the iPad build and the server, green/red/grey verdict
   assertRan("ipad-setup-core", __runIpadSetupTests(), 30); // D145–D148 ("make the iPad behavior set in stone and something only I can undo"): checklist, owner lockdown policy, Guided Access gate, device health verdict
+  assertRan("offline-unlock-core", __runOfflineUnlockCoreTests(), 90); // D161 ("allows my employees to unlock the ipad registers in offline mode"): per-device key, PBKDF2+HMAC verifiers, roster purge, throttle/wipe, clock-rollback + staleness gates, 4xx never falls back, offline_auth re-judged at sync
   assertRan("drawer-close-slip-core", __runDrawerCloseSlipTests(), 30); // D151–D155 ("print a short receipt with the employee name and register number ... see the table with the numbers in it again. Read only."): close slip with no amounts, read-only second-count table
   console.log("ALL PURE SELF-TESTS PASSED");
 }

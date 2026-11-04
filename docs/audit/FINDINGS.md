@@ -1347,4 +1347,4 @@
   device-bound) either in the Capacitor app or as a carefully-scoped PWA
   feature. Until then: document for staff that during an outage the register
   should be kept awake/in use.
-- **Status:** OPEN (roadmap; owner already aware via UI copy)
+- **Status:** RESOLVED 2026-11-04 (D161–D168): device-bound offline PIN verifiers (PBKDF2 600k + per-device HMAC key, PIN never stored, this-device-only keychain), roster re-check, 4xx-is-final fallback, throttle/wipe, clock-rollback and offline-window limits, owner policy and reset, `offline_auth` audit re-judged at sync (migration 0339). SOP-01 §4.40.

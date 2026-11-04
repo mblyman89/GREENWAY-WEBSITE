@@ -24,6 +24,7 @@ import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } fr
 import { registerGateForEmployee } from "@/lib/staffing/handbook-ack-store";
 import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+import { offlineArmFor } from "@/lib/pos/offline-unlock-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,7 +97,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: handbookGate.reason }, { status: 403 });
   }
 
-  const [openPunch, drawerSession, ownedDrawers, registerRow] = await Promise.all([
+  const [openPunch, drawerSession, ownedDrawers, registerRow, offline] = await Promise.all([
     openWorkPunch(employee.id),
     openSessionForRegister(auth.device.register_id),
     // Fix Phase 6 (G-61, owner D84): the open drawers this employee counted
@@ -105,6 +106,9 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     openDrawersOwnedBy(employee.id),
     // Fix Phase 6 (G-62, owner D85): the standard float, for the count-in warning.
     getRegister(auth.device.register_id),
+    // D161 — the offline arm block (this iPad's offline key + PIN stamp) so
+    // the iPad can store a verifier for this PIN. Never fails the unlock.
+    offlineArmFor(auth.device, employee),
   ]);
 
   await recordAudit({
@@ -133,5 +137,6 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     drawer: drawerSession
       ? { sessionId: drawerSession.id, openedAt: drawerSession.opened_at, businessDay: drawerSession.business_day }
       : null,
+    offline,
   });
 }

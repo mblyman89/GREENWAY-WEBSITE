@@ -36,6 +36,8 @@ import { shouldWriteDeviceHeartbeat } from "@/lib/pos/device-heartbeat-core";
 import { pushLeaflyPickedUp, scheduleAfterResponse } from "@/lib/pos/pickup-leafly-close";
 import { isMarketplaceOrigin, toOrderOrigin } from "@/lib/orders/order-origin-core";
 import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
+import { judgeOfflineAuth, offlineKeyId, validateOfflineAuthPayload, type OfflineAuthPayload } from "./offline-unlock-core";
+import { getOfflinePolicy } from "./offline-unlock-store";
 import {
   validateSalePayload,
   validatePunchPayload,
@@ -391,6 +393,13 @@ async function ingestOne(
           "Medical card-capture events are not accepted yet — apply supabase/migrations/0121_pos_medical.sql first.",
       };
     }
+    if (insertError.code === "23514" && envelope.eventType === "offline_auth") {
+      return {
+        clientUuid: envelope.clientUuid,
+        status: "rejected",
+        reason: "Offline PIN audit events are not accepted yet — apply supabase/migrations/0339_pos_offline_auth.sql first.",
+      };
+    }
     if (insertError.code === "23514" && envelope.eventType === "cart_adjustment") {
       return {
         clientUuid: envelope.clientUuid,
@@ -447,6 +456,8 @@ async function processEnvelope(
         return await processCardCapture(admin, envelope, ledgerId);
       case "cart_adjustment":
         return await processCartAdjustment(admin, envelope, ledgerId);
+      case "offline_auth":
+        return await processOfflineAuth(admin, envelope, ledgerId);
       default:
         return await markException(admin, ledgerId, envelope.clientUuid, "Unknown event type.");
     }
@@ -1703,6 +1714,52 @@ export async function replayStrandedCartAdjustments(resolvedBy: string): Promise
     left: plan.leave.map((l) => ({ clientUuid: l.clientUuid, why: l.why })),
     failed,
   };
+}
+
+// ---------------------------------------------------------------------------
+// offline_auth — a PIN verified on the iPad with no server (D161, 0339)
+// ---------------------------------------------------------------------------
+
+async function processOfflineAuth(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  envelope: PosEventEnvelope,
+  ledgerId: string,
+): Promise<PosSyncAck> {
+  const payload = envelope.payload as Partial<OfflineAuthPayload>;
+  const check = validateOfflineAuthPayload(payload);
+  if (!check.ok) {
+    return markException(admin, ledgerId, envelope.clientUuid, `Invalid offline PIN audit: ${check.errors.join(" ")}`);
+  }
+  const { data: emp } = await admin
+    .from("employees")
+    .select("id, full_name, staff_id, job_role, active")
+    .eq("id", envelope.employeeId)
+    .maybeSingle();
+  const row = emp as { id: string; full_name: string; staff_id: string | null; job_role: string; active: boolean } | null;
+  const policy = await getOfflinePolicy();
+  const verdict = judgeOfflineAuth({
+    payload: payload as OfflineAuthPayload,
+    employee: row ? { active: row.active === true, jobRole: row.job_role } : null,
+    currentKeyId: offlineKeyId(policy.epoch),
+  });
+  await recordAudit({
+    actorId: row?.staff_id ?? null,
+    actorEmail: row?.full_name ?? `pos-device:${envelope.deviceId}`,
+    action: verdict.ok ? verdict.action : "register.offline_auth_flagged",
+    entityType: "register",
+    entityId: envelope.registerId,
+    after: {
+      ...(payload as OfflineAuthPayload),
+      employeeId: envelope.employeeId,
+      deviceId: envelope.deviceId,
+      clientUuid: envelope.clientUuid,
+      occurredAt: envelope.occurredAt,
+      ...(verdict.ok ? {} : { flagged: verdict.reason }),
+    },
+  });
+  if (!verdict.ok) return markException(admin, ledgerId, envelope.clientUuid, verdict.reason);
+  await markProcessed(admin, ledgerId);
+  return { clientUuid: envelope.clientUuid, status: "processed" };
 }
 
 // ---------------------------------------------------------------------------

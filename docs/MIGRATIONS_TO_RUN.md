@@ -3654,3 +3654,25 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0338_cultivera_history_days.rollback.sql`.
   It removes the function; the history table stays (the drop is in the file, commented out).
+
+- [ ] `0339_pos_offline_auth.sql` (D161, owner request 2026-11-04: offline PIN unlock). Apply it **after 0338**.
+  - **Why:** the owner asked: *"please now build for me something that allows my employees to unlock the ipad
+    registers in offline mode. we cant ring a sale if we cant get past the pin unlock page."*
+  - **What it does:** widens the `pos_sale_events` event_type CHECK to also allow `offline_auth`, the audit record
+    every offline PIN use (unlock, clock PIN, manager approval) sends when the internet returns. The server re-checks
+    each one and puts doubtful ones on Exceptions. No PIN, hash or verifier is stored by this feature.
+
+    Until it is applied, offline unlock still works on the iPads, but the offline_auth audit events are rejected
+    (kept on the iPad, with a hint naming this file).
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select pg_get_constraintdef(oid) from pg_constraint
+   where conname = 'pos_sale_events_event_type_check';   -- the list ends with 'offline_auth'
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0339_pos_offline_auth.rollback.sql`. It refuses to run while
+  offline_auth rows exist.

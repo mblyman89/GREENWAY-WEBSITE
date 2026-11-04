@@ -14,6 +14,11 @@
  * way for me to see or validate in some way I am on the latest version for my
  * iPad registers?"
  *
+ * Owner, 2026-11-04 (D161): "please now build for me something that allows
+ * my employees to unlock the ipad registers in offline mode." The offline
+ * unlock policy, the reset, and a per-iPad "Offline unlock" health line live
+ * here too.
+ *
  * Viewing: staffing.manage (same as POS devices). Saving: registers.lockdown
  * (owner only). Every write is audited. No migration: site_settings rows.
  */
@@ -29,6 +34,8 @@ import { listRegisters } from "@/lib/registers/store";
 import { getIpadChecklistState, getIpadLockdownPolicy, listDeviceHealth } from "@/lib/pos/ipad-setup-store";
 import { checklistProgress, deviceHealthVerdict } from "@/lib/pos/ipad-setup-core";
 import { sanitizeFingerprint, shortFingerprint } from "@/lib/pos/register-fingerprint-core";
+import { OfflineUnlockPolicyEditor } from "@/components/admin/registers/OfflineUnlockPolicyEditor";
+import { getOfflinePolicy, offlineUnlockConfigured } from "@/lib/pos/offline-unlock-store";
 
 export const dynamic = "force-dynamic";
 
@@ -60,12 +67,13 @@ export default async function IpadSetupPage() {
     );
   }
 
-  const [devicesRes, registers, health, policy, checklist] = await Promise.all([
+  const [devicesRes, registers, health, policy, checklist, offlinePolicy] = await Promise.all([
     listPosDevices(),
     listRegisters({ includeInactive: true }),
     listDeviceHealth(),
     getIpadLockdownPolicy(),
     getIpadChecklistState(),
+    getOfflinePolicy(),
   ]);
   const serverFingerprint = sanitizeFingerprint(process.env.REGISTER_FINGERPRINT);
   const registerName = new Map(registers.map((r) => [r.id, r.name]));
@@ -84,6 +92,7 @@ export default async function IpadSetupPage() {
             serverFingerprint,
             policy,
             nowMs,
+            offlinePolicy,
           });
           const marks = checklist[d.id.toLowerCase()] ?? {};
           return {
@@ -172,6 +181,24 @@ export default async function IpadSetupPage() {
           <LockdownPolicyEditor initial={policy} canEdit={canEdit} />
         </Card>
 
+        <HelpPanel
+          id="pos-ipad-offline-unlock"
+          title="Unlock the register when the internet is down (offline PIN unlock)"
+          steps={[
+            "While the internet works, every employee who uses an iPad unlocks it ONCE with their PIN. That sets them up for offline on that iPad. Repeat on the other iPad.",
+            "The lock screen then shows \"Offline unlock ready: N people\". The iPad card below shows the same thing, plus how many managers can approve offline.",
+            "If the internet drops (or the server is slow or down), type your PIN as usual. The iPad checks it itself and says \"Unlocked OFFLINE\". Sales save on the iPad and send when the internet returns.",
+            "A wrong PIN is refused. Five wrong PINs pause the pad (30 seconds, then longer). 25 wrong PINs in a row erase the offline copies on that iPad.",
+            "Fired employees and changed PINs drop off the iPad automatically at its next check-in. Every offline unlock, approval and clock punch is recorded and re-checked when it syncs; anything doubtful shows up as an exception.",
+            "Counting a NEW drawer in still needs the internet (the cash count is verified by the server). Keep ringing on the drawer that is already open.",
+          ]}
+        />
+
+        <Card>
+          <h2 className="mb-3 text-base font-semibold text-[var(--admin-text)]">Offline PIN unlock (owner only)</h2>
+          <OfflineUnlockPolicyEditor initial={offlinePolicy} canEdit={canEdit} configured={offlineUnlockConfigured()} />
+        </Card>
+
         {!devicesRes.ok ? (
           <EmptyState title="Devices unavailable" description={devicesRes.error} />
         ) : devices.length === 0 ? (
@@ -185,8 +212,9 @@ export default async function IpadSetupPage() {
         )}
 
         <p className="text-xs text-[var(--admin-text-faint)]">
-          Known limit: unlocking a register with a staff PIN still needs the internet in this build. Sales already in
-          progress keep working offline and queue until the connection returns.
+          Offline: unlocking, clocking in or out, ringing sales and manager approvals keep working on an iPad where each
+          person has unlocked online once (D161). Counting a new drawer in, voids, returns, employee purchases and the day report still need
+          the internet, because the server must check them at the moment they happen.
         </p>
       </div>
     </div>

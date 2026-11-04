@@ -24,13 +24,14 @@
  */
 
 import { sanitizeFingerprint } from "./register-fingerprint-core";
+import { offlineHealthCheck, sanitizeOfflineHealth, type OfflineHealth, type OfflineUnlockPolicy } from "./offline-unlock-core";
 
 // ---------------------------------------------------------------------------
 // 1. The checklist
 // ---------------------------------------------------------------------------
 
 /** Things the iPad app can measure about itself (native build only). */
-export type VerifyKey = "guidedAccess" | "lowPowerOff" | "charging" | "versionCurrent" | "keepAwake" | "queueEmpty";
+export type VerifyKey = "guidedAccess" | "lowPowerOff" | "charging" | "versionCurrent" | "keepAwake" | "queueEmpty" | "offlineArmed";
 
 export type ChecklistSection = "lock" | "settings" | "app" | "hardware" | "drill";
 
@@ -164,8 +165,15 @@ export const IPAD_SETUP_CHECKLIST: readonly ChecklistItem[] = [
     id: "drill-offline",
     section: "drill",
     title: "Offline drill passed",
-    how: "While unlocked: turn Wi-Fi OFF (Control Center is blocked in Guided Access; do this before starting it, or end the session briefly) → ring a $0.01-style test sale or a real sale → the top shows \"1 pending\" → turn Wi-Fi ON → within a minute it shows 0 pending and the sale appears in the back office. Note: unlocking with a PIN still needs the internet in this build.",
+    how: "While unlocked: turn Wi-Fi OFF (Control Center is blocked in Guided Access; do this before starting it, or end the session briefly) → ring a $0.01-style test sale or a real sale → the top shows \"1 pending\" → turn Wi-Fi ON → within a minute it shows 0 pending and the sale appears in the back office.",
     verify: "queueEmpty",
+  },
+  {
+    id: "drill-offline-unlock",
+    section: "drill",
+    title: "Offline PIN unlock drill passed (D161)",
+    how: "With Wi-Fi ON, every employee who works this counter unlocks this iPad once with their PIN (that sets them up for offline, and must be repeated at least every 30 days by default). The lock screen then says \"Offline unlock ready: N people\". Lock the register → turn Wi-Fi OFF → enter a PIN → it unlocks and says \"Unlocked OFFLINE\" → ring a test sale → turn Wi-Fi ON → the sale and an \"unlocked offline\" audit row appear in the back office. Also try a WRONG PIN offline: it must refuse.",
+    verify: "offlineArmed",
   },
 ];
 
@@ -263,6 +271,8 @@ export type DeviceHealthReport = {
   menuFetchedAt: string | null;
   storageOk: boolean | null;
   native: NativeStatus | null;
+  /** D161 — offline unlock readiness (counts only). Absent on older builds. */
+  offline?: OfflineHealth | null;
   /** Server-stamped receipt time (ISO). */
   reportedAt?: string;
 };
@@ -314,6 +324,7 @@ export function sanitizeDeviceHealthReport(raw: unknown): DeviceHealthReport | n
     menuFetchedAt: isoOrNull(r.menuFetchedAt),
     storageOk: boolOrNull(r.storageOk),
     native: sanitizeNativeStatus(r.native),
+    offline: sanitizeOfflineHealth(r.offline),
   };
 }
 
@@ -363,6 +374,8 @@ export function deviceHealthVerdict(input: {
   serverFingerprint: string | null;
   policy: IpadLockdownPolicy;
   nowMs: number;
+  /** D161 — the owner's offline unlock policy. Omitted = no offline line. */
+  offlinePolicy?: OfflineUnlockPolicy;
 }): DeviceHealthVerdict {
   const { report, policy, nowMs } = input;
   const checks: DeviceCheck[] = [];
@@ -420,6 +433,9 @@ export function deviceHealthVerdict(input: {
       if (policy.keepAwake && n.keepAwake === false) checks.push({ label: "Keep awake", state: "warn", text: "The screen may sleep. Set Auto-Lock to Never." });
     }
   }
+  if (input.offlinePolicy && input.status === "active") {
+    checks.push(offlineHealthCheck(report ? (report.offline ?? null) : null, input.offlinePolicy, nowMs));
+  }
   const worst = checks.some((c) => c.state === "bad") ? "bad" : checks.some((c) => c.state === "warn") ? "warn" : "ok";
   const n = report?.native ?? null;
   return {
@@ -434,6 +450,7 @@ export function deviceHealthVerdict(input: {
       keepAwake: n ? n.keepAwake : null,
       versionCurrent: version === "current" ? true : version === "outdated" || (report !== null && !app) ? false : null,
       queueEmpty: report ? report.pending === 0 : null,
+      offlineArmed: report?.offline ? report.offline.armed > 0 : null,
     },
   };
 }
@@ -562,6 +579,27 @@ export function __runIpadSetupTests(): { passed: number; failed: number } {
   ok(out.version === "outdated" && out.verified.versionCurrent === false, "outdated device flagged");
   const pend = deviceHealthVerdict({ status: "active", lastSeenAt: new Date(now).toISOString(), report: { ...rep, rejected: 0, pending: 2, oldestPendingAt: new Date(now - 20 * 60_000).toISOString() }, serverFingerprint: null, policy: DEFAULT_LOCKDOWN_POLICY, nowMs: now });
   ok(pend.checks.some((c) => c.label === "Unsent sales" && c.state === "bad"), "old unsent sales are bad");
+  // D161 — offline unlock line
+  ok(!pend.checks.some((c) => c.label === "Offline unlock"), "no offline line without an offline policy");
+  const offRep = sanitizeDeviceHealthReport({ pending: 0, offline: { enabled: true, armed: 0, approvers: 0, keyId: "e1" } })!;
+  ok(offRep.offline?.armed === 0 && offRep.offline.keyId === "e1", "offline health sanitized into the report");
+  ok(sanitizeDeviceHealthReport({ pending: 0 })!.offline === null, "older build: offline null");
+  const offPol = { enabled: true, maxOfflineHours: 168, armTtlDays: 30, allowOfflineApproval: true, epoch: 1 };
+  const nobody = deviceHealthVerdict({ status: "active", lastSeenAt: new Date(now).toISOString(), report: offRep, serverFingerprint: null, policy: DEFAULT_LOCKDOWN_POLICY, nowMs: now, offlinePolicy: offPol });
+  ok(nobody.checks.some((c) => c.label === "Offline unlock" && c.state === "bad"), "nobody armed is bad");
+  ok(nobody.verified.offlineArmed === false, "offlineArmed verified false");
+  const ready = deviceHealthVerdict({
+    status: "active",
+    lastSeenAt: new Date(now).toISOString(),
+    report: { ...offRep, offline: { ...offRep.offline!, armed: 4, approvers: 1, rosterAt: new Date(now - 60_000).toISOString() } },
+    serverFingerprint: null,
+    policy: DEFAULT_LOCKDOWN_POLICY,
+    nowMs: now,
+    offlinePolicy: offPol,
+  });
+  ok(ready.checks.some((c) => c.label === "Offline unlock" && c.state === "ok") && ready.verified.offlineArmed === true, "armed device ok + verified");
+  ok(IPAD_SETUP_CHECKLIST.some((i) => i.id === "drill-offline-unlock" && i.verify === "offlineArmed"), "offline unlock drill is device-verified");
+  ok(!IPAD_SETUP_CHECKLIST.some((i) => /still needs the internet/.test(i.how)), "old 'unlock needs internet' limit removed from the checklist");
 
   let st = normalizeChecklistState({ devices: { [dev]: { "ga-enable": { at: "2026-11-03T10:00:00Z", by: "m" }, bogus: { at: "2026-11-03T10:00:00Z" } }, "not-a-uuid": {} } });
   ok(Object.keys(st).length === 1 && Object.keys(st[dev]!).join() === "ga-enable", "state normalised");
