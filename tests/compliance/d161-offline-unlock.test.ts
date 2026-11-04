@@ -189,6 +189,14 @@ describe("D161 wiring (source checks)", () => {
     expect(shell).toMatch(/onUnlockedOffline/);
   });
 
+  it("the price-override modal no longer refuses before the offline fallback runs", () => {
+    const sale = read("src/app/(site)/pos/SaleFlow.tsx");
+    expect(sale).not.toMatch(/manager approval needs a connection to verify the PIN/);
+    expect(shell).toMatch(/approveOffline\(pin, "price_override"/);
+    expect(shell).toMatch(/approveOffline\(pin, "no_sale"/);
+    expect(shell).toMatch(/noSaleBlockReason\(!!drawer, online \|\| offlineApprovalOk\)/);
+  });
+
   it("every PIN endpoint arms offline on success", () => {
     expect(shell.match(/armOfflineFromOnline\(/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
     for (const r of ["unlock", "approve", "clock"]) {

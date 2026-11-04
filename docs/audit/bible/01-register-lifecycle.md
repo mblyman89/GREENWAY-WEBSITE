@@ -168,9 +168,18 @@ All PIN entry points on a device share ONE throttle scope: `pos-device:<deviceId
    flips to `home`. If the server reports a different bound register id than the
    cached one, the cached creds are updated (`RegisterShell.tsx:757`).
 
-**Unlock is ONLINE-ONLY in this build.** Offline PIN entry shows: "Offline — unlock
-requires a connection in this build. (Offline PIN cache ships with the Capacitor
-app.)" (`RegisterShell.tsx:1597`).
+**Offline unlock (D161, 2026-11-04; GW-007 resolved).** Unlock tries the server
+first (8 s `AbortController` timeout, `postPinRequest`). A 4xx answer is final.
+Only a thrown request, a timeout or a 5xx falls back to `verifyOfflinePin`
+(`src/lib/pos/offline-unlock.ts`), which checks the PIN against device-bound
+verifiers: HMAC-SHA256(device key, PBKDF2-SHA256(PIN, salt, 600k) | employee id).
+The verifiers live in the `offline-unlock` secure-store item (this device only,
+no iCloud sync) and are armed by every successful online PIN proof
+(`armOfflineFromOnline`), pruned by the 10-minute roster refresh
+(`/api/pos/offline-roster`). An offline unlock queues an `offline_auth` event
+that the server re-judges at sync (`processOfflineAuth`, migration 0339).
+Limits: 5 failures pause, 25 wipe; clock rollback, offline window and arm age
+are enforced by `offlineGate` / `matchVerifiers` in `offline-unlock-core.ts`.
 
 ### 3.4 Clock in/out from the lock screen
 

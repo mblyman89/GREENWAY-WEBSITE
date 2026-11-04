@@ -801,3 +801,18 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | Question | Answer (built) |
 |---|---|
 | The Accounting tab says the books do not recognise a category "EndProduct" | Fixed for new deliveries: those lots are filed by their state inventory type. The Sungrown and Bellevue deliveries finalized before the fix are re-posted when the books work resumes (D160) |
+
+
+**Offline unlock (D161–D168) answers:**
+
+| Question | Answer (built, offline unlock) |
+|---|---|
+| The internet is down. Can I unlock the register? | Yes, if you have unlocked **this iPad** online at least once in the last 30 days. Type your PIN as usual; after up to 8 seconds the iPad checks it itself and shows *Unlocked OFFLINE as <name>* (D161, D163) |
+| How do I know the iPad is ready for an outage? | The lock screen says *Offline unlock ready: N people*. If it says *not set up yet*, have every employee unlock that iPad once while online (D168) |
+| Is my PIN saved on the iPad? | No. Only a one-way, device-bound check (600,000 rounds of PBKDF2) in the iPad's this-device-only keychain. It is useless on any other device (D161) |
+| The server said my PIN was wrong. Will it try offline? | No. A server "no" is final; offline is used only when the server cannot be reached (D163) |
+| What still needs the internet? | Counting in a new drawer, drops, swaps, closes, voids, returns, employee purchases, loyalty redemption, the day report and pickup orders (D165) |
+| Can a manager approve a price override or no sale offline? | Yes, a manager or lead armed on that iPad, unless the owner turned offline approvals off (D165) |
+| It says the offline PIN pad is paused / offline PINs were erased | 5 wrong tries pause it (30 s doubling to 15 min); 25 erase the offline list. Restore internet and each person unlocks online once (D164) |
+| An iPad was lost, or someone left suddenly | Owner: iPad setup & lockdown → Offline unlock → **Reset offline PINs** (type RESET). Every iPad erases all offline PINs at its next check-in; also unpair a lost iPad (D167) |
+| Does the office see offline unlocks? | Yes. Every offline PIN use is sent when the internet returns and re-checked; problems appear on Exceptions (D166) |

@@ -192,7 +192,7 @@ export async function buildOfflineRoster(device: DeviceLike): Promise<RosterResu
     .select("employee_id")
     .is("clock_out_at", null)
     .eq("punch_kind", "work")
-    .limit(1000);
+    .limit(500);
   const onClock = punchErr ? null : new Set(((punches ?? []) as Array<{ employee_id: string }>).map((p) => p.employee_id));
 
   const employees: OfflineRosterEntry[] = [];

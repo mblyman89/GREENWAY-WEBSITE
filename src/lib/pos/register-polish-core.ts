@@ -244,16 +244,18 @@ export function startSaleBlockReason(
  * cashier can actually fix them:
  *   1. a drawer session must be open (the no-sale event is recorded against
  *      the drawer session, so without one there is nothing to audit it to),
- *   2. the register must be online (the manager's approval PIN is verified
- *      server-side by /api/pos/approve — an offline "approval" would be
- *      theater, so the button says exactly that up front).
+ *   2. the approval PIN must be checkable: online it is verified server-side
+ *      by /api/pos/approve; offline (D161) only when a manager or lead is armed
+ *      on this iPad and the owner allows offline approvals. The caller passes
+ *      `online || offlineApprovalReady`, so `false` here means neither path
+ *      exists and the button says so up front.
  */
 export function noSaleBlockReason(drawerOpen: boolean, online: boolean): string | null {
   if (!drawerOpen) {
     return "Count in a drawer first — every no-sale open is recorded against the drawer session.";
   }
   if (!online) {
-    return "Offline — manager approval needs a connection to verify the PIN.";
+    return "Offline — no manager or lead is set up to approve on this iPad, so the PIN cannot be verified. Reconnect.";
   }
   return null;
 }
