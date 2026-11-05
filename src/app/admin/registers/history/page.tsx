@@ -6,6 +6,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Button, Badge } from "@/components/admin/ui";
 import { recentSessions } from "@/lib/registers/store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
+import { CLOSER_COUNT_HIDDEN_TEXT, closerCountVisible, countedCashMinor, loudFlags, cleanFlags } from "@/lib/registers/count-integrity-core";
 import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
@@ -161,7 +162,19 @@ export default async function RegisterHistoryPage({
                     {s.opening_count_minor != null ? formatCents(s.opening_count_minor) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/70">
-                    {s.closing_count_minor != null ? formatCents(s.closing_count_minor) : "—"}
+                    {/* D180: hidden until the second count; then the count the drawer was reconciled on. */}
+                    {!closerCountVisible(s) ? (
+                      <span className="text-xs italic text-white/40">{CLOSER_COUNT_HIDDEN_TEXT}</span>
+                    ) : countedCashMinor(s) != null ? (
+                      formatCents(countedCashMinor(s) as number)
+                    ) : (
+                      "—"
+                    )}
+                    {loudFlags(cleanFlags(s.second_count_flags)).length > 0 ? (
+                      <span className="ml-1 rounded bg-red-600/80 px-1 text-[0.6rem] font-bold uppercase text-white" title="Second count warning: open the record">
+                        Check
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/50">
                     {s.expected_close_minor != null ? formatCents(s.expected_close_minor) : "—"}

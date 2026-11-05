@@ -1,4 +1,5 @@
 import "server-only";
+import { countedCashMinor } from "@/lib/registers/count-integrity-core";
 
 /**
  * src/lib/registers/drawer-figure-store.ts  (Fix Phase 2.1 · G-05 · F-01-4)
@@ -252,7 +253,8 @@ export async function loadDrawerFigure(sessionId: string, preloaded?: DrawerSess
   const figure = buildDrawerFigure({
     sessionId: session.id,
     openingMinor: session.opening_count_minor,
-    closingMinor: session.closing_count_minor,
+    // D180: the count the drawer was reconciled on (0343), else the closer's.
+    closingMinor: countedCashMinor(session),
     dropsMinor,
     saleEvents: sales.rows,
     dayRefunds: refunds.refunds,

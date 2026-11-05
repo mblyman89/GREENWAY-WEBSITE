@@ -11,6 +11,14 @@ import { OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-co
 import { correctReconciledDrawerAction } from "../../actions";
 import { getSecondCountBreakdown } from "@/lib/registers/store";
 import { countTableRows } from "@/lib/registers/drawer-close-slip-core";
+import {
+  CLOSER_COUNT_HIDDEN_TEXT,
+  cleanFlags,
+  closerCountVisible,
+  countedCashMinor,
+  flagSentence,
+  loudFlags,
+} from "@/lib/registers/count-integrity-core";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +77,19 @@ export default async function TillSummaryPage({
     session.second_count_minor != null ? await getSecondCountBreakdown(session.id).then((b) => (b ? countTableRows(b.counts) : null)) : null;
 
   const revealed = session.status === "reconciled" || session.status === "verified";
+  // D180 (S3): the closer's blind count stays hidden until the second count is
+  // in (everyone is a manager type, so the page itself must not let a second
+  // counter peek). The money figure is the count the drawer was reconciled on.
+  const closerVisible = closerCountVisible(session);
+  const reconciledOn = countedCashMinor(session);
+  const reconciledDiffers =
+    revealed && typeof session.reconciled_count_minor === "number" && session.reconciled_count_minor !== session.closing_count_minor;
+  const flags = cleanFlags(session.second_count_flags);
+  const loud = loudFlags(flags);
+  const flagSeconds =
+    session.second_count_opened_at && session.second_counted_at
+      ? Math.max(0, Math.floor((Date.parse(session.second_counted_at) - Date.parse(session.second_count_opened_at)) / 1000))
+      : null;
   const dropsTotal = drops.reduce((sum, d) => sum + d.amount_minor, 0);
 
   return (
@@ -128,7 +149,13 @@ export default async function TillSummaryPage({
             <Row label={`Safe drops (${drops.length})`} value={drops.length > 0 ? `−${formatCents(dropsTotal)}` : "—"} />
             <Row
               label={`Closed ${fmtTime(session.closed_at)}${closedByName ? ` by ${closedByName}` : ""} (blind count)`}
-              value={session.closing_count_minor == null ? "—" : formatCents(session.closing_count_minor)}
+              value={
+                !closerVisible
+                  ? CLOSER_COUNT_HIDDEN_TEXT
+                  : session.closing_count_minor == null
+                    ? "—"
+                    : formatCents(session.closing_count_minor)
+              }
             />
             {/* Fix Phase 2.2 (G-01, owner D2): the second person's own count.
                 Not blind-sensitive: both people already know their counts. */}
@@ -137,6 +164,11 @@ export default async function TillSummaryPage({
                 label={`Second count${secondCountedByName ? ` by ${secondCountedByName}` : ""}`}
                 value={formatCents(session.second_count_minor)}
               />
+            ) : null}
+            {/* D180: when the drawer was reconciled on a different count than the
+                closer's (the second count, or a correction), both stay on the sheet. */}
+            {reconciledDiffers && reconciledOn != null ? (
+              <Row label="Reconciled on (the count the books use)" value={formatCents(reconciledOn)} strong />
             ) : null}
             {revealed ? (
               <>
@@ -174,6 +206,16 @@ export default async function TillSummaryPage({
             ) : null}
           </tbody>
         </table>
+        {canCorrect && loud.length > 0 ? (
+          <div className="mt-2 rounded border-2 border-red-700 bg-red-50 px-3 py-2 text-xs text-red-900" data-testid="history-second-count-flags">
+            <p className="font-black uppercase tracking-[0.1em]">Second count warning (D180)</p>
+            <ul className="mt-1 list-disc pl-4">
+              {loud.map((f) => (
+                <li key={f}>{flagSentence(f, flagSeconds)}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {session.second_count_minor != null ? (
           <p className="mt-1 text-[0.65rem] text-black/50">
             {secondCountSentence(compareCounts(session.closing_count_minor, session.second_count_minor))}
@@ -301,13 +343,13 @@ export default async function TillSummaryPage({
       </div>
 
       {/* Owner D127: correct a reconciled drawer (owner / admin). Not printed. */}
-      {canCorrect && session.status === "reconciled" && session.closing_count_minor != null && session.expected_close_minor != null ? (
+      {canCorrect && session.status === "reconciled" && reconciledOn != null && session.expected_close_minor != null ? (
         <details className="mx-auto mt-4 max-w-2xl rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3 text-sm print:hidden">
           <summary className="cursor-pointer font-semibold text-[var(--admin-text)]">Correct this drawer&apos;s count (owner / admin)</summary>
           <form action={correctReconciledDrawerAction} className="mt-3 space-y-2 text-xs text-[var(--admin-text)]">
             <input type="hidden" name="session_id" value={session.id} />
             <p className="text-[var(--admin-text-muted)]">
-              Reconciled on {formatCents(session.closing_count_minor)} against an expected {formatCents(session.expected_close_minor)} (
+              Reconciled on {formatCents(reconciledOn)} against an expected {formatCents(session.expected_close_minor)} (
               {overShortLabel(session.over_short_minor ?? 0)}). Choose the right count. Over / short is worked out again against the same
               expected figure. The old figures stay in the notes and the audit log. This does not change the books; a drawer that already
               has a ledger entry, or whose cash is in a sealed deposit bag, cannot be corrected here.

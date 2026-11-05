@@ -10,6 +10,7 @@
  * Rule 46: a failed read is returned as an error, never as "no bags".
  */
 import "server-only";
+import { countedCashMinor } from "@/lib/registers/count-integrity-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { type DenomCounts } from "@/lib/registers/cash";
@@ -170,12 +171,21 @@ export async function drawersForDay(day: string): Promise<DayDrawers> {
   const admin = createSupabaseAdminClient();
   const [regs, sess] = await Promise.all([
     admin.from("registers").select("id, name"),
-    admin.from("drawer_sessions").select("id, register_id, status, opening_count_minor, closing_count_minor, opened_at").eq("business_day", day).order("opened_at", { ascending: true }),
+    admin.from("drawer_sessions").select("*").eq("business_day", day).order("opened_at", { ascending: true }),
   ]);
   if (regs.error) return { ok: false, error: `Registers could not be read: ${regs.error.message}` };
   if (sess.error) return { ok: false, error: `Drawer sessions could not be read: ${sess.error.message}` };
   const names = new Map(((regs.data as { id: string; name: string }[] | null) ?? []).map((r) => [r.id, r.name]));
-  const sessions = (sess.data as { id: string; register_id: string; status: string; opening_count_minor: number | null; closing_count_minor: number | null }[] | null) ?? [];
+  const sessions =
+    (sess.data as {
+      id: string;
+      register_id: string;
+      status: string;
+      opening_count_minor: number | null;
+      closing_count_minor: number | null;
+      reconciled_count_minor?: number | null;
+      second_count_minor?: number | null;
+    }[] | null) ?? [];
   let drops: { sessionId: string; amountMinor: number }[] = [];
   if (sessions.length > 0) {
     const d = await admin.from("drawer_drops").select("session_id, amount_minor").in("session_id", sessions.map((s) => s.id));
@@ -188,7 +198,10 @@ export async function drawersForDay(day: string): Promise<DayDrawers> {
       registerName: names.get(s.register_id) ?? "Register",
       status: s.status,
       openingMinor: s.opening_count_minor,
-      closingMinor: s.closing_count_minor,
+      // D180: the count the drawer was reconciled on (0343), the closer's for older rows.
+      closingMinor: countedCashMinor(s),
+      // D180: a closed drawer stays blind here until its second count is in.
+      secondCountMinor: s.second_count_minor ?? null,
     })),
     drops,
   );

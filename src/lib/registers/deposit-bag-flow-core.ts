@@ -84,6 +84,13 @@ export type ExpectedSessionInput = {
   status: string;
   openingMinor: number | null;
   closingMinor: number | null;
+  /**
+   * D180 (S3): the second count, when the caller read it. A CLOSED drawer whose
+   * second count is explicitly null is still blind: its line is withheld (the
+   * "to the bag" figure would give the closer's count away) and the expected
+   * deposit waits. Undefined = not read (older callers) = old behaviour.
+   */
+  secondCountMinor?: number | null;
 };
 
 export type ExpectedSessionLine = {
@@ -130,6 +137,14 @@ export function expectedDeposit(
     const dropsMinor = dropsBy.get(s.id) ?? 0;
     if (s.status === "open") {
       problems.push(`${s.registerName} is still open. Close every drawer first (SOP-03 §4.3).`);
+      dropsTotal += dropsMinor;
+      continue;
+    }
+    if (s.status === "closed" && s.secondCountMinor === null) {
+      problems.push(
+        `${s.registerName} is waiting for its second count. Do the second count first (Registers, Needs attention); ` +
+          "then this drawer's line and the expected deposit appear (D180).",
+      );
       dropsTotal += dropsMinor;
       continue;
     }
@@ -558,6 +573,11 @@ export function __runDepositBagFlowTests(): { passed: number; failed: number } {
   ok(none.expectedMinor === 0 && none.sessionCount === 0, "no drawers: expected is a real zero");
   const missing = expectedDeposit([{ id: "m", registerName: "R3", status: "closed", openingMinor: null, closingMinor: 100 }], []);
   ok(missing.expectedMinor === null, "missing float is a question, not zero");
+  // D180: a closed drawer still waiting for its second count stays blind
+  const blind = expectedDeposit([{ id: "w", registerName: "R4", status: "closed", openingMinor: 16750, closingMinor: 50000, secondCountMinor: null }], []);
+  ok(blind.expectedMinor === null && blind.lines.length === 0 && blind.problems[0].includes("second count"), "D180: no line, no expected until the second count");
+  const seen = expectedDeposit([{ id: "w", registerName: "R4", status: "closed", openingMinor: 16750, closingMinor: 50000, secondCountMinor: 50000 }], []);
+  ok(seen.expectedMinor === 33250 && seen.lines.length === 1, "D180: second count in, the line appears");
 
   // night count
   const n1 = checkNightCount({ bagNo: " 1041 ", countMinor: 164815, closerId: "a", existingBagNoForDay: null, note: "" });

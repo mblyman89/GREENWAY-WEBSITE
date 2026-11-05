@@ -23,6 +23,7 @@
  * the day's bag.
  */
 import "server-only";
+import { closerCountVisible, countedCashMinor } from "@/lib/registers/count-integrity-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -232,7 +233,9 @@ export async function eodData(businessDay: string): Promise<EodData> {
       registerName: regName.get(s.register_id) ?? "Register",
       status: s.status,
       openingMinor: s.opening_count_minor,
-      closingMinor: s.closing_count_minor,
+      // D180: the reconciled count (0343) or the closer's; withheld while blind.
+      closingMinor: countedCashMinor(s),
+      secondCountMinor: s.second_count_minor ?? null,
     })),
     drops: sessionDrops,
     saleEvents: events,
@@ -253,7 +256,8 @@ export async function eodData(businessDay: string): Promise<EodData> {
         registerId: s.register_id,
         status: s.status,
         openingCountMinor: s.opening_count_minor,
-        closingCountMinor: s.closing_count_minor,
+        // D180: hidden (null) while a closed drawer waits for its second count.
+        closingCountMinor: closerCountVisible(s) ? countedCashMinor(s) : null,
         overShortMinor: s.over_short_minor,
         tipsMinor: s.tips_minor ?? null,
       })),
