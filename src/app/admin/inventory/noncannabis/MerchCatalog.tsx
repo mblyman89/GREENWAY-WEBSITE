@@ -428,6 +428,13 @@ function FragmentRow({
             <div>
               <Badge tone="green">UPC/EAN</Badge>
               <div className="mt-1 font-mono text-xs text-[var(--admin-text-faint)]">{row.barcode}</div>
+              {/* D177: torn or unreadable manufacturer barcode → reprint it in the Label Studio. */}
+              <Link
+                href={`/admin/inventory/noncannabis/${row.id}/label`}
+                className="text-xs text-[var(--admin-accent)] underline"
+              >
+                🏷 Reprint label
+              </Link>
             </div>
           ) : (
             <div>
@@ -437,7 +444,7 @@ function FragmentRow({
                   href={`/admin/inventory/noncannabis/${row.id}/label`}
                   className="text-xs text-[var(--admin-accent)] underline"
                 >
-                  🖨 Print label
+                  🏷 Print label
                 </Link>
               </div>
             </div>
@@ -501,7 +508,7 @@ function FragmentRow({
                   href={`/admin/inventory/noncannabis/${row.id}/label`}
                   className="text-xs text-[var(--admin-accent)] underline"
                 >
-                  🖨 Print SKU label
+                  🏷 Open Label Studio
                 </Link>
                 <form action={archiveNonCannabisAction}>
                   <input type="hidden" name="id" value={row.id} />

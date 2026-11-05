@@ -506,6 +506,7 @@ export default async function NonCannabisInventoryPage({
                     <th className="px-4 py-2 text-right">Total</th>
                     <th className="px-4 py-2 text-right">Paid</th>
                     <th className="px-4 py-2 text-center">Status</th>
+                    <th className="px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody>
@@ -533,6 +534,15 @@ export default async function NonCannabisInventoryPage({
                           <Badge tone={remaining > 0 ? "orange" : "green"}>
                             {remaining > 0 ? `Owe ${money(remaining)}` : "Paid"}
                           </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {/* D177: label everything this delivery brought in (copies = pieces received). */}
+                          <Link
+                            href={`/admin/inventory/noncannabis/labels?invoice=${inv.invoiceId}`}
+                            className="whitespace-nowrap text-xs text-[var(--admin-accent)] underline"
+                          >
+                            🏷 Labels
+                          </Link>
                         </td>
                       </tr>
                     );
@@ -562,6 +572,13 @@ export default async function NonCannabisInventoryPage({
           <div>
             <h3 className="mb-2 text-sm font-bold text-[var(--admin-text)]">
               Drafts awaiting confirmation ({drafts.length})
+              {/* D177: label every just-received draft in one print job. */}
+              <Link
+                href="/admin/inventory/noncannabis/labels?drafts=1"
+                className="ml-3 text-xs font-normal text-[var(--admin-accent)] underline"
+              >
+                🏷 Print labels for all drafts
+              </Link>
             </h3>
             <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
               <table className="w-full text-sm">
@@ -605,7 +622,7 @@ export default async function NonCannabisInventoryPage({
                             href={withBackParam(`/admin/inventory/noncannabis/${p.id}/label`, sp)}
                             className="text-xs text-[var(--admin-accent)] underline"
                           >
-                            🖨 Print SKU
+                            🏷 Print label
                           </Link>
                           <form action={activateNonCannabisAction}>
                             <input type="hidden" name="id" value={p.id} />

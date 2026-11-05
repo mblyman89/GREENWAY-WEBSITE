@@ -324,6 +324,58 @@ export function labelLoadErrorText(code: string | null, message: string): string
   return `Couldn't load the items to label${code ? ` (${code})` : ""}${m ? `: ${m}` : ""}. Nothing was printed — reload to try again.`;
 }
 
+/** Most items one batch URL may name (a URL stays well under browser limits). */
+export const MAX_BATCH_IDS = 200;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Parse a `?ids=` list for a batch label page: comma/space separated UUIDs,
+ * lower-cased, de-duplicated in first-seen order, capped at MAX_BATCH_IDS.
+ * Anything that is not a UUID is dropped (and counted) — it never reaches a
+ * query.
+ */
+export function parseLabelIdList(raw: unknown): { ids: string[]; dropped: number; capped: boolean } {
+  const text = Array.isArray(raw) ? raw.join(",") : typeof raw === "string" ? raw : "";
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  let dropped = 0;
+  let capped = false;
+  for (const part of text.split(/[\s,]+/)) {
+    const t = part.trim().toLowerCase();
+    if (!t) continue;
+    if (!UUID_RE.test(t)) { dropped += 1; continue; }
+    if (seen.has(t)) continue;
+    if (ids.length >= MAX_BATCH_IDS) { capped = true; continue; }
+    seen.add(t);
+    ids.push(t);
+  }
+  return { ids, dropped, capped };
+}
+
+/**
+ * Copies per product from vendor-invoice lines (0112: qty is a whole count of
+ * pieces, > 0). Two lines for one product add up; each product is capped at
+ * MAX_COPIES_PER_ITEM. Lines with no product (deleted since) are skipped.
+ */
+export function copiesFromInvoiceLines(lines: ReadonlyArray<{ product_id: unknown; qty: unknown }>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const l of lines) {
+    const id = typeof l.product_id === "string" ? l.product_id.trim().toLowerCase() : "";
+    const q = typeof l.qty === "number" ? l.qty : Number(l.qty);
+    if (!id || !Number.isInteger(q) || q <= 0) continue;
+    out.set(id, Math.min(MAX_COPIES_PER_ITEM, (out.get(id) ?? 0) + q));
+  }
+  return out;
+}
+
+/** Suggested copies for an other-inventory item: one per piece on hand (whole, > 0), capped. */
+export function suggestedCopiesForNc(qtyOnHand: unknown): number | null {
+  const q = typeof qtyOnHand === "number" ? qtyOnHand : Number(qtyOnHand);
+  if (!Number.isInteger(q) || q <= 0) return null;
+  return Math.min(q, MAX_COPIES_PER_ITEM);
+}
+
 export { PRINTERS };
 
 // ── Self-tests ──────────────────────────────────────────────────────────────
@@ -459,6 +511,19 @@ export function __runLabelStudioTests(): { passed: number; failed: number } {
   ok(/permission denied, 42501/.test(labelLoadErrorText("42501", "x")), "load err permission");
   ok(/missing \(PGRST205\)/.test(labelLoadErrorText("PGRST205", "x")) && /missing \(42P01\)/.test(labelLoadErrorText("42P01", "")), "load err missing");
   ok(/Couldn't load.*\(57014\): timeout/.test(labelLoadErrorText("57014", " timeout ")) && /Nothing was printed/.test(labelLoadErrorText(null, "")), "load err other");
+
+  // Batch id lists + invoice copies (S5).
+  const U1 = "11111111-2222-3333-4444-555555555555";
+  const U2 = "AAAAAAAA-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const pl = parseLabelIdList(`${U1}, ${U2} ${U1},nope,'; drop table x`);
+  ok(pl.ids.length === 2 && pl.ids[1] === U2.toLowerCase() && pl.dropped === 5 && !pl.capped, "id list: dedupe, lower, drop junk");
+  ok(parseLabelIdList(undefined).ids.length === 0 && parseLabelIdList([U1, U2]).ids.length === 2, "id list: empty + array");
+  const many = Array.from({ length: 205 }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`).join(",");
+  const plc = parseLabelIdList(many);
+  ok(plc.ids.length === MAX_BATCH_IDS && plc.capped, "id list: capped");
+  const cm = copiesFromInvoiceLines([{ product_id: U1, qty: 6 }, { product_id: U1, qty: 4 }, { product_id: null, qty: 3 }, { product_id: U2.toLowerCase(), qty: 2.5 }, { product_id: U2.toLowerCase(), qty: 900 }]);
+  ok(cm.get(U1) === 10 && cm.get(U2.toLowerCase()) === MAX_COPIES_PER_ITEM && cm.size === 2, "invoice copies sum, skip, cap");
+  ok(suggestedCopiesForNc(12) === 12 && suggestedCopiesForNc(0) === null && suggestedCopiesForNc(1.5) === null && suggestedCopiesForNc(5000) === MAX_COPIES_PER_ITEM, "nc suggested copies");
 
   return { passed, failed };
 }

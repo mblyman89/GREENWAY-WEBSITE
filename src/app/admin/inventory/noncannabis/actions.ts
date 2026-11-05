@@ -309,6 +309,8 @@ export type InvoiceSubmitResult = {
   problems: string[];
   /** Success confirmation. */
   message?: string;
+  /** D177: the saved invoice, so the builder can offer "Print labels for this delivery". */
+  invoiceId?: string;
 };
 
 /** Parse the multi-row invoice-builder form into a pure-core draft. */
@@ -398,6 +400,7 @@ export async function submitNonCannabisInvoiceAction(
     ok: true,
     problems: [],
     message: `Invoice #${res.invoiceNumber} from ${draft.vendorName} saved (${usd(res.totalMinorUnits)}). ${parts.join("; ")}${parts.length ? ". " : ""}It now appears on the Accounts Payable page as a payable.`,
+    invoiceId: res.id,
   };
 }
 

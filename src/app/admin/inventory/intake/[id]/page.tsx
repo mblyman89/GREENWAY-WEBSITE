@@ -484,6 +484,15 @@ export default async function ManifestReviewPage({
         subtitle={`${manifest.vendor_label ?? "Unknown vendor"} · ${manifest.transfer_date ?? "no date"} · ${
           manifest.source_format === "wcia" ? "WCIA transfer" : "generic JSON"
         }${manifest.source_url ? " (fetched by link)" : ""}`}
+        action={
+          /* D177: label every line of this delivery in one print job. */
+          <Link
+            href={`/admin/inventory/intake/${id}/labels`}
+            className="rounded-full border border-[var(--admin-accent)]/50 px-4 py-2 text-sm font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent-soft)]"
+          >
+            🏷 Print labels for this manifest
+          </Link>
+        }
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -1202,7 +1211,7 @@ export default async function ManifestReviewPage({
                       target="_blank"
                       className="mt-1 inline-block text-[11px] font-semibold text-[var(--admin-accent)] underline hover:brightness-110"
                     >
-                      🏷 Print 4×6 label
+                      🏷 Print label
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
