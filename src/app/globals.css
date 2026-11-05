@@ -403,6 +403,74 @@ h1, h2, h3, h4, h5, h6 {
 
 /* The pressed button: dim + block re-clicks + spinner (::after keeps it
    working on any button markup without touching its children). */
+/* D179: the landing card after a form save. "Saved. You're done." (green) or
+   "That did not save." (red, with the server's own words). Big, top-centre,
+   goes away by itself; only shown when the URL proves the outcome. */
+.gw-save-outcome {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: min(560px, 94vw);
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font-size: 15px;
+  line-height: 1.35;
+  animation: gw-save-outcome-in 0.18s ease-out;
+}
+.gw-save-outcome-success {
+  background: #0f2a17;
+  border-color: rgba(126, 217, 87, 0.6);
+  color: #d7f5c8;
+}
+.gw-save-outcome-error {
+  background: #2a1010;
+  border-color: rgba(255, 107, 107, 0.65);
+  color: #ffd9d9;
+}
+.gw-save-outcome-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 17px;
+}
+.gw-save-outcome-success .gw-save-outcome-icon { background: #7ed957; color: #0b1a10; }
+.gw-save-outcome-error .gw-save-outcome-icon { background: #ff6b6b; color: #2a1010; }
+.gw-save-outcome-text { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.gw-save-outcome-detail { font-size: 13px; opacity: 0.9; }
+.gw-save-outcome-close {
+  flex: none;
+  margin-left: 4px;
+  padding: 2px 6px;
+  opacity: 0.6;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+}
+.gw-save-outcome-close:hover { opacity: 1; }
+@keyframes gw-save-outcome-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gw-save-outcome { animation: none; }
+}
+@media print {
+  .gw-save-outcome { display: none; }
+}
+
 .gw-submit-busy {
   position: relative;
   opacity: 0.65;

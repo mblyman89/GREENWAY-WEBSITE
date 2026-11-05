@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
+import { PendingSubmit } from "@/components/admin/compliance/PendingSubmit";
 import { ACH_V_TERMS } from "@/lib/payments/vendor-esign-terms";
 import {
   ENTITY_LABELS,
@@ -83,7 +84,7 @@ function SendCodeForm({ token, label, masked }: { token: string; label: string; 
   return (
     <form action={sendVendorCodeAction} className="space-y-3">
       <input type="hidden" name="token" value={token} />
-      <button type="submit" className={bigButton}>{label}</button>
+      <PendingSubmit className={bigButton} busy="Sending the code…">{label}</PendingSubmit>
       <p className="text-center text-sm text-white/60">The code goes to {masked}, the address this link was sent to.</p>
     </form>
   );
@@ -188,7 +189,7 @@ export default async function VendorAchPage({ params, searchParams }: { params: 
                 <input type="checkbox" name="agree" className="mt-1 h-6 w-6 shrink-0" />
                 <span className="text-sm">{VENDOR_CONSENT_STATEMENT}</span>
               </label>
-              <button type="submit" className={bigButton}>Continue</button>
+              <PendingSubmit className={bigButton} busy="Checking…">Continue</PendingSubmit>
             </form>
           </Card>
           <Card>
