@@ -941,6 +941,29 @@ export async function listLotsForVendor(vendorId: string, limit = 50): Promise<L
 }
 
 /**
+ * D177 S4 — every lot on one manifest (hydrated with vendor/brand names), for
+ * the Label Studio's "label every line" batch. Reads the error instead of
+ * treating a failed read as an empty manifest (AGENTS.md: a call that can fail
+ * silently is a bug); the page explains the code with labelLoadErrorText.
+ */
+export async function listLotsForManifestLabels(
+  manifestId: string,
+): Promise<{ ok: true; lots: LotWithDetail[] } | { ok: false; code: string | null; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: true, lots: [] };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inventory_lots")
+    .select("*")
+    .eq("manifest_id", manifestId)
+    .order("product_name", { ascending: true })
+    .limit(1000);
+  if (error) return { ok: false, code: error.code ?? null, message: error.message ?? "" };
+  const lots = (data as InventoryLot[] | null) ?? [];
+  if (lots.length === 0) return { ok: true, lots: [] };
+  return { ok: true, lots: await hydrateLots(admin, lots) };
+}
+
+/**
  * SLICE 77 — all lots for one POS product key (newest first, hydrated), for
  * the enrichment detail page's inventory cross-link panel.
  */
