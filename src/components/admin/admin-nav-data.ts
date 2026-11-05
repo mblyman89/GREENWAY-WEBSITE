@@ -125,6 +125,8 @@ export const adminNav: AdminNavItem[] = [
   // direct link, no dropdown). Compliance Health stays reachable from the
   // command center's header link + the second item below.
   { label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ compliance shield
+  { label: "CCRS Sales Check", href: "/admin/compliance/sales-check", permission: "reports.view", icon: "\u2705", group: "CCRS" }, // D183: every sale filed, every lot adds up
+  { label: "Taxes Owed", href: "/admin/compliance/taxes-owed", permission: "reports.view", icon: "\ud83e\uddfe", group: "CCRS" }, // D183: excise + sales tax by month
   { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check
   { label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change radar (SLICE 37)
   { label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-18 recurring obligations

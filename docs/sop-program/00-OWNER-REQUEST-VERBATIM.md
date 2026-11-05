@@ -1101,3 +1101,19 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
   - Owner only (`requireBooksAccess`), audited.
   - Email goes through Resend, as the other alerts do. Text goes through Twilio's REST API and needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` on Vercel. The page says which service is not set up.
   - One message per Pacific day, claimed in `compliance_reminder_log` (`night-watch:daily:<day>`) before sending. The text is at most 320 characters: the count, the first two jobs, and the link.
+
+**D183 as built (S6).** Owner: "The numbers and data need to make it to CCRS and I need to pay the correct amount in taxes." Pure `ccrs-completeness-core.ts` (52 self-tests) and `taxes-owed-core.ts` (20 self-tests), `ccrs-completeness-store.ts`, two pages (`/admin/compliance/sales-check` and `/admin/compliance/taxes-owed`, both in the CCRS nav group on reports.view), and 11 CI tests. No migration and no new cron.
+- **CCRS sales check (per week, Production by default, Preprod one click away).** Every cannabis sale line of the week (detail id `order-lineid8`, the id `ccrs-sales.ts` writes) is matched against the rows of live Sale files (not abandoned) and the held list. It reports filed, held (with the reason), and missing. While the week is still running, unfiled lines show as "not filed yet" (pending), never as missing. It also checks the money: the filed rows (quantity × price − discount + sales tax + excise) must equal what the register took for those lines, within 1¢ per line. On live data, Nov 1 preprod: 516 filed rows differ by 33¢ in total. A line filed twice is named. A failed read says "Could not check", never complete (rule 135).
+- **Lot shortfalls (a lot that sold more than it ever had; CCRS rejects these).** Record = received + every non-receive adjustment − sold. Each shortfall gets a plain-English cause and the one safe fix:
+  - **wrong lot**: the register drew from a sibling lot of the same product. Fix: move that one sale line to the sibling.
+  - **count**: a count took away units that were in fact sold. Fix: add a count correction of exactly the shortfall.
+  - **split** or **unknown**: explained only, with no button.
+- **Repairs (owner only, audited, re-checked against fresh data right before writing).**
+  - The move changes only `order_lines.ccrs_inventory_external_id`, guarded by the old value, so a second press changes nothing. It never moves a line that CCRS Production already holds.
+  - The count correction inserts one `count` adjustment and leaves `on_hand` untouched (the shelf is unchanged). It is reported to CCRS as Reconciliation. If two presses race, the second is taken back.
+  - Neither repair changes stock or money. Partner AI Level 2 (S7) may propose these repairs; only these actions apply them.
+  - Live on 2026-11-05: 4 short lots. One is a wrong-lot case, one is a count case, and two are explained only.
+- **Taxes owed (one card per month, newest first).**
+  - Excise to the LCB on the LIQ-1295 is due the 20th of the next month. Sales tax to the DOR is due the 25th, rolled past weekends and holidays (for example, the Nov 2026 return is due Dec 28).
+  - Each card shows filed, due soon, or overdue from the Compliance Calendar's done marks, and a money check: the register's taken total must equal price + sales tax + excise.
+  - A "Next to file" line is at the top. There are links to the calendar (to mark a return filed), the tax report and the excise report.

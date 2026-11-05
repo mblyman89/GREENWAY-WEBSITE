@@ -1167,6 +1167,8 @@ import { __runSaveOutcomeTests } from "../../src/lib/admin/save-outcome-core";
 import { __runCountIntegrityTests } from "../../src/lib/registers/count-integrity-core";
 import { __runGuidedCashTests } from "../../src/lib/registers/guided-cash-core";
 import { __runNightWatchTests } from "../../src/lib/registers/night-watch-core";
+import { __runCcrsCompletenessTests } from "../../src/lib/compliance/ccrs-completeness-core";
+import { __runTaxesOwedTests } from "../../src/lib/compliance/taxes-owed-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2789,6 +2791,8 @@ __runLiquidVolumeTests();
   assertRan("count-integrity-core", __runCountIntegrityTests(), 35); // D180 S3 ("beating the fraud triangle"): the closer's blind count is never overwritten and stays hidden until the second count; fast / copied / closer-login second counts are flagged loud
   assertRan("guided-cash-core", __runGuidedCashTests(), 38); // D181 S4: floats 167.50/300.00, drop when undropped cash passes $2,000, morning duties in order, a bag every day, only Michael seals
   assertRan("night-watch-core", __runNightWatchTests(), 36); // D182 S5: morning report from the night watch, red crew items first, a read error is never all clear; email and text built but OFF by default
+  assertRan("ccrs-completeness-core", __runCcrsCompletenessTests(), 50); // D183 S6: every sale line filed or held with the same money, lot shortfalls diagnosed with one safe record-only fix
+  assertRan("taxes-owed-core", __runTaxesOwedTests(), 20); // D183 S6: excise (LIQ-1295 by the 20th) and sales tax (DOR by the 25th rolled) per month, money check
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
