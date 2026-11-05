@@ -1173,6 +1173,7 @@ import { __runPartnerTests } from "../../src/lib/ai/partner-core";
 import { __runRoleChecklistTests } from "../../src/lib/registers/role-checklist-core";
 import { __runMenuRetentionTests } from "../../src/lib/menu/menu-retention-core";
 import { __runCockpitCacheTests } from "../../src/lib/admin/cockpit-cache-core";
+import { __runSlowReadTests } from "../../src/lib/platform/slow-read-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2801,6 +2802,7 @@ __runLiquidVolumeTests();
   assertRan("role-checklist-core", __runRoleChecklistTests(), 60); // D185 S8: My Day role checklists: opening / during / closing / Michael; the step you are on; loud when urgent; validated only when every staff step is done and none unknown
   assertRan("menu-retention-core", __runMenuRetentionTests(), 22); // PERF round P1/P2 (0344): old menu copies cleared after each publish; prune answer read, never guessed; latest_menu_facts walks only when the function is missing, else reports
   assertRan("cockpit-cache-core", __runCockpitCacheTests(), 24); // PERF P3: cockpit display cache: plain-JSON gate, failed reads never stored, short stated TTLs, keys never hold a clock reading
+  assertRan("slow-read-core", __runSlowReadTests(), 13); // PERF P5: one greppable [slow-read] log line per read past its budget (cockpit cache misses)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
