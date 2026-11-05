@@ -17,6 +17,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll, ADMIN_PAGED_CONCURRENCY } from "@/lib/supabase/chunked-in";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import {
@@ -158,17 +159,43 @@ export async function buildReorderSuggestions(opts: {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
   // PERF2 round 4: settings and lots do not depend on each other - read side by side.
-  const [settings, lotsRes] = await Promise.all([
+  //
+  // PERF P3 (owner 2026-11-05): every read below is PAGED and reads its
+  // error. Before, the lots read was one request: PostgREST answers at most
+  // 1,000 rows, the store has ~2,300 active lots, so the low-stock count on
+  // the cockpit silently ignored most of the store; and the 30-day order
+  // lines went into ONE `.in()` URL with hundreds of ids. A failed read now
+  // throws (the cockpit shows the tile as unreadable) instead of reading as
+  // "nothing is low".
+  type LotRow = {
+    pos_product_key: string | null;
+    product_name: string | null;
+    vendor_id: string | null;
+    brand_id: string | null;
+    on_hand_qty: number | null;
+    unit: string | null;
+    unit_cost_minor_units: number | null;
+    status: string;
+  };
+  const [settings, lots] = await Promise.all([
     getReorderSettings(),
     // 1) On-hand + cost + vendor by product, from active lots.
-    admin
-      .from("inventory_lots")
-      .select("pos_product_key, product_name, vendor_id, brand_id, on_hand_qty, unit, unit_cost_minor_units, status")
-      .eq("status", "active"),
+    pagedAll<LotRow>(
+      async (from, to) => {
+        const { data, error } = await admin
+          .from("inventory_lots")
+          .select("pos_product_key, product_name, vendor_id, brand_id, on_hand_qty, unit, unit_cost_minor_units, status")
+          .eq("status", "active")
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(`Reorder suggestions: active lots could not be read: ${error.message}`);
+        return (data as LotRow[] | null) ?? [];
+      },
+      { concurrency: ADMIN_PAGED_CONCURRENCY },
+    ),
   ]);
-  const lots = lotsRes.data;
 
-  if (!lots || lots.length === 0) return [];
+  if (lots.length === 0) return [];
 
   // 2) Sales velocity per product over the window (started now; it only needs
   //    the settings, so it overlaps the vendor/brand name reads below).
@@ -177,21 +204,41 @@ export async function buildReorderSuggestions(opts: {
   //    single-lot cards resolve the identical key either way).
   const since = new Date(Date.now() - settings.velocity_window_days * 24 * 60 * 60 * 1000).toISOString();
   const soldP = (async () => {
-    const { data: recentOrders } = await admin
-      .from("orders")
-      .select("id")
-      .gte("placed_at", since);
-    const orderIds = (recentOrders ?? []).map((o) => o.id as string);
+    const recentOrders = await pagedAll<{ id: string }>(
+      async (from, to) => {
+        const { data, error } = await admin
+          .from("orders")
+          .select("id")
+          .gte("placed_at", since)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(`Reorder suggestions: recent orders could not be read: ${error.message}`);
+        return (data as { id: string }[] | null) ?? [];
+      },
+      { concurrency: ADMIN_PAGED_CONCURRENCY },
+    );
+    const orderIds = recentOrders.map((o) => o.id);
     const soldByKey = new Map<string, number>();
     if (orderIds.length) {
-      const { data: ols } = await admin
-        .from("order_lines")
-        .select("product_id, variant_id, quantity")
-        .in("order_id", orderIds);
-      for (const ol of ols ?? []) {
+      type SoldLine = { product_id: string | null; variant_id: string | null; quantity: number | null };
+      const ols = await chunkedIn<string, SoldLine>(
+        orderIds,
+        async (chunk, from, to) => {
+          const { data, error } = await admin
+            .from("order_lines")
+            .select("product_id, variant_id, quantity")
+            .in("order_id", chunk)
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) throw new Error(`Reorder suggestions: sold lines could not be read: ${error.message}`);
+          return (data as SoldLine[] | null) ?? [];
+        },
+        { concurrency: ADMIN_PAGED_CONCURRENCY },
+      );
+      for (const ol of ols) {
         const k = lotKeyForSaleLine({
-          productId: (ol.product_id as string | null) ?? null,
-          variantId: (ol.variant_id as string | null) ?? null,
+          productId: ol.product_id ?? null,
+          variantId: ol.variant_id ?? null,
         });
         if (!k) continue;
         soldByKey.set(k, (soldByKey.get(k) ?? 0) + Number(ol.quantity ?? 0));
@@ -199,18 +246,37 @@ export async function buildReorderSuggestions(opts: {
     }
     return soldByKey;
   })();
+  // If a name read below throws first, the velocity read must not become an
+  // unhandled rejection; the real await further down still sees its error.
+  void soldP.catch(() => undefined);
 
   // Resolve vendor + brand names (side by side).
   const vendorIds = Array.from(new Set(lots.map((l) => l.vendor_id).filter(Boolean))) as string[];
   const brandIds = Array.from(new Set(lots.map((l) => l.brand_id).filter(Boolean))) as string[];
   const vendorNames = new Map<string, string>();
   const brandNames = new Map<string, string>();
-  const [vsRes, bsRes] = await Promise.all([
-    vendorIds.length ? admin.from("vendors").select("id, display_name").in("id", vendorIds) : Promise.resolve({ data: null }),
-    brandIds.length ? admin.from("brands").select("id, display_name").in("id", brandIds) : Promise.resolve({ data: null }),
+  type NameRow = { id: string; display_name: string | null };
+  const readNames = (table: "vendors" | "brands", ids: string[]) =>
+    chunkedIn<string, NameRow>(
+      ids,
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from(table)
+          .select("id, display_name")
+          .in("id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(`Reorder suggestions: ${table} names could not be read: ${error.message}`);
+        return (data as NameRow[] | null) ?? [];
+      },
+      { concurrency: ADMIN_PAGED_CONCURRENCY },
+    );
+  const [vs, bs] = await Promise.all([
+    vendorIds.length ? readNames("vendors", vendorIds) : Promise.resolve([] as NameRow[]),
+    brandIds.length ? readNames("brands", brandIds) : Promise.resolve([] as NameRow[]),
   ]);
-  (vsRes.data ?? []).forEach((v) => vendorNames.set(v.id as string, v.display_name as string));
-  (bsRes.data ?? []).forEach((b) => brandNames.set(b.id as string, b.display_name as string));
+  vs.forEach((v) => vendorNames.set(v.id, v.display_name as string));
+  bs.forEach((b) => brandNames.set(b.id, b.display_name as string));
 
   type Agg = {
     key: string | null;

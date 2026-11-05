@@ -183,10 +183,9 @@ export async function computeExciseReturnForMonth(
       orderCount = orders.length;
       const orderIds = orders.map((o) => o.id);
 
-      const [taxSettings, cannabisSet, categoryLookup] = await Promise.all([
+      const [taxSettings, cannabisSet] = await Promise.all([
         getTaxSettings().catch(() => null),
         getCannabisCategorySet(),
-        buildCategoryLookup(admin),
       ]);
       const exciseRateBps = taxSettings?.exciseRateBps ?? 3700;
       const combinedSalesRateBps =
@@ -245,6 +244,14 @@ export async function computeExciseReturnForMonth(
         warnings.push(`Could not load order lines: ${e.message}`);
         return null;
       });
+
+      // PERF P3: the category lookup reads only the keys this month sold
+      // (same newest-row rule as before, so each sold line gets the identical
+      // category). A failed lookup still throws, exactly as before: the
+      // filing is never built on guessed categories.
+      const categoryLookup = lines
+        ? await buildCategoryLookup(admin, lines.map((l) => l.product_id))
+        : new Map<string, { category: string; type: string }>();
 
       if (lines) {
         const box1Lines: Box1Line[] = lines.map((l) => {

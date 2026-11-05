@@ -582,13 +582,20 @@ describe("SLICE 21 — visible in the cockpit and in reports, not just computed"
   it("the cockpit passes the URL's basis into the snapshot", () => {
     const src = cockpit();
     expect(src).toContain("searchParams");
-    expect(src).toContain("getCockpitSnapshot(sp.basis)");
+    // PERF P3: the page streams per section; the basis reaches every section
+    // that reads sales (cockpitSales(basis) is shared once per request).
+    expect(src).toContain("const basis = sp.basis;");
+    expect(src).toContain("<CockpitSalesSection basis={basis} />");
+    expect(src).toContain("cockpitSales(basis)");
     expect(cockpitData()).toContain("parseComparisonBasis");
   });
 
   it("the snapshot actually reads refunds rather than declaring the field", () => {
     const src = cockpitData();
-    expect(src).toContain("returnsVoidsForDay");
+    // PERF P3: the read itself sits behind the cockpit's short display cache
+    // (cockpitReturnsToday -> returnsVoidsForDay); the snapshot uses it.
+    expect(src).toContain("cockpitReturnsToday");
+    expect(read("src/lib/admin/cockpit-cache-server.ts")).toContain("returnsVoidsForDay(todayYmd)");
     expect(src).toContain("computeNetSales");
   });
 

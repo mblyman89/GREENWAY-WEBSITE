@@ -220,13 +220,15 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
   // PostgREST per-response row cap so busy ranges are complete.
   type ReportOrderRow = { id: string; status: string; customer_email: string | null; placed_at: string };
   const orders = await pagedAll<ReportOrderRow>(async (from, to) => {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("orders")
       .select("id, status, customer_email, placed_at")
       .gte("placed_at", fromISO)
       .lte("placed_at", toISO)
       .order("id", { ascending: true })
       .range(from, to);
+    // Rule 135: a failed page is an error, never "no more orders".
+    if (error) throw new Error(`Sales report: orders could not be read: ${error.message}`);
     return (data as ReportOrderRow[] | null) ?? [];
   }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
@@ -247,12 +249,13 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     regular_price_minor_units: number | null;
   };
   const lines = await chunkedIn<string, LineRow>(orderIds, async (chunk, from, to) => {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("order_lines")
       .select("order_id, product_id, product_name, brand, quantity, price_minor_units, regular_price_minor_units")
       .in("order_id", chunk)
       .order("id", { ascending: true })
       .range(from, to);
+    if (error) throw new Error(`Sales report: order lines could not be read: ${error.message}`);
     return (data as LineRow[] | null) ?? [];
   }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 

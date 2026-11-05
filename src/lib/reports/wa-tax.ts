@@ -159,6 +159,14 @@ export type ProductLookup = Map<string, ProductTaxMeta>; // source_item_id -> {c
  */
 export async function buildCategoryLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
+  /**
+   * PERF P3 (owner 2026-11-05, "lightning fast"): the product keys actually
+   * sold in the period. Given, only those keys are looked up (a day of sales
+   * is a few hundred keys, not every product ever listed); omitted, every
+   * key, as before. Same newest-row rule either way, so a sold line gets the
+   * identical category.
+   */
+  keys?: Iterable<string | null | undefined> | null,
 ): Promise<ProductLookup> {
   const lookup: ProductLookup = new Map();
   // S-7: page past the PostgREST per-response row cap so no product's
@@ -167,7 +175,7 @@ export async function buildCategoryLookup(
   // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
   // per product instead of every snapshot ever written; same "newest wins"
   // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
-  const rows = [...(await loadLatestMenuFacts(admin)).values()];
+  const rows = [...(await loadLatestMenuFacts(admin, keys ?? null)).values()];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     const category = r.category?.trim() || "";
@@ -225,10 +233,12 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
   if (!isSupabaseServiceConfigured) return empty;
   const admin = createSupabaseAdminClient();
 
-  const [cannabisSet, categoryLookup] = await Promise.all([
-    getCannabisCategorySet(),
-    buildCategoryLookup(admin),
-  ]);
+  // PERF P3: the cannabis set starts now; the category lookup waits for the
+  // sold lines below so it reads only the keys that were sold.
+  const cannabisSetP = getCannabisCategorySet();
+  // An early "no orders" return must not leave it as an unhandled rejection;
+  // the real await below still sees (and throws) the failure.
+  void cannabisSetP.catch(() => undefined);
 
   // S-7: page the base query too — PostgREST caps any single response at
   // db.max_rows (default 1000), so a busy range would silently drop orders.
@@ -249,7 +259,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     total_minor_units: number | null;
   };
   const orders = await pagedAll<OrderRow>(async (from, to) => {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("orders")
       .select("id, status, placed_at, completed_at, subtotal_minor_units, estimated_tax_minor_units, total_minor_units")
       .eq("status", "completed")
@@ -260,6 +270,9 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
       )
       .order("id", { ascending: true })
       .range(from, to);
+    // Rule 135: a failed page is an error, never "no more orders" (a short
+    // read here would understate every tax figure).
+    if (error) throw new Error(`WA tax report: completed orders could not be read: ${error.message}`);
     return (data as OrderRow[] | null) ?? [];
   }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   // Base query already filters to completed orders (canonical period basis).
@@ -277,14 +290,20 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
   // S-7: chunked + paginated — every line of every order in range, no caps.
   type LineRow = { order_id: string; product_id: string | null; quantity: number; price_minor_units: number };
   const lines = await chunkedIn<string, LineRow>(orderIds, async (chunk, from, to) => {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("order_lines")
       .select("order_id, product_id, quantity, price_minor_units")
       .in("order_id", chunk)
       .order("id", { ascending: true })
       .range(from, to);
+    if (error) throw new Error(`WA tax report: order lines could not be read: ${error.message}`);
     return (data as LineRow[] | null) ?? [];
   }, { concurrency: ADMIN_PAGED_CONCURRENCY });
+
+  const [cannabisSet, categoryLookup] = await Promise.all([
+    cannabisSetP,
+    buildCategoryLookup(admin, lines.map((l) => l.product_id)),
+  ]);
 
   // S-8: medical exemptions — join medical_exempt_sales (WAC 314-55-090(2))
   // by (order_id, product_sku=product_id) so exempt lines contribute ZERO to
@@ -299,13 +318,15 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
       excise_tax_exempt: boolean | null;
     };
     const exemptRows = await pagedAll<ExemptRow>(async (from, to) => {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("medical_exempt_sales")
         .select("order_id, product_sku, sales_tax_exempt, excise_tax_exempt, sale_date, id")
         .gte("sale_date", fromISO.slice(0, 10))
         .lte("sale_date", toISO.slice(0, 10))
         .order("id", { ascending: true })
         .range(from, to);
+      // Rule 135: an unread exemption would tax an exempt line.
+      if (error) throw new Error(`WA tax report: medical exemptions could not be read: ${error.message}`);
       return (data as ExemptRow[] | null) ?? [];
     }, { concurrency: ADMIN_PAGED_CONCURRENCY });
     for (const r of exemptRows) {

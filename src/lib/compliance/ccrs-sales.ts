@@ -118,6 +118,8 @@ export async function getCcrsLicenseSettings(): Promise<CcrsLicenseSettings> {
 
 async function buildCategoryLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
+  /** PERF P3: only the product keys the filing period sold (same newest-row rule). */
+  keys: Iterable<string | null | undefined>,
 ): Promise<Map<string, string>> {
   const lookup = new Map<string, string>();
   // S-7: page past the PostgREST per-response row cap (a dropped catalog row
@@ -125,7 +127,7 @@ async function buildCategoryLookup(
   // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
   // per product instead of every snapshot ever written; same "newest wins"
   // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
-  const rows = [...(await loadLatestMenuFacts(admin)).values()];
+  const rows = [...(await loadLatestMenuFacts(admin, keys)).values()];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     lookup.set(r.source_item_id, r.category?.trim() || "");
@@ -212,10 +214,11 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   }
 
   const admin = createSupabaseAdminClient();
-  const [settings, cannabisSet, categoryLookup, lotIndex] = await Promise.all([
+  // PERF P3: the category lookup waits for the sold lines (below) and reads
+  // only their keys; the rest start now.
+  const [settings, cannabisSet, lotIndex] = await Promise.all([
     getTaxSettings(),
     getCannabisCategorySet(),
-    buildCategoryLookup(admin),
     buildLotIndex(admin),
   ]);
   const combinedSalesBps = settings.stateSalesRateBps + settings.localSalesRateBps;
@@ -307,7 +310,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     category: string | null;
   };
   const lines = await chunkedIn<string, CcrsLineRow>(orderIds, async (chunk, from, to) => {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("order_lines")
       .select(
         "id, order_id, product_id, variant_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id, category",
@@ -315,8 +318,11 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
       .in("order_id", chunk)
       .order("id", { ascending: true })
       .range(from, to);
+    // Rule 135: a failed page must never read as "no more lines" in a filing.
+    if (error) throw new Error(`CCRS Sale.csv: order lines could not be read: ${error.message}`);
     return (data as CcrsLineRow[] | null) ?? [];
   }, { concurrency: ADMIN_PAGED_CONCURRENCY });
+  const categoryLookup = await buildCategoryLookup(admin, lines.map((l) => l.product_id));
 
   const rows: string[][] = [];
   let missingInvIds = 0;
