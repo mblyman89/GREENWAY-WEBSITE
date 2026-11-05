@@ -420,6 +420,8 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "sales_limit_events", disposition: "WIPE", because: "Daily purchase-limit checks recorded against test customers." },
   { table: "special_discount_uses", disposition: "WIPE", because: "Test uses of employee and special discounts." },
   { table: "receipt_print_jobs", disposition: "WIPE", because: "Test receipts queued to the printer." },
+  { table: "label_templates", disposition: "KEEP", because: "The store's saved Label Studio designs (D177, 0342): printer, label size, barcode and the lines on the label. Owner configuration, like your categories; the reset function's WIPE list (0240) is pinned and is not reopened." },
+  { table: "label_print_log", disposition: "KEEP", because: "The Label Studio print history (D177, 0342): who printed which barcode labels for which items. An append-only operations log the server cannot change or delete; the reset function's WIPE list (0240) is pinned and is not reopened." },
   { table: "till_verifications", disposition: "WIPE", because: "Till verification counts recorded while testing the register." },
   { table: "drawer_sessions", disposition: "WIPE", because: "Test drawer open/close sessions." },
   { table: "drawer_counts", disposition: "WIPE", because: "Drawer counts recorded while testing the register." },

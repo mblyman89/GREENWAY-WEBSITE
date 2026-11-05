@@ -20,6 +20,7 @@ import { lotSubject } from "@/lib/printing/label-layout-core";
 import { lotSourceFromRow, suggestedCopiesForLot } from "@/lib/printing/label-studio-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LabelStudio } from "@/components/admin/labels/LabelStudio";
+import { listLabelTemplatesAction, listPrintHistoryAction } from "@/app/admin/labels/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ const LINK = "text-xs text-[var(--admin-text-muted)] underline hover:text-[var(-
 export default async function LotLabelPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const [lot, profile] = await Promise.all([getLotById(id), getStoreProfile()]);
+  const [lot, profile, saved, history] = await Promise.all([getLotById(id), getStoreProfile(), listLabelTemplatesAction("lot"), listPrintHistoryAction(id)]);
   if (!lot) notFound();
 
   const storeName = profile.storeName || profile.legalEntity || "Greenway";
@@ -58,7 +59,7 @@ export default async function LotLabelPage({ params }: { params: Promise<{ id: s
           </div>
         }
       />
-      <LabelStudio kind="lot" items={[{ subject, copies: 1, suggestedCopies: suggestedCopiesForLot(src) }]} />
+      <LabelStudio kind="lot" items={[{ subject, copies: 1, suggestedCopies: suggestedCopiesForLot(src) }]} saved={saved} history={history} />
     </div>
   );
 }

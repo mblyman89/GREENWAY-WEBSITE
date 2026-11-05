@@ -72,6 +72,9 @@ import {
   type StudioPrefs,
 } from "@/lib/printing/label-studio-core";
 import type { QrEcLevel } from "@/lib/printing/qr-core";
+import { listPrintHistoryAction, logLabelPrintAction, type HistoryResult, type SavedListResult } from "@/app/admin/labels/actions";
+import type { PrintHistoryEntry, SavedTemplate } from "@/lib/printing/label-saved-core";
+import { SavedDesigns } from "@/components/admin/labels/SavedDesigns";
 
 export type StudioItem = {
   subject: LabelSubject;
@@ -97,8 +100,15 @@ export type LabelStudioProps = {
   contextLine?: string;
   /** Words for the "suggested copies" button (default "One per unit received"). */
   suggestLabel?: string;
-  /** Optional server action that records the print (S6 audit log). */
-  logPrint?: (entry: PrintLogEntry) => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * Records the print in the store's print history (S6). Defaults to the
+   * logLabelPrintAction server action; pass a stub in tests.
+   */
+  logPrint?: (entry: PrintLogEntry & { context?: string; templateId?: string | null }) => Promise<{ ok: boolean; error?: string; migrationMissing?: boolean }>;
+  /** The store's saved designs for this kind, loaded on the server (S6). Omit to hide the panel. */
+  saved?: SavedListResult;
+  /** Recent prints of this one item (single-item pages only). */
+  history?: HistoryResult;
 };
 
 // ── Small UI atoms ──────────────────────────────────────────────────────────
@@ -210,6 +220,71 @@ function readPrefs(kind: SubjectKind): unknown {
   }
 }
 
+function designKey(kind: SubjectKind): string {
+  return `${prefsStorageKey(kind)}.design`;
+}
+
+function readDesignId(kind: SubjectKind): string | null {
+  try {
+    return window.localStorage.getItem(designKey(kind));
+  } catch {
+    return null;
+  }
+}
+
+function writeDesignId(kind: SubjectKind, id: string | null) {
+  try {
+    if (id) window.localStorage.setItem(designKey(kind), id);
+    else window.localStorage.removeItem(designKey(kind));
+  } catch {
+    // Not remembered; harmless.
+  }
+}
+
+function prefsKey(p: StudioPrefs): string {
+  return JSON.stringify([p.printerId, p.stockId, p.template]);
+}
+
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function RecentPrints({ history }: { history: HistoryResult }) {
+  if (!history.ok) {
+    if (history.migrationMissing) return null;
+    return <p className="text-xs text-[var(--admin-danger)]">{history.error}</p>;
+  }
+  if (history.entries.length === 0) return <p className="text-xs text-[var(--admin-text-faint)]">No labels printed for this item yet.</p>;
+  return (
+    <ul className="divide-y divide-[var(--admin-border)] text-xs">
+      {history.entries.map((e: PrintHistoryEntry) => {
+        const s = stockById(e.stockId);
+        const sym = SYMBOLOGY_LABEL[e.symbology as Symbology] ?? e.symbology;
+        return (
+          <li key={e.id} className="flex items-start justify-between gap-3 py-1.5">
+            <span className="min-w-0">
+              <span className="block font-semibold text-[var(--admin-text)]">
+                {e.forSubject ? `${e.forSubject.copies} label${e.forSubject.copies === 1 ? "" : "s"}` : `${e.totalLabels} labels`}
+                {e.itemCount > 1 ? <span className="font-normal text-[var(--admin-text-faint)]"> · part of a {e.itemCount}-item batch</span> : null}
+              </span>
+              <span className="block truncate text-[0.7rem] text-[var(--admin-text-faint)]">
+                {s ? stockSizeText(s) : e.stockId} · {sym}
+                {e.forSubject?.codeValue ? ` · ${e.forSubject.codeValue}` : ""}
+              </span>
+            </span>
+            <span className="shrink-0 text-right text-[0.7rem] text-[var(--admin-text-muted)]">
+              {fmtWhen(e.printedAt)}
+              <span className="block text-[var(--admin-text-faint)]">{e.who}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function writePrefs(kind: SubjectKind, prefs: StudioPrefs) {
   try {
     window.localStorage.setItem(prefsStorageKey(kind), JSON.stringify(prefs));
@@ -240,25 +315,72 @@ const QR_LEVELS: Array<{ value: QrEcLevel; label: string; title: string }> = [
   { value: "H", label: "H", title: "Largest code, ~30% damage recovery" },
 ];
 
-export function LabelStudio({ kind, items: initialItems, contextLine, suggestLabel = "One per unit received", logPrint }: LabelStudioProps) {
+export function LabelStudio({ kind, items: initialItems, contextLine, suggestLabel = "One per unit received", logPrint = logLabelPrintAction, saved, history: initialHistory }: LabelStudioProps) {
   const { toast } = useToast();
   const first = initialItems[0]?.subject ?? null;
   const batch = initialItems.length > 1;
 
+  // The store's saved designs (S6) and which one the current settings came from.
+  const [designs, setDesigns] = useState<SavedTemplate[]>(() => (saved?.ok ? saved.templates : []));
+  const [designsError, setDesignsError] = useState<string | null>(() => (saved && !saved.ok && !saved.migrationMissing ? saved.error : null));
+  const [designsMissing, setDesignsMissing] = useState<boolean>(() => !!saved && !saved.ok && saved.migrationMissing);
+  const [activeDesignId, setActiveDesignId] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryResult | undefined>(initialHistory);
+
   // Settings (printer / stock / template), restored per device after mount.
+  // A device that has never printed opens on the store's default design.
   const [prefs, setPrefs] = useState<StudioPrefs | null>(() => (first ? sanitizePrefs(null, first) : null));
   const [restored, setRestored] = useState(false);
   useEffect(() => {
     if (!first) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot read of localStorage after hydration (not available on the server)
-    setPrefs(sanitizePrefs(readPrefs(kind), first));
+    const stored = readPrefs(kind);
+    const def = designs.find((d) => d.isDefault) ?? null;
+    if (stored == null && def) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot read of localStorage after hydration (not available on the server)
+      setPrefs(sanitizePrefs({ printerId: def.printerId, stockId: def.stockId, template: def.template }, first));
+      setActiveDesignId(def.id);
+    } else {
+      setPrefs(sanitizePrefs(stored, first));
+      const id = readDesignId(kind);
+      setActiveDesignId(id && designs.some((d) => d.id === id) ? id : null);
+    }
     setRestored(true);
-    // first.id is stable for the life of the page
+    // first.id and the server-loaded designs are stable for the life of the page
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
   useEffect(() => {
     if (restored && prefs) writePrefs(kind, prefs);
   }, [kind, prefs, restored]);
+  useEffect(() => {
+    if (restored) writeDesignId(kind, activeDesignId);
+  }, [kind, activeDesignId, restored]);
+
+  const activeDesign = designs.find((d) => d.id === activeDesignId) ?? null;
+  const designDirty = useMemo(() => {
+    if (!activeDesign || !prefs || !first) return false;
+    return prefsKey(sanitizePrefs({ printerId: activeDesign.printerId, stockId: activeDesign.stockId, template: activeDesign.template }, first)) !== prefsKey(prefs);
+  }, [activeDesign, prefs, first]);
+
+  const applyDesign = useCallback(
+    (d: SavedTemplate) => {
+      if (!first) return;
+      setPrefs(sanitizePrefs({ printerId: d.printerId, stockId: d.stockId, template: d.template }, first));
+      setActiveDesignId(d.id);
+      toast({ tone: "info", message: `Using “${d.name}”.` });
+    },
+    [first, toast],
+  );
+  const onDesignList = useCallback((list: SavedListResult, nextActive?: string | null) => {
+    if (list.ok) {
+      setDesigns(list.templates);
+      setDesignsError(null);
+      setDesignsMissing(false);
+      if (nextActive !== undefined) setActiveDesignId(nextActive && list.templates.some((t) => t.id === nextActive) ? nextActive : null);
+    } else {
+      setDesignsError(list.migrationMissing ? null : list.error);
+      setDesignsMissing(list.migrationMissing);
+    }
+  }, []);
 
   const [copies, setCopies] = useState<Record<string, number>>(() =>
     Object.fromEntries(initialItems.map((it) => [it.subject.id, clampCopies(it.copies)])),
@@ -379,19 +501,23 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
     }
     setConfirmOpen(false);
     setPrinting(plan);
-    if (logPrint) {
-      const entry: PrintLogEntry = {
-        kind,
-        printerId: printer.id,
-        stockId: stock.id,
-        template,
-        totalLabels: plan.totalLabels,
-        items: plan.items.map((p) => ({ subjectId: p.subjectId, copies: p.copies, codeSource: p.layout.code?.source ?? null, codeValue: p.layout.code?.value ?? null })),
-      };
-      void logPrint(entry).then((r) => {
-        if (!r.ok) toast({ tone: "warning", message: `Printed, but the print history couldn't be saved${r.error ? `: ${r.error}` : "."}` });
-      });
-    }
+    const entry: PrintLogEntry = {
+      kind,
+      printerId: printer.id,
+      stockId: stock.id,
+      template,
+      totalLabels: plan.totalLabels,
+      items: plan.items.map((p) => ({ subjectId: p.subjectId, copies: p.copies, codeSource: p.layout.code?.source ?? null, codeValue: p.layout.code?.value ?? null })),
+    };
+    void logPrint({ ...entry, context: contextLine, templateId: activeDesign && !designDirty ? activeDesign.id : null })
+      .then((r) => {
+        // 0342 not applied yet: printing works, history just isn't kept — stay quiet.
+        if (!r.ok && !r.migrationMissing) toast({ tone: "warning", message: `Printed, but the print history couldn't be saved${r.error ? `: ${r.error}` : "."}` });
+        if (r.ok && history && !batch && first) {
+          void listPrintHistoryAction(first.id).then(setHistory).catch(() => undefined);
+        }
+      })
+      .catch(() => toast({ tone: "warning", message: "Printed, but the print history couldn't be saved (connection problem)." }));
   };
 
   const severity = plan.severity === "block" ? "block" : layout.severity === "block" ? "block" : plan.severity === "warn" || layout.severity === "warn" ? "warn" : "ok";
@@ -410,6 +536,32 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
               <strong className="font-bold">Put the sticker beside the producer&apos;s label, never over it.</strong> The producer&apos;s
               lot number, weight, THC/CBD and warnings must stay visible (WAC 314-55-105). This label only adds a barcode the register can scan.
             </div>
+          ) : null}
+
+          {saved ? (
+            <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4" aria-labelledby={`gw-saved-${kind}`}>
+              <header className="mb-3 flex items-center justify-between gap-3">
+                <h2 id={`gw-saved-${kind}`} className="text-sm font-bold text-[var(--admin-text)]">
+                  ★ Store designs
+                </h2>
+                {activeDesign ? (
+                  <Badge tone={designDirty ? "gold" : "green"}>{designDirty ? `${activeDesign.name} · edited` : activeDesign.name}</Badge>
+                ) : (
+                  <span className="text-[0.7rem] text-[var(--admin-text-faint)]">Pick one to start, or build your own below</span>
+                )}
+              </header>
+              <SavedDesigns
+                kind={kind}
+                templates={designs}
+                loadError={designsError}
+                migrationMissing={designsMissing}
+                activeId={activeDesignId}
+                dirty={designDirty}
+                current={{ printerId: printer.id, stockId: stock.id, template }}
+                onApply={applyDesign}
+                onListChange={onDesignList}
+              />
+            </section>
           ) : null}
 
           <Panel
@@ -879,6 +1031,12 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
               </details>
             </div>
           </div>
+          {history && !(!history.ok && history.migrationMissing) ? (
+            <div className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">Recent prints</h2>
+              <RecentPrints history={history} />
+            </div>
+          ) : null}
         </aside>
       </div>
 

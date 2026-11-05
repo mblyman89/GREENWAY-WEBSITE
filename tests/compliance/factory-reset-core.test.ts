@@ -1354,7 +1354,8 @@ describe("D-65 — the connections survive the reset", () => {
     // CVB-3: +4 KEEP cultivera_archive_runs, cultivera_archive_files, cultivera_benchmark_days,
     // cultivera_payback_entries (0337; retained Cultivera history + the owner's payback ledger).
     // CVB-8: +1 KEEP cultivera_history_days (0338; Cultivera report history, never the books).
-    expect(plan.keep.length).toBe(195);
+    // D177 S6: +2 KEEP label_templates, label_print_log (0342; owner configuration + append-only print history).
+    expect(plan.keep.length).toBe(197);
     expect(plan.wipe.length).toBe(139);
   });
 
