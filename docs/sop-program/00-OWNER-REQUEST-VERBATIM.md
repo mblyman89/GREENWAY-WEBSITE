@@ -1117,3 +1117,31 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
   - Excise to the LCB on the LIQ-1295 is due the 20th of the next month. Sales tax to the DOR is due the 25th, rolled past weekends and holidays (for example, the Nov 2026 return is due Dec 28).
   - Each card shows filed, due soon, or overdue from the Compliance Calendar's done marks, and a money check: the register's taken total must equal price + sales tax + excise.
   - A "Next to file" line is at the top. There are links to the calendar (to mark a return filed), the tax report and the excise report.
+
+**D184 as built (S7).** Owner: "Set ai to be level 2 to start." Pure `partner-core.ts` (38 self-tests), `partner-store.ts`, `/admin/partner` ("Greenway Partner", Employee group, any manager type), `PartnerChat`, and 10 CI tests. No migration and no new cron. The level lives in `site_settings` key `partner_ai_level`. A missing setting means Level 2.
+- **The AI never writes.** It reads a capped, cleaned picture of the live data:
+  - the morning report;
+  - this week's and last week's CCRS Sale check (Production);
+  - open register exceptions;
+  - lots that sold more than they had;
+  - anything it could not read, which it must say rather than guess.
+
+  It answers in plain English. It is told to never invent a number or a fix, and never to suggest changing a price, a tax rate, an amount, a date or a count.
+- **Fixes are proposals made by fixed rules, not by the AI.** Each proposal is bound to one of four approved, audited tools:
+  - retry a sale the system tripped on (the same sync chain, legal gates on);
+  - record a sale as rung (the receipt is the truth);
+  - move one sale line to the lot it really drew from (D183);
+  - correct a count (D183).
+
+  Legal blocks and sales that already have an order are never proposed.
+- **Level 2 as offered.**
+  - A fix that changes nothing about the sale (a retry) may be run by any manager.
+  - Anything that changes money, counts or CCRS shows "Michael approves", and only the owner's button runs it.
+  - Level 1 is explain-only.
+  - Level 3 is shown but not open; a saved 3 reads as 2, never wider.
+  - The owner switches levels at the bottom of the page (owner only, audited `partner.level_set`).
+- **A press sends only the fix id.** The server re-reads everything, rebuilds the proposals and runs the tool only if the same id is still proposed and the person may press it.
+  - The id is a hash of the exact repair, so a changed quantity or lot makes a new id and an old page cannot replay it.
+  - Any read error pauses all fixes.
+  - Each press is audited (`partner.fix_applied` / `partner.fix_refused`), on top of the tool's own audit.
+- **Fix links in answers.** Fix ids cited in an AI answer become links to the matching fix card, but only ids that really exist.
