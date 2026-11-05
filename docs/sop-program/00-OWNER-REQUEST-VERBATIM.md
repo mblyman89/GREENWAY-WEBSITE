@@ -1082,3 +1082,22 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 - **Only Michael seals.** `sealBagAction` is gated by `requireBooksAccess` (owner only), like the bank run. If Michael's sign-in is linked to his employee record, the PIN must be his own. A borrowed login with another PIN is refused and audited (`deposit_bag.seal_refused`).
   - Staff see "waiting for Michael to seal … your part is done", not a form.
   - This **replaces D25's "anyone can seal"**.
+
+**D182 as built (S5).** Pure `night-watch-core.ts` (36 self-tests), `night-watch-store.ts`, `src/lib/notifications/sms.ts`, `MorningReportPanel`, the page `/admin/registers/night-watch`, and 9 CI tests. No migration and no new cron.
+- **The night watch** runs inside the existing `platform-health` cron (about 6:25 am PST / 7:25 am PDT), after the database check, so it reads this morning's result. It checks the last 14 days for:
+  - drawers left open overnight;
+  - drawers with no second count, or not reconciled;
+  - days with no deposit bag, and a bag whose night and morning counts differ;
+  - bags waiting for Michael's seal or the bank;
+  - register sales waiting for a decision (urgent after a day);
+  - yesterday's second counts flagged as fast, copied or entered under the closer's login (D180);
+  - over/shorts of $5 or more with no reason (last 7 days);
+  - anyone on the clock for 14+ hours;
+  - a failed or warning health check.
+- **Each item** says who owes it (crew or Michael) and links to the screen that fixes it. Urgent items come first, and crew items before Michael's. A failed read says "Could not check …", never all clear (rule 135). Nothing locks anyone out (D27).
+- **Nudges on admin screens (as asked).** The report is on the admin home page (only when something is open), on Register Activity, and in full on Night Watch (new nav item, Employee group). Staff see the crew's list; Michael sees everything.
+- **Email and text are built and OFF.**
+  - Michael turns them on at Night Watch → "Send the morning report to phones". He can set the addresses (empty means the staff alert list) and phone numbers, and choose whether to send on all-clear mornings. A "Send this morning's report now (test)" button sends right away.
+  - Owner only (`requireBooksAccess`), audited.
+  - Email goes through Resend, as the other alerts do. Text goes through Twilio's REST API and needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` on Vercel. The page says which service is not set up.
+  - One message per Pacific day, claimed in `compliance_reminder_log` (`night-watch:daily:<day>`) before sending. The text is at most 320 characters: the count, the first two jobs, and the link.

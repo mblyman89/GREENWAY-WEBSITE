@@ -34,6 +34,7 @@ import { loadCockpitLeafly, loadCockpitTaxes } from "@/lib/admin/cockpit-extras-
 import { hourWindow, leaflyTile } from "@/lib/admin/cockpit-extras-core";
 import { describeElapsed } from "@/lib/leafly/schedule-core";
 import { GuidedCashPanel } from "@/components/admin/registers/GuidedCashPanel";
+import { MorningReportPanel } from "@/components/admin/registers/MorningReportPanel";
 import { canReadBooks } from "@/lib/accounting/books-view-core";
 
 export const dynamic = "force-dynamic";
@@ -294,6 +295,7 @@ export default async function AdminDashboardPage({
         )}
 
         {/* ── D181: cash jobs (drop now, morning duties, a bag every day) ── */}
+        {canSeeCash ? <MorningReportPanel isOwner={canReadBooks(session.profile.role)} compact /> : null}
         {canSeeCash ? <GuidedCashPanel isOwner={canReadBooks(session.profile.role)} compact /> : null}
 
         {/* ── Needs your attention ─────────────────────────────────────── */}

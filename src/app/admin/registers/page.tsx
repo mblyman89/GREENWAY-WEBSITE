@@ -29,6 +29,7 @@ import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
 import { flagSentence, loudFlags, signOpenedToken, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
 import { keyedHasher } from "@/lib/security/keyed-hash";
 import { GuidedCashPanel } from "@/components/admin/registers/GuidedCashPanel";
+import { MorningReportPanel } from "@/components/admin/registers/MorningReportPanel";
 import { canReadBooks } from "@/lib/accounting/books-view-core";
 
 export const dynamic = "force-dynamic";
@@ -271,6 +272,7 @@ export default async function RegisterActivityPage({
         ) : null}
 
         {/* D181: the cash jobs, loud and in order (drops due, morning duties, a bag every day). */}
+        <MorningReportPanel isOwner={canReadBooks(session.profile.role)} compact />
         <GuidedCashPanel isOwner={canReadBooks(session.profile.role)} />
 
         {undeclaredWarning ? (
