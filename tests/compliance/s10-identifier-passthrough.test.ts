@@ -155,6 +155,8 @@ describe("S-10 server wiring (source anchors)", () => {
   it("Inventory.csv withholds unassigned lots instead of minting", () => {
     const src = read("src/lib/compliance/ccrs-batch.ts");
     expect(src).toContain("const ext = assignedInventoryExternalId(l);");
+    // No occurrence may fall back to an id CCRS never saw.
+    expect(src).not.toMatch(/assignedInventoryExternalId\(l\)\s*\?\?/);
     expect(src).toContain('code: "E3_EXTERNAL_ID_UNASSIGNED"');
     expect(src).not.toMatch(/deriveInventoryExternalId\(/);
   });

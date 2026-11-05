@@ -424,8 +424,10 @@ MUTATIONS = [
     (
         "M30-s10-batch-mints-again",
         BATCHSRV,
-        "    const ext = assignedInventoryExternalId(l);",
-        "    const ext = assignedInventoryExternalId(l) ?? l.lot_code;",
+        # D178: the bare line now occurs 5x in ccrs-batch.ts; anchor on the
+        # E41 loop (unique). The S-10 test also refuses the fallback anywhere.
+        "  const e41Rows: CcrsIssueRow[] = [];\n  for (const l of lots) {\n    const ext = assignedInventoryExternalId(l);",
+        "  const e41Rows: CcrsIssueRow[] = [];\n  for (const l of lots) {\n    const ext = assignedInventoryExternalId(l) ?? l.lot_code;",
         S10_TESTS,
         "S-10: Inventory.csv must not fall back to an id CCRS never saw.",
     ),
