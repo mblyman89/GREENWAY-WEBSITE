@@ -1165,6 +1165,7 @@ import { __runLabelSavedTests } from "../../src/lib/printing/label-saved-core";
 import { __runExceptionRetryTests } from "../../src/lib/pos/exception-retry-core";
 import { __runSaveOutcomeTests } from "../../src/lib/admin/save-outcome-core";
 import { __runCountIntegrityTests } from "../../src/lib/registers/count-integrity-core";
+import { __runGuidedCashTests } from "../../src/lib/registers/guided-cash-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2785,6 +2786,7 @@ __runLiquidVolumeTests();
   assertRan("exception-retry-core", __runExceptionRetryTests(), 35); // D178 S1 ("if product left the shop and money was given to me in exchange, there can be no manual exceptions"): uniform line keys, plain-English exception classes, receipt-is-truth rate drift, retry permissions, replay dated when the money moved
   assertRan("save-outcome-core", __runSaveOutcomeTests(), 28); // D179 S2 ("ends with a big green check: 'Saved. You're done.'"): the landing card only claims what the redirect URL proves; errors are red with the server's words; silence otherwise
   assertRan("count-integrity-core", __runCountIntegrityTests(), 35); // D180 S3 ("beating the fraud triangle"): the closer's blind count is never overwritten and stays hidden until the second count; fast / copied / closer-login second counts are flagged loud
+  assertRan("guided-cash-core", __runGuidedCashTests(), 38); // D181 S4: floats 167.50/300.00, drop when undropped cash passes $2,000, morning duties in order, a bag every day, only Michael seals
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

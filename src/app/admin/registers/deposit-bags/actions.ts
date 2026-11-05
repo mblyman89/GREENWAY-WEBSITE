@@ -10,15 +10,17 @@
  *   D24 "no second count at night, just the recount in the morning by any
  *       employee" — one person at night, a DIFFERENT person in the morning;
  *   D25 "anyone can seal the bag, I am the only one to take cash to the bank";
+ *       REPLACED by D181 (2026-11-04): "I am the only one to seal the bag and
+ *       take it to the bank." Sealing is owner-only now, like the bank run;
  *   D26 tamper-evident pre-numbered bags;
  *   D27 "warning only please" — an undeclared bag warns, never blocks;
  *   D21 a reason is required only over $5.
  *
  * Who may press what:
- *   night count, morning recount, seal  -> orders.manage (any staff login)
+ *   night count, morning recount        -> orders.manage (any staff login)
  *     plus the PIN of the employee who did the count/seal, so the record
  *     names the PERSON, not the shared back-office login.
- *   bank run                            -> requireBooksAccess (owner only, D25)
+ *   seal, bank run                      -> requireBooksAccess (owner only, D181/D25)
  *
  * Every write goes through deposit-bag-store.ts (service role). Migration
  * 0316 removed the staff write policy and made a sealed bag permanent
@@ -52,6 +54,9 @@ import {
   RECOUNT_SAME_PERSON_ERROR,
 } from "@/lib/registers/deposit-bag-flow-core";
 import { checkAssembledDeposit, sealReconcileWarning } from "@/lib/registers/shift-end-core";
+import { sealerCheck } from "@/lib/registers/guided-cash-core";
+import { canReadBooks } from "@/lib/accounting/books-view-core";
+import { employeeIdForStaff } from "@/lib/staffing/tips-store";
 import {
   bagForDay,
   bagDrawers,
@@ -319,17 +324,35 @@ export async function morningRecountAction(formData: FormData): Promise<void> {
   );
 }
 
-/* ── 3. Seal (SOP-03 §4.11): anyone (D25); posts 10400 <- 10100 ─────────── */
+/* ── 3. Seal (SOP-03 §4.11): the owner only (D181 replaces D25); posts 10400 <- 10100 ─────────── */
 
 export async function sealBagAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("orders.manage");
+  // D181: "I am the only one to seal the bag and take it to the bank."
+  // Owner-only gate first (it redirects anyone else before any read).
+  const session = await requireBooksAccess();
   const bagId = str(formData, "bag_id");
   if (!bagId) fail("Missing bag.");
   const got = await getBag(bagId);
   if (!got.ok) fail(`The bag could not be read: ${got.error}. Nothing was saved.`);
   if (!got.bag) fail("That bag was not found. Nothing was saved.");
   const bag = got.bag;
-  const sealer = await employeeFromPin(str(formData, "seal_pin"), "the employee sealing the bag");
+  const sealer = await employeeFromPin(str(formData, "seal_pin"), "Michael (the only one who seals)");
+  const who = sealerCheck({
+    isOwner: canReadBooks(session.profile.role),
+    ownerEmployeeId: await employeeIdForStaff(session.profile.id),
+    pinEmployeeId: sealer.id,
+  });
+  if (!who.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "deposit_bag.seal_refused",
+      entityType: "deposit_bag",
+      entityId: bag.id,
+      after: { bagNo: bag.bagNo, businessDay: bag.businessDay, pinEmployeeId: sealer.id, reason: "not_owner_pin" },
+    });
+    fail(who.error);
+  }
 
   const chk = checkSeal(bag, { bagNo: str(formData, "seal_bag_no") || bag.bagNo, sealerId: sealer.id });
   if (!chk.ok) fail(chk.error);

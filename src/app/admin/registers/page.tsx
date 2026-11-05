@@ -28,6 +28,8 @@ import { CountTableReadOnly } from "@/components/admin/registers/CountTableReadO
 import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
 import { flagSentence, loudFlags, signOpenedToken, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
 import { keyedHasher } from "@/lib/security/keyed-hash";
+import { GuidedCashPanel } from "@/components/admin/registers/GuidedCashPanel";
+import { canReadBooks } from "@/lib/accounting/books-view-core";
 
 export const dynamic = "force-dynamic";
 
@@ -267,6 +269,9 @@ export default async function RegisterActivityPage({
             )}
           </div>
         ) : null}
+
+        {/* D181: the cash jobs, loud and in order (drops due, morning duties, a bag every day). */}
+        <GuidedCashPanel isOwner={canReadBooks(session.profile.role)} />
 
         {undeclaredWarning ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">

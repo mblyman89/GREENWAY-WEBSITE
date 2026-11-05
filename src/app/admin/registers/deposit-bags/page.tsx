@@ -27,6 +27,8 @@ import {
   type BagStage,
 } from "@/lib/registers/deposit-bag-flow-core";
 import { drawersForDay, listBags, listBagsInRange, staffNames } from "@/lib/registers/deposit-bag-store";
+import { missingBagDaysRecent } from "@/lib/registers/guided-cash-store";
+import { missingBagSentence } from "@/lib/registers/guided-cash-core";
 import { nightAssembleAction, nightCountAction, morningRecountAction, sealBagAction, retrySealPostAction, bankRunAction } from "./actions";
 
 /**
@@ -111,12 +113,16 @@ export default async function DepositBagsPage({
   const logTo = toRes.ok ? toRes.day : today;
   const rangeError = !fromRes.ok ? fromRes.error : !toRes.ok ? toRes.error : logFrom > logTo ? "The log's From day is after its To day." : null;
 
-  const [bagsRes, logRes, drawers, employees] = await Promise.all([
+  const [bagsRes, logRes, drawers, employees, missingRes] = await Promise.all([
     listBags({ sinceDay: addPacificDays(today, -14) }),
     listBagsInRange(logFrom, logTo),
     drawersForDay(nightDay),
     listEmployees({ includeInactive: true }),
+    // D181: "There should be a deposit bag for every single day."
+    missingBagDaysRecent(14),
   ]);
+  const missingDays = missingRes.ok ? missingRes.days : [];
+  const missingSentence = missingRes.ok ? missingBagSentence(missingDays) : `Whether every day has its bag could not be checked: ${missingRes.error}`;
 
   if (!bagsRes.ok) {
     return (
@@ -178,8 +184,12 @@ export default async function DepositBagsPage({
                 two counts differ by more than $5.00, a reason is required (D21) and the bag is not ready to seal until it is written.
               </p>
               <p>
-                <strong>Seal (anyone, D25).</strong> Seal the tamper-evident bag (D26) and press Seal. That posts the books entry
+                <strong>Seal (Michael only, D181).</strong> Michael seals the tamper-evident bag (D26) and presses Seal with his own PIN. That posts the books entry
                 10400 Undeposited Funds ← 10100 Vault, dated on the bag&apos;s business day. A sealed bag cannot be changed or deleted.
+              </p>
+              <p>
+                <strong>A bag every day (D181).</strong> Every business day with a drawer gets its own bag. Either morning employee may
+                build yesterday&apos;s bag (pick the day at the top of the night form); a different employee recounts it.
               </p>
               <p>
                 <strong>Bank (owner only, D25).</strong> The owner ticks every sealed bag taken to the bank. When the deposit shows
@@ -203,6 +213,21 @@ export default async function DepositBagsPage({
         {!dayRes.ok ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)] print:hidden">
             {dayRes.error} Showing today ({today}) instead.
+          </div>
+        ) : null}
+        {missingSentence ? (
+          <div data-testid="missing-bag-days" role="alert" className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-text)] print:hidden">
+            <p className="font-semibold text-[var(--admin-danger)]">A day has no deposit bag</p>
+            <p className="mt-1">{missingSentence}</p>
+            {missingDays.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {missingDays.map((d) => (
+                  <Button key={d} href={`${HERE}?day=${d}`} variant="neutral" size="sm">
+                    Build the {d} bag
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {d27 ? (
@@ -377,9 +402,20 @@ export default async function DepositBagsPage({
         </Panel>
 
         {/* ── Seal ──────────────────────────────────────────────────── */}
-        <Panel title="Seal the bag (anyone) and put it back in the safe" className="print:hidden">
+        <Panel title="Seal the bag (Michael only) and put it back in the safe" className="print:hidden">
           {readyToSeal.length === 0 ? (
             <p className="mt-2 text-sm text-[var(--admin-text-muted)]">No bag is ready to seal.</p>
+          ) : !isOwner ? (
+            // D181: "I am the only one to seal the bag and take it to the bank."
+            <div data-testid="seal-owner-only" className="mt-2 space-y-1 text-sm text-[var(--admin-text)]">
+              <p>
+                {readyToSeal.length === 1 ? "1 bag is" : `${readyToSeal.length} bags are`} recounted and waiting for Michael to seal:{" "}
+                <strong>{readyToSeal.map((b) => `${b.bagNo} (${b.businessDay})`).join(", ")}</strong>.
+              </p>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Your part is done. Leave the bag unsealed in the safe with its night sheet. Only Michael seals it and takes it to the bank (D181).
+              </p>
+            </div>
           ) : (
             <div className="mt-2 space-y-4">
               {readyToSeal.map((b) => {
@@ -399,7 +435,7 @@ export default async function DepositBagsPage({
                         Bag # on the sealed bag (change only if a new bag was used, SOP-03 §4.11 step 2)
                         <Input name="seal_bag_no" defaultValue={b.bagNo} maxLength={BAG_NO_MAX_LEN} required autoComplete="off" />
                       </label>
-                      <PinField name="seal_pin" label="Your PIN (who sealed)" />
+                      <PinField name="seal_pin" label="Your PIN, Michael" />
                       <Button type="submit" variant="primary" size="sm">
                         Seal bag {b.bagNo} for {formatCents(b.morningCountMinor)}
                       </Button>

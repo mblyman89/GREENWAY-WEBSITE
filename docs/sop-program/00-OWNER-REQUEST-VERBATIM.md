@@ -1068,3 +1068,17 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 - **Hidden until the second count.** Registers, history, EOD, oversight attention and the activity feed show "Hidden until the second count is done" instead of the closer's figure.
 - **Timed, flagged, never blocked.** The second-count form carries a signed "opened at" token. A save under 2 minutes, an identical figure saved fast, the closer counting their own drawer, or a missing timer raises a loud red "Check this second count — have a third person count the drawer" on the reconcile card and history, plus a `drawer.second_count_flagged` audit. Staff are never blocked; the owner sees it.
 - **Owner action:** apply 0343 after 0341/0342 (MIGRATIONS_TO_RUN.md has the check query and rollback).
+
+**D181 as built (S4).** Pure `guided-cash-core.ts` (38 self-tests), `guided-cash-store.ts`, `GuidedCashPanel`, `/api/pos/drop-status`, and 13 CI tests. No migration.
+- **Floats.** The owner asked us to double-check the manager float: it is $300.00 in code and on the live registers. The rule is now one constant, `STANDARD_FLOAT_MINOR = { sales: 16750, manager_till: 30000 }`. Any register set to something else gets a gold "Float setting" notice.
+- **Drops.** "Over 2k in sales for their register" is read as **cash taken since the last drop**: cash sales minus cash refunds paid from the drawer minus drops. It uses the same drawer figure the reconcile uses. From $1,500 a drop is *coming*. **Over $2,000 it says "DROP NOW"**, with a suggested amount in whole twenties:
+  - in red on the cockpit and Register Activity;
+  - on the iPad home screen, polled every 60 s. Tapping it opens the Cash drop flow, which already needs a witness PIN.
+  - A partial read says "unknown", never "ok". Nothing ever blocks a sale.
+- **Morning duties.** A checklist runs in the order the cash moves: close any open drawer → second counts → reconcile → build yesterday's bag → blind recount by a different person → Michael seals → Michael banks.
+  - The next step is marked 👉 and links to its screen.
+  - Owner steps are labelled "(Michael only)" and do not nag the crew. The crew count shows "the crew is done" once the bag is recounted.
+- **A bag every day.** Any past day (last 14) that had drawers but no bag shows a red alert on Deposit bags and the cockpit, with a "Build the <day> bag" button per day. The night form already takes any past day, so either morning employee can build yesterday's bag.
+- **Only Michael seals.** `sealBagAction` is gated by `requireBooksAccess` (owner only), like the bank run. If Michael's sign-in is linked to his employee record, the PIN must be his own. A borrowed login with another PIN is refused and audited (`deposit_bag.seal_refused`).
+  - Staff see "waiting for Michael to seal … your part is done", not a form.
+  - This **replaces D25's "anyone can seal"**.

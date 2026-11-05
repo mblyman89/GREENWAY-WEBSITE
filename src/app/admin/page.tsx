@@ -33,6 +33,8 @@ import { listAuditSessions } from "@/lib/inventory/audit-hub-store";
 import { loadCockpitLeafly, loadCockpitTaxes } from "@/lib/admin/cockpit-extras-server";
 import { hourWindow, leaflyTile } from "@/lib/admin/cockpit-extras-core";
 import { describeElapsed } from "@/lib/leafly/schedule-core";
+import { GuidedCashPanel } from "@/components/admin/registers/GuidedCashPanel";
+import { canReadBooks } from "@/lib/accounting/books-view-core";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +103,8 @@ export default async function AdminDashboardPage({
   const todayPacific = pacificToday();
   const wantsFullCountCheck = canReviewAudits && todayPacific.slice(5, 7) === "12";
   const canOpenLeafly = can(session.profile.role, "settings.manage");
+  // D181: every staff login sees the cash jobs (drop now, morning duties).
+  const canSeeCash = can(session.profile.role, "orders.manage");
   const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday, fullCountPlanned, taxes, leafly] = await Promise.all([
     getCockpitSnapshot(sp.basis),
     getSetupStatus(),
@@ -288,6 +292,9 @@ export default async function AdminDashboardPage({
             </span>
           </Link>
         )}
+
+        {/* ── D181: cash jobs (drop now, morning duties, a bag every day) ── */}
+        {canSeeCash ? <GuidedCashPanel isOwner={canReadBooks(session.profile.role)} compact /> : null}
 
         {/* ── Needs your attention ─────────────────────────────────────── */}
         {flags.length > 0 && (

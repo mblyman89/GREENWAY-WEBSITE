@@ -1781,6 +1781,41 @@ export function RegisterShell({
     };
   }, [creds, online, registerLocked]);
 
+  // D181 (S4) — "Cash should be dropped if over 2k in sales for their
+  // register." The server works out this drawer's undropped cash; the home
+  // screen shows a banner (loud when a drop is due). Read-only, never blocks
+  // a sale, silent when offline (the back office shows the same alert).
+  const [dropDue, setDropDue] = useState<{ state: string; sentence: string } | null>(null);
+  const hasDrawer = !!drawer;
+  useEffect(() => {
+    if (!creds || !online || registerLocked || !hasDrawer) {
+      const c = setTimeout(() => setDropDue(null), 0);
+      return () => clearTimeout(c);
+    }
+    let cancelled = false;
+    const pollDrop = async () => {
+      try {
+        const res = await posFetch("/api/pos/drop-status", {
+          headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+        });
+        if (!res.ok) return;
+        const body = (await res.json().catch(() => null)) as { drop?: { state?: string; sentence?: string } | null } | null;
+        if (cancelled) return;
+        const d = body?.drop;
+        setDropDue(d && (d.state === "due" || d.state === "soon") && d.sentence ? { state: d.state, sentence: d.sentence } : null);
+      } catch {
+        // Silent: a register that cannot reach this keeps selling.
+      }
+    };
+    const t0 = setTimeout(() => void pollDrop(), 0);
+    const t1 = setInterval(() => void pollDrop(), 60_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(t0);
+      clearInterval(t1);
+    };
+  }, [creds, online, registerLocked, hasDrawer]);
+
   // SLICE 14 — release the "already completed" latch whenever a NEW sale
   // begins. Done centrally here rather than at each of the four
   // setSaleActive(true) call sites (fresh start, resume, hold resume, website
@@ -3043,6 +3078,7 @@ export function RegisterShell({
         }
         onNoSale={() => setNoSaleOpen(true)}
         onTill={(mode) => setTillMode(mode)}
+        dropDue={dropDue}
         onDayReport={() => setDayReportOpen(true)}
         onVoidSale={() => setVoidOpen(true)}
         onReturnSale={() => setReturnsOpen(true)}
@@ -4069,6 +4105,7 @@ function HomeScreen({
   medicalTestModeBanner,
   medicalTestModeAvailable,
   onToggleMedicalTestMode,
+  dropDue,
   buildVersion,
   onApplyUpdate,
   onRefreshMenu,
@@ -4112,6 +4149,8 @@ function HomeScreen({
   onNoSale: () => void;
   /** B21 — open a register-side till action (count-in / drop / blind close / safe swap). */
   onTill: (mode: "open" | "drop" | "close" | "swap") => void;
+  /** D181 — this drawer's drop reminder (null = nothing to say). */
+  dropDue?: { state: string; sentence: string } | null;
   /** B22 — open the manager-gated X/Z day-report flow. */
   onDayReport: () => void;
   /** B27 — open the manager-gated same-day void flow (undefined offline). */
@@ -4442,6 +4481,22 @@ function HomeScreen({
 
       <div className="mx-auto grid w-full max-w-6xl flex-1 gap-6 p-6 lg:grid-cols-[1fr_330px]">
         <div className="flex flex-col">
+          {/* D181 — drop reminder. Tapping opens the Cash drop flow. */}
+          {dropDue && drawer ? (
+            <button
+              type="button"
+              data-testid="pos-drop-due"
+              onClick={() => onTill("drop")}
+              className={`mb-4 rounded-lg border-2 px-4 py-3 text-left text-sm font-semibold ${
+                dropDue.state === "due"
+                  ? "border-[var(--pos-danger)] bg-[var(--pos-danger-soft)] text-[var(--pos-text)]"
+                  : "border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
+              }`}
+            >
+              {dropDue.state === "due" ? "💰 " : ""}
+              {dropDue.sentence} <span className="underline">Tap to start the cash drop</span>
+            </button>
+          ) : null}
           {banner ? (
             <button
               type="button"
