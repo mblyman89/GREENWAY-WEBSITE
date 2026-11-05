@@ -566,6 +566,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "menu_versions", disposition: "WIPE", because: "Menu versions created by test imports." },
   { table: "menu_items", disposition: "WIPE", because: "Products loaded by test imports." },
   { table: "menu_variants", disposition: "WIPE", because: "The size and price variants of those products." },
+  // PERF round (0344): a derived lookup, one row per product key. Not in the pinned 0240 WIPE list;
+  // its own AFTER TRUNCATE trigger on menu_items empties it in the same reset statement.
+  { table: "product_latest_facts", disposition: "KEEP", because: "The newest category / vendor / brand per product key (PERF round, 0344) \u2014 a speed-up copy derived from the menu items. It is emptied automatically together with the menu items by its own trigger, so the reset function's pinned WIPE list (0240) is not reopened." },
   { table: "catalog_product_drafts", disposition: "WIPE", because: "Draft products awaiting approval from test imports." },
   { table: "ai_suggestions", disposition: "WIPE", because: "AI copy suggestions generated during testing." },
   { table: "product_master_suggestions", disposition: "WIPE", because: "Proposed product groupings from test imports." },

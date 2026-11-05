@@ -3778,3 +3778,29 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0343_drawer_count_integrity.rollback.sql` (puts the
   reconciled figure back in `closing_count_minor` first, so the pre-0343 app still posts the right money).
+
+- [ ] **`supabase/migrations/0344_menu_copy_retention.sql`** — PERF round P1/P2 (owner: "I need my back office to be
+  lightning fast"). Adds `public.product_latest_facts` (newest category / POS type / POS category / vendor / brand per
+  product key, kept current by four statement-level triggers on `menu_items`, backfilled from every row),
+  rewrites `latest_menu_facts` to read it (same answer, milliseconds instead of seconds, now SECURITY INVOKER), and adds
+  `prune_menu_version_items(keep, max)` (service_role only) which clears the items of old archived intake copies.
+  The backfill sorts every existing row once: expect it to take up to about a minute on the Micro plan.
+
+  Until it is applied, the app works as before; after each publish the server log says "migration 0344 is not
+  applied yet".
+
+  Safe to re-run.
+
+  **Then, once:** run `scripts/ops/menu-copy-reclaim.sql` step by step (step 1 repeated until `remaining` is 0,
+  then the two VACUUM FULL lines one at a time, outside opening hours).
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select (select count(*) from public.product_latest_facts) as keys_with_facts,                        -- about 2,288
+         (select count(distinct source_item_id) from public.menu_items where source_item_id <> '') as keys_in_menu,  -- same or fewer
+         (select count(*) from pg_trigger where tgname like 'menu_items_latest_facts_%') as triggers;   -- 4
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0344_menu_copy_retention.rollback.sql` (restores the 0305
+  function; refuses while a product key exists only in the facts table, i.e. after pruning).
