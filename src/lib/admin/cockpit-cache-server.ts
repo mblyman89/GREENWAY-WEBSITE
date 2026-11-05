@@ -18,6 +18,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { judgeRead } from "@/lib/platform/slow-read-core";
 
 import { getSalesReport, type SalesReport } from "@/lib/reports/sales";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -62,6 +63,25 @@ async function unwrap<T>(p: Promise<T>): Promise<T> {
 }
 
 /** Wrap a display-only reader in the cockpit's short shared cache (see the header). */
+/**
+ * PERF P5: time a REAL read (this runs only on a cache miss) and log one
+ * "[slow-read]" line when it passes its budget, so a slow cockpit section
+ * names itself in the Vercel logs (AGENTS.md rule 18: measure). Never changes
+ * the result; a failure is re-thrown unchanged.
+ */
+async function timedRead<T>(label: string, read: () => Promise<T>): Promise<T> {
+  const t0 = Date.now();
+  let ok = false;
+  try {
+    const v = await read();
+    ok = true;
+    return v;
+  } finally {
+    const v = judgeRead(label, Date.now() - t0, ok);
+    if (v.slow) console.warn(v.line);
+  }
+}
+
 export function cockpitCached<A extends string[], T>(
   name: string,
   ttl: number,
@@ -69,7 +89,7 @@ export function cockpitCached<A extends string[], T>(
 ): (...args: A) => Promise<T> {
   return (...args: A) =>
     unwrap(
-      unstable_cache(async () => gate(await read(...args)), cockpitCacheKey(name, ...args), {
+      unstable_cache(async () => gate(await timedRead(`cockpit:${name}`, () => read(...args))), cockpitCacheKey(name, ...args), {
         revalidate: ttl,
         tags: [COCKPIT_CACHE_TAG],
       })(),
