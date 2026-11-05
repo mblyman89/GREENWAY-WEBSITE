@@ -1145,3 +1145,23 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
   - Any read error pauses all fixes.
   - Each press is audited (`partner.fix_applied` / `partner.fix_refused`), on top of the tool's own audit.
 - **Fix links in answers.** Fix ids cited in an AI answer become links to the matching fix card, but only ids that really exist.
+
+**D185 as built (S8).** Daily role checklists, so each shift knows exactly what it owes ("This is the step you are on… do this, do this, do that, done. Validate us when we are done… make it loud").
+
+- **Where it lives.**
+  - New screen **My day** at `/admin/registers/my-day`, in the Employee menu. Any staff login can open it (orders.manage, the same as Night Watch).
+  - A compact version sits at the top of the admin home. It only appears while something is open or urgent, and it disappears once the shift is done.
+- **One list per shift, built from the live data** (`role-checklist-core.ts`, pure, 60 self-tests):
+  - **Opening (morning crew):** close, second-count and reconcile yesterday's drawers; build the deposit bag (either morning employee); a different person recounts it blind; count the float ($167.50 for a sales drawer, $300.00 for the manager till); initial and sign off the opening sheet.
+  - **During the shift:** each open drawer's drop status (over $2,000 in cash since the last drop means drop now); the during-shift sheet.
+  - **Closing:** the closing sheet; every drawer from today closed and left in the safe for the morning second count.
+  - **Michael only:** seal the bag and take it to the bank. Everyone can see these lines, but they never hold up a staff list.
+- **Nudging.**
+  - 👉 marks the step you are on.
+  - 🚨 is loud and always comes first. It covers a drop that is due, an earlier day with no deposit bag (a bag for every single day), and yesterday's crew cash still unfinished after the opening shift.
+  - When every staff line up to the current shift is green, the screen says "You're done… Thank you."
+- **Read-only and honest (rule 135).**
+  - The screen never writes and never blocks anyone; each line links to the screen where the work is done.
+  - Anything that could not be read shows ❓ with a hand check, and the shift is not validated while any line is unknown.
+  - `?shift=opening|during|closing` previews another shift's list.
+- **Builds on existing pieces.** It uses the existing 0327 checklist sheets and the S4 guided-cash duties. No migration, no new cron, no notifications (nudges stay on admin screens, as asked).

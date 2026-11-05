@@ -114,6 +114,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 sample receipts log
   { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Employee" }, // 💵 cash drawer
   { label: "Night Watch", href: "/admin/registers/night-watch", permission: "orders.manage", icon: "\ud83c\udf19", group: "Employee" }, // D182 S5: the morning report (what was left undone, who owes it); email/text switches, owner only
+  { label: "My Day", href: "/admin/registers/my-day", permission: "orders.manage", icon: "\u2705", group: "Employee" }, // D185 S8: role daily checklists (opening / during / closing / Michael), the step you are on, loud when urgent, validated when done
   { label: "Greenway Partner", href: "/admin/partner", permission: "staffing.manage", icon: "\ud83e\udd1d", group: "Employee" }, // D184 S7: the data partner (AI explains live facts; fixes run only through approved, audited tools; Level 2 by default)
   { label: "Over / Short Warnings", href: "/admin/registers/over-short", permission: "registers.warnings", icon: "\u26a0\ufe0f", group: "Employee" }, // ⚠️ Fix Phase 2.3 (G-03, owner D7): admin-only $5 over/short warnings
 
