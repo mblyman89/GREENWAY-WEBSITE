@@ -260,7 +260,7 @@ export function replayCompletedAtIso(occurredAtIso: string, nowMs: number): stri
 // Self-tests (scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
-export function __runExceptionRetryTests(): number {
+export function __runExceptionRetryTests(): { passed: number; failed: number } {
   let n = 0;
   const ok = (c: boolean, m: string) => {
     if (!c) throw new Error(`exception-retry-core: ${m}`);
@@ -342,5 +342,5 @@ export function __runExceptionRetryTests(): number {
   ok(replayCompletedAtIso("2026-11-02T18:49:20.559Z", now) === "2026-11-02T18:49:20.559Z", "replay keeps the sale time");
   ok(replayCompletedAtIso("2026-11-06T00:00:00Z", now) === new Date(now).toISOString(), "future clamps to now");
   ok(replayCompletedAtIso("garbage", now) === new Date(now).toISOString(), "garbage → now");
-  return n;
+  return { passed: n, failed: 0 };
 }

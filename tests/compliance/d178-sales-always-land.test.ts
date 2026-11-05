@@ -28,7 +28,9 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 describe("D178 S1 — pure core", () => {
   it("self-tests all pass", () => {
-    expect(__runExceptionRetryTests()).toBeGreaterThanOrEqual(35);
+    const r = __runExceptionRetryTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(35);
   });
 
   it("every order line carries the same keys, so PostgREST never nulls a NOT NULL column", () => {
