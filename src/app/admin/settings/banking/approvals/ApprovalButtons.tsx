@@ -55,13 +55,9 @@ export function DecisionForm({
   }, [state]);
 
   return (
-    <form
-      action={formAction}
-      onSubmit={(e) => {
-        if (confirmText && !window.confirm(confirmText)) e.preventDefault();
-      }}
-      className="flex flex-col gap-2"
-    >
+    // D179: confirm on the button CLICK (not onSubmit) so a Cancel never
+    // leaves PendingKeeper holding the form busy (L-30 bug class).
+    <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name={idName} value={id} />
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -71,7 +67,14 @@ export function DecisionForm({
           aria-label={notePlaceholder}
           className="min-w-[12rem] flex-1 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white placeholder:text-white/30"
         />
-        <button type="submit" disabled={pending} className={btn[tone]}>
+        <button
+          type="submit"
+          disabled={pending}
+          onClick={(e) => {
+            if (confirmText && !window.confirm(confirmText)) e.preventDefault();
+          }}
+          className={btn[tone]}
+        >
           {pending ? pendingLabel : label}
         </button>
       </div>

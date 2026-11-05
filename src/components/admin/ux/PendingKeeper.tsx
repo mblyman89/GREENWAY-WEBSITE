@@ -42,6 +42,12 @@ import {
   submitShouldShowPending,
   type PendingKind,
 } from "@/lib/admin/pending-core";
+import {
+  OUTCOME_ERROR_MS,
+  OUTCOME_SUCCESS_MS,
+  saveOutcomeFromUrls,
+  type SaveOutcome,
+} from "@/lib/admin/save-outcome-core";
 
 type PendingRecord = {
   hrefAtStart: string;
@@ -60,10 +66,17 @@ export function PendingKeeper() {
   // SLICE 103 — honest "Still working — Ns" line for long form saves.
   const [hint, setHint] = useState<string | null>(null);
   const recordRef = useRef<PendingRecord | null>(null);
+  // D179: the landing card ("Saved. You're done." / "That did not save.").
+  // Only claimed from what the URL proves (save-outcome-core); else silence.
+  const [outcome, setOutcome] = useState<SaveOutcome>({ kind: "none" });
 
-  const clearPending = useCallback(() => {
+  const clearPending = useCallback((judge = true) => {
     const rec = recordRef.current;
     if (!rec) return;
+    if (judge && rec.kind === "form") {
+      const o = saveOutcomeFromUrls(rec.hrefAtStart, window.location.href);
+      if (o.kind !== "none") setOutcome(o);
+    }
     rec.submitter?.classList.remove(PENDING_BUTTON_CLASS);
     rec.submitter?.removeAttribute("aria-busy");
     if (rec.form) delete rec.form.dataset.gwBusy;
@@ -74,7 +87,8 @@ export function PendingKeeper() {
 
   const startPending = useCallback(
     (rec: PendingRecord) => {
-      clearPending(); // one pending at a time — a new click replaces the old
+      clearPending(false); // one pending at a time — a new click replaces the old
+      setOutcome({ kind: "none" });
       recordRef.current = rec;
       if (rec.submitter) {
         rec.submitter.classList.add(PENDING_BUTTON_CLASS);
@@ -212,16 +226,54 @@ export function PendingKeeper() {
     clearPending();
   }, [pathname, clearPending]);
 
-  return barVisible ? (
+  // D179: the landing card goes away by itself (errors stay longer).
+  useEffect(() => {
+    if (outcome.kind === "none") return;
+    const t = window.setTimeout(
+      () => setOutcome({ kind: "none" }),
+      outcome.kind === "success" ? OUTCOME_SUCCESS_MS : OUTCOME_ERROR_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [outcome]);
+
+  return (
     <>
-      <div className="gw-pending-bar" role="progressbar" aria-label="Working…">
-        <div className="gw-pending-bar-fill" />
-      </div>
-      {hint ? (
-        <div className="gw-pending-hint" role="status" aria-live="polite">
-          {hint}
+      {barVisible ? (
+        <>
+          <div className="gw-pending-bar" role="progressbar" aria-label="Working…">
+            <div className="gw-pending-bar-fill" />
+          </div>
+          {hint ? (
+            <div className="gw-pending-hint" role="status" aria-live="polite">
+              {hint}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {outcome.kind !== "none" ? (
+        <div
+          className={`gw-save-outcome gw-save-outcome-${outcome.kind}`}
+          role={outcome.kind === "error" ? "alert" : "status"}
+          aria-live={outcome.kind === "error" ? "assertive" : "polite"}
+          data-testid="save-outcome"
+        >
+          <span className="gw-save-outcome-icon" aria-hidden>
+            {outcome.kind === "success" ? "✓" : "!"}
+          </span>
+          <span className="gw-save-outcome-text">
+            <strong>{outcome.title}</strong>
+            {outcome.detail ? <span className="gw-save-outcome-detail">{outcome.detail}</span> : null}
+          </span>
+          <button
+            type="button"
+            className="gw-save-outcome-close"
+            aria-label="Dismiss"
+            onClick={() => setOutcome({ kind: "none" })}
+          >
+            ✕
+          </button>
         </div>
       ) : null}
     </>
-  ) : null;
+  );
 }

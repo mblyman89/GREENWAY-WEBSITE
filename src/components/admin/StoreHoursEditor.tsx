@@ -221,14 +221,19 @@ export function StoreHoursEditor({ initial, saveAction }: Props) {
         </div>
       </form>
 
-      <form
-        action={saveAction}
-        onSubmit={(e) => {
-          if (!window.confirm("Reset to 8 AM – 11 PM every day and remove all holiday hours?")) e.preventDefault();
-        }}
-      >
+      {/* D179: ask on the button CLICK, never in onSubmit. PendingKeeper marks a
+          form busy in the submit capture phase, so a confirm cancelled inside
+          onSubmit left the button stuck busy and swallowed the next press
+          (the L-30 bug class). Cancelling the click means no submit fires. */}
+      <form action={saveAction}>
         <input type="hidden" name="reset" value="1" />
-        <button type="submit" className="text-xs text-[var(--admin-muted)] underline">
+        <button
+          type="submit"
+          onClick={(e) => {
+            if (!window.confirm("Reset to 8 AM – 11 PM every day and remove all holiday hours?")) e.preventDefault();
+          }}
+          className="text-xs text-[var(--admin-muted)] underline"
+        >
           Reset to 8 AM – 11 PM daily (removes holiday hours)
         </button>
       </form>

@@ -7,8 +7,8 @@
  * holdings) can't be deleted by an accidental click.
  *
  * It renders its own <form action={removePlaidItemAction}> with the item_id in
- * a hidden field. On submit we run window.confirm(); if the owner cancels we
- * preventDefault() and nothing happens. A plain <form> submit (no confirm) is
+ * a hidden field. On the button click we run window.confirm(); if the owner
+ * cancels we preventDefault() so no submit fires and nothing happens. A plain <form> submit (no confirm) is
  * the graceful fallback if JS is disabled — the server action still gates on
  * permission, so this is safe.
  */
@@ -23,9 +23,13 @@ export function RemoveConnectionButton({
   institutionName: string;
 }) {
   return (
-    <form
-      action={removePlaidItemAction}
-      onSubmit={(e) => {
+    // D179: confirm on the button CLICK (not onSubmit) so a Cancel never
+    // leaves PendingKeeper holding the form busy (L-30 bug class).
+    <form action={removePlaidItemAction}>
+      <input type="hidden" name="item_id" value={itemId} />
+      <button
+        type="submit"
+        onClick={(e) => {
         const ok = window.confirm(
           `Remove the "${institutionName}" connection?\n\n` +
             "This deletes its accounts, transactions, and any mortgage/holdings " +
@@ -33,11 +37,7 @@ export function RemoveConnectionButton({
             "reconnect it later. This cannot be undone.",
         );
         if (!ok) e.preventDefault();
-      }}
-    >
-      <input type="hidden" name="item_id" value={itemId} />
-      <button
-        type="submit"
+        }}
         className="rounded-[var(--admin-radius)] border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/[0.08]"
       >
         Remove

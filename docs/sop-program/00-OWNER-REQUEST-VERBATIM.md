@@ -1053,3 +1053,11 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 | D183 | **CCRS and taxes are correct by construction**: completeness checks, lot-shortfall repair and a plain-English taxes-owed screen. | *"The numbers and data need to make it to CCRS and I need to pay the correct amount in taxes."* |
 | D184 | **Greenway Partner AI at Level 2**: it can read the database and propose fixes; it acts only through approved, audited repair tools. | *"Set ai to be level 2 to start."* |
 | D185 | **Daily role checklists** so each shift knows exactly what it owes. | *"Cash handling, sop, opening and closing tills, daily employee tasks and obligations."* |
+
+**D179 as built (S2).** PendingKeeper already greyed out, spun and locked every admin server-action button, so nothing was rebuilt. S2 adds the third step the owner asked for, *"ends with a big green check: 'Saved. You're done.'"*:
+- **Green card only when the redirect URL proves the save.** That means a fresh `?saved=`/`?ok=`/… key, or landing on a new page with no error key.
+- **Red "That did not save." card** for `?error=`/`?blocked=`/`…Error=`, showing the server's own words.
+- **Silence otherwise**, because a green check on a failed save teaches staff to trust a lie.
+- **Confirm questions moved to the button click** on three forms that asked inside `onSubmit`. There, a Cancel left the form held busy and swallowed the next press.
+- **Public vendor ACH page:** its two buttons now show a busy state too, since it sits outside the admin keeper.
+- **CI guard:** every async iPad and admin button must carry `disabled=`.
