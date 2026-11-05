@@ -3723,3 +3723,31 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0341_pos_offline_reversal.rollback.sql`. It refuses to run while
   reversal rows exist.
+
+- [ ] `0342_label_studio.sql` (D177 S6, owner request: "a much fancier, far more professional label builder
+  experience … exceptional, professional, enterprise grade, easy to use"). Independent of 0340/0341.
+  - **Why:** the Label Studio can save the store's label designs once ("Glass price tag 2.25×1.25", "Re-barcode
+    2×1 QR") so every iPad and PC picks them by name, with one default per kind that opens automatically on a
+    device that has never printed. Every print is also recorded: who printed which labels, for which lot or item,
+    with which code, on which label size. A lot or item label page shows its recent prints.
+  - **What it does:** creates two tables. `label_templates` holds saved designs. They are archived, never deleted,
+    names are unique per kind, and there is at most one live default per kind. `label_print_log` is append-only
+    print history: the server can only add and read rows, never change or delete them. It also creates one
+    function, `label_template_set_default(id, kind)`, which moves the default in a single step. RLS is on for both
+    tables. Only the server (service_role) can reach them. Design changes go to the Security Log.
+
+    Until it is applied, printing works exactly as before (each device remembers its own settings). The studio
+    shows a one-line hint naming this file where store designs would be, and print history is simply not kept.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select to_regclass('public.label_templates') as templates,
+         to_regclass('public.label_print_log') as print_log,
+         to_regprocedure('public.label_template_set_default(uuid,text)') as set_default;   -- all three non-null
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0342_label_studio.rollback.sql`. It refuses to run once any
+  print has been recorded (the print history is an audit trail).

@@ -18,6 +18,7 @@ import { lotSubject } from "@/lib/printing/label-layout-core";
 import { labelLoadErrorText, lotSourceFromRow, suggestedCopiesForLot } from "@/lib/printing/label-studio-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LabelStudio, type StudioItem } from "@/components/admin/labels/LabelStudio";
+import { listLabelTemplatesAction } from "@/app/admin/labels/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ const SKIP_DISPOSITION = "rejected_at_dock";
 export default async function ManifestLabelsPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const [manifest, loaded, profile] = await Promise.all([getManifestById(id), listLotsForManifestLabels(id), getStoreProfile()]);
+  const [manifest, loaded, profile, saved] = await Promise.all([getManifestById(id), listLotsForManifestLabels(id), getStoreProfile(), listLabelTemplatesAction("lot")]);
   if (!manifest) notFound();
 
   const storeName = profile.storeName || profile.legalEntity || "Greenway";
@@ -78,7 +79,7 @@ export default async function ManifestLabelsPage({ params }: { params: Promise<{
           This manifest has no lines to label yet. Lines appear here once the manifest is received.
         </div>
       ) : (
-        <LabelStudio kind="lot" items={items} contextLine={heading} />
+        <LabelStudio kind="lot" items={items} contextLine={heading} saved={saved} />
       )}
     </div>
   );

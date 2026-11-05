@@ -21,6 +21,7 @@ import { ncSubject } from "@/lib/printing/label-layout-core";
 import { ncSourceFromRow } from "@/lib/printing/label-studio-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LabelStudio } from "@/components/admin/labels/LabelStudio";
+import { listLabelTemplatesAction, listPrintHistoryAction } from "@/app/admin/labels/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function NonCannabisLabelPage({
   await requirePermission("inventory.manage");
   const { id } = await params;
   const { back } = await searchParams;
-  const [product, profile] = await Promise.all([getNonCannabisProduct(id), getStoreProfile()]);
+  const [product, profile, saved, history] = await Promise.all([getNonCannabisProduct(id), getStoreProfile(), listLabelTemplatesAction("nc"), listPrintHistoryAction(id)]);
   if (!product) notFound();
 
   const storeName = profile.storeName || profile.legalEntity || "Greenway";
@@ -56,7 +57,7 @@ export default async function NonCannabisLabelPage({
           </BackLink>
         }
       />
-      <LabelStudio kind="nc" items={[{ subject, copies: 1, suggestedCopies: suggested }]} />
+      <LabelStudio kind="nc" items={[{ subject, copies: 1, suggestedCopies: suggested }]} saved={saved} history={history} />
     </div>
   );
 }

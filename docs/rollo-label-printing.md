@@ -64,13 +64,52 @@ Design decisions, grounded in the specs above:
   carrier labels; our feature is the in-store product/lot label.
 - It does **not** require any Rollo account, driver install, or cloud service.
 
-## Employee steps (plain language)
+## Employee steps (plain language) — Label Studio (D177)
 
-1. Open the manifest (Inventory ▸ Vendor intake ▸ the manifest) or the lot.
-2. Click **Print label** on a lot line — a clean 4×6 label opens in a new tab.
-3. Press **⌘P / Ctrl-P**, pick the **Rollo** printer, confirm paper size **4×6**,
-   and print. (First time only: make sure the Rollo is on the same Wi-Fi and
-   shows up in the printer list — the Equipment page has setup notes.)
+**Where to open it**
+
+| Starting point | Button | What opens |
+|---|---|---|
+| A cannabis lot | **🏷 Print label** | That lot, copies = 1 (one-per-unit button offered) |
+| A product page (cannabis) | 🏷 beside each lot | That lot |
+| A received manifest | **🏷 Print labels for this manifest** / 🏷 per line | Every line (rejected-at-dock lines left out) / one line |
+| An Other Inventory item | **🏷 Print label** | That item |
+| Other Inventory drafts | **🏷 Print labels for all drafts** | Every draft item |
+| A keyed-in vendor invoice | **🏷 Labels**, or **🏷 Print labels for this delivery** after saving | Every line, one label per piece received |
+| Merch catalogue | **🏷 Reprint label** / **🏷 Open Label Studio** | That item |
+
+**Printing**
+
+1. *Store designs* (top): tap a saved design such as "Re-barcode 2×1 QR". A
+   device that has never printed opens on the store default automatically.
+2. *Printer & label size*: pick the printer and any vendor's size, or enter a
+   custom size. Sizes the printer can't feed are shown but blocked, with the reason.
+3. *Code*: **1D barcode** (Code 128), **2D QR code**, or **Retail UPC** (only for a
+   real UPC/EAN). Pick which value it carries (lot code, SKU, UPC…). The studio
+   warns if that value won't ring up at the register.
+4. *What prints*: tick and order the lines (product, price, lot, dates…).
+5. *Copies*, then **🖨 Print**. In the dialog choose the printer, paper size =
+   the label size, margins **None**, scale **100 %**, no headers/footers.
+6. Cannabis: put the sticker **beside** the producer's label, never over it
+   (WAC 314-55-105).
+
+**Saving a design for the whole store** (needs migration `0342_label_studio.sql`)
+
+- **＋ Save as a store design** → name it, optionally *make default*. It saves the
+  printer, size, code type and lines (not copy counts).
+- After changing a design you opened, **Update "…"** saves the change for every
+  device. **Make default** and **Remove** are on each card. Removing is an
+  archive. Printed labels and the history are untouched.
+- Every create / update / default / remove is in the Security Log
+  (`label_template.*`).
+
+**Print history.** Each print records who printed it, when, how many labels,
+for which lots/items, with which code value, size and code type, and the
+manifest or invoice it came from. A single lot or item's studio shows its last
+10 prints under **Recent prints**. This answers "what did we put on this jar?"
+when a re-barcoded item won't ring up. The log is append-only: the server can
+add and read rows, never edit or delete them. Without 0342, printing works
+exactly the same; the history is just not kept.
 
 ---
 

@@ -41,9 +41,17 @@ $25" guesswork, no unscannable pegs.
 
 - The smart SKU (`BONG-0001-12IN-BLUE-M`) is human-readable AND scannable:
   Code128 encodes the full alphanumeric SKU.
-- Printed from `/admin/inventory/noncannabis/[id]/label` (2.25in × 1.25in) on
-  the **label printer registered on the Equipment page** (Rollo Wireless
-  X1040, asset `PRN-LABEL-01`) via the browser print dialog.
+- Printed from the **Label Studio** (D177) at `/admin/inventory/noncannabis/[id]/label`
+  on the **label printer registered on the Equipment page** (Rollo Wireless
+  X1040, asset `PRN-LABEL-01`) via the browser print dialog. 2.25in × 1.25in is
+  still the default, but any vendor's size can be picked (Rollo, OnlineLabels,
+  Zebra, DYMO, or a custom size), with a 1D barcode, a 2D QR code or a retail
+  UPC, and a choice of which lines print.
+- Batch printing: **🏷 Print labels for all drafts** (drafts header),
+  **🏷 Labels** on a keyed-in invoice (one label per piece received), or
+  **🏷 Print labels for this delivery** right after saving an invoice.
+- Saved **store designs** (e.g. "Glass price tag 2.25×1.25") and the
+  **print history** need migration `0342_label_studio.sql`.
 - Label carries: store name, price, item name, type, barcode + SKU text —
   price tag and inventory tag in one.
 - The catalog shows a **"Need SKU labels"** KPI (active items with no

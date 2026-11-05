@@ -34,6 +34,7 @@ import {
 } from "@/lib/printing/label-batch-store";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LabelStudio, type StudioItem } from "@/components/admin/labels/LabelStudio";
+import { listLabelTemplatesAction } from "@/app/admin/labels/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,7 @@ export default async function NonCannabisBatchLabelsPage({
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const profile = await getStoreProfile();
+  const [profile, saved] = await Promise.all([getStoreProfile(), listLabelTemplatesAction("nc")]);
   const ctx = { storeName: profile.storeName || profile.legalEntity || "Greenway", printedOn: pacificToday() };
 
   let rows: NcLabelRow[] = [];
@@ -185,7 +186,7 @@ export default async function NonCannabisBatchLabelsPage({
           print a single item from its 🏷 Print label link.
         </Notice>
       ) : (
-        <LabelStudio kind="nc" items={items} contextLine={heading} suggestLabel={suggestLabel} />
+        <LabelStudio kind="nc" items={items} contextLine={heading} suggestLabel={suggestLabel} saved={saved} />
       )}
     </Shell>
   );
