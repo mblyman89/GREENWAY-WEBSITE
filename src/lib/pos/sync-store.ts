@@ -101,6 +101,16 @@ import { toRecognitionCard, getMedTaxSettings } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
 import { maxRewardOffMinor, redemptionReward, rewardShortLabel } from "@/lib/loyalty/loyalty-reward-core";
 import { issueOfflineRedemption } from "@/lib/loyalty/loyalty-store";
+import {
+  AUTO_RETRY_BATCH_LIMIT,
+  lineLoyaltyMinor,
+  lineUnitGrams,
+  replayCompletedAtIso,
+  retryDecision,
+  specialRateVerdict,
+  type RetryActor,
+  type RetryMode,
+} from "./exception-retry-core";
 
 // ---------------------------------------------------------------------------
 // Schema guard (migration 0120 applied manually by the owner)
@@ -447,6 +457,7 @@ async function processEnvelope(
   device: PosDevice,
   envelope: PosEventEnvelope,
   ledgerId: string,
+  replay: ReplayOptions = {},
 ): Promise<PosSyncAck> {
   // AN-3(d): device clock drift.
   // A FUTURE occurredAt (beyond tolerance) poisons the sales-hours gate and
@@ -462,7 +473,7 @@ async function processEnvelope(
   try {
     switch (envelope.eventType) {
       case "sale":
-        return await processSale(admin, device, envelope, ledgerId);
+        return await processSale(admin, device, envelope, ledgerId, replay);
       case "punch":
         return await processPunch(admin, envelope, ledgerId);
       case "no_sale":
@@ -531,11 +542,24 @@ async function markException(
 // sale — materialize an order + re-run the shared completion gate (B1)
 // ---------------------------------------------------------------------------
 
+/**
+ * D178 — how a sale is being (re)processed. Empty for a normal sync.
+ * `acceptAsRung` is set ONLY by the owner's "Record as rung" button: the
+ * receipt is the truth for a special-discount rate that changed after the
+ * register applied it. Legal gates are never relaxed by any option.
+ */
+export type ReplayOptions = {
+  acceptAsRung?: boolean;
+  /** Who pressed the button / which job retried (audit + order trail). */
+  actorLabel?: string;
+};
+
 async function processSale(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   device: PosDevice,
   envelope: PosEventEnvelope,
   ledgerId: string,
+  replay: ReplayOptions = {},
 ): Promise<PosSyncAck> {
   const payload = envelope.payload as Partial<PosSalePayload>;
   const check = validateSalePayload(payload);
@@ -824,13 +848,34 @@ async function processSale(
         `The ${sd.kind} discount program is turned OFF — the register applied it from a stale menu. Refresh the register's menu, re-ring the sale, then resolve this exception.`,
       );
     }
-    if (program.percentBps !== sd.percentBps) {
+    // D178 — the receipt is the truth. A LOWER applied rate (the customer
+    // got less off than allowed) is recorded as rung with an audit flag; a
+    // HIGHER one only when the owner presses "Record as rung".
+    const rate = specialRateVerdict(sd.percentBps, program.percentBps, replay.acceptAsRung === true);
+    if (rate.kind === "refuse") {
       return markException(
         admin,
         ledgerId,
         envelope.clientUuid,
-        `The ${sd.kind} discount rate changed (register applied ${sd.percentBps} bps; the saved rate is ${program.percentBps} bps). Refresh the register's menu, re-ring the sale, then resolve this exception.`,
+        `The ${sd.kind} discount rate changed (register applied ${sd.percentBps} bps; the saved rate is ${program.percentBps} bps). The register gave MORE off than today's setting allows, so only the owner can record it as rung (Exceptions → Record as rung).`,
       );
+    }
+    if (rate.kind === "as_rung") {
+      await recordAudit({
+        actorId: null,
+        actorEmail: `pos-device:${device.id}`,
+        action: "register.special_rate_as_rung",
+        entityType: "register",
+        entityId: envelope.registerId,
+        after: {
+          clientUuid: envelope.clientUuid,
+          kind: sd.kind,
+          appliedBps: rate.appliedBps,
+          savedBps: rate.savedBps,
+          why: rate.why,
+          by: replay.actorLabel ?? "sync",
+        },
+      });
     }
     for (const [i, l] of sale.lines.entries()) {
       if (!l.specialDiscountMinor) continue;
@@ -1070,16 +1115,15 @@ async function processSale(
       price_minor_units: l.unitPriceMinor,
       regular_price_minor_units: l.regularPriceMinor,
       // Task AM-B — per-UNIT loyalty reduction snapshot (migration 0116).
-      // Only written when a redemption rode this sale, so pre-0116 databases
-      // never see the column on loyalty-free sales.
-      ...(redemptionRow && l.loyaltyDiscountMinor
-        ? { loyalty_discount_minor_units: l.loyaltyDiscountMinor }
-        : {}),
+      // D178: EVERY row carries the SAME keys. PostgREST bulk-inserts with
+      // the union of all rows' keys and sends NULL for a key a row lacks, so
+      // spreading this column only onto the discounted lines nulled it on
+      // the others and the NOT NULL column refused the whole sale (the stuck
+      // $40.90 loyalty sale of 2026-11-03). See uniformLineKeys().
+      loyalty_discount_minor_units: lineLoyaltyMinor(redemptionRow !== null, l.loyaltyDiscountMinor),
       // AN-1 — per-UNIT grams snapshot (migration 0122). The completion gate
       // prefers this over the category default; null = unknown weight.
-      ...(withUnitGrams && typeof l.unitGrams === "number" && l.unitGrams > 0
-        ? { unit_grams: l.unitGrams }
-        : {}),
+      ...(withUnitGrams ? { unit_grams: lineUnitGrams(l.unitGrams) } : {}),
     }));
   let { error: linesError } = await admin.from("order_lines").insert(buildLineRows(true));
   if (
@@ -1267,7 +1311,11 @@ async function processSale(
 
   const completed = await setOrderStatus(order.id, "completed", {
     actorLabel: `POS · ${employeeName}`,
-    note: `Completed via POS sync (${device.name}).`,
+    note: replay.actorLabel
+      ? `Completed via POS sync (${device.name}), replayed from Exceptions by ${replay.actorLabel}${replay.acceptAsRung ? " (recorded as rung)" : ""}.`
+      : `Completed via POS sync (${device.name}).`,
+    // D178 — filed under the day the money moved, not the day it synced.
+    completedAtIso: replayCompletedAtIso(envelope.occurredAt, Date.now()),
   });
   if (!completed.ok) {
     return markException(
@@ -2205,4 +2253,210 @@ export async function resolvePosException(
     .eq("status", "exception");
   if (error) return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// D178 — Sales always land: retry / record-as-rung from the Exceptions queue
+// ---------------------------------------------------------------------------
+
+type RetryLedgerRow = SweepRow & {
+  status: string;
+  exception_reason: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+};
+
+export type RetryExceptionResult =
+  | { ok: true; status: "processed"; orderId: string | null }
+  | { ok: false; error: string; stillException?: boolean };
+
+async function loadReplayDevice(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  deviceId: string,
+  registerId: string,
+): Promise<PosDevice> {
+  const { data: deviceRow } = await admin
+    .from("pos_devices")
+    .select("id, name, register_id, status, provision_hash")
+    .eq("id", deviceId)
+    .maybeSingle<PosDevice>();
+  // A revoked/deleted device does not erase the FACT of the sale.
+  return deviceRow ?? { id: deviceId, name: "(retired device)", register_id: registerId, status: "active", provision_hash: null };
+}
+
+function envelopeFromRow(raw: SweepRow): PosEventEnvelope {
+  return {
+    clientUuid: raw.client_uuid,
+    deviceId: raw.device_id,
+    registerId: raw.register_id,
+    employeeId: raw.employee_id,
+    sequence: raw.sequence,
+    occurredAt: raw.occurred_at,
+    eventType: raw.event_type as PosEventEnvelope["eventType"],
+    payload: raw.payload ?? {},
+  };
+}
+
+/**
+ * Re-run ONE exception through the exact sync chain. The row is CLAIMED by
+ * compare-and-swap (status exception → pending, only while no order exists),
+ * so two presses, or a press racing the cron, can never both run it; the
+ * 0128 unique index on orders.pos_client_uuid is the absolute net under that.
+ * A failure lands back on Exceptions with the NEW reason (the old reason is
+ * kept in the audit row). Legal gates are never relaxed — see
+ * exception-retry-core.retryDecision.
+ */
+export async function retryPosException(
+  id: string,
+  opts: { mode: RetryMode; actor: RetryActor; actorId: string | null; actorLabel: string },
+): Promise<RetryExceptionResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data: raw, error } = await admin
+    .from("pos_sale_events")
+    .select(
+      "id, client_uuid, device_id, register_id, employee_id, sequence, occurred_at, received_at, event_type, payload, order_id, recovery_attempts, status, exception_reason, resolved_at, resolution_note",
+    )
+    .eq("id", id)
+    .maybeSingle<RetryLedgerRow>();
+  if (error) return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
+  if (!raw) return { ok: false, error: "That exception no longer exists." };
+
+  const decision = retryDecision(
+    {
+      status: raw.status,
+      eventType: raw.event_type,
+      orderId: raw.order_id,
+      exceptionReason: raw.exception_reason,
+      resolvedAt: raw.resolved_at,
+      recoveryAttempts: raw.recovery_attempts ?? 0,
+    },
+    opts.mode,
+    opts.actor,
+  );
+  if (!decision.ok) return { ok: false, error: decision.reason };
+
+  // Claim (compare-and-swap). Losing the race is not an error to a person:
+  // somebody else is already recording it.
+  const { data: claimed } = await admin
+    .from("pos_sale_events")
+    // A reviewed-but-never-rung row re-opens while it runs, so a refusal
+    // shows on the open queue again (the old note is kept in the audit row).
+    .update({
+      status: "pending",
+      recovery_attempts: (raw.recovery_attempts ?? 0) + 1,
+      resolved_at: null,
+      resolved_by: null,
+      resolution_note: null,
+    })
+    .eq("id", id)
+    .eq("status", "exception")
+    .is("order_id", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (!claimed) return { ok: false, error: "Someone else is already retrying this sale. Reload in a minute." };
+
+  await recordAudit({
+    actorId: opts.actorId,
+    actorEmail: opts.actor === "cron" ? "cron:exception-retry" : null,
+    action: opts.mode === "record_as_rung" ? "pos.exception_record_as_rung" : "pos.exception_retry",
+    entityType: "pos_sale_event",
+    entityId: id,
+    before: { status: "exception", reason: raw.exception_reason, resolvedAt: raw.resolved_at, note: raw.resolution_note },
+    after: { clientUuid: raw.client_uuid, mode: opts.mode, actor: opts.actor, by: opts.actorLabel, kind: decision.cls.kind },
+  });
+
+  const device = await loadReplayDevice(admin, raw.device_id, raw.register_id);
+  const ack = await processEnvelope(admin, device, envelopeFromRow(raw), raw.id, {
+    acceptAsRung: opts.mode === "record_as_rung",
+    actorLabel: opts.actorLabel,
+  });
+  if (ack.status !== "processed") {
+    return { ok: false, stillException: true, error: ack.reason ?? "The sale was refused again." };
+  }
+  const note =
+    opts.mode === "record_as_rung"
+      ? `Recorded as rung by ${opts.actorLabel} (the receipt is the truth). Earlier reason: ${raw.exception_reason ?? "(none)"}`
+      : `Retried by ${opts.actorLabel} and recorded. Earlier reason: ${raw.exception_reason ?? "(none)"}`;
+  await admin
+    .from("pos_sale_events")
+    .update({
+      resolved_by: opts.actorId,
+      resolved_at: new Date().toISOString(),
+      resolution_note: note.slice(0, 1000),
+    })
+    .eq("id", id)
+    .then(() => {}, () => {});
+  return { ok: true, status: "processed", orderId: ack.orderId ?? null };
+}
+
+export type AutoRetryResult = {
+  ok: boolean;
+  scanned: number;
+  recorded: number;
+  stillOpen: number;
+  details: { id: string; outcome: string }[];
+  error?: string;
+};
+
+/**
+ * The cron's half of "sales always land": every unresolved exception the
+ * pure core calls a SYSTEM FAULT (or a harmless lower discount rate) is
+ * retried, at most AUTO_RETRY_MAX_ATTEMPTS times each. A quiet tick is one
+ * indexed read and writes nothing. Never throws.
+ */
+export async function runExceptionAutoRetry(): Promise<AutoRetryResult> {
+  const out: AutoRetryResult = { ok: true, scanned: 0, recorded: 0, stillOpen: 0, details: [] };
+  if (!isSupabaseServiceConfigured) return out;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("pos_sale_events")
+      .select("id, event_type, order_id, exception_reason, resolved_at, recovery_attempts, status")
+      .eq("status", "exception")
+      .is("resolved_at", null)
+      .is("order_id", null)
+      .order("occurred_at", { ascending: true })
+      .limit(200);
+    if (error) return { ...out, ok: false, error: error.message };
+    type Row = {
+      id: string;
+      event_type: string;
+      order_id: string | null;
+      exception_reason: string | null;
+      resolved_at: string | null;
+      recovery_attempts: number | null;
+      status: string;
+    };
+    const eligible = ((data as Row[] | null) ?? []).filter(
+      (r) =>
+        retryDecision(
+          {
+            status: r.status,
+            eventType: r.event_type,
+            orderId: r.order_id,
+            exceptionReason: r.exception_reason,
+            resolvedAt: r.resolved_at,
+            recoveryAttempts: r.recovery_attempts ?? 0,
+          },
+          "retry",
+          "cron",
+        ).ok,
+    );
+    for (const r of eligible.slice(0, AUTO_RETRY_BATCH_LIMIT)) {
+      out.scanned += 1;
+      const res = await retryPosException(r.id, {
+        mode: "retry",
+        actor: "cron",
+        actorId: null,
+        actorLabel: "the automatic retry",
+      });
+      if (res.ok) out.recorded += 1;
+      else out.stillOpen += 1;
+      out.details.push({ id: r.id, outcome: res.ok ? "recorded" : `open: ${res.error.slice(0, 160)}` });
+    }
+    return out;
+  } catch (e) {
+    return { ...out, ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

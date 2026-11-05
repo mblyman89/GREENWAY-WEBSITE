@@ -6,14 +6,17 @@
  * Resolution is the ONLY write: a manager reviews an exception's full
  * payload, does whatever the reason instructs (intake the card, apply the
  * migration, fix the price, re-ring the sale…), and records a written note.
- * Resolution NEVER replays the event — the register re-sends anything that
- * should be retried, and the durable row keeps the whole story.
+ * D178: a sale can also be RETRIED (any manager, for a system fault) or
+ * RECORDED AS RUNG (owner/admin only: the receipt is the truth for a
+ * discount setting that changed after the register applied it). Both re-run
+ * the exact sync chain; legal gates are never relaxed.
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { replayStrandedCartAdjustments, resolvePosException } from "@/lib/pos/sync-store";
+import { can } from "@/lib/auth/roles";
+import { replayStrandedCartAdjustments, resolvePosException, retryPosException } from "@/lib/pos/sync-store";
 
 const BASE = "/admin/registers/exceptions";
 
@@ -68,4 +71,33 @@ export async function recordStrandedCartAdjustmentsAction(): Promise<void> {
     );
   }
   redirect(`${BASE}?replayed=${result.recorded}`);
+}
+
+/**
+ * D178 — "Retry this sale" / "Record as rung". The owner gate for recording
+ * as rung is `registers.warnings` (owner + admin); every manager type may
+ * retry a system fault. The store re-checks everything (retryDecision).
+ */
+export async function retryPosExceptionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("staffing.manage");
+  const id = String(formData.get("exception_id") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "retry") === "record_as_rung" ? "record_as_rung" : "retry";
+  if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing exception id."));
+  const isOwner = can(session.profile.role, "registers.warnings");
+  const label = session.profile.full_name || session.email || "a manager";
+  const result = await retryPosException(id, {
+    mode,
+    actor: isOwner ? "owner" : "manager",
+    actorId: session.profile.id,
+    actorLabel: label,
+  });
+  revalidatePath(BASE);
+  revalidatePath("/admin/registers");
+  if (!result.ok) {
+    redirect(
+      `${BASE}?error=` +
+        encodeURIComponent(result.stillException ? `Still not recorded: ${result.error}` : result.error),
+    );
+  }
+  redirect(`${BASE}?rung=${mode === "record_as_rung" ? "as_rung" : "retried"}`);
 }
