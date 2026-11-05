@@ -1169,6 +1169,7 @@ import { __runGuidedCashTests } from "../../src/lib/registers/guided-cash-core";
 import { __runNightWatchTests } from "../../src/lib/registers/night-watch-core";
 import { __runCcrsCompletenessTests } from "../../src/lib/compliance/ccrs-completeness-core";
 import { __runTaxesOwedTests } from "../../src/lib/compliance/taxes-owed-core";
+import { __runPartnerTests } from "../../src/lib/ai/partner-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2793,6 +2794,7 @@ __runLiquidVolumeTests();
   assertRan("night-watch-core", __runNightWatchTests(), 36); // D182 S5: morning report from the night watch, red crew items first, a read error is never all clear; email and text built but OFF by default
   assertRan("ccrs-completeness-core", __runCcrsCompletenessTests(), 50); // D183 S6: every sale line filed or held with the same money, lot shortfalls diagnosed with one safe record-only fix
   assertRan("taxes-owed-core", __runTaxesOwedTests(), 20); // D183 S6: excise (LIQ-1295 by the 20th) and sales tax (DOR by the 25th rolled) per month, money check
+  assertRan("partner-core", __runPartnerTests(), 38); // D184 S7: Greenway Partner Level 2 by default; the AI never writes; fixes are deterministic proposals bound to approved audited tools; money, counts and CCRS wait for the owner
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
