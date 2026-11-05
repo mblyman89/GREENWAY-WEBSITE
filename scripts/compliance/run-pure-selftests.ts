@@ -1162,6 +1162,7 @@ import { __runLabelBarcodeTests } from "../../src/lib/printing/label-barcode-cor
 import { __runLabelLayoutTests } from "../../src/lib/printing/label-layout-core";
 import { __runLabelStudioTests } from "../../src/lib/printing/label-studio-core";
 import { __runLabelSavedTests } from "../../src/lib/printing/label-saved-core";
+import { __runExceptionRetryTests } from "../../src/lib/pos/exception-retry-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2779,6 +2780,7 @@ __runLiquidVolumeTests();
   assertRan("label-layout-core", __runLabelLayoutTests(), 70); // D177 S3 ("the info I want on the label"): field picker + register-aware code sources + auto-fit layout that never drops the barcode and never prints potency
   assertRan("label-studio-core", __runLabelStudioTests(), 49); // D177 S4+S5 ("far more professional label builder experience … easy to use"): remembered settings never reopen on a stock the printer can't feed, batch print plan with copy ceilings + refusals, one-label-per-page print CSS at the exact stock size
   assertRan("label-saved-core", __runLabelSavedTests(), 36); // D177 S6 ("enterprise grade"): shared saved label designs validated server-side (known printer, feedable stock, sanitized template) + append-only print log rows re-clamped and cross-checked
+  assertRan("exception-retry-core", __runExceptionRetryTests(), 35); // D178 S1 ("if product left the shop and money was given to me in exchange, there can be no manual exceptions"): uniform line keys, plain-English exception classes, receipt-is-truth rate drift, retry permissions, replay dated when the money moved
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

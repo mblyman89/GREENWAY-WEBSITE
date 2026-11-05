@@ -779,6 +779,15 @@ export type SetStatusOptions = {
    * moving backward in the active chain). See order-lifecycle-core.ts (S-15).
    */
   reversalReason?: string | null;
+  /**
+   * D178 — when the sale really happened, for a register sale. The POS sync
+   * passes the register's occurredAt (clamped to now by
+   * replayCompletedAtIso), so an offline flush or a sale replayed from
+   * Exceptions days later is filed under the day the money moved: CCRS
+   * SaleDate, the excise return and the books all read completed_at.
+   * Ignored on every transition except → completed.
+   */
+  completedAtIso?: string | null;
 };
 
 export type SetOrderStatusResult =
@@ -837,7 +846,7 @@ export async function setOrderStatus(
   const now = new Date().toISOString();
   if (toStatus === "acknowledged") patch.acknowledged_at = now;
   if (toStatus === "ready") patch.ready_at = now;
-  if (toStatus === "completed") patch.completed_at = now;
+  if (toStatus === "completed") patch.completed_at = opts.completedAtIso ?? now;
   // Reversals rewind history — clear the timestamps of statuses being undone
   // so the row reflects the true current position in the workflow.
   if (verdict.kind === "reversal") {

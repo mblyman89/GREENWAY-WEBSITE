@@ -9,6 +9,9 @@
  * row stays forever: reason + payload + who resolved it + the note.
  */
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
+import { classifyExceptionReason } from "@/lib/pos/exception-retry-core";
+import { PendingSubmit } from "@/components/admin/compliance/PendingSubmit";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, EmptyState, HelpPanel } from "@/components/admin/ux";
@@ -23,7 +26,7 @@ import { listRegisters } from "@/lib/registers/store";
 import { listEmployees } from "@/lib/staffing/store";
 import { pacificParts } from "@/lib/reports/timezone";
 import { STRANDED_UUID_REASON } from "@/lib/pos/cart-adjust-core";
-import { recordStrandedCartAdjustmentsAction, resolvePosExceptionAction } from "./actions";
+import { recordStrandedCartAdjustmentsAction, resolvePosExceptionAction, retryPosExceptionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +52,10 @@ function eventBadge(eventType: string) {
 export default async function PosExceptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; resolved?: string; replayed?: string; back?: string }>;
+  searchParams: Promise<{ error?: string; resolved?: string; replayed?: string; rung?: string; back?: string }>;
 }) {
-  await requirePermission("staffing.manage");
+  const session = await requirePermission("staffing.manage");
+  const isOwner = can(session.profile.role, "registers.warnings");
   const sp = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
@@ -72,6 +76,9 @@ export default async function PosExceptionsPage({
     listRegisters({ includeInactive: true }),
     listEmployees({ includeInactive: true }),
   ]);
+  // D178 — a sale that was marked reviewed but never made it into the books
+  // (no order) is still money that changed hands: it is offered again here.
+  const reviewedNotRung = resolved.filter((r) => r.event_type === "sale" && !r.order_id);
   const stranded = open.filter(
     (r) => r.event_type === "cart_adjustment" && (r.exception_reason ?? "").trim() === STRANDED_UUID_REASON,
   ).length;
@@ -106,7 +113,9 @@ export default async function PosExceptionsPage({
           steps={[
             "Every reason is staff-actionable: it tells you exactly what to fix (intake a card, apply a migration, correct a price).",
             "Open the payload to see exactly what the register sent — lines, totals, tender, card facts.",
-            "Fix the underlying problem FIRST, then resolve with a note. Resolving never replays the event — re-ring at the register if the sale still needs to happen.",
+            "If product left the shop and money changed hands, the sale must be recorded. System faults are retried automatically every few minutes; you can also press Retry this sale.",
+            "Record as rung (owner only) accepts the receipt as the truth when a discount setting changed after the register applied it. The law (hours, recall, expired edibles, limits) is never forced.",
+            "Mark reviewed only for events that are NOT a sale that happened (for example a test, or a sale you re-rang). Marking reviewed does not record the sale.",
             "Resolved rows keep the reason, payload, resolver, and note forever — that is your paper trail.",
           ]}
         />
@@ -119,6 +128,16 @@ export default async function PosExceptionsPage({
         {sp.resolved ? (
           <Card>
             <p className="text-sm text-emerald-300">Exception resolved and recorded.</p>
+          </Card>
+        ) : null}
+
+        {sp.rung ? (
+          <Card>
+            <p className="text-sm font-semibold text-emerald-300" role="status">
+              {sp.rung === "as_rung"
+                ? "Done. The sale is recorded as rung: it is in sales, taxes, inventory, the drawer and CCRS, dated when it happened."
+                : "Done. The sale went through and is recorded, dated when it happened."}
+            </p>
           </Card>
         ) : null}
 
@@ -143,9 +162,12 @@ export default async function PosExceptionsPage({
               resolve them with a note. Safe to press twice.
             </p>
             <form action={recordStrandedCartAdjustmentsAction} className="mt-3">
-              <Button type="submit" size="sm">
+              <PendingSubmit
+                busy="Recording…"
+                className="rounded-lg bg-[var(--admin-gold,#c9a227)] px-3 py-2 text-sm font-semibold text-black"
+              >
                 Record {stranded} cart adjustment{stranded === 1 ? "" : "s"} and resolve
-              </Button>
+              </PendingSubmit>
             </form>
           </Card>
         ) : null}
@@ -178,6 +200,7 @@ export default async function PosExceptionsPage({
                   </div>
 
                   <p className="mt-2 text-sm text-red-200">{row.exception_reason ?? "No reason recorded."}</p>
+                  <RetryControls row={row} isOwner={isOwner} />
 
                   <details className="mt-3">
                     <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-text-dim)]">
@@ -202,15 +225,46 @@ export default async function PosExceptionsPage({
                         className="w-full rounded-lg border border-[var(--admin-border)] bg-transparent px-3 py-2 text-sm text-white"
                       />
                     </label>
-                    <Button type="submit" size="sm">
-                      Resolve
-                    </Button>
+                    <PendingSubmit
+                      busy="Saving…"
+                      className="rounded-lg border border-[var(--admin-border)] px-3 py-2 text-sm font-semibold text-white"
+                    >
+                      Mark reviewed
+                    </PendingSubmit>
                   </form>
                 </li>
               ))}
             </ul>
           )}
         </Card>
+
+        {reviewedNotRung.length > 0 ? (
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-white">Reviewed but never recorded</h2>
+              <Badge tone="danger">{reviewedNotRung.length} not in the books</Badge>
+            </div>
+            <p className="mb-3 text-sm text-[var(--admin-text-dim)]">
+              These sales were marked reviewed, but no sale was ever recorded for them, so they are missing from
+              sales, taxes, inventory, the drawer and CCRS. If the customer paid and left with the product, record it.
+            </p>
+            <ul className="space-y-3">
+              {reviewedNotRung.map((row) => (
+                <li key={row.id} className="rounded-[var(--admin-radius-lg)] border border-amber-500/30 bg-amber-950/10 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {eventBadge(row.event_type)}
+                    <span className="text-xs text-[var(--admin-text-dim)]">
+                      {pacificStamp(row.occurred_at)} · {who(row)} · {money(row.payload)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--admin-text-dim)]">{row.exception_reason ?? "No reason recorded."}</p>
+                  {row.resolution_note ? <p className="mt-1 text-sm text-neutral-200">“{row.resolution_note}”</p> : null}
+                  <RetryControls row={row} isOwner={isOwner} />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
         <Card>
           <h2 className="mb-4 text-base font-semibold text-white">Recently resolved</h2>
@@ -258,6 +312,62 @@ export default async function PosExceptionsPage({
           Queue trims to the oldest 200 open rows. Base path: <span className="font-mono">{BASE}</span>
         </p>
       </div>
+    </div>
+  );
+}
+
+function money(payload: Record<string, unknown> | null): string {
+  const t = payload && typeof payload.totalMinor === "number" ? payload.totalMinor : null;
+  return t === null ? "" : `$${(t / 100).toFixed(2)}`;
+}
+
+/** D178 — the plain-English verdict plus the buttons this person may press. */
+function RetryControls({ row, isOwner }: { row: PosExceptionRow; isOwner: boolean }) {
+  const cls = classifyExceptionReason(row.exception_reason, { eventType: row.event_type, orderId: row.order_id });
+  // A higher-than-allowed discount only clears with "Record as rung", so a
+  // plain Retry is not offered for it (it would refuse again).
+  const canRetry =
+    !row.order_id &&
+    cls.kind !== "legal_block" &&
+    (cls.kind !== "receipt_drift" || cls.managerRetry) &&
+    (isOwner || cls.managerRetry);
+  const canRung = !row.order_id && isOwner && row.event_type === "sale" && cls.kind !== "legal_block";
+  const tone =
+    cls.kind === "legal_block" ? "text-red-300" : cls.kind === "system_fault" ? "text-sky-300" : "text-amber-200";
+  return (
+    <div className="mt-3 rounded-lg border border-[var(--admin-border)] bg-black/20 p-3">
+      <p className={`text-sm ${tone}`}>
+        <span className="font-semibold">What this means: </span>
+        {cls.plain}
+      </p>
+      {canRetry || canRung ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {canRetry ? (
+            <form action={retryPosExceptionAction}>
+              <input type="hidden" name="exception_id" value={row.id} />
+              <input type="hidden" name="mode" value="retry" />
+              <PendingSubmit
+                busy="Retrying…"
+                className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Retry this sale
+              </PendingSubmit>
+            </form>
+          ) : null}
+          {canRung ? (
+            <form action={retryPosExceptionAction}>
+              <input type="hidden" name="exception_id" value={row.id} />
+              <input type="hidden" name="mode" value="record_as_rung" />
+              <PendingSubmit
+                busy="Recording…"
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Record as rung (receipt is the truth)
+              </PendingSubmit>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
