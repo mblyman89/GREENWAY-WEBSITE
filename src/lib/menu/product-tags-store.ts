@@ -365,3 +365,79 @@ export async function countFirstSeen(): Promise<number | null> {
 export function tagClockNowMs(): number {
   return new Date().getTime();
 }
+
+// ---------------------------------------------------------------------------
+// PERF P4c (owner 2026-11-05, "lightning fast"; AGENTS.md rule 18)
+// ---------------------------------------------------------------------------
+/**
+ * The WHOLE tag picture (defs, every hand-applied tag, every first-seen date)
+ * as JSON-safe entries, for the public-menu overlay's cache.
+ *
+ * WHY: withProductTags ran loadTagInputsForKeys for ~2,300 menu keys on every
+ * render of the home, shop, product and specials pages: 8 chunks x 2 tables =
+ * 16 uncached queries per render (product_first_seen alone: 287,000 calls in
+ * the 2026-11-05 measurement). The tables are keyed by PRODUCT (one row per
+ * product / per tag applied), not by menu copy, so the whole set is small and
+ * caches well under Vercel's 2 MB entry limit.
+ *
+ * THROWS on any read error (never returns a partial picture), so a cache
+ * built on it never stores a failure; the caller falls back to the keyed read.
+ * Returns null before 0269 / with no enabled tags (nothing to show).
+ */
+export type TagInputEntries = {
+  defs: TagDefinition[];
+  manual: [string, string[]][];
+  firstSeen: [string, string][];
+};
+
+export async function loadAllTagInputEntries(): Promise<TagInputEntries | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const defsRes = await listTagDefinitions();
+  if (!defsRes.ok) {
+    if (defsRes.missing) return null;
+    throw new Error(`Tag definitions could not be read: ${defsRes.error}`);
+  }
+  const defs = defsRes.defs.filter((d) => d.enabled);
+  if (defs.length === 0) return null;
+  const admin = createSupabaseAdminClient();
+  const needFirstSeen = defs.some((d) => d.autoRule === "new_window");
+  const [assignRows, seenRows] = await Promise.all([
+    pagedAll<{ tag_id: string; pos_product_key: string }>(
+      async (from, to) => {
+        const { data, error } = await admin
+          .from("product_tag_assignments")
+          .select("tag_id, pos_product_key")
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(`Tag assignments could not be read: ${error.message}`);
+        return (data as { tag_id: string; pos_product_key: string }[] | null) ?? [];
+      },
+      { concurrency: MENU_READ_CONCURRENCY },
+    ),
+    needFirstSeen
+      ? pagedAll<{ pos_product_key: string; first_published_at: string }>(
+          async (from, to) => {
+            const { data, error } = await admin
+              .from("product_first_seen")
+              .select("pos_product_key, first_published_at")
+              .order("pos_product_key", { ascending: true })
+              .range(from, to);
+            if (error) throw new Error(`First-seen dates could not be read: ${error.message}`);
+            return (data as { pos_product_key: string; first_published_at: string }[] | null) ?? [];
+          },
+          { concurrency: MENU_READ_CONCURRENCY },
+        )
+      : Promise.resolve([] as { pos_product_key: string; first_published_at: string }[]),
+  ]);
+  const manual = new Map<string, string[]>();
+  for (const r of assignRows) {
+    const list = manual.get(r.pos_product_key) ?? [];
+    list.push(r.tag_id);
+    manual.set(r.pos_product_key, list);
+  }
+  return {
+    defs,
+    manual: [...manual.entries()],
+    firstSeen: seenRows.map((r) => [r.pos_product_key, r.first_published_at] as [string, string]),
+  };
+}
