@@ -19,12 +19,19 @@
  * G-71b: the same run also sends the monthly platform review (once per
  * Pacific month, standing rule 16) and the 30/7/1-day and overdue warnings
  * for open items in the platform changes register. No extra cron.
+ *
+ * D182 (S5): the same run then builds the NIGHT WATCH morning report (after
+ * the health check, so the report reads this morning's result) and sends it
+ * by email / text only if the owner has switched those on at
+ * /admin/registers/night-watch (both OFF by default). Claimed once per
+ * Pacific day (night-watch:daily:<day>). Still no extra cron.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runPlatformHealthCheck } from "@/lib/platform/platform-health-store";
 import { runPlatformReview } from "@/lib/platform/platform-review-store";
+import { runNightWatch } from "@/lib/registers/night-watch-store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -62,8 +69,12 @@ export async function GET(req: NextRequest) {
     deadlines: [],
     notes: [e instanceof Error ? e.message : String(e)],
   }));
+  const nightWatch = await runNightWatch()
+    .then((w) => ({ status: w.report.status, items: w.report.items.length, sent: w.sent, why: w.why, notes: w.notes }))
+    .catch((e: unknown) => ({ status: "failed" as const, notes: [e instanceof Error ? e.message : String(e)] }));
   return NextResponse.json({
     ok: true,
+    nightWatch,
     status: out.report.status,
     summary: out.report.summary,
     problems: out.report.problems.length,

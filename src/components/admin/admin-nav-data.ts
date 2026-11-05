@@ -113,6 +113,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade samples
   { label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 sample receipts log
   { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Employee" }, // 💵 cash drawer
+  { label: "Night Watch", href: "/admin/registers/night-watch", permission: "orders.manage", icon: "\ud83c\udf19", group: "Employee" }, // D182 S5: the morning report (what was left undone, who owes it); email/text switches, owner only
   { label: "Over / Short Warnings", href: "/admin/registers/over-short", permission: "registers.warnings", icon: "\u26a0\ufe0f", group: "Employee" }, // ⚠️ Fix Phase 2.3 (G-03, owner D7): admin-only $5 over/short warnings
 
   // Medical: ONE page — /admin/medical carries the guided patient intake,
