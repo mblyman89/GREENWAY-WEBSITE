@@ -117,6 +117,7 @@ import { loadBarcodeInputs, loadVendorIdInputs } from "@/lib/inventory/restock-p
 import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 import { runAfterResponse } from "@/lib/after-response";
+import { pruneOldMenuCopies } from "@/lib/menu/menu-retention-store";
 // S32: remembered answers for products that matched 2+ live cards.
 import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
 import { loadCardAliases } from "@/lib/pos/card-alias-store";
@@ -1173,6 +1174,9 @@ async function autoPublishIntakeVersion(
   // the version's own published_at, so running after the response stamps
   // exactly the same rows.
   runAfterResponse("first-seen stamp", () => stampFirstSeenForVersion(versionId));
+  // PERF round (0344): clear a few old menu copies so menu_items never piles up again
+  // (720,163 rows for 2,288 products on 2026-11-05). After the response, bounded, never throws.
+  runAfterResponse("old menu copies", () => pruneOldMenuCopies());
 
   // Audit trail — same action name as the manual Menu Imports publish, with
   // the intake origin recorded (recordAudit never throws).

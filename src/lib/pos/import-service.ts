@@ -57,6 +57,7 @@ import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/i
 import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 import { runAfterResponse } from "@/lib/after-response";
+import { pruneOldMenuCopies } from "@/lib/menu/menu-retention-store";
 import { getImportDiagnostics, getVersionItems, countVersionItems, getPublishedVersion } from "@/lib/pos/menu-version";
 import { listFactReviewsResult, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import {
@@ -479,6 +480,9 @@ export async function publishMenuVersion(
   // never throws, never blocks or undoes the publish; first stamp wins.
   // PERF2-P6: after the response (same rows; see intake-menu-staging).
   runAfterResponse("first-seen stamp", () => stampFirstSeenForVersion(versionId));
+  // PERF round (0344): clear a few old menu copies so menu_items never piles up again
+  // (720,163 rows for 2,288 products on 2026-11-05). After the response, bounded, never throws.
+  runAfterResponse("old menu copies", () => pruneOldMenuCopies());
   return { openReviewsAcknowledged };
 }
 

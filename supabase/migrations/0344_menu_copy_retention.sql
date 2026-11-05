@@ -38,14 +38,20 @@
 -- menu_variants.id. publish_menu_version (0236) promotes a staged version; an archived version
 -- is never re-published (clean_slate_test_data restores is_test rows only, which are kept).
 --
--- SECURITY: product_latest_facts_sync is SECURITY DEFINER (justified): a trigger must keep the
--- facts table current whichever role writes menu_items, and it writes only that table. Pinned
+-- SECURITY: the three trigger bodies (product_latest_facts_sync / _on_delete / _on_truncate) are
+-- SECURITY DEFINER (justified): a trigger must keep the facts table current whichever role writes
+-- menu_items, and they write only that table. No role can execute them directly. Pinned
 -- search_path. Everything else is SECURITY INVOKER.
 --
 -- Idempotent: safe to run twice. APPLY MANUALLY in the Supabase SQL editor (standing rule).
 -- Then run scripts/ops/menu-copy-reclaim.sql once (the backlog + VACUUM FULL), owner only.
 -- Until this file is applied the app keeps working: it still calls latest_menu_facts (old body)
 -- and treats a missing prune function as "not yet applied".
+
+-- The one-time backfill below sorts every existing menu_items row (about 6 s on the Micro plan).
+-- These apply to this run only (the SQL editor runs the file as one transaction).
+set local statement_timeout = '15min';
+set local work_mem = '64MB';
 
 -- 1. The facts table ---------------------------------------------------------------------------
 create table if not exists public.product_latest_facts (
@@ -123,6 +129,83 @@ create trigger menu_items_latest_facts_upd
   referencing new table as new_rows
   for each statement execute function public.product_latest_facts_sync();
 
+-- 2b. Deletes and the factory reset keep the 0305 answer exact -------------------------------
+-- clean_slate_test_data (0236) DELETES test versions: a key whose newest row was a test row must
+-- go back to its newest remaining row, as 0305 would answer. A key with no rows left keeps its
+-- last facts (a past sale still resolves). The prune below sets greenway.menu_prune for its own
+-- transaction, so pruning old copies never changes a key's facts. The factory reset (0240)
+-- TRUNCATEs menu_items: the facts are derived from those rows, so they are emptied with them.
+create or replace function public.product_latest_facts_on_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if coalesce(current_setting('greenway.menu_prune', true), '') = 'on' then
+    return null;
+  end if;
+  with hit as (
+    select distinct o.source_item_id
+      from old_rows o
+      join public.product_latest_facts f
+        on f.source_item_id = o.source_item_id and f.row_id = o.id
+  ), newest as (
+    select distinct on (mi.source_item_id)
+           mi.source_item_id, mi.id, mi.created_at, mi.category, mi.pos_inventory_type,
+           mi.pos_inventory_category, mi.vendor_name, mi.brand_name
+      from public.menu_items mi
+      join hit h on h.source_item_id = mi.source_item_id
+     order by mi.source_item_id, mi.created_at desc, mi.id asc
+  )
+  update public.product_latest_facts f
+     set row_id                 = n.id,
+         row_created_at         = n.created_at,
+         category               = n.category,
+         pos_inventory_type     = n.pos_inventory_type,
+         pos_inventory_category = n.pos_inventory_category,
+         vendor_name            = n.vendor_name,
+         brand_name             = n.brand_name,
+         updated_at             = now()
+    from newest n
+   where f.source_item_id = n.source_item_id;
+  return null;
+end;
+$$;
+
+comment on function public.product_latest_facts_on_delete() is
+  '0344 (PERF): statement-level AFTER DELETE body on menu_items. When the row a key''s facts came from is deleted (clean slate of test data), the key takes its newest remaining row (0305 rule). Keys with no rows left keep their facts. Skipped inside prune_menu_version_items (greenway.menu_prune).';
+
+revoke all on function public.product_latest_facts_on_delete() from public, anon, authenticated, service_role;
+
+drop trigger if exists menu_items_latest_facts_del on public.menu_items;
+create trigger menu_items_latest_facts_del
+  after delete on public.menu_items
+  referencing old table as old_rows
+  for each statement execute function public.product_latest_facts_on_delete();
+
+create or replace function public.product_latest_facts_on_truncate()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  truncate table public.product_latest_facts;
+  return null;
+end;
+$$;
+
+comment on function public.product_latest_facts_on_truncate() is
+  '0344 (PERF): AFTER TRUNCATE on menu_items (the factory reset, 0240) empties product_latest_facts, which is derived from those rows.';
+
+revoke all on function public.product_latest_facts_on_truncate() from public, anon, authenticated, service_role;
+
+drop trigger if exists menu_items_latest_facts_trunc on public.menu_items;
+create trigger menu_items_latest_facts_trunc
+  after truncate on public.menu_items
+  for each statement execute function public.product_latest_facts_on_truncate();
+
 -- 3. Backfill from every existing row (one time; re-running changes nothing) ------------------
 insert into public.product_latest_facts as t
        (source_item_id, row_id, row_created_at, category, pos_inventory_type,
@@ -197,6 +280,9 @@ begin
       using errcode = '22023';
   end if;
 
+  -- Pruning removes old COPIES; it must never change a key's facts (see 2b).
+  perform set_config('greenway.menu_prune', 'on', true);
+
   for v_id in
     select mv.id
       from public.menu_versions mv
@@ -234,6 +320,7 @@ begin
    where mv.status = 'archived'
      and mv.import_id is null
      and mv.is_test is not true
+     and mv.updated_at < now() - interval '10 minutes'
      and mv.id not in (
            select k.id from public.menu_versions k
             where k.status = 'archived' and k.import_id is null and k.is_test is not true
@@ -241,6 +328,7 @@ begin
             limit v_keep)
      and exists (select 1 from public.menu_items mi where mi.menu_version_id = mv.id);
 
+  perform set_config('greenway.menu_prune', '', true);
   return jsonb_build_object('versions', v_versions, 'items', v_items, 'remaining', v_remaining);
 end;
 $$;

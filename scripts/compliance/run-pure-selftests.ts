@@ -1171,6 +1171,7 @@ import { __runCcrsCompletenessTests } from "../../src/lib/compliance/ccrs-comple
 import { __runTaxesOwedTests } from "../../src/lib/compliance/taxes-owed-core";
 import { __runPartnerTests } from "../../src/lib/ai/partner-core";
 import { __runRoleChecklistTests } from "../../src/lib/registers/role-checklist-core";
+import { __runMenuRetentionTests } from "../../src/lib/menu/menu-retention-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2797,6 +2798,7 @@ __runLiquidVolumeTests();
   assertRan("taxes-owed-core", __runTaxesOwedTests(), 20); // D183 S6: excise (LIQ-1295 by the 20th) and sales tax (DOR by the 25th rolled) per month, money check
   assertRan("partner-core", __runPartnerTests(), 38); // D184 S7: Greenway Partner Level 2 by default; the AI never writes; fixes are deterministic proposals bound to approved audited tools; money, counts and CCRS wait for the owner
   assertRan("role-checklist-core", __runRoleChecklistTests(), 60); // D185 S8: My Day role checklists: opening / during / closing / Michael; the step you are on; loud when urgent; validated only when every staff step is done and none unknown
+  assertRan("menu-retention-core", __runMenuRetentionTests(), 22); // PERF round P1/P2 (0344): old menu copies cleared after each publish; prune answer read, never guessed; latest_menu_facts walks only when the function is missing, else reports
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

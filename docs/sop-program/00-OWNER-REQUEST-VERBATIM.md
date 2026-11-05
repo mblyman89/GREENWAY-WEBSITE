@@ -1165,3 +1165,32 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
   - Anything that could not be read shows ❓ with a hand check, and the shift is not validated while any line is unknown.
   - `?shift=opening|during|closing` previews another shift's list.
 - **Builds on existing pieces.** It uses the existing 0327 checklist sheets and the S4 guided-cash duties. No migration, no new cron, no notifications (nudges stay on admin screens, as asked).
+
+
+## Owner requests, 2026-11-05 (recorded verbatim, D186–D190: the PERF round)
+
+> Thank you. I will test now. I need you to log back in to supabase and help me optimize everything. A lot of the pages, main admin cockpit included, are very very slow to load. I am hoping you can see why in supabase and let me know your thoughts and opinions on it. If you need a read only access to the back office site, let me know and I’ll set you up. I need my back office to be lightning fast. Our database is large at all yet, and already it is incredibly slow. We have done several optimizations to it, but now that you have access to the database, maybe you can more accurately pinpoint why it’s so slow. The main cockpit especially needs to load instantly. Right now, I have to avoid it to get anywhere else in the back office. Please go above and beyond and really impress me with how efficient and optimized the system can become! No code edits yet, just let me know why we are so slow right now and how you plan to fix it. If you need back office access, let me know. Follow the standing rules. Thank you.
+
+> Thank you! Please proceed to fix all issues, big and small. If there is ways to pin optimization and efficiency in the test suite or code or something like that, please make it a permanent issue to address every time we add to the repo. I want optimization and efficiency to be paramount now that we are in live production. Please push and merge often to protect the work from this unstable sandbox environment. Keep the work safe. Go above and beyond. Follow the standing rules. Thank you!
+
+> you are back in now. please continue. follow the standing rules. thank you.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D186 | **Old menu copies stop piling up.** Each publish clears a few old archived intake copies (newest 5 kept; published, staged, import, test and just-archived copies never touched). The newest facts per product live in `product_latest_facts`, so pruning never changes a past sale's category. | *"I need my back office to be lightning fast."* |
+| D187 | **The menu-facts lookup reads one row per product** and never falls back to a walk of every row on a timeout; it reports the error instead. | *"A lot of the pages, main admin cockpit included, are very very slow to load."* |
+| D188 | **The cockpit loads instantly**: panels stream in, finished days are cached, shared reads are done once. | *"The main cockpit especially needs to load instantly."* |
+| D189 | **Small costs fixed too**: N+1 reads, unscoped menu reads, a 459 kB vendor row, the Vercel region next to the database, missing indexes. | *"Please proceed to fix all issues, big and small."* |
+| D190 | **Performance is a standing rule with a guard test**, checked every time the repo changes. | *"please make it a permanent issue to address every time we add to the repo. I want optimization and efficiency to be paramount"* |
+
+**D186 / D187 as built (PERF P1/P2).** Measured read-only on 2026-11-05: `menu_items` held 720,163 rows (755 MB) for 2,288 products, because every intake stage wrote a full menu copy and nothing removed the old ones. The facts lookup sorted all of them (6 s for all keys), and on any error the app walked the whole table 1,000 rows at a time (5,622 walks at 2.15 s a page, the biggest cost on the server).
+
+- **Migration 0344** (owner applies by hand):
+  - `product_latest_facts`: one row per product key, kept current by statement-level triggers on insert, update, delete (a clean-slate delete falls back to the newest remaining row) and truncate (the factory reset empties it).
+  - `latest_menu_facts`: same signature and answer, now reads that table; SECURITY INVOKER.
+  - `prune_menu_version_items(keep, max)`: bounded, service_role only, never changes a fact.
+  - Pg-check `scripts/recon/menu-copy-retention-0344-pg-check.sql`; rollback refuses while a key would lose its facts.
+- **After 0344:** the owner runs `scripts/ops/menu-copy-reclaim.sql` once (clear the backlog, then VACUUM FULL).
+- **App:** both publish paths call the prune after the response (`menu-retention-store.ts`; "not applied yet" is logged, never treated as done). `latest-menu-facts.ts` only walks when the function is missing, and the walk reads its own errors.
