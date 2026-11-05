@@ -11,7 +11,7 @@ import { evaluateReductionAgainstHold, isMissingHeldQtyColumnError, toHeldNumber
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
-import { pagedAll, chunkedIn, ADMIN_PAGED_CONCURRENCY, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
+import { pagedAll, pagedAllChecked, chunkedIn, ADMIN_PAGED_CONCURRENCY, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { pacificToday, addPacificDays } from "@/lib/reports/timezone";
 import type { ReceivedDateLot } from "@/lib/inventory/received-date-core";
 import type { BulkFillLot, BulkFillField } from "@/lib/inventory/bulk-fill-core";
@@ -951,14 +951,26 @@ export async function listLotsForManifestLabels(
 ): Promise<{ ok: true; lots: LotWithDetail[] } | { ok: false; code: string | null; message: string }> {
   if (!isSupabaseServiceConfigured) return { ok: true, lots: [] };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("inventory_lots")
-    .select("*")
-    .eq("manifest_id", manifestId)
-    .order("product_name", { ascending: true })
-    .limit(1000);
-  if (error) return { ok: false, code: error.code ?? null, message: error.message ?? "" };
-  const lots = (data as InventoryLot[] | null) ?? [];
+  // Paged + checked (SLICE 5C): a manifest can never be silently truncated at
+  // PostgREST's 1,000-row cap, and a mid-read failure is reported, not hidden.
+  let lastCode: string | null = null;
+  let lastMessage = "";
+  const { rows, verdict } = await pagedAllChecked<InventoryLot>(async (from, to) => {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select("*")
+      .eq("manifest_id", manifestId)
+      .order("product_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      lastCode = error.code ?? null;
+      lastMessage = error.message ?? "";
+    }
+    return { rows: (data as InventoryLot[] | null) ?? [], ok: !error };
+  });
+  if (!verdict.complete) return { ok: false, code: lastCode, message: lastMessage || verdict.message };
+  const lots = rows;
   if (lots.length === 0) return { ok: true, lots: [] };
   return { ok: true, lots: await hydrateLots(admin, lots) };
 }
