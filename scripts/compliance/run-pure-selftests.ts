@@ -1156,6 +1156,7 @@ import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
 import { __runPayrollGuardrailsCoreTests } from "../../src/lib/payroll/payroll-guardrails-core";
 import { __runInventoryCatalogTests } from "../../src/lib/pos/inventory-type-catalog";
 import { __runCode128Tests } from "../../src/lib/printing/code128-core";
+import { __runLabelStockTests } from "../../src/lib/printing/label-stock-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2767,6 +2768,7 @@ __runLiquidVolumeTests();
   assertRan("outage-resilience-core", __runOutageResilienceCoreTests(), 16); // D170 O12: menu age and offline-window warnings on a long outage
   assertRan("member-book-core", __runMemberBookCoreTests(), 31); // D170 O15 + O15b offline rewards ("add customer loyalty to the iPad ... all features unlocked"): the encrypted member book answers lookup, scan attach and history offline with the server's own search and match rules, always saying how old it is
   assertRan("drawer-close-slip-core", __runDrawerCloseSlipTests(), 30); // D151–D155 ("print a short receipt with the employee name and register number ... see the table with the numbers in it again. Read only."): close slip with no amounts, read-only second-count table
+  assertRan("label-stock-core", __runLabelStockTests(), 150); // D177 ("select from the various size labels, not just rollo but any vendors sizes"): verified vendor stock catalogue, Rollo X1040 1.57–4.1in fit check, dot-snapped geometry
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
