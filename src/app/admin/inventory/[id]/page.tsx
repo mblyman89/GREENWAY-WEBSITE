@@ -371,14 +371,23 @@ export default async function LotDetailPage({
         title={lot.product_name ?? "Inventory lot"}
         subtitle={`Lot ${lot.lot_code ?? "(no code)"} · ${lot.vendor_name ?? "unknown vendor"}`}
         action={
-          backPath ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* D177: the Label Studio, for a re-barcode sticker (damaged / wrong / missing barcode). */}
             <Link
-              href={backPath}
-              className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
+              href={`/admin/inventory/lots/${lot.id}/label`}
+              className="rounded-full border border-[var(--admin-accent)]/50 px-4 py-2 text-sm font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent-soft)]"
             >
-              ← Back
+              🏷 Print label
             </Link>
-          ) : undefined
+            {backPath ? (
+              <Link
+                href={backPath}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
+              >
+                ← Back
+              </Link>
+            ) : null}
+          </div>
         }
         breadcrumbs={
           <Breadcrumbs

@@ -95,6 +95,8 @@ export type LabelStudioProps = {
   items: StudioItem[];
   /** Heading context, e.g. "Manifest 2026-04-30 · Grow Op Farms". */
   contextLine?: string;
+  /** Words for the "suggested copies" button (default "One per unit received"). */
+  suggestLabel?: string;
   /** Optional server action that records the print (S6 audit log). */
   logPrint?: (entry: PrintLogEntry) => Promise<{ ok: boolean; error?: string }>;
 };
@@ -238,7 +240,7 @@ const QR_LEVELS: Array<{ value: QrEcLevel; label: string; title: string }> = [
   { value: "H", label: "H", title: "Largest code, ~30% damage recovery" },
 ];
 
-export function LabelStudio({ kind, items: initialItems, contextLine, logPrint }: LabelStudioProps) {
+export function LabelStudio({ kind, items: initialItems, contextLine, suggestLabel = "One per unit received", logPrint }: LabelStudioProps) {
   const { toast } = useToast();
   const first = initialItems[0]?.subject ?? null;
   const batch = initialItems.length > 1;
@@ -722,7 +724,7 @@ export function LabelStudio({ kind, items: initialItems, contextLine, logPrint }
                       className="rounded-full bg-[var(--admin-surface-2)] px-3 py-1 font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
                       onClick={() => setCopies(Object.fromEntries(initialItems.map((it) => [it.subject.id, clampCopies(it.suggestedCopies ?? 1)])))}
                     >
-                      One per unit received
+                      {suggestLabel}
                     </button>
                   ) : null}
                   <button

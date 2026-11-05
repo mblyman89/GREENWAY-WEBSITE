@@ -14,6 +14,7 @@
  * paper, the server blocks a mismatch (typo catcher). Dollars in the UI,
  * cents on the server.
  */
+import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { NONCANNABIS_TYPES } from "@/lib/naming/noncannabis-core";
@@ -301,6 +302,15 @@ export function InvoiceBuilderForm({ products }: { products: InvoiceProductOptio
       {state?.ok && state.message && (
         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
           ✓ {state.message}
+          {state.invoiceId ? (
+            <>
+              {" "}
+              {/* D177: label what just arrived — glass and goods with no barcode of their own. */}
+              <Link href={`/admin/inventory/noncannabis/labels?invoice=${state.invoiceId}`} className="font-semibold underline">
+                🏷 Print labels for this delivery
+              </Link>
+            </>
+          ) : null}
         </div>
       )}
     </form>

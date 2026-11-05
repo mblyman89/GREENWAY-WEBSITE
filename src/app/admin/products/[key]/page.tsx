@@ -266,10 +266,10 @@ export default async function ProductEditorPage({
             </div>
             <ul className="grid gap-2 sm:grid-cols-2">
               {productLots.map((lot) => (
-                <li key={lot.id}>
+                <li key={lot.id} className="flex items-stretch gap-1.5">
                   <Link
                     href={`/admin/inventory/${lot.id}?back=${encodeURIComponent(`/admin/products/${rawKey}`)}`}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs hover:border-[var(--admin-accent)]/50"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs hover:border-[var(--admin-accent)]/50"
                   >
                     <span className="min-w-0 flex-1 truncate text-white/80">
                       {lot.lot_code ?? lot.product_name ?? "Unnamed lot"}
@@ -278,6 +278,15 @@ export default async function ProductEditorPage({
                     <span className="shrink-0 text-white/40">
                       {lot.on_hand_qty} on hand · {lot.status}
                     </span>
+                  </Link>
+                  {/* D177: re-barcode sticker for this exact lot. */}
+                  <Link
+                    href={`/admin/inventory/lots/${lot.id}/label`}
+                    title="Print a label for this lot"
+                    aria-label={`Print a label for lot ${lot.lot_code ?? lot.id}`}
+                    className="flex shrink-0 items-center rounded-lg border border-white/10 bg-black/40 px-2.5 text-xs text-[var(--admin-accent)] hover:border-[var(--admin-accent)]/50"
+                  >
+                    🏷
                   </Link>
                 </li>
               ))}
