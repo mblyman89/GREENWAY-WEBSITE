@@ -409,7 +409,9 @@ describe("ccrs-batch.ts wiring (source pins)", () => {
     expect(iSelf).toBeGreaterThan(0);
     expect(iSelf - iIf).toBeLessThan(80);
     expect(iSelf).toBeLessThan(iRet);
-    expect(BATCH).toContain("files.map((f) => ({ type: f.type, csv: f.csv })),");
+    // Pinned AT the self-check call (the same text also feeds planOutboxFiles
+    // elsewhere, so a bare toContain would pass with this call filtered).
+    expect(BATCH.slice(iSelf, iSelf + 160)).toContain("saleAwareLedger ?? ledger,\n      files.map((f) => ({ type: f.type, csv: f.csv })),");
     expect(BATCH).toContain("syncIssues.push(i);");
   });
 });
