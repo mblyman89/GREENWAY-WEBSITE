@@ -393,13 +393,16 @@ describe("2.6a · 3 — the server actions check before they write", () => {
     expect(b).toContain('"deposit_bag.recounted"');
   });
 
-  it("seal: anyone with a PIN (D25), checkSeal before saveSeal, then the books", () => {
+  it("seal: the owner only (D181 replaces D25's 'anyone'), with his PIN, checkSeal before saveSeal, then the books", () => {
     const b = body("sealBagAction");
+    // D181: "I am the only one to seal the bag and take it to the bank."
+    expect(b.indexOf("requireBooksAccess(")).toBeGreaterThan(-1);
+    expect(b).not.toContain('requirePermission("orders.manage")');
     expect(b.indexOf("employeeFromPin(")).toBeGreaterThan(-1);
+    expect(b.indexOf("sealerCheck(")).toBeLessThan(b.indexOf("saveSeal("));
     expect(b.indexOf("checkSeal(")).toBeLessThan(b.indexOf("saveSeal("));
     expect(b.indexOf("saveSeal(")).toBeLessThan(b.indexOf("postSealForBag("));
     expect(b).toContain('"deposit_bag.sealed"');
-    expect(b).not.toContain("requireBooksAccess(");
   });
 
   it("retry: posts again through the same idempotent poster, audited", () => {
