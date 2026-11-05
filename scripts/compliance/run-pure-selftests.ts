@@ -1172,6 +1172,7 @@ import { __runTaxesOwedTests } from "../../src/lib/compliance/taxes-owed-core";
 import { __runPartnerTests } from "../../src/lib/ai/partner-core";
 import { __runRoleChecklistTests } from "../../src/lib/registers/role-checklist-core";
 import { __runMenuRetentionTests } from "../../src/lib/menu/menu-retention-core";
+import { __runCockpitCacheTests } from "../../src/lib/admin/cockpit-cache-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2799,6 +2800,7 @@ __runLiquidVolumeTests();
   assertRan("partner-core", __runPartnerTests(), 38); // D184 S7: Greenway Partner Level 2 by default; the AI never writes; fixes are deterministic proposals bound to approved audited tools; money, counts and CCRS wait for the owner
   assertRan("role-checklist-core", __runRoleChecklistTests(), 60); // D185 S8: My Day role checklists: opening / during / closing / Michael; the step you are on; loud when urgent; validated only when every staff step is done and none unknown
   assertRan("menu-retention-core", __runMenuRetentionTests(), 22); // PERF round P1/P2 (0344): old menu copies cleared after each publish; prune answer read, never guessed; latest_menu_facts walks only when the function is missing, else reports
+  assertRan("cockpit-cache-core", __runCockpitCacheTests(), 24); // PERF P3: cockpit display cache: plain-JSON gate, failed reads never stored, short stated TTLs, keys never hold a clock reading
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

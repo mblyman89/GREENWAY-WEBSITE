@@ -184,12 +184,16 @@ export async function isSageMappingReady(): Promise<boolean> {
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 /** menu source_item_id → category (newest wins), same pattern as sage50.ts. */
-async function buildCategoryLookup(admin: Admin): Promise<Map<string, string>> {
+async function buildCategoryLookup(
+  admin: Admin,
+  /** PERF P3: only the product keys the export touches (same newest-row rule). */
+  keys: Iterable<string | null | undefined>,
+): Promise<Map<string, string>> {
   const catLookup = new Map<string, string>();
   // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
   // per product instead of every snapshot ever written; same "newest wins"
   // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
-  const rows = [...(await loadLatestMenuFacts(admin)).values()];
+  const rows = [...(await loadLatestMenuFacts(admin, keys)).values()];
   for (const r of rows) {
     if (!r.source_item_id || catLookup.has(r.source_item_id)) continue;
     catLookup.set(r.source_item_id, r.category?.trim() || "");
@@ -296,11 +300,11 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
   }
 
   const admin = createSupabaseAdminClient();
-  const [tax, cannabisSet, categoryMap, catLookup, costLookup] = await Promise.all([
+  // PERF P3: the category lookup waits for the sold lines and reads only their keys.
+  const [tax, cannabisSet, categoryMap, costLookup] = await Promise.all([
     getTaxSettings(),
     getCannabisCategorySet(),
     getSageCategoryMap(),
-    buildCategoryLookup(admin),
     buildCostLookup(admin),
   ]);
 
@@ -335,15 +339,18 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
   const lines = await chunkedIn<string, SageLineRow>(
     completed.map((o) => o.id),
     async (chunk, from, to) => {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("order_lines")
         .select("order_id, product_id, quantity, price_minor_units, regular_price_minor_units")
         .in("order_id", chunk)
         .order("id", { ascending: true })
         .range(from, to);
+      // Rule 135: a failed page must never post a short journal.
+      if (error) throw new Error(`Sage cash receipts: order lines could not be read: ${error.message}`);
       return (data as SageLineRow[] | null) ?? [];
     }, { concurrency: ADMIN_PAGED_CONCURRENCY },
   );
+  const catLookup = await buildCategoryLookup(admin, lines.map((l) => l.product_id));
 
   const unmapped = new Set<string>();
   const knownBuckets = new Set(Object.keys(accounts));
@@ -631,10 +638,10 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
     return empty;
   }
   const admin = createSupabaseAdminClient();
-  const [cannabisSet, categoryMap, catLookup] = await Promise.all([
+  // PERF P3: the category lookup waits for the adjusted lots and reads only their keys.
+  const [cannabisSet, categoryMap] = await Promise.all([
     getCannabisCategorySet(),
     getSageCategoryMap(),
-    buildCategoryLookup(admin),
   ]);
 
   // S-7: paged past the PostgREST per-response row cap.
@@ -666,15 +673,17 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
   const lotIds = [...new Set(adjustments.map((a) => a.lot_id))];
   type AdjLotRow = { id: string; pos_product_key: string | null; product_name: string | null; unit_cost_minor_units: number | null };
   const lotsData = await chunkedIn<string, AdjLotRow>(lotIds, async (chunk, from, to) => {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("inventory_lots")
       .select("id, pos_product_key, product_name, unit_cost_minor_units")
       .in("id", chunk)
       .order("id", { ascending: true })
       .range(from, to);
+    if (error) throw new Error(`Sage adjustments: lots could not be read: ${error.message}`);
     return (data as AdjLotRow[] | null) ?? [];
   }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   const lotById = new Map(lotsData.map((l) => [l.id, l]));
+  const catLookup = await buildCategoryLookup(admin, lotsData.map((l) => l.pos_product_key));
 
   const unmapped = new Set<string>();
   const noCost = new Set<string>();

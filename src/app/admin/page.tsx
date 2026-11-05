@@ -4,6 +4,7 @@ import { fullCountReminder } from "@/lib/inventory/full-count-core";
 import { hasFullCountForYear } from "@/lib/inventory/full-count-store";
 import { pacificToday } from "@/lib/reports/timezone";
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireStaff } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -11,7 +12,8 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Section } from "@/components/admin/ui/Section";
 import { Card, CardHeader } from "@/components/admin/ui/Card";
 import { Button } from "@/components/admin/ui/Button";
-import { getCockpitSnapshot } from "@/lib/admin/cockpit-data";
+import { cockpitLowStock, cockpitOps, cockpitRefunds, cockpitSales } from "@/lib/admin/cockpit-data";
+import { CockpitPanelSkeleton, CockpitSectionSkeleton } from "@/components/admin/perf/CockpitSkeletons";
 import { getSetupStatus } from "@/lib/admin/setup-status";
 import { WorkspaceTour } from "@/components/admin/WorkspaceTour";
 import {
@@ -66,6 +68,640 @@ function deltaAccent(d: Delta): "green" | "orange" | "muted" {
   return "muted";
 }
 
+
+/*
+ * PERF P3 (owner 2026-11-05, verbatim: "I need my back office to be lightning
+ * fast" ... "I want the main admin page to be instant").
+ *
+ * BEFORE: the page awaited ONE Promise.all of every read (sales today,
+ * yesterday and the baseline; taxes; returns; the order board; registers; the
+ * low-stock walk over every lot; the intake queue; Leafly; setup; audits)
+ * and only then sent its first byte. The slowest read decided when anything
+ * at all appeared.
+ *
+ * NOW: the header, the banners that need no data and every section's frame
+ * are sent at once. Each section below is its own async component inside its
+ * own <Suspense>, and paints the moment ITS figures are ready. Reads shared
+ * between sections are made once per request (React cache in
+ * cockpit-data.ts), and the heavy figures are shared for a few seconds across
+ * staff (cockpit-cache-core.ts: display only, failed reads never stored).
+ * tests/compliance/perf-p3-cockpit-instant.test.ts pins all of this.
+ */
+
+/* ── Compliance + setup banners (books-23: the compliance count is the owner's alone) ── */
+async function CockpitBanners({ canSeeCompliance }: { canSeeCompliance: boolean }) {
+  const [setup, overdueCompliance] = await Promise.all([
+    getSetupStatus(),
+    canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
+  ]);
+  const setupComplete = setup.completed >= setup.total;
+  return (
+    <>
+      {/* ── S-18: overdue compliance-calendar obligations (books-23: owner only) ──
+          The permission is re-checked here as well as at the fetch. That is not
+          redundancy for its own sake: the fetch guard protects the QUERY and the
+          render guard protects the SCREEN, and a future edit that reinstates an
+          unconditional fetch would otherwise silently start nagging staff again.
+          The link target refuses non-owners, so showing it would advertise a
+          door that does not open. */}
+      {canSeeCompliance && overdueCompliance > 0 && (
+        <Link
+          href="/admin/compliance/calendar"
+          className="admin-card-interactive block rounded-[var(--admin-radius-lg)] border border-red-500/40 bg-red-500/[0.08] px-5 py-4"
+        >
+          <p className="text-sm font-semibold text-red-300">
+            {overdueCompliance} compliance obligation{overdueCompliance === 1 ? " is" : "s are"} past due
+          </p>
+          <p className="mt-1 text-xs text-red-200/90">
+            Open the compliance calendar to see what&apos;s overdue (LIQ-1295, weekly CCRS,
+            CCTV retention check, …) and sign it off once done.
+          </p>
+        </Link>
+      )}
+
+
+      {/* ── Setup progress nudge (only until fully set up) ─────────────────
+          Links straight to the next incomplete step's page (the checks in
+          setup-status carry their own href). Disappears once every real
+          setup check reads done. */}
+      {!setupComplete && (
+        <Link
+          href={setup.nextAction?.href ?? "/admin/help"}
+          className="admin-card-interactive flex flex-wrap items-center gap-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/[0.06] px-5 py-4"
+        >
+          <span className="text-2xl" aria-hidden="true">
+            🧭
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[var(--admin-text)]">
+              Finish setting up your store
+            </p>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              {setup.completed} of {setup.total} steps done
+              {setup.nextAction ? ` · next: ${setup.nextAction.label}` : ""}
+            </p>
+          </div>
+          <div className="hidden w-40 sm:block">
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-[var(--admin-accent)]"
+                style={{
+                  width: `${Math.round((setup.completed / Math.max(setup.total, 1)) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+          <span className="shrink-0 text-sm font-medium text-[var(--admin-accent)]">
+            Continue setup →
+          </span>
+        </Link>
+      )}
+    </>
+  );
+}
+
+/* ── Needs your attention: every flag source, owner-only reads gated at the fetch ── */
+async function CockpitAttention({
+  basis,
+  canWorkIntake,
+  canReviewAudits,
+  todayPacific,
+  wantsFullCountCheck,
+}: {
+  basis?: string;
+  canWorkIntake: boolean;
+  canReviewAudits: boolean;
+  todayPacific: string;
+  wantsFullCountCheck: boolean;
+}) {
+  const [ops, refunds, lowStockCount, intakeInputs, auditsInReview, vendorToday, fullCountPlanned] = await Promise.all([
+    cockpitOps(),
+    cockpitRefunds(basis),
+    cockpitLowStock(),
+    canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
+    canReviewAudits ? listAuditSessions({ statuses: ["review"], limit: 20 }) : Promise.resolve(null),
+    // Fix Phase 4.4c (G-40): the vendor-of-the-day reminder, owner only.
+    canReviewAudits ? vendorCountPlannedToday().catch(() => null) : Promise.resolve(null),
+    wantsFullCountCheck
+      ? hasFullCountForYear(Number(todayPacific.slice(0, 4))).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const snap = { ...ops, ...refunds, lowStockCount };
+  const yearEndReminder =
+    fullCountPlanned === null ? null : fullCountReminder({ todayPacific, hasCountForYear: fullCountPlanned });
+  const vendorReminder = vendorToday
+    ? vendorOfDayReminder({ started: vendorToday.started, plannedToday: vendorToday.planned })
+    : null;
+  // W3: the product-intake pipeline surfaces its work here too — same verified
+  // counts, same priority order, and same copy as the hub's work queue.
+  const flags = [
+    ...buildAttentionFlags({
+      activeOrders: snap.activeOrders,
+      lowStockCount: snap.lowStockCount ?? 0,
+      drawers: snap.drawers,
+      publishedItems: snap.publishedItems,
+      refunds: {
+        severity: snap.refundSeverityToday,
+        refundMinor: snap.netToday.refundMinor,
+        ratePct: formatRate(snap.netToday.refundRate),
+      },
+      auditsAwaitingReview:
+        auditsInReview && auditsInReview.ok
+          ? auditsInReview.data.map((a) => ({ id: a.id, label: a.label }))
+          : [],
+    }),
+    ...workQueueAttentionFlags(intakeInputs),
+    ...(vendorReminder
+      ? [{ severity: "info" as const, text: vendorReminder, href: "/admin/inventory/audits/new?gen=vendor" }]
+      : []),
+    ...(yearEndReminder
+      ? [{ severity: "info" as const, text: yearEndReminder, href: "/admin/inventory/audits/full-count" }]
+      : []),
+  ];
+  return (
+    <>
+      {/* ── Needs your attention ─────────────────────────────────────── */}
+      {flags.length > 0 && (
+        <Section title="Needs your attention">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {flags.map((f, i) => {
+              const tone =
+                f.severity === "critical"
+                  ? "border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 text-[var(--admin-danger)]"
+                  : f.severity === "warning"
+                    ? "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
+                    : "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]";
+              const inner = (
+                <div className={`flex items-start gap-2 rounded-[var(--admin-radius)] border px-3 py-2.5 text-sm ${tone}`}>
+                  <span>
+                    {f.severity === "critical" ? "🚨" : f.severity === "warning" ? "⚠️" : "ℹ️"}
+                  </span>
+                  <span className="text-[var(--admin-text)]">{f.text}</span>
+                </div>
+              );
+              return f.href ? (
+                <Link key={i} href={f.href} className="admin-focus">
+                  {inner}
+                </Link>
+              ) : (
+                <div key={i}>{inner}</div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+    </>
+  );
+}
+
+/* ── Today's sales KPIs (vs the chosen basis) ── */
+async function CockpitSalesSection({ basis }: { basis?: string }) {
+  const snap = await cockpitSales(basis);
+  return (
+    <>
+      {/* ── Today's sales KPIs (vs the chosen basis) ────────────────────── */}
+      <Section
+        title="Today's sales"
+        description={`${snap.comparison.window.comparisonLabel.replace(/^vs /, "Compared with ")}. ${snap.comparison.window.paceNote}`}
+      >
+        <div className="mb-4">
+          <ComparisonBasisPicker active={snap.basis} />
+        </div>
+        {/* Rule 135: an unreadable day is said out loud, never shown as a quiet $0. */}
+        {!snap.todayReadable ? (
+          <p role="status" className="mb-3 text-xs text-[var(--admin-gold)]">
+            Today&apos;s sales could not be read just now, so these tiles show zero. Refresh in a moment.
+          </p>
+        ) : null}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Revenue"
+            value={formatMoneyMinor(snap.today.totalRevenueMinorUnits)}
+            hint={measureHint(snap.comparison.revenue, snap.comparison.window.comparisonLabel, true)}
+            accent={deltaAccent(snap.comparison.revenue.delta)}
+            icon="💵"
+          />
+          <StatCard
+            label="Orders"
+            value={snap.today.totalOrders}
+            hint={measureHint(snap.comparison.orders, snap.comparison.window.comparisonLabel, false)}
+            accent={deltaAccent(snap.comparison.orders.delta)}
+            icon="🧾"
+          />
+          <StatCard
+            label="Units sold"
+            value={snap.today.totalUnits}
+            hint={measureHint(snap.comparison.units, snap.comparison.window.comparisonLabel, false)}
+            accent={deltaAccent(snap.comparison.units.delta)}
+            icon="📦"
+          />
+          <StatCard
+            label="Avg. order"
+            value={formatMoneyMinor(snap.today.avgOrderMinorUnits)}
+            hint={measureHint(snap.comparison.avgOrder, snap.comparison.window.comparisonLabel, true)}
+            accent={deltaAccent(snap.comparison.avgOrder.delta)}
+            icon="🛒"
+          />
+        </div>
+      </Section>
+    </>
+  );
+}
+
+/* ── CVB-D18: today's taxes ── */
+async function CockpitTaxSection() {
+  // CVB-D18: today's excise / sales tax / after-tax sales, the Reports -> Tax engine. null = unreadable.
+  const taxes = await loadCockpitTaxes();
+  return (
+    <>
+      {/* ── CVB-D18: today's taxes and after-tax sales ──────────────────────────────────
+          Owner: "I want to see excise tax, sales tax, and after tax sales figures." Same engine and
+          basis as Reports -> Tax (completed orders, 37% excise on cannabis, 9.3% sales tax, medical
+          exemptions honoured). Unreadable = "Unavailable", never $0.00. */}
+      <Section
+        title="Today's taxes"
+        description="Completed sales today, worked out the same way as Reports → Tax. After-tax sales is what the store keeps once excise and sales tax are set aside."
+      >
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="After-tax sales"
+            value={taxes ? formatMoneyMinor(taxes.afterTaxMinor) : "Unavailable"}
+            hint={taxes ? `${taxes.orders} completed order${taxes.orders === 1 ? "" : "s"} · ${formatMoneyMinor(taxes.withTaxMinor)} with tax` : "The tax figures could not be read"}
+            accent={taxes ? "green" : "orange"}
+            href="/admin/reports/tax"
+            icon="🧾"
+          />
+          <StatCard
+            label="Excise tax (37%)"
+            value={taxes ? formatMoneyMinor(taxes.exciseMinor) : "Unavailable"}
+            hint="Cannabis lines only · owed to the WSLCB"
+            accent={taxes ? "gold" : "orange"}
+            href="/admin/reports/excise"
+            icon="🏛️"
+          />
+          <StatCard
+            label="Sales tax"
+            value={taxes ? formatMoneyMinor(taxes.salesTaxMinor) : "Unavailable"}
+            hint="State + local · owed to the DOR"
+            accent={taxes ? "gold" : "orange"}
+            href="/admin/reports/tax"
+            icon="📋"
+          />
+          <StatCard
+            label="Total tax"
+            value={taxes ? formatMoneyMinor(taxes.exciseMinor + taxes.salesTaxMinor) : "Unavailable"}
+            hint={
+              taxes && taxes.medicalExemptLines > 0
+                ? `${taxes.medicalExemptLines} medical-exempt line${taxes.medicalExemptLines === 1 ? "" : "s"} not taxed`
+                : "Excise + sales tax"
+            }
+            accent={taxes ? "muted" : "orange"}
+            href="/admin/reports/tax"
+            icon="∑"
+          />
+        </div>
+      </Section>
+    </>
+  );
+}
+
+/* ── SLICE 21: returns, voids and net ── */
+async function CockpitRefundsSection({ basis }: { basis?: string }) {
+  const snap = await cockpitRefunds(basis);
+  return (
+    <>
+      {/* ── SLICE 21: returns, voids and NET ─────────────────────────────
+          Michael: "nowhere in the back office can I find anything related to
+          returns or voids". The facts were recorded all along (voids in
+          audit_logs, returns in customer_returns) but only the register's
+          X/Z slip ever read them. Revenue above is GROSS — this is what the
+          business actually kept. */}
+      <Section
+        title="Returns, voids & net"
+        description="Today, store-wide. Neither voids nor returns record which register they happened on, so these are not per-register numbers."
+      >
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Net revenue"
+            value={formatMoneyMinor(snap.netToday.netMinor)}
+            hint={`Gross ${formatMoneyMinor(snap.netToday.grossMinor)} − refunds ${formatMoneyMinor(snap.netToday.refundMinor)}`}
+            accent={snap.netToday.netMinor < 0 ? "orange" : "green"}
+            icon="💰"
+          />
+          <StatCard
+            label="Refunded out"
+            value={formatMoneyMinor(snap.netToday.refundMinor)}
+            hint={`${formatRate(snap.netToday.refundRate)} of gross`}
+            accent={
+              snap.refundSeverityToday === "high"
+                ? "orange"
+                : snap.refundSeverityToday === "watch"
+                  ? "gold"
+                  : "muted"
+            }
+            icon="↩️"
+          />
+          <StatCard
+            label="Voids"
+            value={snap.refundsToday.totals.voidCount}
+            hint={`${formatMoneyMinor(snap.refundsToday.totals.voidRefundMinor)} reversed`}
+            accent={snap.refundsToday.totals.voidCount > 0 ? "gold" : "muted"}
+            icon="❌"
+          />
+          <StatCard
+            label="Returns"
+            value={snap.refundsToday.totals.returnCount}
+            hint={`${formatMoneyMinor(snap.refundsToday.totals.returnRefundMinor)} refunded`}
+            accent={snap.refundsToday.totals.returnCount > 0 ? "gold" : "muted"}
+            icon="🔁"
+          />
+        </div>
+        {snap.refundsToday.byReason.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {snap.refundsToday.byReason.map((r) => (
+              <span
+                key={r.key}
+                className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/65"
+              >
+                {r.label}: {r.count} · {formatMoneyMinor(r.refundMinor)}
+              </span>
+            ))}
+            {snap.refundsToday.restockShare !== null && (
+              <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/65">
+                Restocked: {formatRate(snap.refundsToday.restockShare, 0)} of returned value
+              </span>
+            )}
+          </div>
+        )}
+        <p className="mt-3 text-[11px] text-white/40">
+          <Link href="/admin/reports/returns" className="text-[var(--admin-accent)] hover:underline">
+            Full returns &amp; voids report →
+          </Link>
+        </p>
+      </Section>
+    </>
+  );
+}
+
+/* ── Hourly sales + top sellers ── */
+async function CockpitHourlySection({ basis }: { basis?: string }) {
+  const snap = await cockpitSales(basis);
+  const peak = peakHour(snap.today.byHour);
+  // CVB-D19: the old chart scaled each bar as a % of a column with no height of its own, so every bar
+  // collapsed to its 3 px minimum. hourWindow draws 8 AM to midnight (widened to any hour with a sale).
+  const hourBars = hourWindow(snap.today.byHour);
+  const topSellers = snap.today.byProduct.slice(0, 6);
+  return (
+    <>
+      {/* ── Hourly sales + top sellers ───────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2" padding="none">
+          <CardHeader
+            className="p-5 pb-0"
+            title="Sales by hour (today)"
+            subtitle={
+              peak
+                ? `Busiest so far: ${peak.label} (${formatMoneyMinor(peak.revenueMinorUnits)})`
+                : "No sales recorded yet today."
+            }
+          />
+          <div className="p-5 pt-0">
+            {hourBars.some((b) => b.revenueMinorUnits > 0) ? (
+              <div className="flex h-44 gap-1" role="img" aria-label="Revenue by hour today">
+                {hourBars.map((b) => (
+                  <div key={b.hour} className="group flex h-full min-w-0 flex-1 flex-col items-center">
+                    {/* The track has a real height (flex-1 of h-44), so the bar's % height works. */}
+                    <div className="flex w-full flex-1 items-end">
+                      <div
+                        className="w-full rounded-t bg-[var(--admin-accent)]/70 transition group-hover:bg-[var(--admin-accent)]"
+                        style={{ height: `${b.heightPct}%` }}
+                        title={`${b.label}: ${formatMoneyMinor(b.revenueMinorUnits)} · ${b.orders} order${b.orders === 1 ? "" : "s"}`}
+                      />
+                    </div>
+                    <span className="mt-1 hidden text-[9px] text-[var(--admin-text-faint)] sm:block">
+                      {b.shortLabel}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-10 text-center text-sm text-[var(--admin-text-faint)]">
+                Sales will chart here as orders come through today.
+              </p>
+            )}
+          </div>
+        </Card>
+
+        <Card padding="none">
+          <CardHeader className="p-5 pb-0" title="Top sellers (today)" />
+          <div className="p-5 pt-0">
+            {topSellers.length > 0 ? (
+              <ol className="space-y-2">
+                {topSellers.map((p, i) => (
+                  <li key={p.label} className="flex items-center gap-3 text-sm">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-surface-2)] text-xs font-bold text-[var(--admin-text-muted)]">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[var(--admin-text)]">{p.label}</span>
+                    <span className="shrink-0 text-xs text-[var(--admin-text-muted)]">
+                      {p.units}× · {formatMoneyMinor(p.revenueMinorUnits)}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="py-6 text-center text-sm text-[var(--admin-text-faint)]">
+                No products sold yet today.
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+/* ── Open orders board + live registers ── */
+async function CockpitOrdersSection() {
+  const snap = await cockpitOps();
+  return (
+    <>
+      {/* ── Open orders board + live registers ───────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card padding="none">
+          <CardHeader
+            className="p-5 pb-0"
+            title="Open orders"
+            subtitle={`${snap.activeOrders} awaiting fulfillment`}
+            action={
+              <Button href="/admin/orders" variant="neutral" size="sm">
+                Manage
+              </Button>
+            }
+          />
+          <div className="grid grid-cols-2 gap-3 p-5 pt-0 sm:grid-cols-4">
+            {snap.orderBoard.map((o) => (
+              <Link
+                key={o.status}
+                href={`/admin/orders?status=${o.status}`}
+                className="admin-card-interactive rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3 text-center"
+              >
+                <div className="text-2xl font-bold text-[var(--admin-text)]">{o.count}</div>
+                <div className="mt-0.5 text-[11px] text-[var(--admin-text-muted)]">{o.label}</div>
+              </Link>
+            ))}
+          </div>
+        </Card>
+
+        <Card padding="none">
+          <CardHeader
+            className="p-5 pb-0"
+            title="Register Activity"
+            subtitle={
+              snap.registers.length > 0
+                ? `${snap.drawers.openCount} open · ${snap.drawers.verifiedCount} verified`
+                : "No registers configured"
+            }
+            action={
+              <Button href="/admin/registers" variant="neutral" size="sm">
+                View activity
+              </Button>
+            }
+          />
+          <div className="p-5 pt-0">
+            {snap.registers.length > 0 ? (
+              <ul className="space-y-2">
+                {snap.registers.map((r) => {
+                  const s = r.openSession;
+                  return (
+                    <li
+                      key={r.register.id}
+                      className="flex items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm"
+                    >
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${s ? "bg-[var(--admin-accent)]" : "bg-white/20"}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-[var(--admin-text)]">
+                        {r.register.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-[var(--admin-text-muted)]">
+                        {s
+                          ? `${s.status} · drops ${formatMoneyMinor(r.dropsMinor)}`
+                          : "Closed"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="py-6 text-center text-sm text-[var(--admin-text-faint)]">
+                Set up a register to track cash drawers.
+              </p>
+            )}
+            {snap.drawers.needsAttention > 0 && (
+              <p className="mt-3 rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-3 py-2 text-xs text-[var(--admin-danger)]">
+                {snap.drawers.needsAttention} drawer{snap.drawers.needsAttention === 1 ? "" : "s"} need review (closed blind or over/short).
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+/* ── Operations status strip ── */
+async function CockpitOpsSection({ basis, canOpenLeafly }: { basis?: string; canOpenLeafly: boolean }) {
+  const [ops, lowStockCount, sales, leafly] = await Promise.all([
+    cockpitOps(),
+    cockpitLowStock(),
+    cockpitSales(basis),
+    // CVB-D20: the Leafly verdict the Leafly page shows. null = could not be worked out.
+    loadCockpitLeafly(),
+  ]);
+  const snap = { ...ops, lowStockCount };
+  const leaflyCard = leaflyTile(leafly?.verdict ?? null, leafly?.lastCheckIso ?? null, (iso) =>
+    describeElapsed(iso, leafly?.nowIso ?? new Date().toISOString()),
+  );
+  const topCategories = sales.today.byCategory.slice(0, 5);
+  return (
+    <>
+      {/* ── Operations status strip ──────────────────────────────────── */}
+      <Section title="Operations">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Live menu items"
+            value={snap.publishedItems ?? "—"}
+            hint={snap.publishedItems !== null ? "Currently published" : "No menu published"}
+            accent="green"
+            href="/admin/menu-imports"
+            icon="🌿"
+          />
+          <StatCard
+            label="Low stock"
+            value={snap.lowStockCount ?? "Unavailable"}
+            hint={
+              snap.lowStockCount === null
+                ? "Stock levels could not be read just now"
+                : snap.lowStockCount > 0
+                  ? "At/below reorder point"
+                  : "All above reorder point"
+            }
+            accent={snap.lowStockCount === null || snap.lowStockCount > 0 ? "orange" : "muted"}
+            href="/admin/purchasing"
+            icon="📉"
+          />
+          {/* CVB-D20: the one-time menu upload is done, so this tile is now Leafly's: the same verdict as
+              Integrations -> Leafly, when Leafly last got the menu, and the last automatic check. */}
+          <StatCard
+            label="Leafly"
+            value={leaflyCard.value}
+            hint={leaflyCard.hint}
+            accent={leaflyCard.accent}
+            href={canOpenLeafly ? "/admin/integrations/leafly" : undefined}
+            icon="🍃"
+          />
+          <StatCard
+            label="Loyalty signups"
+            value={snap.loyaltySignups}
+            hint="New — awaiting review"
+            accent="gold"
+            href="/admin/loyalty-signups"
+            icon="⭐"
+          />
+        </div>
+
+        {/* Top categories inline (only when there's data) */}
+        {topCategories.length > 0 && (
+          <div className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-white/40">
+              Today&apos;s revenue by category
+            </p>
+            <div className="space-y-2">
+              {topCategories.map((c) => (
+                <div key={c.label} className="flex items-center gap-3">
+                  <span className="w-28 shrink-0 truncate text-sm capitalize text-[var(--admin-text)]">
+                    {c.label}
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-[var(--admin-accent)]"
+                      style={{ width: `${Math.round(c.revenueShare * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-24 shrink-0 text-right text-xs text-[var(--admin-text-muted)]">
+                    {formatMoneyMinor(c.revenueMinorUnits)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
+    </>
+  );
+}
+
 export default async function AdminDashboardPage({
   searchParams,
 }: {
@@ -73,6 +709,7 @@ export default async function AdminDashboardPage({
 }) {
   const sp = await searchParams;
   const session = await requireStaff();
+  const role = session.profile.role;
   // W3: intake work-queue flags only for people who can act on them — every
   // queue target requires inventory.manage, so gate the fetch the same way.
   const canWorkIntake = can(session.profile.role, "inventory.manage");
@@ -107,28 +744,6 @@ export default async function AdminDashboardPage({
   const canOpenLeafly = can(session.profile.role, "settings.manage");
   // D181: every staff login sees the cash jobs (drop now, morning duties).
   const canSeeCash = can(session.profile.role, "orders.manage");
-  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview, vendorToday, fullCountPlanned, taxes, leafly] = await Promise.all([
-    getCockpitSnapshot(sp.basis),
-    getSetupStatus(),
-    canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
-    canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
-    canReviewAudits ? listAuditSessions({ statuses: ["review"], limit: 20 }) : Promise.resolve(null),
-    // Fix Phase 4.4c (G-40): the vendor-of-the-day reminder, owner only.
-    canReviewAudits ? vendorCountPlannedToday().catch(() => null) : Promise.resolve(null),
-    wantsFullCountCheck
-      ? hasFullCountForYear(Number(todayPacific.slice(0, 4))).catch(() => null)
-      : Promise.resolve(null),
-    // CVB-D18: today's excise / sales tax / after-tax sales, the Reports -> Tax engine. null = unreadable.
-    loadCockpitTaxes(),
-    // CVB-D20: the Leafly verdict the Leafly page shows. null = could not be worked out.
-    loadCockpitLeafly(),
-  ]);
-  const yearEndReminder =
-    fullCountPlanned === null ? null : fullCountReminder({ todayPacific, hasCountForYear: fullCountPlanned });
-  const vendorReminder = vendorToday
-    ? vendorOfDayReminder({ started: vendorToday.started, plannedToday: vendorToday.planned })
-    : null;
-  const setupComplete = setup.completed >= setup.total;
 
   // S-9: surface unset webhook secrets loudly. In production those endpoints
   // now refuse (fail closed), so this banner tells the owner exactly which env
@@ -139,43 +754,8 @@ export default async function AdminDashboardPage({
 
   const firstName =
     (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
-
-  // W3: the product-intake pipeline surfaces its work here too — same verified
-  // counts, same priority order, and same copy as the hub's work queue.
-  const flags = [
-    ...buildAttentionFlags({
-      activeOrders: snap.activeOrders,
-      lowStockCount: snap.lowStockCount,
-      drawers: snap.drawers,
-      publishedItems: snap.publishedItems,
-      refunds: {
-        severity: snap.refundSeverityToday,
-        refundMinor: snap.netToday.refundMinor,
-        ratePct: formatRate(snap.netToday.refundRate),
-      },
-      auditsAwaitingReview:
-        auditsInReview && auditsInReview.ok
-          ? auditsInReview.data.map((a) => ({ id: a.id, label: a.label }))
-          : [],
-    }),
-    ...workQueueAttentionFlags(intakeInputs),
-    ...(vendorReminder
-      ? [{ severity: "info" as const, text: vendorReminder, href: "/admin/inventory/audits/new?gen=vendor" }]
-      : []),
-    ...(yearEndReminder
-      ? [{ severity: "info" as const, text: yearEndReminder, href: "/admin/inventory/audits/full-count" }]
-      : []),
-  ];
-
-  const peak = peakHour(snap.today.byHour);
-  // CVB-D19: the old chart scaled each bar as a % of a column with no height of its own, so every bar
-  // collapsed to its 3 px minimum. hourWindow draws 8 AM to midnight (widened to any hour with a sale).
-  const hourBars = hourWindow(snap.today.byHour);
-  const leaflyCard = leaflyTile(leafly?.verdict ?? null, leafly?.lastCheckIso ?? null, (iso) =>
-    describeElapsed(iso, leafly?.nowIso ?? new Date().toISOString()),
-  );
-  const topSellers = snap.today.byProduct.slice(0, 6);
-  const topCategories = snap.today.byCategory.slice(0, 5);
+  const isOwner = canReadBooks(role);
+  const basis = sp.basis;
 
   return (
     <div>
@@ -222,27 +802,9 @@ export default async function AdminDashboardPage({
           </div>
         )}
 
-        {/* ── S-18: overdue compliance-calendar obligations (books-23: owner only) ──
-            The permission is re-checked here as well as at the fetch. That is not
-            redundancy for its own sake: the fetch guard protects the QUERY and the
-            render guard protects the SCREEN, and a future edit that reinstates an
-            unconditional fetch would otherwise silently start nagging staff again.
-            The link target refuses non-owners, so showing it would advertise a
-            door that does not open. */}
-        {canSeeCompliance && overdueCompliance > 0 && (
-          <Link
-            href="/admin/compliance/calendar"
-            className="admin-card-interactive block rounded-[var(--admin-radius-lg)] border border-red-500/40 bg-red-500/[0.08] px-5 py-4"
-          >
-            <p className="text-sm font-semibold text-red-300">
-              {overdueCompliance} compliance obligation{overdueCompliance === 1 ? " is" : "s are"} past due
-            </p>
-            <p className="mt-1 text-xs text-red-200/90">
-              Open the compliance calendar to see what&apos;s overdue (LIQ-1295, weekly CCRS,
-              CCTV retention check, …) and sign it off once done.
-            </p>
-          </Link>
-        )}
+        <Suspense fallback={null}>
+          <CockpitBanners canSeeCompliance={canSeeCompliance} />
+        </Suspense>
 
         {/* ── S-10: at-rest encryption key not set ── */}
         {encryptionKeyMissing && (
@@ -257,450 +819,50 @@ export default async function AdminDashboardPage({
             </p>
           </div>
         )}
+        {/* ── D181: cash jobs (drop now, morning duties, a bag every day). Each streams on its own. ── */}
+        <Suspense fallback={canSeeCash ? <CockpitPanelSkeleton /> : null}>
+          {canSeeCash ? <MyDayHomePanel isOwner={isOwner} /> : null}
+        </Suspense>
+        <Suspense fallback={canSeeCash ? <CockpitPanelSkeleton /> : null}>
+          {canSeeCash ? <MorningReportPanel isOwner={isOwner} compact /> : null}
+        </Suspense>
+        <Suspense fallback={canSeeCash ? <CockpitPanelSkeleton /> : null}>
+          {canSeeCash ? <GuidedCashPanel isOwner={isOwner} compact /> : null}
+        </Suspense>
 
-        {/* ── Setup progress nudge (only until fully set up) ─────────────────
-            Links straight to the next incomplete step's page (the checks in
-            setup-status carry their own href). Disappears once every real
-            setup check reads done. */}
-        {!setupComplete && (
-          <Link
-            href={setup.nextAction?.href ?? "/admin/help"}
-            className="admin-card-interactive flex flex-wrap items-center gap-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/[0.06] px-5 py-4"
-          >
-            <span className="text-2xl" aria-hidden="true">
-              🧭
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[var(--admin-text)]">
-                Finish setting up your store
-              </p>
-              <p className="text-xs text-[var(--admin-text-muted)]">
-                {setup.completed} of {setup.total} steps done
-                {setup.nextAction ? ` · next: ${setup.nextAction.label}` : ""}
-              </p>
-            </div>
-            <div className="hidden w-40 sm:block">
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-[var(--admin-accent)]"
-                  style={{
-                    width: `${Math.round((setup.completed / Math.max(setup.total, 1)) * 100)}%`,
-                  }}
-                />
-              </div>
-            </div>
-            <span className="shrink-0 text-sm font-medium text-[var(--admin-accent)]">
-              Continue setup →
-            </span>
-          </Link>
-        )}
+        <Suspense fallback={null}>
+          <CockpitAttention
+            basis={basis}
+            canWorkIntake={canWorkIntake}
+            canReviewAudits={canReviewAudits}
+            todayPacific={todayPacific}
+            wantsFullCountCheck={wantsFullCountCheck}
+          />
+        </Suspense>
 
-        {/* ── D181: cash jobs (drop now, morning duties, a bag every day) ── */}
-        {canSeeCash ? <MyDayHomePanel isOwner={canReadBooks(session.profile.role)} /> : null}
-        {canSeeCash ? <MorningReportPanel isOwner={canReadBooks(session.profile.role)} compact /> : null}
-        {canSeeCash ? <GuidedCashPanel isOwner={canReadBooks(session.profile.role)} compact /> : null}
+        <Suspense fallback={<CockpitSectionSkeleton title="Today's sales" />}>
+          <CockpitSalesSection basis={basis} />
+        </Suspense>
 
-        {/* ── Needs your attention ─────────────────────────────────────── */}
-        {flags.length > 0 && (
-          <Section title="Needs your attention">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {flags.map((f, i) => {
-                const tone =
-                  f.severity === "critical"
-                    ? "border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 text-[var(--admin-danger)]"
-                    : f.severity === "warning"
-                      ? "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
-                      : "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]";
-                const inner = (
-                  <div className={`flex items-start gap-2 rounded-[var(--admin-radius)] border px-3 py-2.5 text-sm ${tone}`}>
-                    <span>
-                      {f.severity === "critical" ? "🚨" : f.severity === "warning" ? "⚠️" : "ℹ️"}
-                    </span>
-                    <span className="text-[var(--admin-text)]">{f.text}</span>
-                  </div>
-                );
-                return f.href ? (
-                  <Link key={i} href={f.href} className="admin-focus">
-                    {inner}
-                  </Link>
-                ) : (
-                  <div key={i}>{inner}</div>
-                );
-              })}
-            </div>
-          </Section>
-        )}
+        <Suspense fallback={<CockpitSectionSkeleton title="Today's taxes" />}>
+          <CockpitTaxSection />
+        </Suspense>
 
-        {/* ── Today's sales KPIs (vs the chosen basis) ────────────────────── */}
-        <Section
-          title="Today's sales"
-          description={`${snap.comparison.window.comparisonLabel.replace(/^vs /, "Compared with ")}. ${snap.comparison.window.paceNote}`}
-        >
-          <div className="mb-4">
-            <ComparisonBasisPicker active={snap.basis} />
-          </div>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              label="Revenue"
-              value={formatMoneyMinor(snap.today.totalRevenueMinorUnits)}
-              hint={measureHint(snap.comparison.revenue, snap.comparison.window.comparisonLabel, true)}
-              accent={deltaAccent(snap.comparison.revenue.delta)}
-              icon="💵"
-            />
-            <StatCard
-              label="Orders"
-              value={snap.today.totalOrders}
-              hint={measureHint(snap.comparison.orders, snap.comparison.window.comparisonLabel, false)}
-              accent={deltaAccent(snap.comparison.orders.delta)}
-              icon="🧾"
-            />
-            <StatCard
-              label="Units sold"
-              value={snap.today.totalUnits}
-              hint={measureHint(snap.comparison.units, snap.comparison.window.comparisonLabel, false)}
-              accent={deltaAccent(snap.comparison.units.delta)}
-              icon="📦"
-            />
-            <StatCard
-              label="Avg. order"
-              value={formatMoneyMinor(snap.today.avgOrderMinorUnits)}
-              hint={measureHint(snap.comparison.avgOrder, snap.comparison.window.comparisonLabel, true)}
-              accent={deltaAccent(snap.comparison.avgOrder.delta)}
-              icon="🛒"
-            />
-          </div>
-        </Section>
+        <Suspense fallback={<CockpitSectionSkeleton title="Returns, voids & net" />}>
+          <CockpitRefundsSection basis={basis} />
+        </Suspense>
 
-        {/* ── CVB-D18: today's taxes and after-tax sales ──────────────────────────────────
-            Owner: "I want to see excise tax, sales tax, and after tax sales figures." Same engine and
-            basis as Reports -> Tax (completed orders, 37% excise on cannabis, 9.3% sales tax, medical
-            exemptions honoured). Unreadable = "Unavailable", never $0.00. */}
-        <Section
-          title="Today's taxes"
-          description="Completed sales today, worked out the same way as Reports → Tax. After-tax sales is what the store keeps once excise and sales tax are set aside."
-        >
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              label="After-tax sales"
-              value={taxes ? formatMoneyMinor(taxes.afterTaxMinor) : "Unavailable"}
-              hint={taxes ? `${taxes.orders} completed order${taxes.orders === 1 ? "" : "s"} · ${formatMoneyMinor(taxes.withTaxMinor)} with tax` : "The tax figures could not be read"}
-              accent={taxes ? "green" : "orange"}
-              href="/admin/reports/tax"
-              icon="🧾"
-            />
-            <StatCard
-              label="Excise tax (37%)"
-              value={taxes ? formatMoneyMinor(taxes.exciseMinor) : "Unavailable"}
-              hint="Cannabis lines only · owed to the WSLCB"
-              accent={taxes ? "gold" : "orange"}
-              href="/admin/reports/excise"
-              icon="🏛️"
-            />
-            <StatCard
-              label="Sales tax"
-              value={taxes ? formatMoneyMinor(taxes.salesTaxMinor) : "Unavailable"}
-              hint="State + local · owed to the DOR"
-              accent={taxes ? "gold" : "orange"}
-              href="/admin/reports/tax"
-              icon="📋"
-            />
-            <StatCard
-              label="Total tax"
-              value={taxes ? formatMoneyMinor(taxes.exciseMinor + taxes.salesTaxMinor) : "Unavailable"}
-              hint={
-                taxes && taxes.medicalExemptLines > 0
-                  ? `${taxes.medicalExemptLines} medical-exempt line${taxes.medicalExemptLines === 1 ? "" : "s"} not taxed`
-                  : "Excise + sales tax"
-              }
-              accent={taxes ? "muted" : "orange"}
-              href="/admin/reports/tax"
-              icon="∑"
-            />
-          </div>
-        </Section>
+        <Suspense fallback={<CockpitSectionSkeleton tiles={3} tall />}>
+          <CockpitHourlySection basis={basis} />
+        </Suspense>
 
-        {/* ── SLICE 21: returns, voids and NET ─────────────────────────────
-            Michael: "nowhere in the back office can I find anything related to
-            returns or voids". The facts were recorded all along (voids in
-            audit_logs, returns in customer_returns) but only the register's
-            X/Z slip ever read them. Revenue above is GROSS — this is what the
-            business actually kept. */}
-        <Section
-          title="Returns, voids & net"
-          description="Today, store-wide. Neither voids nor returns record which register they happened on, so these are not per-register numbers."
-        >
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              label="Net revenue"
-              value={formatMoneyMinor(snap.netToday.netMinor)}
-              hint={`Gross ${formatMoneyMinor(snap.netToday.grossMinor)} − refunds ${formatMoneyMinor(snap.netToday.refundMinor)}`}
-              accent={snap.netToday.netMinor < 0 ? "orange" : "green"}
-              icon="💰"
-            />
-            <StatCard
-              label="Refunded out"
-              value={formatMoneyMinor(snap.netToday.refundMinor)}
-              hint={`${formatRate(snap.netToday.refundRate)} of gross`}
-              accent={
-                snap.refundSeverityToday === "high"
-                  ? "orange"
-                  : snap.refundSeverityToday === "watch"
-                    ? "gold"
-                    : "muted"
-              }
-              icon="↩️"
-            />
-            <StatCard
-              label="Voids"
-              value={snap.refundsToday.totals.voidCount}
-              hint={`${formatMoneyMinor(snap.refundsToday.totals.voidRefundMinor)} reversed`}
-              accent={snap.refundsToday.totals.voidCount > 0 ? "gold" : "muted"}
-              icon="❌"
-            />
-            <StatCard
-              label="Returns"
-              value={snap.refundsToday.totals.returnCount}
-              hint={`${formatMoneyMinor(snap.refundsToday.totals.returnRefundMinor)} refunded`}
-              accent={snap.refundsToday.totals.returnCount > 0 ? "gold" : "muted"}
-              icon="🔁"
-            />
-          </div>
-          {snap.refundsToday.byReason.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {snap.refundsToday.byReason.map((r) => (
-                <span
-                  key={r.key}
-                  className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/65"
-                >
-                  {r.label}: {r.count} · {formatMoneyMinor(r.refundMinor)}
-                </span>
-              ))}
-              {snap.refundsToday.restockShare !== null && (
-                <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/65">
-                  Restocked: {formatRate(snap.refundsToday.restockShare, 0)} of returned value
-                </span>
-              )}
-            </div>
-          )}
-          <p className="mt-3 text-[11px] text-white/40">
-            <Link href="/admin/reports/returns" className="text-[var(--admin-accent)] hover:underline">
-              Full returns &amp; voids report →
-            </Link>
-          </p>
-        </Section>
+        <Suspense fallback={<CockpitSectionSkeleton tiles={2} tall />}>
+          <CockpitOrdersSection />
+        </Suspense>
 
-        {/* ── Hourly sales + top sellers ───────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2" padding="none">
-            <CardHeader
-              className="p-5 pb-0"
-              title="Sales by hour (today)"
-              subtitle={
-                peak
-                  ? `Busiest so far: ${peak.label} (${formatMoneyMinor(peak.revenueMinorUnits)})`
-                  : "No sales recorded yet today."
-              }
-            />
-            <div className="p-5 pt-0">
-              {hourBars.some((b) => b.revenueMinorUnits > 0) ? (
-                <div className="flex h-44 gap-1" role="img" aria-label="Revenue by hour today">
-                  {hourBars.map((b) => (
-                    <div key={b.hour} className="group flex h-full min-w-0 flex-1 flex-col items-center">
-                      {/* The track has a real height (flex-1 of h-44), so the bar's % height works. */}
-                      <div className="flex w-full flex-1 items-end">
-                        <div
-                          className="w-full rounded-t bg-[var(--admin-accent)]/70 transition group-hover:bg-[var(--admin-accent)]"
-                          style={{ height: `${b.heightPct}%` }}
-                          title={`${b.label}: ${formatMoneyMinor(b.revenueMinorUnits)} · ${b.orders} order${b.orders === 1 ? "" : "s"}`}
-                        />
-                      </div>
-                      <span className="mt-1 hidden text-[9px] text-[var(--admin-text-faint)] sm:block">
-                        {b.shortLabel}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="py-10 text-center text-sm text-[var(--admin-text-faint)]">
-                  Sales will chart here as orders come through today.
-                </p>
-              )}
-            </div>
-          </Card>
-
-          <Card padding="none">
-            <CardHeader className="p-5 pb-0" title="Top sellers (today)" />
-            <div className="p-5 pt-0">
-              {topSellers.length > 0 ? (
-                <ol className="space-y-2">
-                  {topSellers.map((p, i) => (
-                    <li key={p.label} className="flex items-center gap-3 text-sm">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-surface-2)] text-xs font-bold text-[var(--admin-text-muted)]">
-                        {i + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[var(--admin-text)]">{p.label}</span>
-                      <span className="shrink-0 text-xs text-[var(--admin-text-muted)]">
-                        {p.units}× · {formatMoneyMinor(p.revenueMinorUnits)}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="py-6 text-center text-sm text-[var(--admin-text-faint)]">
-                  No products sold yet today.
-                </p>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* ── Open orders board + live registers ───────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card padding="none">
-            <CardHeader
-              className="p-5 pb-0"
-              title="Open orders"
-              subtitle={`${snap.activeOrders} awaiting fulfillment`}
-              action={
-                <Button href="/admin/orders" variant="neutral" size="sm">
-                  Manage
-                </Button>
-              }
-            />
-            <div className="grid grid-cols-2 gap-3 p-5 pt-0 sm:grid-cols-4">
-              {snap.orderBoard.map((o) => (
-                <Link
-                  key={o.status}
-                  href={`/admin/orders?status=${o.status}`}
-                  className="admin-card-interactive rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3 text-center"
-                >
-                  <div className="text-2xl font-bold text-[var(--admin-text)]">{o.count}</div>
-                  <div className="mt-0.5 text-[11px] text-[var(--admin-text-muted)]">{o.label}</div>
-                </Link>
-              ))}
-            </div>
-          </Card>
-
-          <Card padding="none">
-            <CardHeader
-              className="p-5 pb-0"
-              title="Register Activity"
-              subtitle={
-                snap.registers.length > 0
-                  ? `${snap.drawers.openCount} open · ${snap.drawers.verifiedCount} verified`
-                  : "No registers configured"
-              }
-              action={
-                <Button href="/admin/registers" variant="neutral" size="sm">
-                  View activity
-                </Button>
-              }
-            />
-            <div className="p-5 pt-0">
-              {snap.registers.length > 0 ? (
-                <ul className="space-y-2">
-                  {snap.registers.map((r) => {
-                    const s = r.openSession;
-                    return (
-                      <li
-                        key={r.register.id}
-                        className="flex items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm"
-                      >
-                        <span
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${s ? "bg-[var(--admin-accent)]" : "bg-white/20"}`}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-[var(--admin-text)]">
-                          {r.register.name}
-                        </span>
-                        <span className="shrink-0 text-xs text-[var(--admin-text-muted)]">
-                          {s
-                            ? `${s.status} · drops ${formatMoneyMinor(r.dropsMinor)}`
-                            : "Closed"}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="py-6 text-center text-sm text-[var(--admin-text-faint)]">
-                  Set up a register to track cash drawers.
-                </p>
-              )}
-              {snap.drawers.needsAttention > 0 && (
-                <p className="mt-3 rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-3 py-2 text-xs text-[var(--admin-danger)]">
-                  {snap.drawers.needsAttention} drawer{snap.drawers.needsAttention === 1 ? "" : "s"} need review (closed blind or over/short).
-                </p>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* ── Operations status strip ──────────────────────────────────── */}
-        <Section title="Operations">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              label="Live menu items"
-              value={snap.publishedItems ?? "—"}
-              hint={snap.publishedItems !== null ? "Currently published" : "No menu published"}
-              accent="green"
-              href="/admin/menu-imports"
-              icon="🌿"
-            />
-            <StatCard
-              label="Low stock"
-              value={snap.lowStockCount}
-              hint={snap.lowStockCount > 0 ? "At/below reorder point" : "All above reorder point"}
-              accent={snap.lowStockCount > 0 ? "orange" : "muted"}
-              href="/admin/purchasing"
-              icon="📉"
-            />
-            {/* CVB-D20: the one-time menu upload is done, so this tile is now Leafly's: the same verdict as
-                Integrations -> Leafly, when Leafly last got the menu, and the last automatic check. */}
-            <StatCard
-              label="Leafly"
-              value={leaflyCard.value}
-              hint={leaflyCard.hint}
-              accent={leaflyCard.accent}
-              href={canOpenLeafly ? "/admin/integrations/leafly" : undefined}
-              icon="🍃"
-            />
-            <StatCard
-              label="Loyalty signups"
-              value={snap.loyaltySignups}
-              hint="New — awaiting review"
-              accent="gold"
-              href="/admin/loyalty-signups"
-              icon="⭐"
-            />
-          </div>
-
-          {/* Top categories inline (only when there's data) */}
-          {topCategories.length > 0 && (
-            <div className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-white/40">
-                Today&apos;s revenue by category
-              </p>
-              <div className="space-y-2">
-                {topCategories.map((c) => (
-                  <div key={c.label} className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 truncate text-sm capitalize text-[var(--admin-text)]">
-                      {c.label}
-                    </span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-[var(--admin-accent)]"
-                        style={{ width: `${Math.round(c.revenueShare * 100)}%` }}
-                      />
-                    </div>
-                    <span className="w-24 shrink-0 text-right text-xs text-[var(--admin-text-muted)]">
-                      {formatMoneyMinor(c.revenueMinorUnits)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Section>
+        <Suspense fallback={<CockpitSectionSkeleton title="Operations" />}>
+          <CockpitOpsSection basis={basis} canOpenLeafly={canOpenLeafly} />
+        </Suspense>
 
         {/* ── Explore your back office (quick navigation) ────────────────────
             A compact launcher to every workspace, role-filtered. Best-in-class
@@ -714,7 +876,7 @@ export default async function AdminDashboardPage({
             </Button>
           }
         >
-          <WorkspaceTour role={session.profile.role} variant="compact" />
+          <WorkspaceTour role={role} variant="compact" />
         </Section>
       </div>
     </div>

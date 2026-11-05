@@ -64,7 +64,8 @@ export async function loadOurDays(from: string, to: string): Promise<OurDay[]> {
   const fromISO = pacificWallTimeToUtcISO(from, "start");
   const toISO = pacificWallTimeToUtcISO(to, "end");
 
-  const [settings, cannabisSet, categoryLookup] = await Promise.all([getTaxSettings(), getCannabisCategorySet(), buildCategoryLookup(admin)]);
+  // PERF P3: the category lookup waits for the sold lines and reads only their keys.
+  const [settings, cannabisSet] = await Promise.all([getTaxSettings(), getCannabisCategorySet()]);
 
   type OrderRow = { id: string; placed_at: string; completed_at: string | null };
   const orderRows = await pagedAll<OrderRow>(
@@ -101,6 +102,8 @@ export async function loadOurDays(from: string, to: string): Promise<OurDay[]> {
         { concurrency: ADMIN_PAGED_CONCURRENCY },
       )
     : [];
+
+  const categoryLookup = await buildCategoryLookup(admin, lineRows.map((l) => l.product_id));
 
   // WAC 314-55-090(2) medical exemptions, joined exactly as the WA tax report does (order_id + product_sku).
   type ExemptRow = { order_id: string | null; product_sku: string | null; sales_tax_exempt: boolean | null; excise_tax_exempt: boolean | null };
