@@ -1194,3 +1194,34 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
   - Pg-check `scripts/recon/menu-copy-retention-0344-pg-check.sql`; rollback refuses while a key would lose its facts.
 - **After 0344:** the owner runs `scripts/ops/menu-copy-reclaim.sql` once (clear the backlog, then VACUUM FULL).
 - **App:** both publish paths call the prune after the response (`menu-retention-store.ts`; "not applied yet" is logged, never treated as done). `latest-menu-facts.ts` only walks when the function is missing, and the walk reads its own errors.
+
+**D188 as built (PERF P3, PR #1691).** The cockpit used to wait on one `Promise.all` of about 20 reads, so the slowest read held the whole page. Now:
+
+- The page itself awaits only the session and the URL. Each section (banners, flags, sales, taxes, refunds, hourly, orders, operations, and the My day, Morning report and Guided cash panels) has its own `<Suspense>` with a skeleton, so each one appears as soon as its own reads finish.
+- Shared reads use React `cache()`, so each runs once per request.
+- Display figures are kept briefly in a cache:
+  - today's figures for 30 s;
+  - finished days for 10 min;
+  - the low-stock count for 2 min.
+- A failed read is never stored ("cache the display, never cache the money"). Filings and exports always read live.
+- Fixes found along the way:
+  - The tax, LIQ-1295, CCRS, Sage and benchmark category lookups now read only the products actually sold.
+  - The low-stock count was silently capped at 1,000 of about 2,300 lots. It is now paged and checked.
+  - The sales, tax and filing reads now report their errors (rule 135).
+
+**D189 as built (PERF P4a/P4c, PRs #1692 and #1694).**
+
+- **Old menu copies:** every per-product read now reads one row per product (`loadLatestMenuFacts`) instead of every old menu copy. This covers:
+  - the return's tax snapshot (which also now reports a failed read instead of quietly treating the item as non-cannabis);
+  - the pickup ticket;
+  - the Sage "unmapped categories" list;
+  - the Leafly labels, which now use the live menu.
+- **Product tags:** the public menu's tags and "New" badges are read once a minute and shared by every page. Before, each page view ran 16 queries; `product_first_seen` alone took 287,000 calls. Tag edits and publishes clear the cache at once.
+- **Vendor row:** the 459 kB vendor row could not be traced to code from the sandbox. It is listed as a SQL check in the hand-off.
+
+**D190 as built (PERF P4b/P5, PRs #1693 and #1695).**
+
+- AGENTS.md rule 18: "Speed is a requirement, not a polish step."
+- `tests/compliance/perf-guard-menu-items-scope.test.ts` scans the whole repo, so every future `menu_items` read must be scoped to a menu version or a row id.
+- Vercel functions are pinned to `sfo1`, next to the database in us-west-1 (they ran in pdx1 before).
+- A cockpit read that misses its cache and runs past 800 ms logs one `[slow-read]` line in the Vercel logs, so a slow section names itself.
