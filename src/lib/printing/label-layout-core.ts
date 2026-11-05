@@ -547,6 +547,9 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
         const style = it.def.style;
         const pt = style === "title" ? f.title : style === "subtitle" ? f.subtitle : style === "price" ? f.price : f.line;
         const bold = style === "title" || style === "price";
+        // Never print below the legibility floor: report overflow so the
+        // caller drops a field instead of crushing every line.
+        if (pt < MIN_FONT_PT - 1e-9) return { out, used: y, overflow: true };
         const wr = wrapText(it.text, w, pt, bold, it.def.maxLines);
         const h = wr.lines.length * (pt / 72) * LINE_H;
         if (y + h > maxH + 1e-9) return { out, used: y, overflow: true };
@@ -643,7 +646,7 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
     return { widthIn: stock.acrossIn, heightIn: stock.feedIn, shape: stock.shape, blocks: [], code, severity: "block", messages, scale: 0 };
   }
 
-  if (dropped.length > 0) messages.push({ severity: "warn", code: "dropped", text: `Didn't fit, so left off: ${dropped.join(", ")}. Try a bigger label or a QR code.` });
+  if (dropped.length > 0) messages.push({ severity: "warn", code: "dropped", text: `Didn't fit, so left off: ${dropped.join(", ")}. ${t.symbology === "qr" ? "Try a bigger label or fewer lines." : "Try a bigger label or a QR code."}` });
   if (usedScale < 0.999) messages.push({ severity: "ok", code: "shrunk", text: `Text shrunk to ${Math.round(usedScale * 100)} % to fit.` });
   messages.push(...result.warn);
   if (result.bc && result.bc.ok) messages.push(...result.bc.messages);

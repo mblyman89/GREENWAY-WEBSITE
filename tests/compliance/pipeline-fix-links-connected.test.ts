@@ -743,7 +743,11 @@ describe("S31 D — repo-wide census: no dead admin link, no dropped query key",
   it("S31 link fixes stay fixed", () => {
     expect(read("src/app/admin/books/financial-statements/page.tsx")).toContain("/admin/books/accounts?entity=${entity}");
     expect(read("src/lib/accounting/books-guidance-core.ts")).toContain('href: "/admin/reports/excise"');
-    expect(read("src/components/admin/inventory/LabelPrintControls.tsx")).not.toContain("/admin/inventory?lot=");
+    // D177: the lot label controls moved into the Label Studio page; its
+    // "Back to lot" still opens the lot page, never the unfiltered list.
+    const lotLabel = read("src/app/admin/inventory/lots/[id]/label/page.tsx");
+    expect(lotLabel).not.toContain("/admin/inventory?lot=");
+    expect(lotLabel).toContain("href={`/admin/inventory/${lot.id}`}");
     const lot = read("src/app/admin/inventory/[id]/page.tsx");
     expect(lot).toContain('safeAdminPath(back, "")');
   });
