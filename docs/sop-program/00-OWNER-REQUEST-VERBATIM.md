@@ -1061,3 +1061,10 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 - **Confirm questions moved to the button click** on three forms that asked inside `onSubmit`. There, a Cancel left the form held busy and swallowed the next press.
 - **Public vendor ACH page:** its two buttons now show a busy state too, since it sits outside the admin keeper.
 - **CI guard:** every async iPad and admin button must carry `disabled=`.
+
+**D180 as built (S3).** Migration 0343 plus pure `count-integrity-core.ts` (36 self-tests) and 14 CI tests:
+- **The closer's count is never overwritten.** Reconcile and correction now write a new `reconciled_count_minor` column; a database trigger refuses any change to the closer's count or the second count once the drawer is closed. 0343 backfills old drawers by restoring the closer's original figure from the `drawer_counts` 'close' row.
+- **Money reads the reconciled count.** Posting, drawer figure, EOD sheet and deposit bag all read `countedCashMinor()` (reconciled, then second count, then closer). A closed drawer with no second count is withheld from the deposit bag with a plain message, so a bag is never built on an unchecked count.
+- **Hidden until the second count.** Registers, history, EOD, oversight attention and the activity feed show "Hidden until the second count is done" instead of the closer's figure.
+- **Timed, flagged, never blocked.** The second-count form carries a signed "opened at" token. A save under 2 minutes, an identical figure saved fast, the closer counting their own drawer, or a missing timer raises a loud red "Check this second count — have a third person count the drawer" on the reconcile card and history, plus a `drawer.second_count_flagged` audit. Staff are never blocked; the owner sees it.
+- **Owner action:** apply 0343 after 0341/0342 (MIGRATIONS_TO_RUN.md has the check query and rollback).

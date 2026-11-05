@@ -26,6 +26,8 @@ import { getSecondCountBreakdown, type SecondCountBreakdown } from "@/lib/regist
 import { drawerRef, parseViewedSessionId } from "@/lib/registers/drawer-close-slip-core";
 import { CountTableReadOnly } from "@/components/admin/registers/CountTableReadOnly";
 import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
+import { flagSentence, loudFlags, signOpenedToken, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
+import { keyedHasher } from "@/lib/security/keyed-hash";
 
 export const dynamic = "force-dynamic";
 
@@ -694,6 +696,8 @@ function ReconcileCard({
     closedByName: string | null;
     secondCountedByName: string | null;
     secondCountMinor: number | null;
+    secondCountFlags?: SecondCountFlag[];
+    secondCountSeconds?: number | null;
   };
   /** Owner D154: the saved second count's table, shown read only. */
   breakdown: SecondCountBreakdown | null;
@@ -753,6 +757,26 @@ function ReconcileCard({
             />
             {f.overShortMinor != null && <Row label="Over / short" value={overShortLabel(f.overShortMinor)} />}
           </dl>
+          {/* D180 (S3): a second count that looks copied, rushed or entered from
+              the closer's own sign-in is shown loud before anyone reconciles. */}
+          {loudFlags(item.secondCountFlags).length > 0 ? (
+            <div
+              role="alert"
+              data-testid="second-count-flags"
+              className="mb-3 rounded-[var(--admin-radius)] border-2 border-[var(--admin-danger)] bg-[var(--admin-danger)]/10 px-3 py-2 text-xs text-[var(--admin-danger)]"
+            >
+              <p className="font-bold uppercase tracking-wide">Check this second count</p>
+              <ul className="mt-1 list-disc pl-4">
+                {loudFlags(item.secondCountFlags).map((f) => (
+                  <li key={f}>{flagSentence(f, item.secondCountSeconds ?? null)}</li>
+                ))}
+              </ul>
+              <p className="mt-1">
+                Reconcile still works. If you are not sure, have a third person count the drawer before you reconcile.
+                Michael sees this warning in the drawer&apos;s history and the audit log.
+              </p>
+            </div>
+          ) : null}
           {breakdown ? (
             <div className="mb-3">
               <DisclosurePanel
@@ -955,6 +979,8 @@ function SecondCountCard({
 }: {
   item: { sessionId: string; registerName: string; businessDay: string; closedByName: string | null };
 }) {
+  // eslint-disable-next-line react-hooks/purity -- server component: the time this form is rendered IS the fact being signed
+  const openedToken = signOpenedToken(item.sessionId, Date.now(), keyedHasher("secondCountOpened"));
   return (
     <Card padding="md" accent="orange">
       <div className="mb-2 flex items-center justify-between">
@@ -967,10 +993,14 @@ function SecondCountCard({
         slip left with the till. Count the drawer by yourself,
         enter the bill quantities and your own PIN. Any employee can do this except
         {item.closedByName ? ` ${item.closedByName}` : " the person who closed it"}. The closer&apos;s count stays hidden
-        until you save. Reconcile opens after this.
+        until you save. Reconcile opens after this. Take your time: a count saved in under two minutes, or one that
+        matches the closer coin for coin that fast, is flagged to Michael.
       </p>
       <form action={secondCountAction} className="space-y-2">
         <input type="hidden" name="session_id" value={item.sessionId} />
+        {/* D180 (S3): the server signs the moment this blind form was shown,
+            so a count saved seconds later is flagged for the owner. */}
+        <input type="hidden" name="opened_token" value={openedToken} />
         <CountGrid totalLabel="Second count total" namePrefix="second_" />
         <label className="block text-xs text-[var(--admin-text-muted)]">
           Your PIN (the person doing the second count)

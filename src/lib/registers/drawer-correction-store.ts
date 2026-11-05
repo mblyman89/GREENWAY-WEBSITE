@@ -7,8 +7,11 @@ import "server-only";
  * rules need (sealed bag? ledger entry?) and writes the change with a
  * compare-and-set, so two people correcting at once cannot both land.
  *
- * No migration: the corrected figure goes in closing_count_minor /
- * over_short_minor / over_short_reason, the old and new figures are appended
+ * D180 (S3, migration 0343): the corrected figure goes in
+ * reconciled_count_minor, NEVER closing_count_minor (the closer's own blind
+ * count is kept exactly as typed; a 0343 trigger enforces it). Before 0343 is
+ * applied the old path (closing_count_minor) is the fallback. over_short_minor
+ * / over_short_reason change too, and the old and new figures are appended
  * to the drawer's notes, and the full before/after goes in the audit log
  * (the caller records it). The books are not touched: a drawer with a ledger
  * entry is refused.
@@ -17,6 +20,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getSession } from "@/lib/registers/store";
 import { tillCloseSourceRef } from "@/lib/registers/drawer-posting-service";
+import { countedCashMinor } from "@/lib/registers/count-integrity-core";
 import { checkCorrection, correctionNote, appendNote, correctedReason } from "@/lib/registers/drawer-correction-core";
 
 export type CorrectionResult =
@@ -80,7 +84,7 @@ export async function correctReconciledDrawer(opts: {
 
   const check = checkCorrection({
     status: session.status,
-    currentCountMinor: session.closing_count_minor,
+    currentCountMinor: countedCashMinor(session),
     expectedMinor: session.expected_close_minor,
     secondMinor: session.second_count_minor ?? null,
     basis: opts.basis,
@@ -91,7 +95,8 @@ export async function correctReconciledDrawer(opts: {
   });
   if (!check.ok) return check;
 
-  const oldCount = session.closing_count_minor as number;
+  const oldCount = countedCashMinor(session) as number;
+  const hasReconciledCol = typeof session.reconciled_count_minor === "number";
   const note = correctionNote({
     whenLabel: opts.whenLabel,
     who: opts.who,
@@ -105,21 +110,27 @@ export async function correctReconciledDrawer(opts: {
   const newReason = correctedReason(oldReason, check.reason);
 
   const admin = createSupabaseAdminClient();
-  const update = (withReason: boolean) =>
-    admin
+  const missingCol = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
+  const update = (with0343: boolean, withReason: boolean) => {
+    let q = admin
       .from("drawer_sessions")
       .update({
-        closing_count_minor: check.newCountMinor,
+        ...(with0343 ? { reconciled_count_minor: check.newCountMinor } : { closing_count_minor: check.newCountMinor }),
         over_short_minor: check.newOverShortMinor,
         notes: appendNote(session.notes, note),
         ...(withReason ? { over_short_reason: newReason, over_short_reason_by: opts.correctedBy } : {}),
       })
       .eq("id", opts.sessionId)
-      .eq("status", "reconciled")
-      .eq("closing_count_minor", oldCount)
-      .select("id");
-  let { data, error } = await update(true);
-  if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await update(false));
+      .eq("status", "reconciled");
+    // Compare-and-set on the figure the person was looking at.
+    if (!with0343) q = q.eq("closing_count_minor", oldCount);
+    else if (hasReconciledCol) q = q.eq("reconciled_count_minor", oldCount);
+    else q = q.is("reconciled_count_minor", null).eq("closing_count_minor", oldCount);
+    return q.select("id");
+  };
+  let { data, error } = await update(true, true);
+  if (missingCol(error)) ({ data, error } = await update(false, true));
+  if (missingCol(error)) ({ data, error } = await update(false, false));
   if (error) return { ok: false, error: `${error.message} Nothing was changed.` };
   if (!data || (data as unknown[]).length === 0) {
     return { ok: false, error: "Someone changed this drawer a moment ago. Reload the page. Nothing was changed." };

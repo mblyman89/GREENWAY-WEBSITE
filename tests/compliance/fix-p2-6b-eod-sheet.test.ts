@@ -217,7 +217,7 @@ describe("2.6b · eodData returns failed reads instead of empty", () => {
   it("a whole day reads with no problems and builds the sheet", async () => {
     TABLES.registers = { data: [{ id: "r1", name: "Sales Register 1" }], error: null };
     TABLES.drawer_sessions = {
-      data: [{ id: "s1", register_id: "r1", status: "closed", opening_count_minor: 16750, closing_count_minor: 96750, over_short_minor: null }],
+      data: [{ id: "s1", register_id: "r1", status: "closed", opening_count_minor: 16750, closing_count_minor: 96750, second_count_minor: 96750, over_short_minor: null }],
       error: null,
     };
     TABLES.drawer_drops = { data: [{ session_id: "s1", amount_minor: 50000 }], error: null };

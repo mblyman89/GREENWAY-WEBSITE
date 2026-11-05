@@ -1,4 +1,5 @@
 import "server-only";
+import { cleanFlags, closerCountVisible, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
 
 /**
  * src/lib/registers/oversight.ts
@@ -127,6 +128,10 @@ export type AttentionItem = {
   secondCountedByName: string | null;
   /** Fix Phase 2.2 (G-01, 0314): the second person's count, cents. */
   secondCountMinor: number | null;
+  /** D180 (0343): second-count warnings (fast / identical_and_fast / closer_login / no_timer). */
+  secondCountFlags: SecondCountFlag[];
+  /** D180: seconds from the blind form opening to the save, when known. */
+  secondCountSeconds: number | null;
 };
 
 export type ActivityKind =
@@ -350,11 +355,18 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         kind: "reconcile",
         businessDay: s.business_day,
         expectedCloseMinor: s.expected_close_minor,
-        closingCountMinor: s.closing_count_minor,
+        // D180: the closer's blind count never reaches the page before the
+        // second count (the card shows only the blind form until then).
+        closingCountMinor: closerCountVisible(s) ? s.closing_count_minor : null,
         tipsMinor: s.tips_minor ?? null,
         closedByName: nameFor(s.closed_by),
         secondCountedByName: nameFor(s.second_counted_by ?? null),
         secondCountMinor: s.second_count_minor ?? null,
+        secondCountFlags: cleanFlags(s.second_count_flags),
+        secondCountSeconds:
+          s.second_count_opened_at && s.second_counted_at
+            ? Math.max(0, Math.floor((Date.parse(s.second_counted_at) - Date.parse(s.second_count_opened_at)) / 1000))
+            : null,
       });
     }
   }
@@ -429,7 +441,8 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         atLabel: pacificClock(s.closed_at),
         title: `${s.register_name} closed`,
         detail: s.closed_by ? `by ${nameFor(s.closed_by)}` : null,
-        amountMinor: s.closing_count_minor,
+        // D180: no figure in the feed while the drawer waits for its second count.
+        amountMinor: closerCountVisible(s) ? s.closing_count_minor : null,
       });
     }
     if (s.reconciled_at && s.status === "reconciled") {

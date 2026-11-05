@@ -121,7 +121,9 @@ describe("D127: correct a reconciled drawer", () => {
     expect(page).toContain("correctReconciledDrawerAction");
     expect(page).toContain('can(staff.profile.role, "registers.warnings")');
   });
-  it("no migration was needed", () => {
-    expect(read("src/lib/registers/drawer-correction-store.ts")).toContain("No migration");
+  it("D180 supersedes 'no migration': the correction lands on reconciled_count_minor (0343), never the closer's count", () => {
+    const store = read("src/lib/registers/drawer-correction-store.ts");
+    expect(store).toContain("reconciled_count_minor: check.newCountMinor");
+    expect(store).toContain("currentCountMinor: countedCashMinor(session)");
   });
 });

@@ -520,7 +520,7 @@ describe("S-14 wiring and guards", () => {
   });
   it("no migration was added by this slice", () => {
     const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
-    expect(migs[migs.length - 1]).toBe("0342_label_studio.sql"); // D161 added 0339, D170 O1 added 0340, D170 O2/O3 added 0341 after this slice, D177 S6 added 0342
+    expect(migs[migs.length - 1]).toBe("0343_drawer_count_integrity.sql"); // D161 added 0339, D170 O1 added 0340, D170 O2/O3 added 0341 after this slice, D177 S6 added 0342, D180 S3 added 0343
   });
   it("the cleanup purpose is one the database allows (0247)", () => {
     expect(read("supabase/migrations/0247_ccrs_ledger.sql")).toContain("'weekly', 'cleanup:stale', 'cleanup:cost', 'cleanup:area'");

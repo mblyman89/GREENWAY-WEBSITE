@@ -1,4 +1,5 @@
 import "server-only";
+import { countedCashMinor } from "@/lib/registers/count-integrity-core";
 
 /**
  * src/lib/registers/drawer-posting-service.ts
@@ -153,8 +154,11 @@ export async function postDrawerCloseForSession(
   // nobody ever counted. Coalescing the second into the first is exactly the
   // D-72 shape moved into cash, so all three are checked here and none of them
   // is defaulted below.
+  // D180: the counted cash is the count the drawer was reconciled on
+  // (reconciled_count_minor, 0343), the closer's own count for older drawers.
+  const countedMinor = countedCashMinor(session);
   if (
-    session.closing_count_minor === null ||
+    countedMinor === null ||
     session.expected_close_minor === null ||
     session.opening_count_minor === null
   ) {
@@ -187,7 +191,7 @@ export async function postDrawerCloseForSession(
     openingFloatMinor: openingMinor,
     cashSalesMinor,
     dropsMinor,
-    countedMinor: session.closing_count_minor,
+    countedMinor,
     // The float stays in the drawer overnight: migration 0077 pins every
     // register's default float at 16750 and the drawers are not emptied to the
     // vault nightly. Only the takings go to the safe.

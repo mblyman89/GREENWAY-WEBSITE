@@ -38,6 +38,9 @@ export const KEYED_HASH_PURPOSES = {
   // R41 S3: the duplicate-file key (sorted routing|account|cents of every
   // entry) holds account numbers, so ach_files keeps only this keyed hash.
   achFileEntrySet: "greenway/r41/ach-file-entry-set/v1",
+  // D180 S3: signs the moment the blind second-count form was shown, so
+  // "saved 40 s after opening" is a fact the page cannot fake.
+  secondCountOpened: "greenway/d180/second-count-opened/v1",
 } as const;
 export type KeyedHashPurpose = keyof typeof KEYED_HASH_PURPOSES;
 

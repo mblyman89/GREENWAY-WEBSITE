@@ -30,6 +30,8 @@ import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 import { checkZeroClose, countBasisNeeded, resolveCountBasis } from "@/lib/registers/drawer-correction-core";
 import { correctReconciledDrawer } from "@/lib/registers/drawer-correction-store";
 import { getSession, getRegister } from "@/lib/registers/store";
+import { flagSentence, loudFlags, readOpenedToken } from "@/lib/registers/count-integrity-core";
+import { keyedHasher } from "@/lib/security/keyed-hash";
 import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
 import {
   postDrawerCloseForSession,
@@ -238,7 +240,12 @@ export async function secondCountAction(formData: FormData): Promise<void> {
   const denoms = parseDenoms((k) => formData.get(`second_${k}`) as string | null);
   if (denomTotalMinor(denoms) <= 0) fail("Enter the bill quantities you counted.");
 
-  const result = await recordSecondCount({ sessionId, employeeId: counter.id, denoms });
+  // D180 (S3): when was the blind form shown (server-signed), and who is
+  // signed in? Both only WARN: a fast, copied-looking or closer-login count
+  // is saved, flagged loud for the owner and audited, never refused.
+  const openedAtMs = readOpenedToken(str(formData, "opened_token"), sessionId, Date.now(), keyedHasher("secondCountOpened"));
+  const loginEmployeeId = await employeeIdForStaff(session.profile.id);
+  const result = await recordSecondCount({ sessionId, employeeId: counter.id, denoms, openedAtMs, loginEmployeeId });
   if (!result.ok) {
     await recordAudit({
       actorId: session.userId,
@@ -264,9 +271,28 @@ export async function secondCountAction(formData: FormData): Promise<void> {
       secondCountMinor: result.secondMinor ?? null,
       countsAgree: cmp.state === "match",
       countDiffMinor: cmp.diffMinor,
+      // D180: the integrity warnings (also on the drawer row once 0343 is applied).
+      flags: result.flags ?? [],
+      secondsFormOpenToSave: result.seconds ?? null,
+      loginEmployeeId,
+      flagsSavedOnDrawer: result.flagsSaved ?? false,
       ...(result.countRowWarning ? { countRowWarning: result.countRowWarning } : {}),
     },
   });
+  if (loudFlags(result.flags).length > 0) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.second_count_flagged",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: {
+        flags: loudFlags(result.flags),
+        sentences: loudFlags(result.flags).map((f) => flagSentence(f, result.seconds ?? null)),
+        secondCountedByName: counter.full_name,
+      },
+    });
+  }
   revalidatePath(BASE);
   // Owner D154 (2026-11-03): carry the drawer id back so the page can offer
   // "See the numbers you entered" (read only) right after saving.
@@ -417,6 +443,9 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
       over_short_warning: result.warning ?? false,
       over_short_reason: result.reason ?? null,
       over_short_reason_saved: result.reasonSaved ?? true,
+      // D180: the count the drawer was reconciled on (closer's count kept as typed).
+      counted_cash_minor: result.countedMinor ?? null,
+      reconciled_count_saved: result.reconciledColSaved ?? false,
       // Owner D126: the count the drawer was reconciled on, when the two counts disagreed.
       ...(basisChoice
         ? {
@@ -598,9 +627,12 @@ export async function correctReconciledDrawerAction(formData: FormData): Promise
     action: "drawer.reconcile_corrected",
     entityType: "drawer_session",
     entityId: sessionId,
-    before: { closing_count_minor: fixed.oldCountMinor, over_short_minor: fixed.oldOverShortMinor, over_short_reason: fixed.oldReason },
+    // D180: the correction changes the count the drawer is reconciled on
+    // (reconciled_count_minor); the closer's own blind count is never changed.
+    before: { counted_cash_minor: fixed.oldCountMinor, over_short_minor: fixed.oldOverShortMinor, over_short_reason: fixed.oldReason },
     after: {
-      closing_count_minor: fixed.newCountMinor,
+      counted_cash_minor: fixed.newCountMinor,
+      closer_count_unchanged: true,
       over_short_minor: fixed.newOverShortMinor,
       over_short_reason: fixed.newReason,
       expected_minor: fixed.expectedMinor,

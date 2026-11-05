@@ -3751,3 +3751,30 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0342_label_studio.rollback.sql`. It refuses to run once any
   print has been recorded (the print history is an audit trail).
+
+- [ ] **`supabase/migrations/0343_drawer_count_integrity.sql`** — D180 S3 (blind-count integrity, "beating the
+  fraud triangle"). Adds to `public.drawer_sessions`: `reconciled_count_minor` (the count the drawer was
+  reconciled on; books / deposit / EOD use it), `second_count_opened_at`, `second_count_flags`
+  (`fast`, `identical_and_fast`, `closer_login`, `no_timer`) and `second_count_entered_by_login`.
+  Backfills every reconciled drawer: `reconciled_count_minor` := the figure the books were posted on, and
+  `closing_count_minor` is restored to the closer's own blind count (from the `drawer_counts` 'close' row)
+  where an old reconcile or correction had replaced it. Over/short and the books do not change.
+  Adds trigger `drawer_sessions_counts_immutable`: after close the closer's count can never change, and a
+  saved second count can never change.
+
+  Until it is applied, the app works as before (it falls back when the columns are missing), the closer's
+  count is still hidden until the second count, and the second-count warnings are kept in the audit log only.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) filter (where reconciled_count_minor is not null) as reconciled_rows,
+         count(*) filter (where status in ('reconciled','verified') and reconciled_count_minor is null) as missing,  -- 0
+         (select count(*) from pg_trigger where tgname = 'drawer_sessions_counts_immutable') as trigger_on         -- 1
+    from public.drawer_sessions;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0343_drawer_count_integrity.rollback.sql` (puts the
+  reconciled figure back in `closing_count_minor` first, so the pre-0343 app still posts the right money).

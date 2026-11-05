@@ -13,6 +13,7 @@ import { businessDayFor } from "@/lib/staffing/time";
 import { type DenomCounts, denomTotalMinor, expectedClose, overShort } from "@/lib/registers/cash";
 import { checkSecondCounter, closeErrorMessage } from "@/lib/registers/second-count-core";
 import { checkOverShortReason, isOverShortWarning } from "@/lib/registers/over-short-warning-core";
+import { DENOM_KEYS, secondCountFlags, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
 
 export type Register = {
   id: string;
@@ -58,6 +59,14 @@ export type DrawerSession = {
   over_short_reason_by?: string | null;
   /** The manager (employee record) who reconciled. */
   reconciled_by?: string | null;
+  /** D180 (0343): the count the drawer was reconciled on. Use countedCashMinor() to read money. */
+  reconciled_count_minor?: number | null;
+  /** D180 (0343): when the blind second-count form was shown. */
+  second_count_opened_at?: string | null;
+  /** D180 (0343): warnings worked out when the second count was saved (cleanFlags() to read). */
+  second_count_flags?: string[] | null;
+  /** D180 (0343): the back-office login's employee record that entered the second count. */
+  second_count_entered_by_login?: string | null;
   opened_at: string | null;
   closed_at: string | null;
   reconciled_at: string | null;
@@ -330,12 +339,22 @@ export async function recordSecondCount(opts: {
   sessionId: string;
   employeeId: string;
   denoms: DenomCounts;
+  /** D180: when the blind form was shown (verified token), or null. */
+  openedAtMs?: number | null;
+  /** D180: the signed-in back-office login's employee record, or null. */
+  loginEmployeeId?: string | null;
 }): Promise<{
   ok: boolean;
   error?: string;
   secondMinor?: number;
   closingMinor?: number | null;
   countRowWarning?: string;
+  /** D180: warnings worked out at save (never a block). */
+  flags?: SecondCountFlag[];
+  /** D180: seconds from form open to save, when known. */
+  seconds?: number | null;
+  /** D180: false before migration 0343 (the flags are in the audit entry only). */
+  flagsSaved?: boolean;
 }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const session = await getSession(opts.sessionId);
@@ -375,12 +394,68 @@ export async function recordSecondCount(opts: {
     ...opts.denoms,
     total_minor: secondMinor,
   });
+  // D180 (S3): fast / copied / closer-login warnings. Worked out AFTER the
+  // count is safely saved, written separately so a missing 0343 column can
+  // never lose the count itself; the caller audits them either way.
+  const savedAtMs = Date.now();
+  const closerDenoms = await closeCountDenoms(opts.sessionId);
+  const verdict = secondCountFlags({
+    closedAtIso: session.closed_at,
+    openedAtMs: opts.openedAtMs ?? null,
+    savedAtMs,
+    closerDenoms,
+    secondDenoms: opts.denoms,
+    loginEmployeeId: opts.loginEmployeeId ?? null,
+    closerEmployeeId: session.closed_by,
+  });
+  let flagsSaved = false;
+  try {
+    const { error: flagError } = await admin
+      .from("drawer_sessions")
+      .update({
+        second_count_flags: verdict.flags,
+        second_count_opened_at: opts.openedAtMs != null ? new Date(opts.openedAtMs).toISOString() : null,
+        second_count_entered_by_login: opts.loginEmployeeId ?? null,
+      })
+      .eq("id", opts.sessionId);
+    flagsSaved = !flagError;
+  } catch {
+    flagsSaved = false;
+  }
   return {
     ok: true,
     secondMinor,
     closingMinor: session.closing_count_minor ?? null,
+    flags: verdict.flags,
+    seconds: verdict.seconds,
+    flagsSaved,
     ...(rowError ? { countRowWarning: `second-count breakdown not saved: ${rowError.message}` } : {}),
   };
+}
+
+/**
+ * D180: the closer's own denomination table (drawer_counts 'close'), for the
+ * "identical and fast" check only. Server-side; never shown to the second
+ * counter. Null when it was not saved.
+ */
+async function closeCountDenoms(sessionId: string): Promise<DenomCounts | null> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("drawer_counts")
+    .select("pennies, nickels, dimes, quarters, half_dollars, dollar_coins, ones, twos, fives, tens, twenties, fifties, hundreds")
+    .eq("session_id", sessionId)
+    .eq("count_type", "close")
+    .order("counted_at", { ascending: true })
+    .limit(1)
+    .maybeSingle<Record<string, unknown>>();
+  if (error || !data) return null;
+  const n = (v: unknown) => {
+    const x = Number(v ?? 0);
+    return Number.isFinite(x) ? Math.max(0, Math.floor(x)) : 0;
+  };
+  const out = {} as DenomCounts;
+  for (const k of DENOM_KEYS) out[k] = n(data[k]);
+  return out;
 }
 
 /** A saved second count's denomination table (owner D154). */
@@ -472,9 +547,9 @@ export async function reconcileDrawer(opts: {
   overShortReason?: string | null;
   /**
    * Owner D126: the counts were more than $5.00 apart and the manager chose
-   * the count to reconcile on. `countedMinor` replaces closing_count_minor
-   * (compare-and-set on the original), and `note` is appended to the drawer's
-   * notes so the closer's original figure stays on the record.
+   * the count to reconcile on. D180: `countedMinor` is saved as
+   * reconciled_count_minor (compare-and-set on the closer's original, which is
+   * never changed), and `note` is appended to the drawer's notes.
    */
   countBasis?: { countedMinor: number; originalClosingMinor: number; note: string };
 }): Promise<{
@@ -488,6 +563,10 @@ export async function reconcileDrawer(opts: {
   reasonSaved?: boolean;
   /** True when the over/short is more than $5.00 (a warning, D7). */
   warning?: boolean;
+  /** D180: the count the drawer was reconciled on, cents. */
+  countedMinor?: number;
+  /** D180: false before migration 0343 (the figure went in closing_count_minor the old way). */
+  reconciledColSaved?: boolean;
 }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
@@ -513,13 +592,15 @@ export async function reconcileDrawer(opts: {
   if (!reasonCheck.ok) return { ok: false, error: reasonCheck.error, overShortMinor: os, expectedMinor: expected };
   const reason = reasonCheck.reason;
 
+  // D180 (S3): the closer's blind count is NEVER overwritten. The count the
+  // drawer is reconciled on goes in reconciled_count_minor (migration 0343).
+  // Only before 0343 exists does a chosen basis still replace
+  // closing_count_minor (the pre-0343 books read that column), and the note
+  // keeps the closer's original figure on the record either way.
   const base = {
     status: "reconciled",
     ...(opts.countBasis
-      ? {
-          closing_count_minor: counted,
-          notes: [session.notes?.trim(), `Reconcile: ${opts.countBasis.note}`].filter(Boolean).join("\n"),
-        }
+      ? { notes: [session.notes?.trim(), `Reconcile: ${opts.countBasis.note}`].filter(Boolean).join("\n") }
       : {}),
     expected_close_minor: expected,
     over_short_minor: os,
@@ -528,32 +609,51 @@ export async function reconcileDrawer(opts: {
   };
   const figureCols = { cash_sales_minor: opts.cashSalesMinor, refunds_paid_minor: opts.refundsPaidMinor };
   const reasonCols = { over_short_reason: reason, over_short_reason_by: reason ? opts.reconciledBy : null };
-  const write = (withFigure: boolean, withReason: boolean) => {
+  const write = (with0343: boolean, withFigure: boolean, withReason: boolean) => {
+    const countCols = with0343
+      ? { reconciled_count_minor: counted }
+      : opts.countBasis
+        ? { closing_count_minor: counted }
+        : {};
     let q = admin
       .from("drawer_sessions")
-      .update({ ...base, ...(withFigure ? figureCols : {}), ...(withReason ? reasonCols : {}) })
+      .update({ ...base, ...countCols, ...(withFigure ? figureCols : {}), ...(withReason ? reasonCols : {}) })
       .eq("id", opts.sessionId)
       .eq("status", "closed");
-    // D126: only replace the count the manager was looking at.
+    // D126: only reconcile on the count the manager was looking at.
     if (opts.countBasis) q = q.eq("closing_count_minor", opts.countBasis.originalClosingMinor);
     return q.select("id");
   };
   const missingCol = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
   let reasonSaved = true;
-  let { data, error } = await write(true, true);
-  // Before migration 0315 the reason columns do not exist yet: the reconcile
-  // still lands and the reason is kept in the audit entry (the caller says so
-  // on the banner). Before 0313 the two figure columns are missing as well.
+  let reconciledColSaved = true;
+  let { data, error } = await write(true, true, true);
+  // Before 0343 reconciled_count_minor is missing; before 0315 the reason
+  // columns; before 0313 the two figure columns. Migrations apply in order,
+  // so each step back drops the newest columns: the reconcile still lands.
   if (missingCol(error)) {
-    reasonSaved = false;
-    ({ data, error } = await write(true, false));
-    if (missingCol(error)) ({ data, error } = await write(false, false));
+    reconciledColSaved = false;
+    ({ data, error } = await write(false, true, true));
+    if (missingCol(error)) {
+      reasonSaved = false;
+      ({ data, error } = await write(false, true, false));
+      if (missingCol(error)) ({ data, error } = await write(false, false, false));
+    }
   }
   if (error) return { ok: false, error: error.message };
   if (!data || (data as unknown[]).length === 0) {
     return { ok: false, error: "This drawer was reconciled by someone else a moment ago. Nothing was changed. Reload the page." };
   }
-  return { ok: true, overShortMinor: os, expectedMinor: expected, reason, reasonSaved: reason ? reasonSaved : true, warning: isOverShortWarning(os) };
+  return {
+    ok: true,
+    overShortMinor: os,
+    expectedMinor: expected,
+    countedMinor: counted,
+    reconciledColSaved,
+    reason,
+    reasonSaved: reason ? reasonSaved : true,
+    warning: isOverShortWarning(os),
+  };
 }
 
 /*
