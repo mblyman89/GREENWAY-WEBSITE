@@ -56,6 +56,7 @@ import "server-only";
  */
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getPublishedVersion } from "@/lib/pos/menu-version";
 import {
   makeProductIdentity,
   type ProductIdentity,
@@ -101,6 +102,20 @@ export async function loadProductIdentities(
     return out;
   }
 
+  // PERF P4: with no version given, read the PUBLISHED version's copy. Without
+  // a version the read matched EVERY menu copy ever written for each key
+  // (tens to hundreds per product), unpaged - slow, and silently capped at
+  // PostgREST's 1,000 rows, so later keys in a chunk lost their labels. One
+  // copy per key is also what these labels describe: the live menu.
+  let versionId = typeof menuVersionId === "string" && menuVersionId.length > 0 ? menuVersionId : null;
+  if (versionId === null) {
+    try {
+      versionId = (await getPublishedVersion())?.id ?? null;
+    } catch {
+      versionId = null;
+    }
+  }
+
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK);
 
@@ -113,8 +128,13 @@ export async function loadProductIdentities(
           "source_item_id, name, product_name, brand_name, vendor_name, category, strain_name",
         )
         .in("source_item_id", chunk);
-      if (typeof menuVersionId === "string" && menuVersionId.length > 0) {
-        q = q.eq("menu_version_id", menuVersionId);
+      if (versionId !== null) {
+        q = q.eq("menu_version_id", versionId);
+      } else {
+        // No live menu at all (a fresh database): newest copy first, so the
+        // first row per key below is the newest; paged nowhere because a
+        // database with no published menu holds only staged copies.
+        q = q.order("created_at", { ascending: false }).limit(CHUNK * 5);
       }
       const res = await q;
       rows = (res.data as Array<Record<string, unknown>> | null) ?? [];
@@ -144,7 +164,7 @@ export async function loadProductIdentities(
 
     for (const row of rows) {
       const id = String(row.source_item_id ?? "").trim();
-      if (id.length === 0) continue;
+      if (id.length === 0 || out.has(id)) continue;
       out.set(
         id,
         makeProductIdentity({

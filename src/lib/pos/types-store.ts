@@ -153,27 +153,6 @@ export async function getInventoryType(id: string): Promise<InventoryType | null
 }
 
 /**
- * Count how many live inventory lots reference a given website category, so the
- * UI can warn before deactivating / refuse to hard-delete an in-use category.
- */
-export async function countWebsiteCategoryUsage(value: string): Promise<number> {
-  if (!isSupabaseServiceConfigured) return 0;
-  const admin = createSupabaseAdminClient();
-  // menu_items.category and inventory_types.website_category both reference it.
-  const [{ count: menuCount }, { count: invTypeCount }] = await Promise.all([
-    admin
-      .from("menu_items")
-      .select("source_item_id", { count: "exact", head: true })
-      .eq("category", value),
-    admin
-      .from("inventory_types")
-      .select("id", { count: "exact", head: true })
-      .eq("website_category", value),
-  ]);
-  return (menuCount ?? 0) + (invTypeCount ?? 0);
-}
-
-/**
  * Count how many live inventory lots reference a given inventory-type key (by
  * the free-text inventory_lots.category, normalised). Used by the deletion guard.
  */
