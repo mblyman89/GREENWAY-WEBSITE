@@ -1,0 +1,213 @@
+{
+  "_about": "D177 S2: every Label Studio barcode case (src/lib/printing/label-barcode-cases.ts) was rasterised by cairosvg at the printer's own dpi (one pixel per printer dot) and decoded with zxing-cpp 3.1.1, an independent decoder. svgSha256 pins the exact drawing. If it changes, re-run scripts/compliance/label-barcode-roundtrip.py.",
+  "items": [
+    {
+      "id": "c128-lot16-2x1",
+      "payload": "6034772160010001",
+      "symbology": "code128",
+      "dpi": 203,
+      "xDots": 2,
+      "svgSha256": "bcea7b52ec13b30b44bef7a6c01bcd745a5a64606eaae6519cb860a299aa9e44",
+      "zxing": "6034772160010001",
+      "format": "Code128",
+      "rasterPx": [
+        346,
+        91
+      ],
+      "decoded": "6034772160010001",
+      "ok": true
+    },
+    {
+      "id": "c128-alnum-4x6",
+      "payload": "WA-LOT-2026-0412",
+      "symbology": "code128",
+      "dpi": 203,
+      "xDots": 3,
+      "svgSha256": "60114c4b8eede6e4b5c3a2574373eee9d030922f754f5e33f25eaa48b121a310",
+      "zxing": "WA-LOT-2026-0412",
+      "format": "Code128",
+      "rasterPx": [
+        735,
+        182
+      ],
+      "decoded": "WA-LOT-2026-0412",
+      "ok": true
+    },
+    {
+      "id": "c128-alnum-3x1",
+      "payload": "WA1.ABCDEFG",
+      "symbology": "code128",
+      "dpi": 203,
+      "xDots": 3,
+      "svgSha256": "d9ee98a19aff533400b5055ef05437b730f55eeb24f3fe3abdb34276992519ab",
+      "zxing": "WA1.ABCDEFG",
+      "format": "Code128",
+      "rasterPx": [
+        570,
+        91
+      ],
+      "decoded": "WA1.ABCDEFG",
+      "ok": true
+    },
+    {
+      "id": "c128-sku-225",
+      "payload": "GLS-BONG-14IN",
+      "symbology": "code128",
+      "dpi": 203,
+      "xDots": 2,
+      "svgSha256": "29c1f8e0cb32b269c245577e49aa59f75b2b416988fd06f3130e3e6fc98921d8",
+      "zxing": "GLS-BONG-14IN",
+      "format": "Code128",
+      "rasterPx": [
+        428,
+        101
+      ],
+      "decoded": "GLS-BONG-14IN",
+      "ok": true
+    },
+    {
+      "id": "c128-lower",
+      "payload": "nc-sku-77",
+      "symbology": "code128",
+      "dpi": 203,
+      "xDots": 2,
+      "svgSha256": "f6bc707727137a16ce4ce01904e4069421becdbc4a919a55d06c211bf38d6d2a",
+      "zxing": "nc-sku-77",
+      "format": "Code128",
+      "rasterPx": [
+        368,
+        91
+      ],
+      "decoded": "nc-sku-77",
+      "ok": true
+    },
+    {
+      "id": "upca-225",
+      "payload": "036000291452",
+      "symbology": "upc_ean",
+      "dpi": 203,
+      "xDots": 3,
+      "svgSha256": "8bb2f2c240a478340fa6298e80e4ca3faf04e23c40dd38fbec6b1b3261b7c291",
+      "zxing": "0036000291452",
+      "format": "UPCA",
+      "rasterPx": [
+        339,
+        121
+      ],
+      "decoded": "036000291452",
+      "ok": true
+    },
+    {
+      "id": "upca-75pct",
+      "payload": "036000291452",
+      "symbology": "upc_ean",
+      "dpi": 203,
+      "xDots": 2,
+      "svgSha256": "8ff1a587766663a919e1045e01d0049ee68bdffd9db1945b50506001aa4c52f6",
+      "zxing": "0036000291452",
+      "format": "UPCA",
+      "rasterPx": [
+        226,
+        101
+      ],
+      "decoded": "036000291452",
+      "ok": true
+    },
+    {
+      "id": "ean13-2x1",
+      "payload": "4006381333931",
+      "symbology": "upc_ean",
+      "dpi": 203,
+      "xDots": 3,
+      "svgSha256": "395e6370e793f48988c99341f0db06ad0a514584f05ee9530fb3ab6058cb59a2",
+      "zxing": "4006381333931",
+      "format": "EAN13",
+      "rasterPx": [
+        339,
+        101
+      ],
+      "decoded": "4006381333931",
+      "ok": true
+    },
+    {
+      "id": "ean8-2x1",
+      "payload": "96385074",
+      "symbology": "upc_ean",
+      "dpi": 203,
+      "xDots": 4,
+      "svgSha256": "cfbe50e61961c7ebd82f35881639e59c5049161b3e0080cc741020be1cc3a8d1",
+      "zxing": "96385074",
+      "format": "EAN8",
+      "rasterPx": [
+        324,
+        101
+      ],
+      "decoded": "96385074",
+      "ok": true
+    },
+    {
+      "id": "qr-lot-small",
+      "payload": "WA-LOT-2026-0412",
+      "symbology": "qr",
+      "dpi": 203,
+      "xDots": 3,
+      "svgSha256": "ef67cc701a840c2f574bcd9ac91190fb7f830687783e6247dfa92e946dcf8f0b",
+      "zxing": "WA-LOT-2026-0412",
+      "format": "QRCode",
+      "rasterPx": [
+        99,
+        99
+      ],
+      "decoded": "WA-LOT-2026-0412",
+      "ok": true
+    },
+    {
+      "id": "qr-lot-2x2",
+      "payload": "6034772160010001",
+      "symbology": "qr",
+      "dpi": 203,
+      "xDots": 7,
+      "svgSha256": "426f4ffb3139e6e3f4073c98a08e5547d7004b94321466daacbfd89d7e2e9175",
+      "zxing": "6034772160010001",
+      "format": "QRCode",
+      "rasterPx": [
+        231,
+        231
+      ],
+      "decoded": "6034772160010001",
+      "ok": true
+    },
+    {
+      "id": "qr-sku-H",
+      "payload": "GLS-BONG-14IN",
+      "symbology": "qr",
+      "dpi": 203,
+      "xDots": 6,
+      "svgSha256": "abba2a745c2cef9ff0a117fae2b699bbde1611d7d1f3682153e988861e6a1b32",
+      "zxing": "GLS-BONG-14IN",
+      "format": "QRCode",
+      "rasterPx": [
+        198,
+        198
+      ],
+      "decoded": "GLS-BONG-14IN",
+      "ok": true
+    },
+    {
+      "id": "c128-300dpi",
+      "payload": "WA-LOT-2026-0412",
+      "symbology": "code128",
+      "dpi": 300,
+      "xDots": 3,
+      "svgSha256": "8b3f6b57b6b5a04e23bf2f27b2b37c0b45cdabaa1bdbeefa3f09e17ce0dd0b2c",
+      "zxing": "WA-LOT-2026-0412",
+      "format": "Code128",
+      "rasterPx": [
+        783,
+        135
+      ],
+      "decoded": "WA-LOT-2026-0412",
+      "ok": true
+    }
+  ]
+}
