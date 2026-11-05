@@ -26,6 +26,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { loadLatestMenuFacts, type LatestMenuFactsRow } from "@/lib/menu/latest-menu-facts";
 import type { PickupMenuFacts } from "@/lib/pos/pickup-detail-core";
 
 type MenuItemRow = {
@@ -42,7 +43,7 @@ type MenuItemRow = {
 const ITEM_COLUMNS =
   "id, source_item_id, brand_name, vendor_name, category, pos_inventory_type, pos_inventory_category, created_at";
 
-function toFacts(r: MenuItemRow): PickupMenuFacts {
+function toFacts(r: Pick<MenuItemRow, "brand_name" | "vendor_name" | "category" | "pos_inventory_type" | "pos_inventory_category"> | LatestMenuFactsRow): PickupMenuFacts {
   const t = (v: string | null) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
   return {
     vendorName: t(r.vendor_name),
@@ -50,13 +51,6 @@ function toFacts(r: MenuItemRow): PickupMenuFacts {
     inventoryType: t(r.pos_inventory_type) ?? t(r.pos_inventory_category),
     category: t(r.category),
   };
-}
-
-/** Newest row per source_item_id (rows must arrive created_at DESC). */
-function newestBySource(rows: MenuItemRow[]): Map<string, MenuItemRow> {
-  const m = new Map<string, MenuItemRow>();
-  for (const r of rows) if (r.source_item_id && !m.has(r.source_item_id)) m.set(r.source_item_id, r);
-  return m;
 }
 
 /**
@@ -68,14 +62,10 @@ export async function loadMenuFactsByProductId(productIds: readonly (string | nu
   const ids = [...new Set(productIds.filter((v): v is string => typeof v === "string" && v.trim() !== ""))];
   if (!isSupabaseServiceConfigured || ids.length === 0) return out;
   try {
-    const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("menu_items")
-      .select(ITEM_COLUMNS)
-      .in("source_item_id", ids)
-      .order("created_at", { ascending: false });
-    if (error || !data) return out;
-    for (const [k, r] of newestBySource(data as MenuItemRow[])) out.set(k, toFacts(r));
+    // PERF P4: one row per key from latest_menu_facts (product_latest_facts,
+    // 0344) instead of every menu copy of every key, unpaged and sorted.
+    const facts = await loadLatestMenuFacts(createSupabaseAdminClient(), ids);
+    for (const [k, r] of facts) out.set(k, toFacts(r));
   } catch {
     // Enrichment only - see the header.
   }

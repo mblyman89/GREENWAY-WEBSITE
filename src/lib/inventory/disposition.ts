@@ -15,6 +15,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
 // GW-012: atomic lot quantity writes (strict for reductions).
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
@@ -646,14 +647,19 @@ export async function createCustomerReturn(
   const [taxSettings, cannabisSet] = await Promise.all([getTaxSettings(), getCannabisCategorySet()]);
   let category = "";
   if (l.product_id) {
-    const { data: mi } = await admin
-      .from("menu_items")
-      .select("category")
-      .eq("source_item_id", l.product_id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    category = ((mi as { category: string | null } | null)?.category ?? "").trim();
+    // PERF P4: the newest category for this ONE key via latest_menu_facts
+    // (one indexed row) - not an ordered scan of every menu copy ever written.
+    // Rule 135: an unreadable category is an error, never a silent "not
+    // cannabis" on a correction snapshot that reaches CCRS.
+    try {
+      const facts = await loadLatestMenuFacts(admin, [l.product_id]);
+      category = (facts.get(l.product_id)?.category ?? "").trim();
+    } catch (err) {
+      return {
+        ok: false,
+        error: `The product's category could not be read, so the return's tax snapshot can't be built yet. Try again in a moment. (${err instanceof Error ? err.message : String(err)})`,
+      };
+    }
   }
   const isCannabis = isCannabisCategory(category, cannabisSet);
   // GW-010: mirror the (fixed) Sale.csv builder — stored prices are

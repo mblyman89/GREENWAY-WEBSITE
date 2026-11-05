@@ -823,23 +823,17 @@ export async function listUnmappedCategories(): Promise<string[]> {
     // only past row 1,000 was invisible here, and an unmapped category that
     // never surfaces is revenue landing in the wrong Sage account with nothing
     // on screen to reveal it. Paged completely.
-    const [categoryMap, accounts, { rows: categoryRows }] = await Promise.all([
+    // PERF P4: the Sage exports bucket every line by the NEWEST facts row
+    // per product (loadLatestMenuFacts), so those are exactly the categories
+    // that can land in the wrong account. One row per product from
+    // latest_menu_facts (0344 product_latest_facts) instead of a paged scan of
+    // every menu copy ever written (hundreds of thousands of rows).
+    const [categoryMap, accounts, facts] = await Promise.all([
       getSageCategoryMap(),
       getSageCategoryAccounts(),
-      pagedAllChecked<{ category: string | null }>(
-        async (from, to) => {
-          const { data, error } = await admin
-            .from("menu_items")
-            .select("category")
-            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
-            .order("id", { ascending: true })
-            .range(from, to);
-          if (error) return { rows: [], ok: false };
-          return { rows: (data as { category: string | null }[] | null) ?? [], ok: true };
-        },
-        { maxRows: SAGE_SCAN_MAX_ROWS },
-      ),
+      loadLatestMenuFacts(admin),
     ]);
+    const categoryRows = [...facts.values()].map((f) => ({ category: f.category }));
     const data = categoryRows;
     const knownBuckets = new Set(Object.keys(accounts));
     const seen = new Map<string, string>(); // normalized → original casing
