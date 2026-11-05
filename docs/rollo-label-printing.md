@@ -153,3 +153,21 @@ key, then a variant's lot key, then the barcode index, which holds each lot's
 a non-cannabis label encodes the **SKU** (or the manufacturer UPC when it is
 on file). Lookups are case-insensitive. The Label Studio checks this before
 printing and warns when the encoded value would not ring up.
+
+## Independent decode proof (D177 S2)
+
+`src/lib/printing/label-barcode-cases.ts` lists every Label Studio barcode
+shape at the smallest module size the studio will pick on common stock (Code
+128 B and C, UPC-A, UPC-A at 75 %, EAN-13, EAN-8, QR at 10 mil and at level H,
+and a 300-dpi profile). `scripts/compliance/label-barcode-dump.ts` writes them
+as SVG; `scripts/compliance/label-barcode-roundtrip.py` rasterises each at
+**the printer's own dpi** (one pixel per thermal dot, what the head actually
+lays down) and decodes it with **zxing-cpp**, an independent decoder. The
+results are pinned in `tests/fixtures/label-studio/roundtrip.json`, and
+`tests/compliance/d177-label-barcode.test.ts` fails if a drawing changes
+without the proof being re-run.
+
+```
+npx tsx scripts/compliance/label-barcode-dump.ts /tmp/label-rt
+python3 scripts/compliance/label-barcode-roundtrip.py /tmp/label-rt   # pip install zxing-cpp cairosvg pillow
+```
