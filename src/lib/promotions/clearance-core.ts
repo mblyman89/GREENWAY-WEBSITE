@@ -55,6 +55,8 @@ export const CLEARANCE_OWNER_QUOTE =
   "a 50% off products we have been sitting on for too long and things about to expire. ... Those items are excluded from any and all other sales/ daily deals";
 
 /** Same hard-block set as expired-stock-core (D36, D44); kept local so this stays pure. */
+import { costFloorMinorUnits } from "./discount-engine-core";
+
 export type ExpiryKind = "block" | "warn";
 
 export type ClearanceLot = {
@@ -73,9 +75,19 @@ export type ClearanceLot = {
   receivedIsGuess: boolean;
   /** Block or warn when expired (expired-stock-core expiryKindFor). */
   expiredKind: ExpiryKind;
+  /** D195: the menu size this lot sells as (inventory_lots.menu_source_variant_id). */
+  sizeId?: string | null;
 };
 
-export type ClearanceMenuItem = { name: string; brand: string; priceMinorUnits: number };
+export type ClearanceMenuItem = {
+  name: string;
+  brand: string;
+  priceMinorUnits: number;
+  /** D195: each size's own price (source_variant_id -> price). */
+  sizePrices?: ReadonlyMap<string, number>;
+  /** D195: merch uses the merch tax divisor for the floor. */
+  merch?: boolean;
+};
 
 export type ExistingMarkdown = { promotionId: string; title: string; status: string; percent: number };
 
@@ -103,8 +115,14 @@ export type ClearanceCandidate = {
   markdownPriceMinorUnits: number | null;
   /** Highest known unit cost among the lots, or null. */
   maxUnitCostMinorUnits: number | null;
-  /** True when the markdown price is under a known unit cost. The publish guard decides. */
+  /**
+   * True when, for some lot, the markdown of the price that lot sells at (its
+   * own size when linked, else the card price) is under that lot's legal
+   * floor (cost + tax, costFloorMinorUnits, D195). The publish guard decides.
+   */
   belowCost: boolean;
+  /** D195: the highest legal floor among the lots (cost + tax), or null. */
+  maxFloorMinorUnits: number | null;
   blocked: ClearanceBlock | null;
   existing: ExistingMarkdown[];
 };
@@ -239,6 +257,20 @@ export function findClearanceCandidates(input: {
             : null;
     const price = menuItem ? menuItem.priceMinorUnits : null;
     const mdPrice = price === null ? null : markdownPrice(price, percent);
+    // D195: each lot against the price it really sells at (its size) and its
+    // tax-inclusive floor, the same rule as the publish guard and the register.
+    let belowCost = false;
+    let maxFloor: number | null = null;
+    if (menuItem) {
+      for (const l of lots) {
+        if (l.unitCostMinorUnits === null || !Number.isInteger(l.unitCostMinorUnits) || l.unitCostMinorUnits <= 0) continue;
+        const floor = costFloorMinorUnits(l.unitCostMinorUnits, menuItem.merch === true);
+        maxFloor = maxFloor === null ? floor : Math.max(maxFloor, floor);
+        const sized = l.sizeId ? menuItem.sizePrices?.get(l.sizeId) : undefined;
+        const sellsAt = sized != null && Number.isFinite(sized) ? sized : menuItem.priceMinorUnits;
+        if (markdownPrice(sellsAt, percent) < floor) belowCost = true;
+      }
+    }
     out.push({
       key,
       productName: menuItem?.name || lots[0]?.productName || "Unnamed product",
@@ -251,7 +283,8 @@ export function findClearanceCandidates(input: {
       priceMinorUnits: price,
       markdownPriceMinorUnits: mdPrice,
       maxUnitCostMinorUnits: maxCost,
-      belowCost: mdPrice !== null && maxCost !== null && mdPrice < maxCost,
+      belowCost,
+      maxFloorMinorUnits: maxFloor,
       blocked,
       existing: isLotOnly ? [] : (input.existing.get(key) ?? []),
     });
@@ -442,5 +475,21 @@ export function __runClearanceTests(): { passed: number; failed: number } {
   ok(!bad.ok && bad.error.includes("no longer eligible"), "a blocked product cannot be posted in");
   const none = buildClearanceDraft({ keys: [], candidates: c1, percent: 50, today });
   ok(!none.ok && none.error.includes("tick at least one"), "empty refused");
+
+  // D195: a lot is judged at its own size's price against cost + tax.
+  {
+    const sizedMenu = new Map<string, ClearanceMenuItem>([
+      ["k-s", { name: "S", brand: "B", priceMinorUnits: 700, sizePrices: new Map([["k-s-1g", 700], ["k-s-35", 4500]]) }],
+    ]);
+    const runS = (lots: ClearanceLot[]) =>
+      findClearanceCandidates({ lots, menu: sizedMenu, neverDiscount: new Set(), existing: new Map(), today, settings: { percent: 50, sittingDays: 90 } });
+    // 3.5g lot cost $11.89: floor ~ $17.40; 50% of $45 = $22.50 -> fine. Card price $7 would have flagged it.
+    const big = runS([lot("s1", { posProductKey: "k-s", expiresOn: "2026-11-01", unitCostMinorUnits: 1189, sizeId: "k-s-35" })]);
+    ok(big[0]!.belowCost === false, "D195: a 3.5g lot is checked at the 3.5g price, not the card's 1g price");
+    ok(big[0]!.maxFloorMinorUnits === costFloorMinorUnits(1189, false), "D195: the floor is cost + tax");
+    // $3.00 raw cost: 50% of $7 = $3.50 is above the raw cost but under the tax-inclusive floor (~$4.39).
+    const small = runS([lot("s2", { posProductKey: "k-s", expiresOn: "2026-11-01", unitCostMinorUnits: 300, sizeId: "k-s-1g" })]);
+    ok(small[0]!.belowCost === true, "D195: under the tax-inclusive floor is flagged even above the raw cost");
+  }
   return { passed, failed };
 }

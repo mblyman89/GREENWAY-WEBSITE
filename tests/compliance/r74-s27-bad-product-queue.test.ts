@@ -217,7 +217,7 @@ beforeEach(() => {
 
 describe("R74 S27 bad product queue", () => {
   it("self-tests pinned + registered in the runner; the core reads no env", () => {
-    expect(core.__runBadProductQueueCoreTests()).toEqual({ passed: 49, failed: 0 });
+    expect(core.__runBadProductQueueCoreTests()).toEqual({ passed: 55, failed: 0 }); // D195: +6 size-true checks
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toMatch(/__runBadProductQueueCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 49\) throw new Error\([^\n]*\} \/\/ R74 S27/);
     expect(read("src/lib/promotions/bad-product-queue-core.ts")).not.toContain("process" + ".env");

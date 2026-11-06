@@ -45,9 +45,20 @@ type LotRow = {
   category: string | null;
   inventory_type: string | null;
   is_sample: boolean | null;
+  menu_source_variant_id?: string | null;
 };
 
-type MenuRow = { source_item_id: string; name: string; brand_name: string | null; price_minor_units: number };
+type MenuRow = {
+  id?: string;
+  source_item_id: string;
+  name: string;
+  brand_name: string | null;
+  price_minor_units: number;
+  category?: string | null;
+  filter_categories?: string[] | null;
+};
+
+const MERCH = ["merch", "accessories", "paraphernalia"];
 
 function text(err: unknown): string {
   return err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : String(err);
@@ -63,16 +74,26 @@ export async function loadClearanceInputs(): Promise<ClearanceRead> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "The database is not configured in this environment." };
   const admin = createSupabaseAdminClient();
 
+  // D195: also each lot's menu SIZE (0294) so a lot is judged at its size's
+  // price. Re-read without it before 0294.
+  let withSize = true;
   const lotsP = pagedAllChecked<LotRow>(async (from, to) => {
-    const { data, error } = await admin
-      .from("inventory_lots")
-      .select("id, lot_code, pos_product_key, product_name, on_hand_qty, unit_cost_minor_units, expires_on, received_on, created_at, category, inventory_type, is_sample")
-      .eq("status", "active")
-      .gt("on_hand_qty", 0)
-      .order("id", { ascending: true })
-      .range(from, to);
-    if (error) return { rows: [], ok: false };
-    return { rows: (data as LotRow[] | null) ?? [], ok: true };
+    const read = (cols: string) =>
+      admin
+        .from("inventory_lots")
+        .select(cols)
+        .eq("status", "active")
+        .gt("on_hand_qty", 0)
+        .order("id", { ascending: true })
+        .range(from, to);
+    const base = "id, lot_code, pos_product_key, product_name, on_hand_qty, unit_cost_minor_units, expires_on, received_on, created_at, category, inventory_type, is_sample";
+    let res = await read(withSize ? `${base}, menu_source_variant_id` : base);
+    if (res.error && withSize && /menu_source_variant_id/.test(String(res.error.message ?? ""))) {
+      withSize = false;
+      res = await read(base);
+    }
+    if (res.error) return { rows: [], ok: false };
+    return { rows: (res.data as unknown as LotRow[] | null) ?? [], ok: true };
   });
 
   const versionP = getPublishedVersion();
@@ -88,7 +109,7 @@ export async function loadClearanceInputs(): Promise<ClearanceRead> {
     const items = await pagedAllChecked<MenuRow>(async (from, to) => {
       const { data, error } = await admin
         .from("menu_items")
-        .select("source_item_id, name, brand_name, price_minor_units")
+        .select("id, source_item_id, name, brand_name, price_minor_units, category, filter_categories")
         .eq("menu_version_id", version.id)
         .order("id", { ascending: true })
         .range(from, to);
@@ -98,9 +119,50 @@ export async function loadClearanceInputs(): Promise<ClearanceRead> {
     if (!items.verdict.complete) {
       return { ok: false, error: "The published menu could not be read in full, so prices are unknown. Reload the page." };
     }
+    // D195: each size's own price, so a lot linked to a size is marked down
+    // from the price it really sells at.
+    const ids = items.rows.map((r) => r.id).filter((x): x is string => typeof x === "string" && x !== "");
+    const sizePrices = new Map<string, Map<string, number>>();
+    if (ids.length > 0) {
+      let failed = false;
+      const variants = await chunkedIn<string, { menu_item_id: string; source_variant_id: string | null; price_minor_units: number | null }>(
+        ids,
+        async (chunk, from, to) => {
+          const { data, error } = await admin
+            .from("menu_variants")
+            .select("id, menu_item_id, source_variant_id, price_minor_units")
+            .in("menu_item_id", chunk)
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) {
+            failed = true;
+            return [];
+          }
+          return (data as { menu_item_id: string; source_variant_id: string | null; price_minor_units: number | null }[] | null) ?? [];
+        },
+        { chunkSize: 200 },
+      );
+      if (failed) {
+        return { ok: false, error: "The menu sizes could not be read in full, so size prices are unknown. Reload the page." };
+      }
+      for (const v of variants) {
+        const sid = (v.source_variant_id ?? "").trim();
+        if (!sid || !Number.isInteger(v.price_minor_units)) continue;
+        const m = sizePrices.get(v.menu_item_id) ?? new Map<string, number>();
+        m.set(sid, Number(v.price_minor_units));
+        sizePrices.set(v.menu_item_id, m);
+      }
+    }
     for (const r of items.rows) {
       if (!r.source_item_id || !Number.isInteger(r.price_minor_units)) continue;
-      menu.set(r.source_item_id, { name: r.name, brand: r.brand_name ?? "", priceMinorUnits: r.price_minor_units });
+      const cats = (r.filter_categories?.length ? r.filter_categories : [r.category ?? ""]).map((c) => String(c).toLowerCase());
+      menu.set(r.source_item_id, {
+        name: r.name,
+        brand: r.brand_name ?? "",
+        priceMinorUnits: r.price_minor_units,
+        sizePrices: (r.id && sizePrices.get(r.id)) || undefined,
+        merch: cats.some((c) => MERCH.includes(c)),
+      });
     }
   }
 
@@ -157,6 +219,7 @@ export async function loadClearanceInputs(): Promise<ClearanceRead> {
       receivedOn: r.received_on ?? created,
       receivedIsGuess: !r.received_on,
       expiredKind: expiryKindFor({ category: r.category, inventoryType: r.inventory_type, productName: r.product_name }),
+      sizeId: (r.menu_source_variant_id ?? "").trim() || null,
     });
   }
 
