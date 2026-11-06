@@ -29,7 +29,7 @@ import { normalizeScan } from "@/lib/inventory/cycle-count-scan-core";
 import { isRegisterSellableLotStatus } from "@/lib/pos/register-availability-core";
 import { nonCannabisTypeLabel } from "@/lib/naming/noncannabis-core";
 import { renderLabelBarcode, type Symbology, type BarcodeRender } from "./label-barcode-core";
-import { printableArea, SAFE_INSET_IN, type FitMessage, type FitSeverity, type LabelStock } from "./label-stock-core";
+import { type FitMessage, type FitSeverity, type LabelStock } from "./label-stock-core";
 import type { QrEcLevel } from "./qr-core";
 
 // ── Fields ───────────────────────────────────────────────────────────────────
@@ -282,7 +282,17 @@ export function ncSubject(p: NcLabelSource, ctx: SubjectContext): LabelSubject {
 // ── Template ─────────────────────────────────────────────────────────────────
 
 export type BarcodePlacement = "auto" | "bottom" | "left" | "right" | "none";
-export type Density = "compact" | "regular" | "large";
+export type Density = "compact" | "regular" | "large" | "fill";
+/**
+ * D191: how close to the die edge anything prints. "standard" keeps 1/16″
+ * (forgiving of roll drift); "tight" keeps 1/32″ for small labels once the
+ * printer is calibrated (test label shows the border intact).
+ */
+export type EdgeMargin = "standard" | "tight";
+export const EDGE_INSET_IN: Record<EdgeMargin, number> = { standard: 0.0625, tight: 0.03125 };
+/** Biggest text multiplier "Fill" will try, and its absolute title ceiling. */
+export const FILL_MAX_SCALE = 2.6;
+export const FILL_MAX_TITLE_PT = 54;
 
 export type LabelTemplate = {
   symbology: Symbology;
@@ -292,6 +302,7 @@ export type LabelTemplate = {
   fields: FieldId[];
   showCodeText: boolean;
   density: Density;
+  edge: EdgeMargin;
   customText: string;
 };
 
@@ -321,14 +332,17 @@ export function defaultTemplate(subject: LabelSubject, stock: LabelStock): Label
     placement: "auto",
     fields: defaultFields(subject.kind, stock),
     showCodeText: true,
-    density: "regular",
+    // D191: new designs fill the label (largest text that still fits).
+    density: "fill",
+    edge: "standard",
     customText: "",
   };
 }
 
 const SYMS: Symbology[] = ["code128", "qr", "upc_ean"];
 const PLACEMENTS: BarcodePlacement[] = ["auto", "bottom", "left", "right", "none"];
-const DENSITIES: Density[] = ["compact", "regular", "large"];
+const DENSITIES: Density[] = ["compact", "regular", "large", "fill"];
+const EDGES: EdgeMargin[] = ["standard", "tight"];
 const LEVELS: QrEcLevel[] = ["L", "M", "Q", "H"];
 const SOURCES: CodeSource[] = ["lot_code", "ccrs_id", "product_key", "row_id", "sku", "upc"];
 const FIELD_IDS = new Set<FieldId>(FIELD_DEFS.map((f) => f.id));
@@ -353,7 +367,12 @@ export function sanitizeTemplate(raw: unknown, base: LabelTemplate): LabelTempla
     placement: pick(r.placement, PLACEMENTS, base.placement),
     fields,
     showCodeText: typeof r.showCodeText === "boolean" ? r.showCodeText : base.showCodeText,
-    density: pick(r.density, DENSITIES, base.density),
+    // D191 one-time upgrade: a design saved before "Fill" existed (no `edge`
+    // key) on the old "Regular" default moves to Fill — the owner asked for
+    // "better use of the available space". A design that chose Compact or
+    // Large keeps it.
+    density: !("edge" in r) && r.density === "regular" ? "fill" : pick(r.density, DENSITIES, base.density),
+    edge: pick(r.edge, EDGES, base.edge),
     customText,
   };
 }
@@ -480,7 +499,7 @@ function fieldText(subject: LabelSubject, t: LabelTemplate, id: FieldId): string
 
 function fontsFor(availH: number, availW: number, density: Density) {
   const base = Math.min(availH, availW * 0.6) * 72;
-  const d = density === "compact" ? 0.85 : density === "large" ? 1.18 : 1;
+  const d = density === "compact" ? 0.85 : density === "large" ? 1.18 : 1; // fill starts at 1 and grows
   const title = Math.max(7, Math.min(26, base * 0.15 * d));
   return { title, subtitle: title * 0.8, line: Math.max(6, title * 0.66), price: title * 1.25 };
 }
@@ -501,11 +520,13 @@ function resolvePlacement(t: LabelTemplate, wIn: number, hIn: number, hasCode: b
 export function layoutLabel(input: LayoutInput): LabelLayout {
   const { subject, stock, dpi } = input;
   const t = input.template;
-  const area = printableArea(stock, dpi);
-  const ox = stock.shape === "circle" ? (stock.acrossIn - area.widthIn) / 2 : SAFE_INSET_IN;
-  const oy = stock.shape === "circle" ? (stock.feedIn - area.heightIn) / 2 : SAFE_INSET_IN;
-  const W = area.widthIn;
-  const H = area.heightIn;
+  // Usable area: the label less the edge margin (a circle's inscribed square).
+  const inset = EDGE_INSET_IN[t.edge] ?? EDGE_INSET_IN.standard;
+  const side = stock.shape === "circle" ? stock.acrossIn / Math.SQRT2 : null;
+  const W = (side ?? stock.acrossIn) - 2 * inset;
+  const H = (side ?? stock.feedIn) - 2 * inset;
+  const ox = stock.shape === "circle" ? (stock.acrossIn - W) / 2 : inset;
+  const oy = stock.shape === "circle" ? (stock.feedIn - H) / 2 : inset;
   const messages: FitMessage[] = [];
 
   const code = subject.codes.find((c) => c.source === t.codeSource) ?? null;
@@ -525,9 +546,11 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
     messages.push({ severity: "ok", code: "empty_fields", text: `Left off because they're blank for this item: ${emptyChosen.map((id) => fieldDef(id).label).join(", ")}.` });
   }
 
-  const attempt = (scale: number, keep: typeof items) => {
+  const attempt = (scale: number, keep: typeof items, barShare: number) => {
     const f0 = fontsFor(H, W, t.density);
-    const f = { title: f0.title * scale, subtitle: f0.subtitle * scale, line: f0.line * scale, price: f0.price * scale };
+    const fillCap = t.density === "fill" ? FILL_MAX_TITLE_PT / f0.title : Infinity;
+    const k = Math.min(scale, fillCap);
+    const f = { title: f0.title * k, subtitle: f0.subtitle * k, line: f0.line * k, price: f0.price * k };
     const codeTextPt = Math.max(MIN_FONT_PT, f.line * 0.95);
     const showCodeText = t.showCodeText && t.symbology !== "qr" && placement !== "none";
     // Barcode box and text column.
@@ -553,6 +576,8 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
         const wr = wrapText(it.text, w, pt, bold, it.def.maxLines);
         const h = wr.lines.length * (pt / 72) * LINE_H;
         if (y + h > maxH + 1e-9) return { out, used: y, overflow: true };
+        // "Fill" never grows text to the point of cutting it off.
+        if (wr.truncated && scale > 1 + 1e-9) return { out, used: y, overflow: true };
         if (wr.truncated) warn.push({ severity: "warn", code: `cut_${it.id}`, text: `${it.def.label} was shortened to fit.` });
         out.push({ kind: "text", field: it.id, lines: wr.lines, xIn: ox + x, yIn: oy + y, wIn: w, hIn: h, fontPt: pt, bold, align: center ? "center" : "left" });
         y += h + GAP_IN * scale;
@@ -568,7 +593,10 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
     if (placement === "bottom") {
       const hri = showCodeText ? (codeTextPt / 72) * LINE_H : 0;
       // Reserve at least this much for bars before placing text.
-      const minBars = t.symbology === "qr" ? Math.min(W, H * 0.55) : t.symbology === "upc_ean" ? Math.max(0.3, H * 0.4) : Math.max(0.25, H * 0.35);
+      // "Fill" grows the text, so it reserves a bigger share for the bars
+      // (otherwise big text would starve the barcode).
+      const share = barShare;
+      const minBars = t.symbology === "qr" ? Math.min(W, H * 0.55) : t.symbology === "upc_ean" ? Math.max(0.3, H * Math.max(0.4, share)) : Math.max(0.25, H * share);
       const r = layText(0, W, Math.max(0, H - minBars - hri - GAP_IN), stock.shape === "circle" || t.symbology === "qr");
       if (r.overflow) return { ok: false, blocks: [], warn, bc: null, codeTextPt };
       const top = r.used > 0 ? r.used + GAP_IN * 2 : 0;
@@ -621,24 +649,36 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
 
   // Shrink fonts first, then drop the lowest fields (end of the list) — never
   // the barcode. Each compromise is reported.
-  let keep = items;
-  let result: ReturnType<typeof attempt> | null = null;
-  let usedScale = 1;
-  const dropped: string[] = [];
-  outer: for (;;) {
-    for (let s = 1; s >= 0.55 - 1e-9; s -= 0.05) {
-      const r = attempt(s, keep);
-      if (r.ok && (!r.bc || (r.bc.ok && r.bc.severity !== "block"))) {
+  const search = (topScale: number, barShare: number) => {
+    let keep = items;
+    let result: ReturnType<typeof attempt> | null = null;
+    let usedScale = 1;
+    const dropped: string[] = [];
+    outer: for (;;) {
+      for (let s = topScale; s >= 0.55 - 1e-9; s -= 0.05) {
+        const r = attempt(s, keep, barShare);
+        if (r.ok && (!r.bc || (r.bc.ok && r.bc.severity !== "block"))) {
+          result = r;
+          usedScale = s;
+          break outer;
+        }
         result = r;
-        usedScale = s;
-        break outer;
       }
-      result = r;
+      if (keep.length === 0) break;
+      dropped.unshift(keep[keep.length - 1].def.label);
+      keep = keep.slice(0, -1);
     }
-    if (keep.length === 0) break;
-    dropped.unshift(keep[keep.length - 1].def.label);
-    keep = keep.slice(0, -1);
+    return { result, usedScale, dropped };
+  };
+  // "Fill": grow the text (up to FILL_MAX_SCALE) while giving the bars a
+  // bigger share. If that can't beat Regular's text size, use Regular's
+  // split instead — Fill is never worse than Regular.
+  let found = t.density === "fill" ? search(FILL_MAX_SCALE, 0.46) : search(1, 0.35);
+  if (t.density === "fill" && (found.usedScale < 1 - 1e-9 || found.dropped.length > 0)) {
+    const reg = search(1, 0.35);
+    if (reg.dropped.length <= found.dropped.length && reg.usedScale >= found.usedScale - 1e-9) found = reg;
   }
+  const { result, usedScale, dropped } = found;
 
   if (!result || !result.ok || (result.bc && (!result.bc.ok || result.bc.severity === "block"))) {
     const why = result?.bc && !result.bc.ok ? result.bc.error : result?.bc?.ok ? result.bc.messages.find((m) => m.severity === "block")?.text : "The label is too small for this content.";
@@ -647,7 +687,7 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
   }
 
   if (dropped.length > 0) messages.push({ severity: "warn", code: "dropped", text: `Didn't fit, so left off: ${dropped.join(", ")}. ${t.symbology === "qr" ? "Try a bigger label or fewer lines." : "Try a bigger label or a QR code."}` });
-  if (usedScale < 0.999) messages.push({ severity: "ok", code: "shrunk", text: `Text shrunk to ${Math.round(usedScale * 100)} % to fit.` });
+  if (usedScale < 0.999 && t.density !== "fill") messages.push({ severity: "ok", code: "shrunk", text: `Text shrunk to ${Math.round(usedScale * 100)} % to fit.` });
   messages.push(...result.warn);
   if (result.bc && result.bc.ok) messages.push(...result.bc.messages);
   let smallest = Infinity;
@@ -798,7 +838,7 @@ export function __runLabelLayoutTests(): { passed: number; failed: number } {
   ok(defaultFields("nc", stock225).join() === "product,size_color,price", "2.25x1.25 nc preset");
   ok(defaultFields("nc", stock2x1).join() === "product,price", "2x1 nc preset");
   const san = sanitizeTemplate({ symbology: "qr", fields: ["product", "bogus", "product", "price"], density: "huge", customText: "x".repeat(99) }, base);
-  ok(san.symbology === "qr" && san.fields.join() === "product,price" && san.density === "regular" && san.customText.length === CUSTOM_TEXT_MAX, "sanitize");
+  ok(san.symbology === "qr" && san.fields.join() === "product,price" && san.density === "fill" && san.edge === "standard" && san.customText.length === CUSTOM_TEXT_MAX, "sanitize");
   ok(sanitizeTemplate(null, base).symbology === "code128", "sanitize null");
 
   // Text measurement / wrap.
@@ -860,6 +900,27 @@ export function __runLabelLayoutTests(): { passed: number; failed: number } {
   ok(layoutToSvg(c, { outline: true }).includes("<circle"), "circle outline");
   // Deterministic.
   ok(JSON.stringify(layoutLabel({ subject: s, stock: stock2x1, dpi: 203, template: t2 })) === JSON.stringify(L2), "layout is deterministic");
+
+  // D191: "Fill" uses the space. New designs default to it.
+  ok(t2.density === "fill" && t2.edge === "standard", "new design: fill + standard edge");
+  const titlePt = (L: LabelLayout) => Math.max(0, ...L.blocks.filter((b) => b.kind === "text").map((b) => (b as TextBlock).fontPt));
+  const bcH = (L: LabelLayout) => (L.blocks.find((b) => b.kind === "barcode") as BarcodeBlock | undefined)?.hIn ?? 0;
+  const reg2 = layoutLabel({ subject: s, stock: stock2x1, dpi: 203, template: { ...t2, density: "regular" } });
+  ok(titlePt(L2) > titlePt(reg2) * 1.25, `fill title bigger on 2x1 (${titlePt(L2).toFixed(1)} vs ${titlePt(reg2).toFixed(1)} pt)`);
+  ok(bcH(L2) >= 0.35 - 1e-6, `fill keeps bars >= 0.35in on 2x1 (${bcH(L2).toFixed(3)})`);
+  ok(L2.severity !== "block" && !L2.messages.some((m) => m.code === "shrunk"), "fill never reports 'shrunk'");
+  for (const b of L2.blocks) ok(b.xIn >= 0.06 && b.yIn >= 0.06 && b.xIn + b.wIn <= 2 - 0.06 + 1e-6 && b.yIn + b.hIn <= 1 - 0.06 + 1e-6, `fill 2x1 block inside margin (${b.kind})`);
+  const fill4 = layoutLabel({ subject: s, stock: stock4x6, dpi: 203, template: { ...base, density: "fill" } });
+  ok(fill4.severity !== "block" && titlePt(fill4) <= FILL_MAX_TITLE_PT + 1e-6 && titlePt(fill4) >= titlePt(L4) - 1e-6, "fill on 4x6 capped and not smaller");
+  // Tight edge gives more room and stays 1/32" in.
+  const tight = layoutLabel({ subject: s, stock: stock2x1, dpi: 203, template: { ...t2, edge: "tight" } });
+  ok(tight.severity !== "block" && titlePt(tight) >= titlePt(L2) - 1e-6, "tight edge not smaller");
+  for (const b of tight.blocks) ok(b.xIn >= EDGE_INSET_IN.tight - 1e-6 && b.yIn >= EDGE_INSET_IN.tight - 1e-6, `tight block inside 1/32 (${b.kind})`);
+  // Upgrade: a pre-D191 saved design on "regular" moves to fill; Compact / Large are kept; new saves keep their choice.
+  ok(sanitizeTemplate({ density: "regular" }, base).density === "fill", "old regular → fill");
+  ok(sanitizeTemplate({ density: "large" }, base).density === "large" && sanitizeTemplate({ density: "compact" }, base).density === "compact", "old compact/large kept");
+  ok(sanitizeTemplate({ density: "regular", edge: "standard" }, base).density === "regular", "new regular kept");
+  ok(sanitizeTemplate({ edge: "nope" }, base).edge === "standard" && sanitizeTemplate({ edge: "tight" }, base).edge === "tight", "edge sanitize");
 
   return { passed, failed };
 }

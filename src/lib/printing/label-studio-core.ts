@@ -14,7 +14,9 @@
  *     which are refused and why, with a hard ceiling so a typo of "5000"
  *     copies can't run a roll out;
  *   - the print CSS gives every label its own page at the exact stock size
- *     (margin 0, so the browser never scales — docs/rollo-label-printing.md).
+ *     (margin 0, so the browser never scales — docs/rollo-label-printing.md);
+ *     D191 moved it to label-print-core (portrait page + rotated artwork for
+ *     wide labels, per-device nudge/scale).
  */
 import {
   CUSTOM_MAX_IN,
@@ -22,7 +24,6 @@ import {
   PRINTERS,
   ROLLO_X1040,
   checkStockFit,
-  pageCss,
   printerById,
   stockById,
   type FitMessage,
@@ -208,31 +209,12 @@ export function svgAtSize(svg: string, width: string, height: string): string {
   return svg.replace(/^<svg([^>]*?) width="[^"]*" height="[^"]*"/, `<svg$1 width="${width}" height="${height}"`);
 }
 
-/** Class on the print portal (direct child of <body>). */
-export const PRINT_ROOT_CLASS = "gw-label-print-root";
-
 /**
- * Print CSS: exact page size, margin 0, everything but the portal hidden, one
- * label per page. Values come from the stock catalogue (numbers only), so the
- * string is safe to inline.
+ * Print CSS + portal class now live in label-print-core (D191: orientation,
+ * calibration, overflow-proof page box). Re-exported so callers keep working.
  */
-export function printCss(stock: LabelStock): string {
-  const w = `${stock.acrossIn}in`;
-  const h = `${stock.feedIn}in`;
-  return [
-    pageCss(stock),
-    `.${PRINT_ROOT_CLASS}{display:none}`,
-    "@media print{",
-    "html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;height:auto!important;overflow:visible!important}",
-    `body>*:not(.${PRINT_ROOT_CLASS}){display:none!important}`,
-    `.${PRINT_ROOT_CLASS}{display:block!important}`,
-    `.${PRINT_ROOT_CLASS} .gw-label-page{width:${w};height:${h};overflow:hidden;break-after:page;page-break-after:always;break-inside:avoid}`,
-    `.${PRINT_ROOT_CLASS} .gw-label-page:last-child{break-after:auto;page-break-after:auto}`,
-    `.${PRINT_ROOT_CLASS} .gw-label-page svg{display:block;width:${w};height:${h}}`,
-    "*{-webkit-print-color-adjust:exact;print-color-adjust:exact}",
-    "}",
-  ].join("");
-}
+import { PRINT_ROOT_CLASS, printCss } from "./label-print-core";
+export { PRINT_ROOT_CLASS, printCss };
 
 /** Short spec line for the preview footer, e.g. "Code 128 · 10 mil bars". */
 export function barcodeSpecText(layout: LabelLayout): string {
@@ -484,11 +466,12 @@ export function __runLabelStudioTests(): { passed: number; failed: number } {
 
   // Print CSS.
   const css = printCss(s4x6);
-  ok(css.includes("@page { size: 4in 6in; margin: 0; }"), "page size");
+  ok(css.includes("@page { size: 4in 6in; margin: 0 !important; }"), "page size");
   ok(css.includes(`body>*:not(.${PRINT_ROOT_CLASS}){display:none!important}`), "hides admin chrome");
   ok(css.includes("break-after:page") && css.includes(":last-child{break-after:auto"), "one label per page, no trailing blank");
   ok(!/[<>]/.test(css.replace(/body>\*/g, "")), "no markup in css");
-  ok(printCss(stockById("ol-rl2676")!).includes("size: 2.25in 1.25in"), "nc page size");
+  // D191: wide labels go out as a portrait page (artwork rotated) by default.
+  ok(printCss(stockById("ol-rl2676")!).includes("size: 1.25in 2.25in"), "nc page size (rotated portrait)");
 
   // Spec text.
   ok(/^Code 128 · \d+(\.\d+)? mil bars · /.test(barcodeSpecText(j1.items[0].layout)), "spec text code128");

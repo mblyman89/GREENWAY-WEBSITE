@@ -17,6 +17,12 @@
  * Printing: the Rollo has no cloud API (docs/rollo-label-printing.md), so the
  * studio renders one page per label at the exact stock size into a portal on
  * <body>, injects matching @page CSS, and opens the browser print dialog.
+ *
+ * D191: wide labels (2×1 etc.) are sent as a portrait page with the artwork
+ * turned 90° — Chrome rotates landscape pages on thermal printers (Chromium
+ * 372435414), which printed "the first blank, the second nearly off the
+ * bottom". Per-device calibration (orientation, nudge, scale) and a test label
+ * live in PrintSetup.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -49,6 +55,7 @@ import {
   layoutToSvg,
   type BarcodePlacement,
   type Density,
+  type EdgeMargin,
   type FieldId,
   type LabelSubject,
   type LabelTemplate,
@@ -75,6 +82,18 @@ import type { QrEcLevel } from "@/lib/printing/qr-core";
 import { listPrintHistoryAction, logLabelPrintAction, type HistoryResult, type SavedListResult } from "@/app/admin/labels/actions";
 import type { PrintHistoryEntry, SavedTemplate } from "@/lib/printing/label-saved-core";
 import { SavedDesigns } from "@/components/admin/labels/SavedDesigns";
+import { PrintSetup } from "@/components/admin/labels/PrintSetup";
+import {
+  CALIBRATION_STORAGE_KEY,
+  DEFAULT_CALIBRATION,
+  calibrationFor,
+  detectOs,
+  isDefaultCalibration,
+  testLabelSvg,
+  withCalibration,
+  type ClientOs,
+  type PrintCalibration,
+} from "@/lib/printing/label-print-core";
 
 export type StudioItem = {
   subject: LabelSubject;
@@ -303,11 +322,37 @@ const PLACEMENTS: Array<{ value: BarcodePlacement; label: string }> = [
   { value: "right", label: "Right" },
   { value: "none", label: "No code" },
 ];
-const DENSITIES: Array<{ value: Density; label: string }> = [
-  { value: "compact", label: "Compact" },
-  { value: "regular", label: "Regular" },
+const DENSITIES: Array<{ value: Density; label: string; title?: string }> = [
+  { value: "fill", label: "Fill (biggest)", title: "Grow text and code to use the whole label — recommended" },
   { value: "large", label: "Large" },
+  { value: "regular", label: "Regular" },
+  { value: "compact", label: "Compact" },
 ];
+const EDGES: Array<{ value: EdgeMargin; label: string; title: string }> = [
+  { value: "standard", label: "Standard ¹⁄₁₆″", title: "Safe for every printer and roll" },
+  { value: "tight", label: "Tight ¹⁄₃₂″", title: "More room — use once a test label prints its border complete" },
+];
+
+// ── Calibration (per device, per label size) ────────────────────────────────
+
+function readCalibrations(): unknown {
+  try {
+    const raw = window.localStorage.getItem(CALIBRATION_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCalibrations(map: Record<string, PrintCalibration>) {
+  try {
+    window.localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Not remembered; harmless.
+  }
+}
+
+type PrintJob = { kind: "labels"; plan: JobPlan } | { kind: "test" };
 const QR_LEVELS: Array<{ value: QrEcLevel; label: string; title: string }> = [
   { value: "L", label: "L", title: "Smallest code, ~7% damage recovery" },
   { value: "M", label: "M", title: "Recommended, ~15% damage recovery" },
@@ -393,7 +438,15 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
   const [customError, setCustomError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<"fit" | "actual">("fit");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [printing, setPrinting] = useState<JobPlan | null>(null);
+  const [printing, setPrinting] = useState<PrintJob | null>(null);
+  const [calMap, setCalMap] = useState<Record<string, PrintCalibration>>({});
+  const [os, setOs] = useState<ClientOs>("other");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot read of localStorage / navigator after hydration
+    setCalMap(withCalibration(readCalibrations(), "__none__", DEFAULT_CALIBRATION));
+    const nav = window.navigator as Navigator & { userAgentData?: { platform?: string } };
+    setOs(detectOs(nav.userAgent, nav.userAgentData?.platform ?? nav.platform ?? ""));
+  }, []);
 
   const printer = printerById(prefs?.printerId);
   const stock = stockById(prefs?.stockId) ?? LABEL_STOCK[0];
@@ -432,6 +485,14 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
       .map((s) => ({ stock: s, fit: checkStockFit(s, printer) }))
       .sort((a, b) => rankSev[a.fit.severity] - rankSev[b.fit.severity] || a.stock.acrossIn * a.stock.feedIn - b.stock.acrossIn * b.stock.feedIn);
   }, [vendorTab, printer]);
+
+  const calibration = calibrationFor(calMap, stock.id);
+  const calStockId = stock.id;
+  const setCalibration = (c: PrintCalibration) => {
+    const next = withCalibration(calMap, calStockId, c);
+    setCalMap(next);
+    writeCalibrations(next);
+  };
 
   // Print lifecycle: mount the portal, print once it's painted, unmount after.
   useEffect(() => {
@@ -500,7 +561,7 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
       return;
     }
     setConfirmOpen(false);
-    setPrinting(plan);
+    setPrinting({ kind: "labels", plan });
     const entry: PrintLogEntry = {
       kind,
       printerId: printer.id,
@@ -857,6 +918,10 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
               <p className="mb-1.5 text-xs font-semibold text-[var(--admin-text-muted)]">Text size</p>
               <Segmented label="Text size" value={template.density} options={DENSITIES} onChange={(v) => updateT({ density: v })} />
             </div>
+            <div className="mt-3">
+              <p className="mb-1.5 text-xs font-semibold text-[var(--admin-text-muted)]">Edge margin</p>
+              <Segmented label="Edge margin" value={template.edge} options={EDGES} onChange={(v) => updateT({ edge: v })} />
+            </div>
           </Panel>
 
           <Panel step={4} title={batch ? `Copies · ${initialItems.length} items` : "Copies"}>
@@ -961,6 +1026,27 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
               </div>
             )}
           </Panel>
+
+          <Panel
+            step={5}
+            title="Printer calibration & setup"
+            aside={
+              isDefaultCalibration(calibration) ? (
+                <Badge tone="neutral">Auto</Badge>
+              ) : (
+                <Badge tone="gold">Calibrated</Badge>
+              )
+            }
+          >
+            <PrintSetup
+              stock={stock}
+              printer={printer}
+              calibration={calibration}
+              os={os}
+              onChange={setCalibration}
+              onTestPrint={() => setPrinting({ kind: "test" })}
+            />
+          </Panel>
         </div>
 
         {/* ── Preview + print ─────────────────────────────────────── */}
@@ -1019,16 +1105,11 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
                   🖨 Print
                 </Button>
               </div>
-              <details className="mt-2 text-[0.7rem] text-[var(--admin-text-muted)]">
-                <summary className="cursor-pointer font-semibold">In the print dialog…</summary>
-                <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
-                  <li>Choose <strong>{printer.name}</strong>.</li>
-                  <li>Paper size <strong>{stock.acrossIn}″ × {stock.feedIn}″</strong> (add it as a custom size once if it&apos;s not listed).</li>
-                  <li>Margins <strong>None</strong>, scale <strong>100%</strong> — never “Fit to page”.</li>
-                  <li>Turn off headers and footers.</li>
-                </ol>
-                {printer.note ? <p className="mt-1.5 text-[var(--admin-text-faint)]">{printer.note}</p> : null}
-              </details>
+              <p className="mt-2 text-[0.7rem] text-[var(--admin-text-faint)]">
+                Paper size {stock.acrossIn}″ × {stock.feedIn}″ · margins None · scale 100%.{" "}
+                {calibration.orientation === "auto" && stock.acrossIn > stock.feedIn ? "Sent as a tall page (artwork turned) so Chrome can't rotate it. " : ""}
+                Full steps and a test label: step 5.
+              </p>
             </div>
           </div>
           {history && !(!history.ok && history.migrationMissing) ? (
@@ -1053,11 +1134,19 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
       {printing && typeof document !== "undefined"
         ? createPortal(
             <div className={PRINT_ROOT_CLASS} aria-hidden>
-              <style>{printCss(stock)}</style>
-              {printing.items.flatMap((p) =>
-                Array.from({ length: p.copies }, (_, i) => (
-                  <div key={`${p.subjectId}-${i}`} className="gw-label-page" dangerouslySetInnerHTML={{ __html: p.svg }} />
-                )),
+              <style>{printCss(stock, calibration)}</style>
+              {printing.kind === "test" ? (
+                <div className="gw-label-page">
+                  <div className="gw-label-art" dangerouslySetInnerHTML={{ __html: testLabelSvg(stock, calibration, printer) }} />
+                </div>
+              ) : (
+                printing.plan.items.flatMap((p) =>
+                  Array.from({ length: p.copies }, (_, i) => (
+                    <div key={`${p.subjectId}-${i}`} className="gw-label-page">
+                      <div className="gw-label-art" dangerouslySetInnerHTML={{ __html: p.svg }} />
+                    </div>
+                  )),
+                )
               )}
             </div>,
             document.body,

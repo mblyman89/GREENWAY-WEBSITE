@@ -1174,6 +1174,7 @@ import { __runRoleChecklistTests } from "../../src/lib/registers/role-checklist-
 import { __runMenuRetentionTests } from "../../src/lib/menu/menu-retention-core";
 import { __runCockpitCacheTests } from "../../src/lib/admin/cockpit-cache-core";
 import { __runSlowReadTests } from "../../src/lib/platform/slow-read-core";
+import { __runLabelPrintTests } from "../../src/lib/printing/label-print-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
@@ -2788,7 +2789,7 @@ __runLiquidVolumeTests();
   assertRan("label-stock-core", __runLabelStockTests(), 150); // D177 ("select from the various size labels, not just rollo but any vendors sizes"): verified vendor stock catalogue, Rollo X1040 1.57–4.1in fit check, dot-snapped geometry
   assertRan("ean-upc-core", __runEanUpcTests(), 50); // D177 S2: UPC-A / EAN-13 / EAN-8 re-prints of a torn manufacturer barcode, GS1 check digit reused from merch-intel-core
   assertRan("label-barcode-core", __runLabelBarcodeTests(), 38); // D177 S2 ("switch between 1D and 2D barcodes (qr codes)"): Code 128 / QR / UPC sized in whole printer dots with cited minimums and quiet zones
-  assertRan("label-layout-core", __runLabelLayoutTests(), 70); // D177 S3 ("the info I want on the label"): field picker + register-aware code sources + auto-fit layout that never drops the barcode and never prints potency
+  assertRan("label-layout-core", __runLabelLayoutTests(), 88); // D177 S3 ("the info I want on the label"): field picker + register-aware code sources + auto-fit layout that never drops the barcode and never prints potency
   assertRan("label-studio-core", __runLabelStudioTests(), 49); // D177 S4+S5 ("far more professional label builder experience … easy to use"): remembered settings never reopen on a stock the printer can't feed, batch print plan with copy ceilings + refusals, one-label-per-page print CSS at the exact stock size
   assertRan("label-saved-core", __runLabelSavedTests(), 36); // D177 S6 ("enterprise grade"): shared saved label designs validated server-side (known printer, feedable stock, sanitized template) + append-only print log rows re-clamped and cross-checked
   assertRan("exception-retry-core", __runExceptionRetryTests(), 35); // D178 S1 ("if product left the shop and money was given to me in exchange, there can be no manual exceptions"): uniform line keys, plain-English exception classes, receipt-is-truth rate drift, retry permissions, replay dated when the money moved
@@ -2803,6 +2804,7 @@ __runLiquidVolumeTests();
   assertRan("menu-retention-core", __runMenuRetentionTests(), 22); // PERF round P1/P2 (0344): old menu copies cleared after each publish; prune answer read, never guessed; latest_menu_facts walks only when the function is missing, else reports
   assertRan("cockpit-cache-core", __runCockpitCacheTests(), 24); // PERF P3: cockpit display cache: plain-JSON gate, failed reads never stored, short stated TTLs, keys never hold a clock reading
   assertRan("slow-read-core", __runSlowReadTests(), 13); // PERF P5: one greppable [slow-read] log line per read past its budget (cockpit cache misses)
+  assertRan("label-print-core", __runLabelPrintTests(), 60); // D191 ("it prints two labels, the first blank, the second nearly prints off the bottom … better use of the available space"): wide labels sent as a portrait page with the artwork turned (Chromium 372435414), margin 0 !important over the admin 8mm print rule, no trailing page break, per-device per-size orientation/nudge/scale calibration with every corner proven on-page, test label, OS-specific dialog steps, symptom table
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
