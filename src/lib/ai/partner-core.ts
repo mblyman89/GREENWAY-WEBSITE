@@ -20,6 +20,7 @@
  */
 import type { MoveRepair, CountRepair, Shortfall, CompletenessStatus } from "@/lib/compliance/ccrs-completeness-core";
 import type { WatchItem } from "@/lib/registers/night-watch-core";
+import { healPlan, vitalsLine, type VitalsReport } from "@/lib/platform/db-vitals-core";
 
 // ---------------------------------------------------------------------------
 // 1. Levels
@@ -50,7 +51,7 @@ export const LEVEL_TEXT: Record<PartnerLevel, string> = {
 
 export type Touches = "nothing" | "money" | "counts" | "ccrs";
 
-export type PartnerToolId = "retry_sale" | "record_as_rung" | "move_sale_line" | "correct_count";
+export type PartnerToolId = "retry_sale" | "record_as_rung" | "move_sale_line" | "correct_count" | "clear_stuck_sessions";
 
 export type PartnerTool = {
   id: PartnerToolId;
@@ -85,6 +86,16 @@ export const PARTNER_TOOLS: Record<PartnerToolId, PartnerTool> = {
     label: "Correct a count that took away units that were sold",
     touches: "counts",
     calls: "correctCount (D183)",
+  },
+  // D193 (owner 2026-11-06: "help me self heal these issues now. I want a
+  // healthy db always."). Ends app connections stuck mid-transaction and stops
+  // runaway app queries. No saved row changes: an unfinished step is rolled
+  // back, exactly as if the request had crashed. Never the owner's SQL editor.
+  clear_stuck_sessions: {
+    id: "clear_stuck_sessions",
+    label: "Clear stuck database connections",
+    touches: "nothing",
+    calls: "healStuckSessions -> platform_db_heal_stuck (0345): app sessions only, past the floors",
   },
 };
 
@@ -135,6 +146,8 @@ export type PartnerFacts = {
   weeks: WeekFact[];
   morning: { headline: string; items: WatchItem[] } | null;
   readErrors: string[];
+  /** D193: the database's vital signs right now (null = not read). */
+  database?: VitalsReport | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -145,7 +158,8 @@ export type ProposalPayload =
   | { tool: "retry_sale"; exceptionId: string }
   | { tool: "record_as_rung"; exceptionId: string }
   | { tool: "move_sale_line"; repair: MoveRepair }
-  | { tool: "correct_count"; repair: CountRepair };
+  | { tool: "correct_count"; repair: CountRepair }
+  | { tool: "clear_stuck_sessions"; pids: number[] };
 
 export type Proposal = {
   /** Deterministic: same facts, same id. */
@@ -179,6 +193,8 @@ export function payloadKey(p: ProposalPayload): string {
       return `${p.tool}|${p.repair.lineId}|${p.repair.fromExt}|${p.repair.toExt}|${p.repair.quantity}`;
     case "correct_count":
       return `${p.tool}|${p.repair.lotId}|${p.repair.ext}|${p.repair.quantity}`;
+    case "clear_stuck_sessions":
+      return `${p.tool}|${[...p.pids].sort((a, b) => a - b).join(",")}`;
   }
 }
 
@@ -233,6 +249,19 @@ export function buildProposals(f: PartnerFacts, level: PartnerLevel): Proposal[]
     }
   }
 
+  // D193: stuck database connections (the same pids = the same id, so a
+  // stale approval for connections that already cleared finds nothing).
+  const heal = healPlan(f.database?.vitals ?? null);
+  if (heal) {
+    add(
+      "clear_stuck_sessions",
+      { tool: "clear_stuck_sessions", pids: heal.pids },
+      `Clear ${heal.pids.length} stuck database connection(s)`,
+      "A request stopped half way and kept its hold on the database. Left alone, these pile up until the back office cannot connect.",
+      heal.sentence,
+    );
+  }
+
   // Owner approvals first (they need Michael), then the auto kind.
   return out.sort((a, b) => (a.gate === b.gate ? a.id.localeCompare(b.id) : a.gate === "owner_approves" ? -1 : 1));
 }
@@ -256,6 +285,10 @@ export function factsBlock(f: PartnerFacts, proposals: readonly Proposal[], leve
   lines.push(`TODAY (Pacific): ${f.todayIso}`);
   lines.push(`PARTNER LEVEL: ${LEVEL_TEXT[level]}`);
   if (f.readErrors.length) lines.push(`COULD NOT READ (say so, never guess): ${f.readErrors.map(clean).join(" | ")}`);
+  if (f.database) {
+    lines.push(vitalsLine(f.database));
+    for (const x of f.database.findings.slice(0, 6)) lines.push(`- [${x.severity}] ${clean(x.what)} To do: ${clean(x.todo)}`);
+  }
   if (f.morning) {
     lines.push(`MORNING REPORT: ${clean(f.morning.headline)}`);
     for (const i of f.morning.items.slice(0, 20)) lines.push(`- [${i.severity}/${i.who}] ${clean(i.sentence)} (page ${i.href})`);
@@ -279,6 +312,7 @@ export const PARTNER_SYSTEM = [
   "Never invent a number, a sale, a lot, a fix or a page. Use only the facts. If a fact says it could not be read, say you could not check it.",
   "When a fix applies, name it by its id (for example P-1a2b3c4d), say what it changes, and say who presses it: [auto] fixes any manager may run; [owner_approves] fixes only Michael may run.",
   "Never suggest changing a price, a tax rate, a sale amount, a date or a count to make a report look right. Taxes and CCRS come from the actual sales. If something cannot be fixed by a listed tool, say what page to open and what a person must check.",
+  "If the DATABASE line is not OK, say so first in plain words: what happened, whether the back office is affected, and the fix (a listed fix id, or the To do). A restart means it was briefly unreachable and is back; repeated restarts mean the database computer is too small (Micro) and the owner should move it to Small in Supabase.",
   "No legal, medical or financial advice. Keep answers under about 180 words unless asked for more.",
 ].join("\n");
 
@@ -361,7 +395,7 @@ export function __runPartnerTests(): { passed: number; failed: number } {
   };
   const ps = buildProposals(facts, 2);
   ok(ps.length === 4, `4 proposals (retry, rung, count, move): ${ps.length}`);
-  ok(!ps.some((p) => p.payload.tool !== "move_sale_line" && p.payload.tool !== "correct_count" && p.payload.exceptionId.startsWith("cccc")), "legal block never proposed");
+  ok(!ps.some((p) => (p.payload.tool === "retry_sale" || p.payload.tool === "record_as_rung") && p.payload.exceptionId.startsWith("cccc")), "legal block never proposed");
   ok(!ps.some((p) => (p.payload.tool === "retry_sale" || p.payload.tool === "record_as_rung") && p.payload.exceptionId.startsWith("dddd")), "a sale with an order is never proposed");
   ok(ps[ps.length - 1]!.gate === "auto", "owner approvals listed first, auto last");
   ok(ps.filter((p) => p.gate === "owner_approves").length === 3, "three owner approvals");
@@ -385,6 +419,33 @@ export function __runPartnerTests(): { passed: number; failed: number } {
   ok(stableId("a") !== stableId("b") && /^P-[0-9a-f]{8}$/.test(stableId("a")), "stable id format");
   ok(PARTNER_SYSTEM.includes("can NOT change anything"), "system prompt: AI never writes");
   ok(PARTNER_SYSTEM.includes("Never invent"), "system prompt: no invention");
+
+  // D193 database self-heal
+  ok(gateFor("clear_stuck_sessions", 2) === "auto", "clearing stuck connections touches nothing: auto at 2");
+  ok(gateFor("clear_stuck_sessions", 1) === "explain_only", "level 1 still explains only");
+  const dbStuck: VitalsReport = {
+    status: "warn",
+    summary: "s",
+    restarted: false,
+    findings: [{ code: "stuck_sessions", severity: "warn", what: "2 stuck", todo: "clear", healable: true }],
+    vitals: {
+      startedAt: "2026-11-06T02:28:36Z", checkedAt: "2026-11-06T04:00:00Z", maxConnections: 60, connections: 20, active: 2, idle: 16, idleInTx: 2,
+      appConnections: 18, oldestIdleInTxSecs: 900, longestActiveSecs: 1, waitingOnLock: 0, cacheHitRatio: 0.999, blocksRead: 1, deadlocks: 0, tempBytes: 0, dbBytes: 5e8,
+      stuck: [
+        { pid: 9, role: "authenticator", state: "idle in transaction", secs: 900, query: "q" },
+        { pid: 7, role: "postgres", state: "idle in transaction", secs: 900, query: "owner" },
+      ],
+    },
+  };
+  const withDb = buildProposals({ ...facts, database: dbStuck }, 2);
+  const heal = withDb.find((p) => p.tool === "clear_stuck_sessions");
+  ok(heal !== undefined && heal.gate === "auto", "stuck connections become an auto fix");
+  ok(heal !== undefined && heal.payload.tool === "clear_stuck_sessions" && heal.payload.pids.join() === "9", "only the app session, never the owner's editor");
+  ok(buildProposals({ ...facts, database: { ...dbStuck, vitals: { ...dbStuck.vitals!, stuck: [] } } }, 2).every((p) => p.tool !== "clear_stuck_sessions"), "nothing stuck: no heal proposal");
+  ok(buildProposals({ ...facts, database: null }, 2).length === 4, "no database facts: the old proposals only");
+  const fbDb = factsBlock({ ...facts, database: dbStuck }, withDb, 2);
+  ok(fbDb.includes("DATABASE: WARN") && fbDb.includes("2 stuck"), "database vitals are in the grounding");
+  ok(PARTNER_SYSTEM.includes("DATABASE line"), "system prompt: explain database trouble first");
 
   return { passed, failed };
 }

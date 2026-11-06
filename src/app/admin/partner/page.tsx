@@ -58,6 +58,20 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
           <span className="font-bold">{LEVEL_TEXT[level]}</span>
         </div>
 
+        {facts.database ? (
+          <div
+            data-testid="partner-database"
+            role={facts.database.status === "ok" ? "status" : "alert"}
+            className={`rounded-[var(--admin-radius)] border px-4 py-3 text-sm ${facts.database.status === "ok" ? "border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : facts.database.status === "warn" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"}`}
+          >
+            <span className="font-bold">Database: </span>
+            {facts.database.summary}{" "}
+            <a className="underline" href="/admin/settings/platform-health">
+              Vital signs
+            </a>
+          </div>
+        ) : null}
+
         {facts.readErrors.length ? (
           <div role="alert" className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
             The partner could not read everything, so fixes are paused until it can:

@@ -174,6 +174,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/label-studio-0342-pg-check.sql", mustPrint: "LABEL STUDIO 0342 CHECK PASSED" }, // D177 S6
   { file: "scripts/recon/drawer-count-integrity-0343-pg-check.sql", mustPrint: "DRAWER COUNT INTEGRITY 0343 CHECK PASSED" }, // D180 S3
   { file: "scripts/recon/menu-copy-retention-0344-pg-check.sql", mustPrint: "MENU COPY RETENTION 0344 CHECK PASSED" }, // PERF round P1/P2
+  { file: "scripts/recon/db-vitals-0345-pg-check.sql", mustPrint: "DB VITALS 0345 CHECK PASSED" }, // D193 DB health B
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */

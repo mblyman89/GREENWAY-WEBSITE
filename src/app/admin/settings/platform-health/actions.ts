@@ -29,3 +29,31 @@ export async function runHealthCheckNowAction(): Promise<RunHealthCheckResult> {
   if (!out.saved && out.notes.length > 0) return { ok: false, error: `${out.report.summary} (${out.notes.join("; ")})` };
   return { ok: true, status: out.report.status, summary: out.report.summary };
 }
+
+// ---------------------------------------------------------------------------
+// D193 (DB health B): database vital signs. "Clear stuck connections" ends
+// only APP connections stuck past the floors (0345); it changes no saved row.
+// ---------------------------------------------------------------------------
+
+export type ClearStuckResult = { ok: true; message: string } | { ok: false; error: string };
+
+export async function clearStuckConnectionsAction(): Promise<ClearStuckResult> {
+  const session = await requirePermission("settings.manage");
+  const { readVitalsNow, healStuckSessions } = await import("@/lib/platform/db-vitals-store");
+  const { healPlan } = await import("@/lib/platform/db-vitals-core");
+  const { report } = await readVitalsNow();
+  const plan = healPlan(report.vitals);
+  if (!plan) {
+    revalidatePath(PLATFORM_HEALTH_PAGE);
+    return { ok: true, message: report.vitals ? "Nothing is stuck right now." : report.summary };
+  }
+  const r = await healStuckSessions({
+    pids: plan.pids,
+    idleTxMinutes: plan.idleTxMinutes,
+    activeMinutes: plan.activeMinutes,
+    source: "manual",
+    actor: { id: session.profile.id, email: session.email },
+  });
+  revalidatePath(PLATFORM_HEALTH_PAGE);
+  return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error };
+}

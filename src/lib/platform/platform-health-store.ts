@@ -218,6 +218,7 @@ export async function listRecentHealthRuns(limit = 30): Promise<{ rows: HealthRu
     const { data, error } = await admin
       .from(RUNS_TABLE)
       .select("id, kind, status, summary, report, source, run_by, created_at")
+      .eq("kind", KIND) // D193: the 10-minute db_vitals / db_heal readings share the table; they show in their own card
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {
