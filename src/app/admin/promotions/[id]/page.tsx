@@ -24,11 +24,16 @@ import {
 import type { PostStatus } from "@/lib/promotions/types";
 import { isAiConfigured } from "@/lib/promotions/ai-copy";
 import { guardPromotionPublish, guardRuleShapeFor } from "@/lib/promotions/promo-guard";
+import { minPriceToClearFloor, maxSafePercent } from "@/lib/promotions/promo-blocker-fix-core";
 import {
-  minPriceToClearFloor,
-  maxSafePercent,
-  lotForPriceFix,
-} from "@/lib/promotions/promo-blocker-fix-core";
+  distinctCards,
+  guardRowId,
+  inventoryHrefFor,
+  lotForSize,
+  sizeCountByCard,
+  worstFindingPerCard,
+} from "@/lib/promotions/size-guard-core";
+import { formatPacificDateTime } from "@/lib/inventory/lot-lifecycle-core";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { isMarkdownConfig, MARKDOWN_LOCK_LABEL } from "@/lib/promotions/markdown-lock-core";
 import { guardSkipNote, MAX_HIDE_PER_PRESS } from "@/lib/promotions/promo-fix-core";
@@ -76,9 +81,14 @@ export default async function EditPromotionPage({
     previewAffectedProductsWithImages(promotion),
     guardPromotionPublish(promotion),
   ]);
-  const guardBelowCost = guard.findings.filter((f) => f.reason === "below_cost");
-  const guardCostUnknown = guard.findings.filter((f) => f.reason === "cost_unknown");
-  const guardRegularBelow = guard.findings.filter((f) => f.reason === "regular_below_cost");
+  // D195: findings are per SIZE. The card-level actions (hide, leave out,
+  // never discount) act on the product, so the blocker list has one entry per
+  // product (its worst size) and lists every blocking size under it.
+  const guardBelowCostSizes = guard.findings.filter((f) => f.reason === "below_cost");
+  const guardBelowCost = worstFindingPerCard(guardBelowCostSizes);
+  const guardCostUnknown = worstFindingPerCard(guard.findings.filter((f) => f.reason === "cost_unknown"));
+  const guardRegularBelow = worstFindingPerCard(guard.findings.filter((f) => f.reason === "regular_below_cost"));
+  const checkedAt = formatPacificDateTime(new Date().toISOString());
   // R74 S22: what the guard left out (hidden cards, never-discount products).
   const guardSkipped = guardSkipNote(guard.hiddenSkipped, guard.neverSkipped);
   // R74 S23: the numbers that fix each blocker, with the guard's own math.
@@ -96,9 +106,20 @@ export default async function EditPromotionPage({
   const schedule = promoScheduleSummary(scheduleInput, nowIso);
   const gate = scheduleGate(scheduleInput, nowIso);
   const PREVIEW_CAP = 500;
-  const blockerLots = guardBelowCost.length
-    ? await listLotRefsForKeys(guardBelowCost.slice(0, 50).map((f) => f.key))
-    : [];
+  // D195 step 3: every product link opens the inventory lot of the exact
+  // size (lotForSize), else the inventory search for the card. Never the
+  // enrichment page: prices, costs and size links are fixed on the lot.
+  const shownRows = preview.rows.slice(0, PREVIEW_CAP);
+  const sizeCounts = sizeCountByCard(guard.affected);
+  const lotKeys = [
+    ...shownRows.map((r) => r.key),
+    ...shownRows.map((r) => r.lotKey ?? ""),
+    ...guardBelowCostSizes.map((f) => f.key),
+    ...guardBelowCostSizes.map((f) => f.lotKey ?? ""),
+  ].filter(Boolean);
+  const blockerLots = lotKeys.length ? await listLotRefsForKeys(lotKeys) : [];
+  const lotHref = (row: { key: string; sizeId?: string | null; lotKey?: string | null }, anchor?: string) =>
+    inventoryHrefFor(lotForSize(blockerLots, row, sizeCounts.get(row.key) ?? 0), row.key, anchor);
 
   // Pick a representative product (or a sensible default) for the live badge preview.
   const sample = affected[0] ?? null;
@@ -155,8 +176,13 @@ export default async function EditPromotionPage({
           </h2>
           <p className="mt-1 text-xs text-white/50">
             Every product this deal would discount on the live menu, at its deepest possible
-            discount, against the legal minimum built from its cost. These are the exact numbers
-            Publish and Schedule check. {schedule.text}
+            discount, against the legal minimum built from its cost. Every size is checked at its
+            own price and its own cost, exactly as the register rings it. These are the exact
+            numbers Publish and Schedule check. {schedule.text}
+          </p>
+          <p data-testid="promo-preview-checked-at" className="mt-1 text-[11px] text-white/40">
+            Checked at {checkedAt} against the live menu and inventory costs. Saved a price, cost or
+            size in inventory? Reload this page to re-check.
           </p>
           {guard.readProblems.length > 0 && (
             <p data-testid="promo-preview-incomplete" className="mt-2 text-xs text-[var(--admin-gold)]">
@@ -182,7 +208,8 @@ export default async function EditPromotionPage({
               </span>
             ))}
             <span className="rounded-md px-2 py-1 text-xs text-white/40">
-              {preview.total} product{preview.total === 1 ? "" : "s"} in this deal
+              {distinctCards(preview.rows)} product{distinctCards(preview.rows) === 1 ? "" : "s"},{" "}
+              {preview.total} size{preview.total === 1 ? "" : "s"} in this deal
             </span>
           </div>
           {preview.total === 0 ? (
@@ -196,6 +223,7 @@ export default async function EditPromotionPage({
                 <thead className="sticky top-0 bg-[#0a0a0a] text-white/40">
                   <tr>
                     <th className="px-2 py-1.5 font-medium">Product</th>
+                    <th className="px-2 py-1.5 font-medium">Size</th>
                     <th className="px-2 py-1.5 text-right font-medium">Price</th>
                     <th className="px-2 py-1.5 text-right font-medium">Lowest with this deal</th>
                     <th className="px-2 py-1.5 text-right font-medium">Legal minimum</th>
@@ -203,17 +231,20 @@ export default async function EditPromotionPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.rows.slice(0, PREVIEW_CAP).map((r) => (
-                    <tr key={r.key} data-testid={`promo-preview-row-${r.verdict}`} className="border-t border-white/5">
+                  {shownRows.map((r) => (
+                    <tr key={r.rowId} data-testid={`promo-preview-row-${r.verdict}`} className="border-t border-white/5">
                       <td className="px-2 py-1 text-white/75">
                         <a
-                          href={`/admin/products/${encodeURIComponent(r.key)}`}
+                          href={lotHref(r, r.verdict === "blocks" || r.verdict === "regular_below" ? "after_tax_price" : undefined)}
+                          data-testid="promo-preview-lot-link"
+                          title="Open this size's inventory lot (price, cost, size link)"
                           className="underline decoration-white/15 hover:decoration-white/60"
                         >
                           {r.brand ? `${r.brand} · ` : ""}
                           {r.name}
                         </a>
                       </td>
+                      <td className="px-2 py-1 text-white/55">{r.sizeLabel ?? "\u2014"}</td>
                       <td className="px-2 py-1 text-right text-white/60">{formatMoneyMinor(r.priceMinor)}</td>
                       <td className="px-2 py-1 text-right text-white/80">{formatMoneyMinor(r.lowestMinor)}</td>
                       <td className="px-2 py-1 text-right text-white/60">
@@ -243,8 +274,8 @@ export default async function EditPromotionPage({
               </table>
               {preview.total > PREVIEW_CAP && (
                 <p data-testid="promo-preview-more" className="px-2 py-1.5 text-xs text-white/40">
-                  Showing the first {PREVIEW_CAP} of {preview.total} (problems first). The counts above
-                  cover all {preview.total}.
+                  Showing the first {PREVIEW_CAP} of {preview.total} sizes (problems first). The counts
+                  above cover all {preview.total}.
                 </p>
               )}
             </div>
@@ -252,7 +283,9 @@ export default async function EditPromotionPage({
           {guardSkipped && <p className="mt-2 text-[11px] text-white/40">{guardSkipped}</p>}
           <p className="mt-2 text-[11px] text-white/35">
             Lowest with this deal assumes every tier or threshold is met (the deepest it can go). The
-            register also clamps every ticket at the legal minimum.
+            register also clamps every ticket at the legal minimum. Product names open the inventory
+            lot of that size; a size whose lot is not linked yet opens the inventory search for the
+            product.
           </p>
         </section>
 
@@ -374,27 +407,33 @@ export default async function EditPromotionPage({
                     deal. Never discount = still sold, never in any deal. Or fix the price below.
                   </p>
                   <ul className="mt-2 max-h-72 space-y-1.5 overflow-y-auto" data-testid="promo-blockers">
-                    {guardBelowCost.slice(0, 50).map((f) => (
-                      <li key={f.key} className="rounded-md bg-black/30 px-2 py-1.5 text-xs text-[#ffb0b0]/90">
+                    {guardBelowCost.slice(0, 50).map((card) => (
+                      <li key={card.key} className="rounded-md bg-black/30 px-2 py-1.5 text-xs text-[#ffb0b0]/90">
                         <div>
                           <a
-                            href={`/admin/products/${encodeURIComponent(f.key)}`}
+                            href={lotHref(card)}
+                            data-testid="promo-blocker-lot-link"
                             className="text-white/80 underline decoration-white/20 hover:decoration-white/60"
                           >
-                            {f.name}
-                          </a>{" "}
-                          — price {formatMoneyMinor(f.priceMinorUnits)}, worst case{" "}
-                          {formatMoneyMinor(f.worstCasePriceMinorUnits)} {"<"} floor{" "}
-                          {formatMoneyMinor(f.floorMinorUnits)}
+                            {card.brand ? `${card.brand} \u00b7 ` : ""}
+                            {card.name}
+                          </a>
                         </div>
-                        {(() => {
+                        {guardBelowCostSizes.filter((x) => x.key === card.key).map((f) => {
                           const needPrice = minPriceToClearFloor(guardShape, f.floorMinorUnits);
                           const safePct =
                             guardShape.discountType === "percent" && !guardShape.config.eitherOr
                               ? maxSafePercent(f.priceMinorUnits, f.floorMinorUnits)
                               : null;
-                          const lotId = lotForPriceFix(blockerLots, f.key);
+                          const lotId = lotForSize(blockerLots, f, sizeCounts.get(f.key) ?? 0);
                           return (
+                            <div key={guardRowId(f)} className="mt-1 border-l border-white/10 pl-2" data-testid="promo-blocker-size">
+                            <div>
+                              {f.sizeLabel ? <span className="font-medium text-white/75">{f.sizeLabel}: </span> : null}
+                              price {formatMoneyMinor(f.priceMinorUnits)}, worst case{" "}
+                              {formatMoneyMinor(f.worstCasePriceMinorUnits)} {"<"} floor{" "}
+                              {formatMoneyMinor(f.floorMinorUnits)}
+                            </div>
                             <p className="mt-0.5 text-[11px] text-white/50" data-testid="promo-blocker-fix-hint">
                               {needPrice != null ? (
                                 <>Price it at {formatMoneyMinor(needPrice)} or more and this deal is legal for it. </>
@@ -412,15 +451,22 @@ export default async function EditPromotionPage({
                                   Fix price on the lot
                                 </a>
                               ) : (
-                                <span>No inventory lot found for it.</span>
+                                <a
+                                  href={inventoryHrefFor(null, f.key)}
+                                  className="text-[var(--admin-accent)] underline"
+                                  data-testid="promo-blocker-find-lot"
+                                >
+                                  No lot is linked to this size yet: find it in inventory and set its size
+                                </a>
                               )}
                             </p>
+                            </div>
                           );
-                        })()}
+                        })}
                         <div className="mt-1 flex flex-wrap gap-1">
                           <form action={hidePromotionBlockersAction}>
                             <input type="hidden" name="id" value={promotion.id} />
-                            <input type="hidden" name="key" value={f.key} />
+                            <input type="hidden" name="key" value={card.key} />
                             <button
                               type="submit"
                               className="rounded border border-[#ff6b6b]/40 px-2 py-0.5 text-[11px] text-[#ffb0b0] hover:bg-[#ff6b6b]/15"
@@ -431,7 +477,7 @@ export default async function EditPromotionPage({
                           <form action={fixPromotionBlockersAction}>
                             <input type="hidden" name="id" value={promotion.id} />
                             <input type="hidden" name="fix" value="exclude" />
-                            <input type="hidden" name="key" value={f.key} />
+                            <input type="hidden" name="key" value={card.key} />
                             <button
                               type="submit"
                               className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/10"
@@ -442,7 +488,7 @@ export default async function EditPromotionPage({
                           <form action={fixPromotionBlockersAction}>
                             <input type="hidden" name="id" value={promotion.id} />
                             <input type="hidden" name="fix" value="never" />
-                            <input type="hidden" name="key" value={f.key} />
+                            <input type="hidden" name="key" value={card.key} />
                             <button
                               type="submit"
                               className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/10"
@@ -463,8 +509,9 @@ export default async function EditPromotionPage({
               ) : (
                 <p className="mt-1 text-xs text-white/60">
                   Worst case checked against {guard.affectedCount} affected product
-                  {guard.affectedCount === 1 ? "" : "s"}: no price can fall below its acquisition
-                  cost. The register also clamps every ticket at the floor (defense in depth).
+                  {guard.affectedCount === 1 ? "" : "s"} ({guard.affectedSizeCount} size
+                  {guard.affectedSizeCount === 1 ? "" : "s"}, each at its own price and cost): no price
+                  can fall below its acquisition cost. The register also clamps every ticket at the floor (defense in depth).
                 </p>
               )}
               {guardSkipped && (
