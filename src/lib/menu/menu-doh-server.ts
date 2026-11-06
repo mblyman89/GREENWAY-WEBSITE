@@ -23,6 +23,10 @@ import "server-only";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { getMedicalRegistryForKeys } from "@/lib/medical/sale-store";
 import { attachDohCompliance } from "@/lib/menu/menu-doh-core";
+// DB HEALTH A (owner 2026-11-06): one shared DOH registry snapshot per minute for public renders.
+import { medicalRegistrySnapshot } from "@/lib/site/public-snapshot-server";
+import { pickKeys } from "@/lib/site/public-snapshot-core";
+import { isDohCategory, type DohCategory } from "@/lib/medical/medical-sale-core";
 
 /**
  * Attach DOH-compliance to menu items using the durable registry. One batched,
@@ -32,6 +36,10 @@ import { attachDohCompliance } from "@/lib/menu/menu-doh-core";
  */
 export async function withDohCompliance<T extends GreenwayMenuItem>(items: T[]): Promise<T[]> {
   if (items.length === 0) return items;
-  const registry = await getMedicalRegistryForKeys(items.map((item) => item.id));
+  const keys = items.map((item) => item.id);
+  const snap = await medicalRegistrySnapshot();
+  const registry: Map<string, DohCategory> = snap
+    ? new Map([...pickKeys(snap, keys)].filter((e): e is [string, DohCategory] => isDohCategory(e[1])))
+    : await getMedicalRegistryForKeys(keys);
   return attachDohCompliance(items, registry);
 }

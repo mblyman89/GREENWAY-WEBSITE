@@ -1235,3 +1235,35 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 | # | Decision | Source phrase |
 |---|---|---|
 | D191 | **Root cause: Chrome rotates a page that is wider than tall when printing to a thermal printer** (Chromium issue 372435414, reported on a 60×50 mm label; Firefox and Acrobat print it correctly). Our 2×1 page went to the Rollo turned 90°, so it spread over two labels: the first blank, the second cut off. **The fix (new pure core `label-print-core`):** Orientation **Auto** sends wide labels as a tall page (1×2 for a 2×1) with the artwork turned in CSS, so the browser has nothing to rotate. `@page` margin is `0 !important`, which beats the admin's 8 mm pick-ticket print rule. Each page box is 0.01″ shorter than the page, and the last label has no page break, so no stray blank label. **Added (per device, per label size):** Orientation (Auto / Straight / Rotate ↻ / Rotate ↺), Nudge X/Y in 0.01″ steps (±0.25″), Scale 85–105 %, **🎯 Print test label** (border, corner brackets, 0.1″ ruler, centre cross, TOP arrow, the active settings), print-dialog steps for the detected OS (Mac custom size with zero margins; Windows mm and the Rollo TCP/IP driver note), the Rollo Printer Portal media size, and a symptom → fix table (blank+cut, sideways, shifted, too big, every-other-label/drift → recalibrate, faint → Darkness/Speed). **Better use of space:** new **Fill** text size (the default; designs saved on Regular before D178 upgrade once) grows text and code to fill the label with no truncation and the barcode never dropped. New **Edge margin** setting: Standard 1/16″ or Tight 1/32″. | *"it prints two labels, the first blank, the second nearly prints off the bottom of the label"* / *"I need to have better use of the available space"* / *"Give me settings and abilities I've not even asked for if they exist"* |
+
+## Owner request, 2026-11-06 (recorded verbatim, D192-D194: the database stays healthy)
+
+> Thank you. I completed the sql steps and cleared everything out. I'll update you in a few days about what I see in there. I need you to log back in to supabase now. Every few hours the database will become "unhealthy" and I can't use the back office. I get an email alert about the platform health. It's unexplainable and frequent. I am hoping you can go in and locate the instability and fix it so we have a consistently health database that we can communicate with always. Surely supabase isn't a spotty service that goes down every few hours. This has to be something we are doing. If you need help logging in, stop and queue up the browser for me to log you in. Otherwise, please start querying the db. Please look for ways you can add to the ai partnership so that it can help me self heal these issues now. I want a healthy db always. Thank you.
+
+### What was measured (Supabase dashboard, logs and metrics, read-only)
+
+- **Compute:** Supabase **Micro**: 1 GB RAM, 2 shared CPU cores, 60 direct connections. Steady state: RAM 55-80%, swap 50-65%, average CPU under 10%.
+- **Two hard stops in six hours.** Postgres logged "database system was interrupted ... not properly shut down; automatic recovery in progress":
+  - last good at 21:07:22 UTC on 2026-11-05, back at 21:09:55;
+  - last good at 02:24:30 UTC on 2026-11-06, back at 02:28:36.
+  - Nothing was logged in between, so the whole instance froze or was killed. CPU recovery spikes at 99% matched both events.
+  - The API returned 4,045 "503" responses in the 21:00 hour, then 521/520/525 at 02:00.
+- **What came right before each stop:** bursts of 2,000-7,000 API requests a minute from our own website server (user agent `node`). Before the 02:24 stop:
+  - about 1,600 a minute were the **same eight `content_blocks` lookups** (footer warning, footer hours image, business hours, social links, brand kit, fonts...), about 255 of each per minute;
+  - about 800 a minute were **whole-menu `product_enrichments` chunks** for product photos;
+  - plus product-first-seen, overrides and DOH registry chunks.
+  - PostgREST logged "Thread killed by timeout manager" in the hour before. `platform_error_events` shows `AbortError` page renders on `/menu/products/[id]` and `/menu/[category]` in the same hours.
+- **Not the cause:**
+  - The queries themselves are fast; the top statement averages 25 ms.
+  - Connections stayed at about 31 of 60.
+  - Disk IO budget stayed at 99%.
+  - No pg_cron or pg_net backlog.
+  - The 516 MB database after the reclaim.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D192 | **Stop the render stampede (slice A).** The small display tables that every public page reads are now read once a minute into shared snapshots, and each render looks values up in memory: content_blocks (public visitors only; staff preview keeps the live read), published enrichment photos plus media URLs (exact rung and S20 identity borrow), classification overrides, and the DOH registry. A failed read is never cached; a failed, missing or oversized snapshot falls back to the original keyed read. Display only, never money. The DOH registry save now also clears the public menu. Pinned by `tests/compliance/db-health-a-public-snapshots.test.ts` and `public-snapshot-core` self-tests. | "This has to be something we are doing" |
+| D193 | **Watch the database's vital signs and let the Partner help heal (slice B).** Recurring check of restarts, connections, idle-in-transaction sessions, long queries, cache hit and database size, with plain-English remedies; safe repairs are owner-approved and audited. | "add to the ai partnership so that it can help me self heal" |
+| D194 | **Recommend the compute step up.** Micro (1 GB) has no headroom for a burst. Small (2 GB) is about $5 more a month. Slices A and B remove the load we caused; the upgrade adds a margin. The owner decides. | "I want a healthy db always" |

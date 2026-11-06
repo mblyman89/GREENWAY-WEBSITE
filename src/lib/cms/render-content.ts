@@ -17,6 +17,11 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { CONTENT_BLOCK_SEEDS } from "./content-blocks-seed";
 import type { PostStatus } from "./types";
 import { resolvePolicyRows, type PolicyRow } from "./policy-doc-core";
+// DB HEALTH A (owner 2026-11-06 "I want a healthy db always"): public visitors read ONE shared
+// content snapshot per minute instead of one database query per block per render (~1,600 a
+// minute in the bursts that preceded both database restarts). Staff preview keeps the live read.
+import { publicContentSnapshot } from "@/lib/site/public-snapshot-server";
+import { publicContentValue, publicContentValues } from "@/lib/site/public-snapshot-core";
 
 const SEED_DEFAULTS = new Map(
   CONTENT_BLOCK_SEEDS.map((s) => [s.block_key, s.defaultValue]),
@@ -41,6 +46,11 @@ export async function getContentForRender(
   }
 
   if (!isSupabaseServiceConfigured) return fallback;
+
+  if (!isPreview) {
+    const snap = await publicContentSnapshot();
+    if (snap) return publicContentValue(snap.get(blockKey), fallback);
+  }
 
   try {
     const admin = createSupabaseAdminClient();
@@ -96,6 +106,11 @@ export async function getContentValues(
   }
 
   if (!isSupabaseServiceConfigured) return result;
+
+  if (!isPreview) {
+    const snap = await publicContentSnapshot();
+    if (snap) return publicContentValues(snap, blockKeys, (k) => result[k] ?? "");
+  }
 
   try {
     const admin = createSupabaseAdminClient();

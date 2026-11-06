@@ -32,7 +32,14 @@ import {
 } from "@/lib/ai/kb/image-substitutes";
 // S20: a lot whose own row has no published image borrows the PRODUCT's.
 import { loadPublishedEnrichmentsByIdentity } from "@/lib/enrichment/enrichment-identity-server";
-import type { IdentityCandidate } from "@/lib/enrichment/enrichment-identity-core";
+import { indexPublishedByIdentity, type IdentityCandidate } from "@/lib/enrichment/enrichment-identity-core";
+// DB HEALTH A (owner 2026-11-06): every public render used to re-read the whole published
+// enrichment set in 300-key chunks (~800 requests a minute in the bursts before both database
+// restarts). One shared snapshot per minute now answers the exact and identity rungs in memory;
+// a missing/failed/oversized snapshot falls back to the original keyed reads below.
+import { enrichmentImageSnapshot } from "@/lib/site/public-snapshot-server";
+import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identity-server";
+import { exactImagesFromSnapshot, identityImagesFromSnapshot } from "@/lib/site/public-snapshot-core";
 
 export type ImageSource = "exact" | "brand" | "vendor" | "category" | "inventory_type" | "global";
 
@@ -194,6 +201,13 @@ async function batchIdentityImages(items: ProductImageQuery[]): Promise<Map<stri
   const out = new Map<string, string>();
   const withId = items.filter((i) => Boolean(i.identityKey?.trim()));
   if (withId.length === 0 || !isSupabaseServiceConfigured) return out;
+  if (!enrichmentFollowsIdentityOn()) return out;
+  const snap = await enrichmentImageSnapshot();
+  if (snap) {
+    return identityImagesFromSnapshot(snap, withId, (rows) =>
+      indexPublishedByIdentity(rows as unknown as IdentityCandidate[]) as unknown as Map<string, { row: (typeof rows)[number] }>,
+    );
+  }
   type Row = IdentityCandidate & { primary_media_id: string | null; image_media_ids: string[] | null };
   const survivors = await loadPublishedEnrichmentsByIdentity<Row>(
     withId.map((i) => i.identityKey!.trim()),
@@ -240,6 +254,8 @@ async function batchExactImages(posKeys: string[]): Promise<Map<string, string>>
   const map = new Map<string, string>();
   const keys = Array.from(new Set(posKeys.filter(Boolean)));
   if (keys.length === 0 || !isSupabaseServiceConfigured) return map;
+  const snap = await enrichmentImageSnapshot();
+  if (snap) return exactImagesFromSnapshot(snap, keys);
   const admin = createSupabaseAdminClient();
 
   // Pull published enrichment rows that actually have an image.
