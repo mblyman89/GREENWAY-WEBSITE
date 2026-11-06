@@ -1174,6 +1174,7 @@ import { __runRoleChecklistTests } from "../../src/lib/registers/role-checklist-
 import { __runMenuRetentionTests } from "../../src/lib/menu/menu-retention-core";
 import { __runCockpitCacheTests } from "../../src/lib/admin/cockpit-cache-core";
 import { __runSlowReadTests } from "../../src/lib/platform/slow-read-core";
+import { __runPublicSnapshotTests } from "../../src/lib/site/public-snapshot-core";
 import { __runLabelPrintTests } from "../../src/lib/printing/label-print-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
@@ -2804,6 +2805,7 @@ __runLiquidVolumeTests();
   assertRan("menu-retention-core", __runMenuRetentionTests(), 22); // PERF round P1/P2 (0344): old menu copies cleared after each publish; prune answer read, never guessed; latest_menu_facts walks only when the function is missing, else reports
   assertRan("cockpit-cache-core", __runCockpitCacheTests(), 24); // PERF P3: cockpit display cache: plain-JSON gate, failed reads never stored, short stated TTLs, keys never hold a clock reading
   assertRan("slow-read-core", __runSlowReadTests(), 13); // PERF P5: one greppable [slow-read] log line per read past its budget (cockpit cache misses)
+  assertRan("public-snapshot-core", __runPublicSnapshotTests(), 24); // DB HEALTH A: public renders read one shared snapshot per minute (content, photos, overrides, DOH); never drafts, never money
   assertRan("label-print-core", __runLabelPrintTests(), 60); // D191 ("it prints two labels, the first blank, the second nearly prints off the bottom … better use of the available space"): wide labels sent as a portrait page with the artwork turned (Chromium 372435414), margin 0 !important over the admin 8mm print rule, no trailing page break, per-device per-size orientation/nudge/scale calibration with every corner proven on-page, test label, OS-specific dialog steps, symptom table
   console.log("ALL PURE SELF-TESTS PASSED");
 }

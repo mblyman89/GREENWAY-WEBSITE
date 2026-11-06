@@ -22,13 +22,19 @@ import "server-only";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import { applyCategoryOverrides, applyHouseTypeOverrides } from "@/lib/menu/menu-category-override-core";
+// DB HEALTH A (owner 2026-11-06): public renders read one shared override snapshot per minute
+// (cleared by revalidatePublicMenuSurfaces) instead of re-querying every menu key per render.
+import { classificationOverrideSnapshot } from "@/lib/site/public-snapshot-server";
+import { pickKeys } from "@/lib/site/public-snapshot-core";
 
 export async function withCategoryOverride(
   items: GreenwayMenuItem[],
 ): Promise<GreenwayMenuItem[]> {
   if (items.length === 0) return items;
   try {
-    const overrides = await getOverridesForKeys(items.map((i) => i.id));
+    const keys = items.map((i) => i.id);
+    const snap = await classificationOverrideSnapshot();
+    const overrides = snap ? pickKeys(snap, keys) : await getOverridesForKeys(keys);
     if (overrides.size === 0) return items;
     const map = new Map<string, string | null>();
     // R33: the TYPE half of the owner's re-file (house_type) was saved but

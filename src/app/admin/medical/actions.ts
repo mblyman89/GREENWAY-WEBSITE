@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { redirect } from "next/navigation";
@@ -201,6 +202,8 @@ export async function attachScanAction(form: FormData): Promise<void> {
       entityType: "patient_authorization",
       entityId: id,
     });
+    // DB HEALTH A: the public DOH pill reads a shared snapshot; clear it now.
+    revalidatePublicMenuSurfaces();
   }
   revalidatePath("/admin/medical");
 }
@@ -266,6 +269,8 @@ export async function upsertDohProductAction(form: FormData): Promise<void> {
       after: { pos_product_key: key, doh_category: categoryRaw },
     });
     revalidatePath("/admin/medical");
+    // DB HEALTH A: the public DOH pill reads a shared snapshot; clear it now.
+    revalidatePublicMenuSurfaces();
   } else {
     redirect(`/admin/medical?reg_error=${encodeURIComponent(res.error)}`);
   }
