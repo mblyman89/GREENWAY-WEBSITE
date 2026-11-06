@@ -2,6 +2,7 @@
 
 import { isNonCannabisSide, cannabisLotTargetRefusal, CANNABIS_LINE_RULE } from "@/lib/compliance/cannabis-line-core";
 import { revalidatePath } from "next/cache";
+import { revalidatePromotionSurfaces } from "@/lib/promotions/revalidate-promotions";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
@@ -145,6 +146,7 @@ export async function adjustLotAction(lotId: string, formData: FormData) {
   );
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   if (!result.ok) {
     redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(result.error.slice(0, 900))}#adjust`);
   }
@@ -211,6 +213,7 @@ export async function setLotStatusAction(lotId: string, formData: FormData) {
   const result = await updateLotStatus(lotId, decision.from, decision.to, session.userId);
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   if (!result.ok) {
     redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(result.error.slice(0, 600))}#lifecycle`);
   }
@@ -341,6 +344,7 @@ export async function linkLotProductAction(lotId: string, formData: FormData) {
 
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   redirect(`/admin/inventory/${lotId}?saved=1#${PRODUCT_LINK_ANCHOR}`);
 }
 
@@ -518,6 +522,7 @@ export async function updateLotDetailsAction(lotId: string, formData: FormData) 
 
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   redirect(`/admin/inventory/${lotId}?saved=1` + (banner ? `&lot_msg=${encodeURIComponent(banner)}` : ""));
 }
 
@@ -786,6 +791,7 @@ export async function updateLotWebsiteClassificationAction(lotId: string, formDa
   // refresh both surfaces.
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
@@ -932,6 +938,7 @@ export async function updateLotAfterTaxPriceAction(lotId: string, formData: Form
   // the back office and the customer menu.
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
@@ -979,6 +986,7 @@ export async function setLotSizeAction(lotId: string, formData: FormData) {
   });
   revalidatePath(dest);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   redirect(dest + "?saved=1#lot-size");
 }
 
@@ -1110,6 +1118,7 @@ export async function bulkFillLotsAction(formData: FormData) {
   });
 
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
@@ -1264,6 +1273,7 @@ export async function updateLotComplianceClassificationAction(
 
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
@@ -1306,6 +1316,7 @@ export async function restoreProductToSaleAction(formData: FormData) {
   // The published menu is what the register, the website and the back office
   // all read, so every surface that could show the stale status is revalidated.
   revalidatePath("/admin/inventory");
+  revalidatePromotionSurfaces(); // D195: Promotions re-check price/cost/size/link/status
   // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
