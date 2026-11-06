@@ -53,6 +53,7 @@ import {
   isAiConfigured as isPromoAiConfigured,
 } from "@/lib/promotions/ai-copy";
 import { guardPromotionPublish, auditPublishedPromotions, loadGuardMenu } from "@/lib/promotions/promo-guard";
+import { distinctCards, guardRowLabel, worstFindingPerCard } from "@/lib/promotions/size-guard-core";
 import { DAILY_DEAL_SEEDS } from "@/lib/promotions/daily-deal-seed";
 import {
   planDailyDeals,
@@ -600,12 +601,13 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
         );
       }
       if (guard.blocked) {
-        const hits = guard.findings.filter((f) => f.reason === "below_cost");
+        // D195: findings are per size; the message counts PRODUCTS (worst size each).
+        const hits = worstFindingPerCard(guard.findings.filter((f) => f.reason === "below_cost"));
         const sample = hits
           .slice(0, 3)
           .map(
             (f) =>
-              `${f.name} (floor ${formatMoneyMinor(f.floorMinorUnits)}, worst case ${formatMoneyMinor(f.worstCasePriceMinorUnits)})`,
+              `${guardRowLabel(f)} (floor ${formatMoneyMinor(f.floorMinorUnits)}, worst case ${formatMoneyMinor(f.worstCasePriceMinorUnits)})`,
           )
           .join("; ");
         const more = hits.length > 3 ? ` and ${hits.length - 3} more` : "";
@@ -622,6 +624,7 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
             products: hits.slice(0, 20).map((f) => ({
               key: f.key,
               name: f.name,
+              size: f.sizeLabel ?? null,
               floorMinorUnits: f.floorMinorUnits,
               worstCasePriceMinorUnits: f.worstCasePriceMinorUnits,
             })),
@@ -737,7 +740,7 @@ export async function hidePromotionBlockersAction(formData: FormData): Promise<v
 
   if (outcome.hidden.length > 0) revalidatePublicMenuSurfaces();
   const after = await guardPromotionPublish(promo);
-  outcome.stillBlocking = after.findings.filter((f) => f.reason === "below_cost").length;
+  outcome.stillBlocking = distinctCards(after.findings.filter((f) => f.reason === "below_cost"));
 
   await recordAudit({
     actorId: session.userId,
@@ -841,7 +844,7 @@ export async function fixPromotionBlockersAction(formData: FormData): Promise<vo
 
   const fresh = (await getPromotion(id)) ?? promo;
   const after = await guardPromotionPublish(fresh);
-  outcome.stillBlocking = after.findings.filter((f) => f.reason === "below_cost").length;
+  outcome.stillBlocking = distinctCards(after.findings.filter((f) => f.reason === "below_cost"));
   revalidatePath("/admin/promotions");
   revalidatePath(`/admin/promotions/${id}`);
   if (outcome.done.length > 0) {
@@ -1203,7 +1206,7 @@ export async function applyDailyDealSetupAction(): Promise<void> {
     };
     const guard = await guardPromotionPublish(draft, menu);
     if (guard.blocked) {
-      const hits = guard.findings.filter((f) => f.reason === "below_cost");
+      const hits = worstFindingPerCard(guard.findings.filter((f) => f.reason === "below_cost"));
       skipped.push({
         day: item.dayLabel,
         reason: `${hits.length} product${hits.length === 1 ? "" : "s"} would go below cost; open the deal and use the cost-floor tools`,

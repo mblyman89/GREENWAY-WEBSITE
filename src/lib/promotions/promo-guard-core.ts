@@ -36,6 +36,17 @@ export type GuardProduct = {
   priceMinorUnits: number;
   /** Weighted-average acquisition cost, PRE-TAX minor units. Null = unknown. */
   costMinorUnits: number | null;
+  /**
+   * D195: the menu SIZE this row checks (menu_variants.source_variant_id).
+   * The guard checks every size at its own price and its own cost, exactly
+   * what the register rings. Absent/null = a card with no sizes (one row at
+   * the card price and the card cost, the pre-D195 behaviour).
+   */
+  sizeId?: string | null;
+  /** D195: the size's label ("3.5g"), for the preview and the blocker list. */
+  sizeLabel?: string | null;
+  /** D195: an intake size's own lot key (`<key>-onboarded`), else null. */
+  lotKey?: string | null;
 };
 
 export type GuardRuleShape = {
@@ -57,6 +68,10 @@ export type BelowCostFinding = {
   worstCasePriceMinorUnits: number;
   /** Why this product is flagged. */
   reason: "below_cost" | "cost_unknown" | "regular_below_cost";
+  /** D195: the size this finding is about (null/absent = the whole card). */
+  sizeId?: string | null;
+  sizeLabel?: string | null;
+  lotKey?: string | null;
 };
 
 export const MERCH_TOKENS = ["merch", "accessories", "paraphernalia"];
@@ -118,6 +133,12 @@ export function worstCasePriceMinorUnits(rule: GuardRuleShape, priceMinorUnits: 
   return Math.round(priceMinorUnits * (1 - pct / 100));
 }
 
+/** D195: the size fields a finding carries (only when the row is a size). */
+function sizeOf(p: GuardProduct): Pick<BelowCostFinding, "sizeId" | "sizeLabel" | "lotKey"> {
+  if (p.sizeId == null && p.sizeLabel == null && p.lotKey == null) return {};
+  return { sizeId: p.sizeId ?? null, sizeLabel: p.sizeLabel ?? null, lotKey: p.lotKey ?? null };
+}
+
 /**
  * Scan the products a promotion affects and return every below-cost finding.
  *  - "below_cost": the worst-case discounted price dips under the cost floor
@@ -141,6 +162,7 @@ export function findBelowCost(
         key: p.key,
         name: p.name,
         brand: p.brand,
+        ...sizeOf(p),
         priceMinorUnits: p.priceMinorUnits,
         costMinorUnits: p.costMinorUnits ?? null,
         floorMinorUnits: 0,
@@ -154,6 +176,7 @@ export function findBelowCost(
         key: p.key,
         name: p.name,
         brand: p.brand,
+        ...sizeOf(p),
         priceMinorUnits: p.priceMinorUnits,
         costMinorUnits: p.costMinorUnits,
         floorMinorUnits: floor,
@@ -167,6 +190,7 @@ export function findBelowCost(
         key: p.key,
         name: p.name,
         brand: p.brand,
+        ...sizeOf(p),
         priceMinorUnits: p.priceMinorUnits,
         costMinorUnits: p.costMinorUnits,
         floorMinorUnits: floor,

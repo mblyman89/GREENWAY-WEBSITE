@@ -46,6 +46,7 @@ import {
   type GuardRuleShape,
 } from "./promo-guard-core";
 import { costFloorMinorUnits } from "./discount-engine-core";
+import { guardRowId } from "./size-guard-core";
 import { formatRunAt, pacificLocalToUtc, relativeFromNow } from "@/lib/cms/content-schedule-core";
 
 // ---------------------------------------------------------------------------
@@ -87,6 +88,13 @@ export type PreviewRow = {
   /** lowest - floor, only for costed rows (how much room is left). */
   headroomMinor: number | null;
   verdict: PreviewVerdict;
+  /** D195: the size this row checks (null = a card with no sizes). */
+  sizeId: string | null;
+  sizeLabel: string | null;
+  /** D195: an intake size's own lot key (for the exact-lot link). */
+  lotKey: string | null;
+  /** D195: unique per card + size (React key, test ids). */
+  rowId: string;
 };
 
 export type PromoPreview = {
@@ -105,14 +113,17 @@ function isMerch(categories: string[]): boolean {
  * row is exactly a product that would block Publish.
  */
 export function buildPromoPreview(shape: GuardRuleShape, affected: GuardProduct[]): PromoPreview {
-  const findings = new Map(findBelowCost(shape, affected).map((f) => [f.key, f]));
+  // D195: one row per SIZE (card + size), matched to the guard's finding for
+  // that exact size. A card with no sizes keeps its single card-key row.
+  const findings = new Map(findBelowCost(shape, affected).map((f) => [guardRowId(f), f]));
   const counts: Record<PreviewVerdict, number> = { blocks: 0, regular_below: 0, no_cost: 0, ok: 0 };
   const rows: PreviewRow[] = [];
   const seen = new Set<string>();
   for (const p of affected) {
-    if (seen.has(p.key)) continue;
-    seen.add(p.key);
-    const f = findings.get(p.key);
+    const rowId = guardRowId(p);
+    if (seen.has(rowId)) continue;
+    seen.add(rowId);
+    const f = findings.get(rowId);
     const verdict: PreviewVerdict = !f
       ? "ok"
       : f.reason === "below_cost"
@@ -134,6 +145,10 @@ export function buildPromoPreview(shape: GuardRuleShape, affected: GuardProduct[
       costMinor,
       headroomMinor: costMinor == null ? null : lowestMinor - floorMinor,
       verdict,
+      sizeId: p.sizeId ?? null,
+      sizeLabel: p.sizeLabel ?? null,
+      lotKey: p.lotKey ?? null,
+      rowId,
     });
   }
   const rank = (v: PreviewVerdict) => PREVIEW_VERDICTS.indexOf(v);
@@ -142,7 +157,8 @@ export function buildPromoPreview(shape: GuardRuleShape, affected: GuardProduct[
       rank(a.verdict) - rank(b.verdict) ||
       (a.headroomMinor ?? 0) - (b.headroomMinor ?? 0) ||
       a.name.localeCompare(b.name) ||
-      a.key.localeCompare(b.key),
+      a.key.localeCompare(b.key) ||
+      (a.sizeLabel ?? "").localeCompare(b.sizeLabel ?? ""),
   );
   return { rows, counts, total: rows.length };
 }
@@ -418,5 +434,18 @@ export function __runPromoPreviewCoreTests(): { passed: number; failed: number }
   const rev = parsePromoWindow("2026-11-27T09:00", "2026-11-27T09:00");
   ok(!rev.ok && /after Starts/.test(rev.error), "end not after start refused");
 
+
+  // D195: one row per SIZE. A cheap 1g that clears and a 3.5g that blocks are
+  // two rows of one card; the guard and the preview agree size by size.
+  {
+    const cheap = prod("card", 10000, 1000, { sizeId: "card-1g", sizeLabel: "1g", lotKey: null });
+    const dear = prod("card", Math.ceil(floor1000 / 0.7) - 200, 1000, { sizeId: "card-35", sizeLabel: "3.5g", lotKey: null });
+    const sv = buildPromoPreview(shape, [cheap, dear]);
+    ok(sv.total === 2, "D195: each size of a card is its own row");
+    ok(sv.rows[0].sizeLabel === "3.5g" && sv.rows[0].verdict === "blocks", "D195: the size that blocks is the size shown as blocking");
+    ok(sv.rows[1].sizeLabel === "1g" && sv.rows[1].verdict === "ok", "D195: the other size of the same card stays OK");
+    ok(sv.rows[0].rowId === "card::card-35" && sv.rows[1].rowId === "card::card-1g", "D195: row ids are card + size");
+    ok(by("ok").sizeId === null && by("ok").rowId === "ok", "D195: a card with no sizes keeps its card-key row");
+  }
   return { passed, failed };
 }

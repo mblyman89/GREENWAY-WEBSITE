@@ -179,29 +179,40 @@ export async function addPromotionProductExclusions(
  */
 export async function listLotRefsForKeys(
   keys: string[],
-): Promise<{ id: string; posProductKey: string; status: string; createdAt: string }[]> {
+): Promise<{ id: string; posProductKey: string; status: string; createdAt: string; sizeId: string | null }[]> {
   const uniq = Array.from(new Set(keys.filter(Boolean)));
   if (!isSupabaseServiceConfigured || uniq.length === 0) return [];
   try {
     const admin = createSupabaseAdminClient();
-    type Row = { id: string; pos_product_key: string; status: string; created_at: string };
+    type Row = { id: string; pos_product_key: string; status: string; created_at: string; menu_source_variant_id?: string | null };
+    // D195 step 3: also the lot's menu SIZE (0294), so each size's link opens
+    // the lot that sells as that size. Before 0294 it is re-read without it.
+    let withSize = true;
     // Chunked AND paged (chunked-in.ts), so a key with many lots can never be
     // silently cut at PostgREST's 1,000-row cap.
     const data = await chunkedIn<string, Row>(uniq, async (chunk, from, to) => {
-      const { data: page, error } = await admin
-        .from("inventory_lots")
-        .select("id, pos_product_key, status, created_at")
-        .in("pos_product_key", chunk)
-        .order("id", { ascending: true })
-        .range(from, to);
-      if (error) return [];
-      return (page as Row[] | null) ?? [];
+      const read = (cols: string) =>
+        admin
+          .from("inventory_lots")
+          .select(cols)
+          .in("pos_product_key", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+      const base = "id, pos_product_key, status, created_at";
+      let res = await read(withSize ? `${base}, menu_source_variant_id` : base);
+      if (res.error && withSize && /menu_source_variant_id/.test(String(res.error.message ?? ""))) {
+        withSize = false;
+        res = await read(base);
+      }
+      if (res.error) return [];
+      return (res.data as unknown as Row[] | null) ?? [];
     });
     return data.map((r) => ({
       id: r.id,
       posProductKey: r.pos_product_key,
       status: r.status,
       createdAt: r.created_at,
+      sizeId: (r.menu_source_variant_id ?? "").trim() || null,
     }));
   } catch {
     return [];
