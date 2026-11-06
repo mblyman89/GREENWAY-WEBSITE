@@ -396,10 +396,11 @@ export function textWidthIn(text: string, fontPt: number, bold: boolean): number
 }
 
 /** Word-wrap into at most `maxLines`; the last line gets "…" if it overflows. */
-export function wrapText(text: string, widthIn: number, fontPt: number, bold: boolean, maxLines: number): { lines: string[]; truncated: boolean } {
+export function wrapText(text: string, widthIn: number, fontPt: number, bold: boolean, maxLines: number): { lines: string[]; truncated: boolean; brokeWord: boolean } {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let cur = "";
+  let brokeWord = false;
   const fits = (s: string) => textWidthIn(s, fontPt, bold) <= widthIn + 1e-9;
   let i = 0;
   while (i < words.length) {
@@ -418,6 +419,7 @@ export function wrapText(text: string, widthIn: number, fontPt: number, bold: bo
         else break;
       }
       if (!part) part = w[0];
+      if (part.length < w.length) brokeWord = true;
       lines.push(part);
       words[i] = w.slice(part.length);
       if (!words[i]) i += 1;
@@ -439,7 +441,7 @@ export function wrapText(text: string, widthIn: number, fontPt: number, bold: bo
   if (lines.length === 0 && text) {
     truncated = true;
   }
-  return { lines, truncated };
+  return { lines, truncated, brokeWord };
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -573,11 +575,23 @@ export function layoutLabel(input: LayoutInput): LabelLayout {
         // Never print below the legibility floor: report overflow so the
         // caller drops a field instead of crushing every line.
         if (pt < MIN_FONT_PT - 1e-9) return { out, used: y, overflow: true };
-        const wr = wrapText(it.text, w, pt, bold, it.def.maxLines);
+        let wr = wrapText(it.text, w, pt, bold, it.def.maxLines);
+        // D196: the product name may use extra lines (up to 4) when the
+        // room is there, so the whole name prints instead of "Sorbet -…".
+        if (wr.truncated && style === "title") {
+          const lineIn = (pt / 72) * LINE_H;
+          const room = Math.min(4, Math.floor((maxH - y + 1e-9) / lineIn));
+          for (let n = it.def.maxLines + 1; n <= room; n++) {
+            const more = wrapText(it.text, w, pt, bold, n);
+            wr = more;
+            if (!more.truncated) break;
+          }
+        }
         const h = wr.lines.length * (pt / 72) * LINE_H;
         if (y + h > maxH + 1e-9) return { out, used: y, overflow: true };
-        // "Fill" never grows text to the point of cutting it off.
-        if (wr.truncated && scale > 1 + 1e-9) return { out, used: y, overflow: true };
+        // "Fill" never grows text to the point of cutting it off, or of
+        // splitting a word across lines ("Watermelo / n", D196).
+        if ((wr.truncated || wr.brokeWord) && scale > 1 + 1e-9) return { out, used: y, overflow: true };
         if (wr.truncated) warn.push({ severity: "warn", code: `cut_${it.id}`, text: `${it.def.label} was shortened to fit.` });
         out.push({ kind: "text", field: it.id, lines: wr.lines, xIn: ox + x, yIn: oy + y, wIn: w, hIn: h, fontPt: pt, bold, align: center ? "center" : "left" });
         y += h + GAP_IN * scale;
@@ -854,6 +868,19 @@ export function __runLabelLayoutTests(): { passed: number; failed: number } {
   ok(L4.blocks.some((b) => b.kind === "barcode"), "4x6 has a barcode");
   ok(L4.blocks.filter((b) => b.kind === "text").length === base.fields.length, "4x6 shows every chosen field");
   for (const b of L4.blocks) ok(b.xIn >= 0 && b.yIn >= 0 && b.xIn + b.wIn <= 4 + 1e-6 && b.yIn + b.hIn <= 6 + 1e-6, `block inside 4x6 (${b.kind})`);
+  // D196: owner screenshot showed "Cantina - Sorbet -…" next to the QR on a
+  // 2x1. The whole product name must print, in whole words, bigger than Regular.
+  {
+    const sD = lotSubject({ ...lot, product_name: "Cantina - Sorbet - Watermelon - 100mg" }, ctx);
+    const tD = { ...defaultTemplate(sD, stock2x1), symbology: "qr" as const };
+    const LD = layoutLabel({ subject: sD, stock: stock2x1, dpi: 203, template: tD });
+    const pb = LD.blocks.find((b) => b.kind === "text" && b.field === "product") as TextBlock | undefined;
+    ok(!!pb && pb.lines.join(" ") === "Cantina - Sorbet - Watermelon - 100mg", "D196 2x1 QR prints the whole product name");
+    ok(!!pb && !pb.lines.some((l) => l.endsWith("…")) && !LD.messages.some((m) => m.code === "cut_product"), "D196 no ellipsis / no cut warning");
+    ok(!!pb && pb.lines.every((l) => /^[\w-]+( [\w-]+)*$/.test(l)) && pb.lines.includes("Watermelon"), "D196 words are not split across lines");
+    ok(!!pb && pb.fontPt >= 10, "D196 name is at least 10 pt");
+    ok(wrapText("Watermelon", 0.3, 12, true, 3).brokeWord && !wrapText("Short", 2, 10, false, 1).brokeWord, "brokeWord flag");
+  }
   const t2 = defaultTemplate(s, stock2x1);
   const L2 = layoutLabel({ subject: s, stock: stock2x1, dpi: 203, template: t2 });
   ok(L2.severity !== "block", "2x1 lot lays out");

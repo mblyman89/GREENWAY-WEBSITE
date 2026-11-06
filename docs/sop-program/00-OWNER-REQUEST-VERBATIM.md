@@ -1288,3 +1288,25 @@ The *proposed fix* the owner approved (from the read-only loyalty report of the 
 | # | Decision | Source phrase |
 |---|---|---|
 | D195 | **Promotions become size-true and inventory-linked.** (1) One shared per-size guard row (card + size + its own price + `costForLine` cost + the lot ids behind it) used by publish guard, preview, standing audit, bad-products queue, clearance and simulator, so the back office checks exactly what the register charges. (2) Lots keyed by a raw CCRS barcode are matched to their menu card and size (name + size + brand evidence, owner confirms, guarded write, audited), plus a standing "unlinked stock" worklist so it cannot recur silently. (3) Every product link and fix button in Promotions opens the inventory lot detail page of the exact size at issue (`/admin/inventory/<lotId>`), which already links on to enrichment. (4) The page stays live: inventory price/cost/size/link saves revalidate the promotions pages and the preview shows "checked at". No code in this round. | "we need a promotions page that is fully connected and updates itself" |
+
+## Owner request, 2026-11-06 (recorded verbatim, D196: label printing still wrong)
+
+> "the label maker is still not working right. i have tried all the things. i am uploading screen shots of everything wrong. please try harder to get this right."
+
+Uploads:
+- the Chrome print dialog: Greenway Barcode Label, 2x1in, Margins None, Scale Default, and a **tall** preview with the art turned;
+- the Rollo web page Media screen (2 × 1″ Barcode Label, offset 0 × 0, Gap);
+- the Rollo web page Printing Defaults screen (Orientation "?", 600 dpi, Darkness 53 %, Speed 5, Scaling None);
+- the back-office preview ("Cantina - Sorbet - Watermelon -…" cut off next to the QR);
+- a photo of the print: sideways across two labels, QR on one and the turned text on the next.
+
+### Findings
+
+- The Rollo printed D191's 1″ × 2″ turned page exactly as sent. With this setup nothing rotates the page, so turning the art made the print run across two labels. Rollo's guidance is a page the same size as the label (support article 29000051200).
+- In the 2×1 QR layout, the product name was limited to 2 lines and cut with "…" at 9.5 pt. Fill could not grow it because cutting is not allowed above 100 %.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D196 | **Labels go out straight at the exact label size; the full name prints.** Orientation Auto now resolves to Straight for every stock. A 2×1 is a 2″ × 1″ page with no transform. Turned ↻/↺ remains as a manual override for drivers that turn pages. Saved per-device calibrations are reset (key v1 → v2). Step 5 tells the owner to set the Rollo web page Printing Defaults Orientation to the upright "A", Media to the label size and Gap. On Windows it gives Rollo's own driver by TCP/IP (51 × 25 mm form, Rotate Normal) as the fallback. The two-labels symptom comes first in the symptom table. The product line may use up to 4 lines when there is room, and Fill never splits a word, so "Cantina - Sorbet - Watermelon - 100mg" prints whole at about 12 pt beside the QR. Pinned by `label-print-core` / `label-layout-core` / `label-studio-core` self-tests and `tests/compliance/d191-label-print.test.ts`, `d177-label-studio.test.ts`. | "please try harder to get this right" |

@@ -15,7 +15,7 @@
  *     copies can't run a roll out;
  *   - the print CSS gives every label its own page at the exact stock size
  *     (margin 0, so the browser never scales — docs/rollo-label-printing.md);
- *     D191 moved it to label-print-core (portrait page + rotated artwork for
+ *     D191 moved it to label-print-core (D196: now straight by default; was portrait page + rotated artwork for
  *     wide labels, per-device nudge/scale).
  */
 import {
@@ -470,8 +470,9 @@ export function __runLabelStudioTests(): { passed: number; failed: number } {
   ok(css.includes(`body>*:not(.${PRINT_ROOT_CLASS}){display:none!important}`), "hides admin chrome");
   ok(css.includes("break-after:page") && css.includes(":last-child{break-after:auto"), "one label per page, no trailing blank");
   ok(!/[<>]/.test(css.replace(/body>\*/g, "")), "no markup in css");
-  // D191: wide labels go out as a portrait page (artwork rotated) by default.
-  ok(printCss(stockById("ol-rl2676")!).includes("size: 1.25in 2.25in"), "nc page size (rotated portrait)");
+  // D196: every label goes out straight, page = label size (the D191 turned
+  // page printed sideways across two labels on the owner's Rollo).
+  ok(printCss(stockById("ol-rl2676")!).includes("size: 2.25in 1.25in"), "nc page size (straight, label size)");
 
   // Spec text.
   ok(/^Code 128 · \d+(\.\d+)? mil bars · /.test(barcodeSpecText(j1.items[0].layout)), "spec text code128");

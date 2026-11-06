@@ -24,6 +24,7 @@ import {
   printCss,
   sanitizeCalibration,
   testLabelSvg,
+  windowsRolloDriverSteps,
   withCalibration,
 } from "@/lib/printing/label-print-core";
 import { __runLabelLayoutTests, defaultTemplate, layoutLabel, lotSubject, sanitizeTemplate, type LotLabelSource } from "@/lib/printing/label-layout-core";
@@ -58,24 +59,32 @@ describe("label-print-core (D191)", () => {
     expect(r.passed).toBeGreaterThanOrEqual(60);
   });
 
-  it("a 2×1 Rollo label goes out as a tall 1×2 page with the artwork turned", () => {
+  it("D196: a 2×1 Rollo label goes out straight, page = label size (owner photo: the turned page ran across two labels)", () => {
     const s = stockById("rollo-2x1")!;
     const g = pageGeometry(s, DEFAULT_CALIBRATION);
-    expect(g.orientation).toBe("rotate_cw");
-    expect([g.pageWIn, g.pageHIn]).toEqual([1, 2]);
-    expect(g.landscapePage).toBe(false);
+    expect(g.orientation).toBe("straight");
+    expect([g.pageWIn, g.pageHIn]).toEqual([2, 1]);
+    expect(g.transform).toBe("none");
     const css = printCss(s);
-    expect(css).toContain("@page { size: 1in 2in; margin: 0 !important; }");
-    expect(css).toContain("rotate(90deg)");
+    expect(css).toContain("@page { size: 2in 1in; margin: 0 !important; }");
+    expect(css).not.toContain("rotate(90deg)");
     expect(css).toContain(".gw-label-page:last-child{break-after:auto");
-    // every corner of the artwork lands on the page
     for (const [x, y] of [[0, 0], [2, 0], [0, 1], [2, 1]]) {
       const p = mapPoint(g, DEFAULT_CALIBRATION, x, y);
       expect(p.x).toBeGreaterThanOrEqual(-1e-6);
-      expect(p.x).toBeLessThanOrEqual(1 + 1e-6);
+      expect(p.x).toBeLessThanOrEqual(2 + 1e-6);
       expect(p.y).toBeGreaterThanOrEqual(-1e-6);
-      expect(p.y).toBeLessThanOrEqual(2 + 1e-6);
+      expect(p.y).toBeLessThanOrEqual(1 + 1e-6);
     }
+  });
+
+  it("Turned is still available as a manual choice", () => {
+    const s = stockById("rollo-2x1")!;
+    const c = { ...DEFAULT_CALIBRATION, orientation: "rotate_cw" as const };
+    const g = pageGeometry(s, c);
+    expect([g.pageWIn, g.pageHIn]).toEqual([1, 2]);
+    expect(printCss(s, c)).toContain("@page { size: 1in 2in; margin: 0 !important; }");
+    expect(printCss(s, c)).toContain("rotate(90deg)");
   });
 
   it("tall labels (4×6) are left straight", () => {
@@ -105,8 +114,11 @@ describe("label-print-core (D191)", () => {
     expect(detectOs("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows");
     const steps = dialogSteps("mac", s, ROLLO_X1040, pageGeometry(s, DEFAULT_CALIBRATION)).join(" ");
     expect(steps).toMatch(/Manage Custom Sizes/);
-    expect(steps).toMatch(/372435414/);
-    expect(SYMPTOM_FIXES[0].symptom).toMatch(/first blank/);
+    expect(steps).toMatch(/exact size/);
+    expect(SYMPTOM_FIXES[0].symptom).toMatch(/across two labels/);
+    expect(SYMPTOM_FIXES[0].fix).toMatch(/upright/);
+    expect(SYMPTOM_FIXES.some((f) => /first blank/.test(f.symptom))).toBe(true);
+    expect(windowsRolloDriverSteps(s).join(" ")).toMatch(/51 mm/);
   });
 });
 
@@ -136,5 +148,14 @@ describe("label-layout-core fill (D191)", () => {
       return Math.max(...L.blocks.map((b) => (b.kind === "text" ? b.fontPt : 0)));
     };
     expect(pt("fill")).toBeGreaterThan(pt("regular"));
+  });
+
+  it("D196: the whole product name fits next to a QR on a 2×1 (no …)", () => {
+    const s = lotSubject({ ...lot, product_name: "Cantina - Sorbet - Watermelon - 100mg" }, ctx);
+    const st = stockById("rollo-2x1")!;
+    const L = layoutLabel({ subject: s, stock: st, dpi: 203, template: { ...defaultTemplate(s, st), symbology: "qr" } });
+    const pb = L.blocks.find((b) => b.kind === "text" && b.field === "product");
+    expect(pb && pb.kind === "text" ? pb.lines.join(" ") : "").toBe("Cantina - Sorbet - Watermelon - 100mg");
+    expect(L.messages.some((m) => m.code === "cut_product")).toBe(false);
   });
 });
