@@ -111,12 +111,54 @@ when a re-barcoded item won't ring up. The log is append-only: the server can
 add and read rows, never edit or delete them. Without 0342, printing works
 exactly the same; the history is just not kept.
 
+## D196: labels go out straight again (this replaces D191's turned page)
+
+Owner (2026-11-06): *"the label maker is still not working right. i have tried
+all the things. i am uploading screen shots of everything wrong. please try
+harder to get this right."*
+
+**What the photos showed.** The Chrome dialog (paper 2x1in, Margins None, Scale
+Default) previewed a **tall** page with the art turned, which is what D191's
+Auto sent. The Rollo printed that 1″ × 2″ page **as it was**, so the
+design came out sideways across two labels: the QR on one label and the turned
+text on the next. On this setup (the Rollo's web page set to Media 2 × 1, Gap,
+600 dpi) neither Chrome nor the printer rotates the page. D191's turn was
+the wrong fix here.
+
+**What the studio does now.**
+
+- **Auto = Straight** for every size. The page is the label's exact size
+  (`@page { size: 2in 1in; margin: 0 }` for a 2×1). This is what Rollo says to do: "Make sure your label file is designed at the same size as your
+  labels" ([Rollo 29000051200](https://support.rollo.com/support/solutions/articles/29000051200-set-up-a-custom-label-size-windows-mac-and-mobile-app-)).
+- Turned ↻/↺ stays available as a manual choice, but only for a driver that turns pages by itself.
+- Saved calibrations were reset. The storage key went from v1 to v2, because nudges tuned against the turned page no longer apply.
+- The product name may use up to 4 lines when the room is there. Fill no longer grows the text to the point of splitting a word. On a 2×1 with a QR, "Cantina - Sorbet - Watermelon - 100mg" now prints in full at about 12 pt (before: "Cantina - / Sorbet -…" at 9.5 pt).
+
+**One-time setup on the Rollo's own web page.**
+
+1. Type the printer's IP address into a browser.
+2. **Media:** 2 × 1, Label Separator **Gap**.
+3. **Printing Defaults → Orientation:** the upright **"A"** (not "?" auto), then Save.
+4. The Wireless Rollo re-learns the gap by itself when a roll is loaded.
+
+**Windows fallback.** If it still runs across two labels, add the printer with Rollo's own driver:
+
+1. Download it from rollo.com/driver-dl/Rollo-Windows-Latest.zip.
+2. Add the printer by TCP/IP hostname.
+3. Create a form of 51 × 25 mm with margins 0.
+4. Set Rotate to Normal and the print position to 0.
+
+The studio lists these steps under step 5 on Windows.
+
 ## Printing problems, calibration and setup (D191)
 
 Owner (2026-11-05): *"I tested the 2x1" labels, it prints two labels, the first
 blank, the second nearly prints off the bottom of the label."*
 
-**Why it happened.** Chrome rotates a page that is wider than it is tall when it
+> **Superseded by D196 above:** on the owner's Rollo the turned page printed across two
+> labels. Kept for the record.
+
+**Why it happened (D191's theory).** Chrome rotates a page that is wider than it is tall when it
 prints to a thermal printer, even when the preview looks right ([Chromium issue
 372435414](https://issues.chromium.org/issues/372435414), "Prints are rotated
 with 90 degree if the page width is larger than the page height", reported for a

@@ -19,6 +19,21 @@
  * orientation by hand, nudge the image (offset), shrink it a touch (scale),
  * and print a calibration label that shows edges, centre and direction.
  *
+ * D196 (owner photo, 2026-11-06): with D191's turned tall page the Rollo
+ * printed the design sideways down two labels, with the QR code on one label
+ * and the name on the next. That is the 1″ × 2″ page printed exactly as
+ * sent, so on that computer nothing rotates the page and the extra turn was
+ * wrong. Rollo's documented flow is a page the same size as the label
+ * (support 29000051200: "Make sure your label file is designed at the same size
+ * as your labels"), with the printer's Media set to that size. The owner's
+ * Rollo web page now shows 2 × 1. So Auto sends every label STRAIGHT. The
+ * turned pages stay as manual options for a driver that does turn wide pages
+ * (Chromium issue 372435414). The Rollo's own web page also has an Orientation
+ * setting, and the owner's showed "?" (auto-rotate). The setup now says to set
+ * it to the upright "A" so the printer never turns a page by itself. If a
+ * Windows computer still prints a straight page sideways, Rollo's own fix is
+ * its Windows driver, added by hostname, with Rotate set to Normal.
+ *
  * Everything here is deterministic and self-tested; the component only stores
  * the choice and renders the CSS/SVG these functions return.
  */
@@ -27,12 +42,14 @@ import { ROLLO_X1040, customStock, stockById, stockSizeText, type LabelStock, ty
 // ── Calibration (per device, per label size) ────────────────────────────────
 
 /**
- * - auto:     wide labels go out as a portrait page with the artwork rotated
- *             (the Chromium fix); tall/square labels go out as-is.
- * - straight: page exactly as the label (across × feed), no rotation — the
- *             pre-D191 behaviour, right for drivers that already handle it.
- * - rotate_cw / rotate_ccw: always send the portrait page, artwork turned
- *             clockwise / counter-clockwise (pick whichever reads upright).
+ * - auto:     D196: the page is exactly the label (same as straight). This is
+ *             Rollo's documented setup and what its own Windows driver and
+ *             the Mac custom size expect.
+ * - straight: page exactly as the label (across × feed), no rotation.
+ * - rotate_cw / rotate_ccw: send a tall page with the artwork turned
+ *             clockwise / counter-clockwise, for a driver that turns wide pages
+ *             itself (Chromium issue 372435414). Use the direction test to
+ *             find out.
  */
 export type PrintOrientation = "auto" | "straight" | "rotate_cw" | "rotate_ccw";
 
@@ -57,9 +74,10 @@ export const DEFAULT_CALIBRATION: PrintCalibration = { orientation: "auto", offs
 export const ORIENTATION_LABEL: Record<PrintOrientation, string> = {
   auto: "Auto (recommended)",
   straight: "Straight",
-  rotate_cw: "Rotate ↻",
-  rotate_ccw: "Rotate ↺",
+  rotate_cw: "Turned ↻",
+  rotate_ccw: "Turned ↺",
 };
+
 
 function clampNum(raw: unknown, lo: number, hi: number, d: number, step: number): number {
   const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
@@ -85,8 +103,12 @@ export function isDefaultCalibration(c: PrintCalibration): boolean {
   return c.orientation === "auto" && c.offsetXIn === 0 && c.offsetYIn === 0 && c.scalePct === 100;
 }
 
-/** localStorage key for this device's calibration map (stockId → calibration). */
-export const CALIBRATION_STORAGE_KEY = "gw.labelStudio.v1.calibration";
+/**
+ * localStorage key for this device's calibration map (stockId → calibration).
+ * D196 bumped v1 → v2: nudges saved while D191 sent a turned page were tuned
+ * for the wrong direction, so every computer starts fresh on Auto (straight).
+ */
+export const CALIBRATION_STORAGE_KEY = "gw.labelStudio.v2.calibration";
 
 /** Pick one stock's calibration out of the stored map (sanitised). */
 export function calibrationFor(map: unknown, stockId: string): PrintCalibration {
@@ -119,8 +141,11 @@ export function isWideLabel(stock: LabelStock): boolean {
 }
 
 export function resolveOrientation(stock: LabelStock, c: PrintCalibration): ResolvedOrientation {
+  void stock;
+  // D196: Auto = straight for every size (see the header). The turned pages
+  // made a 2×1 print sideways across two labels on the owner's Rollo.
   if (c.orientation !== "auto") return c.orientation;
-  return isWideLabel(stock) ? "rotate_cw" : "straight";
+  return "straight";
 }
 
 export type PageGeometry = {
@@ -323,29 +348,51 @@ export function dialogSteps(os: ClientOs, stock: LabelStock, printer: PrinterPro
   if (os === "mac") {
     steps.push(`Paper size: your ${size} custom size (Paper Size → Manage Custom Sizes… → width ${inchText(stock.acrossIn)} in, height ${inchText(stock.feedIn)} in, all four margins 0, “User defined” non-printable area). Name it e.g. “Rollo ${inchText(stock.acrossIn)}x${inchText(stock.feedIn)}”.`);
   } else if (os === "windows") {
-    steps.push(`Paper size: ${size} (${mm}). Wireless Rollo on Windows is 4×6-only until it is added with the Rollo driver (Add printer → TCP/IP hostname rollo-xxxx.local); then set this size under Printing Preferences → Advanced.`);
+    steps.push(`Paper size: ${size} (${mm}). If it isn't in the list, set the Rollo's Media to this size on its web page first.`);
   } else {
     steps.push(`Paper size: ${size} (${mm}).`);
   }
   steps.push("Margins: None. Scale: Default / 100% (Actual size) — not “Fit to page”.");
   steps.push("Turn off “Headers and footers”; “Background graphics” on.");
   if (g.orientation !== "straight") {
-    steps.push("Layout: leave Portrait. The studio already turned the artwork so Chrome won't rotate it again (Chromium bug 372435414).");
+    steps.push("Layout: leave Portrait. The studio already turned the artwork (Turned mode, for drivers that turn wide pages; Chromium issue 372435414).");
   } else {
-    steps.push(g.landscapePage ? "Layout: Landscape (Chrome usually picks it automatically)." : "Layout: Portrait.");
+    steps.push("Layout: if Chrome shows a Layout choice, leave it as it is. The page is already the label's exact size.");
   }
   return steps;
+}
+
+/**
+ * D196: Rollo's documented Windows setup for custom sizes on the Wireless Rollo
+ * (support article 29000051200). Done once per computer, then once per new
+ * label size (step 5 only).
+ */
+export function windowsRolloDriverSteps(stock: LabelStock): string[] {
+  const wmm = Math.round(stock.acrossIn * 25.4);
+  const hmm = Math.round(stock.feedIn * 25.4);
+  return [
+    "Download and install Rollo's Windows driver: rollo.com/driver-dl/Rollo-Windows-Latest.zip.",
+    "Find the printer's network name: it is in the address bar of the Rollo web page you set Media on (like rollo-e8-54-7a.local). Or hold the Rollo's Wi-Fi button 2–3 seconds to print a network page that shows it.",
+    "Control Panel → Devices and Printers → Add a printer → “The printer that I want isn't listed” → “Add a printer using a TCP/IP address or hostname”. Device type TCP/IP Device, type the network name, then Next.",
+    "Pick Rollo and the Rollo driver (“Use the driver that is currently installed”). Name it “Rollo Labels” so it's easy to spot. Finish.",
+    `Settings → Printers & scanners → Rollo Labels → Printing preferences → Settings tab: Form name ${stockSizeText(stock).replace(/\s/g, "")}, Width ${wmm} mm, Height ${hmm} mm, Left/Right/Top/Bottom 0 → Save → Apply. Orientation/Rotate: Normal. Print position adjustment: 0 and 0.`,
+    "In the studio, Orientation Auto, press 🎯 Print test label and choose Rollo Labels as the destination.",
+  ];
 }
 
 /** What to try next for each symptom (all observable on the test label). */
 export const SYMPTOM_FIXES: ReadonlyArray<{ symptom: string; fix: string }> = [
   {
+    symptom: "The design comes out sideways and runs across two labels (QR code on one, the name on the next)",
+    fix: "The printer got a page turned the wrong way, so it printed it down two labels. The design is fine. Set Orientation to Auto (it now sends the label exactly its own size). On the Rollo's web page → Printing Defaults, set Orientation to the upright “A” (not “?”) and Save. Print a 🎯 test label. If it still runs down two labels on Windows, add the Rollo with Rollo's own driver (Windows: one-time printer setup).",
+  },
+  {
     symptom: "Two labels come out — the first blank, the second cut off",
-    fix: "The page went out rotated. Keep Orientation on Auto (or try Rotate ↻ / Rotate ↺) and print a test label. If it persists, recalibrate the Rollo (below) and check the dialog's paper size is this label, not 4×6.",
+    fix: "Check Chrome's Margins say None and the paper size is this label, not 4×6. Then print a 🎯 test label.",
   },
   {
     symptom: "Image is sideways",
-    fix: "Switch Rotate ↻ ↔ Rotate ↺ (or Straight). On Mac, also check Printer Features → Rotate is 0.",
+    fix: "Try Straight first, then Turned ↻ / ↺, with a 🎯 test label each time. On the Rollo's web page, Orientation should be the upright “A”. On Mac, also check Printer Features → Rotate is 0. With Rollo's Windows driver, Orientation/Rotate must be Normal.",
   },
   {
     symptom: "Everything is shifted / one edge is clipped",
@@ -357,11 +404,11 @@ export const SYMPTOM_FIXES: ReadonlyArray<{ symptom: string; fix: string }> = [
   },
   {
     symptom: "It prints on every other label, or drifts down the roll",
-    fix: "The printer lost the gap between labels: recalibrate. With the roll loaded and guides touching its edges, hold the Rollo's top button until it beeps, then let go — it feeds a few labels to re-learn the gap. Do this every time you change label size.",
+    fix: "The printer lost the gap between labels. The Wireless Rollo re-learns it by itself when labels are loaded: take the roll out, feed it back in from the back with the guides touching its edges, and let it feed. (A USB Rollo: hold the top button until it beeps.) On the Rollo's web page, Media → Label Separator must be Gap.",
   },
   {
     symptom: "Print is faint or bars bleed together",
-    fix: "Adjust Darkness (and lower Speed) in the Rollo Printer Portal: Rollo app → Menu → Rollo Printer → Settings → Printer Defaults.",
+    fix: "On the Rollo's web page → Printing Defaults: raise Print Darkness (or lower Print Speed) if faint; lower Darkness if the bars bleed.",
   },
 ];
 
@@ -402,12 +449,16 @@ export function __runLabelPrintTests(): { passed: number; failed: number } {
 
   // Orientation.
   ok(isWideLabel(wide) && !isWideLabel(tall) && !isWideLabel(sq), "wide detection");
-  ok(resolveOrientation(wide, D) === "rotate_cw", "auto rotates wide labels");
+  ok(resolveOrientation(wide, D) === "straight", "D196: auto sends wide labels straight (owner photo: the turned page ran across two labels)");
   ok(resolveOrientation(tall, D) === "straight" && resolveOrientation(sq, D) === "straight", "auto leaves tall/square");
   ok(resolveOrientation(wide, { ...D, orientation: "straight" }) === "straight", "manual straight");
 
-  // Geometry: wide + auto = portrait page 1×2 (never landscape).
-  const g1 = pageGeometry(wide, D);
+  // Geometry: wide + auto = the label's own 2×1 page (D196).
+  const g0 = pageGeometry(wide, D);
+  ok(g0.pageWIn === 2 && g0.pageHIn === 1 && g0.transform === "none", "D196: 2x1 auto = 2x1 page, no transform");
+  ok(printCss(wide).includes("@page { size: 2in 1in; margin: 0 !important; }"), "D196: 2x1 auto css page is the label size");
+  // Turned ↻ (manual): portrait page 1×2.
+  const g1 = pageGeometry(wide, { ...D, orientation: "rotate_cw" });
   ok(g1.pageWIn === 1 && g1.pageHIn === 2 && !g1.landscapePage, "2x1 goes out as a 1x2 portrait page");
   ok(g1.transform === "translate(1in,0in) rotate(90deg)", `cw transform (${g1.transform})`);
   const g2 = pageGeometry(wide, { ...D, orientation: "straight" });
@@ -443,7 +494,8 @@ export function __runLabelPrintTests(): { passed: number; failed: number } {
   ok(tl4.x === 0 && tl4.y === 2, "ccw: label top-left → page bottom-left");
 
   // Nudge is in the LABEL frame: "down" on the label stays "down" after rotation.
-  const cDown = { ...D, offsetYIn: 0.05 };
+  const CW = { ...D, orientation: "rotate_cw" as const };
+  const cDown = { ...CW, offsetYIn: 0.05 };
   const gDown = pageGeometry(wide, cDown);
   const a = mapPoint(gDown, cDown, 1, 0.5);
   const b = mapPoint(g1, D, 1, 0.5);
@@ -457,7 +509,7 @@ export function __runLabelPrintTests(): { passed: number; failed: number } {
   ok(gS.transform.startsWith("translate(0.08in,0.12in) scale(0.96)"), `scale transform (${gS.transform})`);
 
   // CSS.
-  const css = printCss(wide);
+  const css = printCss(wide, CW);
   ok(css.includes("@page { size: 1in 2in; margin: 0 !important; }"), "rotated page css is portrait");
   ok(printCss(wide, { ...D, orientation: "straight" }).includes("@page { size: 2in 1in;"), "straight page css");
   ok(css.includes("height:1.99in") && css.includes("overflow:hidden"), "page box a hair short, clipped");
@@ -470,7 +522,7 @@ export function __runLabelPrintTests(): { passed: number; failed: number } {
   // Test label.
   const t = testLabelSvg(wide, D);
   ok(t.startsWith("<svg") && t.includes('width="2in" height="1in"') && t.includes("TOP"), "test label svg");
-  ok(t.includes("Auto (recommended) → Rotate ↻") && t.includes("2″ × 1″"), "test label states settings");
+  ok(t.includes("Auto (recommended) → Straight") && t.includes("2″ × 1″"), "test label states settings");
   ok(testLabelSvg(stockById("rollo-circle-2")!, D).includes("<circle"), "circle test label");
   ok(!testLabelSvg(wide, { ...D, offsetXIn: -0.02 }).includes("<script"), "no script");
   ok(testLabelSvg(wide, { ...D, offsetXIn: -0.02 }).includes("Nudge -0.02″"), "test label shows nudge");
@@ -482,11 +534,19 @@ export function __runLabelPrintTests(): { passed: number; failed: number } {
   ok(detectOs("Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)") === "chromeos" && detectOs("") === "other", "chromeos/other");
   const mac = dialogSteps("mac", wide, ROLLO_X1040, g1);
   ok(mac.some((s) => s.includes("Manage Custom Sizes") && s.includes("width 2 in, height 1 in")), "mac custom size step");
-  ok(mac.some((s) => s.includes("leave Portrait")), "rotated → portrait advice");
+  ok(mac.some((s) => s.includes("leave Portrait")), "turned → portrait advice");
   const win = dialogSteps("windows", wide, ROLLO_X1040, g2);
-  ok(win.some((s) => s.includes("51 × 25 mm") && s.includes("TCP/IP")), "windows mm + driver step");
-  ok(win.some((s) => s.includes("Landscape")), "straight wide → landscape advice");
-  ok(SYMPTOM_FIXES.length >= 6 && SYMPTOM_FIXES[0].symptom.includes("first blank"), "symptom table");
+  ok(win.some((s) => s.includes("51 × 25 mm")), "windows mm step");
+  ok(win.some((s) => s.includes("exact size")), "straight → leave layout");
+  const wd = windowsRolloDriverSteps(wide);
+  ok(wd.length >= 5 && wd.some((s) => s.includes("TCP/IP")) && wd.some((s) => s.includes("Width 51 mm, Height 25 mm") && s.includes("Normal")), "windows Rollo driver steps (Rollo 29000051200)");
+  ok(SYMPTOM_FIXES[0].symptom.includes("across two labels") && SYMPTOM_FIXES[0].fix.includes("upright"), "D196 symptom first");
+  // D196: every catalogue size defaults to its own page size, never turned.
+  for (const st of [wide, tall, sq, stockById("rollo-circle-2")!]) {
+    const g = pageGeometry(st, D);
+    ok(g.pageWIn === st.acrossIn && g.pageHIn === st.feedIn && g.transform === "none", `D196 auto straight (${st.id})`);
+  }
+  ok(SYMPTOM_FIXES.length >= 6 && SYMPTOM_FIXES.some((f) => f.symptom.includes("first blank")), "symptom table");
 
   return { passed, failed };
 }

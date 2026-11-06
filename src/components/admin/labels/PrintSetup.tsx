@@ -23,6 +23,7 @@ import {
   SYMPTOM_FIXES,
   dialogSteps,
   isDefaultCalibration,
+  windowsRolloDriverSteps,
   pageGeometry,
   sanitizeCalibration,
   type ClientOs,
@@ -41,10 +42,10 @@ const OS_NAME: Record<ClientOs, string> = {
 };
 
 const ORIENT_TITLE: Record<PrintOrientation, string> = {
-  auto: "Wide labels are sent as a tall page with the artwork turned — the fix for Chrome rotating wide pages.",
-  straight: "Send the page exactly as the label looks (use for tall/square labels, or if Auto prints sideways).",
-  rotate_cw: "Turn the artwork a quarter-turn clockwise onto a tall page.",
-  rotate_ccw: "Turn the artwork a quarter-turn counter-clockwise onto a tall page (try if ↻ prints upside down).",
+  auto: "Recommended. Sends every label straight, on a page exactly the label's size — what Rollo asks for.",
+  straight: "Same as Auto: the page is exactly the label, as previewed.",
+  rotate_cw: "Only if your printer driver turns pages itself: turn the artwork a quarter-turn clockwise onto a tall page.",
+  rotate_ccw: "Only if your printer driver turns pages itself: turn the artwork counter-clockwise onto a tall page.",
 };
 
 function fmtIn(n: number): string {
@@ -157,8 +158,8 @@ export function PrintSetup({
         </div>
         <p className="mt-1.5 text-[0.7rem] text-[var(--admin-text-faint)]">
           {g.orientation === "straight"
-            ? `Sent as a ${g.pageWIn}″ × ${g.pageHIn}″ page, exactly as previewed.`
-            : `Sent as a tall ${g.pageWIn}″ × ${g.pageHIn}″ page with the artwork turned ${g.orientation === "rotate_cw" ? "↻" : "↺"} — Chrome rotates wide pages on thermal printers (the “first label blank, second cut off” problem), so the studio does the turn itself.`}
+            ? `Sent as a ${g.pageWIn}″ × ${g.pageHIn}″ page — exactly the label's size, exactly as previewed.`
+            : `Sent as a tall ${g.pageWIn}″ × ${g.pageHIn}″ page with the artwork turned ${g.orientation === "rotate_cw" ? "↻" : "↺"}. Only use this if Auto prints sideways on your setup — on a Rollo set to Orientation “A” it will run across two labels.`}
         </p>
       </div>
 
@@ -214,10 +215,20 @@ export function PrintSetup({
         </ol>
         {isRollo ? (
           <p className="mt-2 text-[var(--admin-text-faint)]">
-            One-time, on the Rollo itself: Rollo app → Menu → Rollo Printer → your printer → Settings → Media → set the custom size to{" "}
-            {stock.acrossIn}″ × {stock.feedIn}″ → Save, then reopen the browser. Then hold the top button until it beeps so it re-learns the
-            label gap.
+            One-time, on the Rollo&apos;s own web page (type the printer&apos;s IP address into the browser): <strong>Media</strong> → choose{" "}
+            {stock.acrossIn}″ × {stock.feedIn}″, Label Separator <strong>Gap</strong> → Save. Then <strong>Printing Defaults</strong> →
+            Orientation: the upright <strong>“A”</strong> (not “?”) → Save. The Wireless Rollo re-learns the gap by itself when you load a roll.
           </p>
+        ) : null}
+        {isRollo && os === "windows" ? (
+          <details className="mt-2">
+            <summary className="cursor-pointer font-semibold text-[var(--admin-text)]">Still across two labels on Windows? Use Rollo&apos;s own driver</summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-4">
+              {windowsRolloDriverSteps(stock).map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ol>
+          </details>
         ) : null}
         {printer.note ? <p className="mt-1.5 text-[var(--admin-text-faint)]">{printer.note}</p> : null}
       </details>

@@ -1107,7 +1107,7 @@ export function LabelStudio({ kind, items: initialItems, contextLine, suggestLab
               </div>
               <p className="mt-2 text-[0.7rem] text-[var(--admin-text-faint)]">
                 Paper size {stock.acrossIn}″ × {stock.feedIn}″ · margins None · scale 100%.{" "}
-                {calibration.orientation === "auto" && stock.acrossIn > stock.feedIn ? "Sent as a tall page (artwork turned) so Chrome can't rotate it. " : ""}
+                {calibration.orientation === "auto" || calibration.orientation === "straight" ? "Sent straight, page = label size. " : "Sent turned (manual setting). "}
                 Full steps and a test label: step 5.
               </p>
             </div>
