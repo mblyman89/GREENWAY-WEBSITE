@@ -33,6 +33,7 @@
  * PURE: no I/O. Self-tested via __runUnlinkedStockCoreTests().
  */
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+import type { Issue } from "@/lib/admin/issues-core";
 
 export type UnlinkedLotInput = {
   id: string;
@@ -305,6 +306,28 @@ export function checkRelink(
 /** Where the worklist lives. */
 export const UNLINKED_STOCK_HREF = "/admin/inventory/unlinked";
 
+/**
+ * The standing warning (Inventory Issues tab; Promotions shows the same
+ * count). Null when every received lot with a sellable status is on a card.
+ */
+export function unlinkedStockIssue(sum: UnlinkedSummary | null): Issue | null {
+  if (!sum || sum.sellable <= 0) return null;
+  const n = sum.sellable;
+  return {
+    severity: "warning",
+    code: "unlinked_stock",
+    title: `${n} ${n === 1 ? "lot is" : "lots are"} on no menu card (${sum.unitsOnHand} units on hand)`,
+    meaning:
+      "These lots were received under a vendor barcode that no published product card points to, so the register cannot floor them at cost, FIFO cannot pick them, and Promotions shows their card as \"no cost\".",
+    fixText:
+      sum.suggested > 0
+        ? `${sum.suggested} ${sum.suggested === 1 ? "has" : "have"} a clear match: confirm each with one press.`
+        : "Open the list: each lot shows the card it most likely belongs to, confirmed with one press.",
+    fix: { href: UNLINKED_STOCK_HREF, label: "Link these lots" },
+    why: "A manifest line without a product SKU is keyed by its barcode. Onboarding normally joins it to a card; a rejected manifest set active by hand skips that step.",
+  };
+}
+
 /* ------------------------------------------------------------------ tests */
 
 export function __runUnlinkedStockCoreTests(): { passed: number; failed: number } {
@@ -410,6 +433,11 @@ export function __runUnlinkedStockCoreTests(): { passed: number; failed: number 
   ok(checkRelink(lot({}), cards, { expectedOldKey: "GF41918905566982", cardKey: "pos-e00093cb5259", sizeId: "pos-gg4-a" }).ok === false, "a size of another card is refused");
   const picked = checkRelink(lot({ productName: "GG4 Flower" }), cards, { expectedOldKey: "GF41918905566982", cardKey: "pos-gg4", sizeId: "pos-gg4-c" });
   ok(picked.ok && picked.suggestion.sizeId === "pos-gg4-c" && picked.suggestion.sizeLabel === "1oz", "owner-picked size of the card accepted");
+  // standing warning
+  ok(unlinkedStockIssue(null) === null, "no summary -> no issue");
+  ok(unlinkedStockIssue({ total: 1, sellable: 0, suggested: 0, rejected: 1, unitsOnHand: 0 }) === null, "only rejected -> no issue");
+  const iss = unlinkedStockIssue(sum);
+  ok(!!iss && iss.severity === "warning" && iss.fix?.href === UNLINKED_STOCK_HREF && iss.title.startsWith("3 lots"), "issue points at the worklist");
   ok(checkRelink(lot({ posProductKey: "pos-e00093cb5259" }), cards, { expectedOldKey: "pos-e00093cb5259", cardKey: "pos-e00093cb5259" }).ok === false, "already linked refused");
 
   return { passed, failed };

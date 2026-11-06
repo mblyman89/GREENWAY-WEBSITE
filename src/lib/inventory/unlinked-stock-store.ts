@@ -26,7 +26,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
-import type { UnlinkedCardInput, UnlinkedLotInput } from "@/lib/inventory/unlinked-stock-core";
+import {
+  summarizeUnlinked,
+  type UnlinkedCardInput,
+  type UnlinkedLotInput,
+  type UnlinkedSummary,
+} from "@/lib/inventory/unlinked-stock-core";
 
 type Fail = { ok: false; error: string };
 
@@ -177,4 +182,74 @@ export async function relinkLotToCard(
     .select("id");
   if (error) return { ok: false, error: error.message };
   return { ok: true, relinked: ((data as { id: string }[] | null) ?? []).length > 0 };
+}
+
+/**
+ * Which of `keys` a published card can reach: as its card key, or as the lot
+ * key of one of its `<lotKey>-onboarded` sizes. Throws on a read failure.
+ */
+async function reachableAmong(versionId: string, keys: string[]): Promise<Set<string>> {
+  const admin = createSupabaseAdminClient();
+  const out = new Set<string>();
+  if (keys.length === 0) return out;
+  let failed: string | null = null;
+  const cards = await chunkedIn<string, { source_item_id: string }>(keys, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("menu_items")
+      .select("source_item_id")
+      .eq("menu_version_id", versionId)
+      .in("source_item_id", chunk)
+      .order("id")
+      .range(from, to);
+    if (error) failed = error.message;
+    return (data as { source_item_id: string }[] | null) ?? [];
+  });
+  if (failed) throw new Error(`read the menu cards: ${failed}`);
+  for (const c of cards) out.add(c.source_item_id);
+  const rest = keys.filter((k) => !out.has(k)).map((k) => `${k}-onboarded`);
+  const sizes = await chunkedIn<string, { source_variant_id: string; menu_item_id: string }>(rest, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("menu_variants")
+      .select("source_variant_id, menu_item_id")
+      .in("source_variant_id", chunk)
+      .order("id")
+      .range(from, to);
+    if (error) failed = error.message;
+    return (data as { source_variant_id: string; menu_item_id: string }[] | null) ?? [];
+  });
+  if (failed) throw new Error(`read the menu sizes: ${failed}`);
+  const itemIds = [...new Set(sizes.map((v) => v.menu_item_id))];
+  const published = new Set<string>();
+  const owners = await chunkedIn<string, { id: string }>(itemIds, async (chunk, from, to) => {
+    const { data, error } = await admin.from("menu_items").select("id").eq("menu_version_id", versionId).in("id", chunk).order("id").range(from, to);
+    if (error) failed = error.message;
+    return (data as { id: string }[] | null) ?? [];
+  });
+  if (failed) throw new Error(`read the menu cards: ${failed}`);
+  for (const o of owners) published.add(o.id);
+  for (const v of sizes) if (published.has(v.menu_item_id)) out.add(v.source_variant_id.replace(/-onboarded$/, ""));
+  return out;
+}
+
+/**
+ * The count behind the standing warning (Inventory Issues, Promotions).
+ * Kept light for pages that load often (DB health, D192): the received
+ * lots' keys are checked against the published menu by exact key only; the
+ * full menu (for suggestions) is read only by the worklist page itself.
+ * Best effort: any read failure returns null, so no warning is shown rather
+ * than a wrong one (the worklist page says what failed).
+ */
+export async function loadUnlinkedSummary(): Promise<UnlinkedSummary | null> {
+  try {
+    const version = await getPublishedVersion();
+    if (!version) return null;
+    const lots = await loadCandidateLots();
+    if (!lots.ok) return null;
+    const keys = [...new Set(lots.lots.map((l) => (l.posProductKey ?? "").trim()).filter(Boolean))];
+    const reach = await reachableAmong(version.id, keys);
+    const open = lots.lots.filter((l) => l.status !== "destroyed" && !reach.has((l.posProductKey ?? "").trim()));
+    return summarizeUnlinked(open.map((lot) => ({ lot, state: lot.status === "rejected" ? "rejected" : "no_match", candidates: [] })));
+  } catch {
+    return null;
+  }
 }

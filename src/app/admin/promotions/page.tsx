@@ -27,6 +27,8 @@ import {
   resolveStaffNames,
 } from "@/lib/promotions/promotions-store";
 import { auditPublishedPromotions } from "@/lib/promotions/promo-guard";
+import { loadUnlinkedSummary } from "@/lib/inventory/unlinked-stock-store";
+import { UNLINKED_STOCK_HREF } from "@/lib/inventory/unlinked-stock-core";
 import { inventoryHrefFor, lotForSize, guardRowLabel } from "@/lib/promotions/size-guard-core";
 import { listLotRefsForKeys } from "@/lib/promotions/promotions-store";
 import { formatPacificDateTime } from "@/lib/inventory/lot-lifecycle-core";
@@ -137,13 +139,15 @@ export default async function PromotionsAdminPage({
     );
   }
 
-  const [promos, conflicts, audit, presentationJson, menuBrands, dailyPlan] = await Promise.all([
+  const [promos, conflicts, audit, presentationJson, menuBrands, dailyPlan, unlinked] = await Promise.all([
     listPromotions(),
     detectConflicts(),
     auditPublishedPromotions(),
     getContentForRender("specials.deals.presentation"),
     listMenuBrands(),
     previewDailyDealSetupAction(),
+    // D195 step 2: stock on no menu card (its card shows "no cost" here). Null = no verdict.
+    loadUnlinkedSummary(),
   ]);
   // D135: wording heads-up per promotion (warn only; targets are checked on the promotion page).
   const copyWarnings = new Map<string, number>(
@@ -307,6 +311,19 @@ export default async function PromotionsAdminPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {unlinked && unlinked.sellable > 0 ? (
+          <p
+            className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100"
+            data-testid="promo-unlinked-warning"
+          >
+            {unlinked.sellable} received {unlinked.sellable === 1 ? "lot is" : "lots are"} on no menu card ({unlinked.unitsOnHand} units on hand),
+            so the checks below cannot see their cost and their cards may show "no cost".{" "}
+            <Link href={UNLINKED_STOCK_HREF} className="font-semibold underline">
+              Link them to their cards
+            </Link>
+            .
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           <StatCard label="Total promotions" value={promos.length} accent="muted" />
           <StatCard label="Published (live)" value={published} accent="green" />
