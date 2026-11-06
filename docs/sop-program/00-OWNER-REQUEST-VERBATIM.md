@@ -1310,3 +1310,13 @@ Uploads:
 | # | Decision | Source phrase |
 |---|---|---|
 | D196 | **Labels go out straight at the exact label size; the full name prints.** Orientation Auto now resolves to Straight for every stock. A 2×1 is a 2″ × 1″ page with no transform. Turned ↻/↺ remains as a manual override for drivers that turn pages. Saved per-device calibrations are reset (key v1 → v2). Step 5 tells the owner to set the Rollo web page Printing Defaults Orientation to the upright "A", Media to the label size and Gap. On Windows it gives Rollo's own driver by TCP/IP (51 × 25 mm form, Rotate Normal) as the fallback. The two-labels symptom comes first in the symptom table. The product line may use up to 4 lines when there is room, and Fill never splits a word, so "Cantina - Sorbet - Watermelon - 100mg" prints whole at about 12 pt beside the QR. Pinned by `label-print-core` / `label-layout-core` / `label-studio-core` self-tests and `tests/compliance/d191-label-print.test.ts`, `d177-label-studio.test.ts`. | "please try harder to get this right" |
+
+## Owner request, 2026-11-07 (recorded verbatim, D197: build the D195 promotions fixes, do not merge)
+
+> "thank you. please complete all fixes required to get the promotions page working correctly. use the shared root workspace folder to push work out of the sandbox often, the sandbox is very unstable, so it is very important to keep the work safe. you can store it on github if it is safe to do so without merging yet, just keep the work safe. after you have finished, report back with a summary report of whats been done and what i need to do. i have another agent working, so please complete all work, then wait to merge it to the repo until i say it is safe to do so. follow the standing rules. thank you."
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D197 | **Build all of D195 on one branch, keep it safe, do not merge.** Work lives on branch `fix/promos-d195`, pushed to GitHub often, with `git format-patch` copies in `/workspace/backups`. A PR may be opened but is merged only when the owner says it is safe (another agent is working). The round ends with a summary of what was done and what the owner must do. | "complete all fixes required ... wait to merge it to the repo until i say it is safe to do so" |
