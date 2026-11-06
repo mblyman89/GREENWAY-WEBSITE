@@ -27,6 +27,9 @@ import {
   resolveStaffNames,
 } from "@/lib/promotions/promotions-store";
 import { auditPublishedPromotions } from "@/lib/promotions/promo-guard";
+import { inventoryHrefFor, lotForSize, guardRowLabel } from "@/lib/promotions/size-guard-core";
+import { listLotRefsForKeys } from "@/lib/promotions/promotions-store";
+import { formatPacificDateTime } from "@/lib/inventory/lot-lifecycle-core";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { isMarkdownConfig, MARKDOWN_LOCK_LABEL } from "@/lib/promotions/markdown-lock-core";
 import { isAiConfigured } from "@/lib/ai/provider";
@@ -206,6 +209,16 @@ export default async function PromotionsAdminPage({
     (e) => e.belowCost.length > 0 || e.regularBelowCost.length > 0,
   );
   const costUnknownTotal = audit.totals.costUnknown;
+  // D195 step 3: audit product links open the inventory lot of the exact size
+  // (else the inventory search for the product), never the enrichment page.
+  const auditShown = auditWithIssues.flatMap((e) => [...e.belowCost.slice(0, 5), ...e.regularBelowCost.slice(0, 3)]);
+  const auditLots = auditShown.length
+    ? await listLotRefsForKeys(auditShown.flatMap((f) => [f.key, f.lotKey ?? ""]).filter(Boolean))
+    : [];
+  const auditHref = (f: { key: string; sizeId?: string | null; lotKey?: string | null }) =>
+    // A finding with a size uses that size's lot; one without (no sizes) any lot of the card.
+    inventoryHrefFor(lotForSize(auditLots, f, f.sizeId ? 2 : 0), f.key, "after_tax_price");
+  const auditCheckedAt = formatPacificDateTime(audit.checkedAt);
 
   // SLICE 106: published, weekday-based promotions whose /specials deal CARD is
   // currently hidden by the Specials presentation settings. The deal still
@@ -406,6 +419,10 @@ export default async function PromotionsAdminPage({
               A discount may never take the sale price below the cost of acquisition (CCRS Upload
               User Guide; RCW 69.50.357). The register already clamps these — fix the price, soften
               the deal, or exclude the product so the advertised deal matches the charged deal.
+              Every size is checked at its own price and cost; a name opens that size&apos;s lot.
+            </p>
+            <p data-testid="promo-audit-checked-at" className="mt-1 text-[11px] text-white/45">
+              Checked at {auditCheckedAt}.
             </p>
             <div className="mt-3 space-y-3">
               {auditWithIssues.map((e) => (
@@ -420,7 +437,7 @@ export default async function PromotionsAdminPage({
                   <ul className="mt-1.5 space-y-1">
                     {e.belowCost.slice(0, 5).map((f) => (
                       <li key={`bc-${f.key}`} className="text-xs text-[#ffb0b0]">
-                        <span className="font-medium text-white/80">{f.name}</span> — worst case{" "}
+                        <a href={auditHref(f)} data-testid="promo-audit-lot-link" className="font-medium text-white/80 underline decoration-white/20 hover:decoration-white/60">{guardRowLabel(f)}</a> — worst case{" "}
                         {formatMoneyMinor(f.worstCasePriceMinorUnits)} is below the{" "}
                         {formatMoneyMinor(f.floorMinorUnits)} cost floor (reg{" "}
                         {formatMoneyMinor(f.priceMinorUnits)}); register clamps to the floor.
@@ -433,7 +450,7 @@ export default async function PromotionsAdminPage({
                     )}
                     {e.regularBelowCost.slice(0, 3).map((f) => (
                       <li key={`rb-${f.key}`} className="text-xs text-[var(--admin-gold)]/90">
-                        <span className="font-medium text-white/80">{f.name}</span> — regular price{" "}
+                        <a href={auditHref(f)} data-testid="promo-audit-lot-link" className="font-medium text-white/80 underline decoration-white/20 hover:decoration-white/60">{guardRowLabel(f)}</a> — regular price{" "}
                         {formatMoneyMinor(f.priceMinorUnits)} already sits at/below its{" "}
                         {formatMoneyMinor(f.floorMinorUnits)} cost floor. No discount can apply;
                         review the price or the cost data.
@@ -456,8 +473,8 @@ export default async function PromotionsAdminPage({
             </p>
             <p className="mt-1 text-white/60">
               Every published promotion was worst-case checked against your live menu and
-              weighted-average acquisition costs: no product can be discounted below its cost of
-              acquisition.
+              acquisition costs, every size at its own price and cost: no product can be discounted
+              below its cost of acquisition. Checked at {auditCheckedAt}.
               {costUnknownTotal > 0 && (
                 <>
                   {" "}

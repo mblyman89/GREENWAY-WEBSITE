@@ -272,7 +272,7 @@ describe("R74 S22 wiring", () => {
     expect(page).toContain('data-testid="promo-hide-all"');
     expect(page).toContain("Hide from menu");
     expect(page).toContain('name="all" value="1"');
-    expect(page).toContain('name="key" value={f.key}');
+    expect(page).toContain('name="key" value={card.key}'); // D195: one blocker entry per product (its worst size)
     expect(page).toContain("guardSkipNote(guard.hiddenSkipped, guard.neverSkipped)");
     expect(page).toContain('data-testid="promo-fix-banner"');
     expect(page).toContain('id="cost-floor"');
