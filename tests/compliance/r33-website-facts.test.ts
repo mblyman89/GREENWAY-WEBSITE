@@ -57,6 +57,14 @@ vi.mock("@/lib/ai/kb/store", () => ({ listKbStrains: async () => net.kb }));
 vi.mock("@/lib/pos/product-classification-overrides", () => ({
   getOverridesForKeys: async (keys: string[]) => new Map([...net.overrides].filter(([k]) => keys.includes(k))),
 }));
+// D192: the public pages read overrides from one cached snapshot first; serve
+// the same fixture through it so this test still exercises the re-file logic.
+vi.mock("@/lib/site/public-snapshot-server", () => ({
+  classificationOverrideSnapshot: async () => [...net.overrides],
+  medicalRegistrySnapshot: async () => null,
+  enrichmentImageSnapshot: async () => null,
+  publicContentSnapshot: async () => null,
+}));
 vi.mock("@/components/cart/CartProvider", () => ({ useMockCart: () => ({ addItem: (x: unknown) => net.cart.push(x) }) }));
 vi.mock("@/components/promotions/PublishedRulesProvider", () => ({ useActiveDealRules: () => undefined }));
 vi.mock("@/lib/specials/useStoreWeekday", () => ({ useStoreWeekday: () => undefined }));
