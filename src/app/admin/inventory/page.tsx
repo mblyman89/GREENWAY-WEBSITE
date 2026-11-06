@@ -62,6 +62,8 @@ import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntel
 // packages at the counter. This surfaces the same answer here, before a shift.
 import { RegisterSellabilityBanner, RestoreToSalePanel } from "@/components/admin/inventory/RegisterSellabilityBanner";
 import { getRegisterSellabilityReport } from "@/lib/inventory/register-sellability-store";
+import { loadUnlinkedSummary } from "@/lib/inventory/unlinked-stock-store";
+import { unlinkedStockIssue } from "@/lib/inventory/unlinked-stock-core";
 // SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
 import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
 // Owner request: a LEAFLY badge in the Status column for products on Leafly.
@@ -278,6 +280,8 @@ export default async function InventoryPage({
   const onboardingPromise = loadLotOnboardingIndex();
   // Fix Phase 1.6c (G-25): recall reads, started with the others; each never throws.
   const recallPromise = Promise.all([getRecallPlan(), listOpenRecallEventFacts(), listOpenOrderLines(), recalledProductKeys()]);
+  // D195 step 2: received lots on no published menu card (best effort; null = no verdict).
+  const unlinkedPromise = loadUnlinkedSummary();
   const [allLots, stats, intel, sellability, leafly] = await Promise.all([
     listAllLotsForFiltering(),
     computeInventoryStats(),
@@ -425,10 +429,12 @@ export default async function InventoryPage({
   const cannabisLineIssue = buildCannabisLineIssue(categorized.lots);
   const [recallPlan, openRecallEvents, openOrders, recalledKeys] = await recallPromise;
   const recallOrdersIssue = openOrdersIssue(ordersHoldingRecalled(openOrders, recalledKeys));
+  const unlinkedIssue = unlinkedStockIssue(await unlinkedPromise);
   const issues = sortIssues([
     ...(cannabisLineIssue ? [cannabisLineIssue] : []),
     ...recallEventIssues(openRecallEvents, new Date().toISOString(), today),
     ...(recallOrdersIssue ? [recallOrdersIssue] : []),
+    ...(unlinkedIssue ? [unlinkedIssue] : []),
     ...recallPlanIssues(recallPlan, today),
     ...intelIssues,
     ...buildInventoryIssues({
