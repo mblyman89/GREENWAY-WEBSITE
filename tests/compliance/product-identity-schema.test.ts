@@ -298,6 +298,11 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     // R74 S11 added the eighth reader on purpose (pin updated on purpose):
     // the vendor mastering panel counts drafts linked to the KB; any read
     // error is shown as an error, never as zero (pinned by "R74 S11" below).
+    // D192 (DB health slice A) added the ninth reader on purpose (pin updated
+    // on purpose): the cached public enrichment-image snapshot reads
+    // identity_key; ANY read error (pre-0234 included) throws inside the
+    // snapshot, which returns null, and the menu falls back to the live keyed
+    // read (pinned by db-health-a-public-snapshots "null fallbacks").
     expect(offenders.sort()).toEqual([
       "src/lib/catalog/attach-facts.ts",
       "src/lib/catalog/image-memory-server.ts",
@@ -307,6 +312,7 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
       "src/lib/inventory/coa-extract.ts",
       "src/lib/inventory/cultivera-vendor.ts",
       "src/lib/products/masters-store.ts",
+      "src/lib/site/public-snapshot-server.ts",
     ]);
   });
 
