@@ -28,7 +28,14 @@ export type MenuPick = {
   variantLabel?: string | null;
   /** Weighted-average acquisition cost (pre-tax, minor units); null = unknown. */
   costMinorUnits?: number | null;
+  /**
+   * D195: one pick per SIZE (card key + size id), priced and costed like the
+   * register rings that size. `key` stays the card key (what deals target).
+   */
+  pickId?: string;
 };
+
+const idOf = (p: MenuPick): string => p.pickId ?? p.key;
 
 type BasketEntry = { pick: MenuPick; quantity: number };
 
@@ -57,9 +64,9 @@ export function SimulatorClient({
 
   function addPick(pick: MenuPick) {
     setBasket((prev) => {
-      const existing = prev.find((b) => b.pick.key === pick.key);
+      const existing = prev.find((b) => idOf(b.pick) === idOf(pick));
       if (existing) {
-        return prev.map((b) => (b.pick.key === pick.key ? { ...b, quantity: b.quantity + 1 } : b));
+        return prev.map((b) => (idOf(b.pick) === idOf(pick) ? { ...b, quantity: b.quantity + 1 } : b));
       }
       return [...prev, { pick, quantity: 1 }];
     });
@@ -67,16 +74,16 @@ export function SimulatorClient({
   function setQty(key: string, qty: number) {
     setBasket((prev) =>
       prev
-        .map((b) => (b.pick.key === key ? { ...b, quantity: Math.max(0, qty) } : b))
+        .map((b) => (idOf(b.pick) === key ? { ...b, quantity: Math.max(0, qty) } : b))
         .filter((b) => b.quantity > 0),
     );
   }
   function remove(key: string) {
-    setBasket((prev) => prev.filter((b) => b.pick.key !== key));
+    setBasket((prev) => prev.filter((b) => idOf(b.pick) !== key));
   }
 
   const cartLines: EngineCartLine[] = basket.map((b) => ({
-    lineId: b.pick.key,
+    lineId: idOf(b.pick),
     regularPriceMinorUnits: b.pick.priceMinorUnits,
     quantity: b.quantity,
     categories: b.pick.categories.length ? b.pick.categories : [b.pick.category.toLowerCase()],
@@ -109,13 +116,16 @@ export function SimulatorClient({
           <div className="max-h-[420px] divide-y divide-stone-100 overflow-y-auto rounded-[var(--admin-radius)] border border-stone-200">
             {filtered.map((m) => (
               <button
-                key={m.key}
+                key={idOf(m)}
                 type="button"
                 onClick={() => addPick(m)}
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-emerald-50"
               >
                 <span>
-                  <span className="font-medium text-stone-800">{m.name}</span>
+                  <span className="font-medium text-stone-800">
+                    {m.name}
+                    {m.variantLabel ? <span className="font-normal text-stone-500"> ({m.variantLabel})</span> : null}
+                  </span>
                   <span className="block text-xs text-stone-500">
                     {[m.brand, m.category].filter(Boolean).join(" · ") || "—"}
                   </span>
@@ -151,12 +161,15 @@ export function SimulatorClient({
                 </thead>
                 <tbody>
                   {basket.map((b) => {
-                    const res = lineById.get(b.pick.key);
+                    const res = lineById.get(idOf(b.pick));
                     const saved = res ? res.unitSavingsMinorUnits > 0 : false;
                     return (
-                      <tr key={b.pick.key} className="border-t border-stone-100">
+                      <tr key={idOf(b.pick)} className="border-t border-stone-100">
                         <td className="px-2 py-2">
-                          <div className="font-medium text-stone-800">{b.pick.name}</div>
+                          <div className="font-medium text-stone-800">
+                            {b.pick.name}
+                            {b.pick.variantLabel ? <span className="font-normal text-stone-500"> ({b.pick.variantLabel})</span> : null}
+                          </div>
                           <div className="text-xs text-stone-500">{b.pick.brand || "—"}</div>
                         </td>
                         <td className="px-2 py-2 text-right">
@@ -164,7 +177,7 @@ export function SimulatorClient({
                             type="number"
                             min={1}
                             value={b.quantity}
-                            onChange={(e) => setQty(b.pick.key, Math.round(Number(e.target.value) || 0))}
+                            onChange={(e) => setQty(idOf(b.pick), Math.round(Number(e.target.value) || 0))}
                             className="w-16 rounded border border-stone-300 px-2 py-1 text-right text-sm"
                           />
                         </td>
@@ -189,7 +202,7 @@ export function SimulatorClient({
                         <td className="px-2 py-2 text-right">
                           <button
                             type="button"
-                            onClick={() => remove(b.pick.key)}
+                            onClick={() => remove(idOf(b.pick))}
                             className="text-xs text-stone-400 hover:text-red-600"
                             aria-label="Remove"
                           >

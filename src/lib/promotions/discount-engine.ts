@@ -22,6 +22,7 @@
 import "server-only";
 // R74 S31: per-size acquisition cost (the lot size link, 0294).
 import { buildCostMap } from "@/lib/promotions/size-cost-core";
+import { costForSize } from "@/lib/promotions/size-guard-core";
 
 import { getPublishedPromotions, listNeverDiscountKeys } from "./promotions-store";
 import type { PublishedPromotion } from "./types";
@@ -308,9 +309,13 @@ export async function loadProductCostsChecked(): Promise<{
   return { costs, verdict };
 }
 
-export type SimBasketItem = { productKey: string; quantity: number };
+export type SimBasketItem = { productKey: string; quantity: number; /** D195: the size (source_variant_id); default = the card's first size. */ sizeId?: string | null };
 
-/** Resolve a sample basket of product keys into EngineCartLines from the published menu (with costs). */
+/**
+ * Resolve a sample basket into EngineCartLines from the published menu, each
+ * line priced at its SIZE and floored at that size's cost by the register's
+ * rule (variant lot key, then the size's linked lots, then the card).
+ */
 export async function menuLinesForBasket(items: SimBasketItem[]): Promise<EngineCartLine[]> {
   const version = await getPublishedVersion();
   if (!version) return [];
@@ -320,15 +325,17 @@ export async function menuLinesForBasket(items: SimBasketItem[]): Promise<Engine
   for (const it of items) {
     const m = byKey.get(it.productKey);
     if (!m) continue;
+    const variants = Array.isArray(m.variants) ? m.variants : [];
+    const v = (it.sizeId ? variants.find((x) => x.source_variant_id === it.sizeId) : undefined) ?? variants[0];
     lines.push({
-      lineId: it.productKey,
-      regularPriceMinorUnits: m.price_minor_units,
+      lineId: v ? `${it.productKey}::${v.source_variant_id}` : it.productKey,
+      regularPriceMinorUnits: v && Number.isFinite(v.price_minor_units) ? v.price_minor_units : m.price_minor_units,
       quantity: Math.max(1, it.quantity),
       categories: (m.filter_categories?.length ? m.filter_categories : [m.category]).map((c) => String(c).toLowerCase()),
       brand: m.brand_name ?? null,
       productKey: m.source_item_id,
-      variantLabel: null,
-      costMinorUnits: costs.get(it.productKey) ?? null,
+      variantLabel: v?.label ?? null,
+      costMinorUnits: v ? costForSize(costs, it.productKey, v.source_variant_id) : costs.get(it.productKey) ?? null,
     });
   }
   return lines;
