@@ -3804,3 +3804,31 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0344_menu_copy_retention.rollback.sql` (restores the 0305
   function; refuses while a product key exists only in the facts table, i.e. after pruning).
+
+- [ ] **`supabase/migrations/0345_db_vitals.sql`** — D193 DB health slice B (owner 2026-11-06: "Please look for ways
+  you can add to the ai partnership so that it can help me self heal these issues now. I want a healthy db always.").
+  Adds two functions, **no table**, and changes no rows:
+  - **`public.platform_db_vitals()`** (read-only): when the database last started (a change means it restarted),
+    connections by state against the limit, the oldest connection paused mid-transaction, the longest query,
+    requests waiting on a lock, cache hit ratio, size, and the list of stuck APP connections.
+  - **`public.platform_db_heal_stuck(pids, idle_minutes, active_minutes)`**: ends APP connections (authenticator /
+    anon / authenticated / service_role) paused mid-transaction for 5+ minutes (their unfinished step is rolled back)
+    and cancels APP queries running 10+ minutes. Never touches your own SQL editor (role postgres), Supabase's roles
+    or background workers. Floors are 2 and 5 minutes even if asked for less.
+  Both are SECURITY DEFINER (only the owner role may see and signal other sessions) with a pinned search_path, and
+  only the server role may run them.
+
+  Until it is applied, the new 10-minute `db-vitals` check reports "Vital signs are not installed yet (run migration
+  0345)" and the Partner offers no "Clear stuck database connections" fix; nothing else changes.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select public.platform_db_vitals() ->> 'connections' as connections,                       -- a number, e.g. 12
+         public.platform_db_vitals() ->> 'started_at'  as up_since,                           -- the last restart
+         has_function_privilege('anon', 'public.platform_db_heal_stuck(int[], int, int)', 'EXECUTE') as anon_can_heal;  -- false
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0345_db_vitals.rollback.sql` (drops the two functions).

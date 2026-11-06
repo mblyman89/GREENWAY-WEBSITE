@@ -97,6 +97,6 @@ describe("D184 S7: Greenway Partner AI at Level 2", () => {
   });
 
   it("registered in the pure self-test harness", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("partner-core", __runPartnerTests\(\), 38\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("partner-core", __runPartnerTests\(\), 47\)/);
   });
 });

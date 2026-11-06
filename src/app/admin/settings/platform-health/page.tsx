@@ -35,6 +35,9 @@ import {
 import { pacificToday } from "@/lib/reports/timezone";
 import { listRecentErrors, type ErrorEventListRow } from "@/lib/platform/platform-error-store";
 import { ALERT_THRESHOLD, ALERT_WINDOW_MINUTES, KIND_LABEL } from "@/lib/platform/platform-errors-core";
+import { ClearStuckButton } from "@/components/admin/platform/ClearStuckButton";
+import { readVitalsNow, vitalsHistory } from "@/lib/platform/db-vitals-store";
+import { healPlan, isStale } from "@/lib/platform/db-vitals-core";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +82,11 @@ export default async function PlatformHealthPage() {
     );
   }
 
-  const [{ rows, error }, errs] = await Promise.all([listRecentHealthRuns(30), listRecentErrors(50)]);
+  const [{ rows, error }, errs, vit, hist] = await Promise.all([listRecentHealthRuns(30), listRecentErrors(50), readVitalsNow(), vitalsHistory()]);
+  const vr = vit.report;
+  const plan = healPlan(vr.vitals);
+  // eslint-disable-next-line react-hooks/purity -- server component: one render per request
+  const checkStale = isStale(vit.lastStoredAt, Date.now());
   const latest = rows[0] ?? null;
   const today = pacificToday();
   const digest = reviewDigest(PLATFORM_CHANGES, today);
@@ -107,6 +114,39 @@ export default async function PlatformHealthPage() {
             "Run check now records a run here but does not send the email.",
           ]}
         />
+
+        {/* D193 (DB health B): the database's vital signs, read live on every page view. */}
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Database vital signs</h2>
+              <Badge tone={vr.status === "ok" ? "green" : vr.status === "warn" ? "gold" : "danger"}>{vr.status === "ok" ? "Healthy" : vr.status === "warn" ? "Watch" : "Trouble"}</Badge>
+            </div>
+            {plan ? <ClearStuckButton count={plan.pids.length} /> : null}
+          </div>
+          <p className="mt-3 text-sm">{vr.summary}</p>
+          {vr.findings.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {vr.findings.map((f, i) => (
+                <li key={i} className="rounded-[var(--admin-radius-sm)] bg-[var(--admin-surface-2)] p-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge tone={f.severity === "fail" ? "danger" : "gold"}>{f.severity === "fail" ? "Fail" : "Warn"}</Badge>
+                    <span>{f.what}</span>
+                  </div>
+                  <p className="mt-1">
+                    <strong>What to do:</strong> {f.todo}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
+            {hist.error
+              ? `History not available: ${hist.error}`
+              : `Last 7 days: ${hist.restarts7d.count} restart${hist.restarts7d.count === 1 ? "" : "s"}${hist.restarts7d.count ? ` (${hist.restarts7d.at.map((a) => when(a)).join(", ")})` : ""}, ${hist.heals7d} self-heal${hist.heals7d === 1 ? "" : "s"}.`}{" "}
+            {checkStale ? "The 10-minute check has not stored a reading in the last 30 minutes (normal right after setup, otherwise check Vercel crons)." : "Checked every 10 minutes; stuck app connections are cleared by themselves when Greenway Partner is on Level 2."}
+          </p>
+        </Card>
 
         {error ? (
           <Card>

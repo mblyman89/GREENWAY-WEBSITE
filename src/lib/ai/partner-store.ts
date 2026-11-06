@@ -22,6 +22,8 @@ import { retryPosException } from "@/lib/pos/sync-store";
 import { morningReportNow } from "@/lib/registers/night-watch-store";
 import { checkLots, checkWeek, correctCount, moveSaleLine } from "@/lib/compliance/ccrs-completeness-store";
 import { weekContaining } from "@/lib/compliance/ccrs-week-core";
+import { healStuckSessions, readVitalsNow } from "@/lib/platform/db-vitals-store";
+import { HEAL_ACTIVE_MINUTES, HEAL_IDLE_TX_MINUTES } from "@/lib/platform/db-vitals-core";
 import {
   buildProposals,
   citedProposals,
@@ -112,12 +114,13 @@ export async function gatherPartnerFacts(): Promise<PartnerFacts> {
   const readErrors: string[] = [];
   const thisWeek = weekContaining(todayIso);
   const lastWeek = weekContaining(addPacificDays(thisWeek.start, -1));
-  const [exceptions, lots, wNow, wLast, morning] = await Promise.all([
+  const [exceptions, lots, wNow, wLast, morning, db] = await Promise.all([
     readExceptions(readErrors),
     checkLots().catch((e: unknown) => ({ shortfalls: [], aboveReceived: [], lots: 0, errors: [`lots: ${e instanceof Error ? e.message : "failed"}`] })),
     checkWeek("prod", thisWeek).catch(() => null),
     checkWeek("prod", lastWeek).catch(() => null),
     morningReportNow().catch(() => null),
+    readVitalsNow().catch(() => null),
   ]);
   readErrors.push(...lots.errors);
   const weeks: WeekFact[] = [];
@@ -140,6 +143,9 @@ export async function gatherPartnerFacts(): Promise<PartnerFacts> {
     weeks,
     morning: morning ? { headline: morning.headline, items: morning.items } : null,
     readErrors,
+    // D193: a database that cannot answer is itself the finding (status fail,
+    // "unreachable"), so it is NOT a read error that would block every fix.
+    database: db ? db.report : null,
   };
 }
 
@@ -231,6 +237,17 @@ export async function applyProposal(
     case "correct_count":
       out = await correctCount(p.payload.repair, { id: actor.id, email: actor.email });
       break;
+    case "clear_stuck_sessions": {
+      const r = await healStuckSessions({
+        pids: p.payload.pids,
+        idleTxMinutes: HEAL_IDLE_TX_MINUTES,
+        activeMinutes: HEAL_ACTIVE_MINUTES,
+        source: "manual",
+        actor: { id: actor.id, email: actor.email },
+      });
+      out = r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error };
+      break;
+    }
   }
 
   await recordAudit({

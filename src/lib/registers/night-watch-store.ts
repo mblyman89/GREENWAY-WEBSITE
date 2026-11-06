@@ -98,7 +98,7 @@ export async function gatherFindings(now: Date = new Date()): Promise<WatchFindi
     listBagsInRange(from, day),
     admin.from("pos_sale_events").select("received_at").eq("status", "exception").order("received_at", { ascending: true }).limit(500),
     admin.from("time_punches").select("employee_id, clock_in_at").is("clock_out_at", null).eq("punch_kind", "work").lt("clock_in_at", punchCutoff),
-    admin.from("platform_health_runs").select("status, created_at").order("created_at", { ascending: false }).limit(1),
+    admin.from("platform_health_runs").select("status, created_at").eq("kind", "db_contract").order("created_at", { ascending: false }).limit(1),
   ]);
 
   const names = new Map(((regs.data as { id: string; name: string }[] | null) ?? []).map((r) => [r.id, r.name]));

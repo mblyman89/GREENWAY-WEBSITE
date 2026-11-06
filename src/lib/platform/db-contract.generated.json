@@ -388,6 +388,8 @@
     "ofac_record_run",
     "orders_board_snapshot",
     "platform_db_contract_check",
+    "platform_db_heal_stuck",
+    "platform_db_vitals",
     "platform_money_smoke_test",
     "prune_menu_version_items",
     "publish_menu_version",
