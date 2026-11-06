@@ -231,7 +231,7 @@ function Row({ c }: { c: ClearanceCandidate }) {
         {c.markdownPriceMinorUnits === null ? "\u2014" : formatCents(c.markdownPriceMinorUnits)}
         {c.belowCost ? (
           <span className="mt-1 block">
-            <Badge tone="orange">Under cost {formatCents(c.maxUnitCostMinorUnits ?? 0)}</Badge>
+            <Badge tone="orange">Under the legal floor {formatCents(c.maxFloorMinorUnits ?? c.maxUnitCostMinorUnits ?? 0)} (cost + tax)</Badge>
           </span>
         ) : null}
       </td>

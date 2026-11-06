@@ -16,6 +16,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAllChecked, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { loadProductCostsChecked } from "@/lib/promotions/discount-engine";
+import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
 import {
   buildBadProductQueue,
   type BadProductQueue,
@@ -50,7 +51,13 @@ type ItemRow = {
   hidden: boolean | null;
   hidden_reason: string | null;
 };
-type VariantRow = { id: string; menu_item_id: string; price_minor_units: number | null };
+type VariantRow = {
+  id: string;
+  menu_item_id: string;
+  price_minor_units: number | null;
+  source_variant_id?: string | null;
+  label?: string | null;
+};
 type LotRow = {
   id: string;
   pos_product_key: string | null;
@@ -58,6 +65,7 @@ type LotRow = {
   on_hand_qty: number | null;
   lab_result_id: string | null;
   created_at: string;
+  menu_source_variant_id?: string | null;
 };
 
 export async function loadBadProductQueue(): Promise<BadProductQueueLoad> {
@@ -83,13 +91,24 @@ export async function loadBadProductQueue(): Promise<BadProductQueueLoad> {
       }
       return { rows: (data as ItemRow[] | null) ?? [], ok: true };
     });
+    // D195: each lot's menu SIZE (0294), so a size's price fix opens the lot
+    // that sells as that size. Re-read without it before 0294.
+    let lotsWithSize = true;
     const lotsP = pagedAllChecked<LotRow>(async (from, to) => {
-      const { data, error } = await admin
-        .from("inventory_lots")
-        .select("id, pos_product_key, status, on_hand_qty, lab_result_id, created_at")
-        .not("pos_product_key", "is", null)
-        .order("id", { ascending: true })
-        .range(from, to);
+      const read = (cols: string) =>
+        admin
+          .from("inventory_lots")
+          .select(cols)
+          .not("pos_product_key", "is", null)
+          .order("id", { ascending: true })
+          .range(from, to);
+      const base = "id, pos_product_key, status, on_hand_qty, lab_result_id, created_at";
+      let res = await read(lotsWithSize ? `${base}, menu_source_variant_id` : base);
+      if (res.error && lotsWithSize && isMissingSizeLinkColumnError(res.error)) {
+        lotsWithSize = false;
+        res = await read(base);
+      }
+      const { data, error } = res as unknown as { data: LotRow[] | null; error: { message: string } | null };
       if (error) {
         console.error("[bad-product-queue] inventory_lots read error:", error.message);
         return { rows: [], ok: false };
@@ -121,7 +140,7 @@ export async function loadBadProductQueue(): Promise<BadProductQueueLoad> {
       async (chunk, from, to) => {
         const { data, error } = await admin
           .from("menu_variants")
-          .select("id, menu_item_id, price_minor_units")
+          .select("id, menu_item_id, price_minor_units, source_variant_id, label")
           .in("menu_item_id", chunk)
           .order("id", { ascending: true })
           .range(from, to);
@@ -137,10 +156,18 @@ export async function loadBadProductQueue(): Promise<BadProductQueueLoad> {
     if (variantsFailed) problems.push("menu sizes: the read failed.");
 
     const pricesByItem = new Map<string, number[]>();
+    const sizesByItem = new Map<string, { sizeId: string; label: string | null; priceMinor: number }[]>();
     for (const v of variants) {
+      const price = v.price_minor_units == null ? Number.NaN : Number(v.price_minor_units);
       const list = pricesByItem.get(v.menu_item_id) ?? [];
-      list.push(v.price_minor_units == null ? Number.NaN : Number(v.price_minor_units));
+      list.push(price);
       pricesByItem.set(v.menu_item_id, list);
+      const sizeId = (v.source_variant_id ?? "").trim();
+      if (sizeId) {
+        const sizes = sizesByItem.get(v.menu_item_id) ?? [];
+        sizes.push({ sizeId, label: v.label ?? null, priceMinor: price });
+        sizesByItem.set(v.menu_item_id, sizes);
+      }
     }
     const cards: QueueCard[] = items.rows.map((i) => ({
       key: i.source_item_id,
@@ -151,6 +178,8 @@ export async function loadBadProductQueue(): Promise<BadProductQueueLoad> {
       hidden: i.hidden === true,
       hiddenReason: i.hidden_reason,
       variantPrices: pricesByItem.get(i.id) ?? [],
+      // D195: each size judged at its own price and cost.
+      sizes: sizesByItem.get(i.id) ?? [],
     }));
     const queueLots: QueueLot[] = lots.rows.map((l) => ({
       id: l.id,
@@ -159,6 +188,7 @@ export async function loadBadProductQueue(): Promise<BadProductQueueLoad> {
       onHand: Number(l.on_hand_qty ?? 0),
       hasCoa: !!l.lab_result_id,
       createdAt: l.created_at,
+      sizeId: (l.menu_source_variant_id ?? "").trim() || null,
     }));
     const queue = buildBadProductQueue({ cards, costs: costs.costs, neverKeys, lots: queueLots });
     return { queue, complete: problems.length === 0, problems, hasMenu: true };

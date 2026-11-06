@@ -28,6 +28,7 @@ import {
   type QueueRow,
 } from "@/lib/promotions/bad-product-queue-core";
 import { fixBadProductsAction } from "./actions";
+import { inventoryHrefFor } from "@/lib/promotions/size-guard-core";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,23 @@ function productHref(key: string): string {
   return `/admin/products/${encodeURIComponent(key)}`;
 }
 
+/**
+ * D195 step 3: a product name opens its INVENTORY lot (the size at issue when
+ * the row is about a size), else the inventory search for the product. Price,
+ * cost and size links are fixed on the lot, not on the enrichment page.
+ */
+function inventoryHref(row: QueueRow): string {
+  return inventoryHrefFor(row.sizeLotId ?? row.lotId, row.key);
+}
+
 /** The link-type fixes for one row in one section (never a dead end). */
 function linkFixes(row: QueueRow, kind: QueueKind): { href: string; label: string }[] {
   const out: { href: string; label: string }[] = [];
   if (kind === "no_price" || kind === "below_floor") {
-    if (row.lotId && row.variantCount <= 1) out.push({ href: `/admin/inventory/${row.lotId}#after_tax_price`, label: "Fix price on the lot" });
+    // D195: the lot of the exact size at issue (any size count), else the search.
+    if (row.sizeLotId) out.push({ href: `/admin/inventory/${row.sizeLotId}#after_tax_price`, label: `Fix price on the lot${row.sizeLabel ? ` (${row.sizeLabel})` : ""}` });
+    else if (row.lotId && row.variantCount <= 1) out.push({ href: `/admin/inventory/${row.lotId}#after_tax_price`, label: "Fix price on the lot" });
+    else out.push({ href: inventoryHrefFor(null, row.key), label: "Find its lots in inventory (set each lot's size)" });
   }
   if (kind === "no_cost" && row.lotId) out.push({ href: `/admin/inventory/${row.lotId}`, label: "Open the lot (cost comes from the manifest)" });
   if (kind === "needs_category") {
@@ -74,9 +87,10 @@ function Row({ row, kind }: { row: QueueRow; kind: QueueKind }) {
   return (
     <li className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-xs text-white/70" data-testid={`bpq-row-${kind}`}>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <Link href={productHref(row.key)} className="font-semibold text-white/90 underline decoration-white/20 hover:decoration-white/60">
+        <Link href={inventoryHref(row)} data-testid="bpq-lot-link" className="font-semibold text-white/90 underline decoration-white/20 hover:decoration-white/60">
           {row.name || row.key}
         </Link>
+        {row.sizeLabel ? <span className="text-white/55">{row.sizeLabel}</span> : null}
         {row.brand ? <span className="text-white/40">{row.brand}</span> : null}
         <span>price {Number.isFinite(row.priceMinor) ? formatMoneyMinor(row.priceMinor) : "none"}</span>
         <span>cost {row.costMinor != null ? formatMoneyMinor(row.costMinor) : "none on file"}</span>
@@ -86,10 +100,11 @@ function Row({ row, kind }: { row: QueueRow; kind: QueueKind }) {
           <span className="text-white/40">also: {row.kinds.filter((k) => k !== kind).map((k) => KIND_TITLE[k].toLowerCase()).join(", ")}</span>
         ) : null}
       </div>
-      {(kind === "no_price" || kind === "below_floor") && row.variantCount > 1 ? (
+      {(kind === "no_price" || kind === "below_floor") && row.variantCount > 1 && !row.sizeLotId ? (
         <p className="mt-1 text-[11px] text-white/50" data-testid="bpq-several-sizes">
-          This card has {row.variantCount} sizes, so the lot page cannot tell which size to reprice (it refuses rather than guess). Correct the size price in
-          Cultivera and re-import, or hide it until then.
+          This card has {row.variantCount} sizes and no lot is linked to {row.sizeLabel ? `the ${row.sizeLabel} size` : "that size"} yet, so the lot page
+          cannot tell which size to reprice (it refuses rather than guess). Open the product&apos;s lots in inventory and pick each lot&apos;s size
+          ("Which size is this lot?"); then the price fix opens the right lot. Or correct the size price in Cultivera and re-import, or hide it until then.
         </p>
       ) : null}
       {kind === "missing_coa" ? (

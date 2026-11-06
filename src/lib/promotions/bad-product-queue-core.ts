@@ -38,6 +38,8 @@
 import { costFloorMinorUnits } from "./discount-engine-core";
 import { MERCH_TOKENS } from "./promo-guard-core";
 import { heldForCategory } from "@/lib/inventory/cultivera-category-gate-core";
+import { costForSize, lotForSize } from "./size-guard-core";
+import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 
 export type QueueKind =
   | "no_price"
@@ -83,6 +85,12 @@ export type QueueCard = {
   hiddenReason: string | null;
   /** Prices of the card's sizes (menu_variants.price_minor_units). */
   variantPrices: number[];
+  /**
+   * D195: the card's sizes with their ids, so each size is judged at its own
+   * price against its own cost (the register's rule). Absent = the pre-D195
+   * card-level check (card price vs card average cost).
+   */
+  sizes?: { sizeId: string; label: string | null; priceMinor: number }[];
 };
 
 /** An inventory lot reduced to what the queue needs. */
@@ -93,6 +101,8 @@ export type QueueLot = {
   onHand: number;
   hasCoa: boolean;
   createdAt: string;
+  /** D195: inventory_lots.menu_source_variant_id (the size this lot sells as). */
+  sizeId?: string | null;
 };
 
 export type QueueRow = {
@@ -118,6 +128,13 @@ export type QueueRow = {
   /** An active, stocked lot with no COA (for the #coa link). */
   coaLotId: string | null;
   coaMissingLots: number;
+  /** D195: the size the price/floor numbers are about (null = the card). */
+  sizeLabel: string | null;
+  /**
+   * D195: the lot that sells as that size (the price fix opens it). Null on a
+   * multi-size card whose lots are not linked to sizes yet.
+   */
+  sizeLotId: string | null;
 };
 
 export type BadProductQueue = {
@@ -168,8 +185,43 @@ export function buildBadProductQueue(input: {
     seen.add(key);
     const merch = isMerch(c.categories);
     const rawCost = input.costs.get(key);
-    const costMinor = rawCost != null && Number.isFinite(rawCost) && rawCost > 0 ? rawCost : null;
-    const floorMinor = costFloorMinorUnits(costMinor, merch);
+    let costMinor = rawCost != null && Number.isFinite(rawCost) && rawCost > 0 ? rawCost : null;
+    let floorMinor = costFloorMinorUnits(costMinor, merch);
+    let priceForFloor = Number.isFinite(c.priceMinor) ? c.priceMinor : 0;
+    let sizeLabel: string | null = null;
+    let sizeId: string | null = null;
+    let sizeLotKey: string | null = null;
+    // D195: judge every SIZE at its own price against its own cost. The row
+    // shows the size with the least room (the one a fix must address).
+    const sizes = (c.sizes ?? []).filter((z) => z && String(z.sizeId ?? "").trim() !== "");
+    let anySizeNoCost = false;
+    if (sizes.length > 0) {
+      let worst: { room: number; price: number; cost: number; floor: number; z: (typeof sizes)[number] } | null = null;
+      for (const z of sizes) {
+        const raw = costForSize(input.costs, key, z.sizeId);
+        const cost = raw != null && Number.isFinite(raw) && raw > 0 ? raw : null;
+        if (cost == null) {
+          anySizeNoCost = true;
+          continue;
+        }
+        const price = Number.isFinite(z.priceMinor) ? z.priceMinor : 0;
+        if (price <= 0) continue; // no_price handles it
+        const floor = costFloorMinorUnits(cost, merch);
+        const room = price - floor;
+        if (!worst || room < worst.room) worst = { room, price, cost, floor, z };
+      }
+      if (worst) {
+        costMinor = worst.cost;
+        floorMinor = worst.floor;
+        priceForFloor = worst.price;
+        sizeLabel = (worst.z.label ?? "").trim() || null;
+        sizeId = worst.z.sizeId;
+        sizeLotKey = lotKeyFromVariantId(sizeId);
+      } else if (anySizeNoCost) {
+        costMinor = null;
+        floorMinor = 0;
+      }
+    }
     const lots = lotsByKey.get(key) ?? [];
     const stocked = lots.filter((l) => l.status === "active" && l.onHand > 0);
     const noCoa = stocked.filter((l) => !l.hasCoa).sort(newestFirst);
@@ -186,17 +238,26 @@ export function buildBadProductQueue(input: {
       const price = Number.isFinite(c.priceMinor) ? c.priceMinor : 0;
       const badSize = c.variantPrices.some((p) => !Number.isFinite(p) || p <= 0);
       if (price <= 0 || badSize) kinds.push("no_price");
-      if (costMinor != null && price > 0 && price <= floorMinor) kinds.push("below_floor");
-      if (costMinor == null && !onNeverList) kinds.push("no_cost");
+      if (costMinor != null && price > 0 && priceForFloor > 0 && priceForFloor <= floorMinor) kinds.push("below_floor");
+      if ((costMinor == null || anySizeNoCost) && !onNeverList) kinds.push("no_cost");
       if (!merch && noCoa.length > 0) kinds.push("missing_coa");
     }
     if (kinds.length === 0) continue;
     for (const k of kinds) counts[k] += 1;
+    const sizeLots = (sizeLotKey ? [...lots, ...(lotsByKey.get(sizeLotKey) ?? [])] : lots).map((l) => ({
+      id: l.id,
+      posProductKey: (l.key ?? "").trim(),
+      status: l.status,
+      createdAt: l.createdAt,
+      sizeId: l.sizeId ?? null,
+    }));
+    const sizeCount = sizes.length > 0 ? sizes.length : c.variantPrices.length;
+    const sizeLotId = lotForSize(sizeLots, { key, sizeId, lotKey: sizeLotKey }, sizeCount);
     rows.push({
       key,
       name: c.name,
       brand: c.brand,
-      priceMinor: c.priceMinor,
+      priceMinor: sizeId ? priceForFloor : c.priceMinor,
       costMinor,
       floorMinor,
       kinds,
@@ -209,6 +270,8 @@ export function buildBadProductQueue(input: {
       lotId,
       coaLotId: noCoa[0]?.id ?? null,
       coaMissingLots: noCoa.length,
+      sizeLabel,
+      sizeLotId,
     });
   }
   return { rows, counts, scanned: seen.size };
@@ -480,5 +543,31 @@ export function __runBadProductQueueCoreTests(): { passed: number; failed: numbe
   ok(/bad product queue \(no cost on file\)/.test(queueHideReason(["no_cost"])), "hide reason names the problem");
   ok(/never-discount|bad product queue/.test(queueNeverReason(["below_floor"])), "never reason");
 
+
+  // D195: sizes are judged at their own price against their own cost.
+  {
+    const SEP = "\u0000size:";
+    const sized = (over: Partial<QueueCard> = {}) =>
+      card({
+        priceMinor: 700,
+        variantPrices: [700, 4500],
+        sizes: [
+          { sizeId: "k1-1g", label: "1g", priceMinor: 700 },
+          { sizeId: "k1-35", label: "3.5g", priceMinor: 4500 },
+        ],
+        ...over,
+      });
+    // Card average 527 would make the $7 1g look under its floor; its own 1g cost is 225.
+    const sizeCosts: [string, number][] = [["k1", 527], [`k1${SEP}k1-1g`, 225], [`k1${SEP}k1-35`, 1189]];
+    ok(build([sized()], sizeCosts).rows.length === 0, "D195: no false below-floor from the card average");
+    const dearCosts: [string, number][] = [["k1", 527], [`k1${SEP}k1-1g`, 225], [`k1${SEP}k1-35`, 4000]];
+    const dear = build([sized()], dearCosts, [lot({ id: "L35", sizeId: "k1-35" }), lot({ id: "L1", sizeId: "k1-1g", createdAt: "2026-09-01" })]).rows[0];
+    ok(dear?.kinds.includes("below_floor") === true && dear.sizeLabel === "3.5g", "D195: the size that is under its floor is named");
+    ok(dear?.priceMinor === 4500 && dear.costMinor === 4000, "D195: the row carries that size's price and cost");
+    ok(dear?.sizeLotId === "L35", "D195: the fix opens that size's lot, not the newest lot");
+    const unlinked = build([sized()], dearCosts, [lot({ id: "Lx" })]).rows[0];
+    ok(unlinked?.sizeLotId === null, "D195: multi-size card with no size-linked lot: no guessed lot");
+    ok(build([sized()], []).rows[0]?.kinds.join() === "no_cost", "D195: sized card with no cost is no_cost");
+  }
   return { passed, failed };
 }
