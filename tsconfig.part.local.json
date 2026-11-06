@@ -1,1 +1,0 @@
-{ "extends": "./tsconfig.json", "include": ["next-env.d.ts", "src/lib/promotions/**/*.ts", "src/app/admin/promotions/**/*.tsx", "src/app/admin/promotions/**/*.ts", "src/types/**/*.d.ts"] }
