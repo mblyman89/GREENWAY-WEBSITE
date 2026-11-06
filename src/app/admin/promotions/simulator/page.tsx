@@ -6,6 +6,7 @@ import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 import { SimulatorClient, type MenuPick } from "./simulator-client";
 import { backHref } from "@/lib/admin/back-link-core";
+import { expandCardSizes, guardRowId } from "@/lib/promotions/size-guard-core";
 
 export const dynamic = "force-dynamic";
 
@@ -23,18 +24,39 @@ export default async function PromotionSimulatorPage({
   let menu: MenuPick[] = [];
   if (version) {
     const [items, costs] = await Promise.all([getVersionItems(version.id), loadProductCosts()]);
+    // D195: one pick per SIZE, priced at that size and floored at that size's
+    // cost by the register's own rule (expandCardSizes / costForSize).
     menu = items
       .filter((i) => !i.hidden)
-      .map((i) => ({
-        key: i.source_item_id,
-        name: i.name,
-        brand: i.brand_name ?? "",
-        category: i.category,
-        categories: (i.filter_categories?.length ? i.filter_categories : [i.category]).map((c) => String(c).toLowerCase()),
-        priceMinorUnits: i.price_minor_units,
-        variantLabel: i.variants?.[0]?.label ?? null,
-        costMinorUnits: costs.get(i.source_item_id) ?? null,
-      }));
+      .flatMap((i) => {
+        const categories = (i.filter_categories?.length ? i.filter_categories : [i.category]).map((c) => String(c).toLowerCase());
+        return expandCardSizes(
+          {
+            key: i.source_item_id,
+            name: i.name,
+            brand: i.brand_name ?? "",
+            categories,
+            priceMinorUnits: i.price_minor_units,
+            sizes: (Array.isArray(i.variants) ? i.variants : []).map((v) => ({
+              sourceVariantId: v.source_variant_id,
+              label: v.label,
+              priceMinorUnits: v.price_minor_units,
+              sortOrder: v.sort_order,
+            })),
+          },
+          costs,
+        ).map((r) => ({
+          key: r.key,
+          pickId: guardRowId(r),
+          name: r.name,
+          brand: r.brand,
+          category: i.category,
+          categories,
+          priceMinorUnits: r.priceMinorUnits,
+          variantLabel: r.sizeLabel ?? i.variants?.[0]?.label ?? null,
+          costMinorUnits: r.costMinorUnits,
+        }));
+      });
   }
 
   return (
