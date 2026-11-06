@@ -317,7 +317,7 @@ export default async function PromotionsAdminPage({
             data-testid="promo-unlinked-warning"
           >
             {unlinked.sellable} received {unlinked.sellable === 1 ? "lot is" : "lots are"} on no menu card ({unlinked.unitsOnHand} units on hand),
-            so the checks below cannot see their cost and their cards may show "no cost".{" "}
+            so the checks below cannot see their cost and their cards may show &quot;no cost&quot;.{" "}
             <Link href={UNLINKED_STOCK_HREF} className="font-semibold underline">
               Link them to their cards
             </Link>

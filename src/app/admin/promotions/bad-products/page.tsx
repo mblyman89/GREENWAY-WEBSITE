@@ -104,7 +104,7 @@ function Row({ row, kind }: { row: QueueRow; kind: QueueKind }) {
         <p className="mt-1 text-[11px] text-white/50" data-testid="bpq-several-sizes">
           This card has {row.variantCount} sizes and no lot is linked to {row.sizeLabel ? `the ${row.sizeLabel} size` : "that size"} yet, so the lot page
           cannot tell which size to reprice (it refuses rather than guess). Open the product&apos;s lots in inventory and pick each lot&apos;s size
-          ("Which size is this lot?"); then the price fix opens the right lot. Or correct the size price in Cultivera and re-import, or hide it until then.
+          (&quot;Which size is this lot?&quot;); then the price fix opens the right lot. Or correct the size price in Cultivera and re-import, or hide it until then.
         </p>
       ) : null}
       {kind === "missing_coa" ? (
