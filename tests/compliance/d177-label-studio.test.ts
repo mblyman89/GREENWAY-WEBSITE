@@ -46,7 +46,8 @@ describe("label-studio-core (D177 S4)", () => {
     const plan = planPrintJob(lots.map((s) => ({ subject: s, copies: 2 })), stock, ROLLO_X1040, { ...prefs.template, fields: ["product"] });
     expect(plan.totalLabels).toBe(24);
     expect(plan.items.every((p) => p.svg.includes('width="2in" height="1in"'))).toBe(true);
-    expect(printCss(stock)).toContain("@page { size: 2in 1in; margin: 0; }");
+    // D191: a 2×1 goes out as a tall 1×2 page with the artwork turned (Chromium 372435414).
+    expect(printCss(stock)).toContain("@page { size: 1in 2in; margin: 0 !important; }");
     expect(MAX_LABELS_PER_JOB).toBeLessThanOrEqual(1000);
   });
 

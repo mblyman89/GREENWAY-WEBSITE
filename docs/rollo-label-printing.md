@@ -111,6 +111,72 @@ when a re-barcoded item won't ring up. The log is append-only: the server can
 add and read rows, never edit or delete them. Without 0342, printing works
 exactly the same; the history is just not kept.
 
+## Printing problems, calibration and setup (D191)
+
+Owner (2026-11-05): *"I tested the 2x1" labels, it prints two labels, the first
+blank, the second nearly prints off the bottom of the label."*
+
+**Why it happened.** Chrome rotates a page that is wider than it is tall when it
+prints to a thermal printer, even when the preview looks right ([Chromium issue
+372435414](https://issues.chromium.org/issues/372435414), "Prints are rotated
+with 90 degree if the page width is larger than the page height", reported for a
+60×50 mm label; Firefox and Acrobat print it correctly). A 2×1 page went to the
+Rollo turned sideways: 2″ of artwork down a 1″ label means one blank label and
+one cut off.
+
+**What the studio does now** (`src/lib/printing/label-print-core.ts`)
+
+| Setting (step 5, "Printer calibration & setup") | What it does |
+|---|---|
+| Orientation **Auto** (default) | Wide labels go out as a **tall** page (a 2×1 is sent as 1″ × 2″) with the artwork already turned, so Chrome has nothing to rotate. Tall/square labels go straight. |
+| Straight / Rotate ↻ / Rotate ↺ | Manual override if a particular computer or driver still prints sideways or upside-down. |
+| Nudge right/left, down/up | 0.01″ steps (about 2 dots at 203 dpi), up to ±0.25″. |
+| Scale | 85–105 %. Use 97–98 % if the border is clipped on every side. |
+| 🎯 Print test label | Border 0.03″ inside the edge, corner brackets, 0.1″ ruler, centre cross, ▲ TOP ▲, and the active settings. Complete border and centred cross mean every label will land right. |
+
+These are saved on the device for each label size. The page `@page` margin is
+`0 !important` (beats the admin-wide 8 mm print margin used for pick tickets).
+Each page box is 0.01″ shorter than the page, and the last label has no page
+break, so there is no stray blank label at the end.
+
+**Better use of space.** Text size **Fill** (the new default) grows the text and
+barcode to use the whole label. It never truncates text to grow and never drops
+the barcode. **Edge margin: Tight 1/32″** gives more room once a test label
+prints its border complete.
+
+**One-time setup on each computer**
+
+1. **Rollo Printer Portal** (the printer's own media size): Rollo app → Menu →
+   Rollo Printer → Default Rollo Printer → Settings → Media → custom size 2 × 1 →
+   Save. Then reopen the browser ([Rollo 29000051200](https://support.rollo.com/support/solutions/articles/29000051200-set-up-a-custom-label-size-windows-mac-and-mobile-app-)).
+2. **Mac:** in the print dialog, Paper Size → Manage Custom Sizes… → width 2 in,
+   height 1 in, all margins 0 ([Rollo 29000040964](https://support.rollo.com/support/solutions/articles/29000040964-create-custom-size-labels)).
+   Printer Features → Rotate must be 0 ([Rollo 29000000902](https://support.rollo.com/support/solutions/articles/29000000902)).
+3. **Windows:** sizes are in mm (2×1 in = 51 × 25 mm). Wireless on Windows offers
+   only 4×6 until the printer is added with the Rollo driver by TCP/IP hostname.
+4. In Chrome's dialog: the Rollo, the label's paper size, Margins **None**, Scale
+   **Default/100 %**, headers and footers off, Layout **Portrait** (Auto mode
+   already turned the art).
+5. **Recalibrate** whenever the label size changes, or if it prints on every
+   other label or drifts: guides touching the roll edges, hold the top button
+   until it beeps ([Rollo 29000051114](https://support.rollo.com/support/solutions/articles/29000051114);
+   [HotLabel](https://www.hotlabel.com/); [Label Blanks](https://labelblanks.com/blogs/articles/rollo-printer-troubleshooting-tips)).
+6. **Darkness / speed:** Rollo Printer Portal → Printer Defaults (Mac: Printers →
+   Options & Supplies → Show Printer Web Page) ([Rollo 29000044309](https://support.rollo.com/support/solutions/articles/29000044309)).
+   Lower darkness if bars bleed or labels stick. Raise it, or lower the speed, if
+   the print is faint.
+
+**Symptom → fix** (also in the studio)
+
+| Symptom | Fix |
+|---|---|
+| Two labels: first blank, second cut off | Orientation Auto (or try ↻ / ↺), print a test label; check the dialog paper size is the label, not 4×6; recalibrate. |
+| Sideways | Swap ↻ ↔ ↺ or Straight; Mac Rotate = 0. |
+| Shifted / one edge clipped | Nudge toward the uncut side. |
+| Clipped on every side | Scale 97–98 %; check the dialog isn't "Fit". |
+| Every other label / drifting | Recalibrate (hold the top button until it beeps). |
+| Faint or bleeding | Darkness / Speed in Printer Defaults. |
+
 ---
 
 # Label Studio (D177) — research basis
