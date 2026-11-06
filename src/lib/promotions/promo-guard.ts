@@ -42,6 +42,7 @@ import {
 } from "./discount-engine";
 import { getPublishedPromotions, listNeverDiscountKeys } from "./promotions-store";
 import { splitGuardable } from "./promo-fix-core";
+import { distinctCards, expandCardSizes, worstFindingPerCard } from "./size-guard-core";
 import type { PromotionWithRules, PromoScope } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -96,17 +97,18 @@ export async function loadGuardMenu(): Promise<GuardMenu> {
       String(c).toLowerCase(),
     ),
     priceMinorUnits: i.price_minor_units,
-    costMinorUnits: costs.get(i.source_item_id) ?? null,
+    // D195: every SIZE with its own price (what the register rings).
+    sizes: (Array.isArray(i.variants) ? i.variants : []).map((v) => ({
+      sourceVariantId: v.source_variant_id,
+      label: v.label,
+      priceMinorUnits: v.price_minor_units,
+      sortOrder: v.sort_order,
+    })),
   }));
   const split = splitGuardable(rows, neverKeys);
-  const products: GuardProduct[] = split.kept.map((r) => ({
-    key: r.key,
-    name: r.name,
-    brand: r.brand,
-    categories: r.categories,
-    priceMinorUnits: r.priceMinorUnits,
-    costMinorUnits: r.costMinorUnits,
-  }));
+  // D195: one guard row per size, each floored at its own cost (costForSize =
+  // the register's rule). A card with no sizes stays one row at card price.
+  const products: GuardProduct[] = split.kept.flatMap((r) => expandCardSizes(r, costs));
   return { products, hiddenSkipped: split.hiddenSkipped, neverSkipped: split.neverSkipped, readProblems };
 }
 
@@ -180,13 +182,15 @@ export type PublishGuardResult = {
   blocked: boolean;
   /** Every finding (below_cost blocks; cost_unknown / regular_below_cost warn). */
   findings: BelowCostFinding[];
-  /** How many published-menu products the promotion applies to. */
+  /** How many published-menu products (cards) the promotion applies to. */
   affectedCount: number;
+  /** D195: how many sizes were checked (one row per size). */
+  affectedSizeCount: number;
   /** R74 S22: hidden cards left out of the check (whole menu, not just this deal). */
   hiddenSkipped: number;
   /** R74 S22: never-discount products left out of the check (whole menu). */
   neverSkipped: number;
-  /** R74 S28: the exact products checked (the preview lists every one). */
+  /** R74 S28 / D195: the exact rows checked, one per size (the preview lists every one). */
   affected: GuardProduct[];
   /** R74 S28: failed/short reads (see GuardMenu.readProblems). */
   readProblems: string[];
@@ -218,7 +222,7 @@ export async function guardPromotionPublish(
 ): Promise<PublishGuardResult> {
   const { products, hiddenSkipped, neverSkipped, readProblems } = preloaded ?? (await loadGuardMenu());
   if (products.length === 0) {
-    return { blocked: false, findings: [], affectedCount: 0, hiddenSkipped, neverSkipped, affected: [], readProblems };
+    return { blocked: false, findings: [], affectedCount: 0, affectedSizeCount: 0, hiddenSkipped, neverSkipped, affected: [], readProblems };
   }
 
   const targets = promo.targets.map((t) => ({ scope: t.scope, value: t.value }));
@@ -231,7 +235,8 @@ export async function guardPromotionPublish(
   return {
     blocked: hasPublishBlock(findings),
     findings,
-    affectedCount: affected.length,
+    affectedCount: distinctCards(affected),
+    affectedSizeCount: affected.length,
     hiddenSkipped,
     neverSkipped,
     affected,
@@ -261,6 +266,8 @@ export type PromotionsAudit = {
   totals: { belowCost: number; costUnknown: number; regularBelowCost: number };
   productCount: number;
   costedProductCount: number;
+  /** D195 step 4: when this check read the menu and costs (shown as "Checked at"). */
+  checkedAt: string;
 };
 
 /**
@@ -276,9 +283,11 @@ export async function auditPublishedPromotions(): Promise<PromotionsAudit> {
     getPublishedPromotions(),
   ]);
   const weekdayById = new Map(published.map((p) => [p.id, p.weekday]));
-  const costedProductCount = products.filter(
-    (p) => p.costMinorUnits != null && p.costMinorUnits > 0,
-  ).length;
+  // D195: rows are sizes; the counts stay PRODUCTS (cards). A card counts as
+  // costed when every one of its sizes has a cost.
+  const uncosted = new Set(products.filter((p) => !(p.costMinorUnits != null && p.costMinorUnits > 0)).map((p) => p.key));
+  const productCount = distinctCards(products);
+  const costedProductCount = new Set(products.map((p) => p.key).filter((k) => !uncosted.has(k))).size;
   const entries: PromotionAuditEntry[] = [];
   const totals = { belowCost: 0, costUnknown: 0, regularBelowCost: 0 };
 
@@ -291,9 +300,11 @@ export async function auditPublishedPromotions(): Promise<PromotionsAudit> {
       config: rule.config,
     };
     const findings = findBelowCost(shape, affected);
-    const belowCost = findings.filter((f) => f.reason === "below_cost");
-    const costUnknown = findings.filter((f) => f.reason === "cost_unknown");
-    const regularBelowCost = findings.filter((f) => f.reason === "regular_below_cost");
+    // D195: findings are per size; each list keeps one row per PRODUCT (its
+    // worst size), so the totals stay product counts.
+    const belowCost = worstFindingPerCard(findings.filter((f) => f.reason === "below_cost"));
+    const costUnknown = worstFindingPerCard(findings.filter((f) => f.reason === "cost_unknown"));
+    const regularBelowCost = worstFindingPerCard(findings.filter((f) => f.reason === "regular_below_cost"));
     totals.belowCost += belowCost.length;
     totals.costUnknown += costUnknown.length;
     totals.regularBelowCost += regularBelowCost.length;
@@ -301,12 +312,12 @@ export async function auditPublishedPromotions(): Promise<PromotionsAudit> {
       promotionId: rule.id,
       title: rule.title,
       weekday: weekdayById.get(rule.id) ?? null,
-      affectedCount: affected.length,
+      affectedCount: distinctCards(affected),
       belowCost,
       costUnknown,
       regularBelowCost,
     });
   }
 
-  return { entries, totals, productCount: products.length, costedProductCount };
+  return { entries, totals, productCount, costedProductCount, checkedAt: new Date().toISOString() };
 }

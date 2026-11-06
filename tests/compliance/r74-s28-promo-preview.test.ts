@@ -153,7 +153,7 @@ beforeEach(() => {
 
 describe("R74 S28 pure core", () => {
   it("self-tests pinned and registered", () => {
-    expect(core.__runPromoPreviewCoreTests()).toEqual({ passed: 46, failed: 0 });
+    expect(core.__runPromoPreviewCoreTests()).toEqual({ passed: 51, failed: 0 }); // D195: +5 per-size rows
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toMatch(/__runPromoPreviewCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 46\) throw new Error\([^\n]*\} \/\/ R74 S28/);
     expect(read("src/lib/promotions/promo-preview-core.ts")).not.toContain("process" + ".env");
