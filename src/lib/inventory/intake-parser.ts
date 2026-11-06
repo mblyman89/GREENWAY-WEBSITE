@@ -385,6 +385,10 @@ function parseWciaLab(item: Obj): ParsedLab | null {
   };
 }
 
+/** D195: the receiving warning for a WCIA line keyed by its barcode (no product SKU). */
+export const NO_SKU_LINE_WARNING =
+  "No product SKU on this line, so the lot is keyed by its barcode. Finish it in Product Onboarding so it joins its menu card; otherwise link it on Inventory > Stock on no menu card.";
+
 function parseWciaLine(item: unknown): ParsedLine {
   const warnings: string[] = [];
   if (!isObj(item)) {
@@ -431,6 +435,12 @@ function parseWciaLine(item: unknown): ParsedLine {
   if (linePrice === 0 || (linePrice != null && linePrice === 0)) {
     if (!is_sample) warnings.push("$0 line — likely a vendor sample; confirm before selling.");
   }
+  // D195 step 2 (root cause): with no product SKU the lot is keyed by its
+  // barcode below. Product Onboarding joins it to its menu card; if the
+  // manifest is rejected or the draft is skipped, the lot stays on no card
+  // (cost, FIFO and Promotions cannot see it) until linked on
+  // /admin/inventory/unlinked.
+  if (!sku && lot_code) warnings.push(NO_SKU_LINE_WARNING);
 
   return {
     product_name,

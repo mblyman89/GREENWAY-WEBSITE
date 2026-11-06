@@ -17,7 +17,7 @@
  */
 
 import { SAMPLE_INTAKE_REVIEW_MESSAGE } from "./sample-lot-core";
-import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
+import { NO_SKU_LINE_WARNING, type ParsedManifest, type ParsedLine } from "@/lib/inventory/intake-parser";
 import { suspectsOtherwiseTaken } from "@/lib/compliance/sales-limits-core";
 
 export type IntakeReviewSeverity = "error" | "warning" | "info";
@@ -116,7 +116,8 @@ export function summarizeIntakeForReview(manifest: ParsedManifest): IntakeReview
       flags.push({ severity, line: lineNo, label, message });
 
     // Carry per-line parser warnings.
-    for (const w of line.warnings ?? []) add("warning", w);
+    // D195: the no-SKU (barcode key) note is information, not a warning to act on.
+    for (const w of line.warnings ?? []) add(w === NO_SKU_LINE_WARNING ? "info" : "warning", w);
 
     if (line.is_sample) {
       sampleCount += 1;
