@@ -305,7 +305,7 @@ export function __runOfflineReversalCoreTests(): { passed: number; failed: numbe
       console.error("offline-reversal-core FAIL:", m);
     }
   };
-  const policy: PosReturnPolicyConfig = { loyaltyRequired: false, windowDays: 7, excludedCategories: ["edibles"] };
+  const policy: PosReturnPolicyConfig = { loyaltyRequired: false, windowDays: 7, excludedCategories: ["edibles"], noReceiptMembers: false };
   const sid = "11111111-2222-4333-8444-555566667777";
   const at = "2026-11-04T19:00:00.000Z";
   const now = Date.parse(at) + 3_600_000;
@@ -370,7 +370,7 @@ export function __runOfflineReversalCoreTests(): { passed: number; failed: numbe
       lines: [],
     }));
     let b: SaleBook | null = null;
-    for (const e of big) b = addSaleToBook(b, "r1", e, { windowDays: 30, loyaltyRequired: false, excludedCategories: [] }, Date.parse("2026-11-04T19:00:00.000Z"));
+    for (const e of big) b = addSaleToBook(b, "r1", e, { windowDays: 30, loyaltyRequired: false, excludedCategories: [], noReceiptMembers: false }, Date.parse("2026-11-04T19:00:00.000Z"));
     ok(JSON.stringify(b!.sales).length <= SALE_BOOK_MAX_CHARS && b!.sales[b!.sales.length - 1].id === big[29].id, "O12: the book is size-capped, newest kept");
   }
   return { passed, failed };

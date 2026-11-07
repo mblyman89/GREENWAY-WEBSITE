@@ -26,6 +26,15 @@
  *     originalPackaging, lotIdLegible, pin, processedByName }
  *                            → process the return.
  *
+ * D205 (no receipt, loyalty members, owner's policy toggle):
+ *   { memberSales: customerId }          → the member's register sales still
+ *                                          inside the return window.
+ *   { customerId, orderId }              → lookup of one of those sales.
+ *   { customerId, orderId, orderLineId, scan } (no pin)
+ *                                        → check the scanned package matches.
+ *   { customerId, orderId, orderLineId, scan, …, pin }
+ *                                        → process (scan + packaging required).
+ *
  * This route is the ONLINE path. D170 O3: when the server is unreachable
  * the register returns a line from a sale rung on THIS iPad (encrypted sale
  * book), behind a manager/lead PIN, and queues one `reversal` event. At sync
@@ -42,7 +51,14 @@ import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { recordAudit } from "@/lib/auth/audit";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
-import { lookupSaleByReceipt, processCounterReturn } from "@/lib/pos/returns-store";
+import {
+  listMemberSalesForReturn,
+  lookupSaleByReceipt,
+  lookupSaleForMember,
+  processCounterReturn,
+  verifyReturnScan,
+  type CounterReturnSale,
+} from "@/lib/pos/returns-store";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { openDrawerIdForRegister, assignReturnRefund } from "@/lib/registers/drawer-figure-store";
 
@@ -73,45 +89,53 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     lotIdLegible?: unknown;
     pin?: unknown;
     processedByName?: unknown;
+    memberSales?: unknown;
+    customerId?: unknown;
+    orderId?: unknown;
+    scan?: unknown;
   };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
+  // ── D205: the member's sales inside the window (no receipt) ─────────────
+  if (typeof body.memberSales === "string") {
+    const listed = await listMemberSalesForReturn(body.memberSales);
+    if (!listed.ok) return NextResponse.json({ error: listed.error }, { status: 422 });
+    return NextResponse.json({ sales: listed.sales, windowDays: listed.windowDays });
+  }
+
+  const customerId = String(body.customerId ?? "").trim();
+  const orderId = String(body.orderId ?? "").trim();
+  const noReceipt = customerId.length > 0 || orderId.length > 0;
   const receipt = String(body.receipt ?? "").trim();
-  if (!receipt) {
+  if (!receipt && !noReceipt) {
     return NextResponse.json({ error: "Enter the receipt number." }, { status: 400 });
   }
+  if (noReceipt && (!customerId || !orderId)) {
+    return NextResponse.json({ error: "Pick the loyalty member and the sale being returned." }, { status: 400 });
+  }
+  const scan = String(body.scan ?? "").trim();
 
   // ── Lookup mode (no line/pin yet): show what could be returned ───────────
   const orderLineId = String(body.orderLineId ?? "").trim();
   const pin = String(body.pin ?? "");
   if (!orderLineId && !pin) {
-    const lookup = await lookupSaleByReceipt(receipt);
+    const lookup = noReceipt ? await lookupSaleForMember(customerId, orderId) : await lookupSaleByReceipt(receipt);
     if (!lookup.ok) return NextResponse.json({ errors: lookup.errors }, { status: 404 });
-    const s = lookup.sale;
-    return NextResponse.json({
-      sale: {
-        receiptNumber: s.receiptNumber,
-        orderNumber: s.orderNumber,
-        purchasedAtIso: s.purchasedAtIso,
-        memberLabel: s.memberLabel,
-        daysRemaining: s.daysRemaining,
-        orderTotalMinor: s.orderTotalMinor,
-        // Fix 6F (G-67/G-68) — the policy the lookup was judged by.
-        policySummary: s.policySummary,
-        lines: s.lines.map((l) => ({
-          lineId: l.lineId,
-          productName: l.productName,
-          quantity: l.quantity,
-          priceMinorUnits: l.priceMinorUnits,
-          alreadyReturned: l.alreadyReturned,
-          remainingReturnable: l.remainingReturnable,
-          notReturnableReason: l.notReturnableReason,
-        })),
-      },
-    });
+    return NextResponse.json({ sale: saleForRegister(lookup.sale) });
+  }
+
+  // ── D205: scan check (no pin yet): does the package match the line? ─────
+  if (noReceipt && orderLineId && !pin) {
+    const lookup = await lookupSaleForMember(customerId, orderId);
+    if (!lookup.ok) return NextResponse.json({ error: lookup.errors.join(" ") }, { status: 404 });
+    const line = lookup.sale.lines.find((l) => l.lineId === orderLineId);
+    if (!line) return NextResponse.json({ error: "That item isn't on this sale." }, { status: 404 });
+    const verdict = await verifyReturnScan(line, scan);
+    if (!verdict.ok) return NextResponse.json({ error: verdict.error }, { status: 422 });
+    return NextResponse.json({ scanMatched: true });
   }
 
   // ── Process mode: validate the return, then the manager PIN ─────────────
@@ -129,6 +153,9 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   const disposition = body.disposition === "restock" ? "restock" : body.disposition === "destroy" ? "destroy" : null;
   if (!disposition) {
     return NextResponse.json({ error: "Pick restock or destroy." }, { status: 400 });
+  }
+  if (noReceipt && !scan) {
+    return NextResponse.json({ error: "Without a receipt, scan the product being returned first." }, { status: 400 });
   }
 
   const throttleScope = deviceThrottleScope(auth.device.id);
@@ -161,6 +188,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       disposition,
       originalPackaging: body.originalPackaging === true,
       lotIdLegible: body.lotIdLegible === true,
+      ...(noReceipt ? { noReceipt: { customerId, orderId, scan } } : {}),
     },
     employee.staff_id, // staff_profiles id (nullable) — same FK the back office writes
     processedByName,
@@ -195,7 +223,10 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     after: {
       via: "register",
       deviceId: auth.device.id,
-      receipt_number: receipt,
+      receipt_number: receipt || null,
+      // D205: the courtesy no-receipt return is tagged for the owner's review.
+      no_receipt: noReceipt,
+      ...(noReceipt ? { member_customer_id: customerId, order_id: orderId, scanned_code: result.scannedCode ?? null } : {}),
       order_line_id: orderLineId,
       quantity,
       reason,
@@ -218,6 +249,30 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     receiptHtml: result.receiptHtml,
     stockNote: result.stockNote,
   });
+}
+
+/** What the register needs to show a returnable sale (no scan codes, no ids beyond the line). */
+function saleForRegister(s: CounterReturnSale) {
+  return {
+    receiptNumber: s.receiptNumber,
+    orderNumber: s.orderNumber,
+    purchasedAtIso: s.purchasedAtIso,
+    memberLabel: s.memberLabel,
+    daysRemaining: s.daysRemaining,
+    orderTotalMinor: s.orderTotalMinor,
+    // Fix 6F (G-67/G-68) — the policy the lookup was judged by.
+    policySummary: s.policySummary,
+    noReceipt: s.noReceipt === true,
+    lines: s.lines.map((l) => ({
+      lineId: l.lineId,
+      productName: l.productName,
+      quantity: l.quantity,
+      priceMinorUnits: l.priceMinorUnits,
+      alreadyReturned: l.alreadyReturned,
+      remainingReturnable: l.remainingReturnable,
+      notReturnableReason: l.notReturnableReason,
+    })),
+  };
 }
 
 /**

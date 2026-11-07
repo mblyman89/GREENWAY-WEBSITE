@@ -22,6 +22,8 @@ export async function saveReturnPolicyAction(input: {
   loyaltyRequired: boolean;
   windowDays: string | number;
   excludedCategories: string[];
+  /** D205: allow returns without a receipt for loyalty members. */
+  noReceiptMembers?: boolean;
 }): Promise<SaveReturnPolicyResult> {
   const session = await requirePermission("settings.manage");
 

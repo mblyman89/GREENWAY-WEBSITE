@@ -73,7 +73,7 @@ describe("pos/returns-core (POS B15)", () => {
 
   it("refuses anonymous sales when the loyalty toggle is on and reports every failure at once", () => {
     const verdict = evaluateReturnEligibility({
-      policy: { loyaltyRequired: true, windowDays: 7, excludedCategories: [] },
+      policy: { loyaltyRequired: true, windowDays: 7, excludedCategories: [], noReceiptMembers: false },
       orderStatus: "pending",
       orderCustomerId: null,
       purchasedAtIso: "2026-06-01T19:00:00.000Z",

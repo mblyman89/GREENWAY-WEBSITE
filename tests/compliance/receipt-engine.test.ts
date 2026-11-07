@@ -484,7 +484,7 @@ describe("the return policy on the paper matches the policy we enforce", () => {
     expect(policy.toLowerCase()).toContain("receipt");
     expect(policy.toLowerCase()).not.toContain("loyalty");
     expect(policy.toLowerCase()).toContain("original packaging");
-    const loyal = defaultReturnPolicyText({ loyaltyRequired: true, windowDays: 7, excludedCategories: [] });
+    const loyal = defaultReturnPolicyText({ loyaltyRequired: true, windowDays: 7, excludedCategories: [], noReceiptMembers: false });
     expect(loyal.toLowerCase()).toContain("loyalty");
   });
 
