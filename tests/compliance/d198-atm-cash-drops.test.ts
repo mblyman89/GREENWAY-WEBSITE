@@ -231,7 +231,7 @@ describe("D198 S6 the ATM bank account auto-syncs; SOP + concierge", () => {
     expect(sop1).toMatch(/\| \*\*Version\*\* \| [^\n]*1\.23 \(draft/); // later versions keep 1.23 in the history
     expect(sop1).toContain("How many $20 bills are you taking for the ATM?");
     const sop2 = read("docs/sop/SOP-02-master-till-safe.md");
-    expect(sop2).toMatch(/\| \*\*Version\*\* \| 1\.9 /);
+    expect(sop2).toMatch(/\| \*\*Version\*\* \| [^\n]*1\.9[ :]/); // later versions keep 1.9 in the history
     expect(sop2).toContain("**ATM drops (D198)**");
     expect(sop2).toContain("ATM drops in the books (D198, NOT BUILT on purpose)");
     const kb = read("src/lib/admin/concierge-kb.ts");
