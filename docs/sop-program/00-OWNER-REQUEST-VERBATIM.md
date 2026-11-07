@@ -1400,3 +1400,57 @@ Finding: an ATM drop was never built. Every register drop went to the store safe
   - self-tests: `coa-from-cultivera-core` (31) registered;
   - 62 related compliance files (1,566 tests) pass.
 - **After the merge:** the crawler on Railway must redeploy (automatic on a main merge; otherwise click Redeploy). Until then the Fetch button says so.
+
+## Owner request, 2026-11-07 (recorded verbatim, D201: a targeted Gmail search of Stephen's mailbox for the last COAs)
+
+> "Thank you. They will be in Stephen's Gmail address. Please build me a targeted search for his email address. We already have everything we need to fetch them, we just need a targeted search. Either the COA's will be PDFs, or they will be a url inside the json. Please build this focused search for me. Two buttons if possible, a fetch and attach buttons. Please do your best to get me these last few coas. Let me click a missing coa product and have that be a targeted search maybe for one off products that are stubborn? Go above and beyond for me please, let's get them all. Follow the standing rules. Thank you."
+
+### Findings (production, read-only, before building)
+
+- **459 stocked lots on 32 rebuilt Cultivera transfers still have no COA.** The D200 buttons have not been pressed yet (there is no `coa_from_cultivera_run` setting).
+- **Already in the kept Gmail documents (`cultivera_mail_docs`):**
+  - 261 lots have their barcode inside a crawled WCIA JSON. D200 "Attach all COAs" (or the D201 Attach) links them from the JSON's own `lab_result_data`, including its `coa` URL.
+  - 79 lots appear only on PDF manifests.
+- **The PDF COAs are already in storage but were never read as COAs.** GrowFlow vendors (CLARITY 1209/1210, STARLEAF/DELUGE 1185, DOWNTOWN 1199, FIRETREE 419) email `New order INV-…` with three attachments: `Invoice_*.pdf`, `QA_*.pdf` and `CCRS_Manifest_*.pdf`. The `QA_*.pdf` is a "QA Results" COA bundle: one row per product with Lab Sample ID#, Parent ID# and **Child ID# = the lot's own barcode**. The harvest's manifest reader marked these "unreadable" (they are not manifests). The site already has the exact reader for them (`readCoaBundleFromBase64` → `readGrowFlowQaResults`, Fix Phase 3.1a). It was simply never pointed at the harvested emails.
+- **No kept email at all** for transfers 1183 ALIS, 1195 EVERGREEN HERBAL, 1211 ALPHA CRUX, 1212 NALLEY VALLEY, 1213 MOUNTAIN HI and 1214 GREEN RESEARCH. 1211–1214 arrived after the crawl's last pass (cursor saved 2026-10-23). A targeted search is the right tool for these.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D201 | **"Search Gmail for the missing COAs" (Fetch).** For every delivery that still has stocked lots with no COA, the site asks Gmail (`stephen@`, read-only) a handful of exact questions instead of walking the mailbox: (1) the manifest number (in a subject, filename or body); (2) the lots' barcodes, 20 per question; (3) the vendor's name inside the receive-date window (−10/+14 days) on emails with an attachment or a "Transfer Data" link. Every matched email that is not kept yet goes through the EXISTING harvester (the same storage, rows, parsers and Transfer-link fetch; ON CONFLICT DO NOTHING). Matched emails are remembered (site_settings `coa_gmail_search`) so Attach reads them. Bounded per click (40 new emails, 200 s); click again to continue. Audited. | "build me a targeted search for his email address" / "We already have everything we need to fetch them" / "a fetch … button" |
+| D201a | **"Attach COAs from Gmail" (+ Preview, which writes nothing).** Two exact sources, fill-only: (1) **the URL inside the JSON**: every kept JSON (WCIA or vendor JSON, attached or fetched from a Transfer link) that carries a missing lot's barcode is parsed with `parseVendorJson`, and the line's own lab data (lab test id, potency, `coa` URL) becomes the lab result through the native path (`planWciaLabLinks` → `applyWciaLinkPlan`); (2) **the PDF COA**: every PDF on an email that names a missing lot (by barcode on any of its documents, by manifest number, or found by the Fetch) is opened, and only a lab certificate or a GrowFlow QA table is read (`readCoaBundleFromBase64`; LlamaParse only when the text layer cannot identify a certificate). A certificate is linked **only when an id printed on it equals the lot's barcode** (never by product name). Two different certificates for one barcode are left alone. A certificate that is already on file (exact lab test id) is reused. The lot's `lab_result_id` is filled only when it is empty (compare-and-set), never on a destroyed lot. The PDF is filed in the private `coa` bucket under its lab result. Audited. | "Either the COA's will be PDFs, or they will be a url inside the json" / "an … attach button" |
+| D201b | **Click a missing-COA product → a targeted search for just that one.** Every "No COA" row on Fix later gets a **Search Gmail** button, and every delivery in the new card gets one too. It runs a wider search for that lot or delivery (its barcode anywhere, its manifest number, its vendor ±30 days), keeps the matched emails, then attaches straight away with the same exact, fill-only rules. It reports what it found: the emails it matched (date and subject) and whether the lot now has a COA. | "Let me click a missing coa product and have that be a targeted search maybe for one off products that are stubborn?" |
+| D201c | **Above and beyond, within the rules.** The card lists the deliveries still missing COAs (vendor, manifest, receive date, lots). What no email can answer is plainly a vendor request. Nothing is guessed: no name matching, no AI value written. No migration and no new table. | "Go above and beyond for me please, let's get them all" / standing rules |
+
+### As built (D201)
+
+- **Code:**
+  - `src/lib/inventory/coa-gmail-search-core.ts` (pure: questions, PDF order, exact-id certificate plan, remembered state, notes);
+  - `src/lib/inventory/coa-gmail-search-store.ts` (search / attach / one product / card);
+  - `harvestOneEmail` exported from `src/lib/pos/cultivera-mail-harvest-store.ts` (unchanged behaviour);
+  - three actions in `src/app/admin/inventory/fix-later/actions.ts`, all behind `inventory.manage`.
+- **Page** (Inventory > Fix later):
+  - a new card, **"COAs from Stephen's Gmail"**, with these buttons:
+    - **Search Gmail for the missing COAs**;
+    - **Attach COAs from Gmail**;
+    - **Preview first (writes nothing)**;
+    - a table of the deliveries still missing COAs, each with its own **Search Gmail** button.
+  - Every "No COA" row in "Selling now, fix later" has a **Search Gmail for this COA** button. It runs a wider search for just that product (its own barcode, its manifest, and the vendor ±30 days, plus its first two words), attaches its delivery, and answers in plain words. The answer is either "This product now has its COA" or "ask the vendor".
+- **Matching rule:**
+  - A PDF certificate links a lot only when the certificate *prints* the lot's barcode. GrowFlow QA "Child ID#" is the barcode.
+  - An id must look like an id: 8 or more characters, no spaces, at least one digit, so a product name never matches.
+  - Two different certificates for one barcode means the lot is left alone.
+  - The lab result uses the certificate's own lab id. An existing one is reused.
+  - Fill-only: only `lab_result_id`/`updated_by` change, and only where the lot has none and is not destroyed.
+  - The PDF is filed in the private `coa` bucket on the new lab result.
+- **No migration, no new table.** The remembered search is the site_settings key `coa_gmail_search`.
+- **Tests:**
+  - `tests/compliance/d201-coa-gmail-search.test.ts` (8);
+  - self-test `coa-gmail-search-core` (44, floor 40);
+  - D200 wiring count updated (5 `inventory.manage` actions).
+- **Click order for the owner:**
+  1. "Attach all COAs" in the Cultivera card (links the 261 lots already in kept vendor JSON).
+  2. "Search Gmail for the missing COAs" (repeat until it says done).
+  3. "Preview first", then "Attach COAs from Gmail".
+  4. For anything left, the per-product "Search Gmail for this COA".

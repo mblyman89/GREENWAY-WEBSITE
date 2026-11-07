@@ -5,6 +5,7 @@
  *
  * The two buttons the owner asked for: "give me a simple crawl button ...
  * Then a button to attach everything automatically."
+ * D201 adds the Gmail search, attach (+ preview) and the one-product search.
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -42,4 +43,70 @@ export async function attachAllCoasAction(formData: FormData) {
     revalidatePath("/admin/inventory");
   }
   redirect(back(extra));
+}
+
+// --- D201: COAs from Stephen's Gmail ------------------------------------------------------------
+// "Please build me a targeted search for his email address ... Two buttons if possible, a fetch and
+// attach buttons ... Let me click a missing coa product and have that be a targeted search."
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const backGmail = (extra: Record<string, string>, anchor = "coa-from-gmail") =>
+  `/admin/inventory/fix-later?${new URLSearchParams(extra).toString()}#${anchor}`;
+const errText = (err: unknown) => (err instanceof Error ? err.message : String(err)).slice(0, 300);
+
+/** "Search Gmail for the missing COAs": exact questions per delivery, new emails kept (read-only Gmail). */
+export async function searchGmailForCoasAction() {
+  const session = await requirePermission("inventory.manage");
+  const { searchGmailForCoas } = await import("@/lib/inventory/coa-gmail-search-store");
+  const { searchNote, searchTone } = await import("@/lib/inventory/coa-gmail-search-core");
+  let extra: Record<string, string>;
+  try {
+    const t = await searchGmailForCoas(session.userId);
+    extra = { gm: searchTone(t), gm_msg: searchNote(t).slice(0, 900) };
+  } catch (err) {
+    extra = { gm: "warn", gm_msg: `Stopped: ${errText(err)}` };
+  }
+  revalidatePath("/admin/inventory/fix-later");
+  redirect(backGmail(extra));
+}
+
+/** "Attach COAs from Gmail" (and its preview, which writes nothing). */
+export async function attachCoasFromGmailAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const dryRun = formData.get("dryRun") === "1";
+  const { attachCoasFromGmail } = await import("@/lib/inventory/coa-gmail-search-store");
+  const { attachNote, attachTone } = await import("@/lib/inventory/coa-gmail-search-core");
+  let extra: Record<string, string>;
+  try {
+    const t = await attachCoasFromGmail(session.userId, { dryRun });
+    extra = { gm: attachTone(t), gm_msg: attachNote(t).slice(0, 900) };
+  } catch (err) {
+    extra = { gm: "warn", gm_msg: `Stopped: ${errText(err)}` };
+  }
+  if (!dryRun) {
+    revalidatePath("/admin/inventory/fix-later");
+    revalidatePath("/admin/inventory");
+  }
+  redirect(backGmail(extra));
+}
+
+/** One stubborn product (lotId) or one delivery (manifestId): a wider search, then attach it. */
+export async function searchGmailForOneAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const lotId = String(formData.get("lotId") ?? "").trim();
+  const manifestId = String(formData.get("manifestId") ?? "").trim();
+  if (!(lotId ? UUID_RE.test(lotId) : UUID_RE.test(manifestId))) {
+    redirect(backGmail({ gm: "warn", gm_msg: "Search not started: that product or delivery id is not valid." }));
+  }
+  const { searchGmailForOne, oneSearchNote } = await import("@/lib/inventory/coa-gmail-search-store");
+  let extra: Record<string, string>;
+  try {
+    const r = await searchGmailForOne(session.userId, lotId ? { lotId } : { manifestId });
+    extra = { gm: r.ok && r.lotLinked !== false ? "ok" : "warn", gm_msg: oneSearchNote(r).slice(0, 900) };
+  } catch (err) {
+    extra = { gm: "warn", gm_msg: `Stopped: ${errText(err)}` };
+  }
+  revalidatePath("/admin/inventory/fix-later");
+  revalidatePath("/admin/inventory");
+  redirect(backGmail(extra));
 }

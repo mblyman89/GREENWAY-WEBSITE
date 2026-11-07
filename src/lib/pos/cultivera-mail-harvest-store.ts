@@ -158,8 +158,11 @@ export function supabaseHarvestIo(
   };
 }
 
-/** One email -> its rows. Throws only for a transient error (the caller stops the batch). */
-async function harvestOneEmail(io: HarvestIo, token: string, mailbox: string, gmailId: string): Promise<HarvestDocRow[]> {
+/**
+ * One email -> its rows. Throws only for a transient error (the caller stops the batch).
+ * D201: exported so the targeted COA search keeps a matched email exactly like the walk does.
+ */
+export async function harvestOneEmail(io: HarvestIo, token: string, mailbox: string, gmailId: string): Promise<HarvestDocRow[]> {
   const msg = await io.getMessage(token, gmailId);
   const meta = messageMeta(msg);
   const base = { mailbox, gmailId, meta };
