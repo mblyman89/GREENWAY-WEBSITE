@@ -8163,7 +8163,7 @@ function TillModal({
                       {atmParse.twenties} x $20 = {formatCents(atmParse.amountMinor)}
                     </span>
                   ) : (
-                    <span className="font-semibold text-[var(--pos-danger,#b91c1c)]">{atmParse && !atmParse.ok ? atmParse.error : ""}</span>
+                    <span className="font-semibold text-[var(--pos-danger)]">{atmParse && !atmParse.ok ? atmParse.error : ""}</span>
                   )}
                 </p>
                 <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
@@ -8218,7 +8218,7 @@ function TillModal({
               onChange={(e) => setWitnessPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
             />
             {atmWitness && atmWitness.message ? (
-              <p className={`mt-1 text-xs font-semibold ${atmWitness.allowed ? "text-[var(--pos-warn,#b45309)]" : "text-[var(--pos-danger,#b91c1c)]"}`}>
+              <p className={`mt-1 text-xs font-semibold ${atmWitness.allowed ? "text-[var(--pos-warn)]" : "text-[var(--pos-danger)]"}`}>
                 {atmWitness.message}
               </p>
             ) : null}
