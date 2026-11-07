@@ -12,13 +12,18 @@
  * each with what to fix, and separately the few lots that are stopped for
  * safety (recall, failed lab, destruction) with why.
  *
- * Read-only: every lot links to its own page to fix it.
+ * Read-only: every lot links to its own page to fix it. D200 adds the two
+ * COA buttons (fetch from Cultivera, attach all): fill-only, audited.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { readFixLaterCoverage } from "@/lib/pos/register-fix-later-store";
+import { Button } from "@/components/admin/ui";
+import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefresh";
+import { readCoaPanel, type CoaPanel } from "@/lib/inventory/coa-from-cultivera-store";
+import { attachAllCoasAction, fetchCoasFromCultiveraAction } from "./actions";
 import {
   FIX_LATER_REASON_LABELS,
   REGISTER_STOP_LABELS,
@@ -27,6 +32,8 @@ import {
 } from "@/lib/pos/register-fix-later-core";
 
 export const dynamic = "force-dynamic";
+/** D200: "Attach all COAs" reads every vendor file in one click. */
+export const maxDuration = 300;
 
 const CARD = "rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5";
 const H2 = "mb-3 text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-text)]";
@@ -41,9 +48,89 @@ const REASON_SHORT: Record<FixLaterReason, string> = {
   fixed_at_register: "Fixed at register",
 };
 
-export default async function FixLaterPage() {
+function CoaFromCultivera({ panel, tone, msg }: { panel: CoaPanel; tone: string | undefined; msg: string | undefined }) {
+  const st = panel.run?.state;
+  const running = Boolean(panel.run?.active) || st?.status === "running";
+  const wcia = st?.stages?.wcia_json as { fetched_now?: number; wanted?: number; missing?: unknown[] } | undefined;
+  const details = st?.stages?.transfer_details as { missing?: unknown[] } | undefined;
+  return (
+    <div className={CARD} id="coa-from-cultivera" data-testid="coa-from-cultivera">
+      <FetchRunAutoRefresh active={running} />
+      <h2 className={H2}>COAs from Cultivera</h2>
+      {msg ? (
+        <p
+          className={`mb-3 rounded-[var(--admin-radius)] border px-3 py-2 text-sm ${tone === "ok" ? "border-emerald-500/40 text-[var(--admin-text)]" : "border-amber-500/50 text-[var(--admin-text)]"}`}
+          data-testid="coa-from-cultivera-result"
+        >
+          {msg}
+        </p>
+      ) : null}
+      {!panel.ok ? (
+        <p className="text-sm text-[var(--admin-text-muted)]">Could not read the lots with no COA: {panel.error}</p>
+      ) : (
+        <>
+          <p className="text-sm text-[var(--admin-text)]">
+            <strong>{panel.missingLots}</strong> lot{panel.missingLots === 1 ? "" : "s"} with stock have no COA.{" "}
+            {panel.transferIds.length > 0 ? (
+              <>
+                They came in on <strong>{panel.transferIds.length}</strong> Cultivera transfer{panel.transferIds.length === 1 ? "" : "s"} (
+                {panel.transferIds.slice(0, 40).join(", ")}
+                {panel.transferIds.length > 40 ? ", ..." : ""}).
+              </>
+            ) : null}
+            {panel.lotsOffCultivera > 0 ? ` ${panel.lotsOffCultivera} are not on a Cultivera transfer (only the Gmail files can help those).` : ""}
+          </p>
+          <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm text-[var(--admin-text-muted)]">
+            <li>
+              <form action={fetchCoasFromCultiveraAction} className="flex flex-wrap items-center gap-3">
+                <Button type="submit" variant="primary" size="sm" disabled={running || panel.transferIds.length === 0} data-testid="coa-fetch-button">
+                  Fetch COAs from Cultivera
+                </Button>
+                <span>Your crawler logs in with its saved Cultivera login and downloads each transfer&apos;s vendor file (read-only, a few minutes).</span>
+              </form>
+              {panel.setting ? (
+                <p className="mt-1 text-xs" data-testid="coa-fetch-status">
+                  Last crawl {panel.setting.runId}:{" "}
+                  {panel.runError
+                    ? panel.runError
+                    : running
+                      ? `running${wcia?.fetched_now != null ? ` (${wcia.fetched_now} files so far)` : "..."}`
+                      : `${st?.status ?? "unknown"}${wcia?.wanted != null ? `, ${wcia.wanted - (wcia.missing?.length ?? 0)} of ${wcia.wanted} vendor files` : ""}${details?.missing?.length ? `, ${details.missing.length} transfers Cultivera did not return` : ""}${st?.error ? ` (${st.error})` : ""}`}
+                  {panel.setting.savedAt ? `; files saved ${panel.setting.savedAt.slice(0, 16).replace("T", " ")} UTC` : ""}
+                </p>
+              ) : null}
+            </li>
+            <li>
+              <div className="flex flex-wrap items-center gap-3">
+                <form action={attachAllCoasAction}>
+                  <Button type="submit" variant="primary" size="sm" disabled={running} data-testid="coa-attach-button">
+                    Attach all COAs
+                  </Button>
+                </form>
+                <form action={attachAllCoasAction}>
+                  <input type="hidden" name="dryRun" value="1" />
+                  <Button type="submit" variant="neutral" size="sm" disabled={running} data-testid="coa-preview-button">
+                    Preview first (writes nothing)
+                  </Button>
+                </form>
+              </div>
+              <p className="mt-1">
+                Saves the fetched files, links each lot to its vendor lab result from its own Cultivera transfer, then fills what is still missing
+                from the WCIA files already crawled from Gmail. Only empty COAs are filled; a lot that has one is never changed. Safe to click
+                again.
+              </p>
+            </li>
+          </ol>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string }> }) {
   await requirePermission("inventory.manage");
-  const read = await readFixLaterCoverage();
+  const sp = await searchParams;
+  const [read, coaPanel] = await Promise.all([readFixLaterCoverage(), readCoaPanel()]);
 
   return (
     <div className="space-y-5">
@@ -75,6 +162,8 @@ export default async function FixLaterPage() {
               it to the cart and lists it here.
             </p>
           </div>
+
+          <CoaFromCultivera panel={coaPanel} tone={sp.coa} msg={sp.coa_msg} />
 
           {read.coverage.stoppedLots > 0 ? (
             <div className={CARD} data-testid="fix-later-stopped">

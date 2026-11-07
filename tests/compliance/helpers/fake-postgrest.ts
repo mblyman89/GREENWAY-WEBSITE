@@ -260,6 +260,10 @@ function parseFilters(url: URL): Array<(r: Row) => boolean> {
     } else if (op === "not" && val === "is.null") {
       // R24 S12: .not(col, "is", null)
       out.push((r) => r[col] !== null && r[col] !== undefined);
+    } else if (op === "ov") {
+      // D200: array overlap (text[] && '{a,b}'), as PostgREST.
+      const set = new Set(parseList(val.replace(/^\{/, "(").replace(/\}$/, ")")));
+      out.push((r) => Array.isArray(r[col]) && (r[col] as unknown[]).some((x) => set.has(String(x))));
     } else if (op === "lt" || op === "lte" || op === "gt" || op === "gte") {
       out.push((r) => {
         const a = r[col];

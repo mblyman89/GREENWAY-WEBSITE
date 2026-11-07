@@ -79,6 +79,46 @@ export async function startPosRun(fresh: boolean, salesFrom?: string | null): Pr
   return { runId: d.runId, resumed: Boolean(d.resumed) };
 }
 
+/**
+ * D200: start the small crawl that fetches ONLY the vendor WCIA files (COAs) for the named Cultivera
+ * transfers (the crawler's `POST /cultivera-pos/wcia-runs`). Same secret, same single-flight lock.
+ */
+export async function startWciaRun(transferIds: readonly number[]): Promise<{ runId: string; transferIds: number[] }> {
+  const ids = [...new Set(transferIds)].filter((n) => Number.isSafeInteger(n) && n > 0).sort((a, b) => a - b);
+  if (ids.length === 0) throw new Error("No Cultivera transfers to fetch.");
+  if (ids.length > 500) throw new Error("At most 500 transfers per crawl.");
+  const res = await posFetch("/wcia-runs", { method: "POST", body: JSON.stringify({ transferIds: ids }) });
+  if (res.status === 404) throw new Error("The crawler does not have the COA fetch yet: redeploy the crawler on Railway, then click again.");
+  if (res.status !== 202 && !res.ok) throw new Error(`Crawler responded ${res.status}: ${await detail(res)}`);
+  const d = (await res.json()) as { runId: string; transferIds?: unknown[] };
+  if (!isValidRunId(String(d.runId))) throw new Error("Crawler returned an invalid run id.");
+  return { runId: d.runId, transferIds: (d.transferIds ?? []).filter((x): x is number => typeof x === "number") };
+}
+
+/**
+ * D200: the vendor WCIA files of a COA crawl, verified against the run's manifest (bytes + sha256)
+ * when it lists them. `missing` = the crawler no longer has the run (it was pruned or redeployed).
+ */
+export async function loadWciaRunRecords(
+  runId: string,
+): Promise<{ kind: "ok"; records: WciaRunRecord[]; bad: number } | { kind: "missing" } | { kind: "error"; error: string }> {
+  if (!isValidRunId(runId)) return { kind: "error", error: "invalid run id" };
+  try {
+    const mres = await posFetch(`/runs/${runId}/files/manifest.json`, undefined, 60_000);
+    if (mres.status === 404) return { kind: "missing" };
+    if (!mres.ok) return { kind: "error", error: `manifest.json: crawler responded ${mres.status}` };
+    const manifest = JSON.parse(Buffer.from(await mres.arrayBuffer()).toString("utf8")) as Manifest;
+    if (!(manifest.files ?? []).some((f) => f.name === "wcia_json.jsonl")) return { kind: "ok", records: [], bad: 0 };
+    const b = await getFile(runId, "wcia_json.jsonl");
+    const v = verifyFile(manifest, "wcia_json.jsonl", b.length, sha(b));
+    if (!v.ok) return { kind: "error", error: v.reason };
+    const pj = parseJsonl<WciaRunRecord>(b.toString("utf8"));
+    return { kind: "ok", records: pj.records, bad: pj.bad };
+  } catch (e) {
+    return { kind: "error", error: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
+  }
+}
+
 export async function listPosRuns(): Promise<string[]> {
   const res = await posFetch("/runs");
   if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await detail(res)}`);
