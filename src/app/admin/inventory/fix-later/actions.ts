@@ -134,3 +134,41 @@ export async function deepDigGmailAction(formData: FormData) {
   revalidatePath("/admin/inventory");
   redirect(backGmail(extra));
 }
+
+// --- D206: re-read every COA and trust it (overnight, on the server) ----------------------------
+// "we need all coa's regardless if we like them or not to be read AND trusted ... I will push the
+// button before bed and hopefully when I wake up it will be finished."
+
+const backTrust = (extra: Record<string, string>) => `/admin/inventory/fix-later?${new URLSearchParams(extra).toString()}#coa-trust-all`;
+
+/** "Re-read every COA and trust it": writes the run; the cron route /api/cron/coa-trust-all does the reading. */
+export async function startTrustAllAction() {
+  const session = await requirePermission("inventory.manage");
+  const { startTrustAll } = await import("@/lib/inventory/coa-trust-all-store");
+  let extra: Record<string, string>;
+  try {
+    const r = await startTrustAll(session.userId);
+    extra = r.ok
+      ? { tr: "ok", tr_msg: `Started: ${r.target} certificate${r.target === 1 ? "" : "s"} to read and accept. The server works on them every 5 minutes; you can close this page.` }
+      : { tr: "warn", tr_msg: `Not started: ${r.error}`.slice(0, 600) };
+  } catch (err) {
+    extra = { tr: "warn", tr_msg: `Not started: ${errText(err)}` };
+  }
+  revalidatePath("/admin/inventory/fix-later");
+  redirect(backTrust(extra));
+}
+
+/** Stop the overnight run (it can be started again from the beginning). */
+export async function stopTrustAllAction() {
+  const session = await requirePermission("inventory.manage");
+  const { stopTrustAll } = await import("@/lib/inventory/coa-trust-all-store");
+  let extra: Record<string, string>;
+  try {
+    const r = await stopTrustAll(session.userId);
+    extra = r.ok ? { tr: "ok", tr_msg: "Stopped. Everything read so far is kept." } : { tr: "warn", tr_msg: `Not stopped: ${r.error ?? "unknown error"}` };
+  } catch (err) {
+    extra = { tr: "warn", tr_msg: `Not stopped: ${errText(err)}` };
+  }
+  revalidatePath("/admin/inventory/fix-later");
+  redirect(backTrust(extra));
+}

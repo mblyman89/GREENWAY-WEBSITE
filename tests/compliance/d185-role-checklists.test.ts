@@ -94,6 +94,6 @@ describe("D185 S8: My Day role checklists", () => {
 
   it("adds no cron", () => {
     const v = JSON.parse(read("vercel.json")) as { crons?: unknown[] };
-    expect(v.crons?.length ?? 0).toBe(20); // D193 later added /api/cron/db-vitals; D185 itself added none
+    expect(v.crons?.length ?? 0).toBe(21); // D206 later added /api/cron/coa-trust-all; D193 later added /api/cron/db-vitals; D185 itself added none
   });
 });

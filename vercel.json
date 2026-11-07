@@ -89,6 +89,10 @@
     {
       "path": "/api/cron/db-vitals",
       "schedule": "9-59/10 * * * *"
+    },
+    {
+      "path": "/api/cron/coa-trust-all",
+      "schedule": "1-59/5 * * * *"
     }
   ]
 }
