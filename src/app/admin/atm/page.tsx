@@ -161,6 +161,13 @@ export default async function AtmPage({
           </div>
         ) : null}
 
+        {/* D198: the till ATM drops <-> PAI cash loads match lives on its own owner page */}
+        <div className="mb-4">
+          <Link href="/admin/atm/drops" className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/[0.12]">
+            ATM drops from the tills, matched to cash loads &rarr;
+          </Link>
+        </div>
+
         {/* Connection status chip */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <span

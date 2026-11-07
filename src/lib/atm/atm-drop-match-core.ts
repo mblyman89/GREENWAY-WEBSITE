@@ -822,6 +822,50 @@ export function matchCsv(r: MatchResult): string {
   return lines.join("\n") + "\n";
 }
 
+export type ReviewInputOk = {
+  ok: true;
+  subjectKind: "drop" | "load" | "day";
+  subjectId: string;
+  decision: ReviewDecision;
+  linkLoadId: string | null;
+  note: string;
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate the owner's sign-off form. A review ALWAYS needs a written reason (3-2000 chars, the 0346
+ * CHECK): "accepted" with no words is how a pattern gets waved through. "linked" needs a real load
+ * (the owner pairing a drop to a load the engine could not, e.g. a typo'd count) and only on a drop.
+ * A "day" subject is a yyyy-mm-dd.
+ */
+export function validateAtmDropReview(raw: {
+  subjectKind?: unknown;
+  subjectId?: unknown;
+  decision?: unknown;
+  linkLoadId?: unknown;
+  note?: unknown;
+}): ReviewInputOk | { ok: false; error: string } {
+  const kind = raw.subjectKind;
+  if (kind !== "drop" && kind !== "load" && kind !== "day") return { ok: false, error: "Pick what you are reviewing." };
+  const id = typeof raw.subjectId === "string" ? raw.subjectId.trim() : "";
+  if (kind === "day" ? !/^\d{4}-\d{2}-\d{2}$/.test(id) : !UUID_RE.test(id)) return { ok: false, error: "That item could not be found." };
+  const decisions: ReviewDecision[] = ["accepted", "explained", "investigating", "escalated", "linked"];
+  const decision = decisions.find((d) => d === raw.decision);
+  if (!decision) return { ok: false, error: "Pick a decision." };
+  const note = typeof raw.note === "string" ? raw.note.trim() : "";
+  if (note.length < 3) return { ok: false, error: "Write a short reason (at least 3 characters). Every sign-off needs one." };
+  if (note.length > 2000) return { ok: false, error: "The reason is too long (2,000 characters at most)." };
+  let linkLoadId: string | null = null;
+  if (decision === "linked") {
+    if (kind !== "drop") return { ok: false, error: "Only a drop can be linked to a load." };
+    const l = typeof raw.linkLoadId === "string" ? raw.linkLoadId.trim() : "";
+    if (!UUID_RE.test(l)) return { ok: false, error: "Pick the cash load this drop went into." };
+    linkLoadId = l;
+  }
+  return { ok: true, subjectKind: kind, subjectId: id, decision, linkLoadId, note };
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
@@ -996,5 +1040,13 @@ export function __runAtmDropMatchCoreTests(): { passed: number; failed: number }
   const r21 = run([drop("d", "2026-11-06T20:00:00Z", 10)], [load("l1", "2026-11-06T20:10:00Z", 20000), load("l2", "2026-11-06T20:20:00Z", 20000)]);
   ok(r21.loads.filter((l) => l.status === "matched").length === 1 && r21.loads.filter((l) => l.status === "no_drop").length === 1, "a drop is used once");
 
+  // 19. review validation
+  const U = "11111111-2222-4333-8444-555555555555";
+  ok(validateAtmDropReview({ subjectKind: "drop", subjectId: U, decision: "accepted", note: "ok" }).ok === false, "review needs a 3+ char reason");
+  ok(validateAtmDropReview({ subjectKind: "drop", subjectId: U, decision: "accepted", note: "counted twice, fine" }).ok === true, "valid review");
+  ok(validateAtmDropReview({ subjectKind: "load", subjectId: U, decision: "linked", linkLoadId: U, note: "pair it" }).ok === false, "only drops link");
+  ok(validateAtmDropReview({ subjectKind: "drop", subjectId: U, decision: "linked", linkLoadId: "x", note: "pair it" }).ok === false, "link needs a load id");
+  ok(validateAtmDropReview({ subjectKind: "day", subjectId: "2026-11-06", decision: "explained", note: "PAI late" }).ok === true, "day review");
+  ok(validateAtmDropReview({ subjectKind: "drop", subjectId: U, decision: "deleted", note: "nope" }).ok === false, "unknown decision refused");
   return { passed, failed };
 }
