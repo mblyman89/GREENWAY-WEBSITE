@@ -1,7 +1,7 @@
 /**
  * D195 (owner, 2026-11-07): "help me figure out why the promotions page is not
  * working correctly. i think it is not connected properly to the inventory
- * system." D196: "please complete all fixes required to get the promotions
+ * system." D197: "please complete all fixes required to get the promotions
  * page working correctly."
  *
  * Pins the four D195 steps:
