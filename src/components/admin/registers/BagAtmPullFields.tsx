@@ -29,7 +29,7 @@ export function BagAtmPullFields({
   maxTwenties: number;
   witnessPolicy: "required" | "recommended" | "off";
   terminalId: string;
-  /** From the ATM card's last reading and the owner's fill-to level; null = unknown. */
+  /** From the top-off banner (fresh reading, daily fill amount, $20s already taken since); null = unknown / check first. */
   suggestedTwenties: number | null;
 }) {
   const [on, setOn] = useState(false);
@@ -46,8 +46,8 @@ export function BagAtmPullFields({
       </label>
       {!on ? (
         <p className="text-xs text-[var(--admin-text-faint)]">
-          Only when the ATM needs cash. Check the &quot;Cash in the ATM&quot; card above first
-          {suggestedTwenties !== null ? ` — it says up to ${suggestedTwenties} x $20 is needed.` : "."}
+          Only when the ATM needs cash. Check the ATM banner and the &ldquo;Cash in the ATM&rdquo; card above first
+          {suggestedTwenties === null ? "." : suggestedTwenties === 0 ? " — they say the ATM is full for the day." : ` — they say the ATM needs ${suggestedTwenties} x $20 to reach the daily fill amount.`}
         </p>
       ) : (
         <>

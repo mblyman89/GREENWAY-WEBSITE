@@ -72,10 +72,11 @@ import { postSealForBag, describeSealPost } from "@/lib/accounting/seal-bag-post
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { getLatestAtmTerminalStatus } from "@/lib/atm/store";
 import { refreshLiveAtmStatus } from "@/lib/atm/sync-server";
+import { atmTopOff } from "@/lib/registers/atm-daily-fill-core";
+import { atmLoadsSince } from "@/lib/registers/atm-daily-fill-store";
 import {
   ATM_REFRESH_MIN_SECONDS,
   BAG_PULL_FLAG_TEXT,
-  atmCashNeed,
   bagTotalAfterPull,
   minutesBetween,
   parseBagAtmPull,
@@ -137,6 +138,10 @@ async function readBagPull(
   const witnessPin = str(formData, "atm_witness_pin");
   const witness = wanted && witnessPin !== "" ? await employeeFromPin(witnessPin, "the witness") : null;
   const status = wanted ? await getLatestAtmTerminalStatus(settings.terminalId) : null;
+  // D198i: $20s already taken for the ATM since that reading count as loaded (no second top-off
+  // from one stale figure). A failed read falls back to 0 = the D198e check, never a block.
+  const since = status?.capturedAt ? await atmLoadsSince(status.capturedAt, settings.terminalId) : null;
+  const pendingSinceReadingMinor = since && since.ok ? since.items.reduce((t, i) => t + i.amountMinor, 0) : 0;
   const parsed = parseBagAtmPull({
     wanted,
     twentiesText,
@@ -150,6 +155,7 @@ async function readBagPull(
     fillToCents: settings.fillToCents,
     reason: str(formData, "atm_pull_reason"),
     nowIso: new Date().toISOString(),
+    pendingSinceReadingMinor,
   });
   if (!parsed.ok) {
     // A refused pull is evidence too (someone tried): audited, then shown.
@@ -641,6 +647,8 @@ export type AtmCashCardState = {
   terminalId: string;
   needSentence: string;
   needTwenties: number | null;
+  /** D198i: how loud the need is (danger = the ATM needs $20s to reach the daily fill amount). */
+  needTone: "danger" | "warn" | "ok" | "muted";
   message: string | null;
   /** The server's clock when this state was made; the card ages the reading against it (render stays pure). */
   serverNowIso: string;
@@ -651,9 +659,19 @@ export async function refreshAtmCashAction(prev: AtmCashCardState | null, _form?
   const session = await requirePermission("orders.manage");
   const settings = await getAtmDropSettings();
   const terminalId = settings.terminalId;
-  const shape = (balanceCents: number | null, capturedAt: string | null, message: string | null, ok: boolean): AtmCashCardState => {
-    const need = atmCashNeed(balanceCents, settings.fillToCents);
-    return { ok, balanceCents, capturedAt, terminalId, needSentence: need.sentence, needTwenties: need.kind === "needs" ? need.twenties : null, message, serverNowIso: new Date().toISOString() };
+  const shape = async (balanceCents: number | null, capturedAt: string | null, message: string | null, ok: boolean): Promise<AtmCashCardState> => {
+    // D198i: the same top-off figure as the page banner: daily fill amount - (reading + $20s taken since).
+    const nowIso = new Date().toISOString();
+    const since = capturedAt ? await atmLoadsSince(capturedAt, terminalId) : null;
+    const t = atmTopOff({
+      fillToCents: settings.fillToCents,
+      reading: balanceCents === null ? null : { balanceCents, capturedAt },
+      pending: since && since.ok ? since.items : [],
+      nowIso,
+      maxTwentiesPerLoad: settings.maxTwentiesPerDrop,
+      terminalId,
+    });
+    return { ok, balanceCents, capturedAt, terminalId, needSentence: t.headline, needTwenties: t.kind === "needs" ? t.needTwenties : null, needTone: t.tone, message, serverNowIso: nowIso };
   };
   const latest = await getLatestAtmTerminalStatus(terminalId);
   const nowIso = new Date().toISOString();
@@ -672,6 +690,8 @@ export async function refreshAtmCashAction(prev: AtmCashCardState | null, _form?
       ? { from: "deposit_bags_card", balanceCents: live.balanceCents, capturedAt: live.capturedAt, status: live.status }
       : { from: "deposit_bags_card", error: live.error },
   });
+  // D198i: re-render the page so the loud top-off banner follows the new reading.
+  revalidatePath(BASE);
   if (!live.ok) {
     // Keep showing the last figure we had, clearly dated, with the reason the live read failed.
     const fallback = latest ?? (prev && prev.capturedAt ? { balanceCents: prev.balanceCents, capturedAt: prev.capturedAt } : null);
