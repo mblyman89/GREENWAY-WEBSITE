@@ -46,7 +46,17 @@ import {
   refundForLine,
 } from "@/lib/pos/returns-core";
 import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
-import { lineNotReturnableReason, lookupWindowDays, returnPolicySummary, type PosReturnPolicyConfig } from "@/lib/pos/return-policy-core";
+import { lineNotReturnableReason, lookupWindowDays, returnPolicySummary, WALK_IN_SALE_LABEL, type PosReturnPolicyConfig } from "@/lib/pos/return-policy-core";
+import {
+  lineScanCodes,
+  memberOwnsSale,
+  memberSalesCutoffIso,
+  memberSalesInWindow,
+  noReceiptBlockedReason,
+  NOT_MEMBERS_SALE_ERROR,
+  scanMatchesLine,
+  type MemberSaleRow,
+} from "@/lib/pos/no-receipt-return-core";
 import { getCategoryLabeler } from "@/lib/pos/category-registry";
 import { pagedAll } from "@/lib/supabase/chunked-in";
 import { createCustomerReturn } from "@/lib/inventory/disposition";
@@ -76,6 +86,9 @@ export type CounterReturnLine = {
   priceMinorUnits: number;
   alreadyReturned: number;
   remainingReturnable: number;
+  /** D205: order_lines.variant_id + CCRS id (server-side scan match only). */
+  variantId?: string | null;
+  ccrsExternalId?: string | null;
   /** order_lines.category snapshot (null on old sales). */
   category: string | null;
   /**
@@ -101,6 +114,8 @@ export type CounterReturnSale = {
   policy: PosReturnPolicyConfig;
   /** Plain-English summary of that policy (category labels resolved). */
   policySummary: string;
+  /** D205: true when found by member lookup (no receipt in hand). */
+  noReceipt?: boolean;
 };
 
 export type CounterReturnLookup =
@@ -166,11 +181,30 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, 
     };
   }
 
-  const { data: orderRow } = await admin
+  return finishLookup(admin, policy, match, wanted, asOfIso, null);
+}
+
+type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+
+/**
+ * Shared tail of every lookup: read the order, run the SAME policy verdict,
+ * build the lines. D205: `memberCustomerId` set = a no-receipt lookup, so the
+ * sale must be on that member's loyalty account.
+ */
+async function finishLookup(
+  admin: AdminClient,
+  policy: PosReturnPolicyConfig,
+  match: { client_uuid: string; order_id: string },
+  wanted: string,
+  asOfIso: string | undefined,
+  memberCustomerId: string | null,
+): Promise<CounterReturnLookup> {
+  const { data: orderRow, error: orderErr } = await admin
     .from("orders")
     .select("id, order_number, status, customer_id, placed_at, completed_at, total_minor_units")
     .eq("id", match.order_id)
     .maybeSingle();
+  if (orderErr) return { ok: false, errors: [`Could not read the sale: ${orderErr.message}`] };
   const order = orderRow as {
     id: string;
     order_number: string;
@@ -191,11 +225,15 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, 
     policy,
   });
   if (!verdict.ok) return { ok: false, errors: verdict.errors };
+  if (memberCustomerId !== null && !memberOwnsSale(order.customer_id, memberCustomerId)) {
+    return { ok: false, errors: [NOT_MEMBERS_SALE_ERROR] };
+  }
 
   // Member label (privacy-lean, same shape the register shows). Since Fix
   // Phase 6F anyone may return (when the loyalty toggle is off), so a sale
-  // with no member reads "Not a loyalty member" instead of a lookup.
-  let memberLabel = order.customer_id ? "Loyalty member" : "Not a loyalty member";
+  // with no member reads as a walk-in sale (D205: plain wording, it is a
+  // description, not a refusal).
+  let memberLabel = order.customer_id ? "Loyalty member" : WALK_IN_SALE_LABEL;
   if (order.customer_id) {
     const { data: cust } = await admin
       .from("customers")
@@ -207,14 +245,17 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, 
   }
 
   // Lines + prior returns (double-return guard, same source as Task Q).
-  const [{ data: lines }, { data: prior }] = await Promise.all([
+  const [{ data: lines, error: linesErr }, { data: prior, error: priorErr }] = await Promise.all([
     admin
       .from("order_lines")
-      .select("id, product_id, product_name, quantity, price_minor_units, category")
+      .select("id, product_id, variant_id, ccrs_inventory_external_id, product_name, quantity, price_minor_units, category")
       .eq("order_id", order.id)
       .order("created_at", { ascending: true }),
     admin.from("customer_returns").select("order_line_id, quantity").eq("order_id", order.id),
   ]);
+  if (linesErr || priorErr) {
+    return { ok: false, errors: [`Could not read the sale's items: ${(linesErr ?? priorErr)?.message ?? "unknown error"}`] };
+  }
   const returnedByLine = new Map<string, number>();
   for (const r of (prior as { order_line_id: string | null; quantity: number }[] | null) ?? []) {
     if (!r.order_line_id) continue;
@@ -223,7 +264,16 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, 
   // Fix Phase 6F (G-68): the owner's DB category labels name a blocked type.
   const labelFor = policy.excludedCategories.length > 0 ? await getCategoryLabeler() : (v: string) => v;
   const saleLines: CounterReturnLine[] = (
-    (lines as { id: string; product_id: string | null; product_name: string; quantity: number; price_minor_units: number; category?: string | null }[] | null) ?? []
+    (lines as {
+      id: string;
+      product_id: string | null;
+      variant_id?: string | null;
+      ccrs_inventory_external_id?: string | null;
+      product_name: string;
+      quantity: number;
+      price_minor_units: number;
+      category?: string | null;
+    }[] | null) ?? []
   ).map((l) => {
     const already = returnedByLine.get(l.id) ?? 0;
     const category = l.category ?? null;
@@ -232,6 +282,8 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, 
       notReturnableReason: lineNotReturnableReason(policy, category, category ? labelFor(category) : null),
       lineId: l.id,
       productId: l.product_id,
+      variantId: l.variant_id ?? null,
+      ccrsExternalId: l.ccrs_inventory_external_id ?? null,
       productName: l.product_name,
       quantity: Number(l.quantity) || 0,
       priceMinorUnits: l.price_minor_units,
@@ -256,8 +308,140 @@ export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, 
       lines: saleLines,
       policy,
       policySummary: returnPolicySummary(policy, labelFor),
+      ...(memberCustomerId !== null ? { noReceipt: true } : {}),
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// D205: no-receipt returns for loyalty members
+// ---------------------------------------------------------------------------
+
+export type MemberSalesResult = { ok: true; sales: MemberSaleRow[]; windowDays: number } | { ok: false; error: string };
+
+/**
+ * The member's register sales still inside the return window (newest first),
+ * for the cashier to pick the one being returned. Only sales rung ON the
+ * member's loyalty account are listed. Blocked when the owner's policy has
+ * no-receipt returns switched off.
+ */
+export async function listMemberSalesForReturn(customerId: string, asOfIso?: string): Promise<MemberSalesResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
+  const id = customerId.trim();
+  if (!id) return { ok: false, error: "Pick the loyalty member first." };
+  const policy = await getPosReturnPolicy();
+  const blocked = noReceiptBlockedReason(policy);
+  if (blocked) return { ok: false, error: blocked };
+  const admin = createSupabaseAdminClient();
+  const nowIso = asOfIso ?? new Date().toISOString();
+  const cutoff = memberSalesCutoffIso(policy, nowIso);
+
+  type OrderRow = { id: string; order_number: string; completed_at: string | null; placed_at: string; total_minor_units: number };
+  const { data: orderRows, error } = await admin
+    .from("orders")
+    .select("id, order_number, completed_at, placed_at, total_minor_units")
+    .eq("customer_id", id)
+    .eq("status", "completed")
+    .gte("placed_at", cutoff)
+    .order("placed_at", { ascending: false })
+    .limit(200);
+  if (error) return { ok: false, error: `Could not read the member's purchases: ${error.message}` };
+  const orders = (orderRows as OrderRow[] | null) ?? [];
+  if (orders.length === 0) return { ok: true, sales: [], windowDays: policy.windowDays };
+  const orderIds = orders.map((o) => o.id);
+
+  const [{ data: events, error: evErr }, { data: lineRows, error: lnErr }] = await Promise.all([
+    admin
+      .from("pos_sale_events")
+      .select("client_uuid, order_id")
+      .eq("event_type", "sale")
+      .eq("status", "processed")
+      .in("order_id", orderIds),
+    admin.from("order_lines").select("order_id, product_name, quantity").in("order_id", orderIds),
+  ]);
+  if (evErr || lnErr) return { ok: false, error: `Could not read the member's purchases: ${(evErr ?? lnErr)?.message ?? "unknown error"}` };
+  const uuidByOrder = new Map<string, string>();
+  for (const e of (events as { client_uuid: string; order_id: string }[] | null) ?? []) {
+    if (!uuidByOrder.has(e.order_id)) uuidByOrder.set(e.order_id, e.client_uuid);
+  }
+  const itemsByOrder = new Map<string, { names: string[]; count: number }>();
+  for (const l of (lineRows as { order_id: string; product_name: string; quantity: number }[] | null) ?? []) {
+    const cur = itemsByOrder.get(l.order_id) ?? { names: [], count: 0 };
+    cur.names.push(l.product_name);
+    cur.count += Number(l.quantity) || 0;
+    itemsByOrder.set(l.order_id, cur);
+  }
+  const rows = orders
+    .filter((o) => uuidByOrder.has(o.id))
+    .map((o) => ({
+      orderId: o.id,
+      orderNumber: o.order_number,
+      saleClientUuid: uuidByOrder.get(o.id) as string,
+      purchasedAtIso: o.completed_at ?? o.placed_at,
+      totalMinor: o.total_minor_units,
+      items: (itemsByOrder.get(o.id)?.names ?? []).slice(0, 6),
+      itemCount: itemsByOrder.get(o.id)?.count ?? 0,
+    }));
+  return { ok: true, sales: memberSalesInWindow(rows, policy, nowIso), windowDays: policy.windowDays };
+}
+
+/**
+ * D205: open one of the member's sales for a no-receipt return. Same verdict
+ * as a receipt lookup (completed, window, loyalty toggle, product types),
+ * plus: the policy allows it and the sale is on THIS member's account.
+ */
+export async function lookupSaleForMember(customerId: string, orderId: string, asOfIso?: string): Promise<CounterReturnLookup> {
+  if (!isSupabaseServiceConfigured) return { ok: false, errors: ["Supabase service role not configured."] };
+  const policy = await getPosReturnPolicy();
+  const blocked = noReceiptBlockedReason(policy);
+  if (blocked) return { ok: false, errors: [blocked] };
+  const cid = customerId.trim();
+  const oid = orderId.trim();
+  if (!cid || !oid) return { ok: false, errors: ["Pick the loyalty member and the sale being returned."] };
+  const admin = createSupabaseAdminClient();
+  const { data: ev, error } = await admin
+    .from("pos_sale_events")
+    .select("client_uuid, order_id")
+    .eq("event_type", "sale")
+    .eq("status", "processed")
+    .eq("order_id", oid)
+    .order("occurred_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) return { ok: false, errors: [`Could not read the sale: ${error.message}`] };
+  const match = ev as { client_uuid: string; order_id: string } | null;
+  if (!match) return { ok: false, errors: ["That sale was not rung at a register, so it cannot be returned here. Ask a manager."] };
+  return finishLookup(admin, policy, match, receiptNumber(match.client_uuid), asOfIso, cid);
+}
+
+/**
+ * D205: does the scanned package match the line? Codes are the line's own
+ * product/lot key and CCRS id, plus every lot behind it (lot barcode, CCRS
+ * and vendor inventory ids).
+ */
+export async function verifyReturnScan(
+  line: Pick<CounterReturnLine, "productId" | "variantId" | "ccrsExternalId" | "productName">,
+  rawScan: unknown,
+): Promise<{ ok: true; code: string } | { ok: false; error: string }> {
+  const admin = createSupabaseAdminClient();
+  const base = lineScanCodes({ productId: line.productId, variantId: line.variantId ?? null, ccrsExternalId: line.ccrsExternalId ?? null });
+  const keys = [...new Set([line.productId, ...(line.variantId?.endsWith("-onboarded") ? [line.variantId.slice(0, -"-onboarded".length)] : [])].filter((k): k is string => !!k && k.trim().length > 0))];
+  let lots: { lotCode: string | null; ccrsExternalId: string | null }[] = [];
+  if (keys.length > 0) {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select("lot_code, ccrs_inventory_external_id, vendor_inventory_external_id")
+      .in("pos_product_key", keys)
+      .limit(500);
+    if (error) return { ok: false, error: `Could not read the product's barcodes: ${error.message}` };
+    lots = ((data as { lot_code: string | null; ccrs_inventory_external_id: string | null; vendor_inventory_external_id: string | null }[] | null) ?? []).flatMap((l) => [
+      { lotCode: l.lot_code, ccrsExternalId: l.ccrs_inventory_external_id },
+      { lotCode: l.vendor_inventory_external_id, ccrsExternalId: null },
+    ]);
+  }
+  const all = lineScanCodes({ productId: null, lots });
+  for (const c of base) all.add(c);
+  return scanMatchesLine(rawScan, all, line.productName);
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +461,8 @@ export type ProcessCounterReturnInput = {
   asOfIso?: string;
   /** D170 O12: the exact sale (offline path) \u2014 never a receipt twin. */
   saleClientUuid?: string;
+  /** D205: no receipt \u2014 the member, the sale and the product scan. */
+  noReceipt?: { customerId: string; orderId: string; scan: string };
 };
 
 export type ProcessCounterReturnResult =
@@ -294,6 +480,8 @@ export type ProcessCounterReturnResult =
        * Pre-0308: the app could not hold it, keep it in the sealed destroy bin.
        */
       stockNote: string | null;
+      /** D205: the package code scanned on a no-receipt return (audit). */
+      scannedCode?: string | null;
     }
   | { ok: false; error: string };
 
@@ -312,7 +500,9 @@ export async function processCounterReturn(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
 
   // ── Server-authoritative policy re-check ─────────────────────────────────
-  const lookup = await lookupSaleByReceipt(input.receiptNumber, input.asOfIso, input.saleClientUuid);
+  const lookup = input.noReceipt
+    ? await lookupSaleForMember(input.noReceipt.customerId, input.noReceipt.orderId, input.asOfIso)
+    : await lookupSaleByReceipt(input.receiptNumber, input.asOfIso, input.saleClientUuid);
   if (!lookup.ok) return { ok: false, error: lookup.errors.join(" ") };
   const sale = lookup.sale;
 
@@ -320,6 +510,17 @@ export async function processCounterReturn(
   if (!line) return { ok: false, error: "That item isn't on this receipt. Look the receipt up again and pick the item from the list." };
   // Fix Phase 6F (G-68): the owner's returnable product types, server-side.
   if (line.notReturnableReason) return { ok: false, error: line.notReturnableReason };
+  // D205: no receipt = the package in hand must be scanned and match the line,
+  // and the original packaging is mandatory.
+  let scannedCode: string | null = null;
+  if (input.noReceipt) {
+    if (!input.originalPackaging || !input.lotIdLegible) {
+      return { ok: false, error: "Without a receipt the product must be in its original packaging with the lot ID legible." };
+    }
+    const scan = await verifyReturnScan(line, input.noReceipt.scan);
+    if (!scan.ok) return { ok: false, error: scan.error };
+    scannedCode = scan.code;
+  }
 
   // ── Exact refund from the stored paid price (no manual entry) ───────────
   const refund = refundForLine({
@@ -431,6 +632,7 @@ export async function processCounterReturn(
     pointsClawed,
     correctionOperation,
     receiptHtml,
+    scannedCode,
     // Phase 4: an Other Inventory unit is written off, never held on a lot.
     ...(isNc
       ? { stockNote: input.disposition === "destroy" ? "Written off (not put back on the shelf)." : null }

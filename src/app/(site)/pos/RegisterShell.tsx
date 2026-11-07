@@ -269,6 +269,7 @@ import {
   normalizePosReturnPolicy,
   returnPolicyShortLabel,
   returnPolicySummary,
+  WALK_IN_SALE_LABEL,
 } from "@/lib/pos/return-policy-core";
 import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary, type RefundSummary } from "@/lib/pos/day-report-core";
@@ -5362,6 +5363,21 @@ type ReturnableSale = {
   }[];
   /** Fix 6F — the policy the server judged this lookup by. */
   policySummary?: string;
+  /** D205 — found by loyalty member lookup (no receipt in hand). */
+  noReceipt?: boolean;
+};
+
+/** D205 — one loyalty member hit in the no-receipt finder. */
+type ReturnMemberHit = { customerId: string; label: string; fullName?: string; detail?: string };
+/** D205 — one of the member's sales still inside the return window. */
+type ReturnMemberSale = {
+  orderId: string;
+  orderNumber: string;
+  purchasedAtIso: string;
+  totalMinor: number;
+  items: string[];
+  itemCount: number;
+  daysRemaining: number;
 };
 
 /**
@@ -5425,6 +5441,23 @@ function ReturnsModal({
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // D205 — no-receipt courtesy return for loyalty members (owner's policy
+  // toggle). Find the member by name or phone, pick their sale inside the
+  // window, then the product in hand must be scanned and match the line.
+  const noReceiptAllowed = offline.policy().noReceiptMembers === true;
+  const [showMember, setShowMember] = useState(false);
+  const [memberQuery, setMemberQuery] = useState("");
+  const [memberHits, setMemberHits] = useState<ReturnMemberHit[] | null>(null);
+  const [memberNote, setMemberNote] = useState<string | null>(null);
+  const [member, setMember] = useState<ReturnMemberHit | null>(null);
+  const [memberSales, setMemberSales] = useState<ReturnMemberSale[] | null>(null);
+  const [memberBusy, setMemberBusy] = useState(false);
+  const [noReceiptOrderId, setNoReceiptOrderId] = useState<string | null>(null);
+  const [productScan, setProductScan] = useState("");
+  const [scanMatched, setScanMatched] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const [scanBusy, setScanBusy] = useState(false);
+
   // D170 O3 — the sale found in this iPad's own book (no server). Its line
   // ids are "book-<index>"; processing queues instead of calling.
   const [bookSale, setBookSale] = useState<{ entry: SaleBookEntry; reason: OfflineReason } | null>(null);
@@ -5451,7 +5484,7 @@ function ReturnsModal({
       receiptNumber: receiptNumber(entry.id),
       orderNumber: "offline",
       purchasedAtIso: entry.at,
-      memberLabel: entry.memberLabel ?? (entry.hasMember ? "Loyalty member" : "Not a loyalty member"),
+      memberLabel: entry.memberLabel ?? (entry.hasMember ? "Loyalty member" : WALK_IN_SALE_LABEL),
       daysRemaining: verdict.daysRemaining,
       orderTotalMinor: entry.totalMinor,
       lines: entry.lines.map((l, i) => ({
@@ -5475,9 +5508,10 @@ function ReturnsModal({
   const line = sale?.lines.find((l) => l.lineId === lineId) ?? null;
   const maxQty = line?.remainingReturnable ?? 0;
   const refundPreviewMinor = line ? line.priceMinorUnits * Math.min(quantity, maxQty) : 0;
+  const noReceiptSale = !!sale?.noReceipt && !!member && !!noReceiptOrderId;
   const ready =
     !!sale && !!line && quantity >= 1 && quantity <= maxQty && !!reason && !!disposition &&
-    originalPackaging && lotIdLegible && pin.length >= 4;
+    originalPackaging && lotIdLegible && pin.length >= 4 && (!noReceiptSale || scanMatched);
 
   const call = async (body: Record<string, unknown>) => {
     const res = await posFetch("/api/pos/returns", {
@@ -5649,6 +5683,119 @@ function ReturnsModal({
     ]);
   };
 
+  // D205 — search loyalty members by name or phone (the register's own
+  // member search, online only: the no-receipt list needs the server).
+  const searchMembers = async () => {
+    const q = memberQuery.trim();
+    if (q.length < 2) {
+      setMemberNote("Type at least 2 characters of the name or phone number.");
+      return;
+    }
+    if (!navigator.onLine) {
+      setMemberNote("Offline \u2014 a no-receipt return needs the internet to look up the member's purchases.");
+      return;
+    }
+    setMemberBusy(true);
+    setMemberNote(null);
+    try {
+      const res = await posFetch(`/api/pos/member?q=${encodeURIComponent(q)}`, {
+        headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+      });
+      const json = (await res.json().catch(() => null)) as { members?: ReturnMemberHit[]; note?: string | null; error?: string } | null;
+      if (!res.ok || !Array.isArray(json?.members)) {
+        setMemberNote(String(json?.error ?? "Member search failed \u2014 try again."));
+        return;
+      }
+      setMemberHits(json.members);
+      setMemberNote(json.members.length === 0 ? `No loyalty member matches \u201c${q}\u201d.` : (json.note ?? null));
+    } catch {
+      setMemberNote("Could not reach the server \u2014 try again.");
+    } finally {
+      setMemberBusy(false);
+    }
+  };
+
+  const pickMember = async (hit: ReturnMemberHit) => {
+    setMember(hit);
+    setMemberSales(null);
+    setMemberBusy(true);
+    setMemberNote(null);
+    try {
+      const { ok, json } = await call({ memberSales: hit.customerId });
+      if (!ok || !Array.isArray(json?.sales)) {
+        setMemberNote(String(json?.error ?? "Could not load the member's purchases."));
+        return;
+      }
+      const sales = json.sales as ReturnMemberSale[];
+      setMemberSales(sales);
+      if (sales.length === 0) {
+        setMemberNote(
+          `${hit.label} has no register purchases on their loyalty account inside the return window. Without a receipt there is nothing to return.`,
+        );
+      }
+    } catch {
+      setMemberNote("Could not reach the server \u2014 try again.");
+    } finally {
+      setMemberBusy(false);
+    }
+  };
+
+  const openMemberSale = async (row: ReturnMemberSale) => {
+    if (!member || busy) return;
+    setBusy(true);
+    setErrors([]);
+    setSale(null);
+    setLineId(null);
+    setBookSale(null);
+    setProductScan("");
+    setScanMatched(false);
+    setScanNote(null);
+    try {
+      const { ok, json } = await call({ customerId: member.customerId, orderId: row.orderId });
+      if (!ok || !json?.sale) {
+        setErrors(Array.isArray(json?.errors) ? (json.errors as string[]) : [String(json?.error ?? "Lookup failed.")]);
+        return;
+      }
+      const found = json.sale as ReturnableSale;
+      setNoReceiptOrderId(row.orderId);
+      setSale(found);
+      setShowMember(false);
+      const returnable = found.lines.filter((l) => l.remainingReturnable > 0 && !l.notReturnableReason);
+      if (returnable.length === 1) {
+        setLineId(returnable[0].lineId);
+        setQuantity(1);
+      }
+    } catch {
+      setErrors(["Could not reach the server \u2014 try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // D205 — the product in hand must match the line being returned. The
+  // server checks the code against the line's lot barcodes / CCRS ids.
+  const checkProductScan = async (raw: string) => {
+    const code = raw.trim();
+    if (!code || !member || !noReceiptOrderId || !lineId || scanBusy) return;
+    setProductScan(code);
+    setScanBusy(true);
+    setScanMatched(false);
+    setScanNote(null);
+    try {
+      const { ok, json } = await call({ customerId: member.customerId, orderId: noReceiptOrderId, orderLineId: lineId, scan: code });
+      if (ok && json?.scanMatched === true) {
+        setScanMatched(true);
+        setScanNote("\u2713 Product matches the item sold.");
+      } else {
+        setScanNote(String(json?.error ?? "That scan does not match the item sold."));
+      }
+    } catch {
+      setScanNote("Could not reach the server \u2014 scan again.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
   const lookup = async (override?: string) => {
     // `override` lets a history row run this exact lookup without waiting a
     // render for `setReceipt` to land. Same call, same policy, same verdict —
@@ -5674,6 +5821,9 @@ function ReturnsModal({
     setSale(null);
     setLineId(null);
     setBookSale(null);
+    setNoReceiptOrderId(null);
+    setScanMatched(false);
+    setProductScan("");
     if (!navigator.onLine) {
       findOffline(code, "offline");
       setBusy(false);
@@ -5715,7 +5865,17 @@ function ReturnsModal({
   useEffect(() => {
     lookupRef.current = lookup;
   });
+  // D205 — while a no-receipt sale has an item picked, a scan is the
+  // PRODUCT in hand (checked against the line), not a receipt.
+  const productScanRef = useRef<((raw: string) => void) | null>(null);
+  useEffect(() => {
+    productScanRef.current = noReceiptSale && lineId ? (raw: string) => void checkProductScan(raw) : null;
+  });
   const takeReceiptScan = useCallback((payload: string): boolean => {
+    if (productScanRef.current) {
+      productScanRef.current(payload);
+      return true;
+    }
     const code = receiptCodeFromScan(payload);
     if (!code) return false;
     setReceipt(code);
@@ -5816,6 +5976,9 @@ function ReturnsModal({
       return;
     }
     const fallback = async (why: OfflineReason): Promise<boolean> => {
+      // D205 — a no-receipt return is online only (the member's purchases and
+      // the scan match are checked by the server).
+      if (noReceiptSale) return false;
       const entry = offline.find(sale.receiptNumber);
       const idx = entry ? bookIndexFor(entry, line) : -1;
       if (!entry || idx < 0 || !offlineReturnCheck(entry, offline.policy(), new Date().toISOString()).ok) return false;
@@ -5824,7 +5987,9 @@ function ReturnsModal({
     };
     try {
       const { ok, status, json } = await call({
-        receipt: sale.receiptNumber,
+        ...(noReceiptSale && member && noReceiptOrderId
+          ? { customerId: member.customerId, orderId: noReceiptOrderId, scan: productScan }
+          : { receipt: sale.receiptNumber }),
         orderLineId: line.lineId,
         quantity,
         reason,
@@ -6047,6 +6212,117 @@ function ReturnsModal({
           ) : null}
         </div>
 
+        {/* D205 - no receipt: loyalty member lookup (owner's policy toggle). */}
+        {noReceiptAllowed ? (
+          <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                No receipt? Loyalty member lookup
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowMember(!showMember)}
+                className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-1.5 text-sm font-semibold"
+              >
+                {showMember ? "Hide" : "Find member"}
+              </button>
+            </div>
+            {showMember ? (
+              <div className="mt-3">
+                <p className="text-xs text-[var(--pos-text-muted)]">
+                  Courtesy return for loyalty members without the receipt. Only sales on their loyalty account inside the
+                  return window are listed. They must have the original packaging, and you will scan the product.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm"
+                    value={memberQuery}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="search"
+                    placeholder="Name or phone number"
+                    onChange={(e) => setMemberQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      void searchMembers();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void searchMembers()}
+                    disabled={memberBusy || memberQuery.trim().length < 2}
+                    className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold disabled:opacity-40"
+                  >
+                    {memberBusy && !member ? "\u2026" : "Search"}
+                  </button>
+                </div>
+                {memberNote ? <p className="mt-2 text-xs text-[var(--pos-text-muted)]">{memberNote}</p> : null}
+                {member === null && memberHits && memberHits.length > 0 ? (
+                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                    {memberHits.map((h) => (
+                      <button
+                        key={h.customerId}
+                        type="button"
+                        onClick={() => void pickMember(h)}
+                        className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-left text-sm"
+                      >
+                        <span className="font-semibold">{h.fullName ?? h.label}</span>
+                        {h.detail ? <span className="mt-0.5 block text-xs text-[var(--pos-text-muted)]">{h.detail}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {member ? (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{member.fullName ?? member.label}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMember(null);
+                          setMemberSales(null);
+                          setMemberNote(null);
+                        }}
+                        className="rounded-lg border border-[var(--pos-border-strong)] px-2 py-1 text-xs"
+                      >
+                        Change
+                      </button>
+                    </div>
+                    {memberBusy ? <p className="mt-2 text-xs text-[var(--pos-text-muted)]">Loading purchases\u2026</p> : null}
+                    {memberSales && memberSales.length > 0 ? (
+                      <div className="mt-2 max-h-64 space-y-2 overflow-y-auto">
+                        {memberSales.map((r) => (
+                          <button
+                            key={r.orderId}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void openMemberSale(r)}
+                            className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-left text-sm disabled:opacity-40"
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">
+                                {new Date(r.purchasedAtIso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                              </span>
+                              <span className="font-mono">{formatCents(r.totalMinor)}</span>
+                            </span>
+                            <span className="mt-0.5 block text-xs text-[var(--pos-text-muted)]">
+                              {r.orderNumber} \u00b7 {r.itemCount} item{r.itemCount === 1 ? "" : "s"}
+                              {r.items.length > 0 ? ` \u00b7 ${r.items.join(", ")}` : ""} \u00b7 {r.daysRemaining} day
+                              {r.daysRemaining === 1 ? "" : "s"} left
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {/* D198d - scan first: the QR on the receipt carries the real receipt
             number. A Socket scanner (SDK) or a keyboard-wedge scanner both
             work with this window open — nothing to tap first. */}
@@ -6113,6 +6389,11 @@ function ReturnsModal({
               <p className="text-sm font-semibold">
                 Order {sale.orderNumber} · {sale.memberLabel}
               </p>
+              {noReceiptSale ? (
+                <p className="mt-1 text-xs font-semibold text-[var(--pos-warn,#b45309)]">
+                  No receipt \u2014 loyalty member courtesy return. Scan the product to match it to the item sold.
+                </p>
+              ) : null}
               <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
                 {sale.daysRemaining} day{sale.daysRemaining === 1 ? "" : "s"} left in the return window
               </p>
@@ -6134,6 +6415,9 @@ function ReturnsModal({
                     onClick={() => {
                       setLineId(selected ? null : l.lineId);
                       setQuantity(1);
+                      setScanMatched(false);
+                      setScanNote(null);
+                      setProductScan("");
                     }}
                     className={`w-full rounded-lg px-3 py-2.5 text-left text-sm disabled:opacity-40 ${
                       selected
@@ -6156,6 +6440,45 @@ function ReturnsModal({
                 );
               })}
             </div>
+
+            {line && noReceiptSale ? (
+              <div className="mt-4 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3">
+                <p className="text-sm font-semibold">\ud83d\udcf7 Scan the product being returned</p>
+                <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+                  Scan the barcode on the package (or type it). It must match {line.productName} from this sale.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 font-mono text-sm"
+                    value={productScan}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="Package barcode"
+                    onChange={(e) => {
+                      setProductScan(e.target.value);
+                      setScanMatched(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      void checkProductScan(productScan);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={scanBusy || !productScan.trim()}
+                    onClick={() => void checkProductScan(productScan)}
+                    className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold disabled:opacity-40"
+                  >
+                    {scanBusy ? "\u2026" : "Check"}
+                  </button>
+                </div>
+                {scanNote ? (
+                  <p className={`mt-2 text-xs font-semibold ${scanMatched ? "text-[var(--pos-accent)]" : "text-[var(--pos-danger)]"}`}>{scanNote}</p>
+                ) : null}
+              </div>
+            ) : null}
 
             {line ? (
               <>

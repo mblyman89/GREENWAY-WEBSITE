@@ -30,6 +30,13 @@
  *     allows a cannabis return only "in their original packaging with the
  *     lot, batch, or inventory ID number fully legible". The owner's message
  *     keeps both.
+ *   - noReceiptMembers (toggle)  - D205 owner: "allow returns without a
+ *                                  receipt, but they must be a loyalty
+ *                                  member". Default OFF. When on, the register
+ *                                  may find a LOYALTY MEMBER's sale by name or
+ *                                  phone instead of the receipt, the product
+ *                                  must be scanned and match the line sold,
+ *                                  and the window still applies.
  */
 
 export type PosReturnPolicyConfig = {
@@ -39,6 +46,8 @@ export type PosReturnPolicyConfig = {
   windowDays: number;
   /** Category values (order_lines.category) that may NOT be returned. */
   excludedCategories: string[];
+  /** D205: a loyalty member without the receipt may return (member lookup + product scan). */
+  noReceiptMembers: boolean;
 };
 
 /** Owner message 9: "it falls within the 7 day return period". */
@@ -51,6 +60,7 @@ export const DEFAULT_POS_RETURN_POLICY: PosReturnPolicyConfig = {
   loyaltyRequired: false,
   windowDays: DEFAULT_RETURN_WINDOW_DAYS,
   excludedCategories: [],
+  noReceiptMembers: false,
 };
 
 /** Days of sales the receipt lookup and history panel scan: window + 2 days of slack. */
@@ -77,7 +87,12 @@ export function normalizePosReturnPolicy(raw: unknown): PosReturnPolicyConfig {
   const excluded = Array.isArray(o.excludedCategories)
     ? [...new Set(o.excludedCategories.map(cleanSlug).filter(Boolean))].sort()
     : [];
-  return { loyaltyRequired: o.loyaltyRequired === true, windowDays, excludedCategories: excluded };
+  return {
+    loyaltyRequired: o.loyaltyRequired === true,
+    windowDays,
+    excludedCategories: excluded,
+    noReceiptMembers: o.noReceiptMembers === true,
+  };
 }
 
 /** Validate a form save; plain-English errors, never a silent clamp on save. */
@@ -85,6 +100,7 @@ export function validateReturnPolicyDraft(input: {
   loyaltyRequired: unknown;
   windowDays: unknown;
   excludedCategories: unknown;
+  noReceiptMembers?: unknown;
 }): { ok: true; config: PosReturnPolicyConfig } | { ok: false; error: string } {
   const raw = typeof input.windowDays === "string" ? input.windowDays.trim() : input.windowDays;
   const n = Number(raw);
@@ -100,21 +116,28 @@ export function validateReturnPolicyDraft(input: {
       loyaltyRequired: input.loyaltyRequired === true,
       windowDays: n,
       excludedCategories: Array.isArray(input.excludedCategories) ? input.excludedCategories : [],
+      noReceiptMembers: input.noReceiptMembers === true,
     }),
   };
 }
 
 /**
- * May a line of this category come back? A line with no category on record
- * (sales from before categories were stamped) cannot be classified, so it is
- * NOT blocked by the product-type setting; the window, the receipt and the
- * packaging checks still apply.
+ * May a line of this category come back?
+ *
+ * D205: when the owner has marked ANY product type as not returnable, a line
+ * whose type is unknown is NOT returnable (fail closed). Before, it was
+ * offered, so a line with no type could slip past the owner's list. When
+ * every type is returnable, an unknown type is returnable too (nothing to
+ * enforce).
  */
 export function categoryReturnable(policy: PosReturnPolicyConfig, category: string | null | undefined): boolean {
   const slug = cleanSlug(category);
-  if (!slug) return true;
+  if (!slug) return policy.excludedCategories.length === 0;
   return !policy.excludedCategories.includes(slug);
 }
+
+/** D205: what the register calls a sale with or without a member on it. */
+export const WALK_IN_SALE_LABEL = "Walk-in sale (no loyalty account)";
 
 /** Why a line cannot be returned under the product-type setting, or null. */
 export function lineNotReturnableReason(
@@ -123,6 +146,9 @@ export function lineNotReturnableReason(
   categoryLabel?: string | null,
 ): string | null {
   if (categoryReturnable(policy, category)) return null;
+  if (!cleanSlug(category)) {
+    return "This item's product type is not on record, so the register cannot check it against the store's returnable types. Ask a manager (the back-office Returns desk can look at the sale).";
+  }
   const name = (categoryLabel ?? "").trim() || cleanSlug(category);
   return `${name} is not a returnable product type (store return policy, Register Activity \u2192 Return policy). Refuse the return of this item.`;
 }
@@ -139,7 +165,10 @@ function dayWord(n: number): string {
 /** One sentence for the Returns desk and the register's Return screen. */
 export function returnPolicySummary(policy: PosReturnPolicyConfig, labelFor?: (v: string) => string): string {
   const who = policy.loyaltyRequired ? "Loyalty members only" : "Anyone";
-  const base = `Store policy: ${who}, original receipt in hand, original packaging with the lot ID legible, within ${policy.windowDays} ${dayWord(policy.windowDays)} of purchase.`;
+  const receipt = policy.noReceiptMembers
+    ? "original receipt in hand (a loyalty member without it may be looked up by name or phone, and the product is scanned to match the sale)"
+    : "original receipt in hand";
+  const base = `Store policy: ${who}, ${receipt}, original packaging with the lot ID legible, within ${policy.windowDays} ${dayWord(policy.windowDays)} of purchase.`;
   if (policy.excludedCategories.length === 0) return `${base} All product types may be returned.`;
   const names = policy.excludedCategories.map((v) => (labelFor ? labelFor(v) : v));
   return `${base} Not returnable: ${names.join(", ")}.`;
@@ -159,6 +188,9 @@ export function returnPolicyReceiptText(policy: PosReturnPolicyConfig): string {
     policy.loyaltyRequired
       ? "Bring this receipt and the loyalty account used for the sale."
       : "Bring this receipt.",
+    ...(policy.noReceiptMembers
+      ? ["No receipt? Loyalty members can be looked up by name or phone if the sale was on their account."]
+      : []),
     "Product must be in its original packaging with the lot/batch label legible.",
     "Refunds are issued to the original form of payment.",
   ].join(" ");
@@ -201,7 +233,18 @@ export function __runReturnPolicyCoreTests(): { passed: number; failed: number }
   ok(!categoryReturnable(p, "edible-solid"), "excluded type blocked");
   ok(!categoryReturnable(p, " EDIBLE-SOLID "), "excluded type blocked regardless of case/space");
   ok(categoryReturnable(p, "flower"), "other types allowed");
-  ok(categoryReturnable(p, null) && categoryReturnable(p, ""), "a line with no category is not blocked by the type setting");
+  ok(!categoryReturnable(p, null) && !categoryReturnable(p, ""), "D205: unknown type is NOT returnable when any type is excluded (fail closed)");
+  ok(categoryReturnable(d, null), "D205: unknown type returnable when every type is returnable");
+  ok((lineNotReturnableReason(p, null) ?? "").includes("not on record"), "D205: unknown type names the reason");
+  ok(d.noReceiptMembers === false, "D205: no-receipt returns OFF by default");
+  ok(normalizePosReturnPolicy({ noReceiptMembers: "yes" }).noReceiptMembers === false, "D205: only a literal true turns no-receipt on");
+  ok(normalizePosReturnPolicy({ noReceiptMembers: true }).noReceiptMembers === true, "D205: no-receipt toggles on");
+  const vNr = validateReturnPolicyDraft({ loyaltyRequired: false, windowDays: "7", excludedCategories: [], noReceiptMembers: true });
+  ok(vNr.ok && vNr.config.noReceiptMembers === true, "D205: save keeps the no-receipt toggle");
+  ok(returnPolicySummary({ ...d, noReceiptMembers: true }).includes("looked up by name or phone"), "D205: summary mentions the no-receipt option");
+  ok(!returnPolicySummary(d).includes("looked up"), "D205: summary silent when off");
+  ok(returnPolicyReceiptText({ ...d, noReceiptMembers: true }).includes("No receipt? Loyalty members"), "D205: receipt paragraph mentions no-receipt when on");
+  ok(WALK_IN_SALE_LABEL.startsWith("Walk-in"), "D205: plain walk-in label");
   ok(lineNotReturnableReason(p, "flower") === null, "allowed line has no reason");
   const why = lineNotReturnableReason(p, "edible-solid", "Edible (Solid)") ?? "";
   ok(why.startsWith("Edible (Solid) is not a returnable product type"), "blocked line names the type");

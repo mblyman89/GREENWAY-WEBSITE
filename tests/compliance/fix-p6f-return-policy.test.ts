@@ -32,7 +32,7 @@ describe("Fix 6F — return policy settings", () => {
   });
 
   it("defaults to owner message 9: anyone, 7 days, every product type", () => {
-    expect(DEFAULT_POS_RETURN_POLICY).toEqual({ loyaltyRequired: false, windowDays: 7, excludedCategories: [] });
+    expect(DEFAULT_POS_RETURN_POLICY).toEqual({ loyaltyRequired: false, windowDays: 7, excludedCategories: [], noReceiptMembers: false });
     expect(normalizePosReturnPolicy(undefined)).toEqual(DEFAULT_POS_RETURN_POLICY);
   });
 
@@ -44,8 +44,8 @@ describe("Fix 6F — return policy settings", () => {
       nowIso: "2026-07-10T19:00:00.000Z", // day 9
     };
     expect(evaluateReturnEligibility(base).ok).toBe(false); // 7-day default
-    expect(evaluateReturnEligibility({ ...base, policy: { loyaltyRequired: false, windowDays: 10, excludedCategories: [] } }).ok).toBe(true);
-    const loyal = evaluateReturnEligibility({ ...base, policy: { loyaltyRequired: true, windowDays: 10, excludedCategories: [] } });
+    expect(evaluateReturnEligibility({ ...base, policy: { loyaltyRequired: false, windowDays: 10, excludedCategories: [], noReceiptMembers: false } }).ok).toBe(true);
+    const loyal = evaluateReturnEligibility({ ...base, policy: { loyaltyRequired: true, windowDays: 10, excludedCategories: [], noReceiptMembers: false } });
     expect(loyal.ok).toBe(false);
     if (!loyal.ok) expect(loyal.errors.join(" ")).toMatch(/loyalty/i);
   });
@@ -58,7 +58,7 @@ describe("Fix 6F — return policy settings", () => {
 
   it("the default receipt policy text follows the settings", () => {
     expect(defaultReturnPolicyText()).toBe(returnPolicyReceiptText(DEFAULT_POS_RETURN_POLICY));
-    expect(defaultReturnPolicyText({ loyaltyRequired: false, windowDays: 3, excludedCategories: [] })).toContain("3 days");
+    expect(defaultReturnPolicyText({ loyaltyRequired: false, windowDays: 3, excludedCategories: [], noReceiptMembers: false })).toContain("3 days");
   });
 
   it("wiring: settings page, toolbar button, lookup, register, desk, receipts", () => {
