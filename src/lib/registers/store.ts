@@ -499,6 +499,15 @@ async function closeCountDenoms(sessionId: string): Promise<DenomCounts | null> 
   return out;
 }
 
+/**
+ * D204b: the closer's table for the RECONCILE screen only (after the second
+ * count is saved, when the blind part is over). Null when not saved.
+ */
+export async function getCloseCountDenoms(sessionId: string): Promise<DenomCounts | null> {
+  if (!isSupabaseServiceConfigured || !sessionId) return null;
+  return closeCountDenoms(sessionId);
+}
+
 /** A saved second count's denomination table (owner D154). */
 export type SecondCountBreakdown = {
   sessionId: string;

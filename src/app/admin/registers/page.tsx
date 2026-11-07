@@ -22,7 +22,10 @@ import { undeclaredBagsBefore } from "@/lib/registers/deposit-bag-store";
 import { undeclaredBagWarning } from "@/lib/accounting/safe-bag-core";
 import { pacificToday } from "@/lib/reports/timezone";
 import { listOpenSupplyRuns } from "@/lib/registers/supply-run-store";
-import { getSecondCountBreakdown, type SecondCountBreakdown } from "@/lib/registers/store";
+import { getSecondCountBreakdown, getCloseCountDenoms, type SecondCountBreakdown } from "@/lib/registers/store";
+import { countDiffRows, suggestedBasis, type CountDiffRow } from "@/lib/registers/close-count-check-core";
+import { COUNT_GAP_HOLD_MINOR } from "@/lib/registers/drawer-correction-core";
+import type { DenomCounts } from "@/lib/registers/cash";
 import { drawerRef, parseViewedSessionId } from "@/lib/registers/drawer-close-slip-core";
 import { CountTableReadOnly } from "@/components/admin/registers/CountTableReadOnly";
 import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
@@ -125,6 +128,17 @@ export default async function RegisterActivityPage({
     [...breakdownIds].map(async (id) => {
       breakdowns.set(id, await getSecondCountBreakdown(id));
     }),
+  );
+  // D204b: the closer's table, for managers only and only once the second
+  // count is saved (the blind part is over), so reconcile can show the two
+  // counts row by row.
+  const closerTables = new Map<string, DenomCounts | null>();
+  await Promise.all(
+    reconcileItems
+      .filter((a) => a.secondCountMinor != null)
+      .map(async (a) => {
+        closerTables.set(a.sessionId, await getCloseCountDenoms(a.sessionId));
+      }),
   );
   const justSaved = justSavedId
     ? {
@@ -375,6 +389,11 @@ export default async function RegisterActivityPage({
                     key={a.sessionId}
                     item={a}
                     breakdown={breakdowns.get(a.sessionId) ?? null}
+                    diffRows={(() => {
+                      const c = closerTables.get(a.sessionId);
+                      const b = breakdowns.get(a.sessionId);
+                      return c && b ? countDiffRows(c, b.counts) : null;
+                    })()}
                     loaded={figures.get(a.sessionId) ?? null}
                     drawerChoices={drawerChoices}
                   />
@@ -696,6 +715,7 @@ function refundDay(r: FigureRefund, fallback: string): string {
 function ReconcileCard({
   item,
   breakdown,
+  diffRows,
   loaded,
   drawerChoices,
 }: {
@@ -713,6 +733,8 @@ function ReconcileCard({
   };
   /** Owner D154: the saved second count's table, shown read only. */
   breakdown: SecondCountBreakdown | null;
+  /** D204b: rows where the closer's and second counter's tables differ (null = a table is missing). */
+  diffRows: CountDiffRow[] | null;
   loaded: LoadedDrawerFigure | null;
   drawerChoices: Map<string, { id: string; label: string }[]>;
 }) {
@@ -800,6 +822,31 @@ function ReconcileCard({
                   <CountTableReadOnly counts={breakdown.counts} />
                 </div>
               </DisclosurePanel>
+            </div>
+          ) : null}
+          {diffRows && diffRows.length > 0 ? (
+            <div className="mb-3 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/50 px-3 py-2 text-xs" data-testid="count-diff-rows">
+              <p className="mb-1 font-semibold text-[var(--admin-gold)]">Where the two counts differ</p>
+              <table className="w-full">
+                <thead>
+                  <tr className="text-[var(--admin-text-muted)]">
+                    <th className="text-left font-normal">Row</th>
+                    <th className="text-right font-normal">Closer</th>
+                    <th className="text-right font-normal">Second</th>
+                    <th className="text-right font-normal">Difference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffRows.map((r) => (
+                    <tr key={r.key} className="text-[var(--admin-text)]">
+                      <td>{r.label}</td>
+                      <td className="text-right">{r.closer}</td>
+                      <td className="text-right">{r.second}</td>
+                      <td className="text-right">{r.diffMinor > 0 ? "+" : "\u2212"}{formatCents(Math.abs(r.diffMinor))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : null}
           {(() => {
@@ -901,8 +948,17 @@ function ReconcileCard({
                   Held: the counts are {formatCents(Math.abs((item.secondCountMinor ?? 0) - (item.closingCountMinor ?? 0)))} apart. Choose the count to reconcile on.
                 </legend>
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="count_basis" value="second" required />
+                  <input
+                    type="radio"
+                    name="count_basis"
+                    value="second"
+                    required
+                    defaultChecked={suggestedBasis(item.closingCountMinor, item.secondCountMinor, COUNT_GAP_HOLD_MINOR) === "second"}
+                  />
                   Use the second count ({formatCents(item.secondCountMinor)}{item.secondCountedByName ? `, ${item.secondCountedByName}` : ""})
+                  {suggestedBasis(item.closingCountMinor, item.secondCountMinor, COUNT_GAP_HOLD_MINOR) === "second" ? (
+                    <span className="text-[var(--admin-gold)]"> (suggested: counted calmly in the office)</span>
+                  ) : null}
                 </label>
                 <label className="flex items-center gap-2">
                   <input type="radio" name="count_basis" value="closer" />

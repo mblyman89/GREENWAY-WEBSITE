@@ -89,7 +89,7 @@ function mustPost(o: DrawerPostOutcome) {
   if (o.kind !== "posted") throw new Error(`expected posted, got ${o.kind}: ${o.message}`);
   return o;
 }
-function mustNot(o: DrawerPostOutcome, kind: "skipped" | "refused" | "failed") {
+function mustNot(o: DrawerPostOutcome, kind: "skipped" | "refused" | "failed" | "deferred") {
   if (o.kind !== kind) throw new Error(`expected ${kind}, got ${o.kind}: ${o.message}`);
   return o;
 }
@@ -366,6 +366,22 @@ describe("books-94 · what it refuses", () => {
     expect(o.code).toBe("GL_OUT_OF_BALANCE");
     expect(o.message).toContain("debits and the credits");
   });
+
+  it("D204d: no approved template is DEFERRED (books not live), never failed", async () => {
+    submit.mockResolvedValueOnce({
+      ok: false,
+      journalId: null,
+      journalNo: null,
+      status: null,
+      outcome: null,
+      code: "GL_AUTOPOST_NO_TEMPLATE",
+      message: "Nothing posts automatically without a template you approved in advance.",
+    } as unknown as Awaited<ReturnType<typeof submit>>);
+    session.mockResolvedValue(reconciled());
+    const o = mustNot(await postDrawerCloseForSession("s-1"), "deferred");
+    expect(o.code).toBe("GL_AUTOPOST_NO_TEMPLATE");
+    expect(o.message).toContain("reconciled");
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -463,10 +479,12 @@ describe("books-94 · reachability", () => {
       { kind: "skipped", sessionId: "s", code: "C", message: "nothing moved" },
       { kind: "refused", sessionId: "s", code: "C", message: "bad numbers" },
       { kind: "failed", sessionId: "s", sourceRef: "r", code: "C", message: "ledger said no" },
+      { kind: "deferred", sessionId: "s", sourceRef: "r", code: "GL_AUTOPOST_NO_TEMPLATE", message: "books not live" },
     ];
     const said = kinds.map(describeDrawerPostOutcome);
-    // Four distinct sentences: none may collapse into a shrug.
-    expect(new Set(said).size).toBe(4);
+    // Five distinct sentences: none may collapse into a shrug.
+    expect(new Set(said).size).toBe(5);
+    expect(said[4]).toContain("deferred");
     for (const s of said) expect(s.length).toBeGreaterThan(10);
     expect(said[0]).toContain("#5");
     expect(said[3]).toContain("ledger said no");

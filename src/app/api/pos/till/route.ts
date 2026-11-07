@@ -47,6 +47,8 @@ import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } fr
 import { validateTillRequest } from "@/lib/pos/till-core";
 import { denomTotalMinor } from "@/lib/registers/cash";
 import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession, getRegister } from "@/lib/registers/store";
+import { loadDrawerFigure } from "@/lib/registers/drawer-figure-store";
+import { closeShortCheck } from "@/lib/registers/close-count-check-core";
 import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
 import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -417,6 +419,38 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   // (owner D122, admin/registers secondCountAction). An old register build
   // that still sends a second PIN and second counts is accepted; the extra fields
   // are ignored (validateTillRequest drops them).
+  // D204a: a count far BELOW what the register expects asks the closer to
+  // count again before it is saved. BLIND: the reply never carries the
+  // expected figure or the gap. A failed figure read never blocks a close.
+  let recheckFlagged = false;
+  {
+    let expectedMinor: number | null = null;
+    try {
+      const loaded = await loadDrawerFigure(session.id, session);
+      expectedMinor = loaded?.figure.expectedMinor ?? null;
+    } catch (e) {
+      console.error("[pos/till] expected figure read failed; close not checked", e);
+      expectedMinor = null;
+    }
+    const check = closeShortCheck({
+      countedMinor: denomTotalMinor(till.denoms),
+      expectedMinor,
+      recountConfirmed: till.recountConfirmed === true,
+    });
+    if (!check.ok) {
+      await recordAudit({
+        actorId: employee.staff_id,
+        actorEmail: employee.full_name,
+        action: "drawer.close_recheck_asked",
+        entityType: "drawer_session",
+        entityId: session.id,
+        after: { via: "register", deviceId: auth.device.id, employeeId: employee.id },
+      });
+      return NextResponse.json({ error: check.error, code: check.code }, { status: 409 });
+    }
+    recheckFlagged = check.flagged;
+  }
+
   const result = await closeDrawerBlind({
     sessionId: session.id,
     employeeId: employee.id,
@@ -445,6 +479,9 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       secondCount: "back_office",
       // Owner D125: a $0.00 close the closer confirmed as really empty.
       ...(till.confirmedEmpty ? { confirmedEmpty: true } : {}),
+      // D204a: saved after the closer was asked to count again.
+      ...(recheckFlagged ? { recountAfterLowCount: true } : {}),
+      ...(till.recountConfirmed ? { recountConfirmed: true } : {}),
       ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
     },
   });

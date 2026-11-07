@@ -16,7 +16,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { can } from "@/lib/auth/roles";
-import { replayStrandedCartAdjustments, resolvePosException, retryPosException } from "@/lib/pos/sync-store";
+import { replayStrandedCartAdjustments, resolvePosExceptionChecked, retryPosException } from "@/lib/pos/sync-store";
 
 const BASE = "/admin/registers/exceptions";
 
@@ -24,9 +24,13 @@ export async function resolvePosExceptionAction(formData: FormData): Promise<voi
   const session = await requirePermission("staffing.manage");
   const id = String(formData.get("exception_id") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
+  // D204c: a refused SALE is closed only by a re-ring (receipt checked) or a
+  // written "no sale" reason; other types keep the plain note.
+  const kind = String(formData.get("resolve_kind") ?? "").trim();
+  const receipt = String(formData.get("rerung_receipt") ?? "").trim();
   if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing exception id."));
 
-  const result = await resolvePosException(id, { resolvedBy: session.profile.id, note });
+  const result = await resolvePosExceptionChecked(id, { resolvedBy: session.profile.id, kind, receipt, note });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
 
   await recordAudit({
@@ -35,7 +39,11 @@ export async function resolvePosExceptionAction(formData: FormData): Promise<voi
     action: "pos.exception_resolved",
     entityType: "pos_sale_event",
     entityId: id,
-    after: { note },
+    after: {
+      note,
+      resolve_kind: result.ok ? result.kind : null,
+      ...(result.ok && result.rerungClientUuid ? { rerung_client_uuid: result.rerungClientUuid, rerung_receipt: receipt } : {}),
+    },
   });
   revalidatePath(BASE);
   redirect(`${BASE}?resolved=1`);

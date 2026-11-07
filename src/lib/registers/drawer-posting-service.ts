@@ -110,7 +110,31 @@ export type DrawerPostOutcome =
       readonly sourceRef: string;
       readonly code: string;
       readonly message: string;
+    }
+  | {
+      /**
+       * D204d: the books are not switched on for drawer closes yet (no
+       * approved auto-post template, D128). Nothing is wrong with the drawer
+       * or its numbers; the entry waits for the books. Kept apart from
+       * "failed" so the error list only shows real ledger problems.
+       */
+      readonly kind: "deferred";
+      readonly sessionId: string;
+      readonly sourceRef: string;
+      readonly code: string;
+      readonly message: string;
     };
+
+/** D204d: ledger codes that mean "the books are not set up for this yet", not a failure. */
+export const BOOKS_NOT_READY_CODES: readonly string[] = [
+  "GL_AUTOPOST_NO_TEMPLATE",
+  "GL_AUTOPOST_TEMPLATE_INACTIVE",
+  "GL_AUTOPOST_TEMPLATE_UNAPPROVED",
+  "GL_AUTOPOST_TEMPLATE_NOT_YET_EFFECTIVE",
+];
+
+export const BOOKS_DEFERRED_MESSAGE =
+  "The drawer is reconciled. Its ledger entry is waiting until the books are switched on for drawer closes (no approved template yet).";
 
 /**
  * Post the closing entry for one reconciled drawer session.
@@ -242,6 +266,10 @@ export async function postDrawerCloseForSession(
     client,
   );
 
+  if (!result.ok && BOOKS_NOT_READY_CODES.includes(result.code)) {
+    return { kind: "deferred", sessionId, sourceRef, code: result.code, message: BOOKS_DEFERRED_MESSAGE };
+  }
+
   if (!result.ok) {
     return {
       kind: "failed",
@@ -283,5 +311,7 @@ export function describeDrawerPostOutcome(o: DrawerPostOutcome): string {
       return `Not posted: ${o.message}`;
     case "failed":
       return `The ledger refused the entry: ${o.message}`;
+    case "deferred":
+      return `Ledger entry deferred: ${o.message}`;
   }
 }
