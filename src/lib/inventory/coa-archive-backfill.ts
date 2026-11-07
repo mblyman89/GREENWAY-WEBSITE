@@ -62,10 +62,11 @@ export type CoaBackfillOptions = {
 
 const MAX_REDIRECTS = 3;
 
-type Fetched = { outcome: Exclude<CoaOutcome, "archived" | "upload-failed" | "changed">; detail: string | null } | { bytes: Uint8Array };
+export type Fetched = { outcome: Exclude<CoaOutcome, "archived" | "upload-failed" | "changed">; detail: string | null } | { bytes: Uint8Array };
 
-/** Download one certificate. Redirects are followed by hand so every hop passes the same URL check. */
-async function download(rawUrl: string | null, fetchImpl: typeof fetch): Promise<Fetched> {
+/** Download one certificate. Redirects are followed by hand so every hop passes the same URL check.
+ *  D202: exported so the Cultivera batch-COA attach files PDFs through the same checks. */
+export async function downloadCoaPdf(rawUrl: string | null, fetchImpl: typeof fetch): Promise<Fetched> {
   let check = checkCoaUrl(rawUrl);
   if (!check.ok) return { outcome: "bad-link", detail: check.reason };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -112,7 +113,7 @@ async function archiveOne(
   lab: LabRow,
   fetchImpl: typeof fetch,
 ): Promise<{ outcome: CoaOutcome; detail: string | null; bytes: number }> {
-  const got = await download(lab.coa_url, fetchImpl);
+  const got = await downloadCoaPdf(lab.coa_url, fetchImpl);
   if (!("bytes" in got)) return { ...got, bytes: 0 };
   const path = coaStoragePath(lab.id, lab.labtest_external_identifier);
   try {

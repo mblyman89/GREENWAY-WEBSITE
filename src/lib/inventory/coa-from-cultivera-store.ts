@@ -28,8 +28,10 @@ import { recordAudit } from "@/lib/auth/audit";
 import { parseVendorJson, type ParsedLine } from "@/lib/inventory/intake-parser";
 import { RECONSTRUCTED_MANIFEST_KIND } from "@/lib/inventory/cultivera-manifest-group-core";
 import { applyWciaLinkPlan, attachWciaLabResults, loadWciaText, saveWciaFiles } from "@/lib/inventory/cultivera-wcia-store";
-import { CULTIVERA_WCIA_EVENT, emptyWciaResult, planWciaLabLinks, wciaAttachNote, type WciaAttachResult } from "@/lib/inventory/cultivera-wcia-core";
-import { getPosRun, loadWciaRunRecords, startWciaRun } from "@/lib/pos/cultivera-fetch-client";
+import { CULTIVERA_WCIA_EVENT, emptyWciaResult, nativeLabRow, planWciaLabLinks, wciaAttachNote, type WciaAttachResult } from "@/lib/inventory/cultivera-wcia-core";
+import { getPosRun, loadBatchCoaRecords, loadWciaRunRecords, startWciaRun } from "@/lib/pos/cultivera-fetch-client";
+import { BATCH_COA_SOURCE, planBatchCoaLinks, type BatchCoaLot, type BatchCoaPlan } from "@/lib/inventory/coa-batch-cultivera-core";
+import { COA_BUCKET, coaStoragePath } from "@/lib/inventory/coa-archive-backfill-core";
 import type { CrawlerRun } from "@/lib/pos/cultivera-fetch-button-core";
 import {
   COA_ATTACH_AUDIT,
@@ -183,7 +185,136 @@ export async function startCoaFetch(actorId: string | null): Promise<{ ok: true;
 
 type MailDocRow = { id: string; storage_key: string | null };
 
-export type CoaAttachOptions = { dryRun?: boolean; admin?: Admin; now?: () => number; budgetMs?: number };
+export type CoaAttachOptions = { dryRun?: boolean; admin?: Admin; now?: () => number; budgetMs?: number; fetchImpl?: typeof fetch };
+
+// --- D202: the batch COA documents ----------------------------------------------------------
+
+type BatchApply = { linked: number; created: number; reused: number; skippedChanged: number; pdfsFiled: number; pdfsLeft: number; stoppedForTime: boolean; errors: string[] };
+const emptyBatchApply = (): BatchApply => ({ linked: 0, created: 0, reused: 0, skippedChanged: 0, pdfsFiled: 0, pdfsLeft: 0, stoppedForTime: false, errors: [] });
+/** COA links per `.in()` read (URL length: Cultivera links are ~110 characters). */
+const COA_URL_CHUNK = 30;
+/** PDFs downloaded at the same time (polite to files.cultivera.com). */
+const BATCH_PDF_PARALLEL = 4;
+/** Never start a PDF download with less than this left of the click's time. */
+const BATCH_PDF_MIN_LEFT_MS = 25_000;
+
+type LabByUrl = { id: string; coa_url: string | null; coa_storage_path: string | null; created_at: string | null };
+
+/**
+ * Apply a batch COA plan: reuse a lab result that already has the SAME coa_url (oldest), else
+ * insert one (source cultivera-batch-coa); fill each planned lot's EMPTY lab_result_id (guarded,
+ * never a destroyed lot); then download each COA PDF (https, not a private host, really a PDF)
+ * and file it in `coa` with a compare-and-set on an empty coa_storage_path. A dry run only reads.
+ */
+async function applyBatchCoaPlan(
+  admin: Admin,
+  bp: BatchCoaPlan,
+  actorId: string | null,
+  o: { dryRun: boolean; deadline: number; now: () => number; fetchImpl: typeof fetch },
+): Promise<BatchApply> {
+  const r = emptyBatchApply();
+  const push = (e: string) => {
+    if (r.errors.length < 5) r.errors.push(e.slice(0, 200));
+  };
+  if (bp.plan.links.length === 0) return r;
+  const urls = [...new Set([...bp.urlByKey.values()])].sort();
+  const existing = new Map<string, LabByUrl>();
+  for (const part of chunk(urls, COA_URL_CHUNK)) {
+    const { data, error } = await admin.from("lab_results").select("id, coa_url, coa_storage_path, created_at").in("coa_url", part);
+    if (error) {
+      push(`lab results could not be read (${short(error)})`);
+      return r;
+    }
+    for (const row of (data as LabByUrl[] | null) ?? []) {
+      if (!row.coa_url) continue;
+      const cur = existing.get(row.coa_url);
+      const at = row.created_at ?? "";
+      if (!cur || at < (cur.created_at ?? "") || (at === (cur.created_at ?? "") && row.id < cur.id)) existing.set(row.coa_url, row);
+    }
+  }
+  if (o.dryRun) {
+    for (const need of bp.plan.needs) {
+      if (existing.has(bp.urlByKey.get(need.key) ?? "")) r.reused += 1;
+      else r.created += 1;
+    }
+    r.linked = bp.plan.links.length;
+    return r;
+  }
+  const labByKey = new Map<string, LabByUrl>();
+  for (const need of bp.plan.needs) {
+    const url = bp.urlByKey.get(need.key) ?? "";
+    const reuse = existing.get(url);
+    if (reuse) {
+      labByKey.set(need.key, reuse);
+      r.reused += 1;
+      continue;
+    }
+    const row = { ...nativeLabRow(need.lab, "wcia", actorId, { withJsonUrl: false }), source: BATCH_COA_SOURCE };
+    const { data, error } = await admin.from("lab_results").insert(row).select("id").single();
+    const id = (data as { id: string } | null)?.id ?? null;
+    if (error || !id) {
+      push(`a lab result could not be saved (${short(error ?? "no id returned")})`);
+      continue;
+    }
+    labByKey.set(need.key, { id, coa_url: url, coa_storage_path: null, created_at: null });
+    r.created += 1;
+  }
+  for (const link of bp.plan.links) {
+    const lab = labByKey.get(link.labKey);
+    if (!lab) continue;
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .update({ lab_result_id: lab.id, updated_by: actorId })
+      .eq("id", link.lotId)
+      .neq("status", "destroyed")
+      .is("lab_result_id", null)
+      .select("id");
+    if (error) {
+      push(`a lot could not be linked (${short(error)})`);
+      continue;
+    }
+    if (((data as { id: string }[] | null) ?? []).length > 0) r.linked += 1;
+    else r.skippedChanged += 1;
+  }
+  // File the PDFs (labs with no stored copy yet), a few at a time, inside the click's time.
+  const toFile = [...new Map([...labByKey.values()].filter((l) => !l.coa_storage_path && l.coa_url).map((l) => [l.id, l])).values()];
+  const { downloadCoaPdf } = await import("@/lib/inventory/coa-archive-backfill");
+  for (let i = 0; i < toFile.length; i += BATCH_PDF_PARALLEL) {
+    if (o.deadline - o.now() < BATCH_PDF_MIN_LEFT_MS) {
+      r.stoppedForTime = true;
+      r.pdfsLeft += toFile.length - i;
+      break;
+    }
+    const group = toFile.slice(i, i + BATCH_PDF_PARALLEL);
+    await Promise.all(
+      group.map(async (lab) => {
+        const got = await downloadCoaPdf(lab.coa_url, o.fetchImpl).catch((e: unknown) => ({ outcome: "fetch-failed" as const, detail: short(e) }));
+        if (!("bytes" in got)) {
+          r.pdfsLeft += 1;
+          push(`a COA PDF could not be downloaded (${got.outcome}${got.detail ? `: ${got.detail}` : ""})`);
+          return;
+        }
+        const path = coaStoragePath(lab.id, null);
+        const up = await admin.storage.from(COA_BUCKET).upload(path, Buffer.from(got.bytes), { contentType: "application/pdf", upsert: true });
+        if (up.error) {
+          r.pdfsLeft += 1;
+          push(`a COA PDF could not be filed (${short(up.error)})`);
+          return;
+        }
+        const { error } = await admin
+          .from("lab_results")
+          .update({ coa_storage_path: path, coa_file_bytes: got.bytes.byteLength, coa_archived_at: new Date().toISOString() })
+          .eq("id", lab.id)
+          .is("coa_storage_path", null);
+        if (error) {
+          r.pdfsLeft += 1;
+          push(`a COA PDF could not be recorded (${short(error)})`);
+        } else r.pdfsFiled += 1;
+      }),
+    );
+  }
+  return r;
+}
 
 export async function attachAllCoas(actorId: string | null, opts: CoaAttachOptions = {}): Promise<CoaAttachTotals> {
   const dryRun = opts.dryRun === true;
@@ -207,6 +338,7 @@ export async function attachAllCoas(actorId: string | null, opts: CoaAttachOptio
 
     // 1. The files the crawl fetched from Cultivera (if any), saved where the import keeps them.
     let byTransfer = new Map<number, string>();
+    let batchData: { lots: Parameters<typeof planBatchCoaLinks>[1]; batches: Parameters<typeof planBatchCoaLinks>[2]; runId: string } | null = null;
     const s = await readRunSetting(admin);
     if (!s.ok) pushError(totals, `the last crawl could not be read (${s.error})`);
     else if (s.setting) {
@@ -231,6 +363,12 @@ export async function attachAllCoas(actorId: string | null, opts: CoaAttachOptio
           }
         }
         // "missing": the crawler lost the run; the files saved by an earlier click are still read below.
+        // D202: the batch COA documents (for transfers Cultivera holds no vendor file on).
+        const b = await loadBatchCoaRecords(s.setting.runId);
+        if (b.kind === "error") pushError(totals, `the crawl's batch COAs could not be read (${b.error})`);
+        else if (b.kind === "ok") batchData = { lots: b.lots, batches: b.batches, runId: s.setting.runId };
+        else if (b.kind === "none" && loaded.kind === "ok" && loaded.records.length === 0)
+          pushError(totals, "this crawl is from before the batch COA step: click Fetch COAs from Cultivera again, wait for done, then Attach");
       }
     }
 
@@ -304,6 +442,7 @@ export async function attachAllCoas(actorId: string | null, opts: CoaAttachOptio
           emptyWciaResult("error", [short(reason)]),
         );
         totals.linkedFromMail += r.linked;
+        for (const id of r.linkedLotIds ?? []) linked.add(id);
         totals.created += r.created;
         totals.reused += r.reused;
         totals.skippedChanged += r.skippedChanged;
@@ -311,11 +450,38 @@ export async function attachAllCoas(actorId: string | null, opts: CoaAttachOptio
       }
     }
 
-    // 4. The honest count after the run.
-    if (dryRun) totals.stillMissing = Math.max(0, totals.missingBefore - totals.linkedFromCultivera - totals.linkedFromMail);
+    // 4. D202: what is still missing -> each lot's Cultivera batch COA document (exact barcode on
+    //    the lot's own transfer), one lab result per COA link, the PDF filed in `coa`. Fill-only.
+    if (batchData) {
+      const transferOf = new Map<string, number>();
+      for (const m of read.targets.manifests) for (const id of m.lotIds) transferOf.set(id, m.transferId);
+      const lots: BatchCoaLot[] = read.lots
+        .filter((l) => !linked.has(l.id) && transferOf.has(l.id))
+        .map((l) => ({ id: l.id, lot_code: l.lot_code, status: l.status, lab_result_id: l.lab_result_id, transferId: transferOf.get(l.id) ?? null }));
+      const bp = planBatchCoaLinks(lots, batchData.lots, batchData.batches, batchData.runId);
+      totals.ambiguous += bp.counts.ambiguous;
+      totals.batchNoDocument += bp.counts.noDocument + bp.counts.noBatch;
+      if (bp.counts.badLink > 0) pushError(totals, `${bp.counts.badLink} Cultivera COA links are not usable https links (first: ${bp.firstBadLink ?? "?"})`);
+      const r = await applyBatchCoaPlan(admin, bp, actorId, { dryRun, deadline: t0 + budget, now, fetchImpl: opts.fetchImpl ?? fetch }).catch((reason: unknown) => ({
+        ...emptyBatchApply(),
+        errors: [short(reason)],
+      }));
+      totals.linkedFromBatchCoa += r.linked;
+      totals.created += r.created;
+      totals.reused += r.reused;
+      totals.skippedChanged += r.skippedChanged;
+      totals.batchPdfsFiled += r.pdfsFiled;
+      totals.batchPdfsLeft += r.pdfsLeft;
+      if (r.stoppedForTime) totals.stoppedForTime = true;
+      for (const e of r.errors) pushError(totals, `Cultivera batch COAs: ${e}`);
+    }
+
+    // 5. The honest count after the run.
+    const linkedNow = totals.linkedFromCultivera + totals.linkedFromMail + totals.linkedFromBatchCoa;
+    if (dryRun) totals.stillMissing = Math.max(0, totals.missingBefore - linkedNow);
     else {
       const after = await readCoaTargets(admin);
-      totals.stillMissing = after.ok ? after.targets.missingLots : Math.max(0, totals.missingBefore - totals.linkedFromCultivera - totals.linkedFromMail);
+      totals.stillMissing = after.ok ? after.targets.missingLots : Math.max(0, totals.missingBefore - linkedNow);
     }
   } catch (e) {
     pushError(totals, short(e));

@@ -18,6 +18,7 @@ import type { ListLot } from "@/lib/pos/cultivera-fetch-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { buildPlanInputs, type RehomePlanInputs } from "@/lib/inventory/cultivera-rehome-core";
 import type { WciaRunRecord } from "@/lib/inventory/cultivera-wcia-core";
+import type { BatchCoaRecord, TransferLotRecord } from "@/lib/inventory/coa-batch-cultivera-core";
 import { vendorFileCoverage, type VendorFileCoverage } from "@/lib/pos/cultivera-wcia-coverage-core";
 import { isRawReportFile, type RawReportFile } from "@/lib/pos/cultivera-run-report-core";
 import {
@@ -114,6 +115,43 @@ export async function loadWciaRunRecords(
     if (!v.ok) return { kind: "error", error: v.reason };
     const pj = parseJsonl<WciaRunRecord>(b.toString("utf8"));
     return { kind: "ok", records: pj.records, bad: pj.bad };
+  } catch (e) {
+    return { kind: "error", error: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
+  }
+}
+
+/**
+ * D202: the batch COAs of a COA crawl - transfer_lots.json (the live Cultivera lots on the named
+ * transfers) and batches.jsonl (their batch details: HasCoaDocument / ImagePath), verified against
+ * the run's manifest. `none` = a crawl from before the batch step (or one that never reached it).
+ */
+export async function loadBatchCoaRecords(
+  runId: string,
+): Promise<
+  | { kind: "ok"; lots: TransferLotRecord[]; batches: BatchCoaRecord[]; bad: number }
+  | { kind: "none" }
+  | { kind: "missing" }
+  | { kind: "error"; error: string }
+> {
+  if (!isValidRunId(runId)) return { kind: "error", error: "invalid run id" };
+  try {
+    const mres = await posFetch(`/runs/${runId}/files/manifest.json`, undefined, 60_000);
+    if (mres.status === 404) return { kind: "missing" };
+    if (!mres.ok) return { kind: "error", error: `manifest.json: crawler responded ${mres.status}` };
+    const manifest = JSON.parse(Buffer.from(await mres.arrayBuffer()).toString("utf8")) as Manifest;
+    const names = new Set((manifest.files ?? []).map((f) => f.name));
+    if (!names.has("transfer_lots.json")) return { kind: "none" };
+    const lb = await getFile(runId, "transfer_lots.json");
+    const lv = verifyFile(manifest, "transfer_lots.json", lb.length, sha(lb));
+    if (!lv.ok) return { kind: "error", error: lv.reason };
+    const parsed = JSON.parse(lb.toString("utf8")) as { data?: unknown };
+    const lots = Array.isArray(parsed.data) ? (parsed.data.filter((x) => x && typeof x === "object") as TransferLotRecord[]) : [];
+    if (!names.has("batches.jsonl")) return { kind: "ok", lots, batches: [], bad: 0 };
+    const bb = await getFile(runId, "batches.jsonl");
+    const bv = verifyFile(manifest, "batches.jsonl", bb.length, sha(bb));
+    if (!bv.ok) return { kind: "error", error: bv.reason };
+    const pj = parseJsonl<BatchCoaRecord>(bb.toString("utf8"));
+    return { kind: "ok", lots, batches: pj.records, bad: pj.bad };
   } catch (e) {
     return { kind: "error", error: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
   }

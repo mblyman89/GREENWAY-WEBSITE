@@ -794,6 +794,7 @@ import { __runXlsxStructureCoreTests } from "../../src/lib/pos/xlsx-structure-co
 import { __runCultiveraCategoryReleaseCoreTests } from "../../src/lib/inventory/cultivera-category-release-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCoaFromCultiveraCoreTests } from "../../src/lib/inventory/coa-from-cultivera-core";
+import { __runCoaBatchCultiveraCoreTests } from "../../src/lib/inventory/coa-batch-cultivera-core";
 import { __runCoaGmailSearchCoreTests } from "../../src/lib/inventory/coa-gmail-search-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
@@ -1840,6 +1841,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-category-release-core", __runCultiveraCategoryReleaseCoreTests(), 33); // R74 S17: a picked category-hold card goes live
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("coa-from-cultivera-core", __runCoaFromCultiveraCoreTests(), 30);
+  assertRan("coa-batch-cultivera-core", __runCoaBatchCultiveraCoreTests(), 25);
   assertRan("coa-gmail-search-core", __runCoaGmailSearchCoreTests(), 40);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
   assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);

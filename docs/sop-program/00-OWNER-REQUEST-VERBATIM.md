@@ -1454,3 +1454,37 @@ Finding: an ATM drop was never built. Every register drop went to the store safe
   2. "Search Gmail for the missing COAs" (repeat until it says done).
   3. "Preview first", then "Attach COAs from Gmail".
   4. For anything left, the per-product "Search Gmail for this COA".
+
+---
+
+## D202 — Cultivera COA fetch found "0 of 0 vendor files" (2026-11-07)
+
+> "thank you. I tried the new fetch button on the fit it later page from the inventory page. it works for a few seconds then comes back saying it found nothing. this is the message on the page after pressing the button, "Last crawl 20261107T063901Z-dd3e6ec8: done, 0 of 0 vendor files". please log in to supabase and query the database to see what went wrong so you can fix it properly. I will wait to try the gmail fetch feature until cultivera has been scraped. also, side note, we need to build a button in the fix it later page that rereads all coa's for all products where it failed, or only did a partial read. there are still some coa's that the parser does not like. I will give you an example. we need all coa's regardless if we like them or not to be read AND trusted. we have never, and will never accept illegal products. every coa we have is legitimate and should be treated as such, no exceptions. so I want to have a button that will reread all of them. it should run on the server in the background, I will push the button before bed and hopefully when I wake up it will be finished reading all of them and accepting them regardless of how it feels about them. this is the message in the inventory detail page of one of the problem coas, not the only one, just one of many probably. so hyper focus on all of them and not just this one. after pressing the read coa button in the detail page, "Lab certificate (read by the system) Re-read lab certificate The lab certificate could not be read - the reasons are below. Set the facts by hand if the lab cannot be reached. Could not be read - COA PDF not read: This certificate layout is not one the reader knows yet - its facts were not read. Enter them by hand or send it to the developer.. Read Nov 6, 2026, 11:12 PM from LlamaParse." please fix the cultivera fetch first then stop and report back. tell me what was wrong and what you fixed. I will try it, then let you know to proceed with the other coa issues. follow the standing rules. thank you."
+
+Follow-up: "this is the report. please continue. follow the standing rules. thank you." (run report `cultivera-run-20261107T063901Z-dd3e6ec8-report.txt`).
+
+### What was wrong
+
+The crawl worked: 32 of 32 transfer details (manifests 419 and 1181–1214) fetched, 0 errors. But **none of the 32 transfers carries a vendor WCIA file (`JsonFile`) in Cultivera**, so the only source the crawl looked at was empty ("0 of 0"). The COAs are not on the transfer; Cultivera keeps them **on each batch** (`inventory-batch/{BatchId}` → `HasCoaDocument`, `ImagePath` = the COA PDF).
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D202 | **The COA crawl also reads Cultivera's batch COA documents.** Two new read-only crawl stages: `transfer_lots` (the live inventory lots on the target transfers, barcode → BatchId) and `batch_coas` (each batch's detail: COA document link, lab, testing date). A batch that fails is recorded and the crawl continues (partial, not failed). | "please … see what went wrong so you can fix it properly" |
+| D202a | **Attach links lots to their batch COA, exact and fill-only.** A lot is linked only when Cultivera has the **same barcode on the same transfer** and the batch has a COA document (https, no credentials). Two different documents for one barcode → left alone. One lab result per COA link (`source = cultivera-batch-coa`, an existing one with the same link is reused); no potency is invented. `lab_result_id` is filled only when empty and the lot is not destroyed. The PDF is downloaded and filed in the private `coa` bucket (bounded per click; click again for the rest). | standing rules |
+| D202b | **An honest status line.** The page now says what the crawl actually found, e.g. "Cultivera has no vendor transfer file on these 32 transfers", "X of Y batches have a COA document in Cultivera", or "this crawl is from before the batch COA step: click Fetch again". | "comes back saying it found nothing" |
+| D202c | **The "Re-read all COAs, trust all" background button is NOT in this change** — the owner asked to stop and report first. | "please fix the cultivera fetch first then stop and report back" |
+
+### As built (D202)
+
+- **Crawler:** `crawler/app/cultivera_pos.py` — stages `transfer_lots` and `batch_coas` in the WCIA-only crawl; `transfer_lots.json` + `batches.jsonl` in the run; `_fetch_each(tolerate=True)` for batches. Tests in `crawler/tests/test_cultivera_pos_wcia_only.py` (crawler suite 656 passed).
+- **Site:**
+  - `src/lib/inventory/coa-batch-cultivera-core.ts` (pure: COA link check, plan, status line; self-test 25);
+  - `loadBatchCoaRecords` in `src/lib/pos/cultivera-fetch-client.ts` (manifest-verified);
+  - `applyBatchCoaPlan` + step 4 in `src/lib/inventory/coa-from-cultivera-store.ts`;
+  - `downloadCoaPdf` exported from `coa-archive-backfill.ts`;
+  - Fix later page: new status line and help text.
+- **No migration, no new table.**
+- **Tests:** `tests/compliance/d202-cultivera-batch-coas.test.ts` (7); D200 mock updated.
+- **Click order for the owner:** after the crawler redeploys, click **Fetch COAs from Cultivera**, wait for "done", optionally **Preview**, then **Attach all COAs** (click again if it says PDFs are left to file).
