@@ -152,3 +152,33 @@ describe("D198 S3 ATM cash never counts toward the safe / bag", () => {
     expect(read("src/app/admin/registers/eod/page.tsx")).toContain("not in the bag");
   });
 });
+
+describe("D198 S4 drop <-> load matching engine (pure)", () => {
+  it("self-tests pass and the engine stays pure (only the reconcile core import)", async () => {
+    const m = await import("@/lib/atm/atm-drop-match-core");
+    const r = m.__runAtmDropMatchCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(50);
+    const src = read("src/lib/atm/atm-drop-match-core.ts");
+    const imports = src.split("\n").filter((l) => /^import /.test(l));
+    expect(imports.every((l) => l.includes("atm-reconcile-core"))).toBe(true);
+  });
+
+  it("two $20 drops that add up to one PAI load match exactly; a short load is flagged", async () => {
+    const { matchAtmDrops } = await import("@/lib/atm/atm-drop-match-core");
+    const drop = (id: string, at: string, n: number) => ({
+      id, droppedAt: at, amountCents: n * 2000, twenties: n, terminalId: "HG26499", registerName: "R1",
+      employeeId: "e1", employeeName: "Alex", witnessId: "e2", witnessName: "Sam",
+      recordedVia: "register" as const, storedAs: "columns" as const, notes: null,
+    });
+    const load = (id: string, at: string, cents: number) => ({
+      id, terminalId: "HG26499", loadedAt: at, loadDate: at.slice(0, 10), cashLoadCents: cents, balanceAfterCents: null, source: "pai" as const,
+    });
+    const options = { matchWindowMinutes: 120, terminalId: "HG26499", witnessPolicy: "recommended" as const, nowIso: "2026-11-07T20:00:00Z", plaidLastSyncedAt: "2026-11-07T14:00:00Z", hasAtmAccount: true };
+    const good = matchAtmDrops({ drops: [drop("a", "2026-11-06T20:00:00Z", 10), drop("b", "2026-11-06T20:10:00Z", 15)], loads: [load("l", "2026-11-06T20:30:00Z", 50000)], settlements: [], deposits: [], reviews: [], options });
+    expect(good.loads[0].status).toBe("matched");
+    expect(good.drops.every((d) => d.status === "matched")).toBe(true);
+    const short = matchAtmDrops({ drops: [drop("a", "2026-11-06T20:00:00Z", 25)], loads: [load("l", "2026-11-06T20:30:00Z", 48000)], settlements: [], deposits: [], reviews: [], options });
+    expect(short.signals.some((s) => s.code === "LOAD_SHORT" && s.severity === "high")).toBe(true);
+  });
+});
