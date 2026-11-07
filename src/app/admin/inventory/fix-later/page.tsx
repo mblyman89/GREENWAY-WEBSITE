@@ -17,6 +17,7 @@
  * D201 adds "COAs from Stephen's Gmail": a targeted search, attach (+ preview),
  * and a "Search Gmail" button on every No COA lot and every delivery.
  * D203 adds "Deep dig" (all, or one delivery) for the last ones the search cannot find.
+ * D206 adds "Re-read every COA and trust it": the overnight server job (cron /api/cron/coa-trust-all).
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -28,7 +29,18 @@ import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefr
 import { readCoaPanel, type CoaPanel } from "@/lib/inventory/coa-from-cultivera-store";
 import { readGmailPanel, type GmailPanel } from "@/lib/inventory/coa-gmail-search-store";
 import { coaCrawlStatusLine, type BatchCoaStage, type TransferLotsStage } from "@/lib/inventory/coa-batch-cultivera-core";
-import { attachAllCoasAction, attachCoasFromGmailAction, deepDigGmailAction, fetchCoasFromCultiveraAction, searchGmailForCoasAction, searchGmailForOneAction } from "./actions";
+import { readTrustPanel, type TrustPanel } from "@/lib/inventory/coa-trust-all-store";
+import { trustRunLine } from "@/lib/inventory/coa-trust-all-core";
+import {
+  attachAllCoasAction,
+  attachCoasFromGmailAction,
+  deepDigGmailAction,
+  fetchCoasFromCultiveraAction,
+  searchGmailForCoasAction,
+  searchGmailForOneAction,
+  startTrustAllAction,
+  stopTrustAllAction,
+} from "./actions";
 import {
   FIX_LATER_REASON_LABELS,
   REGISTER_STOP_LABELS,
@@ -262,10 +274,70 @@ function CoaFromGmail({ panel, tone, msg }: { panel: GmailPanel; tone: string | 
   );
 }
 
-export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string; gm?: string; gm_msg?: string }> }) {
+function trustLineNow(panel: TrustPanel): string {
+  return trustRunLine(panel.run, Date.now());
+}
+
+function CoaTrustAll({ panel, tone, msg }: { panel: TrustPanel; tone: string | undefined; msg: string | undefined }) {
+  const running = panel.run?.status === "running";
+  return (
+    <div className={CARD} id="coa-trust-all" data-testid="coa-trust-all">
+      <FetchRunAutoRefresh active={running} />
+      <h2 className={H2}>Re-read every COA and trust it</h2>
+      {msg ? (
+        <p
+          className={`mb-3 rounded-[var(--admin-radius)] border px-3 py-2 text-sm ${tone === "ok" ? "border-emerald-500/40 text-[var(--admin-text)]" : "border-amber-500/50 text-[var(--admin-text)]"}`}
+          data-testid="coa-trust-all-result"
+        >
+          {msg}
+        </p>
+      ) : null}
+      <p className="text-sm text-[var(--admin-text-muted)]">
+        Every certificate that was never read, failed, or was only partly read is read again with a reader that takes any lab&apos;s layout, and
+        then <strong>accepted</strong>: every COA we have is legitimate. The checks that did not pass are kept in the record as notes, not as
+        failures. It runs on the server in the background (a batch every 5 minutes), so you can press it before bed and close the page.
+      </p>
+      {!panel.ok ? (
+        <p className="mt-2 text-sm text-[var(--admin-text-muted)]">Could not read the run: {panel.error}</p>
+      ) : (
+        <>
+          <p className="mt-3 text-sm text-[var(--admin-text)]" data-testid="coa-trust-all-status">
+            {trustLineNow(panel)}
+          </p>
+          {panel.run?.recentErrors?.length ? (
+            <details className="mt-2 text-xs text-[var(--admin-text-muted)]">
+              <summary>Recent errors ({panel.run.recentErrors.length})</summary>
+              <ul className="mt-1 list-disc pl-5">
+                {panel.run.recentErrors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <form action={startTrustAllAction}>
+              <Button type="submit" variant="primary" size="sm" disabled={running} data-testid="coa-trust-all-start">
+                Re-read every COA and trust it
+              </Button>
+            </form>
+            {running ? (
+              <form action={stopTrustAllAction}>
+                <Button type="submit" variant="neutral" size="sm" data-testid="coa-trust-all-stop">
+                  Stop
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string; gm?: string; gm_msg?: string; tr?: string; tr_msg?: string }> }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const [read, coaPanel, gmailPanel] = await Promise.all([readFixLaterCoverage(), readCoaPanel(), readGmailPanel()]);
+  const [read, coaPanel, gmailPanel, trustPanel] = await Promise.all([readFixLaterCoverage(), readCoaPanel(), readGmailPanel(), readTrustPanel()]);
 
   return (
     <div className="space-y-5">
@@ -300,6 +372,7 @@ export default async function FixLaterPage({ searchParams }: { searchParams: Pro
 
           <CoaFromCultivera panel={coaPanel} tone={sp.coa} msg={sp.coa_msg} />
           <CoaFromGmail panel={gmailPanel} tone={sp.gm} msg={sp.gm_msg} />
+          <CoaTrustAll panel={trustPanel} tone={sp.tr} msg={sp.tr_msg} />
 
           {read.coverage.stoppedLots > 0 ? (
             <div className={CARD} data-testid="fix-later-stopped">
