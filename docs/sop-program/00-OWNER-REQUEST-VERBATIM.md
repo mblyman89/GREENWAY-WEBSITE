@@ -1624,3 +1624,18 @@ Upload: a photo of the iPad Return window after scanning receipt B96C3F27 (order
 | D205d | **The return window always applies**, receipt or not. | "the return needs to still be within the return window" |
 | D205e | **Same controls as a receipt return.** The manager/lead PIN, the refund at the price paid, the tie to the open drawer, the product-type rules and the audit all apply. The return is tagged *no receipt* in the audit so the owner can review these courtesy returns. | "this is a courtesy for those that do not have a receipt" |
 | D205f | **Plain wording.** "Not a loyalty member" becomes "Walk-in sale (no loyalty account)". The printed policy summary follows the saved policy, including the no-receipt option. The owner's custom receipt text is never overwritten; the owner is told it still says "members only". | "the register went back to an old method for completing returns, loyalty members only" |
+
+### As built (D205)
+
+- **Policy page** (Register Activity → Return policy) has a new switch, "Allow returns without a receipt (loyalty members only)" (`pos_return_policy.noReceiptMembers`). It is off by default. The return window and the non-returnable product types apply to every return, with or without a receipt.
+- **Product types:** a sale line with no product type on record is refused when any type is excluded (fail closed), with the message "Ask a manager". When no type is excluded, every line is returnable. The policy page lists the product types so the owner can check them.
+- **iPad Returns screen:** when the switch is on, a "No receipt? Loyalty member lookup" panel appears.
+  - The cashier searches by name or phone and picks the member.
+  - The screen lists that member's completed sales that are still inside the window, newest first.
+  - The cashier picks the sale, then the item.
+  - The package in hand must be scanned. The scan must match that line's lot barcode, CCRS inventory id, or the lot key the register sold. "Process" stays locked until the scan matches.
+- **Server checks:** the server re-checks everything when the return is processed: the switch, member ownership (`orders.customer_id`), the window, packaging with a legible lot ID, the manager/lead PIN, and the scan. No-receipt returns are never queued offline.
+- **Audit:** `customer_return.counter` now records `no_receipt`, `member_customer_id`, `order_id` and `scanned_code`. The CCRS adjustment note is unchanged.
+- **Wording:** sales with no member now read "Walk-in sale (no loyalty account)" instead of "Not a loyalty member". The owner's custom receipt return text was **not** changed and still says loyalty is required. The owner should edit it in Receipt settings.
+- **Code:** `src/lib/pos/no-receipt-return-core.ts` (pure, 22 self-tests) and `src/lib/pos/returns-store.ts` (`listMemberSalesForReturn`, `lookupSaleForMember`, `verifyReturnScan`). Route modes are in `src/app/api/pos/returns/route.ts`. Test: `tests/compliance/d205-returns-no-receipt.test.ts`.
+- **iPad rebuild needed:** the register screen changes ship in the iPad app bundle.

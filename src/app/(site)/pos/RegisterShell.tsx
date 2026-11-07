@@ -1144,7 +1144,7 @@ export function RegisterShell({
               headerText: rc?.headerText ?? null,
               footerText: rc?.footerText ?? null,
               addressLines: rc ? receiptAddressLines(rc) : [],
-              memberLabel: sale.memberLabel ?? "Not a loyalty member",
+              memberLabel: sale.memberLabel ?? WALK_IN_SALE_LABEL,
               lines: [{ productName: full.line!.productName, quantity: full.line!.quantity, refundMinor: full.refundMinor }],
               refundTotalMinor: full.refundMinor,
               disposition: full.disposition ?? "restock",
@@ -6390,7 +6390,7 @@ function ReturnsModal({
                 Order {sale.orderNumber} · {sale.memberLabel}
               </p>
               {noReceiptSale ? (
-                <p className="mt-1 text-xs font-semibold text-[var(--pos-warn,#b45309)]">
+                <p className="mt-1 text-xs font-semibold text-[var(--pos-warn)]">
                   No receipt \u2014 loyalty member courtesy return. Scan the product to match it to the item sold.
                 </p>
               ) : null}
