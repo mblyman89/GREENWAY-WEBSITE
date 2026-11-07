@@ -19,7 +19,8 @@
  * partial predicate (23505), "missing table" mode (PGRST205, as PostgREST
  * answers for a table that is not in its schema cache), (R24) upsert via
  * Prefer resolution=merge-duplicates + on_conflict, and (R24 S12) HEAD probes
- * and the not.is.null filter, and (R39 S5) eq on a JSON text path (col->>key).
+ * and the not.is.null filter, and (R39 S5) eq on a JSON text path (col->>key),
+ * and (D206) HEAD with Prefer count=exact (Content-Range total).
  */
 
 export type Row = Record<string, unknown>;
@@ -71,6 +72,12 @@ export class FakePostgrest {
     const canned = this.before?.(req);
     if (canned) return json(canned.status, canned.body);
     const { status, body } = this.apply(req, headers);
+    // D206: HEAD + Prefer count=exact answers the filtered row count in Content-Range, as PostgREST.
+    if (method === "HEAD" && (headers.get("Prefer") ?? "").includes("count=exact") && !this.missing.has(table)) {
+      const filters = parseFilters(url);
+      const n = this.rows(table).filter((r) => filters.every((f) => f(r))).length;
+      return new Response(null, { status, headers: { "Content-Range": n ? `0-${n - 1}/${n}` : `*/${n}` } });
+    }
     if (body === undefined) return new Response(null, { status });
     return json(status, body);
   };
