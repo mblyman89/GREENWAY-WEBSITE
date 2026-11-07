@@ -290,6 +290,8 @@ export type WciaAttachResult = {
   skippedChanged: number;
   outcomes: Record<WciaLotOutcome, number>;
   errors: string[];
+  /** D200: the lots linked (a dry run: that would be). Optional, so older callers are unchanged. */
+  linkedLotIds?: string[];
 };
 
 export function emptyWciaResult(status: WciaAttachStatus, errors: string[] = []): WciaAttachResult {

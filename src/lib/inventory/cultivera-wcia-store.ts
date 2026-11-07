@@ -37,7 +37,9 @@ import {
   planWciaLabLinks,
   wciaFilesToSave,
   wciaStorageKey,
+  type LabSourceFormat,
   type WciaAttachResult,
+  type WciaLinkPlan,
   type WciaLot,
   type WciaRunRecord,
 } from "@/lib/inventory/cultivera-wcia-core";
@@ -117,7 +119,7 @@ export async function attachWciaLabResults(
   manifestId: string,
   lineage: { import_id?: unknown; cultivera_transfer_id?: unknown } | null,
   actorId: string | null,
-  opts: { dryRun?: boolean } = {},
+  opts: { dryRun?: boolean; text?: string } = {},
 ): Promise<WciaAttachResult> {
   const transferId = parseTransferId(lineage?.cultivera_transfer_id);
   // A manifest grouped by receive time (S1 fallback) has no transfer: nothing to attach.
@@ -125,10 +127,16 @@ export async function attachWciaLabResults(
   const key = wciaStorageKey(lineage?.import_id, transferId);
   if (!key) return emptyWciaResult("no-transfer");
 
-  const loaded = await loadWciaText(admin, key);
-  if (loaded.kind === "missing") return emptyWciaResult("no-document");
-  if (loaded.kind === "unreadable") return emptyWciaResult("unreadable", [`vendor transfer file: ${loaded.error}`]);
-  const parsed = parseVendorJson(loaded.text);
+  // D200: the file just fetched from Cultivera may be handed in (a preview reads it before it is saved).
+  let text: string;
+  if (typeof opts.text === "string" && isWciaDocumentText(opts.text)) text = opts.text;
+  else {
+    const loaded = await loadWciaText(admin, key);
+    if (loaded.kind === "missing") return emptyWciaResult("no-document");
+    if (loaded.kind === "unreadable") return emptyWciaResult("unreadable", [`vendor transfer file: ${loaded.error}`]);
+    text = loaded.text;
+  }
+  const parsed = parseVendorJson(text);
   if (!parsed.ok) return emptyWciaResult("unreadable", [`vendor transfer file: ${parsed.error}`]);
 
   // The manifest's lots (paged with an honest verdict: a short read attaches nothing).
@@ -148,6 +156,27 @@ export async function attachWciaLabResults(
   const plan = planWciaLabLinks(lotsRead.rows, parsed.manifest);
   const result = emptyWciaResult("attached");
   result.outcomes = plan.outcomes;
+  if (plan.links.length === 0) return result;
+  return applyWciaLinkPlan(admin, plan, parsed.manifest.source_format, actorId, result, { dryRun: opts.dryRun });
+}
+
+/**
+ * The write half of every WCIA attach (shared by the Cultivera transfer file and,
+ * D200, the WCIA files crawled from Gmail): reuse an exact lab test id already on
+ * file, else insert the native row, then fill each planned lot's EMPTY
+ * lab_result_id (guarded compare-and-set; never a destroyed lot, never replaces a
+ * certificate). A dry run stops after the reads. `result.linkedLotIds` lists the
+ * lots linked (or, in a dry run, that would be).
+ */
+export async function applyWciaLinkPlan(
+  admin: Admin,
+  plan: WciaLinkPlan,
+  sourceFormat: LabSourceFormat,
+  actorId: string | null,
+  result: WciaAttachResult,
+  opts: { dryRun?: boolean } = {},
+): Promise<WciaAttachResult> {
+  const linkedIds = (result.linkedLotIds ??= []);
   if (plan.links.length === 0) return result;
 
   // Exact lab test ids already on file are the same certificate: reuse, never duplicate.
@@ -172,6 +201,7 @@ export async function attachWciaLabResults(
       else result.created += 1;
     }
     result.linked = plan.links.length;
+    linkedIds.push(...plan.links.map((l) => l.lotId));
     return result;
   }
 
@@ -184,7 +214,7 @@ export async function attachWciaLabResults(
       result.reused += 1;
       continue;
     }
-    const row = nativeLabRow(need.lab, parsed.manifest.source_format, actorId, { withJsonUrl: !jsonUrlColumnMissing });
+    const row = nativeLabRow(need.lab, sourceFormat, actorId, { withJsonUrl: !jsonUrlColumnMissing });
     let { data, error } = await admin.from("lab_results").insert(row).select("id").single();
     if (error && "wcia_json_url" in row && isMissingColumnError(error)) {
       jsonUrlColumnMissing = true;
@@ -214,7 +244,10 @@ export async function attachWciaLabResults(
       if (result.errors.length < 5) result.errors.push(`a lot could not be linked: ${short(error)}`);
       continue;
     }
-    if (((data as { id: string }[] | null) ?? []).length > 0) result.linked += 1;
+    if (((data as { id: string }[] | null) ?? []).length > 0) {
+      result.linked += 1;
+      linkedIds.push(link.lotId);
+    }
     else result.skippedChanged += 1;
   }
   return result;
