@@ -228,7 +228,7 @@ describe("D198 S6 the ATM bank account auto-syncs; SOP + concierge", () => {
   it("SOP-01 4.25a, SOP-02 4.12 and the concierge describe ATM drops with the owner's words", () => {
     const sop1 = read("docs/sop/SOP-01-register-operations.md");
     expect(sop1).toContain("### 4.25a Cash drops to the ATM (owner D198)");
-    expect(sop1).toMatch(/\| \*\*Version\*\* \| 1\.23 /);
+    expect(sop1).toMatch(/\| \*\*Version\*\* \| [^\n]*1\.23 \(draft/); // later versions keep 1.23 in the history
     expect(sop1).toContain("How many $20 bills are you taking for the ATM?");
     const sop2 = read("docs/sop/SOP-02-master-till-safe.md");
     expect(sop2).toMatch(/\| \*\*Version\*\* \| 1\.9 /);

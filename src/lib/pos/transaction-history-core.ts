@@ -136,6 +136,12 @@ export type TransactionInput = {
   employeeName: string | null;
   /** Line facts: quantity sold and quantity already returned. */
   lines: { productName: string; quantity: number; returnedQuantity: number }[];
+  /**
+   * D198d - the sale's fun receipt name (orders.display_name, Slice 23), the
+   * "receipt overlay" printed in the header and under the QR. Null when the
+   * sale has none (offline, empty pool) - the paper then shows the number.
+   */
+  displayName?: string | null;
 };
 
 /** One shaped row, ready to render. */
@@ -171,6 +177,12 @@ export type TransactionRow = {
    * fields.
    */
   searchTerms: string[];
+  /**
+   * D198d - the fun receipt name printed on the paper, or null. Shown on the
+   * row and searchable, because it is what the customer's receipt actually
+   * says; the 8-character number is only inside the QR when a name exists.
+   */
+  displayName?: string | null;
 };
 
 // ── Derivations ──────────────────────────────────────────────────────────────
@@ -265,6 +277,7 @@ export function shapeTransaction(input: TransactionInput): TransactionRow {
     // Search sees the WHOLE basket, display shows the first few. Lowercased
     // once here so the filter does not re-lower every name on every keystroke.
     searchTerms: names.map((n) => n.toLowerCase()),
+    displayName: (input.displayName ?? "").trim() || null,
   };
 }
 
@@ -289,6 +302,8 @@ export function searchTransactions(
     if (r.orderNumber.toLowerCase().includes(q)) return true;
     if (r.customerLabel.toLowerCase().includes(q)) return true;
     if (r.employeeName.toLowerCase().includes(q)) return true;
+    // D198d - the fun receipt name ("receipt overlay") printed on the paper.
+    if ((r.displayName ?? "").toLowerCase().includes(q)) return true;
     // searchTerms carries EVERY product name (already lowercased); r.items is
     // the truncated display preview and must never be the search source.
     // Fall back to items only for rows shaped before searchTerms existed.
@@ -575,6 +590,11 @@ export function __runTransactionHistoryCoreTests(): void {
   ok(searchTransactions(rows, "  jane  ").length === 1, "query whitespace tolerated");
   ok(searchTransactions(rows, "zzzz").length === 0, "no match returns empty");
   ok(searchTransactions(rows, "Bob").length === 1, "voided sales remain findable");
+  // D198d - the fun receipt name ("receipt overlay") is what the paper says.
+  const named = { ...row, displayName: "Purple Rain" };
+  ok(searchTransactions([named, walkIn], "purple rain").length === 1, "search by the receipt name");
+  ok(searchTransactions([named, walkIn], "PURPLE").length === 1, "receipt-name search is partial + case-insensitive");
+  ok(row.displayName === null, "no name = null, never an empty string");
 
   // ── sort ──
   const sorted = sortNewestFirst([row, voided, walkIn]);
