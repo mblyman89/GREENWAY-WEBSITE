@@ -1356,7 +1356,8 @@ describe("D-65 — the connections survive the reset", () => {
     // CVB-8: +1 KEEP cultivera_history_days (0338; Cultivera report history, never the books).
     // D177 S6: +2 KEEP label_templates, label_print_log (0342; owner configuration + append-only print history).
     // PERF round: +1 KEEP product_latest_facts (0344; derived lookup, emptied by its own TRUNCATE trigger with menu_items).
-    expect(plan.keep.length).toBe(198);
+    // D198 S1: +1 KEEP atm_drop_reviews (0346; the owner's append-only ATM drop sign-offs, no FK).
+    expect(plan.keep.length).toBe(199);
     expect(plan.wipe.length).toBe(139);
   });
 

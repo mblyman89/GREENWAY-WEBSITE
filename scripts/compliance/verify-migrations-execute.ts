@@ -175,6 +175,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/drawer-count-integrity-0343-pg-check.sql", mustPrint: "DRAWER COUNT INTEGRITY 0343 CHECK PASSED" }, // D180 S3
   { file: "scripts/recon/menu-copy-retention-0344-pg-check.sql", mustPrint: "MENU COPY RETENTION 0344 CHECK PASSED" }, // PERF round P1/P2
   { file: "scripts/recon/db-vitals-0345-pg-check.sql", mustPrint: "DB VITALS 0345 CHECK PASSED" }, // D193 DB health B
+  { file: "scripts/recon/atm-cash-drops-0346-pg-check.sql", mustPrint: "ATM CASH DROPS 0346 CHECK PASSED" }, // D198 S1 ATM cash drops
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */
