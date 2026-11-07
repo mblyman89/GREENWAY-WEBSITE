@@ -64,9 +64,21 @@ export async function reviewAtmDropAction(formData: FormData): Promise<void> {
   back({ ...keep, msg: `Saved: ${v.decision}. It is permanent and in the Security Log.` });
 }
 
+function fillToCentsFromForm(v: FormDataEntryValue | null): number | null {
+  const t = String(v ?? "").trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
 export async function saveAtmDropSettingsAction(formData: FormData): Promise<void> {
   const session = await requirePermission("finances.view");
   const before = await getAtmDropSettings();
+  const fillTyped = String(formData.get("fill_to") ?? "").trim();
+  const fillCents = fillToCentsFromForm(formData.get("fill_to"));
+  if (fillTyped !== "" && (fillCents === null || fillCents <= 0 || fillCents % 2000 !== 0 || fillCents > 10_000_000)) {
+    back({ tab: "settings", error: "Fill the ATM to: enter whole $20s (for example 4000), up to $100,000, or leave it blank. Nothing was saved." });
+  }
   const res = await saveAtmDropSettings(
     {
       enabled: formData.get("enabled") === "on",
@@ -74,6 +86,8 @@ export async function saveAtmDropSettingsAction(formData: FormData): Promise<voi
       witness: String(formData.get("witness") ?? ""),
       maxTwentiesPerDrop: Number(formData.get("max_twenties") ?? NaN),
       matchWindowMinutes: Number(formData.get("match_window") ?? NaN),
+      // D198e: dollars on the form, cents stored; blank = not set; whole $20s only (normalize drops anything else).
+      fillToCents: fillToCentsFromForm(formData.get("fill_to")),
     },
     session.profile.id,
   );

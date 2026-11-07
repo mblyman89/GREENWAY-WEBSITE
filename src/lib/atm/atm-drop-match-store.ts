@@ -12,6 +12,7 @@
  * table / migration comes back as a flag so the page says "run migration 0346" instead of crashing.
  *
  * Sources (all four legs of the money trail):
+ *   1b. deposit_bags  - D198e: $20s taken out of the deposit bag for the ATM (0347), as drops.
  *   1. drawer_drops   - the till side (destination atm, or the pre-0346 note tag), with register,
  *                       employee and witness names.
  *   2. atm_cash_loads - the machine side (PAI "Cash Load" report, synced daily by /api/cron/atm-sync).
@@ -24,6 +25,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { bagPullDrop } from "@/lib/registers/deposit-bag-atm-pull-core";
 import { readDropDestination } from "@/lib/registers/atm-drop-core";
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { listAtmSettlements, getAtmReconcileInputs } from "@/lib/atm/store";
@@ -170,6 +172,75 @@ export async function getAtmDropMatchInputs(window: { fromDay: string; toDay: st
     });
   } catch (e) {
     base.errors.push(`Drops: ${e instanceof Error ? e.message : "read failed"}`);
+  }
+
+  // 1b. D198e: $20s taken out of the deposit bag for the ATM (0347). The same match as a till ATM
+  //     drop: a PAI cash load of exactly that many $20s must follow. Pre-0347: nothing to read.
+  try {
+    type PullDb = {
+      id: string;
+      bag_no: string;
+      business_day: string;
+      atm_pull_twenties: number;
+      atm_pull_minor: number;
+      atm_pulled_at: string;
+      atm_pull_terminal_id: string;
+      atm_pulled_by: string | null;
+      atm_pull_witnessed_by: string | null;
+      atm_pull_reason: string | null;
+      atm_pull_flags: string[] | null;
+    };
+    let pullsMissing = false;
+    const read = await pagedAllChecked<PullDb>(async (a, b) => {
+      const { data, error } = await admin
+        .from("deposit_bags")
+        .select(
+          "id, bag_no, business_day, atm_pull_twenties, atm_pull_minor, atm_pulled_at, atm_pull_terminal_id, atm_pulled_by, atm_pull_witnessed_by, atm_pull_reason, atm_pull_flags",
+        )
+        .not("atm_pull_twenties", "is", null)
+        .gte("atm_pulled_at", fromIso)
+        .lt("atm_pulled_at", toIso)
+        .order("id", { ascending: true })
+        .range(a, b);
+      if (error) {
+        if (MISSING.has(error.code ?? "") || /atm_pull/i.test(error.message ?? "")) pullsMissing = true;
+        else base.errors.push(`Deposit bag ATM pulls: ${error.message}`);
+        return { rows: [], ok: pullsMissing };
+      }
+      return { rows: (data ?? []) as PullDb[], ok: true };
+    });
+    if (!pullsMissing && !read.verdict.complete) base.errors.push(`Deposit bag ATM pulls: ${read.verdict.message}`);
+    const pulls = pullsMissing ? [] : read.rows;
+    if (pulls.length) {
+      const ids = [...new Set(pulls.flatMap((r) => [r.atm_pulled_by, r.atm_pull_witnessed_by]).filter((x): x is string => !!x))];
+      const names = new Map<string, string>();
+      if (ids.length) {
+        const { data: emps } = await admin.from("employees").select("id, full_name").in("id", ids);
+        for (const e of (emps ?? []) as { id: string; full_name: string }[]) names.set(e.id, e.full_name);
+      }
+      const asDrops = pulls.map(
+        (r) =>
+          bagPullDrop(
+            {
+              id: r.id,
+              bagNo: r.bag_no,
+              businessDay: r.business_day,
+              atmPullTwenties: Number(r.atm_pull_twenties),
+              atmPullMinor: Number(r.atm_pull_minor),
+              atmPulledAt: r.atm_pulled_at,
+              atmPullTerminalId: r.atm_pull_terminal_id,
+              atmPulledBy: r.atm_pulled_by,
+              atmPullWitnessedBy: r.atm_pull_witnessed_by,
+              atmPullReason: r.atm_pull_reason,
+              atmPullFlags: r.atm_pull_flags ?? [],
+            },
+            (id) => (id ? (names.get(id) ?? null) : null),
+          ) satisfies MatchDrop,
+      );
+      base.drops = [...base.drops, ...asDrops].sort((x, y) => (x.droppedAt < y.droppedAt ? -1 : x.droppedAt > y.droppedAt ? 1 : 0));
+    }
+  } catch (e) {
+    base.errors.push(`Deposit bag ATM pulls: ${e instanceof Error ? e.message : "read failed"}`);
   }
 
   // 2. PAI cash loads (loaded_at is the ISO instant; load_date the Pacific day).

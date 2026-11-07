@@ -44,7 +44,15 @@ export type AtmDropSettings = {
   maxTwentiesPerDrop: number;
   /** Minutes allowed between the till drop and the PAI cash load before the match is late. */
   matchWindowMinutes: number;
+  /**
+   * D198e: the cash the owner wants in the ATM after a fill, in cents (null = not set). The deposit
+   * bag page's "Cash in the ATM" card says how many $20s that needs; taking more is flagged OVER_NEED.
+   */
+  fillToCents: number | null;
 };
+
+/** D198e: the most the fill-to level may be ($100,000 - far above any real cassette). */
+export const MAX_ATM_FILL_TO_CENTS = 10_000_000;
 
 export const DEFAULT_ATM_DROP_SETTINGS: AtmDropSettings = {
   enabled: true,
@@ -52,6 +60,7 @@ export const DEFAULT_ATM_DROP_SETTINGS: AtmDropSettings = {
   witness: "recommended",
   maxTwentiesPerDrop: 250, // $5,000: the machine's cassette is far smaller than the $50k ceiling
   matchWindowMinutes: 120,
+  fillToCents: null,
 };
 
 /** Read a stored settings value, never trusting its shape. Unknown / bad fields fall back to defaults. */
@@ -69,7 +78,11 @@ export function normalizeAtmDropSettings(raw: unknown): AtmDropSettings {
     Number.isInteger(maxRaw) && maxRaw >= 1 && maxRaw <= MAX_ATM_TWENTIES ? maxRaw : d.maxTwentiesPerDrop;
   const winRaw = Number(r.matchWindowMinutes);
   const matchWindowMinutes = Number.isInteger(winRaw) && winRaw >= 15 && winRaw <= 24 * 60 ? winRaw : d.matchWindowMinutes;
-  return { enabled, terminalId, witness, maxTwentiesPerDrop, matchWindowMinutes };
+  const fillRaw = r.fillToCents === null || r.fillToCents === undefined || r.fillToCents === "" ? NaN : Number(r.fillToCents);
+  // Whole $20s only: the machine is filled with $20 bills.
+  const fillToCents =
+    Number.isInteger(fillRaw) && fillRaw > 0 && fillRaw <= MAX_ATM_FILL_TO_CENTS && fillRaw % 2000 === 0 ? fillRaw : null;
+  return { enabled, terminalId, witness, maxTwentiesPerDrop, matchWindowMinutes, fillToCents };
 }
 
 /** Cents for a number of $20 bills. */
@@ -332,6 +345,13 @@ export function __runAtmDropCoreTests(): { passed: number; failed: number } {
   const s2 = normalizeAtmDropSettings({ terminalId: "bad id!", witness: "maybe", maxTwentiesPerDrop: 0, matchWindowMinutes: 5 });
   ok(s2.terminalId === "HG26499" && s2.witness === "recommended" && s2.maxTwentiesPerDrop === 250 && s2.matchWindowMinutes === 120, "bad values fall back");
   ok(normalizeAtmDropSettings([1, 2]).enabled === true, "array is not settings");
+  // D198e fill-to level
+  ok(s0.fillToCents === null, "fill-to unset by default");
+  ok(normalizeAtmDropSettings({ fillToCents: 400000 }).fillToCents === 400000, "fill-to read");
+  ok(normalizeAtmDropSettings({ fillToCents: 400010 }).fillToCents === null, "fill-to must be whole $20s");
+  ok(normalizeAtmDropSettings({ fillToCents: -2000 }).fillToCents === null, "negative fill-to refused");
+  ok(normalizeAtmDropSettings({ fillToCents: MAX_ATM_FILL_TO_CENTS + 2000 }).fillToCents === null, "huge fill-to refused");
+  ok(normalizeAtmDropSettings({ fillToCents: "" }).fillToCents === null, "blank fill-to is unset");
 
   // note tag
   ok(atmDropNoteTag(80, "HG26499") === "[ATM drop: 80 x $20 into HG26499]", "tag shape");

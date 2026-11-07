@@ -365,6 +365,20 @@ export type BagRow = {
   depositConfirmedOn: string | null;
   /** Fix Phase 6 (D82): night total saved as assembled and verified (no night denominations). Only set by the list reads. */
   nightAssembled?: boolean;
+  /**
+   * D198e (0347): $20s taken OUT of the day's deposit for the ATM while the bag was built. Absent /
+   * null = none (or 0347 not applied). The bag should hold expectedMinor - atmPullMinor.
+   */
+  atmPullTwenties?: number | null;
+  atmPullMinor?: number | null;
+  atmPulledBy?: string | null;
+  atmPullWitnessedBy?: string | null;
+  atmPulledAt?: string | null;
+  atmPullTerminalId?: string | null;
+  atmPullFlags?: string[];
+  atmPullReason?: string | null;
+  atmPullBalanceSeenCents?: number | null;
+  atmPullBalanceSeenAt?: string | null;
 };
 
 export type BagStage = "night_counted" | "needs_reason" | "ready_to_seal" | "sealed_in_safe" | "banked" | "other";
@@ -483,6 +497,16 @@ export const BAG_LOG_HEADERS = [
   "Banked by",
   "Bank note",
   "Bank confirmed",
+  // D198e: $20s taken out of the deposit for the ATM (blank = none).
+  "ATM pull $20s",
+  "ATM pull amount",
+  "Bag should hold (expected - ATM pull)",
+  "ATM pulled by",
+  "ATM pull witness",
+  "ATM pulled at",
+  "ATM terminal",
+  "ATM pull flags",
+  "ATM pull reason",
 ] as const;
 
 function cents(minor: number | null): string {
@@ -519,6 +543,15 @@ export function bagLogRow(b: BagRow, nameOf: (id: string | null) => string, bank
     bankerOf(b.bankedBy),
     b.bankNote ?? "",
     b.depositConfirmedOn ?? "",
+    b.atmPullTwenties ? String(b.atmPullTwenties) : "",
+    cents(b.atmPullMinor ?? null),
+    b.atmPullMinor && b.expectedMinor !== null ? cents(b.expectedMinor - b.atmPullMinor) : "",
+    b.atmPullMinor ? nameOf(b.atmPulledBy ?? null) : "",
+    b.atmPullMinor ? (b.atmPullWitnessedBy ? nameOf(b.atmPullWitnessedBy) : "none") : "",
+    b.atmPulledAt ?? "",
+    b.atmPullTerminalId ?? "",
+    (b.atmPullFlags ?? []).join(" "),
+    b.atmPullReason ?? "",
   ];
 }
 
@@ -678,6 +711,9 @@ export function __runDepositBagFlowTests(): { passed: number; failed: number } {
   const line = bagLogRow(row({ status: "deposited", sealedAt: "t", amountMinor: 1000, morningCountMinor: 1000, sealJournalId: null }), () => "N", () => "O");
   ok(line.length === BAG_LOG_HEADERS.length, "row has every column");
   ok(line[16] === "NOT POSTED", "an unposted seal says so");
+  ok(line[21] === "" && line[22] === "", "no ATM pull = blank ATM columns (D198e)");
+  const pl = bagLogRow(row({ expectedMinor: 250000, atmPullTwenties: 40, atmPullMinor: 80000, atmPulledBy: "e1", atmPullWitnessedBy: null, atmPullFlags: ["NO_WITNESS"], atmPullTerminalId: "HG26499" }), (id) => (id ? `N-${id}` : ""), () => "");
+  ok(pl.length === BAG_LOG_HEADERS.length && pl[21] === "40" && pl[22] === "800.00" && pl[23] === "1700.00" && pl[24] === "N-e1" && pl[25] === "none" && pl[28] === "NO_WITNESS", "ATM pull columns (D198e)");
   ok(bagLogCsv([line]).split("\r\n")[0].startsWith("Business day,Bag #"), "csv header first");
 
   // blind morning recount (SOP-03 §4.10 step 2)

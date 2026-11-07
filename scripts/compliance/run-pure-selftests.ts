@@ -1174,6 +1174,7 @@ import { __runGuidedCashTests } from "../../src/lib/registers/guided-cash-core";
 import { __runAtmDropCoreTests } from "../../src/lib/registers/atm-drop-core";
 import { __runAtmDropMatchCoreTests } from "../../src/lib/atm/atm-drop-match-core";
 import { __runReturnScanCoreTests } from "../../src/lib/pos/return-scan-core";
+import { __runDepositBagAtmPullTests } from "../../src/lib/registers/deposit-bag-atm-pull-core";
 import { __runNightWatchTests } from "../../src/lib/registers/night-watch-core";
 import { __runCcrsCompletenessTests } from "../../src/lib/compliance/ccrs-completeness-core";
 import { __runTaxesOwedTests } from "../../src/lib/compliance/taxes-owed-core";
@@ -2825,6 +2826,7 @@ __runLiquidVolumeTests();
   assertRan("atm-drop-core", __runAtmDropCoreTests(), 57); // D198 S1 ("the ipad should only accept whole 20 dollar amounts. i want the number of 20s taken from the till to be entered"): $20 count only, amount derived, safe vs ATM split (deposit/EOD safe only; drawer + 2k banner all), pre-0346 note tag, witness policy
   assertRan("atm-drop-match-core", __runAtmDropMatchCoreTests(), 56); // D198 S4 ("i definitely want the plaid atm bank account connection to be reconciled against the atm drops from the tills"): exact $20 drop↔load matching, Plaid deposit cross-check, fraud-triangle signals
   assertRan("return-scan-core", __runReturnScanCoreTests(), 34); // D198d ("i can not scan a receipt qr code to find the transaction, nor can i enter the receipt overlay to look for the receipt by hand"): receipt QR / number / fun-name parsing, exact-name match, home + return-screen scan classifier
+  assertRan("deposit-bag-atm-pull-core", __runDepositBagAtmPullTests(), 58); // D198e ("exclude 20s from the daily deposit for use in the atm"): pull parse (count / cap / witness / reason / never empties the bag), ATM need from the live reading, flags, pattern, ATM match feed
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
