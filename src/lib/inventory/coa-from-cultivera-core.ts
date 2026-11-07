@@ -207,6 +207,14 @@ export type CoaAttachTotals = {
   manifests: number;
   linkedFromCultivera: number;
   linkedFromMail: number;
+  /** D202: lots linked to their Cultivera batch's COA document (no vendor file on the transfer). */
+  linkedFromBatchCoa: number;
+  /** D202: batch COA PDFs downloaded and filed in the private `coa` bucket. */
+  batchPdfsFiled: number;
+  /** D202: batch COA PDFs not filed yet (time ran out / download failed); a later click retries. */
+  batchPdfsLeft: number;
+  /** D202: lots Cultivera has no COA document for (HasCoaDocument false / no batch). */
+  batchNoDocument: number;
   created: number;
   reused: number;
   mailDocsRead: number;
@@ -227,6 +235,10 @@ export function emptyCoaTotals(dryRun: boolean): CoaAttachTotals {
     manifests: 0,
     linkedFromCultivera: 0,
     linkedFromMail: 0,
+    linkedFromBatchCoa: 0,
+    batchPdfsFiled: 0,
+    batchPdfsLeft: 0,
+    batchNoDocument: 0,
     created: 0,
     reused: 0,
     mailDocsRead: 0,
@@ -246,10 +258,13 @@ export function pushError(t: CoaAttachTotals, e: string): void {
 const n = (k: number, one: string, many = one + "s") => `${k} ${k === 1 ? one : many}`;
 
 export function coaAttachNote(t: CoaAttachTotals): string {
-  const linked = t.linkedFromCultivera + t.linkedFromMail;
+  const linked = t.linkedFromCultivera + t.linkedFromMail + t.linkedFromBatchCoa;
   const verb = t.dryRun ? "would link" : "linked";
+  const batch = t.linkedFromBatchCoa > 0 ? `, ${t.linkedFromBatchCoa} from Cultivera's batch COA documents` : "";
   const parts = [
-    `${verb} ${n(linked, "lot")} to its COA (${t.linkedFromCultivera} from the Cultivera transfer files, ${t.linkedFromMail} from the Gmail WCIA files)`,
+    `${verb} ${n(linked, "lot")} to its COA (${t.linkedFromCultivera} from the Cultivera transfer files, ${t.linkedFromMail} from the Gmail WCIA files${batch})`,
+    t.batchPdfsFiled > 0 || t.batchPdfsLeft > 0 ? `${n(t.batchPdfsFiled, "COA PDF")} filed${t.batchPdfsLeft > 0 ? `, ${t.batchPdfsLeft} not filed yet (click again)` : ""}` : "",
+    t.batchNoDocument > 0 ? `${n(t.batchNoDocument, "lot")} Cultivera has no COA document for` : "",
     t.created + t.reused > 0 ? `${t.dryRun ? "would create" : "created"} ${n(t.created, "lab result")}, reused ${t.reused} already on file` : "",
     t.fetchedFiles > 0 ? `${n(t.fetchedFiles, "Cultivera file")} fetched${t.dryRun ? "" : `, ${t.filesSaved} saved`}` : "",
     t.mailDocsRead > 0 ? `${n(t.mailDocsRead, "Gmail file")} read` : "",
@@ -352,6 +367,9 @@ export function __runCoaFromCultiveraCoreTests(): { passed: number; failed: numb
   ok(note.includes("created 40 lab results, reused 2") && note.includes("30 Cultivera files fetched, 30 saved") && note.includes("12 Gmail files read"), "note counts");
   ok(note.includes("140 lots still have no COA (of 460)") && note.includes("1 left alone"), "note leftovers");
   ok(coaAttachTone(tot) === "ok", "ok tone");
+  const bt = coaAttachNote({ ...tot, linkedFromBatchCoa: 100, batchPdfsFiled: 40, batchPdfsLeft: 2, batchNoDocument: 3 });
+  ok(bt.startsWith("linked 420 lots to its COA (300 from the Cultivera transfer files, 20 from the Gmail WCIA files, 100 from Cultivera's batch COA documents)"), "D202 batch note head");
+  ok(bt.includes("40 COA PDFs filed, 2 not filed yet (click again)") && bt.includes("3 lots Cultivera has no COA document for"), "D202 batch note counts");
   const pv = coaAttachNote({ ...emptyCoaTotals(true), missingBefore: 460, linkedFromCultivera: 1 });
   ok(pv.startsWith("Preview (nothing was written): would link 1 lot") && pv.includes("460 lots have no COA today"), "preview note");
   const st = { ...emptyCoaTotals(false), stoppedForTime: true };

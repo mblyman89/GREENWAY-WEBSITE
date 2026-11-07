@@ -60,8 +60,14 @@ def test_wcia_only_fetches_just_the_named_transfers(tmp_path):
     assert m["kind"] == cp.WCIA_ONLY_KIND
     # only the login, the two transfer details and the one vendor file were requested
     paths = [str(r.url).replace(cp.Q, "") for r in fake.requests]
-    assert paths == [cp.LOGIN_URL, "transfers/incoming/11/detail", "transfers/incoming/12/detail",
-                     "transfers/incoming-load-wcia-json"]
+    # D202: then the live lot list (paged) and the batch details of the lots on 11 + 12
+    head = [cp.LOGIN_URL, "transfers/incoming/11/detail", "transfers/incoming/12/detail",
+            "transfers/incoming-load-wcia-json"]
+    assert paths[:4] == head
+    rest = paths[4:]
+    assert set(p for p in rest if not p.startswith("inventories/inventory-batch/")) == {"inventories"}
+    assert [p for p in rest if p.startswith("inventories/inventory-batch/")] == [
+        f"inventories/inventory-batch/{b}" for b in (101, 102, 103, 104, 105, 107)]
     assert fake.wcia_bodies == [{"Url": WCIA_URL}]
     recs = client.run.read_jsonl("wcia_json.jsonl")
     assert recs == [{"Id": 11, "Url": WCIA_URL, "JsonFile": WCIA_DOC}]
@@ -109,8 +115,107 @@ def test_wcia_only_never_writes_outside_cultivera_read_paths(tmp_path):
         url = str(r.url)
         assert url == cp.LOGIN_URL or url.startswith(cp.Q)
         if r.method == "POST" and url != cp.LOGIN_URL:
-            assert url == cp.Q + "transfers/incoming-load-wcia-json"
+            assert url in (cp.Q + "transfers/incoming-load-wcia-json", cp.Q + "inventories")
     client.close()
+
+
+# ------------------------------------------------------------------ D202: batch COAs
+
+
+def test_lots_on_transfers_and_batch_ids_pure():
+    lots = [{"Id": 3, "Barcode": "B3", "BatchId": 9, "IncomingTransferId": 1181, "UnitCost": 4, "Secret": "x"},
+            {"Id": 1, "Barcode": "B1", "BatchId": "7", "IncomingTransferId": "1181"},
+            {"Id": 2, "Barcode": "B2", "BatchId": 7, "IncomingTransferId": 1214},
+            {"Id": 4, "Barcode": "B4", "BatchId": None, "IncomingTransferId": 1181},
+            {"Id": 5, "Barcode": "B5", "BatchId": 8, "IncomingTransferId": 77},
+            {"Id": 6, "Barcode": "B6", "BatchId": True, "IncomingTransferId": None},
+            {"Id": 7, "Barcode": "B7", "BatchId": "x", "IncomingTransferId": "bad"}]
+    mine = cp.lots_on_transfers(lots, [1181, 1214])
+    assert [l["Id"] for l in mine] == [1, 2, 3, 4]
+    assert set(mine[0]) == set(cp._LOT_SAFE_FIELDS)  # safe fields only (no cost)
+    assert cp.batch_ids_of(mine) == [7, 9]
+    assert cp.batch_ids_of([{"BatchId": True}, {"BatchId": 0}, {"BatchId": -3}, {}]) == []
+
+
+def test_batch_coa_summary_pure():
+    s = cp.batch_coa_summary([{"HasCoaDocument": True, "ImagePath": "https://files.cultivera.com/a/COA_1.pdf"},
+                              {"HasCoaDocument": True, "ImagePath": " "},
+                              {"HasCoaDocument": False, "ImagePath": "https://files.cultivera.com/b.pdf"},
+                              {}])
+    assert s == {"batches": 4, "with_coa_document": 1, "without_coa_document": 3}
+
+
+def test_wcia_only_reads_batch_coas_when_no_vendor_file(tmp_path):
+    """The 2026-11-07 case: no transfer has a vendor file, yet each batch's COA is in Cultivera."""
+    fake = FakeCultivera()
+    orig = fake.handler
+
+    def handler(req):
+        url = str(req.url)
+        if url.endswith("/detail"):
+            fake.requests.append(req)
+            tid = int(url.rsplit("/", 2)[-2])
+            return httpx.Response(200, json={"Id": tid, "Details": [], "JsonFile": None, "HasJsonFile": False})
+        if "inventory-batch/" in url:
+            fake.requests.append(req)
+            b = int(url.rsplit("/", 1)[-1])
+            return httpx.Response(200, json={"Id": b, "HasCoaDocument": b != 102, "IsCannabis": True,
+                                             "ImagePath": f"https://files.cultivera.com/X/Coas/COA_{b}.pdf",
+                                             "Lab": "Lab A", "TestingDate": "2026-10-01T00:00:00", "Thc": 1.5})
+        return orig(req)
+
+    client = cp.PosClient(username="owner@example.com", password=PASSWORD, run=cp.RunDir(tmp_path / "r"),
+                          transport=httpx.MockTransport(handler), pace_seconds=0, sleep=lambda s: None)
+    m = cp.run_wcia_only(client, [11])
+    st = client.run.read_json("state.json")
+    assert st["status"] == "done"
+    assert st["stages"]["wcia_json"]["wanted"] == 0
+    tl = st["stages"]["transfer_lots"]
+    assert tl["status"] == "done" and tl["lots"] == 4 and tl["live_lots"] == 7
+    assert tl["transfers_without_live_lots"] == []
+    bc = st["stages"]["batch_coas"]
+    assert bc["status"] == "done" and bc["wanted"] == 4 and bc["with_coa_document"] == 3
+    assert [r["Id"] for r in client.run.read_jsonl("batches.jsonl")] == [101, 102, 103, 104]
+    lots = client.run.read_json("transfer_lots.json")["data"]
+    assert [l["Barcode"] for l in lots] == ["B1", "B2", "B3", "B4"]
+    names = {f["name"] for f in m["files"]}
+    assert {"transfer_details.jsonl", "transfer_lots.json", "batches.jsonl"} <= names
+    client.close()
+
+
+def test_wcia_only_batch_error_is_partial_not_failed(tmp_path):
+    fake = FakeCultivera()
+    orig = fake.handler
+
+    def handler(req):
+        if str(req.url).endswith("inventory-batch/103"):
+            fake.requests.append(req)
+            return httpx.Response(500)
+        return orig(req)
+
+    client = cp.PosClient(username="owner@example.com", password=PASSWORD, run=cp.RunDir(tmp_path / "r"),
+                          transport=httpx.MockTransport(handler), pace_seconds=0, sleep=lambda s: None)
+    cp.run_wcia_only(client, [11])
+    st = client.run.read_json("state.json")
+    assert st["status"] == "done"
+    assert st["stages"]["batch_coas"]["status"] == "partial" and st["stages"]["batch_coas"]["missing"] == [103]
+    client.close()
+
+
+def test_transfer_without_live_lots_is_information(tmp_path):
+    fake = FakeCultivera()
+    client = _client(tmp_path, fake)
+    cp.run_wcia_only(client, [13])
+    st = client.run.read_json("state.json")
+    assert st["status"] == "done"
+    assert st["stages"]["transfer_lots"]["status"] == "done"
+    assert st["stages"]["transfer_lots"]["transfers_without_live_lots"] == [13]
+    assert st["stages"]["batch_coas"]["wanted"] == 0
+    client.close()
+
+
+def test_transfer_lots_file_is_downloadable():
+    assert "transfer_lots.json" in jobs.DOWNLOADABLE and "batches.jsonl" in jobs.DOWNLOADABLE
 
 
 # ------------------------------------------------------------------ endpoint + jobs

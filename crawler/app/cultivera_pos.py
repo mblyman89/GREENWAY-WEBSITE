@@ -532,7 +532,7 @@ def stage_transfers_list(client: PosClient) -> dict[str, Any]:
 
 
 def _fetch_each(client: PosClient, ids: list[int], url_for: Callable[[int], str], out_name: str,
-                stage: str, cancelled: Callable[[], bool]) -> dict[str, Any]:
+                stage: str, cancelled: Callable[[], bool], tolerate: bool = False) -> dict[str, Any]:
     have = {str(r.get("Id")) for r in client.run.read_jsonl(out_name)}
     fetched = errors = 0
     for i in ids:
@@ -540,7 +540,15 @@ def _fetch_each(client: PosClient, ids: list[int], url_for: Callable[[int], str]
             continue
         if cancelled():
             raise StageCancelled(stage)
-        r = client.call("GET", url_for(i))
+        try:
+            r = client.call("GET", url_for(i))
+        except CultiveraPosError as e:
+            if not tolerate:
+                raise
+            # D202: one batch Cultivera keeps failing is recorded and skipped, never the whole run.
+            errors += 1
+            client.run.append_jsonl("errors.jsonl", {"stage": stage, "id": i, "error": str(e)[:200]})
+            continue
         if r.status_code != 200:
             errors += 1
             client.run.append_jsonl("errors.jsonl", {"stage": stage, "id": i, "status": r.status_code})
@@ -755,6 +763,7 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
             else:
                 result = stage_batches(client, cancelled)
             # R74 S2: a refused vendor-file path is a file we do not have - partial, not done.
+            # "transfers_without_live_lots" is information (sold out in Cultivera), not a failure.
             incomplete = bool(result.get("missing")) or (result.get("coverage") or {}).get("complete") is False
             enrichment = stage in ENRICHMENT_STAGES
             state["stages"][stage] = {"status": ("partial" if enrichment else "incomplete") if incomplete else "done",
@@ -793,7 +802,77 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
 # --------------------------------------------------------------------------- D200: WCIA for named transfers
 
 WCIA_ONLY_KIND = "cultivera_pos_wcia_only"
-WCIA_ONLY_STAGES = ("login", "transfer_details", "wcia_json")
+# D202: vendors often attach no WCIA file to a transfer (32 of 32 on 2026-11-07), but Cultivera
+# still holds each batch's COA document (batch detail ImagePath). So the COA crawl also reads the
+# live lots on the named transfers and their batch details (both read-only data-api GETs/POSTs).
+WCIA_ONLY_STAGES = ("login", "transfer_details", "wcia_json", "transfer_lots", "batch_coas")
+TRANSFER_LOTS_FILE = "transfer_lots.json"
+BATCH_COAS_FILE = "batches.jsonl"
+_LOT_SAFE_FIELDS = ("Id", "Barcode", "BatchId", "IncomingTransferId", "QaResultId", "ProductName")
+
+
+def lots_on_transfers(lots: Iterable[dict[str, Any]], transfer_ids: Iterable[int]) -> list[dict[str, Any]]:
+    """D202: the live lots whose IncomingTransferId is one of the named transfers, safe fields only,
+    sorted by Id. Pure."""
+    want = {int(t) for t in transfer_ids}
+    out = []
+    for l in lots:
+        t = l.get("IncomingTransferId")
+        try:
+            tid = int(t) if t not in (None, "", 0) else None
+        except (TypeError, ValueError):
+            tid = None
+        if tid is not None and tid in want:
+            out.append({k: l.get(k) for k in _LOT_SAFE_FIELDS})
+    return sorted(out, key=lambda r: int(r.get("Id") or 0))
+
+
+def batch_ids_of(lots: Iterable[dict[str, Any]]) -> list[int]:
+    """D202: unique positive BatchIds of the given lots, sorted. Pure."""
+    out: set[int] = set()
+    for l in lots:
+        b = l.get("BatchId")
+        if isinstance(b, bool):
+            continue
+        try:
+            n = int(b)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            out.add(n)
+    return sorted(out)
+
+
+def batch_coa_summary(batches: Iterable[dict[str, Any]]) -> dict[str, int]:
+    """D202: how many fetched batches carry a COA document (HasCoaDocument + an ImagePath). Pure."""
+    total = with_doc = 0
+    for b in batches:
+        total += 1
+        if b.get("HasCoaDocument") and isinstance(b.get("ImagePath"), str) and b["ImagePath"].strip():
+            with_doc += 1
+    return {"batches": total, "with_coa_document": with_doc, "without_coa_document": total - with_doc}
+
+
+def stage_transfer_lots(client: PosClient, transfer_ids: list[int]) -> dict[str, Any]:
+    """D202: page the live inventory list (read-only, Count-verified like Phase A) and keep only
+    the lots on the named transfers."""
+    rows, count = _page_all(client, "inventories", lambda s, t: kendo_body(s, t, "Id"))
+    mine = lots_on_transfers(rows, transfer_ids)
+    client.run.write_json(TRANSFER_LOTS_FILE, {"meta": {"endpoint": "inventories", "count": count,
+                                                        "transferIds": transfer_ids}, "data": mine})
+    on = {int(l["IncomingTransferId"]) for l in mine}
+    return {"file": TRANSFER_LOTS_FILE, "live_lots": count, "lots": len(mine),
+            "transfers_with_lots": len(on), "transfers_without_live_lots": [t for t in transfer_ids if t not in on]}
+
+
+def stage_batch_coas(client: PosClient, cancelled: Callable[[], bool]) -> dict[str, Any]:
+    """D202: each lot's batch detail (HasCoaDocument, ImagePath = the COA PDF, Lab, TestingDate)."""
+    lots = (client.run.read_json(TRANSFER_LOTS_FILE) or {}).get("data") or []
+    ids = batch_ids_of(lots)
+    res = _fetch_each(client, ids, lambda i: Q + f"inventories/inventory-batch/{i}", BATCH_COAS_FILE,
+                      "batch_coas", cancelled, tolerate=True)
+    res.update(batch_coa_summary(client.run.read_jsonl(BATCH_COAS_FILE)))
+    return res
 WCIA_ONLY_MAX_IDS = 500
 
 
@@ -827,7 +906,9 @@ def run_wcia_only(client: PosClient, transfer_ids: list[int], *, cancelled: Call
     """D200: fetch ONLY the vendor WCIA files for the named transfers (the COAs for lots that came in
     without one). Log in, read each transfer's detail (GET), then the existing read-only viewer call
     (POST incoming-load-wcia-json). Writes transfer_details.jsonl + wcia_json.jsonl in the same run-dir
-    layout as Phase A, so the site downloads them the same way. Never raises; errors land in state.json."""
+    layout as Phase A, so the site downloads them the same way. Never raises; errors land in state.json.
+    D202: then the live lots on those transfers (transfer_lots.json) and each lot's batch detail
+    (batches.jsonl: HasCoaDocument / ImagePath = the COA PDF) for transfers with no vendor file."""
     ids = clean_transfer_ids(transfer_ids)
     run = client.run
     state = run.read_json("state.json", {}) or {}
@@ -849,9 +930,14 @@ def run_wcia_only(client: PosClient, transfer_ids: list[int], *, cancelled: Call
             elif stage == "transfer_details":
                 result = _fetch_each(client, ids, lambda i: Q + f"transfers/incoming/{i}/detail",
                                      "transfer_details.jsonl", "transfer_details", cancelled)
-            else:
+            elif stage == "wcia_json":
                 result = stage_wcia_json(client, cancelled, lambda: not remaining_budget_ok(
                     t0, clock() + ENRICHMENT_MARGIN_SECONDS, budget_seconds))
+            elif stage == "transfer_lots":
+                result = stage_transfer_lots(client, ids)
+            else:
+                result = stage_batch_coas(client, cancelled)
+            # "transfers_without_live_lots" is information (sold out in Cultivera), not a failure.
             incomplete = bool(result.get("missing")) or (result.get("coverage") or {}).get("complete") is False
             state["stages"][stage] = {"status": "partial" if incomplete else "done",
                                       "seconds": round(clock() - s0, 1), **result}

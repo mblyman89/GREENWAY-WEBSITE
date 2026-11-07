@@ -30,7 +30,7 @@ from .cultivera_pos import WCIA_ONLY_KIND, PosClient, RunDir, clean_transfer_ids
 DOWNLOADABLE = frozenset({
     "export_inventories.xlsx", "export_products.xlsx", "inventories.json", "transfers.json",
     "transfer_details.jsonl", "wcia_json.jsonl", "batches.jsonl", "errors.jsonl", "manifest.json", "state.json",
-    "sales.jsonl", "sales_summary.json",
+    "sales.jsonl", "sales_summary.json", "transfer_lots.json",
 })
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 KEEP_RUNS = 12

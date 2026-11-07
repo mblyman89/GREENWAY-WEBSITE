@@ -63,6 +63,8 @@ vi.mock("@/lib/pos/cultivera-fetch-client", () => ({
   },
   getPosRun: async () => st.run,
   loadWciaRunRecords: async () => (st.run ? { kind: "ok", records: st.records, bad: 0 } : { kind: "missing" }),
+  // D202: the batch COA step has its own test (d202); a D200-era crawl has no batch files.
+  loadBatchCoaRecords: async () => ({ kind: "none" }),
 }));
 vi.mock("@/lib/auth/audit", () => ({ recordAudit: async (e: Record<string, unknown>) => void st.audits.push(e) }));
 

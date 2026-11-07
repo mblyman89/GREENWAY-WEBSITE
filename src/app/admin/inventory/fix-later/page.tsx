@@ -26,6 +26,7 @@ import { Button } from "@/components/admin/ui";
 import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefresh";
 import { readCoaPanel, type CoaPanel } from "@/lib/inventory/coa-from-cultivera-store";
 import { readGmailPanel, type GmailPanel } from "@/lib/inventory/coa-gmail-search-store";
+import { coaCrawlStatusLine, type BatchCoaStage, type TransferLotsStage } from "@/lib/inventory/coa-batch-cultivera-core";
 import { attachAllCoasAction, attachCoasFromGmailAction, fetchCoasFromCultiveraAction, searchGmailForCoasAction, searchGmailForOneAction } from "./actions";
 import {
   FIX_LATER_REASON_LABELS,
@@ -89,7 +90,10 @@ function CoaFromCultivera({ panel, tone, msg }: { panel: CoaPanel; tone: string 
                 <Button type="submit" variant="primary" size="sm" disabled={running || panel.transferIds.length === 0} data-testid="coa-fetch-button">
                   Fetch COAs from Cultivera
                 </Button>
-                <span>Your crawler logs in with its saved Cultivera login and downloads each transfer&apos;s vendor file (read-only, a few minutes).</span>
+                <span>
+                  Your crawler logs in with its saved Cultivera login and downloads each transfer&apos;s vendor file and, for every lot on
+                  those transfers, its batch&apos;s COA document (read-only, a few minutes).
+                </span>
               </form>
               {panel.setting ? (
                 <p className="mt-1 text-xs" data-testid="coa-fetch-status">
@@ -98,7 +102,15 @@ function CoaFromCultivera({ panel, tone, msg }: { panel: CoaPanel; tone: string 
                     ? panel.runError
                     : running
                       ? `running${wcia?.fetched_now != null ? ` (${wcia.fetched_now} files so far)` : "..."}`
-                      : `${st?.status ?? "unknown"}${wcia?.wanted != null ? `, ${wcia.wanted - (wcia.missing?.length ?? 0)} of ${wcia.wanted} vendor files` : ""}${details?.missing?.length ? `, ${details.missing.length} transfers Cultivera did not return` : ""}${st?.error ? ` (${st.error})` : ""}`}
+                      : coaCrawlStatusLine({
+                          status: st?.status ?? null,
+                          transfers: panel.setting.transferIds.length,
+                          wcia: wcia ?? null,
+                          lotsStage: (st?.stages?.transfer_lots as TransferLotsStage | undefined) ?? null,
+                          batchStage: (st?.stages?.batch_coas as BatchCoaStage | undefined) ?? null,
+                          detailsMissing: details?.missing?.length ?? 0,
+                          error: st?.error ?? null,
+                        })}
                   {panel.setting.savedAt ? `; files saved ${panel.setting.savedAt.slice(0, 16).replace("T", " ")} UTC` : ""}
                 </p>
               ) : null}
@@ -118,8 +130,9 @@ function CoaFromCultivera({ panel, tone, msg }: { panel: CoaPanel; tone: string 
                 </form>
               </div>
               <p className="mt-1">
-                Saves the fetched files, links each lot to its vendor lab result from its own Cultivera transfer, then fills what is still missing
-                from the WCIA files already crawled from Gmail. Only empty COAs are filled; a lot that has one is never changed. Safe to click
+                Saves the fetched files, links each lot to its vendor lab result from its own Cultivera transfer, fills what is still missing
+                from the WCIA files already crawled from Gmail, then links the rest to their Cultivera batch COA document (exact barcode on the
+                lot&apos;s own transfer) and files that PDF. Only empty COAs are filled; a lot that has one is never changed. Safe to click
                 again.
               </p>
             </li>
