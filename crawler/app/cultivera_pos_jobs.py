@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import Settings, get_settings
-from .cultivera_pos import PosClient, RunDir, run_phase_a
+from .cultivera_pos import WCIA_ONLY_KIND, PosClient, RunDir, clean_transfer_ids, run_phase_a, run_wcia_only
 
 # Files the Next.js importer may download. Nothing else in a run dir is served (actions.jsonl stays
 # on the crawler: it is redacted, but it is an audit log, not an input).
@@ -77,7 +77,10 @@ def read_state(run_id: str, settings: Settings | None = None) -> dict[str, Any] 
 def resumable_run(settings: Settings | None = None) -> str | None:
     """The newest run that did not finish ("running" after a crash, "failed", "cancelled")."""
     for rid in list_runs(settings):
-        st = (RunDir(run_dir(rid, settings)).read_json("state.json", {}) or {}).get("status")
+        state = RunDir(run_dir(rid, settings)).read_json("state.json", {}) or {}
+        if state.get("kind") == WCIA_ONLY_KIND:
+            continue  # D200: a COA-only fetch is never resumed as a full harvest
+        st = state.get("status")
         if st in ("running", "failed", "cancelled", None):
             return rid
         if st == "done":
@@ -134,6 +137,50 @@ def start_or_resume(*, fresh: bool = False, settings: Settings | None = None,
     else:
         work()
     return {"runId": rid, "resumed": resumed}
+
+
+def start_wcia_only(transfer_ids: list[int], *, settings: Settings | None = None,
+                    client_factory=None, background: bool = True) -> dict[str, Any]:
+    """D200: a NEW small run that fetches only the vendor WCIA files for the named transfers. Same
+    single-flight lock as the harvest (and the loyalty crawl): one Cultivera session at a time.
+    Raises ValueError for bad ids, RuntimeError("busy") / RuntimeError("not configured")."""
+    ids = clean_transfer_ids(transfer_ids)
+    s = settings or get_settings()
+    if client_factory is None and not s.cultivera_pos_enabled:
+        raise RuntimeError("not configured")
+    with _lock:
+        if _active["run_id"] is not None:
+            raise RuntimeError("busy")
+        from . import cultivera_loyalty_jobs
+
+        if cultivera_loyalty_jobs._active["run_id"] is not None:
+            raise RuntimeError("busy")
+        rid = new_run_id()
+        rd = RunDir(run_dir(rid, s))
+        cancel = threading.Event()
+        if client_factory is not None:
+            client = client_factory(rd)
+        else:
+            client = PosClient(username=s.cultivera_pos_username.strip(), password=s.cultivera_pos_password,
+                               run=rd, pace_seconds=s.cultivera_pos_pace_seconds)
+        _active.update(run_id=rid, cancel=cancel)
+
+    def work() -> None:
+        try:
+            run_wcia_only(client, ids, cancelled=cancel.is_set, budget_seconds=s.cultivera_pos_budget_seconds)
+        finally:
+            client.close()
+            with _lock:
+                _active.update(run_id=None, cancel=None, thread=None)
+            prune(s)
+
+    if background:
+        t = threading.Thread(target=work, name=f"cultivera-wcia-{rid}", daemon=True)
+        _active["thread"] = t
+        t.start()
+    else:
+        work()
+    return {"runId": rid, "transferIds": ids}
 
 
 def request_cancel(run_id: str) -> bool:
