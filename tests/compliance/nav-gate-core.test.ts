@@ -763,6 +763,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
       [
         "/admin/atm",
         "/admin/atm/drops",
+        "/admin/atm/settings",
         "/admin/audit",
         "/admin/compliance/calendar",
         "/admin/crypto",

@@ -165,6 +165,9 @@ export default async function AtmPage({
         <div className="mb-4">
           <Link href="/admin/atm/drops" className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/[0.12]">
             ATM drops from the tills, matched to cash loads &rarr;
+          </Link>{" "}
+          <Link href="/admin/atm/settings" className="ml-2 inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">
+            ATM settings: daily fill amount &rarr;
           </Link>
         </div>
 

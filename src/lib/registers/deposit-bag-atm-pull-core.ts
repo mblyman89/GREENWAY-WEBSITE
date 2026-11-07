@@ -159,6 +159,12 @@ export function parseBagAtmPull(input: {
   fillToCents: number | null;
   reason: string;
   nowIso: string;
+  /**
+   * D198i: $20s already taken for the ATM (bag pulls, till ATM drops) AFTER the reading was captured.
+   * The reading cannot see them yet; they count as loaded so one stale reading cannot justify two
+   * top-offs. Optional: omitted = 0 (the D198e behaviour).
+   */
+  pendingSinceReadingMinor?: number;
 }): BagPullParse {
   const t = String(input.twentiesText ?? "").trim();
   if (!input.wanted) {
@@ -199,7 +205,9 @@ export function parseBagAtmPull(input: {
   const fresh = isFreshReading(input.reading, input.nowIso);
   if (!fresh) flags.push("NO_FRESH_READING");
   else {
-    const need = atmCashNeed(input.reading!.balanceCents, input.fillToCents);
+    const pendingRaw = Number(input.pendingSinceReadingMinor ?? 0);
+    const pending = Number.isInteger(pendingRaw) && pendingRaw > 0 ? pendingRaw : 0;
+    const need = atmCashNeed((input.reading!.balanceCents as number) + pending, input.fillToCents);
     if (need.kind === "full") flags.push("ATM_ALREADY_FULL");
     else if (need.kind === "needs" && n > need.twenties) flags.push("OVER_NEED");
   }
@@ -394,6 +402,11 @@ export function __runDepositBagAtmPullTests(): { passed: number; failed: number 
   ok(!full.ok, "a 1-char reason is not a reason");
   const fullR = parseBagAtmPull({ ...base, reading: { balanceCents: 310000, capturedAt: fresh.capturedAt }, reason: "owner asked" });
   ok(fullR.ok && fullR.pull !== null && fullR.pull.flags.includes("ATM_ALREADY_FULL"), "ATM already full flagged");
+  // D198i: a pull already taken since the reading counts as loaded (no double top-off from one stale figure)
+  const second = parseBagAtmPull({ ...base, twentiesText: "90", pendingSinceReadingMinor: 160000 });
+  ok(!second.ok && second.code === "REASON_REQUIRED", "a second top-off from the same reading asks for a reason");
+  const bogus = parseBagAtmPull({ ...base, twentiesText: "90", pendingSinceReadingMinor: -5 });
+  ok(bogus.ok && bogus.pull !== null && bogus.pull.flags.length === 0, "a bad pending figure is ignored, never invents a flag");
   const noTarget = parseBagAtmPull({ ...base, fillToCents: null, twentiesText: "200", expectedDepositMinor: 900000 });
   ok(noTarget.ok && noTarget.pull !== null && !noTarget.pull.flags.includes("OVER_NEED"), "no fill-to level: no need flag invented");
   // 8. most of the deposit
