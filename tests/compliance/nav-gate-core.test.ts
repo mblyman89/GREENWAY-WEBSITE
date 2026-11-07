@@ -762,6 +762,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(hrefs).toEqual(
       [
         "/admin/atm",
+        "/admin/atm/drops",
         "/admin/audit",
         "/admin/compliance/calendar",
         "/admin/crypto",

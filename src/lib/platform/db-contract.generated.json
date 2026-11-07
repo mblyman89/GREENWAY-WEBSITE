@@ -31,6 +31,7 @@
     "announcer_sounds",
     "atm_cash_loads",
     "atm_connection",
+    "atm_drop_reviews",
     "atm_settlements",
     "atm_terminal_status",
     "audit_logs",

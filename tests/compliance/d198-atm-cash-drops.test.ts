@@ -158,7 +158,7 @@ describe("D198 S4 drop <-> load matching engine (pure)", () => {
     const m = await import("@/lib/atm/atm-drop-match-core");
     const r = m.__runAtmDropMatchCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(50);
+    expect(r.passed).toBeGreaterThanOrEqual(56);
     const src = read("src/lib/atm/atm-drop-match-core.ts");
     const imports = src.split("\n").filter((l) => /^import /.test(l));
     expect(imports.every((l) => l.includes("atm-reconcile-core"))).toBe(true);
@@ -180,5 +180,35 @@ describe("D198 S4 drop <-> load matching engine (pure)", () => {
     expect(good.drops.every((d) => d.status === "matched")).toBe(true);
     const short = matchAtmDrops({ drops: [drop("a", "2026-11-06T20:00:00Z", 25)], loads: [load("l", "2026-11-06T20:30:00Z", 48000)], settlements: [], deposits: [], reviews: [], options });
     expect(short.signals.some((s) => s.code === "LOAD_SHORT" && s.severity === "high")).toBe(true);
+  });
+});
+
+describe("D198 S5 the owner's match page /admin/atm/drops", () => {
+  it("is owner only (finances.view) everywhere: page, actions, CSV, nav", () => {
+    expect(read("src/app/admin/atm/drops/page.tsx")).toContain('await requirePermission("finances.view")');
+    const actions = read("src/app/admin/atm/drops/actions.ts");
+    expect(actions.match(/requirePermission\("finances\.view"\)/g)?.length).toBe(2);
+    expect(read("src/app/admin/atm/drops/csv/route.ts")).toContain('requirePermission("finances.view")');
+    const nav = read("src/components/admin/admin-nav-data.ts").split("\n").find((l) => l.includes('href: "/admin/atm/drops"'));
+    expect(nav).toContain('permission: "finances.view"');
+    expect(nav).toContain('group: "Lyman"');
+  });
+
+  it("every sign-off is append-only, needs a reason, and is mirrored in the Security Log", () => {
+    const actions = read("src/app/admin/atm/drops/actions.ts");
+    expect(actions).toContain("validateAtmDropReview(");
+    expect(actions).toContain('action: "atm.drop_review"');
+    expect(actions).toContain('action: "atm.drop_settings"');
+    const store = read("src/lib/atm/atm-drop-match-store.ts");
+    expect(store).toContain('.from("atm_drop_reviews")');
+    expect(store).not.toMatch(/atm_drop_reviews"\)\s*\.(update|delete|upsert)/);
+    expect(read("src/app/admin/atm/drops/csv/route.ts")).toContain('action: "atm.drop_match_export"');
+  });
+
+  it("the page reads all four legs: till drops, PAI loads, settlements, the Plaid ATM account", () => {
+    const store = read("src/lib/atm/atm-drop-match-store.ts");
+    for (const s of ['.from("drawer_drops")', '.from("atm_cash_loads")', "listAtmSettlements(", "getAtmReconcileInputs(", "lastSuccessfulSync"]) expect(store).toContain(s);
+    // ATM drops are picked by readDropDestination, so pre-0346 note-tagged drops are not lost
+    expect(store).toContain('readDropDestination(r).destination === "atm"');
   });
 });
