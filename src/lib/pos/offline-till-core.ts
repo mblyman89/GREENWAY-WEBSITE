@@ -45,6 +45,9 @@ export type PosTillPayload = {
   denoms?: DenomCounts;
   amountMinor?: number;
   window?: "afternoon" | "night" | "other";
+  /** D198: drop only. Absent = safe (every build before D198). "atm" carries the $20 count. */
+  destination?: "safe" | "atm";
+  twentiesCount?: number;
   inDenoms?: DenomCounts;
   outDenoms?: DenomCounts;
   notes?: string;
@@ -119,6 +122,8 @@ export function validateTillPayload(
     body.window = p.window;
     if (p.witness) body.witnessPin = "offline";
     if (p.notes) body.notes = p.notes;
+    if (p.destination !== undefined) body.destination = p.destination;
+    if (p.twentiesCount !== undefined) body.twentiesCount = p.twentiesCount;
   }
   if (p.action === "swap") {
     body.amountMinor = p.amountMinor;
@@ -171,13 +176,15 @@ export function offlineTillNote(clientUuid: string, notes?: string): string {
 }
 
 /** The banner the cashier sees after an offline drawer action. */
-export function offlineTillMessage(action: OfflineTillAction, amountWords: string): string {
+export function offlineTillMessage(action: OfflineTillAction, amountWords: string, destination: "safe" | "atm" = "safe"): string {
   const tail = " Saved on this iPad (offline); it goes to the back office as soon as the internet is back.";
   switch (action) {
     case "open":
       return `Drawer counted in at ${amountWords} — ready to ring sales.${tail}`;
     case "drop":
-      return `${amountWords} dropped to the safe.${tail}`;
+      return destination === "atm"
+        ? `${amountWords} recorded for the ATM. Load the bills into the ATM now.${tail}`
+        : `${amountWords} dropped to the safe.${tail}`;
     case "swap":
       return `${amountWords} change swap with the safe recorded.${tail}`;
     case "close":
@@ -239,5 +246,11 @@ export function __runOfflineTillCoreTests(): { passed: number; failed: number } 
   ok(!judgeTillPins({ payload: { ...base, action: "drop" as const, witness: pin(D) }, people, currentKeyId: "e1" }).ok, "unknown witness flagged");
   ok(offlineTillNote("c1", "bag 4") === "bag 4 [offline c1]" && offlineTillNote("c1") === "[offline c1]", "idempotency note");
   ok(/Saved on this iPad/.test(offlineTillMessage("drop", "$500.00")), "message says it is saved offline");
+  // D198: ATM drops offline: same $20 rule as online, re-checked at sync.
+  const atmQ = validateTillPayload({ ...base, action: "drop", destination: "atm", twentiesCount: 50, window: "night" });
+  ok(atmQ.ok && atmQ.req.action === "drop" && atmQ.req.destination === "atm" && atmQ.req.amountMinor === 100000, "offline ATM drop: 50 x $20 = $1,000 derived");
+  ok(!validateTillPayload({ ...base, action: "drop", destination: "atm", twentiesCount: 50, amountMinor: 99900, window: "night" }).ok, "offline ATM drop: amount not count x $20 refused");
+  ok(!validateTillPayload({ ...base, action: "drop", destination: "atm", window: "night" }).ok, "offline ATM drop: missing $20 count refused");
+  ok(/ATM/.test(offlineTillMessage("drop", "$1,000.00", "atm")) && !/safe/.test(offlineTillMessage("drop", "$1,000.00", "atm")), "offline ATM message names the ATM, not the safe");
   return { passed, failed };
 }

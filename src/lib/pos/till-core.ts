@@ -27,6 +27,7 @@
  */
 
 import { type DenomCounts, EMPTY_DENOMS, denomTotalMinor } from "@/lib/registers/cash";
+import { validateAtmDropFields } from "@/lib/registers/atm-drop-core";
 import { validateSwapAmount } from "@/lib/registers/safe-core";
 import { checkSwapDenoms } from "@/lib/registers/little-safe-core";
 import { splitTipPool } from "@/lib/registers/shift-end-core";
@@ -51,6 +52,12 @@ export type TillDropRequest = {
   /** Optional second person vouching for the drop (verified server-side). */
   witnessPin?: string;
   notes?: string;
+  /**
+   * D198: where the cash went. Absent = "safe" (every build before D198). For "atm" the amount is
+   * ALWAYS twentiesCount x $20 (the ATM holds $20s only; the count is what the employee types).
+   */
+  destination?: "safe" | "atm";
+  twentiesCount?: number;
 };
 
 export type TillCloseRequest = {
@@ -251,7 +258,10 @@ export function validateTillRequest(body: unknown): TillValidation {
   }
 
   if (action === "drop") {
-    const amountMinor = Number(b.amountMinor);
+    // D198: an ATM drop is a COUNT of $20 bills; the amount is derived from it, never trusted.
+    const atm = validateAtmDropFields({ destination: b.destination, twentiesCount: b.twentiesCount, amountMinor: b.amountMinor });
+    if (!atm.ok) return { ok: false, error: atm.error };
+    const amountMinor = atm.destination === "atm" ? atm.amountMinor : Number(b.amountMinor);
     if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
       return { ok: false, error: "Drop amount must be a positive whole number of cents." };
     }
@@ -276,6 +286,7 @@ export function validateTillRequest(body: unknown): TillValidation {
         window: window as "afternoon" | "night" | "other",
         ...(witnessPin ? { witnessPin } : {}),
         ...(notesRaw ? { notes: notesRaw } : {}),
+        ...(atm.destination === "atm" ? { destination: "atm" as const, twentiesCount: atm.twentiesCount } : {}),
       },
     };
   }
@@ -365,6 +376,23 @@ export function __runTillCoreTests(): void {
   });
   ok(drop2.ok && drop2.req.action === "drop" && drop2.req.witnessPin === "5678" && drop2.req.notes === "end of night",
     "drop: witness PIN and trimmed notes carried");
+  ok(drop1.ok && drop1.req.action === "drop" && drop1.req.destination === undefined,
+    "drop (D198): no destination = a safe drop, exactly as every older build sends it");
+  const atmDrop = validateTillRequest({ action: "drop", pin: "1234", destination: "atm", twentiesCount: 80, window: "afternoon" });
+  ok(atmDrop.ok && atmDrop.req.action === "drop" && atmDrop.req.destination === "atm" && atmDrop.req.twentiesCount === 80 && atmDrop.req.amountMinor === 160000,
+    "drop (D198): ATM drop of 80 x $20 -> $1,600.00, amount derived from the count");
+  ok(validateTillRequest({ action: "drop", pin: "1234", destination: "atm", twentiesCount: 5, amountMinor: 10000, window: "other" }).ok,
+    "drop (D198): ATM drop with a matching amount accepted");
+  ok(!validateTillRequest({ action: "drop", pin: "1234", destination: "atm", twentiesCount: 5, amountMinor: 10500, window: "other" }).ok,
+    "drop (D198): ATM drop whose amount is not count x $20 refused");
+  ok(!validateTillRequest({ action: "drop", pin: "1234", destination: "atm", window: "other", amountMinor: 2000 }).ok,
+    "drop (D198): ATM drop without a $20 count refused");
+  ok(!validateTillRequest({ action: "drop", pin: "1234", destination: "atm", twentiesCount: 2.5, window: "other" }).ok,
+    "drop (D198): half a bill refused");
+  ok(!validateTillRequest({ action: "drop", pin: "1234", destination: "vault", amountMinor: 2000, window: "other" }).ok,
+    "drop (D198): unknown destination refused");
+  ok(!validateTillRequest({ action: "drop", pin: "1234", destination: "safe", twentiesCount: 3, amountMinor: 6000, window: "other" }).ok,
+    "drop (D198): a safe drop does not carry a $20 count");
   ok(!validateTillRequest({ action: "drop", pin: "1234", amountMinor: 0, window: "other" }).ok,
     "drop: zero amount rejected");
   ok(!validateTillRequest({ action: "drop", pin: "1234", amountMinor: 100.5, window: "other" }).ok,

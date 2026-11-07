@@ -33,6 +33,7 @@ import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
+import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
 import { getPosDrawerOnSaleConfig } from "@/lib/pos/drawer-on-sale-store";
 import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
@@ -140,7 +141,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, promo, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy, drawerOnSale] =
+  const [menu, promo, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy, drawerOnSale, atmDrop] =
     await Promise.all([
       loadLiveMenuAll(),
       loadPromoSchedule(),
@@ -155,6 +156,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       getPosScanRequiredConfig(),
       getPosReturnPolicy(),
       getPosDrawerOnSaleConfig(),
+      getAtmDropSettings(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
   // SLICE 28 — ship ALL three program rows (enabled or not); the device
@@ -801,6 +803,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     // register-scan-exact-size — barcode → the package's own size / refusal.
     barcodeSizes,
     barcodeRefusals,
+    // D198 — the owner's ATM-drop settings (ATM terminal, witness policy, max $20s per drop)
+    // ride the bundle so the drop screen works the same OFFLINE.
+    atmDrop,
     // POS B33 — the owner's cash-rounding policy rides the bundle so OFFLINE
     // sales round the amount due exactly like online ones.
     rounding,

@@ -223,6 +223,49 @@ export function atmDropSuccessMessage(twenties: number, terminalId: string | nul
   return head + tail;
 }
 
+export type DropInsertBase = {
+  session_id: string;
+  amount_minor: number;
+  drop_window: string;
+  dropped_by: string | null;
+  witnessed_by: string | null;
+  notes: string | null;
+  dropped_at?: string;
+};
+
+export type DropInsertExtras = {
+  destination: DropDestination;
+  twentiesCount?: number | null;
+  terminalId?: string | null;
+  deviceId?: string | null;
+  recordedVia: "register" | "offline" | "back_office";
+};
+
+/**
+ * The two rows a writer tries, in order:
+ *   full     - with the 0346 columns (destination, twenties_count, atm_terminal_id, device_id, recorded_via)
+ *   fallback - the pre-0346 shape; an ATM drop keeps its truth in the note tag so nothing is lost and
+ *              readDropDestination / splitDrops still read it as an ATM drop.
+ */
+export function buildDropInsertRows(base: DropInsertBase, x: DropInsertExtras): { full: Record<string, unknown>; fallback: Record<string, unknown> } {
+  const isAtm = x.destination === "atm" && typeof x.twentiesCount === "number" && x.twentiesCount > 0;
+  const terminal = isAtm ? (x.terminalId ?? null) : null;
+  const device = x.deviceId && x.deviceId.length <= 128 ? x.deviceId : null;
+  const full: Record<string, unknown> = {
+    ...base,
+    destination: isAtm ? "atm" : "safe",
+    twenties_count: isAtm ? x.twentiesCount : null,
+    atm_terminal_id: terminal,
+    device_id: device,
+    recorded_via: x.recordedVia,
+  };
+  const fallback: Record<string, unknown> = {
+    ...base,
+    notes: isAtm ? withAtmDropNoteTag(base.notes, x.twentiesCount as number, terminal) : base.notes,
+  };
+  return { full, fallback };
+}
+
 /** Is a witness required / missing under the policy? */
 export function atmWitnessCheck(policy: AtmWitnessPolicy, hasWitness: boolean): { allowed: boolean; flag: boolean; message: string | null } {
   if (hasWitness) return { allowed: true, flag: false, message: null };
@@ -332,5 +375,13 @@ export function __runAtmDropCoreTests(): { passed: number; failed: number } {
   ok(!atmWitnessCheck("off", false).flag, "off does not flag");
   ok(!atmWitnessCheck("required", true).flag, "witness present never flags");
 
+  // buildDropInsertRows (S2)
+  const base = { session_id: "s", amount_minor: 160000, drop_window: "night", dropped_by: "e", witnessed_by: null, notes: "hi" };
+  const rA = buildDropInsertRows(base, { destination: "atm", twentiesCount: 80, terminalId: "HG26499", deviceId: "dev1", recordedVia: "register" });
+  ok(rA.full.destination === "atm" && rA.full.twenties_count === 80 && rA.full.atm_terminal_id === "HG26499" && rA.full.recorded_via === "register", "insert row: ATM columns set");
+  ok(rA.fallback.destination === undefined && readDropDestination(rA.fallback as DropRowLike).destination === "atm", "insert fallback: no 0346 columns, note tag keeps it an ATM drop");
+  const rS = buildDropInsertRows({ ...base, amount_minor: 50000 }, { destination: "safe", terminalId: "HG26499", recordedVia: "offline" });
+  ok(rS.full.destination === "safe" && rS.full.twenties_count === null && rS.full.atm_terminal_id === null && rS.fallback.notes === "hi", "insert row: safe drop carries no ATM fields, notes untouched");
+  ok(buildDropInsertRows(base, { destination: "atm", twentiesCount: 80, deviceId: "x".repeat(200), recordedVia: "register" }).full.device_id === null, "insert row: oversize device id dropped, not refused");
   return { passed, failed };
 }
