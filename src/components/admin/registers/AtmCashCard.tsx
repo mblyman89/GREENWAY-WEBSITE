@@ -54,7 +54,20 @@ export function AtmCashCard({ initial, staleMinutes }: { initial: AtmCashCardSta
         <span suppressHydrationWarning className={`mt-1 text-xs ${stale ? "text-[var(--admin-gold)]" : "text-[var(--admin-text-faint)]"}`}>
           {state.capturedAt ? `As of ${when(state.capturedAt)}${stale ? " — old reading, press to refresh" : ""}` : "No reading yet — press to read the ATM"}
         </span>
-        <span className="mt-1 text-xs text-[var(--admin-text)]">{state.needSentence}</span>
+        <span
+          data-testid="atm-cash-card-need"
+          className={`mt-1 text-xs ${
+            state.needTone === "danger"
+              ? "font-bold text-[var(--admin-danger)]"
+              : state.needTone === "warn"
+                ? "font-semibold text-[var(--admin-gold)]"
+                : state.needTone === "ok"
+                  ? "text-[var(--admin-accent)]"
+                  : "text-[var(--admin-text)]"
+          }`}
+        >
+          {state.needSentence}
+        </span>
         {state.message ? (
           <span role="status" className={`mt-1 text-xs ${state.ok ? "text-[var(--admin-text-faint)]" : "text-[var(--admin-danger)]"}`}>
             {state.message}

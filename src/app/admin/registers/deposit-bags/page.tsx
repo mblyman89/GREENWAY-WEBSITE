@@ -33,7 +33,9 @@ import { nightAssembleAction, nightCountAction, morningRecountAction, sealBagAct
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { getLatestAtmTerminalStatus } from "@/lib/atm/store";
 import { recentBagPulls } from "@/lib/registers/deposit-bag-store";
-import { ATM_READING_FRESH_MINUTES, atmCashNeed, bagTotalAfterPull, isFreshReading, pullPattern } from "@/lib/registers/deposit-bag-atm-pull-core";
+import { ATM_READING_FRESH_MINUTES, bagTotalAfterPull, pullPattern } from "@/lib/registers/deposit-bag-atm-pull-core";
+import { atmTopOff } from "@/lib/registers/atm-daily-fill-core";
+import { atmLoadsSince } from "@/lib/registers/atm-daily-fill-store";
 import { AtmCashCard } from "@/components/admin/registers/AtmCashCard";
 import { BagAtmPullFields } from "@/components/admin/registers/BagAtmPullFields";
 
@@ -172,20 +174,30 @@ export default async function DepositBagsPage({
   const bankShape = depositShapeNotice(sealedTotal, depositCashInSafeMinor(bags, sealedInSafe.map((b) => b.id)));
   const exp = drawers.ok ? drawers.expected : null;
 
-  // D198e: the ATM card and the pull fields.
-  const atmNeed = atmCashNeed(atmStatus?.balanceCents ?? null, atmSettings.fillToCents);
+  // D198e: the ATM card and the pull fields. D198i: the loud top-off banner (daily fill amount).
+  const nowIso = new Date().toISOString();
+  const atmSince = atmStatus?.capturedAt ? await atmLoadsSince(atmStatus.capturedAt, atmSettings.terminalId) : null;
+  const topOff = atmTopOff({
+    fillToCents: atmSettings.fillToCents,
+    reading: atmStatus ? { balanceCents: atmStatus.balanceCents, capturedAt: atmStatus.capturedAt } : null,
+    pending: atmSince && atmSince.ok ? atmSince.items : [],
+    nowIso,
+    maxTwentiesPerLoad: atmSettings.maxTwentiesPerDrop,
+    terminalId: atmSettings.terminalId,
+  });
   const atmCard: AtmCashCardState = {
     ok: true,
     balanceCents: atmStatus?.balanceCents ?? null,
     capturedAt: atmStatus?.capturedAt ?? null,
     terminalId: atmSettings.terminalId,
-    needSentence: atmNeed.sentence,
-    needTwenties: atmNeed.kind === "needs" ? atmNeed.twenties : null,
+    needSentence: topOff.headline,
+    needTwenties: topOff.kind === "needs" ? topOff.needTwenties : null,
+    needTone: topOff.tone,
     message: null,
-    serverNowIso: new Date().toISOString(),
+    serverNowIso: nowIso,
   };
-  const atmFresh = isFreshReading(atmStatus ? { balanceCents: atmStatus.balanceCents, capturedAt: atmStatus.capturedAt } : null, new Date().toISOString());
-  const suggestedTwenties = atmFresh ? (atmNeed.kind === "needs" ? atmNeed.twenties : atmNeed.kind === "full" ? 0 : null) : null;
+  // Suggest a number only from a fresh reading; a stale one says "check first" instead.
+  const suggestedTwenties = topOff.stale ? null : topOff.kind === "needs" ? Math.min(topOff.needTwenties, atmSettings.maxTwentiesPerDrop) : topOff.kind === "full" ? 0 : null;
   const pullFieldProps = { maxTwenties: atmSettings.maxTwentiesPerDrop, witnessPolicy: atmSettings.witness, terminalId: atmSettings.terminalId, suggestedTwenties };
   const pullPatterns = isOwner && pullsRes.ok ? pullPattern(pullsRes.pulls) : [];
   const pullLine = (b: BagRow) =>
@@ -264,6 +276,44 @@ export default async function DepositBagsPage({
         ) : null}
         {d27 ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)] print:hidden">{d27}</div>
+        ) : null}
+
+        {/* D198i: owner: "it should be loud on the deposit bag page that the atm needs x amount to be topped off properly." */}
+        {topOff.kind !== "no_target" || isOwner ? (
+          <div
+            data-testid="atm-top-off"
+            role={topOff.tone === "danger" || topOff.tone === "warn" ? "alert" : "status"}
+            className={`rounded-[var(--admin-radius)] border-2 px-4 py-3 print:hidden ${
+              topOff.tone === "danger"
+                ? "border-[var(--admin-danger)] bg-[var(--admin-danger)]/10"
+                : topOff.tone === "warn"
+                  ? "border-[var(--admin-gold)] bg-[var(--admin-gold-soft)]"
+                  : topOff.tone === "ok"
+                    ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)]"
+                    : "border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
+            }`}
+          >
+            <p
+              className={`font-bold ${topOff.kind === "needs" ? "text-xl text-[var(--admin-danger)]" : topOff.tone === "warn" ? "text-base text-[var(--admin-gold)]" : topOff.tone === "ok" ? "text-base text-[var(--admin-accent)]" : "text-sm text-[var(--admin-text)]"}`}
+            >
+              {topOff.kind === "needs" ? "\u26a0 ATM top-off: " : "ATM: "}
+              {topOff.headline}
+            </p>
+            <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{topOff.detail}</p>
+            {atmSince && !atmSince.ok ? (
+              <p className="mt-1 text-xs font-semibold text-[var(--admin-danger)]">$20s already taken for the ATM since that reading could not be checked ({atmSince.error}); ask before taking more.</p>
+            ) : null}
+            {atmSince && atmSince.ok && atmSince.notes.length ? <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{atmSince.notes.join(" ")}</p> : null}
+            {isOwner ? (
+              <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+                Owner: change the daily fill amount on{" "}
+                <a className="underline" href="/admin/atm/settings">
+                  Lyman → ATM Settings
+                </a>
+                .
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 print:hidden">
