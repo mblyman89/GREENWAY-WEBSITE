@@ -1639,3 +1639,12 @@ Upload: a photo of the iPad Return window after scanning receipt B96C3F27 (order
 - **Wording:** sales with no member now read "Walk-in sale (no loyalty account)" instead of "Not a loyalty member". The owner's custom receipt return text was **not** changed and still says loyalty is required. The owner should edit it in Receipt settings.
 - **Code:** `src/lib/pos/no-receipt-return-core.ts` (pure, 22 self-tests) and `src/lib/pos/returns-store.ts` (`listMemberSalesForReturn`, `lookupSaleForMember`, `verifyReturnScan`). Route modes are in `src/app/api/pos/returns/route.ts`. Test: `tests/compliance/d205-returns-no-receipt.test.ts`.
 - **iPad rebuild needed:** the register screen changes ship in the iPad app bundle.
+### As built (D204 — back-office completion lock)
+
+- The order page no longer shows "Mark Completed" when the next step is completed. It says "Complete this order at the register (Pickups), where the customer pays."
+- An owner, admin or manager sees "Complete outside the register" with a required written reason (5+ characters). A warning explains that this records a sale with no payment and no drawer.
+- The server enforces the same rule in `setOrderStatusAction`, before the compliance gate, so a stale tab or hand-built form cannot bypass it.
+  - A refused attempt is audited as `order.transition_blocked` (`complete_at_register`).
+  - An allowed one is audited as `order.completed_off_register` with the reason.
+- Register sync completions (`sync-store.ts`) are untouched.
+- Core: `src/lib/orders/backoffice-complete-core.ts` (15 self-tests). Test: `tests/compliance/d204-lock-backoffice-complete.test.ts`.

@@ -43,6 +43,12 @@ import { LeaflyCallHistory } from "@/components/admin/orders/LeaflyCallHistory";
 // Fix Phase 1.6b (G-24, D36): the expiry warning is acknowledged, not overridden.
 import { EXPIRED_WARNING_REFUSAL_PREFIX } from "@/lib/inventory/expired-stock-core";
 import {
+  OFF_REGISTER_COMPLETE_REFUSAL,
+  OFF_REGISTER_COMPLETE_WARNING,
+  OFF_REGISTER_REASON_MIN,
+  mayCompleteOffRegister,
+} from "@/lib/orders/backoffice-complete-core";
+import {
   setOrderStatusAction,
   updateOrderNoteAction,
   rerollOrderNameAction,
@@ -114,6 +120,8 @@ export default async function OrderDetailPage({
   const limitFlagged = order.limit_flag === true;
   const limitReasons = Array.isArray(order.limit_reasons) ? order.limit_reasons : [];
   const canOverrideLimit = can(session.profile.role, "sales_limit.override");
+  // D204 — completing here records a sale with no payment and no drawer.
+  const canCompleteOffRegister = mayCompleteOffRegister(session.profile.role);
 
   // ── SLICE L-38: LEAFLY STEPS ON THE DETAILS PAGE ──────────────────────────
   // A Leafly order is moved along with the Leafly steps (they push to Leafly
@@ -190,7 +198,9 @@ export default async function OrderDetailPage({
             <p className="text-xs font-black uppercase tracking-[0.14em] text-red-300">
               {blockedMessage === MARKETPLACE_STEPS_REFUSAL
                 ? "Use the Leafly steps on this page"
-                : "Completion blocked — compliance gate"}
+                : blockedMessage === OFF_REGISTER_COMPLETE_REFUSAL
+                  ? "Complete this order at the register"
+                  : "Completion blocked — compliance gate"}
             </p>
             <p className="mt-2 text-sm leading-6 text-red-200">{blockedMessage}</p>
             {blockedMessage.startsWith(EXPIRED_WARNING_REFUSAL_PREFIX) && !isClosed ? (
@@ -198,6 +208,16 @@ export default async function OrderDetailPage({
                 <input type="hidden" name="id" value={order.id} />
                 <input type="hidden" name="status" value="completed" />
                 <input type="hidden" name="expiredAck" value="1" />
+                {canCompleteOffRegister ? (
+                  <input
+                    type="text"
+                    name="offRegisterReason"
+                    required
+                    minLength={OFF_REGISTER_REASON_MIN}
+                    placeholder="Why is this completed outside the register? (logged)"
+                    className="mb-2 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
+                  />
+                ) : null}
                 <SaveButton label="I told the customer — complete the sale" busyLabel="Completing…" variant="save" size="md" />
               </form>
             ) : null}
@@ -343,7 +363,29 @@ export default async function OrderDetailPage({
                 Update status
               </h2>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {next ? (
+                {next === "completed" ? (
+                  <div className="w-full rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/10 px-3 py-2.5" data-testid="complete-at-register">
+                    <p className="text-sm font-semibold text-[var(--admin-gold)]">
+                      Complete this order at the register (Pickups), where the customer pays.
+                    </p>
+                    {canCompleteOffRegister && !(limitFlagged && canOverrideLimit) ? (
+                      <form action={setOrderStatusAction} className="mt-2 flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="id" value={order.id} />
+                        <input type="hidden" name="status" value="completed" />
+                        <input
+                          type="text"
+                          name="offRegisterReason"
+                          required
+                          minLength={OFF_REGISTER_REASON_MIN}
+                          placeholder="Reason it was sold outside the register (logged)"
+                          className="min-w-0 flex-1 rounded-lg border border-[var(--admin-gold)]/40 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
+                        />
+                        <SaveButton label="Complete outside the register" busyLabel="Completing…" variant="save" size="md" />
+                        <p className="w-full text-xs leading-5 text-white/50">{OFF_REGISTER_COMPLETE_WARNING}</p>
+                      </form>
+                    ) : null}
+                  </div>
+                ) : next ? (
                   <form action={setOrderStatusAction}>
                     <input type="hidden" name="id" value={order.id} />
                     <input type="hidden" name="status" value={next} />

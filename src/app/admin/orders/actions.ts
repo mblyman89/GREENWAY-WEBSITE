@@ -48,6 +48,7 @@ import {
   greenwayStatusChangeAllowed,
   MARKETPLACE_STEPS_REFUSAL,
 } from "@/lib/orders/order-board-split-core";
+import { backofficeCompleteVerdict } from "@/lib/orders/backoffice-complete-core";
 
 const VALID_STATUSES: OrderStatus[] = [
   "new",
@@ -97,6 +98,32 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
       });
       redirect(`/admin/orders/${id}?blocked=${encodeURIComponent(MARKETPLACE_STEPS_REFUSAL)}`);
     }
+  }
+
+  // ── D204 OFF-REGISTER COMPLETION LOCK ─────────────────────────────────
+  // An order is completed at the register, where it is paid. Completing it
+  // here posts a sale, takes stock and gives points with no payment and no
+  // drawer, so only an owner/admin/manager may do it, with a written reason,
+  // and it is audited as order.completed_off_register.
+  let offRegisterReason: string | null = null;
+  {
+    const verdict = backofficeCompleteVerdict({
+      toStatus,
+      role: session.profile.role,
+      reason: formData.get("offRegisterReason") ?? formData.get("overrideReason"),
+    });
+    if (!verdict.ok) {
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.email,
+        action: "order.transition_blocked",
+        entityType: "order",
+        entityId: id,
+        after: { reason: "complete_at_register", to: toStatus },
+      });
+      redirect(`/admin/orders/${id}?blocked=${encodeURIComponent(verdict.error)}`);
+    }
+    if (verdict.offRegister) offRegisterReason = verdict.reason;
   }
 
   // ── COMPLETION COMPLIANCE GATE (S-1b + S-2b) ───────────────────────────
@@ -178,6 +205,17 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
     }
     revalidatePath(`/admin/orders/${id}`);
     return;
+  }
+
+  if (offRegisterReason) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "order.completed_off_register",
+      entityType: "order",
+      entityId: id,
+      after: { reason: offRegisterReason, order_number: result.order.order_number, no_payment: true, no_drawer: true },
+    });
   }
 
   await recordAudit({

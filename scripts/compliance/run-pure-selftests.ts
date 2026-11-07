@@ -199,6 +199,7 @@ import { __runLeaflyPayloadTests } from "../../src/lib/leafly/payload-core";
 // brand matcher already taught this codebase. Pure: no I/O.
 import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
 import { __runOrderBoardSplitTests } from "../../src/lib/orders/order-board-split-core";
+import { __runBackofficeCompleteTests } from "../../src/lib/orders/backoffice-complete-core";
 // SLICE L-40 -- the ONE set of rules both order panels (Greenway and Leafly)
 // use for tabs, search, dates, totals, sort and paging. Pure: no I/O.
 import { __runOrdersPanelTests } from "../../src/lib/orders/order-panels-core";
@@ -2358,6 +2359,7 @@ __runLiquidVolumeTests();
   // customer-facing email may be sent at all.
   assertRan("order-origin-core", __runOrderOriginTests(), 40);
   assertRan("order-board-split-core", __runOrderBoardSplitTests(), 43);
+  assertRan("backoffice-complete-core", __runBackofficeCompleteTests(), 15); // D204: online orders are completed at the register; back-office completion is owner/admin/manager + written reason, audited
   // SLICE L-40. Floor 88, from a measured 94. The owner asked for the Leafly
   // panel to "look and behave identically" to ours; this core is where that
   // behaviour is written down, so a drop means a behaviour stopped being proven.
