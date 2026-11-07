@@ -36,7 +36,8 @@ export type EodSessionInput = {
   tipsMinor: number | null;
 };
 
-export type EodDropInput = { registerId: string; amountMinor: number };
+/** D198: destination absent = safe (older callers / pre-0346 rows). */
+export type EodDropInput = { registerId: string; amountMinor: number; destination?: "safe" | "atm" };
 
 export type EodSafeCountInput = {
   window: string; // am | pm | other
@@ -62,7 +63,11 @@ export type EodRegisterRow = {
   anyOpen: boolean;
   openingMinor: number;
   dropCount: number;
+  /** ALL drops (safe + ATM): every one left the drawer. */
   dropsMinor: number;
+  /** D198: the part of dropsMinor that went into the ATM (not the safe / bag). */
+  atmDropCount: number;
+  atmDropsMinor: number;
   /** Sum of blind close counts across closed+ sessions; null if none closed. */
   closedMinor: number | null;
   /** Sum of manager-revealed over/short; null until at least one reveal. */
@@ -77,6 +82,8 @@ export type EodTotals = {
   openingMinor: number;
   dropCount: number;
   dropsMinor: number;
+  atmDropCount: number;
+  atmDropsMinor: number;
   closedMinor: number | null;
   overShortMinor: number | null;
   tipsMinor: number | null;
@@ -159,6 +166,10 @@ export function buildEodModel(input: {
       openingMinor,
       dropCount: drops.length,
       dropsMinor: drops.reduce((sum, d) => sum + (Number.isInteger(d.amountMinor) ? d.amountMinor : 0), 0),
+      atmDropCount: drops.filter((d) => d.destination === "atm").length,
+      atmDropsMinor: drops
+        .filter((d) => d.destination === "atm")
+        .reduce((sum, d) => sum + (Number.isInteger(d.amountMinor) ? d.amountMinor : 0), 0),
       closedMinor,
       overShortMinor,
       tipsMinor,
@@ -172,6 +183,8 @@ export function buildEodModel(input: {
       openingMinor: t.openingMinor + r.openingMinor,
       dropCount: t.dropCount + r.dropCount,
       dropsMinor: t.dropsMinor + r.dropsMinor,
+      atmDropCount: t.atmDropCount + r.atmDropCount,
+      atmDropsMinor: t.atmDropsMinor + r.atmDropsMinor,
       closedMinor: addNullable(t.closedMinor, r.closedMinor),
       overShortMinor: addNullable(t.overShortMinor, r.overShortMinor),
       tipsMinor: addNullable(t.tipsMinor, r.tipsMinor),
@@ -182,6 +195,8 @@ export function buildEodModel(input: {
       openingMinor: 0,
       dropCount: 0,
       dropsMinor: 0,
+      atmDropCount: 0,
+      atmDropsMinor: 0,
       closedMinor: null,
       overShortMinor: null,
       tipsMinor: null,
@@ -277,6 +292,15 @@ export function __runEodCoreTests(): void {
   ok(r2.tipsMinor === null, "eod: unrecorded tips stay null (not zero)");
   ok(finalDay.totals.openingMinor === 33_500 && finalDay.totals.dropsMinor === 35_000, "eod: totals sum opening + drops");
   ok(finalDay.totals.closedMinor === 92_000, "eod: totals sum blind close counts");
+  ok(finalDay.totals.atmDropsMinor === 0 && r1.atmDropCount === 0, "eod (D198): drops with no destination are safe drops");
+  const atmDay = buildEodModel({
+    ...base,
+    drops: [...base.drops, { registerId: "r2", amountMinor: 160_000, destination: "atm" as const }],
+    sessions: [{ registerId: "r2", status: "open", openingCountMinor: 16_750, closingCountMinor: null, overShortMinor: null, tipsMinor: null }],
+  });
+  ok(atmDay.registers[0].dropsMinor === 165_000 && atmDay.registers[0].atmDropsMinor === 160_000 && atmDay.registers[0].atmDropCount === 1,
+    "eod (D198): ATM drop counted in the drawer's drops AND shown separately as ATM");
+  ok(atmDay.totals.atmDropsMinor === 160_000, "eod (D198): ATM drops total");
   ok(finalDay.totals.overShortMinor === -150, "eod: totals include only revealed over/short");
   ok(finalDay.totals.tipsMinor === 4_250, "eod: totals include only recorded tips");
   ok(finalDay.sales.grossMinor === 123_456, "eod: store-wide sales summary rides along unchanged");

@@ -215,7 +215,11 @@ export type DrawerDaySummary = {
   /** Sum of counted-in floats across the day's sessions. */
   openingMinor: number;
   dropCount: number;
+  /** ALL drops (safe + ATM): every one left the drawer. */
   dropsMinor: number;
+  /** D198: the part of the drops that went into the ATM (not the safe). */
+  atmDropCount: number;
+  atmDropsMinor: number;
   /**
    * Sum of manager-revealed over/short across reconciled/verified sessions;
    * null until at least one session has been reconciled (never computed
@@ -226,7 +230,7 @@ export type DrawerDaySummary = {
 
 export function summarizeDrawerDay(
   sessions: DaySessionRow[],
-  drops: { amountMinor: number }[],
+  drops: { amountMinor: number; destination?: "safe" | "atm" }[],
 ): DrawerDaySummary {
   let anyOpen = false;
   let openingMinor = 0;
@@ -239,12 +243,15 @@ export function summarizeDrawerDay(
     }
   }
   const dropsMinor = drops.reduce((sum, d) => sum + (Number.isInteger(d.amountMinor) ? d.amountMinor : 0), 0);
+  const atm = drops.filter((d) => d.destination === "atm");
   return {
     sessionCount: sessions.length,
     anyOpen,
     openingMinor,
     dropCount: drops.length,
     dropsMinor,
+    atmDropCount: atm.length,
+    atmDropsMinor: atm.reduce((sum, d) => sum + (Number.isInteger(d.amountMinor) ? d.amountMinor : 0), 0),
     overShortMinor: overShort,
   };
 }
@@ -353,7 +360,12 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
     ? [
         row("Drawer sessions", String(d.sessionCount)),
         row("Opening float", formatCents(d.openingMinor)),
-        row(`Safe drops (${d.dropCount})`, formatCents(d.dropsMinor)),
+        ...(d.atmDropCount > 0
+          ? [
+              row(`Safe drops (${d.dropCount - d.atmDropCount})`, formatCents(d.dropsMinor - d.atmDropsMinor)),
+              row(`ATM drops (${d.atmDropCount})`, formatCents(d.atmDropsMinor)),
+            ]
+          : [row(`Safe drops (${d.dropCount})`, formatCents(d.dropsMinor))]),
         d.overShortMinor !== null
           ? row("Over / short (reconciled)", formatCents(d.overShortMinor))
           : row("Over / short", "pending manager reconcile"),
@@ -514,6 +526,8 @@ export function __runDayReportCoreTests(): void {
   ok(reportKind(d2) === "Z", "all sessions closed → Z report");
   ok(reportKind(null) === "X", "no drawer data → X (snapshot)");
   ok(reportKind(summarizeDrawerDay([], [])) === "X", "zero sessions → X (nothing to finalize)");
+  const dAtm = summarizeDrawerDay([], [{ amountMinor: 50000 }, { amountMinor: 40000, destination: "atm" }]);
+  ok(dAtm.dropsMinor === 90000 && dAtm.atmDropsMinor === 40000 && dAtm.atmDropCount === 1, "D198: ATM drops counted in drops and split out");
 
   // slip
   const slip = buildDayReportSlipHtml({

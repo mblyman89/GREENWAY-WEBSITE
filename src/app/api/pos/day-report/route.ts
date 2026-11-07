@@ -23,6 +23,7 @@
  * (same pattern as receipts / no-sale slips) and prints with the drawer
  * kick OFF: a report never pops the drawer.
  */
+import { readDropDestination, type DropRowLike } from "@/lib/registers/atm-drop-core";
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { getEmployeeByPin } from "@/lib/staffing/store";
@@ -121,13 +122,17 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   const sessions =
     (sessionRows as { id: string; status: string; opening_count_minor: number | null; over_short_minor: number | null }[] | null) ??
     [];
-  let drops: { amountMinor: number }[] = [];
+  let drops: { amountMinor: number; destination: "safe" | "atm" }[] = [];
   if (sessions.length > 0) {
+    // D198: "*" so the 0346 destination columns ride along (the note tag on an older database).
     const { data: dropRows } = await admin
       .from("drawer_drops")
-      .select("amount_minor")
+      .select("*")
       .in("session_id", sessions.map((s) => s.id));
-    drops = ((dropRows as { amount_minor: number }[] | null) ?? []).map((d) => ({ amountMinor: d.amount_minor }));
+    drops = ((dropRows as DropRowLike[] | null) ?? []).map((d) => ({
+      amountMinor: d.amount_minor,
+      destination: readDropDestination(d).destination,
+    }));
   }
   const sessionSummaries: DaySessionRow[] = sessions.map((s) => ({
     status: s.status,

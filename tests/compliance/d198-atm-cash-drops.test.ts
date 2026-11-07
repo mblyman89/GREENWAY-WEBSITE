@@ -133,3 +133,22 @@ describe("D198 S2 register ATM drop (online + offline)", () => {
     expect(read("src/app/api/pos/menu/route.ts")).toContain("getAtmDropSettings()");
   });
 });
+
+describe("D198 S3 ATM cash never counts toward the safe / bag", () => {
+  it("deposit bag + night sheet use SAFE drops only; drop-due + drawer expected keep ALL drops", () => {
+    const bag = read("src/lib/registers/deposit-bag-store.ts");
+    expect(bag).toContain('readDropDestination(x).destination === "safe"');
+    const eod = read("src/lib/registers/eod-store.ts");
+    expect(eod).toContain('readDropDestination(d).destination === "safe"');
+    // the drawer figure (drop-due $2,000 + expected close) still sums every drop
+    expect(read("src/lib/registers/drawer-figure-store.ts")).toContain("totalDropsMinor(session.id)");
+  });
+
+  it("EOD + day report split the ATM drops out, oversight labels them", async () => {
+    const { summarizeDrawerDay } = await import("@/lib/pos/day-report-core");
+    const d = summarizeDrawerDay([], [{ amountMinor: 50000 }, { amountMinor: 40000, destination: "atm" }]);
+    expect([d.dropsMinor, d.atmDropsMinor, d.atmDropCount]).toEqual([90000, 40000, 1]);
+    expect(read("src/lib/registers/oversight.ts")).toContain("dropDestinationLabel(d)");
+    expect(read("src/app/admin/registers/eod/page.tsx")).toContain("not in the bag");
+  });
+});

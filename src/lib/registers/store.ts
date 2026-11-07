@@ -83,6 +83,12 @@ export type DrawerDrop = {
   witnessed_by: string | null;
   notes: string | null;
   dropped_at: string;
+  /** D198 (migration 0346; absent on an older database - read with readDropDestination). */
+  destination?: "safe" | "atm" | null;
+  twenties_count?: number | null;
+  atm_terminal_id?: string | null;
+  device_id?: string | null;
+  recorded_via?: "register" | "offline" | "back_office" | null;
 };
 
 // ---------------------------------------------------------------------------
