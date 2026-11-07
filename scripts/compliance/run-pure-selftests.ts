@@ -1168,6 +1168,7 @@ import { __runExceptionRetryTests } from "../../src/lib/pos/exception-retry-core
 import { __runSaveOutcomeTests } from "../../src/lib/admin/save-outcome-core";
 import { __runCountIntegrityTests } from "../../src/lib/registers/count-integrity-core";
 import { __runGuidedCashTests } from "../../src/lib/registers/guided-cash-core";
+import { __runAtmDropCoreTests } from "../../src/lib/registers/atm-drop-core";
 import { __runNightWatchTests } from "../../src/lib/registers/night-watch-core";
 import { __runCcrsCompletenessTests } from "../../src/lib/compliance/ccrs-completeness-core";
 import { __runTaxesOwedTests } from "../../src/lib/compliance/taxes-owed-core";
@@ -2813,6 +2814,7 @@ __runLiquidVolumeTests();
   assertRan("public-snapshot-core", __runPublicSnapshotTests(), 24); // DB HEALTH A: public renders read one shared snapshot per minute (content, photos, overrides, DOH); never drafts, never money
   assertRan("db-vitals-core", __runDbVitalsTests(), 38); // DB HEALTH B (D193): database vital signs every 10 minutes, restart detection, plain-English findings, self-heal of stuck app sessions only
   assertRan("label-print-core", __runLabelPrintTests(), 69); // D196 ("the label maker is still not working right"): Auto sends every label straight at the exact label size (the turned page ran across two labels), Rollo web-page Orientation "A", Windows Rollo-driver steps, two-labels symptom first. D191 ("it prints two labels, the first blank, the second nearly prints off the bottom … better use of the available space"): wide labels sent as a portrait page with the artwork turned (Chromium 372435414), margin 0 !important over the admin 8mm print rule, no trailing page break, per-device per-size orientation/nudge/scale calibration with every corner proven on-page, test label, OS-specific dialog steps, symptom table
+  assertRan("atm-drop-core", __runAtmDropCoreTests(), 53); // D198 S1 ("the ipad should only accept whole 20 dollar amounts. i want the number of 20s taken from the till to be entered"): $20 count only, amount derived, safe vs ATM split (deposit/EOD safe only; drawer + 2k banner all), pre-0346 note tag, witness policy
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

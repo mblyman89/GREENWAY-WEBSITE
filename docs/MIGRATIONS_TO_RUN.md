@@ -3832,3 +3832,29 @@ in Vercel.
   ```
 
   **Rollback (only if needed):** `supabase/rollbacks/0345_db_vitals.rollback.sql` (drops the two functions).
+
+- [ ] **`supabase/migrations/0346_atm_cash_drops.sql`** — D198 S1 ATM cash drops (owner 2026-11-07: "the ipad should only
+  accept whole 20 dollar amounts. i want the number of 20s taken from the till to be entered on the register").
+  Adds to `drawer_drops`: `destination` ('safe' default | 'atm'), `twenties_count` (ATM only; amount must equal
+  count x $20), `atm_terminal_id`, `device_id`, `recorded_via`; trigger `drawer_drops_money_immutable` (a drop's
+  drawer, amount, destination, $20 count, terminal and time can never change); new table `atm_drop_reviews` (your
+  append-only sign-offs on the ATM match page; server-only, kept by the factory reset). Existing drops become
+  'safe' drops, unchanged.
+
+  Until it is applied the registers still work: an ATM drop is saved as a plain drop with "[ATM drop: N x $20 into
+  HG26499]" in its notes, and the audit log has the full record; the ATM match page reads the note.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) filter (where destination = 'safe') as safe_drops,                                   -- all old drops
+         count(*) filter (where destination = 'atm')  as atm_drops,                                    -- 0 at first
+         (select count(*) from pg_trigger where tgname = 'drawer_drops_money_immutable') as trigger,   -- 1
+         has_table_privilege('anon', 'public.atm_drop_reviews', 'SELECT') as anon_can_read_reviews     -- false
+    from public.drawer_drops;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0346_atm_cash_drops.rollback.sql` (writes the ATM details into
+  each ATM drop's notes first, keeps `atm_drop_reviews` if it holds any sign-off).
