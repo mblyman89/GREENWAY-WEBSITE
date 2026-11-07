@@ -54,6 +54,8 @@ export type PosTillPayload = {
   tipsMinor?: number;
   tipPool?: { poolMinor: number; people: number };
   confirmEmpty?: true;
+  /** D204a: close only, the closer counted again after the look-again prompt. */
+  recountConfirmed?: true;
   /** pop only: a repeat open needs a reason (D131). */
   popReason?: string;
   /** pop only: which open this was on this iPad (1 = first). */
@@ -114,6 +116,7 @@ export function validateTillPayload(
   if (p.action === "open" || p.action === "close") body.denoms = p.denoms ?? { ...EMPTY_DENOMS };
   if (p.action === "close") {
     if (p.confirmEmpty) body.confirmEmpty = true;
+    if (p.recountConfirmed) body.recountConfirmed = true;
     if (p.tipPool) body.tipPool = p.tipPool;
     else if (p.tipsMinor !== undefined) body.tipsMinor = p.tipsMinor;
   }

@@ -24,6 +24,8 @@
  * or bad key ⇒ 401; migration 0120 not applied ⇒ clear 503-style refusal.
  */
 import "server-only";
+import { resolveExceptionVerdict } from "./exception-resolve-core";
+import { clientUuidMatchesReceipt } from "./returns-core";
 import { ncIdFromKey, ncProductKey } from "@/lib/noncannabis/pos-catalog-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -2253,6 +2255,55 @@ export async function resolvePosException(
     .eq("status", "exception");
   if (error) return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
   return { ok: true };
+}
+
+/**
+ * D204c: resolve an exception with the rule for its type. A refused SALE is
+ * closed only by a re-ring (a processed sale with that receipt number, made
+ * at or after the refused one, on the same register within 2 days) or by a
+ * written "no sale" reason. Other types keep the plain note.
+ */
+export async function resolvePosExceptionChecked(
+  id: string,
+  opts: { resolvedBy: string; kind: unknown; receipt: unknown; note: unknown },
+): Promise<{ ok: true; kind: string; rerungClientUuid?: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data: row, error: readErr } = await admin
+    .from("pos_sale_events")
+    .select("id, event_type, register_id, occurred_at, status")
+    .eq("id", id)
+    .maybeSingle<{ id: string; event_type: string; register_id: string; occurred_at: string; status: string }>();
+  if (readErr) return { ok: false, error: readErr.message };
+  if (!row || row.status !== "exception") return { ok: false, error: "That exception is no longer open. Reload the page." };
+  const verdict = resolveExceptionVerdict({ eventType: row.event_type, kind: opts.kind, receipt: opts.receipt, note: opts.note });
+  if (!verdict.ok) return { ok: false, error: verdict.error };
+  let rerungClientUuid: string | undefined;
+  if (verdict.kind === "rerung") {
+    const until = new Date(Date.parse(row.occurred_at) + 2 * 86_400_000).toISOString();
+    const { data: cands, error: candErr } = await admin
+      .from("pos_sale_events")
+      .select("client_uuid, occurred_at")
+      .eq("event_type", "sale")
+      .eq("status", "processed")
+      .eq("register_id", row.register_id)
+      .gte("occurred_at", row.occurred_at)
+      .lte("occurred_at", until)
+      .order("occurred_at", { ascending: true })
+      .limit(900);
+    if (candErr) return { ok: false, error: candErr.message };
+    const hit = ((cands as { client_uuid: string }[] | null) ?? []).find((c) => clientUuidMatchesReceipt(c.client_uuid, verdict.receipt));
+    if (!hit) {
+      return {
+        ok: false,
+        error: `No recorded sale with receipt ${verdict.receipt} on this register after the refused sale. Check the number, or ring the sale first.`,
+      };
+    }
+    rerungClientUuid = hit.client_uuid;
+  }
+  const res = await resolvePosException(id, { resolvedBy: opts.resolvedBy, note: verdict.note });
+  if (!res.ok) return res;
+  return { ok: true, kind: verdict.kind, ...(rerungClientUuid ? { rerungClientUuid } : {}) };
 }
 
 // ---------------------------------------------------------------------------

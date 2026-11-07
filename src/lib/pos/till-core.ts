@@ -84,6 +84,12 @@ export type TillCloseRequest = {
    * ticked "The drawer is really empty". Present (true) only on a $0.00 close.
    */
   confirmedEmpty?: true;
+  /**
+   * D204a: the closer was told the count looks much lower than expected (or a
+   * whole group was empty), counted again and confirmed. The figure is never
+   * shown to them; this flag only lets the close save and is audited.
+   */
+  recountConfirmed?: true;
 };
 
 
@@ -219,7 +225,10 @@ export function validateTillRequest(body: unknown): TillValidation {
     // 2026-11-01 SR2 was closed at $0.00 by mistake with $2,678.10 in it.
     const zero = checkZeroClose(denomTotalMinor(denoms), b.confirmEmpty);
     if (!zero.ok) return { ok: false, error: zero.error };
-    const empty = zero.confirmedEmpty ? { confirmedEmpty: true as const } : {};
+    const empty = {
+      ...(zero.confirmedEmpty ? { confirmedEmpty: true as const } : {}),
+      ...(b.recountConfirmed === true ? { recountConfirmed: true as const } : {}),
+    };
     // Owner D121: one person closes. No second PIN or second count here; the
     // second count is done in the back office (D122). Anything an old
     // register build still sends for a second count is ignored.

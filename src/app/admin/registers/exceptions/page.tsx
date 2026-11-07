@@ -26,6 +26,7 @@ import { listRegisters } from "@/lib/registers/store";
 import { listEmployees } from "@/lib/staffing/store";
 import { pacificParts } from "@/lib/reports/timezone";
 import { STRANDED_UUID_REASON } from "@/lib/pos/cart-adjust-core";
+import { SALE_RESOLVE_HELP } from "@/lib/pos/exception-resolve-core";
 import { recordStrandedCartAdjustmentsAction, resolvePosExceptionAction, retryPosExceptionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -213,14 +214,33 @@ export default async function PosExceptionsPage({
 
                   <form action={resolvePosExceptionAction} className="mt-3 flex flex-wrap items-end gap-3">
                     <input type="hidden" name="exception_id" value={row.id} />
+                    {row.event_type === "sale" ? (
+                      <fieldset className="w-full space-y-1 text-xs text-[var(--admin-text-dim)]" data-testid="sale-resolve-kind">
+                        <legend className="mb-1 font-semibold">{SALE_RESOLVE_HELP}</legend>
+                        <label className="flex flex-wrap items-center gap-2">
+                          <input type="radio" name="resolve_kind" value="rerung" required />
+                          It was rung again. New receipt number:
+                          <input
+                            name="rerung_receipt"
+                            placeholder="8-character code"
+                            maxLength={12}
+                            className="w-32 rounded border border-[var(--admin-border)] bg-transparent px-2 py-1 text-sm text-white"
+                          />
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name="resolve_kind" value="no_sale" />
+                          No sale happened (say why below, and what happened to any money)
+                        </label>
+                      </fieldset>
+                    ) : null}
                     <label className="min-w-64 flex-1">
                       <span className="mb-1 block text-xs font-semibold text-[var(--admin-text-dim)]">
                         Resolution note (what you did, at least 5 characters)
                       </span>
                       <input
                         name="note"
-                        required
-                        minLength={5}
+                        required={row.event_type !== "sale"}
+                        minLength={row.event_type === "sale" ? undefined : 5}
                         placeholder="e.g. Intook UPID WA-1234 in Medical, customer re-rang at Register 1"
                         className="w-full rounded-lg border border-[var(--admin-border)] bg-transparent px-3 py-2 text-sm text-white"
                       />

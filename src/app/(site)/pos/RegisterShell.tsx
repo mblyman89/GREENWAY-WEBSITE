@@ -65,6 +65,7 @@ import {
 } from "@/lib/pos/printer-pairing-core";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
+import { emptyGroupWarnings } from "@/lib/registers/close-count-check-core";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
 import {
   buildDrawerCloseSlipHtml,
@@ -8181,6 +8182,11 @@ function TillModal({
   // Owner D125 (2026-11-02): a $0.00 close must be confirmed. On 2026-11-01
   // SR2 was closed at $0.00 by mistake with $2,678.10 still in it.
   const [confirmEmpty, setConfirmEmpty] = useState(false);
+  // D204a: "look again" before a close is saved. Empty coin / $1 groups are
+  // checked here; a count far below expected is checked by the server, which
+  // answers only "count again" (never the figure). Both need "I counted again".
+  const [recountConfirmed, setRecountConfirmed] = useState(false);
+  const [serverRecheck, setServerRecheck] = useState<string | null>(null);
   // Owner D130/D131 (2026-11-02): "I need the drawer to pop for the first
   // blind count." The cashier working the drawer opens it with their PIN;
   // the server checks and audits it first. A second open needs a reason.
@@ -8231,8 +8237,12 @@ function TillModal({
   // Fix Phase 6 (G-62, owner D85 "Warn please"): count-in vs the standard float.
   const floatWarn = mode === "open" && countedMinor > 0 ? floatCheck(countedMinor, standardFloatMinor) : null;
 
+  const groupWarnings = mode === "close" ? emptyGroupWarnings(denoms) : [];
+  const needsRecount = mode === "close" && (groupWarnings.length > 0 || serverRecheck !== null);
+
   const ready =
     pin.length >= 4 &&
+    (!needsRecount || recountConfirmed) &&
     (mode === "open"
       ? countedMinor > 0
       : mode === "drop"
@@ -8431,6 +8441,7 @@ function TillModal({
                 actor: a.pin,
                 denoms,
                 ...(countedMinor === 0 && confirmEmpty ? { confirmEmpty: true as const } : {}),
+                ...(recountConfirmed ? { recountConfirmed: true as const } : {}),
                 ...(tips.trim() && tipsMinor !== null
                   ? tipMode === "pool"
                     ? { tipPool: { poolMinor: tipsMinor, people: tipPeopleN } }
@@ -8516,6 +8527,8 @@ function TillModal({
                 denoms,
                 // Owner D125: the server refuses a $0.00 close without this.
                 ...(countedMinor === 0 && confirmEmpty ? { confirmEmpty: true } : {}),
+                // D204a: the closer counted again after the look-again prompt.
+                ...(recountConfirmed ? { recountConfirmed: true } : {}),
                 // Only send tips when the box was actually filled in: an
                 // untouched field stays "not recorded" (NULL) while a typed
                 // "0" is a real counted-zero jar.
@@ -8559,10 +8572,20 @@ function TillModal({
             /** D198: ATM drop confirmation + "no witness" flag. */
             message?: string;
             warning?: string;
+            /** D204a: "recheck_count" = count again (blind, no figure). */
+            code?: string;
           }
         | null;
       if (!res.ok || !resBody?.ok) {
         const msg = resBody?.error ?? "Till action failed — try again.";
+        if (mode === "close" && resBody?.code === "recheck_count") {
+          // D204a: blind "count again". The checkbox below appears.
+          setServerRecheck(msg);
+          setRecountConfirmed(false);
+          setError(null);
+          setPin("");
+          return;
+        }
         setError(msg);
         setPin("");
         return;
@@ -8897,6 +8920,19 @@ function TillModal({
                 <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
                   <input type="checkbox" className="h-5 w-5" checked={confirmEmpty} onChange={(e) => setConfirmEmpty(e.target.checked)} />
                   The drawer is really empty
+                </label>
+              </div>
+            )}
+            {needsRecount && (
+              <div className="mt-2 rounded-lg border border-[var(--pos-warn)] bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]" data-testid="close-recount">
+                <p className="font-semibold">Please look again before saving.</p>
+                {groupWarnings.map((w) => (
+                  <p key={w.key} className="mt-1 text-xs">{w.text}</p>
+                ))}
+                {serverRecheck ? <p className="mt-1 text-xs">{serverRecheck}</p> : null}
+                <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" className="h-5 w-5" checked={recountConfirmed} onChange={(e) => setRecountConfirmed(e.target.checked)} />
+                  I counted again and the count above is right
                 </label>
               </div>
             )}
