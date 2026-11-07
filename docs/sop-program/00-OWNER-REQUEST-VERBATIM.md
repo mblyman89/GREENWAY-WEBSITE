@@ -1563,3 +1563,64 @@ The Gmail search (D201) missed these for seven reasons:
   1. On Fix later, click **Deep dig (the last deliveries)**. Click again until it says finished, or use **Deep dig** on a single delivery.
   2. Optionally, click **Attach COAs from Gmail** afterwards.
   3. If a delivery still says "not sent to this mailbox", the JSON never reached stephen@. Ask that vendor to resend it.
+
+## D204 — Blind counts that do not line up, and online orders completed from the back office (2026-11-07, read-only round)
+
+> "Thank you. I'll give that a try. Please log back in to supabase, my employees are telling me they think there is something wrong with the blind counts. They are certain they are counting and entering in the correct amounts. But the tills still aren't lining up. Please look at them and the sales associated with that till so you can find any bugs or irregularities or mishaps. Query everything important. Recon the code for issues. This is a read only round, no code edits. I want to know what's going on first and what we should do to fix it. Follow the standing rules. Thank you."
+
+> "Sorry to stop you. What you just said may be a cause to look into deeper. I've noticed that if a sale is marked completed from the back office and not the register, the system treats them as a sale even if the customer didn't come in and buy the product. Are there online orders that were completed via the back office and not the register? Please look at this too. Please continue. Follow the standing rules. Thank you."
+
+### Findings (production, read-only, 2026-11-07)
+
+- **The system side is clean.**
+  - 26 drawer sessions (11-01 to 11-07) and 74 counts were checked; every stored count total equals its denomination breakdown.
+  - All 947 sale events carry the right drawer, register and time. Tender minus change equals the total on every sale, and there are no duplicate sales.
+  - Every completed order has its processed sale, and vice versa.
+- **The differences come from counting.** Examples:
+  - A closer left out 55 $1 bills (R1 11-04 AM).
+  - Closers entered no coins on R2 and R1 on 11-06 AM.
+  - A $50 and a $100 were swapped (R2 11-04 PM).
+  - A $0.00 close was followed by a $2,678.10 second count (R2 11-01 PM).
+  - $20s went to the ATM before the register could record an ATM drop (R2 11-01 AM, −$1,853; the ATM drop screen went live 11-07, D198).
+  - A refused $93.50 sale was "resolved" but never re-rung (R1 11-02 AM, +$94.35).
+- **13 of the 24 closer/second-count pairs disagree, and only 7 of 24 closed drawers are reconciled.**
+- **All 12 reconciles posted their ledger entry as `failed` / `GL_AUTOPOST_NO_TEMPLATE`.** The drawer itself is reconciled; only the books entry is missing (the books are deferred, D128).
+- **Back-office completions since go-live: 0.** Every completion since 11-01 came from a register sync.
+  - The weakness is real, though. "Mark Completed" was still open on Greenway (website) orders. It posts the sale, takes the stock and gives loyalty points with no payment and no drawer. Leafly orders were already locked.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D204 | **A Greenway online order is completed at the register, where it is paid.** "Mark Completed" in the back office is locked for Greenway orders. An owner/manager override needs a written reason, is audited, and the page warns that it records a sale with no payment and no drawer. | "if a sale is marked completed from the back office and not the register, the system treats them as a sale even if the customer didn't come in and buy the product" |
+| D204a | **The iPad close catches the counting mistakes we saw.** A whole denomination group left empty (no coins at all, no $1 bills) or a total far below what the register expects asks the closer to look again and confirm before the count is saved. The count stays blind: the expected figure is never shown. | "They are certain they are counting and entering in the correct amounts. But the tills still aren't lining up." |
+| D204b | **Reconcile shows the two counts row by row** (each denomination, closer vs second), so the manager sees exactly where they differ. When they differ by more than $5, the second count is the suggested basis. | "find any bugs or irregularities or mishaps" |
+| D204c | **A refused sale is resolved only by a re-ring or a written reason**, so money taken for a refused sale is never left unexplained in a drawer. | "Recon the code for issues" |
+| D204d | **Drawer reconciles stop failing the books entry** (`GL_AUTOPOST_NO_TEMPLATE`): the posting is recorded as *deferred* (books not live, D128) rather than *failed*, so the error list stays meaningful. | "what we should do to fix it" |
+| D204e | **Every $20 taken from a till is entered on the register as a drop** (Safe or ATM, D198). This is SOP and training, not code. | "the tills still aren't lining up" |
+
+## D205 — Returns must follow the back-office policy, plus a no-receipt courtesy return for loyalty members (2026-11-07)
+
+> "thank you. something in that work broke the returns system. the register went back to an old method for completing returns, loyalty members only. but we built a returns policy page in register activity so I could set who and what can be refunded. the registers are requiring the customer be a member and bought using a member account. the registers needs to respect the returns policy set in the back office. ive decided I want to add to the policy the ability to select if I want to allow returns without a receipt, but they must be a loyalty member. so we can look up the customer and see their recent purchases and then select the one they are there to return. they must also have the packaging with them and the product being returned needs to be scanned so it can be matched to the one sold. this is a courtesy for those that do not have a receipt. the register needs the ability for us to look up a customer by name or phone number. follow the standing rules. thank you."
+
+> "thank you. I am not sure if the screen is working right, I need to test it more. here is a screen shot of what the screen looks like after scanning the receipt for the return. the return needs to still be within the return window. this new setting should live in the already made returns policy page. I want you to also complete all work related to what we were working on before this work. there was several things if I remember correctly. online order work, and a few prompts before that we had more on the docket, but I forget what it is. please look back at all unfinished work, make a plan, then start working on all of it. break it up into manageable slices. push and merge often to protect the work from the unstable sandbox. keep the work safe. when you are finished, return back with a summary report of what was done and what I need to do. follow the standing rules. thank you."
+
+Upload: a photo of the iPad Return window after scanning receipt B96C3F27 (order GWY-CPAF6D). It shows "Store policy: Anyone, original receipt … within 7 days", a long "Not returnable" list that includes Flower, and the line "Not a loyalty member · 7 days left". Yet two flower items are listed as "1 of 1 returnable".
+
+### Findings (production, read-only, 2026-11-07)
+
+- **The saved policy is "Anyone" (`loyaltyRequired = false`), and the register follows it.** The screenshot proves this: a non-member's sale was found and offered for return. Both iPads run the current build (fingerprint `4010d5aec4e8` = main). D198d (PR #1710) did not touch the policy or loyalty checks.
+- **The "members only" belief comes from the printed receipt.** The custom receipt text (`pos_receipt_config.returnPolicyText`) says *"You must bring this receipt and your loyalty account used for the sale"*. The register's own wording, "Not a loyalty member", reads like a refusal, when it is only a description of the sale.
+- **The real defect is in the screenshot:** flower lines were offered for return even though Flower is on the not-returnable list. Root cause and fix are recorded under As built.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D205 | **The register follows the back-office return policy, and only that policy.** Who may return (anyone, or loyalty members only), the window, and the product types are read from `/admin/registers/return-policy`. A line whose product type cannot be told is judged by its menu product's type. If that is still unknown, it is **not** returnable (fail closed), instead of being offered. | "the registers needs to respect the returns policy set in the back office" |
+| D205a | **New policy setting on the same page: "Allow returns without a receipt (loyalty members only)".** It is off by default. | "add to the policy the ability to select if I want to allow returns without a receipt, but they must be a loyalty member" / "this new setting should live in the already made returns policy page" |
+| D205b | **No-receipt return on the register.** The cashier looks up the customer by name or phone number. The register lists that member's sales still inside the return window, and the cashier picks the sale being returned. Only sales recorded on the member's loyalty account are listed. | "so we can look up the customer and see their recent purchases and then select the one they are there to return" / "the register needs the ability for us to look up a customer by name or phone number" |
+| D205c | **Packaging is required and the product is scanned.** The cashier confirms the original packaging is present, then scans the product. The scan must match the line being returned (its barcode, lot or product); a mismatch is refused. | "they must also have the packaging with them and the product being returned needs to be scanned so it can be matched to the one sold" |
+| D205d | **The return window always applies**, receipt or not. | "the return needs to still be within the return window" |
+| D205e | **Same controls as a receipt return.** The manager/lead PIN, the refund at the price paid, the tie to the open drawer, the product-type rules and the audit all apply. The return is tagged *no receipt* in the audit so the owner can review these courtesy returns. | "this is a courtesy for those that do not have a receipt" |
+| D205f | **Plain wording.** "Not a loyalty member" becomes "Walk-in sale (no loyalty account)". The printed policy summary follows the saved policy, including the no-receipt option. The owner's custom receipt text is never overwritten; the owner is told it still says "members only". | "the register went back to an old method for completing returns, loyalty members only" |
