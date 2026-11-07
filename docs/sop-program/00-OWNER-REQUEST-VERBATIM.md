@@ -1648,3 +1648,20 @@ Upload: a photo of the iPad Return window after scanning receipt B96C3F27 (order
   - An allowed one is audited as `order.completed_off_register` with the reason.
 - Register sync completions (`sync-store.ts`) are untouched.
 - Core: `src/lib/orders/backoffice-complete-core.ts` (15 self-tests). Test: `tests/compliance/d204-lock-backoffice-complete.test.ts`.
+
+### As built (D204a–d — till close checks)
+
+- **D204a, iPad close "look again".**
+  - When a non-zero close has no coins, or no $1 bills, a yellow box asks the closer to look again. They must tick "I counted again and the count above is right" before saving.
+  - The server also checks the count against what the register expects. If the count is $40.00 or more below, it answers "count again" without any figure, and the same tick box appears. The count stays blind; nothing about the expected cash is ever shown.
+  - Audit: `drawer.close_recheck_asked`; the close itself records `recountAfterLowCount` / `recountConfirmed`.
+  - A failed figure read never blocks a close.
+  - Core: `src/lib/registers/close-count-check-core.ts`. The iPad needs the new build.
+- **D204b, reconcile row by row.** After the second count is saved, a manager's reconcile card lists every denomination where the closer's and the second counter's tables differ, with the money difference. When the counts are more than $5 apart, "Use the second count" is pre-selected and marked as suggested. The manager can still choose otherwise and must say why.
+- **D204c, refused sales.** On Register exceptions, a refused **sale** can no longer be closed with just a note. The manager picks one of:
+  - "It was rung again" with the new receipt number. The server checks that a recorded sale with that number exists on the same register, after the refused one, within 2 days.
+  - "No sale happened" with a written reason of at least 15 characters.
+  Other exception types keep the plain note. The audit records `resolve_kind` and the re-rung sale.
+- **D204d, ledger.** Reconcile no longer reports `failed` for `GL_AUTOPOST_NO_TEMPLATE` (or an inactive, unapproved or not-yet-effective template). It is reported and audited as `deferred` ("Ledger entry deferred: the drawer is reconciled…"). Real ledger rejections still show as failed.
+- **D204e** (every $20 taken from a till is entered as a drop) is SOP and training. No code.
+- Test: `tests/compliance/d204a-till-close-checks.test.ts`.
