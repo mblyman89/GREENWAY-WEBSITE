@@ -169,7 +169,7 @@ export async function runAtmLiveSync(options?: {
   // still on the guessed default is silently un-filtered and returns only PAI's
   // small default window (this is why Cash Loads / Bank Deposits stalled). So
   // before a full-history pull, if any report still lacks a CONFIRMED date
-  // column, ask PAI for the real names (read-only) and SAVE them first \u2014 no
+  // column, ask PAI for the real names (read-only) and SAVE them first — no
   // separate button, no ordering. We DEEP-MERGE so existing confirmations are
   // never clobbered, and we only ever save CONFIDENT picks (ambiguous reports
   // are left alone and reported by the pull's per-report diagnostics, never
@@ -296,43 +296,10 @@ export async function runAtmLiveSync(options?: {
  */
 async function captureTerminalStatus(): Promise<string> {
   try {
-    const res = await fetchTerminalStatusCsv();
-    if (!res.ok) return `couldn’t read live machine status (${res.error})`;
-
-    const mapped = mapTerminalStatusCsv(res.csv);
-    if (mapped.rows.length === 0) {
-      const why = mapped.problems[0]?.message ?? "no terminal rows returned";
-      return `live machine status unavailable (${why})`;
-    }
-
-    // One capture instant for every row in this pull, so a multi-machine
-    // account reads as a single coherent snapshot.
-    const capturedAt = new Date().toISOString();
-    const write = await upsertAtmTerminalStatus(
-      mapped.rows.map((r) => ({
-        terminal_id: r.terminalId,
-        captured_at: capturedAt,
-        status: r.status,
-        location: r.location,
-        group_name: r.groupName,
-        days_until_cash_out: r.daysUntilCashOut,
-        trxs_since_settlement: r.trxsSinceSettlement,
-        last_trx_raw: r.lastTrxRaw,
-        last_wd_trx_raw: r.lastWithdrawalTrxRaw,
-        last_rev_trx_raw: r.lastReversalTrxRaw,
-        balance_prev_eod_cents: r.balancePrevEodCents,
-        balance_cents: r.balanceCents,
-        raw: r.raw,
-      })),
-    );
-    if (!write.ok) {
-      // The most likely cause on first run is that migration 0183 hasn't been
-      // applied yet. Say so instead of leaving a bare Postgres string.
-      return `couldn’t save live machine status (${write.error}) — if this mentions a missing table, apply migration 0183`;
-    }
-
+    const live = await readAndStoreTerminalStatus();
+    if (!live.ok) return live.error;
     // Lead with the number the owner actually wants to see.
-    const primary = mapped.rows[0];
+    const primary = live.rows[0];
     const bits: string[] = [];
     if (primary.balanceCents !== null) {
       bits.push(`live cash in machine ${centsToUsdPlain(primary.balanceCents)}`);
@@ -344,6 +311,86 @@ async function captureTerminalStatus(): Promise<string> {
     return bits.length > 0 ? bits.join(", ") : "live machine status captured";
   } catch {
     return "couldn’t read live machine status (unexpected error)";
+  }
+}
+
+type TerminalStatusMapped = ReturnType<typeof mapTerminalStatusCsv>["rows"][number];
+
+/**
+ * Read PAI's Terminal Status report NOW and store the snapshot (atm_terminal_status,
+ * 0183). Shared by the daily sync note and the deposit bag page's "Cash in the ATM" card
+ * (D198e). Errors are returned as plain sentences, never thrown.
+ */
+async function readAndStoreTerminalStatus(): Promise<
+  { ok: true; rows: TerminalStatusMapped[]; capturedAt: string } | { ok: false; error: string }
+> {
+  const res = await fetchTerminalStatusCsv();
+  if (!res.ok) return { ok: false, error: `couldn’t read live machine status (${res.error})` };
+
+  const mapped = mapTerminalStatusCsv(res.csv);
+  if (mapped.rows.length === 0) {
+    const why = mapped.problems[0]?.message ?? "no terminal rows returned";
+    return { ok: false, error: `live machine status unavailable (${why})` };
+  }
+
+  // One capture instant for every row in this pull, so a multi-machine
+  // account reads as a single coherent snapshot.
+  const capturedAt = new Date().toISOString();
+  const write = await upsertAtmTerminalStatus(
+    mapped.rows.map((r) => ({
+      terminal_id: r.terminalId,
+      captured_at: capturedAt,
+      status: r.status,
+      location: r.location,
+      group_name: r.groupName,
+      days_until_cash_out: r.daysUntilCashOut,
+      trxs_since_settlement: r.trxsSinceSettlement,
+      last_trx_raw: r.lastTrxRaw,
+      last_wd_trx_raw: r.lastWithdrawalTrxRaw,
+      last_rev_trx_raw: r.lastReversalTrxRaw,
+      balance_prev_eod_cents: r.balancePrevEodCents,
+      balance_cents: r.balanceCents,
+      raw: r.raw,
+    })),
+  );
+  if (!write.ok) {
+    // The most likely cause on first run is that migration 0183 hasn't been
+    // applied yet. Say so instead of leaving a bare Postgres string.
+    return {
+      ok: false,
+      error: `couldn’t save live machine status (${write.error}) — if this mentions a missing table, apply migration 0183`,
+    };
+  }
+  return { ok: true, rows: mapped.rows, capturedAt };
+}
+
+/**
+ * D198e: the deposit bag page's "Cash in the ATM" card. Asks PAI for the machine's cash
+ * right now, stores the snapshot, and returns the one terminal's figure. Never throws.
+ * The caller throttles (the PAI portal is a shared login, not an API).
+ */
+export async function refreshLiveAtmStatus(
+  terminalId: string,
+): Promise<
+  | { ok: true; terminalId: string; balanceCents: number | null; capturedAt: string; status: string | null }
+  | { ok: false; error: string }
+> {
+  try {
+    const live = await readAndStoreTerminalStatus();
+    if (!live.ok) return live;
+    const want = terminalId.trim();
+    const row = live.rows.find((r) => r.terminalId === want) ?? (want === "" ? live.rows[0] : undefined);
+    if (!row) {
+      return {
+        ok: false,
+        error: `PAI answered, but terminal ${want} was not in its Terminal Status report (it listed ${live.rows
+          .map((r) => r.terminalId)
+          .join(", ")}). Check the ATM terminal on /admin/atm/drops.`,
+      };
+    }
+    return { ok: true, terminalId: row.terminalId, balanceCents: row.balanceCents, capturedAt: live.capturedAt, status: row.status };
+  } catch {
+    return { ok: false, error: "couldn’t read live machine status (unexpected error)" };
   }
 }
 
@@ -359,9 +406,9 @@ function centsToUsdPlain(cents: number): string {
 /**
  * Before a full-history pull, ensure every report has a CONFIRMED date-filter
  * column saved. Returns a short, plain-English note describing what it did (or
- * "" when nothing was needed / possible) \u2014 folded into the pull message so
+ * "" when nothing was needed / possible) — folded into the pull message so
  * Michael sees it. NEVER throws and NEVER blocks the pull: a discovery/network
- * hiccup just means we proceed with whatever is saved. NEVER guesses \u2014 only
+ * hiccup just means we proceed with whatever is saved. NEVER guesses — only
  * PAI-confirmed, confident column names are saved (deep-merged, never clobbering
  * an existing confirmation).
  */
@@ -371,7 +418,7 @@ async function selfHealDateFields(): Promise<string> {
     if (!secrets) return ""; // no creds \u2192 the pull itself returns the helpful message
 
     const missing = reportKindsMissingDateField(secrets.reportConfig);
-    if (missing.length === 0) return ""; // all three already confirmed \u2014 nothing to do
+    if (missing.length === 0) return ""; // all three already confirmed — nothing to do
 
     // We save ONLY keys we can PROVE work. Two evidence sources, in order:
     //   1) EMPIRICAL probe — try each candidate F_ key over the full window and

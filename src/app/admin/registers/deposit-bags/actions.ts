@@ -69,6 +69,19 @@ import {
   saveSeal,
 } from "@/lib/registers/deposit-bag-store";
 import { postSealForBag, describeSealPost } from "@/lib/accounting/seal-bag-posting-service";
+import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
+import { getLatestAtmTerminalStatus } from "@/lib/atm/store";
+import { refreshLiveAtmStatus } from "@/lib/atm/sync-server";
+import {
+  ATM_REFRESH_MIN_SECONDS,
+  BAG_PULL_FLAG_TEXT,
+  atmCashNeed,
+  bagTotalAfterPull,
+  minutesBetween,
+  parseBagAtmPull,
+  pullSentence,
+  type BagAtmPull,
+} from "@/lib/registers/deposit-bag-atm-pull-core";
 
 const BASE = "/admin/registers/deposit-bags";
 
@@ -103,6 +116,107 @@ async function employeeFromPin(pin: string, who: string): Promise<{ id: string; 
   return { id: e.id, full_name: e.full_name };
 }
 
+/* ── D198e: $20s out of the deposit for the ATM, while the bag is built ──────
+ * Owner: "a way for the morning employees to exclude 20s from the daily deposit for use in the
+ * atm ... so it can reconcile what was taken out, by who, and then the daily sync will match the
+ * money to the cash loaded into the machine."
+ * Fraud triangle: the builder's PIN names the puller; a second PIN names the witness (owner policy);
+ * the server re-reads the expected deposit and the ATM's last PAI reading itself; a pull the reading
+ * does not support needs a written reason; the pull is written in the same insert as the bag and is
+ * write-once (0347); the morning blind recount checks the bag holds expected - pull; the owner's ATM
+ * match page needs a PAI cash load of exactly that many $20s. Every pull and every refusal is audited.
+ */
+async function readBagPull(
+  formData: FormData,
+  ctx: { session: { userId: string; email: string | null }; builder: { id: string; full_name: string }; expectedDepositMinor: number | null; day: string; form: "assembled" | "counted" },
+): Promise<{ pull: BagAtmPull | null; witnessName: string | null }> {
+  const wanted = formData.get("atm_pull") === "on";
+  const twentiesText = str(formData, "atm_twenties");
+  if (!wanted && (twentiesText === "" || twentiesText === "0")) return { pull: null, witnessName: null };
+  const settings = await getAtmDropSettings();
+  const witnessPin = str(formData, "atm_witness_pin");
+  const witness = wanted && witnessPin !== "" ? await employeeFromPin(witnessPin, "the witness") : null;
+  const status = wanted ? await getLatestAtmTerminalStatus(settings.terminalId) : null;
+  const parsed = parseBagAtmPull({
+    wanted,
+    twentiesText,
+    maxTwenties: settings.maxTwentiesPerDrop,
+    expectedDepositMinor: ctx.expectedDepositMinor,
+    terminalId: settings.terminalId,
+    builderId: ctx.builder.id,
+    witnessId: witness?.id ?? null,
+    witnessPolicy: settings.witness,
+    reading: status ? { balanceCents: status.balanceCents, capturedAt: status.capturedAt } : null,
+    fillToCents: settings.fillToCents,
+    reason: str(formData, "atm_pull_reason"),
+    nowIso: new Date().toISOString(),
+  });
+  if (!parsed.ok) {
+    // A refused pull is evidence too (someone tried): audited, then shown.
+    await recordAudit({
+      actorId: ctx.session.userId,
+      actorEmail: ctx.session.email,
+      action: "deposit_bag.atm_pull_refused",
+      entityType: "deposit_bag",
+      entityId: null,
+      after: {
+        businessDay: ctx.day,
+        form: ctx.form,
+        code: parsed.code,
+        twentiesTyped: twentiesText.slice(0, 20),
+        builderId: ctx.builder.id,
+        builderName: ctx.builder.full_name,
+        witnessId: witness?.id ?? null,
+        expectedDepositMinor: ctx.expectedDepositMinor,
+        atmBalanceSeenCents: status?.balanceCents ?? null,
+        atmBalanceSeenAt: status?.capturedAt ?? null,
+      },
+    });
+    fail(parsed.error);
+  }
+  return { pull: parsed.pull, witnessName: witness?.full_name ?? null };
+}
+
+async function auditBagPull(
+  session: { userId: string; email: string | null },
+  bagId: string,
+  bag: { bagNo: string; day: string; expectedDepositMinor: number | null; bagTotalMinor: number | null },
+  pull: BagAtmPull,
+  builderName: string,
+  witnessName: string | null,
+): Promise<void> {
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "deposit_bag.atm_pull",
+    entityType: "deposit_bag",
+    entityId: bagId,
+    after: {
+      bagNo: bag.bagNo,
+      businessDay: bag.day,
+      twenties: pull.twenties,
+      amountMinor: pull.amountMinor,
+      terminalId: pull.terminalId,
+      pulledBy: pull.pulledBy,
+      pulledByName: builderName,
+      witnessedBy: pull.witnessedBy,
+      witnessedByName: witnessName,
+      flags: pull.flags,
+      reason: pull.reason,
+      atmBalanceSeenCents: pull.balanceSeenCents,
+      atmBalanceSeenAt: pull.balanceSeenAt,
+      expectedDepositMinor: bag.expectedDepositMinor,
+      bagTotalAfterPullMinor: bag.bagTotalMinor,
+    },
+  });
+}
+
+function pullDoneText(pull: BagAtmPull | null, builderName: string, witnessName: string | null): string {
+  if (!pull) return "";
+  const flags = pull.flags.length ? ` Flagged for the owner: ${pull.flags.map((f) => BAG_PULL_FLAG_TEXT[f]).join(" ")}` : "";
+  return ` ${pullSentence(pull, builderName, witnessName)} Load them into the ATM now; the morning PAI sync matches them to the cash load.${flags}`;
+}
+
 /* ── 1. Night count (SOP-03 §4.5–4.6): one person, bag left UNSEALED ─────── */
 
 export async function nightCountAction(formData: FormData): Promise<void> {
@@ -127,7 +241,16 @@ export async function nightCountAction(formData: FormData): Promise<void> {
     note: str(formData, "night_note"),
   });
   if (!chk.ok) fail(chk.error);
-  const vs = nightVsExpected(countMinor, drawers.expected.expectedMinor);
+  // D198e: the bag should hold the expected deposit less any $20s taken out for the ATM.
+  const { pull, witnessName } = await readBagPull(formData, {
+    session,
+    builder: closer,
+    expectedDepositMinor: drawers.expected.expectedMinor,
+    day,
+    form: "counted",
+  });
+  const bagExpectedMinor = bagTotalAfterPull(drawers.expected.expectedMinor, pull?.amountMinor ?? null);
+  const vs = nightVsExpected(countMinor, bagExpectedMinor);
 
   const saved = await insertNightCount({
     bagNo: chk.bagNo,
@@ -137,8 +260,12 @@ export async function nightCountAction(formData: FormData): Promise<void> {
     closerId: closer.id,
     expected: drawers.expected,
     note: chk.note,
+    pull,
   });
   if (!saved.ok) fail(saved.error);
+  if (pull) {
+    await auditBagPull(session, saved.id, { bagNo: chk.bagNo, day, expectedDepositMinor: drawers.expected.expectedMinor, bagTotalMinor: bagExpectedMinor }, pull, closer.full_name, witnessName);
+  }
 
   await recordAudit({
     actorId: session.userId,
@@ -153,6 +280,8 @@ export async function nightCountAction(formData: FormData): Promise<void> {
       nightCountedBy: closer.id,
       nightCountedByName: closer.full_name,
       expectedMinor: drawers.expected.expectedMinor,
+      atmPullMinor: pull?.amountMinor ?? null,
+      bagExpectedMinor,
       diffFromExpectedMinor: vs.diffMinor,
       expectedProblems: drawers.expected.problems,
       note: chk.note,
@@ -160,7 +289,8 @@ export async function nightCountAction(formData: FormData): Promise<void> {
     },
   });
   done(
-    `Bag ${chk.bagNo} counted at ${formatCents(countMinor)} by ${closer.full_name} for ${day}. ${vs.sentence} ` +
+    `Bag ${chk.bagNo} counted at ${formatCents(countMinor)} by ${closer.full_name} for ${day}. ${vs.sentence}` +
+      `${pullDoneText(pull, closer.full_name, witnessName)} ` +
       "Put it in the store safe UNSEALED, with the night sheet; a different employee recounts it in the morning (D23, D24)." +
       (saved.linkError ? ` The drawers could not be linked to the bag (${saved.linkError}); the bag itself is saved.` : ""),
   );
@@ -197,9 +327,20 @@ export async function nightAssembleAction(formData: FormData): Promise<void> {
   });
   if (!asm.ok) fail(asm.error);
 
+  // D198e: $20s taken out of the assembled stacks for the ATM. The bag then holds the ticked total
+  // less the pull - that is the figure saved and the one the morning blind recount must find.
+  const { pull, witnessName } = await readBagPull(formData, {
+    session,
+    builder: closer,
+    expectedDepositMinor: asm.countMinor,
+    day,
+    form: "assembled",
+  });
+  const bagMinor = asm.countMinor - (pull?.amountMinor ?? 0);
+
   const chk = checkNightCount({
     bagNo: str(formData, "bag_no"),
-    countMinor: asm.countMinor,
+    countMinor: bagMinor,
     closerId: closer.id,
     existingBagNoForDay: existing.bagNo,
     note: str(formData, "night_note"),
@@ -209,13 +350,17 @@ export async function nightAssembleAction(formData: FormData): Promise<void> {
   const saved = await insertNightCount({
     bagNo: chk.bagNo,
     businessDay: day,
-    countMinor: asm.countMinor,
+    countMinor: bagMinor,
     denoms: null,
     closerId: closer.id,
     expected: drawers.expected,
     note: chk.note,
+    pull,
   });
   if (!saved.ok) fail(saved.error);
+  if (pull) {
+    await auditBagPull(session, saved.id, { bagNo: chk.bagNo, day, expectedDepositMinor: asm.countMinor, bagTotalMinor: bagMinor }, pull, closer.full_name, witnessName);
+  }
 
   await recordAudit({
     actorId: session.userId,
@@ -227,7 +372,9 @@ export async function nightAssembleAction(formData: FormData): Promise<void> {
       bagNo: chk.bagNo,
       businessDay: day,
       method: "assembled",
-      nightCountMinor: asm.countMinor,
+      nightCountMinor: bagMinor,
+      assembledStacksMinor: asm.countMinor,
+      atmPullMinor: pull?.amountMinor ?? null,
       nightCountedBy: closer.id,
       nightCountedByName: closer.full_name,
       expectedMinor: drawers.expected.expectedMinor,
@@ -237,8 +384,10 @@ export async function nightAssembleAction(formData: FormData): Promise<void> {
     },
   });
   done(
-    `Bag ${chk.bagNo} assembled and verified at ${formatCents(asm.countMinor)} by ${closer.full_name} for ${day} ` +
-      `(${asm.confirmed.length} till stack${asm.confirmed.length === 1 ? "" : "s"} checked against the screen). ` +
+    `Bag ${chk.bagNo} assembled and verified at ${formatCents(bagMinor)} by ${closer.full_name} for ${day} ` +
+      `(${asm.confirmed.length} till stack${asm.confirmed.length === 1 ? "" : "s"} checked against the screen` +
+      `${pull ? `, ${formatCents(asm.countMinor)} before the ATM pull` : ""}).` +
+      `${pullDoneText(pull, closer.full_name, witnessName)} ` +
       "Put it in the store safe UNSEALED, with the night sheet; a different employee counts it blind in the morning (D23, D24, D82)." +
       (saved.linkError ? ` The drawers could not be linked to the bag (${saved.linkError}); the bag itself is saved.` : ""),
   );
@@ -476,4 +625,55 @@ export async function bankRunAction(formData: FormData): Promise<void> {
       "When the bank deposit shows on Books → Bank, press Clear against bags on that line. " +
       (shape ? shape.message : ""),
   );
+}
+
+/* ── D198e: the "Cash in the ATM" card ──────────────────────────────────────
+ * Owner: "a small current cash in atm card on the deposit bag page that acts like a button, when
+ * pressed, it updates the card to show the current amount, so they know how much, if any is needed
+ * from that days deposit bag." Asks PAI's Terminal Status report now (stored as a snapshot, the
+ * same row the daily sync writes), at most once a minute; a press inside the minute returns the
+ * snapshot just taken. Every live read is audited (who looked, what it said).
+ */
+export type AtmCashCardState = {
+  ok: boolean;
+  balanceCents: number | null;
+  capturedAt: string | null;
+  terminalId: string;
+  needSentence: string;
+  needTwenties: number | null;
+  message: string | null;
+};
+
+export async function refreshAtmCashAction(prev: AtmCashCardState | null, _form?: FormData): Promise<AtmCashCardState> {
+  void _form;
+  const session = await requirePermission("orders.manage");
+  const settings = await getAtmDropSettings();
+  const terminalId = settings.terminalId;
+  const shape = (balanceCents: number | null, capturedAt: string | null, message: string | null, ok: boolean): AtmCashCardState => {
+    const need = atmCashNeed(balanceCents, settings.fillToCents);
+    return { ok, balanceCents, capturedAt, terminalId, needSentence: need.sentence, needTwenties: need.kind === "needs" ? need.twenties : null, message };
+  };
+  const latest = await getLatestAtmTerminalStatus(terminalId);
+  const nowIso = new Date().toISOString();
+  const ageMin = latest ? minutesBetween(latest.capturedAt, nowIso) : null;
+  if (latest && ageMin !== null && ageMin >= 0 && ageMin * 60 < ATM_REFRESH_MIN_SECONDS) {
+    return shape(latest.balanceCents, latest.capturedAt, "Read from PAI less than a minute ago.", true);
+  }
+  const live = await refreshLiveAtmStatus(terminalId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "atm.live_status_refresh",
+    entityType: "atm_terminal",
+    entityId: terminalId,
+    after: live.ok
+      ? { from: "deposit_bags_card", balanceCents: live.balanceCents, capturedAt: live.capturedAt, status: live.status }
+      : { from: "deposit_bags_card", error: live.error },
+  });
+  if (!live.ok) {
+    // Keep showing the last figure we had, clearly dated, with the reason the live read failed.
+    const fallback = latest ?? (prev && prev.capturedAt ? { balanceCents: prev.balanceCents, capturedAt: prev.capturedAt } : null);
+    return shape(fallback?.balanceCents ?? null, fallback?.capturedAt ?? null, `Could not read the ATM just now: ${live.error}`, false);
+  }
+  return shape(live.balanceCents, live.capturedAt, null, true);
 }

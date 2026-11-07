@@ -230,6 +230,9 @@ export async function eodData(businessDay: string): Promise<EodData> {
       nightCountedByName: nameFor(b.nightCountedBy),
       morningCountedByName: nameFor(b.morningCountedBy),
       sealedByName: nameFor(b.sealedBy),
+      // D198e: who took $20s out of this deposit for the ATM, and who watched.
+      atmPulledByName: nameFor(b.atmPulledBy ?? null),
+      atmPullWitnessName: nameFor(b.atmPullWitnessedBy ?? null),
     };
   }
   const sheet = buildEodSheet({

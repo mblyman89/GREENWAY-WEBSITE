@@ -29,7 +29,13 @@ import {
 import { drawersForDay, listBags, listBagsInRange, staffNames } from "@/lib/registers/deposit-bag-store";
 import { missingBagDaysRecent } from "@/lib/registers/guided-cash-store";
 import { missingBagSentence } from "@/lib/registers/guided-cash-core";
-import { nightAssembleAction, nightCountAction, morningRecountAction, sealBagAction, retrySealPostAction, bankRunAction } from "./actions";
+import { nightAssembleAction, nightCountAction, morningRecountAction, sealBagAction, retrySealPostAction, bankRunAction, type AtmCashCardState } from "./actions";
+import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
+import { getLatestAtmTerminalStatus } from "@/lib/atm/store";
+import { recentBagPulls } from "@/lib/registers/deposit-bag-store";
+import { ATM_READING_FRESH_MINUTES, atmCashNeed, bagTotalAfterPull, isFreshReading, pullPattern } from "@/lib/registers/deposit-bag-atm-pull-core";
+import { AtmCashCard } from "@/components/admin/registers/AtmCashCard";
+import { BagAtmPullFields } from "@/components/admin/registers/BagAtmPullFields";
 
 /**
  * /admin/registers/deposit-bags — Fix Phase 2.6 (G-04, G-14; findings F-00-6,
@@ -113,13 +119,18 @@ export default async function DepositBagsPage({
   const logTo = toRes.ok ? toRes.day : today;
   const rangeError = !fromRes.ok ? fromRes.error : !toRes.ok ? toRes.error : logFrom > logTo ? "The log's From day is after its To day." : null;
 
-  const [bagsRes, logRes, drawers, employees, missingRes] = await Promise.all([
+  const atmSettings = await getAtmDropSettings();
+  const [bagsRes, logRes, drawers, employees, missingRes, atmStatus, pullsRes] = await Promise.all([
     listBags({ sinceDay: addPacificDays(today, -14) }),
     listBagsInRange(logFrom, logTo),
     drawersForDay(nightDay),
     listEmployees({ includeInactive: true }),
     // D181: "There should be a deposit bag for every single day."
     missingBagDaysRecent(14),
+    // D198e: the ATM card starts from the last stored PAI reading; pressing it reads PAI again.
+    getLatestAtmTerminalStatus(atmSettings.terminalId),
+    // D198e: who keeps taking $20s out of the deposit (owner only, below).
+    recentBagPulls(addPacificDays(today, -90)),
   ]);
   const missingDays = missingRes.ok ? missingRes.days : [];
   const missingSentence = missingRes.ok ? missingBagSentence(missingDays) : `Whether every day has its bag could not be checked: ${missingRes.error}`;
@@ -160,6 +171,26 @@ export default async function DepositBagsPage({
   const sealedTotal = sealedInSafe.reduce((s, b) => s + bagCashMinor(b), 0);
   const bankShape = depositShapeNotice(sealedTotal, depositCashInSafeMinor(bags, sealedInSafe.map((b) => b.id)));
   const exp = drawers.ok ? drawers.expected : null;
+
+  // D198e: the ATM card and the pull fields.
+  const atmNeed = atmCashNeed(atmStatus?.balanceCents ?? null, atmSettings.fillToCents);
+  const atmCard: AtmCashCardState = {
+    ok: true,
+    balanceCents: atmStatus?.balanceCents ?? null,
+    capturedAt: atmStatus?.capturedAt ?? null,
+    terminalId: atmSettings.terminalId,
+    needSentence: atmNeed.sentence,
+    needTwenties: atmNeed.kind === "needs" ? atmNeed.twenties : null,
+    message: null,
+  };
+  const atmFresh = isFreshReading(atmStatus ? { balanceCents: atmStatus.balanceCents, capturedAt: atmStatus.capturedAt } : null, new Date().toISOString());
+  const suggestedTwenties = atmFresh ? (atmNeed.kind === "needs" ? atmNeed.twenties : atmNeed.kind === "full" ? 0 : null) : null;
+  const pullFieldProps = { maxTwenties: atmSettings.maxTwentiesPerDrop, witnessPolicy: atmSettings.witness, terminalId: atmSettings.terminalId, suggestedTwenties };
+  const pullPatterns = isOwner && pullsRes.ok ? pullPattern(pullsRes.pulls) : [];
+  const pullLine = (b: BagRow) =>
+    b.atmPullMinor
+      ? `${b.atmPullTwenties} x $20 (${formatCents(b.atmPullMinor)}) to the ATM by ${nameOf(b.atmPulledBy ?? null)}${b.atmPullWitnessedBy ? `, witness ${nameOf(b.atmPullWitnessedBy)}` : ", NO witness"}${b.atmPullFlags && b.atmPullFlags.length ? ` · flags: ${b.atmPullFlags.join(", ")}` : ""}`
+      : null;
 
   return (
     <div className="space-y-6">
@@ -234,12 +265,25 @@ export default async function DepositBagsPage({
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)] print:hidden">{d27}</div>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 print:hidden">
           <StatCard label="Waiting for the morning recount" value={String(waitingRecount.length)} hint="Unsealed in the safe" />
           <StatCard label="Ready to seal" value={String(readyToSeal.length)} hint="Recounted and agreed" />
           <StatCard label="Sealed, in the safe for the bank" value={String(sealedInSafe.length)} hint={formatCents(sealedTotal)} />
           <StatCard label="Deposit cash in the safe" value={formatCents(inSafe)} hint={notPosted.length > 0 ? `${notPosted.length} sealed bag(s) NOT POSTED to the books` : "Every bag not yet banked"} />
+          <AtmCashCard initial={atmCard} staleMinutes={ATM_READING_FRESH_MINUTES} />
         </div>
+        {pullPatterns.length > 0 ? (
+          <div data-testid="atm-pull-pattern" className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-text)] print:hidden">
+            <p className="font-semibold text-[var(--admin-gold)]">ATM pulls from the deposit, last 90 days (owner)</p>
+            <ul className="mt-1 list-disc pl-5">
+              {pullPatterns.map((p) => (
+                <li key={p.employeeId}>
+                  {nameOf(p.employeeId)}: {p.sentence}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {/* ── Night count ───────────────────────────────────────────── */}
         <Panel title={`Night: assemble and verify the deposit for ${nightDay}`} className="print:hidden">
@@ -323,7 +367,8 @@ export default async function DepositBagsPage({
                       </li>
                     ))}
                 </ul>
-                <p className="text-sm font-semibold text-[var(--admin-text)]">Bag total: {formatCents(exp.expectedMinor)}</p>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">Bag total (before any ATM pull): {formatCents(exp.expectedMinor)}</p>
+                <BagAtmPullFields depositMinor={exp.expectedMinor} {...pullFieldProps} />
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="block text-xs text-[var(--admin-text-muted)]">
                     Bag # (printed on the bag)
@@ -347,7 +392,9 @@ export default async function DepositBagsPage({
               <summary className="cursor-pointer text-sm font-semibold text-[var(--admin-text)]">Count by denomination instead (when a stack does not match, or the expected deposit cannot be worked out)</summary>
             <form action={nightCountAction} className="mt-4 space-y-3">
               <input type="hidden" name="business_day" value={nightDay} />
-              <CountGrid namePrefix="night_" expectedMinor={exp?.expectedMinor ?? null} expectedLabel="Expected deposit" totalLabel="Counted into the bag" />
+              <CountGrid namePrefix="night_" expectedMinor={exp?.expectedMinor ?? null} expectedLabel="Expected deposit (before any ATM pull)" totalLabel="Counted into the bag" />
+              <BagAtmPullFields depositMinor={exp?.expectedMinor ?? null} {...pullFieldProps} />
+              <p className="text-xs text-[var(--admin-text-faint)]">With an ATM pull, count what is IN the bag after the $20s come out; it is checked against the expected deposit less the pull.</p>
               <div className="flex flex-wrap items-end gap-3">
                 <label className="block text-xs text-[var(--admin-text-muted)]">
                   Bag # (printed on the bag)
@@ -382,6 +429,7 @@ export default async function DepositBagsPage({
                   <input type="hidden" name="bag_id" value={b.id} />
                   <p className="text-sm text-[var(--admin-text)]">
                     Bag <strong>{b.bagNo}</strong> · business day {b.businessDay} · {b.nightAssembled ? "assembled and verified" : "counted"} at night by {nameOf(b.nightCountedBy)} at {fmtTime(b.nightCountedAt)}.{" "}
+                    {b.atmPullMinor ? <span className="font-semibold">$20s were taken out of this deposit for the ATM; count only what is in the bag. </span> : null}
                     <span className="text-[var(--admin-text-muted)]">Count it without looking at last night&apos;s figure (SOP-03 §4.10); the screen shows it after you save.</span>
                   </p>
                   <CountGrid namePrefix="morning_" totalLabel="Morning recount" />
@@ -429,6 +477,11 @@ export default async function DepositBagsPage({
                       <strong>{formatCents(b.morningCountMinor)}</strong> ({nameOf(b.morningCountedBy)})
                     </p>
                     {cmp ? <p className="text-xs text-[var(--admin-text-muted)]">{cmp.sentence}{b.varianceReason ? ` Reason: ${b.varianceReason}` : ""}</p> : null}
+                    {pullLine(b) ? (
+                      <p className="text-xs text-[var(--admin-gold)]">
+                        ATM pull (D198e): {pullLine(b)}{b.atmPullReason ? ` — “${b.atmPullReason}”` : ""}. Check it matched a PAI cash load on Admin → ATM Drops.
+                      </p>
+                    ) : null}
                     {shape ? <p className="text-xs text-[var(--admin-gold)]">{shape.message}</p> : null}
                     <div className="flex flex-wrap items-end gap-3">
                       <label className="block text-xs text-[var(--admin-text-muted)]">
@@ -575,7 +628,14 @@ export default async function DepositBagsPage({
                         <td className="py-2 pr-2">
                           <Badge tone={STAGE_TONE[st]}>{STAGE_LABEL[st]}</Badge>
                         </td>
-                        <td className="py-2 pr-2 text-right tabular-nums">{b.expectedMinor === null ? "—" : formatCents(b.expectedMinor)}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums">
+                          {b.expectedMinor === null ? "—" : formatCents(b.expectedMinor)}
+                          {b.atmPullMinor ? (
+                            <div className="text-[var(--admin-gold)] print:text-black/70">
+                              − ATM {formatCents(b.atmPullMinor)} = {formatCents(bagTotalAfterPull(b.expectedMinor, b.atmPullMinor))}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="py-2 pr-2 text-right tabular-nums">
                           {shown ? formatCents(b.nightCountMinor) : "hidden until recount"}
                           <div className="text-[var(--admin-text-faint)] print:text-black/60">{nameOf(b.nightCountedBy)}{b.nightAssembled ? " · assembled" : ""}</div>
@@ -584,7 +644,7 @@ export default async function DepositBagsPage({
                           {b.morningCountMinor === null ? "—" : formatCents(b.morningCountMinor)}
                           <div className="text-[var(--admin-text-faint)] print:text-black/60">{b.morningCountedBy ? nameOf(b.morningCountedBy) : ""}</div>
                         </td>
-                        <td className="py-2 pr-2">{[b.varianceReason, b.nightNote, b.bankNote].filter(Boolean).join(" · ") || "—"}</td>
+                        <td className="py-2 pr-2">{[pullLine(b), b.atmPullReason, b.varianceReason, b.nightNote, b.bankNote].filter(Boolean).join(" · ") || "—"}</td>
                         <td className="py-2 pr-2">{b.sealedAt ? `${formatCents(b.amountMinor)} · ${nameOf(b.sealedBy)} · ${fmtTime(b.sealedAt)}` : "—"}</td>
                         <td className="py-2 pr-2">{b.sealJournalId ? "posted" : b.sealedAt ? "NOT POSTED" : "—"}</td>
                         <td className="py-2">{b.bankedOn ? `${b.bankedOn} · ${bankerOf(b.bankedBy)}` : "—"}{b.depositConfirmedOn ? ` · confirmed ${b.depositConfirmedOn}` : ""}</td>

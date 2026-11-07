@@ -414,6 +414,14 @@ export default async function AtmDropsPage({
               <label className={label} htmlFor="match_window">Match window (min)</label>
               <input id="match_window" name="match_window" type="number" min={15} max={1440} defaultValue={inp.settings.matchWindowMinutes} className={input} />
             </div>
+            <div>
+              <label className={label} htmlFor="fill_to">Fill the ATM to ($, blank = not set)</label>
+              <input id="fill_to" name="fill_to" type="number" min={20} max={100000} step={20} defaultValue={inp.settings.fillToCents === null ? "" : inp.settings.fillToCents / 100} className={input} />
+            </div>
+            <p className="text-xs text-white/45 sm:col-span-5">
+              Fill-to (D198e): the cash you want in the ATM after it is filled. The deposit bag page&apos;s "Cash in the ATM" card
+              uses it to say how many $20s, if any, to take out of the day&apos;s bag; taking more is flagged for you here.
+            </p>
             <div className="sm:col-span-5">
               <button className={btn}>Save rules</button>
             </div>

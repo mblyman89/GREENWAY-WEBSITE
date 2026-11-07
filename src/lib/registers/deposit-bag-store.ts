@@ -17,6 +17,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { type DenomCounts } from "@/lib/registers/cash";
 import { type BagStatus } from "@/lib/accounting/safe-bag-core";
 import { expectedDeposit, type BagRow, type ExpectedDeposit } from "@/lib/registers/deposit-bag-flow-core";
+import { type BagAtmPull, type PullPatternBag } from "@/lib/registers/deposit-bag-atm-pull-core";
 
 const BAG_COLUMNS =
   "id, bag_no, business_day, status, amount_minor, night_count_minor, night_counted_by, night_counted_at, expected_minor, night_note, " +
@@ -24,6 +25,29 @@ const BAG_COLUMNS =
 
 /** Lists also read night_denoms, only to tell an assembled night bag (D82) from a counted one. */
 const LIST_COLUMNS = `${BAG_COLUMNS}, night_denoms`;
+
+/**
+ * D198e (0347): the ATM pull on the bag. Read WITH the bag; when 0347 is not applied yet the read is
+ * retried without them (withPullColumns), so the page never breaks before the owner runs it.
+ */
+const PULL_COLUMNS =
+  "atm_pull_twenties, atm_pull_minor, atm_pulled_by, atm_pull_witnessed_by, atm_pulled_at, atm_pull_terminal_id, " +
+  "atm_pull_flags, atm_pull_reason, atm_pull_balance_seen_cents, atm_pull_balance_seen_at";
+
+/** "The 0347 pull columns are not there yet". */
+export function isMissingPullSchema(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  return (err.code === "42703" || err.code === "PGRST204" || /column/i.test(err.message ?? "")) && /atm_pull/i.test(err.message ?? "");
+}
+
+/** Run a bag read with the pull columns, and once more without them if 0347 is not applied. */
+async function withPullColumns<T extends { error: { code?: string; message?: string } | null }>(
+  run: (extra: string) => PromiseLike<T>,
+): Promise<T> {
+  const first = await run(`, ${PULL_COLUMNS}`);
+  if (first.error && isMissingPullSchema(first.error)) return run("");
+  return first;
+}
 
 type DbBag = {
   id: string;
@@ -48,7 +72,23 @@ type DbBag = {
   bank_note: string | null;
   deposit_confirmed_on: string | null;
   night_denoms?: unknown;
+  atm_pull_twenties?: number | null;
+  atm_pull_minor?: number | null;
+  atm_pulled_by?: string | null;
+  atm_pull_witnessed_by?: string | null;
+  atm_pulled_at?: string | null;
+  atm_pull_terminal_id?: string | null;
+  atm_pull_flags?: string[] | null;
+  atm_pull_reason?: string | null;
+  atm_pull_balance_seen_cents?: number | string | null;
+  atm_pull_balance_seen_at?: string | null;
 };
+
+function numOrNull(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isSafeInteger(n) ? n : null;
+}
 
 function toRow(d: DbBag): BagRow {
   return {
@@ -74,6 +114,20 @@ function toRow(d: DbBag): BagRow {
     bankNote: d.bank_note,
     depositConfirmedOn: d.deposit_confirmed_on,
     ...("night_denoms" in d ? { nightAssembled: d.night_count_minor !== null && (d.night_denoms === null || d.night_denoms === undefined) } : {}),
+    ...("atm_pull_twenties" in d
+      ? {
+          atmPullTwenties: d.atm_pull_twenties ?? null,
+          atmPullMinor: d.atm_pull_minor ?? null,
+          atmPulledBy: d.atm_pulled_by ?? null,
+          atmPullWitnessedBy: d.atm_pull_witnessed_by ?? null,
+          atmPulledAt: d.atm_pulled_at ?? null,
+          atmPullTerminalId: d.atm_pull_terminal_id ?? null,
+          atmPullFlags: Array.isArray(d.atm_pull_flags) ? d.atm_pull_flags : [],
+          atmPullReason: d.atm_pull_reason ?? null,
+          atmPullBalanceSeenCents: numOrNull(d.atm_pull_balance_seen_cents),
+          atmPullBalanceSeenAt: d.atm_pull_balance_seen_at ?? null,
+        }
+      : {}),
   };
 }
 
@@ -95,9 +149,11 @@ export type BagListResult =
 export async function listBags(opts: { sinceDay: string; untilDay?: string }): Promise<BagListResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, missingSchema: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
-  let q = admin.from("deposit_bags").select(LIST_COLUMNS).or(`banked_on.is.null,business_day.gte.${opts.sinceDay}`);
-  if (opts.untilDay) q = q.lte("business_day", opts.untilDay);
-  const { data, error } = await q.order("business_day", { ascending: false }).order("created_at", { ascending: false });
+  const { data, error } = await withPullColumns((extra) => {
+    let q = admin.from("deposit_bags").select(`${LIST_COLUMNS}${extra}`).or(`banked_on.is.null,business_day.gte.${opts.sinceDay}`);
+    if (opts.untilDay) q = q.lte("business_day", opts.untilDay);
+    return q.order("business_day", { ascending: false }).order("created_at", { ascending: false });
+  });
   if (error) return { ok: false, missingSchema: isMissingBagSchema(error), error: error.message };
   return { ok: true, bags: ((data as unknown as DbBag[] | null) ?? []).map(toRow) };
 }
@@ -106,13 +162,15 @@ export async function listBags(opts: { sinceDay: string; untilDay?: string }): P
 export async function listBagsInRange(fromDay: string, toDay: string): Promise<BagListResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, missingSchema: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("deposit_bags")
-    .select(LIST_COLUMNS)
-    .gte("business_day", fromDay)
-    .lte("business_day", toDay)
-    .order("business_day", { ascending: true })
-    .order("created_at", { ascending: true });
+  const { data, error } = await withPullColumns((extra) =>
+    admin
+      .from("deposit_bags")
+      .select(`${LIST_COLUMNS}${extra}`)
+      .gte("business_day", fromDay)
+      .lte("business_day", toDay)
+      .order("business_day", { ascending: true })
+      .order("created_at", { ascending: true }),
+  );
   if (error) return { ok: false, missingSchema: isMissingBagSchema(error), error: error.message };
   return { ok: true, bags: ((data as unknown as DbBag[] | null) ?? []).map(toRow) };
 }
@@ -120,7 +178,7 @@ export async function listBagsInRange(fromDay: string, toDay: string): Promise<B
 export async function getBag(id: string): Promise<{ ok: true; bag: BagRow | null } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.from("deposit_bags").select(BAG_COLUMNS).eq("id", id).maybeSingle();
+  const { data, error } = await withPullColumns((extra) => admin.from("deposit_bags").select(`${BAG_COLUMNS}${extra}`).eq("id", id).maybeSingle());
   if (error) return { ok: false, error: error.message };
   return { ok: true, bag: data ? toRow(data as unknown as DbBag) : null };
 }
@@ -147,12 +205,14 @@ export async function bagDetailForDay(
 > {
   if (!isSupabaseServiceConfigured) return { ok: false, missingSchema: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("deposit_bags")
-    .select(`${BAG_COLUMNS}, night_denoms, morning_denoms`)
-    .eq("business_day", day)
-    .order("created_at", { ascending: true })
-    .limit(1);
+  const { data, error } = await withPullColumns((extra) =>
+    admin
+      .from("deposit_bags")
+      .select(`${BAG_COLUMNS}, night_denoms, morning_denoms${extra}`)
+      .eq("business_day", day)
+      .order("created_at", { ascending: true })
+      .limit(1),
+  );
   if (error) return { ok: false, missingSchema: isMissingBagSchema(error), error: error.message };
   const row = ((data as unknown as (DbBag & { night_denoms: unknown; morning_denoms: unknown })[] | null) ?? [])[0];
   if (!row) return { ok: true, bag: null };
@@ -258,6 +318,11 @@ export async function insertNightCount(input: {
   closerId: string;
   expected: ExpectedDeposit;
   note: string | null;
+  /**
+   * D198e: $20s taken out of the deposit for the ATM, written in the SAME insert as the bag (never
+   * half-saved). countMinor is then what is IN the bag (expected - pull). The builder is the puller.
+   */
+  pull?: BagAtmPull | null;
 }): Promise<NightWriteResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
@@ -274,11 +339,31 @@ export async function insertNightCount(input: {
       night_denoms: input.denoms,
       expected_minor: input.expected.expectedMinor,
       night_note: input.note,
+      ...(input.pull
+        ? {
+            atm_pull_twenties: input.pull.twenties,
+            atm_pull_minor: input.pull.amountMinor,
+            atm_pulled_by: input.closerId,
+            atm_pull_witnessed_by: input.pull.witnessedBy,
+            atm_pulled_at: new Date().toISOString(),
+            atm_pull_terminal_id: input.pull.terminalId,
+            atm_pull_flags: input.pull.flags,
+            atm_pull_reason: input.pull.reason,
+            atm_pull_balance_seen_cents: input.pull.balanceSeenCents,
+            atm_pull_balance_seen_at: input.pull.balanceSeenAt,
+          }
+        : {}),
     })
     .select("id")
     .single();
   if (error) {
     if (error.code === "23505") return { ok: false, error: `Bag ${input.bagNo} is already recorded for ${input.businessDay}. Nothing was saved.` };
+    if (input.pull && isMissingPullSchema(error)) {
+      return {
+        ok: false,
+        error: "Taking $20s out of the deposit for the ATM needs database migration 0347, which is not applied yet. Nothing was saved. Ask the owner to run it, or record the bag without the ATM pull.",
+      };
+    }
     return { ok: false, error: `The bag could not be saved: ${error.message}` };
   }
   const id = (data as { id: string }).id;
@@ -402,5 +487,33 @@ export async function staffNames(ids: readonly string[]): Promise<{ ok: true; na
   return {
     ok: true,
     names: new Map(((data as { id: string; full_name: string | null; email: string }[] | null) ?? []).map((r) => [r.id, r.full_name || r.email])),
+  };
+}
+
+/**
+ * D198e: the ATM pulls from the deposit in a business-day range (the repeat-puller pattern on the
+ * bag page). Pre-0347: an empty list with migrationMissing = true, never an error.
+ */
+export async function recentBagPulls(
+  fromDay: string,
+): Promise<{ ok: true; pulls: PullPatternBag[]; migrationMissing: boolean } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("deposit_bags")
+    .select("business_day, atm_pulled_by, atm_pull_minor, atm_pull_witnessed_by")
+    .gte("business_day", fromDay)
+    .not("atm_pull_twenties", "is", null)
+    .order("business_day", { ascending: false })
+    .limit(400); // one bag a day: ~a year of pulls at most
+  if (error) {
+    if (isMissingPullSchema(error)) return { ok: true, pulls: [], migrationMissing: true };
+    return { ok: false, error: error.message };
+  }
+  const rows = (data as { business_day: string; atm_pulled_by: string | null; atm_pull_minor: number | null; atm_pull_witnessed_by: string | null }[] | null) ?? [];
+  return {
+    ok: true,
+    migrationMissing: false,
+    pulls: rows.map((r) => ({ businessDay: r.business_day, atmPulledBy: r.atm_pulled_by, atmPullMinor: r.atm_pull_minor, atmPullWitnessedBy: r.atm_pull_witnessed_by })),
   };
 }

@@ -3858,3 +3858,29 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0346_atm_cash_drops.rollback.sql` (writes the ATM details into
   each ATM drop's notes first, keeps `atm_drop_reviews` if it holds any sign-off).
+
+- [ ] **`supabase/migrations/0347_deposit_bag_atm_pull.sql`** — D198e $20s out of the deposit bag for the ATM (owner:
+  "I need a way for the morning employees to exclude 20s from the daily deposit for use in the atm ... so it can
+  reconcile what was taken out, by who, and then the daily sync will match the money to the cash loaded into the
+  machine"). Adds to `deposit_bags`: `atm_pull_twenties` (1–2500), `atm_pull_minor` (always count x $20),
+  `atm_pulled_by`, `atm_pull_witnessed_by` (a different person), `atm_pulled_at`, `atm_pull_terminal_id`,
+  `atm_pull_flags`, `atm_pull_balance_seen_cents` / `_at` (what PAI said the ATM held at the time) and
+  `atm_pull_reason`; trigger `deposit_bags_atm_pull_immutable` (a pull is written with the bag and can never be
+  changed or added later). No new table; existing bags are unchanged (no pull).
+
+  Until it is applied the deposit bag page works exactly as before; a bag WITH an ATM pull is refused with "run
+  migration 0347" (nothing is saved half-way), and the ATM cash card still works.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) filter (where atm_pull_twenties is not null) as bags_with_pull,                       -- 0 at first
+         (select count(*) from pg_trigger where tgname = 'deposit_bags_atm_pull_immutable') as trigger,  -- 1
+         (select count(*) from pg_constraint where conname like 'deposit_bags_atm_pull%') as checks       -- 5
+    from public.deposit_bags;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0347_deposit_bag_atm_pull.rollback.sql` (writes "[ATM pull: N x
+  $20 = $X into HG26499 at ...]" into each bag's night note first, also on sealed bags, then drops the columns).

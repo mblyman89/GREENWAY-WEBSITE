@@ -310,7 +310,10 @@ export default async function EodReportPage({
               </p>
             ) : null}
             <p className="mt-1 text-xs">
-              {bag.againstExpectedMinor === null ? "" : `Bag against expected deposit: ${overShortLabel(bag.againstExpectedMinor)}. `}
+              {bag.atmPullMinor
+                ? `$20s taken out for the ATM (D198e): ${bag.atmPullTwenties ?? "?"} x $20 = ${formatCents(bag.atmPullMinor)} by ${bag.atmPulledByName ?? "?"}${bag.atmPullWitnessName ? `, witness ${bag.atmPullWitnessName}` : ", no witness"}; the bag holds the expected deposit less this. `
+                : ""}
+              {bag.againstExpectedMinor === null ? "" : `Bag against ${bag.atmPullMinor ? "expected deposit less the ATM pull" : "expected deposit"}: ${overShortLabel(bag.againstExpectedMinor)}. `}
               {bag.varianceReason ? `Reason: ${bag.varianceReason}. ` : ""}
               {bag.sealedByName ? `Sealed by ${bag.sealedByName}. ` : ""}
               {bag.bankedOn ? `Taken to the bank ${bag.bankedOn}.` : ""}

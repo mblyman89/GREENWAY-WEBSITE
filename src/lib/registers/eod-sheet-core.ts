@@ -144,6 +144,9 @@ export type SheetBagInput = BagRow & {
   nightCountedByName: string | null;
   morningCountedByName: string | null;
   sealedByName: string | null;
+  /** D198e: names for the ATM pull (optional: older callers leave them out). */
+  atmPulledByName?: string | null;
+  atmPullWitnessName?: string | null;
 };
 
 export type SheetBag = {
@@ -161,8 +164,13 @@ export type SheetBag = {
   sealedByName: string | null;
   sealedAt: string | null;
   bankedOn: string | null;
-  /** The bag's count compared with the drawers' expected deposit. */
+  /** The bag's count compared with what it should hold: the drawers' expected deposit less any ATM pull (D198e). */
   againstExpectedMinor: number | null;
+  /** D198e: $20s taken out of this deposit for the ATM while the bag was built (null = none). */
+  atmPullMinor: number | null;
+  atmPullTwenties: number | null;
+  atmPulledByName: string | null;
+  atmPullWitnessName: string | null;
 };
 
 export type EodSheet = {
@@ -219,6 +227,9 @@ export function buildEodSheet(input: {
   if (input.bag) {
     const b = input.bag;
     const nightShown = showNightFigure(b);
+    // D198e: the bag holds the expected deposit less the $20s taken out for the ATM.
+    const pullMinor = b.atmPullMinor && b.atmPullMinor > 0 ? b.atmPullMinor : 0;
+    const shouldHold = deposit.expectedMinor === null ? null : deposit.expectedMinor - pullMinor;
     bag = {
       bagNo: b.bagNo,
       stageLabel: STAGE_LABEL[bagStage(b)],
@@ -234,13 +245,17 @@ export function buildEodSheet(input: {
       sealedAt: b.sealedAt,
       bankedOn: b.bankedOn,
       againstExpectedMinor:
-        deposit.expectedMinor === null
+        shouldHold === null
           ? null
           : b.morningCountMinor !== null
-            ? b.morningCountMinor - deposit.expectedMinor
+            ? b.morningCountMinor - shouldHold
             : nightShown && b.nightCountMinor !== null
-              ? b.nightCountMinor - deposit.expectedMinor
+              ? b.nightCountMinor - shouldHold
               : null,
+      atmPullMinor: pullMinor > 0 ? pullMinor : null,
+      atmPullTwenties: pullMinor > 0 ? (b.atmPullTwenties ?? null) : null,
+      atmPulledByName: pullMinor > 0 ? (b.atmPulledByName ?? null) : null,
+      atmPullWitnessName: pullMinor > 0 ? (b.atmPullWitnessName ?? null) : null,
     };
   } else if (input.bagMissingSchema) {
     bagNote = BAG_SCHEMA_MISSING;
@@ -302,6 +317,15 @@ export function eodSheetWorkbook(sheet: EodSheet, sales: DaySummary): WorkbookSp
     { item: "Total takings (closing count − float)", amount: d.totalTakingsMinor, note: "(a)" },
     { item: "Drops", amount: d.totalDropsMinor, note: "(b)" },
     { item: "Expected deposit (a) + (b)", amount: d.expectedMinor, note: d.expectedMinor === null ? d.problems.join(" ") : "(c)" },
+    ...(sheet.bag?.atmPullMinor
+      ? [
+          {
+            item: `$20s taken out for the ATM (${sheet.bag.atmPullTwenties ?? "?"} x $20)`,
+            amount: -sheet.bag.atmPullMinor,
+            note: `D198e, by ${sheet.bag.atmPulledByName ?? "?"}${sheet.bag.atmPullWitnessName ? `, witness ${sheet.bag.atmPullWitnessName}` : ", no witness"}; the bag holds (c) less this`,
+          },
+        ]
+      : []),
     { item: `Cash sales (${sheet.cash.cashSaleCount}, with rounding)`, amount: sheet.cash.cashSalesMinor, note: "processed, cash tender" },
     { item: `Refunds paid from drawers`, amount: -sheet.refunds.fromDrawersMinor, note: "voids + counter returns" },
     { item: "Net cash from sales", amount: sheet.netCashMinor, note: sheet.netCashProblem ?? "" },
@@ -546,6 +570,10 @@ export function __runEodSheetTests(): { passed: number; failed: number } {
   const after = buildEodSheet({ ...base, bag: { ...bagRow, morningCountMinor: 169900, morningCountedBy: "e2", morningDenoms: { ...denoms! }, morningCountedByName: "Morning Opener" } });
   ok(after.bag!.nightShown && after.bag!.nightCountMinor === 170000, "night shown after recount");
   ok(after.bag!.againstExpectedMinor === -100, "bag vs expected uses the morning count");
+  ok(after.bag!.atmPullMinor === null, "no ATM pull = null (D198e)");
+  const pulled = buildEodSheet({ ...base, bag: { ...bagRow, morningCountMinor: 130000, morningCountedBy: "e2", morningDenoms: { ...denoms! }, morningCountedByName: "Morning Opener", atmPullTwenties: 20, atmPullMinor: 40000, atmPulledByName: "Closer" } });
+  ok(pulled.bag!.againstExpectedMinor === 0 && pulled.bag!.atmPullMinor === 40000, "ATM pull taken off what the bag should hold (D198e)");
+  ok(pulled.differenceMinor === after.differenceMinor, "the ATM pull does not change the cash check (D198e)");
 
   const wb = eodSheetWorkbook(after, {
     saleCount: 3, grossMinor: 179000, subtotalMinor: 150000, taxMinor: 29000, medicalSaleCount: 0, medicalSavingsMinor: 0,
