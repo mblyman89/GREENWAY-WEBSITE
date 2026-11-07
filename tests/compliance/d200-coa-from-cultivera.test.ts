@@ -303,7 +303,7 @@ describe("D200 - wiring", () => {
     expect(page).toContain('data-testid="coa-attach-button"');
     expect(page).toContain("export const maxDuration = 300");
     const actions = read("src/app/admin/inventory/fix-later/actions.ts");
-    expect(actions.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(2);
+    expect(actions.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(5);
     const main = read("crawler/app/main.py");
     expect(main).toContain('@app.post("/cultivera-pos/wcia-runs"');
     const client = read("src/lib/pos/cultivera-fetch-client.ts");

@@ -14,6 +14,8 @@
  *
  * Read-only: every lot links to its own page to fix it. D200 adds the two
  * COA buttons (fetch from Cultivera, attach all): fill-only, audited.
+ * D201 adds "COAs from Stephen's Gmail": a targeted search, attach (+ preview),
+ * and a "Search Gmail" button on every No COA lot and every delivery.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -23,7 +25,8 @@ import { readFixLaterCoverage } from "@/lib/pos/register-fix-later-store";
 import { Button } from "@/components/admin/ui";
 import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefresh";
 import { readCoaPanel, type CoaPanel } from "@/lib/inventory/coa-from-cultivera-store";
-import { attachAllCoasAction, fetchCoasFromCultiveraAction } from "./actions";
+import { readGmailPanel, type GmailPanel } from "@/lib/inventory/coa-gmail-search-store";
+import { attachAllCoasAction, attachCoasFromGmailAction, fetchCoasFromCultiveraAction, searchGmailForCoasAction, searchGmailForOneAction } from "./actions";
 import {
   FIX_LATER_REASON_LABELS,
   REGISTER_STOP_LABELS,
@@ -127,10 +130,107 @@ function CoaFromCultivera({ panel, tone, msg }: { panel: CoaPanel; tone: string 
   );
 }
 
-export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string }> }) {
+function CoaFromGmail({ panel, tone, msg }: { panel: GmailPanel; tone: string | undefined; msg: string | undefined }) {
+  const searched = panel.rows.filter((r) => r.searchedAt).length;
+  return (
+    <div className={CARD} id="coa-from-gmail" data-testid="coa-from-gmail">
+      <h2 className={H2}>COAs from Stephen&apos;s Gmail</h2>
+      {msg ? (
+        <p
+          className={`mb-3 rounded-[var(--admin-radius)] border px-3 py-2 text-sm ${tone === "ok" ? "border-emerald-500/40 text-[var(--admin-text)]" : "border-amber-500/50 text-[var(--admin-text)]"}`}
+          data-testid="coa-gmail-result"
+        >
+          {msg}
+        </p>
+      ) : null}
+      {!panel.ok ? (
+        <p className="text-sm text-[var(--admin-text-muted)]">Could not read the lots with no COA: {panel.error}</p>
+      ) : (
+        <>
+          <p className="text-sm text-[var(--admin-text)]">
+            <strong>{panel.missingLots}</strong> lot{panel.missingLots === 1 ? "" : "s"} with stock still have no COA, on <strong>{panel.rows.length}</strong>{" "}
+            deliver{panel.rows.length === 1 ? "y" : "ies"} ({searched} searched in Gmail so far).
+            {panel.error ? ` (${panel.error})` : ""}
+          </p>
+          <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm text-[var(--admin-text-muted)]">
+            <li>
+              <form action={searchGmailForCoasAction} className="flex flex-wrap items-center gap-3">
+                <Button type="submit" variant="primary" size="sm" disabled={panel.rows.length === 0} data-testid="coa-gmail-search-button">
+                  Search Gmail for the missing COAs
+                </Button>
+                <span>
+                  Asks stephen@greenwaymarijuana.com exact questions for each delivery (its manifest number, its barcodes, its vendor around the
+                  delivery date) and keeps every matching email&apos;s COA PDFs and vendor JSON. Gmail is only read. Click again if it says it is not
+                  finished.
+                </span>
+              </form>
+            </li>
+            <li>
+              <div className="flex flex-wrap items-center gap-3">
+                <form action={attachCoasFromGmailAction}>
+                  <Button type="submit" variant="primary" size="sm" data-testid="coa-gmail-attach-button">
+                    Attach COAs from Gmail
+                  </Button>
+                </form>
+                <form action={attachCoasFromGmailAction}>
+                  <input type="hidden" name="dryRun" value="1" />
+                  <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-preview-button">
+                    Preview first (writes nothing)
+                  </Button>
+                </form>
+              </div>
+              <p className="mt-1">
+                Links each lot to the lab data in its vendor JSON (with the COA link), then reads the COA PDFs: a lot is linked only when a
+                certificate prints its exact barcode. Only empty COAs are filled; the PDF is filed with the lab result. Safe to click again.
+              </p>
+            </li>
+          </ol>
+          {panel.rows.length > 0 ? (
+            <details className="mt-4" data-testid="coa-gmail-deliveries">
+              <summary className="cursor-pointer text-sm font-bold text-[var(--admin-text)]">Deliveries still missing COAs (search one at a time)</summary>
+              <table className="mt-2 w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-[var(--admin-text-muted)]">
+                    <th className="py-1 pr-3">Vendor</th>
+                    <th className="py-1 pr-3">Manifest</th>
+                    <th className="py-1 pr-3">Date</th>
+                    <th className="py-1 pr-3">Lots</th>
+                    <th className="py-1 pr-3">Last searched</th>
+                    <th className="py-1" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {panel.rows.map((r) => (
+                    <tr key={r.manifestId} className="border-t border-[var(--admin-border)]">
+                      <td className="py-1 pr-3">{r.vendorLabel ?? "Unknown vendor"}</td>
+                      <td className="py-1 pr-3 font-mono text-xs">{r.manifestNumber ?? ""}</td>
+                      <td className="py-1 pr-3">{r.transferDate ?? ""}</td>
+                      <td className="py-1 pr-3">{r.lots}</td>
+                      <td className="py-1 pr-3">{r.searchedAt ? `${r.searchedAt.slice(0, 10)} (${r.emails} email${r.emails === 1 ? "" : "s"})` : "never"}</td>
+                      <td className="py-1">
+                        <form action={searchGmailForOneAction}>
+                          <input type="hidden" name="manifestId" value={r.manifestId} />
+                          <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-delivery-button">
+                            Search Gmail
+                          </Button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string; gm?: string; gm_msg?: string }> }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const [read, coaPanel] = await Promise.all([readFixLaterCoverage(), readCoaPanel()]);
+  const [read, coaPanel, gmailPanel] = await Promise.all([readFixLaterCoverage(), readCoaPanel(), readGmailPanel()]);
 
   return (
     <div className="space-y-5">
@@ -164,6 +264,7 @@ export default async function FixLaterPage({ searchParams }: { searchParams: Pro
           </div>
 
           <CoaFromCultivera panel={coaPanel} tone={sp.coa} msg={sp.coa_msg} />
+          <CoaFromGmail panel={gmailPanel} tone={sp.gm} msg={sp.gm_msg} />
 
           {read.coverage.stoppedLots > 0 ? (
             <div className={CARD} data-testid="fix-later-stopped">
@@ -188,7 +289,7 @@ export default async function FixLaterPage({ searchParams }: { searchParams: Pro
             </div>
           ) : null}
 
-          <div className={CARD} data-testid="fix-later-list">
+          <div className={CARD} id="fix-later-list" data-testid="fix-later-list">
             <h2 className={H2}>Selling now, fix later ({read.coverage.rows.filter((r) => r.sells && r.fixLater.length > 0).length})</h2>
             <table className="w-full text-sm">
               <thead>
@@ -212,7 +313,17 @@ export default async function FixLaterPage({ searchParams }: { searchParams: Pro
                       </td>
                       <td className="py-1 pr-3 font-mono text-xs">{read.lots.get(r.lotId)?.lotCode ?? ""}</td>
                       <td className="py-1 pr-3">{r.units}</td>
-                      <td className="py-1">{r.fixLater.map((x) => REASON_SHORT[x]).join(" · ")}</td>
+                      <td className="py-1">
+                        {r.fixLater.map((x) => REASON_SHORT[x]).join(" · ")}
+                        {r.fixLater.includes("no_coa") ? (
+                          <form action={searchGmailForOneAction} className="mt-1">
+                            <input type="hidden" name="lotId" value={r.lotId} />
+                            <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-lot-button">
+                              Search Gmail for this COA
+                            </Button>
+                          </form>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
               </tbody>
