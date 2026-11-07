@@ -49,7 +49,8 @@ import {
   safeCoaUrl,
   type PdfTextCandidate,
 } from "@/lib/inventory/coa-extract-core";
-import type { CoaExtract } from "@/lib/inventory/coa-facts-core";
+import { readStoredCoaExtract, type CoaExtract } from "@/lib/inventory/coa-facts-core";
+import { bestAnyLayout, chooseTrusted, trustExtract } from "@/lib/inventory/coa-trust-all-core";
 
 export type { CoaExtractRun };
 
@@ -69,6 +70,9 @@ type LabRow = {
   wcia_json_url: string | null;
   coa_storage_path: string | null;
   coa_extract_status: string | null;
+  /** D206: read only when the owner's trust policy is applied. */
+  coa_extract_json?: unknown;
+  labtest_external_identifier?: string | null;
 };
 
 
@@ -177,7 +181,7 @@ async function pdfBytesFor(lab: LabRow, ctx: HostContext): Promise<{ bytes: Uint
 /** Read one lab row's certificate (both documents). Never throws. */
 export async function readCoaForLab(
   lab: LabRow,
-  opts: { actorId: string | null; alwaysLlama?: boolean; hosts?: HostContext } = { actorId: null },
+  opts: { actorId: string | null; alwaysLlama?: boolean; hosts?: HostContext; trust?: { hintIds: readonly string[] } } = { actorId: null },
 ): Promise<CoaExtract> {
   const ctx = opts.hosts ?? (await loadHostContext());
   const jsonGot = lab.wcia_json_url ? await fetchBounded(lab.wcia_json_url, "json", ctx) : { bytes: null, error: null };
@@ -210,13 +214,19 @@ export async function readCoaForLab(
     }
   }
   const picked = pdfGot.bytes ? pickPdfText(candidates) : { text: null, via: "none" as const, error: pdfGot.error, considered: [] };
-  return buildCoaExtract({
+  const at = new Date().toISOString();
+  const extract = buildCoaExtract({
     jsonUrl: lab.wcia_json_url,
     transferCoaUrl: lab.coa_url,
     json: { text: jsonText, error: lab.wcia_json_url ? jsonGot.error : null },
     pdf: picked,
-    at: new Date().toISOString(),
+    at,
   });
+  if (!opts.trust) return extract;
+  // D206: the owner's policy - every COA we hold is legitimate. A layout the
+  // strict readers turn down is read by the any-layout reader (every text we
+  // got), and the read is accepted (coa-trust-all-core trustExtract).
+  return trustExtract(extract, { at, reread: bestAnyLayout(candidates.map((c) => c.text), opts.trust.hintIds) });
 }
 
 /**
@@ -255,16 +265,37 @@ async function fillKbFromExtract(labId: string, extract: CoaExtract): Promise<{ 
   return { filled, errors };
 }
 
+/**
+ * D206: each lab result's own ids (its external identifier + the codes of
+ * the lots that point at it) - they pick this product's row out of a
+ * multi-product certificate. A failed read is reported, never a guess.
+ */
+async function trustHints(admin: ReturnType<typeof createSupabaseAdminClient>, rows: readonly LabRow[]): Promise<{ hints: Map<string, string[]>; error: string | null }> {
+  const hints = new Map<string, string[]>();
+  for (const r of rows) hints.set(r.id, r.labtest_external_identifier ? [r.labtest_external_identifier] : []);
+  if (rows.length === 0) return { hints, error: null };
+  const { data, error } = await admin
+    .from("inventory_lots")
+    .select("lab_result_id, lot_code")
+    .in("lab_result_id", rows.map((r) => r.id))
+    .limit(900);
+  if (error) return { hints, error: `lot codes: ${error.message}` };
+  for (const l of (data as { lab_result_id: string | null; lot_code: string | null }[] | null) ?? []) {
+    if (l.lab_result_id && l.lot_code) hints.get(l.lab_result_id)?.push(l.lot_code);
+  }
+  return { hints, error: null };
+}
+
 async function runForLabs(
   labIds: string[],
-  opts: { force: boolean; actorId: string | null; alwaysLlama?: boolean; budgetMs?: number },
+  opts: { force: boolean; actorId: string | null; alwaysLlama?: boolean; budgetMs?: number; trust?: boolean },
 ): Promise<CoaExtractRun> {
   const started = Date.now();
   if (!isSupabaseServiceConfigured || labIds.length === 0) return emptyRun(true);
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("lab_results")
-    .select("id, coa_url, wcia_json_url, coa_storage_path, coa_extract_status")
+    .select(opts.trust ? "id, coa_url, wcia_json_url, coa_storage_path, coa_extract_status, coa_extract_json, labtest_external_identifier" : "id, coa_url, wcia_json_url, coa_storage_path, coa_extract_status")
     .in("id", labIds.slice(0, COA_EXTRACT_MAX_PER_RUN));
   if (isMissingColumnError(error)) return emptyRun(false);
   const run = emptyRun(true);
@@ -272,8 +303,10 @@ async function runForLabs(
     run.errors.push(error.message);
     return run;
   }
-  const rows = ((data as LabRow[] | null) ?? []).filter((r) => opts.force || r.coa_extract_status !== "ok");
+  const rows = ((data as unknown as LabRow[] | null) ?? []).filter((r) => opts.force || r.coa_extract_status !== "ok");
   run.pending = rows.length;
+  const trust = opts.trust ? await trustHints(admin, rows) : null;
+  if (trust?.error) run.errors.push(trust.error);
   // The owner's extra certificate hosts, read ONCE for the whole pass.
   const hosts = rows.length ? await loadHostContext() : BUILT_INS_ONLY;
   // Bounded concurrency: 4 certificates at a time, inside the time budget.
@@ -285,7 +318,9 @@ async function runForLabs(
     await Promise.all(
       rows.slice(i, i + 4).map(async (lab) => {
         try {
-          const extract = await readCoaForLab(lab, { actorId: opts.actorId, alwaysLlama: opts.alwaysLlama, hosts });
+          const fresh = await readCoaForLab(lab, { actorId: opts.actorId, alwaysLlama: opts.alwaysLlama, hosts, trust: trust ? { hintIds: trust.hints.get(lab.id) ?? [] } : undefined });
+          // D206: a link that died since keeps the earlier read, accepted.
+          const extract = trust ? chooseTrusted(fresh, readStoredCoaExtract(lab.coa_extract_json), fresh.extractedAt) : fresh;
           const { error: upErr } = await admin.from("lab_results").update(labExtractPatch(extract)).eq("id", lab.id);
           if (upErr) {
             run.errors.push(`${lab.id}: ${upErr.message}`);
@@ -326,7 +361,8 @@ export async function extractCoaForLot(lotId: string, actorId: string | null): P
   const { data } = await admin.from("inventory_lots").select("lab_result_id, manifest_id").eq("id", lotId).maybeSingle();
   const lot = data as { lab_result_id: string | null; manifest_id: string | null } | null;
   if (!lot?.lab_result_id) return { ...emptyRun(true), errors: ["this lot has no lab result"], manifestId: lot?.manifest_id ?? null };
-  return { ...(await runForLabs([lot.lab_result_id], { force: true, actorId, alwaysLlama: true })), manifestId: lot.manifest_id };
+  // D206: the owner trusts every COA - the lot page button reads any layout and accepts it.
+  return { ...(await runForLabs([lot.lab_result_id], { force: true, actorId, alwaysLlama: true, trust: true })), manifestId: lot.manifest_id };
 }
 
 /**
@@ -372,4 +408,14 @@ export async function rereadCoasForManifest(
   if (labIds.length > COA_EXTRACT_MAX_PER_RUN) run.deferred += labIds.length - COA_EXTRACT_MAX_PER_RUN;
   run.errors.unshift(...errors);
   return { run, labs: labIds.length };
+}
+
+/**
+ * D206 - the overnight "Re-read every COA and trust it" job reads a handful
+ * of certificates per call (coa-trust-all-store). Forced, any layout, accepted
+ * under the owner's policy; LlamaParse only where the text layer had no
+ * potency table (as at finalize), so credits are not spent twice.
+ */
+export async function trustReadLabs(labIds: string[], actorId: string | null): Promise<CoaExtractRun> {
+  return runForLabs(labIds, { force: true, actorId, trust: true, budgetMs: 10 * 60_000 });
 }
