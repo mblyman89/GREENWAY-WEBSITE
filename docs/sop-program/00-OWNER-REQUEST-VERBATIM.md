@@ -1665,3 +1665,33 @@ Upload: a photo of the iPad Return window after scanning receipt B96C3F27 (order
 - **D204d, ledger.** Reconcile no longer reports `failed` for `GL_AUTOPOST_NO_TEMPLATE` (or an inactive, unapproved or not-yet-effective template). It is reported and audited as `deferred` ("Ledger entry deferred: the drawer is reconciled…"). Real ledger rejections still show as failed.
 - **D204e** (every $20 taken from a till is entered as a drop) is SOP and training. No code.
 - Test: `tests/compliance/d204a-till-close-checks.test.ts`.
+## D206 — "Re-read all COAs and trust all", the overnight button (2026-11-08)
+
+Carried over from D202 (D202c parked it), verbatim:
+
+> "we need all coa's regardless if we like them or not to be read AND trusted. we have never, and will never accept illegal products. every coa we have is legitimate and should be treated as such, no exceptions ... it should run on the server in the background, I will push the button before bed and hopefully when I wake up it will be finished reading all of them and accepting them regardless of how it feels about them."
+
+Picked up again by: "I want you to also complete all work related to what we were working on before this work ... please look back at all unfinished work, make a plan, then start working on all of it."
+
+### Findings (production, read-only, 2026-11-08)
+
+`lab_results.coa_extract_status`: ok 1249, never read 300, failed 263, partial 401. The biggest single reason was "layout not known" (299: files.cultivera.com, GrowFlow blob, lab S3 files, OpenTHC, Treeline). Then partial PDF reads (146), Confidence identity checks (~99), no COA link at all (51), and drive.google.com links (21, not an allowed host). The owner's example `GF41918900060579.pdf` is a GrowFlow "QA Results" bundle that lists several products; the old reader refused it.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D206 | **Any-layout reader.** When the known readers fail, a loose reader takes "<cannabinoid> <value>" rows from any lab (nd/<LOQ = not detected, NT skipped, % and mg/g). For a GrowFlow QA bundle it reads **only this product's row**, found by its own GF ids (lab sample / parent / child = the lot code), and never another product's numbers. | "regardless if we like them or not to be read" |
+| D206a | **Trust policy.** If there is any document (WCIA JSON or PDF), the status becomes **ok**. Checks that did not pass are kept as notes ("Accepted (owner trusts every COA): ...") and the original verdict is stored in `trusted` (policy, at, originalStatus, originalSummary, reader, overriddenChecks). Nothing is invented: if there is no document at all, the row stays as it is. A link that has died keeps its earlier read, trusted. | "AND trusted ... every coa we have is legitimate ... no exceptions" |
+| D206b | **Runs on the server overnight.** The button only writes a run (`site_settings.coa_trust_all_run`). A new cron, `/api/cron/coa-trust-all`, runs every 5 minutes at :01 and works for about 280 s per tick. It takes a lease by compare-and-set and saves a cursor after every batch, so it survives killed ticks and doubled ticks. Stop works at any time. An idle tick is one read and writes nothing. | "it should run on the server in the background ... before bed ... when I wake up it will be finished" |
+| D206c | **The lot page's "Re-read lab certificate" button trusts too**, so a single product can be fixed the same way. | consistency |
+
+### As built (D206)
+
+- `src/lib/inventory/coa-trust-all-core.ts` (pure, 38 self-tests, registered): `readLooseRows`, `readQaRowById`, `readAnyLayout`, `bestAnyLayout`, `trustExtract`, `chooseTrusted`, `trustMarkOf`, plus the run state (`newTrustRun`, `parseTrustRun`, `leaseVerdict`, `needsTrustRead`, `addOutcome`, `trustRunLine`).
+- `src/lib/inventory/coa-extract.ts`: `readCoaForLab(..., { trust })`, `runForLabs(..., { trust })` (lot-code hints from `inventory_lots`, error-checked, ≤900 rows), the new export `trustReadLabs`; `extractCoaForLot` now trusts.
+- `src/lib/inventory/coa-trust-all-store.ts`: `readTrustPanel`, `startTrustAll` (refuses while running, counts the target, audits `coa.trust_all_started`), `stopTrustAll` (`coa.trust_all_stopped`), `tickTrustAll` (pages of 200 by id, batches of 8, CAS on `value_json->>leaseToken`, `coa.trust_all_done`).
+- `src/app/api/cron/coa-trust-all/route.ts` (fail-closed CRON_SECRET preamble, maxDuration 300). `vercel.json` now has 21 crons; the pinned counts and the L-34 cadence table are updated.
+- Fix later page: a new card, **"Re-read every COA and trust it"**, with a Stop button, a live progress line (auto-refresh while running) and recent errors. Actions `startTrustAllAction` / `stopTrustAllAction` (inventory.manage).
+- Tests: `tests/compliance/d206-coa-trust-all.test.ts` (14: core, the owner's example, dead-link keep, start/idle/lease/stop-race/out-of-time/reader-throws against the in-memory PostgREST, actions, wiring). The fake PostgREST now answers HEAD `count=exact`.
+- What it cannot fix: the 51 lab results with no COA link or file, and links the server cannot download (e.g. drive.google.com, unless the host is added). Those are counted as "no readable document" on the progress line and still need Fetch / Gmail.
