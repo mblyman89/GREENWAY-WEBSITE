@@ -1514,3 +1514,52 @@ The crawl worked: 32 of 32 transfer details (manifests 419 and 1181–1214) fetc
 - **No migration, no new table.**
 - **Tests:** `tests/compliance/d202-cultivera-batch-coas.test.ts` (7); D200 mock updated.
 - **Click order for the owner:** after the crawler redeploys, click **Fetch COAs from Cultivera**, wait for "done", optionally **Preview**, then **Attach all COAs** (click again if it says PDFs are left to file).
+
+---
+
+## D203 — The last 4 manifests: a deep Gmail dig (2026-11-07)
+
+> "thank you. I was able to get all but 4 manifests. they are in stephens email. log back in to supabase, locate the 4, then really deep dive and dig deep to find these last four. either they go way back, or there is something tricky about them. they exist, they have to, have them on the shelf, which means they came via a json. its the only way product gets entered into a pos system. and they are sent via email. we have them in there somewhere. please do one more deep dig to retrieve them. tune the email fetcher to find them please. follow the standing rules. thank you."
+
+### What was wrong
+
+Supabase showed 4 deliveries with lots on the shelf and no COA link. All 4 manifests were reconstructed from Cultivera, so no vendor JSON was ever kept for them:
+
+1. **ALIS GROUP** (lic 415700), manifest 21055126467944359, 2026-10-02 — brands Kool Faid Nitro and Fetti Prerolls. No vendor email was ever kept.
+2. **EVERGREEN HERBAL** (lic 78256), M07825651675, 2026-10-12 — brands 420 Brand, BLAZE, MAJOR and REIMAGINE. Only the "scheduled for delivery" email (no documents) and the LCB PDF were kept. Earlier Evergreen JSONs came in "Updated JSON Enclosed" emails as a CCRS CSV, or from a rep's address.
+3. **MOUNTAIN HI** (lic 412446), GF41244600011042, 2026-10-23 — SMC brand, LCB id 1694337. Earlier JSONs came as a **link** from a rep's personal Gmail (bnetsov83@gmail.com, subject "Seattle Marijuana Co order Json link/delivery").
+4. **GREEN RESEARCH NETWORK** (Hash Mill, lic 429047), GF42904700003637, 2026-10-28 — brands Frostco and Red Mane, LCB id 1695525.
+
+The Gmail search (D201) missed these for seven reasons:
+
+- It searched by the vendor's legal name, not by brand words.
+- It never searched for the reps' personal Gmail addresses.
+- It never reopened an email it had already kept, even when the JSON came later in a reply in the same thread.
+- It skipped .zip, .txt and octet-stream attachments.
+- It did not follow links unless they pointed to the vendor's own host (Drive and Dropbox links were missed).
+- It did not search Spam or Trash.
+- It did not look for a JSON pasted into the email body.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D203 | **A deep Gmail dig for the deliveries that still have no COA.** It searches `in:anywhere -in:chats` (including Spam and Trash) by manifest number in every form (as written, without its letter prefix, without leading zeros), LCB id, lot barcodes, vendor license, vendor name, **brand words**, earlier **senders**, and "has a JSON attachment within a few days of the delivery". The date window is wider: 45 days before to 21 days after the delivery. | "really deep dive and dig deep … tune the email fetcher to find them" |
+| D203a | **Rep personal senders.** For each vendor it learns the senders who sent this vendor's earlier JSONs (by mapping earlier manifests' barcodes to kept emails) and searches for their emails. Platform senders such as Cultivera and LeafLink are only searched together with the product names. | "something tricky about them" |
+| D203b | **Re-read every matching email and its whole thread** (up to 8 emails per thread), including emails the first harvest already kept. The dig opens attachments the first harvest skipped: .zip (unpacked), .txt and octet-stream (the bytes are checked to see if they are JSON). It also reads a JSON pasted into the email body and follows every public link (Drive and Dropbox links are rewritten to their download form). Private, IP-address and password links are never opened. New documents are stored at doc_index 100 and up, using the existing table and constraints. | "they came via a json … sent via email. we have them in there somewhere" |
+| D203c | **Bounded and resumable.** At most 60 emails per click, with a 140 s search budget and a 110 s attach budget. A memory (`coa_gmail_deep`) records the emails already dug, so a second click does not reopen them; click again until it says finished. | standing rules |
+| D203d | **Lot links stay fill-only.** The attach step is the existing D201 Gmail attach: it fills `lab_result_id` only when it is empty and the lot is not destroyed. Audit row: `inventory.coa_gmail_deep_dig`. | standing rules |
+| D203e | **An honest result per delivery.** "All N lots now have their COA", "transfer JSON found but it has no lab data", or "nothing in stephen@'s mailbox mentions this delivery — it was not sent to this mailbox; ask the vendor to resend the transfer JSON". | "they exist, they have to" |
+
+### As built (D203)
+
+- **Pure core:** `src/lib/inventory/coa-gmail-deep-core.ts` — queries, sender rules, attachment and link plans, deep memory, notes (self-test 47 assertions, floor 45, registered in `run-pure-selftests.ts`).
+- **Store:** `src/lib/inventory/coa-gmail-deep-store.ts` — `deepTargets`, `digOneEmail`, `deepDigGmail`, and a small zip reader (`unzipEntries`, built on node:zlib).
+- **Gmail client:** `getThreadMessageIds` was added to `src/lib/compliance/ccrs-mail-fetch.ts`. D201 helpers are now exported from `coa-gmail-search-store.ts`.
+- **Fix later page:** a new button **Deep dig (the last deliveries)** and a per-delivery **Deep dig** button next to "Search Gmail". Server action `deepDigGmailAction` (requires `inventory.manage`).
+- **No migration, no new table.**
+- **Tests:** `tests/compliance/d203-gmail-deep-dig.test.ts` (6).
+- **Click order for the owner:**
+  1. On Fix later, click **Deep dig (the last deliveries)**. Click again until it says finished, or use **Deep dig** on a single delivery.
+  2. Optionally, click **Attach COAs from Gmail** afterwards.
+  3. If a delivery still says "not sent to this mailbox", the JSON never reached stephen@. Ask that vendor to resend it.
