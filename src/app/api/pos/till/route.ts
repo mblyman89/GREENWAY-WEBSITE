@@ -54,6 +54,8 @@ import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { compactDenoms, denomWords } from "@/lib/registers/little-safe-core";
 import { checkPop } from "@/lib/registers/drawer-pop-core";
+import { atmDropSuccessMessage, atmWitnessCheck } from "@/lib/registers/atm-drop-core";
+import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { drawerCustodian, popsForSession, POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
 
 export const runtime = "nodejs";
@@ -234,9 +236,25 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, popNumber: check.popNumber, repeat: check.repeat, employeeName: employee.full_name });
   }
 
-  // ── drop: mid-shift safe drop ──
+  // ── drop: mid-shift safe drop, or (D198) an ATM drop counted in $20 bills ──
   if (till.action === "drop") {
+    const isAtm = till.destination === "atm";
+    const atmSettings = isAtm ? await getAtmDropSettings() : null;
+    if (isAtm && atmSettings) {
+      if (!atmSettings.enabled) {
+        return NextResponse.json({ error: "ATM drops are turned off in the back office (Lyman > ATM drops > Settings)." }, { status: 403 });
+      }
+      if ((till.twentiesCount ?? 0) > atmSettings.maxTwentiesPerDrop) {
+        return NextResponse.json(
+          { error: `That is more than ${atmSettings.maxTwentiesPerDrop} x $20 in one ATM drop. Check the count, or ask the owner.` },
+          { status: 400 },
+        );
+      }
+      const w = atmWitnessCheck(atmSettings.witness, !!till.witnessPin);
+      if (!w.allowed) return NextResponse.json({ error: w.message ?? "A witness PIN is required." }, { status: 400 });
+    }
     let witnessedBy: string | null = null;
+    let witnessName: string | null = null;
     if (till.witnessPin) {
       if (!isValidPin(till.witnessPin)) {
         return NextResponse.json({ error: "Witness PIN must be 4–6 digits." }, { status: 400 });
@@ -251,6 +269,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: "A drop cannot witness itself — a second person must enter their PIN." }, { status: 400 });
       }
       witnessedBy = witness.id;
+      witnessName = witness.full_name;
     }
 
     const result = await recordDrop({
@@ -260,6 +279,11 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       droppedBy: employee.id,
       witnessedBy,
       notes: till.notes ?? null,
+      destination: isAtm ? "atm" : "safe",
+      twentiesCount: isAtm ? (till.twentiesCount ?? null) : null,
+      atmTerminalId: isAtm ? (atmSettings?.terminalId ?? null) : null,
+      deviceId: auth.device.id,
+      recordedVia: "register",
     });
     if (!result.ok) return NextResponse.json({ error: result.error ?? "Drop failed." }, { status: 409 });
 
@@ -275,9 +299,53 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         amountMinor: till.amountMinor,
         window: till.window,
         witnessed: !!witnessedBy,
+        destination: isAtm ? "atm" : "safe",
+        dropId: result.id ?? null,
       },
     });
-    return NextResponse.json({ ok: true });
+    if (isAtm && atmSettings) {
+      // D198: a dedicated, detailed custody row for every ATM drop - the owner's ATM match page and
+      // any auditor can follow the cash: who, which till, which iPad, how many $20s, which ATM, witness.
+      const w = atmWitnessCheck(atmSettings.witness, !!witnessedBy);
+      await recordAudit({
+        actorId: employee.staff_id,
+        actorEmail: employee.full_name,
+        action: "drawer.atm_drop",
+        entityType: "drawer_drop",
+        entityId: result.id ?? session.id,
+        after: {
+          via: "register",
+          sessionId: session.id,
+          registerId,
+          deviceId: auth.device.id,
+          employeeId: employee.id,
+          employeeName: employee.full_name,
+          twentiesCount: till.twentiesCount ?? null,
+          amountMinor: till.amountMinor,
+          atmTerminalId: atmSettings.terminalId,
+          window: till.window,
+          witnessedBy,
+          witnessName,
+          witnessPolicy: atmSettings.witness,
+          flaggedNoWitness: w.flag,
+          storedAs: result.storedAs ?? null,
+        },
+      });
+    }
+    return NextResponse.json({
+      ok: true,
+      destination: isAtm ? "atm" : "safe",
+      ...(isAtm
+        ? {
+            twentiesCount: till.twentiesCount ?? null,
+            atmTerminalId: atmSettings?.terminalId ?? null,
+            message: atmDropSuccessMessage(till.twentiesCount ?? 0, atmSettings?.terminalId ?? null),
+            ...(atmSettings && atmWitnessCheck(atmSettings.witness, !!witnessedBy).flag
+              ? { warning: "No witness: this ATM drop is flagged for the owner." }
+              : {}),
+          }
+        : {}),
+    });
   }
 
   // ── swap: value-neutral change trade with the safe ──

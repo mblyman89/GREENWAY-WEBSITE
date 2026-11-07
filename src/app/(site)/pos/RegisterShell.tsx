@@ -226,6 +226,13 @@ import {
   type OfflineTillPin,
   type PosTillPayload,
 } from "@/lib/pos/offline-till-core";
+import {
+  atmDropSuccessMessage,
+  atmWitnessCheck,
+  normalizeAtmDropSettings,
+  parseTwentiesInput,
+  type AtmDropSettings,
+} from "@/lib/registers/atm-drop-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import {
@@ -3368,6 +3375,7 @@ export function RegisterShell({
           employeeName={employee.fullName}
           standardFloatMinor={standardFloatMinor}
           drawerSessionId={drawer?.sessionId ?? null}
+          atmDrop={normalizeAtmDropSettings(menuBundle?.atmDrop)}
           queueOffline={(payload, actorId) => enqueue("till_action", payload as unknown as Record<string, unknown>, actorId)}
           onClose={() => setTillMode(null)}
           onDone={(mode, drawerInfo, message, actorEmployeeId, closeSlipRaw) => {
@@ -7562,12 +7570,15 @@ function TillModal({
   employeeName,
   standardFloatMinor,
   drawerSessionId,
+  atmDrop,
   queueOffline,
   onClose,
   onDone,
 }: {
   creds: DeviceCreds;
   mode: "open" | "drop" | "close" | "swap";
+  /** D198: the owner's ATM-drop settings from the bundle (defaults when absent). */
+  atmDrop: AtmDropSettings;
   employeeName: string;
   /** Fix Phase 6 (G-62, owner D85): the register's standard float; null = unknown. */
   standardFloatMinor: number | null;
@@ -7589,6 +7600,10 @@ function TillModal({
   const [denoms, setDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
   const [amount, setAmount] = useState("");
   const [dropWindow, setDropWindow] = useState<"afternoon" | "night" | "other">("afternoon");
+  // D198 (owner: "i want the number of 20s taken from the till to be entered on the register"):
+  // a drop goes to the safe (amount) or into the ATM (a COUNT of $20 bills; the amount is derived).
+  const [dropDest, setDropDest] = useState<"safe" | "atm">("safe");
+  const [twenties, setTwenties] = useState("");
   const [witnessPin, setWitnessPin] = useState("");
   const [notes, setNotes] = useState("");
   const [pin, setPin] = useState("");
@@ -7627,7 +7642,18 @@ function TillModal({
   const countedMinor = denomTotalMinor(denoms);
   const swapInMinor = denomTotalMinor(swapIn);
   const swapOutMinor = denomTotalMinor(swapOut);
-  const amountMinor = mode === "swap" ? (swapInMinor > 0 ? swapInMinor : null) : dollarsToMinor(amount);
+  const atmParse = mode === "drop" && dropDest === "atm" ? parseTwentiesInput(twenties, atmDrop.maxTwentiesPerDrop) : null;
+  const atmWitness = mode === "drop" && dropDest === "atm" ? atmWitnessCheck(atmDrop.witness, witnessPin.length >= 4) : null;
+  const amountMinor =
+    mode === "swap"
+      ? swapInMinor > 0
+        ? swapInMinor
+        : null
+      : atmParse
+        ? atmParse.ok
+          ? atmParse.amountMinor
+          : null
+        : dollarsToMinor(amount);
   const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
   const tipPeopleN = Number(tipPeople);
   const poolSplit = tipMode === "pool" && tips.trim() && tipsMinor !== null ? splitTipPool(tipsMinor, tipPeopleN) : null;
@@ -7646,14 +7672,14 @@ function TillModal({
     (mode === "open"
       ? countedMinor > 0
       : mode === "drop"
-        ? amountMinor !== null
+        ? amountMinor !== null && (atmWitness === null || atmWitness.allowed)
         : mode === "swap"
           ? amountMinor !== null && swapOutMinor === swapInMinor && approverPin.length >= 4
           : tipsValid && (countedMinor > 0 || confirmEmpty));
 
   const TITLES = {
     open: "Count in drawer",
-    drop: "Cash drop to safe",
+    drop: dropDest === "atm" ? `Cash drop into the ATM${atmDrop.terminalId ? ` (${atmDrop.terminalId})` : ""}` : "Cash drop to safe",
     close: "Close drawer — blind count",
     swap: "Change swap with the safe",
   } as const;
@@ -7820,7 +7846,17 @@ function TillModal({
     const drawerRef = mode === "open" ? crypto.randomUUID() : (drawerSessionId as string);
     const payload: PosTillPayload =
       mode === "drop"
-        ? { action: "drop", drawerRef, reason, actor: a.pin, amountMinor: amountMinor ?? 0, window: dropWindow, ...(witness ? { witness } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) }
+        ? {
+            action: "drop",
+            drawerRef,
+            reason,
+            actor: a.pin,
+            amountMinor: amountMinor ?? 0,
+            window: dropWindow,
+            ...(witness ? { witness } : {}),
+            ...(notes.trim() ? { notes: notes.trim() } : {}),
+            ...(dropDest === "atm" && atmParse?.ok ? { destination: "atm" as const, twentiesCount: atmParse.twenties } : {}),
+          }
         : mode === "swap"
           ? { action: "swap", drawerRef, reason, actor: a.pin, ...(approver ? { approver } : {}), amountMinor: amountMinor ?? 0, inDenoms: swapIn, outDenoms: swapOut, ...(notes.trim() ? { notes: notes.trim() } : {}) }
           : mode === "close"
@@ -7855,6 +7891,8 @@ function TillModal({
         offlineTillMessage("open", words) + (floatWarn && floatWarn.sentence ? ` WARNING: ${floatWarn.sentence}` : ""),
         a.pin.employeeId,
       );
+    } else if (mode === "drop" && dropDest === "atm" && atmParse?.ok) {
+      onDone("drop", null, atmDropSuccessMessage(atmParse.twenties, atmDrop.terminalId, true), null);
     } else {
       onDone(mode, null, offlineTillMessage(mode, words), null);
     }
@@ -7895,6 +7933,7 @@ function TillModal({
               window: dropWindow,
               ...(witnessPin ? { witnessPin } : {}),
               ...(notes.trim() ? { notes: notes.trim() } : {}),
+              ...(dropDest === "atm" && atmParse?.ok ? { destination: "atm", twentiesCount: atmParse.twenties } : {}),
             }
           : mode === "swap"
             ? {
@@ -7953,6 +7992,9 @@ function TillModal({
             tipPool?: { shareMinor: number; sentence: string };
             /** Owner D152: who/which/when for the drawer close slip. Never money. */
             closeSlip?: unknown;
+            /** D198: ATM drop confirmation + "no witness" flag. */
+            message?: string;
+            warning?: string;
           }
         | null;
       if (!res.ok || !resBody?.ok) {
@@ -7970,7 +8012,17 @@ function TillModal({
           resBody.employeeId ?? null,
         );
       } else if (mode === "drop") {
-        onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`, null);
+        if (dropDest === "atm" && atmParse?.ok) {
+          onDone(
+            "drop",
+            null,
+            (resBody.message ?? atmDropSuccessMessage(atmParse.twenties, atmDrop.terminalId)) +
+              (resBody.warning ? ` ${resBody.warning}` : ""),
+            null,
+          );
+        } else {
+          onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`, null);
+        }
       } else if (mode === "swap") {
         onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`, null);
       } else {
@@ -8057,16 +8109,81 @@ function TillModal({
 
         {mode === "drop" ? (
           <>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Amount dropped
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
-              inputMode="decimal"
-              placeholder="$0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+            {atmDrop.enabled ? (
+              <>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  Where is the cash going?
+                </label>
+                <div className="mt-1 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Drop destination">
+                  {([
+                    ["safe", "Safe"],
+                    ["atm", `ATM${atmDrop.terminalId ? ` ${atmDrop.terminalId}` : ""}`],
+                  ] as const).map(([d, label]) => (
+                    <button
+                      key={d}
+                      type="button"
+                      role="radio"
+                      aria-checked={dropDest === d}
+                      onClick={() => {
+                        setDropDest(d);
+                        setError(null);
+                      }}
+                      className={`pos-tile rounded-xl py-2.5 text-sm font-semibold ${
+                        dropDest === d
+                          ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                          : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+            {dropDest === "atm" && atmDrop.enabled ? (
+              <>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  How many $20 bills are you taking for the ATM?
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center text-2xl font-semibold"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="e.g. 80"
+                  aria-label="Number of $20 bills"
+                  value={twenties}
+                  maxLength={4}
+                  onChange={(e) => setTwenties(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                />
+                <p className="mt-1 text-sm" aria-live="polite">
+                  {twenties.trim() === "" ? (
+                    <span className="text-[var(--pos-text-muted)]">Whole $20 bills only. Count them twice.</span>
+                  ) : atmParse && atmParse.ok ? (
+                    <span className="font-semibold">
+                      {atmParse.twenties} x $20 = {formatCents(atmParse.amountMinor)}
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-[var(--pos-danger,#b91c1c)]">{atmParse && !atmParse.ok ? atmParse.error : ""}</span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+                  Load these bills into the ATM right away. Every ATM drop is matched to the ATM&apos;s own cash-load report and the bank deposit.
+                </p>
+              </>
+            ) : (
+              <>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  Amount dropped
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
+                  inputMode="decimal"
+                  placeholder="$0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </>
+            )}
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Drop window
             </label>
@@ -8085,7 +8202,11 @@ function TillModal({
               ))}
             </div>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Witness PIN (optional, second person)
+              {dropDest === "atm" && atmDrop.enabled && atmDrop.witness === "required"
+                ? "Witness PIN (required for an ATM drop, second person)"
+                : dropDest === "atm" && atmDrop.enabled && atmDrop.witness === "recommended"
+                  ? "Witness PIN (strongly recommended, second person)"
+                  : "Witness PIN (optional, second person)"}
             </label>
             <input
               className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
@@ -8096,6 +8217,11 @@ function TillModal({
               maxLength={6}
               onChange={(e) => setWitnessPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
             />
+            {atmWitness && atmWitness.message ? (
+              <p className={`mt-1 text-xs font-semibold ${atmWitness.allowed ? "text-[var(--pos-warn,#b45309)]" : "text-[var(--pos-danger,#b91c1c)]"}`}>
+                {atmWitness.message}
+              </p>
+            ) : null}
             <input
               className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
               placeholder="Notes (optional)…"

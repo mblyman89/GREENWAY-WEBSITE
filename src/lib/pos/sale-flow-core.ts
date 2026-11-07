@@ -244,6 +244,12 @@ export type PosMenuBundle = {
    */
   returnPolicy?: PosReturnPolicyConfig;
   /**
+   * D198 — the owner's ATM-drop settings (enabled, ATM terminal id, witness policy, max $20s per
+   * drop). Optional so an older cached bundle still parses; the register normalizes a missing block
+   * to the defaults (normalizeAtmDropSettings).
+   */
+  atmDrop?: unknown;
+  /**
    * Loyalty program facts the device needs OFFLINE (POS B14): the earn rate
    * for the receipt's points ESTIMATE (authoritative accrual happens
    * server-side at completion via orders.customer_id — never on-device).

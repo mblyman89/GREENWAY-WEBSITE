@@ -107,6 +107,9 @@ export async function recordDropAction(formData: FormData): Promise<void> {
     droppedBy: str(formData, "dropped_by") || null,
     witnessedBy: str(formData, "witnessed_by") || null,
     notes: str(formData, "notes") || null,
+    // D198: back-office drops are SAFE drops; ATM drops are entered on the register ($20 count).
+    destination: "safe",
+    recordedVia: "back_office",
   });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
   await recordAudit({
@@ -115,6 +118,7 @@ export async function recordDropAction(formData: FormData): Promise<void> {
     action: "drawer.drop",
     entityType: "drawer_session",
     entityId: sessionId,
+    after: { via: "back_office", destination: "safe", dropId: result.id ?? null, amountMinor: dollarsToMinor(str(formData, "amount")) },
   });
   revalidatePath(BASE);
   redirect(`${BASE}?dropped=1`);

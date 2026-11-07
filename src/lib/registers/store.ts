@@ -14,6 +14,7 @@ import { type DenomCounts, denomTotalMinor, expectedClose, overShort } from "@/l
 import { checkSecondCounter, closeErrorMessage } from "@/lib/registers/second-count-core";
 import { checkOverShortReason, isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 import { DENOM_KEYS, secondCountFlags, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
+import { buildDropInsertRows } from "@/lib/registers/atm-drop-core";
 
 export type Register = {
   id: string;
@@ -203,20 +204,54 @@ export async function recordDrop(opts: {
   droppedBy: string | null;
   witnessedBy: string | null;
   notes?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** D198: where the cash went. Absent = safe. */
+  destination?: "safe" | "atm";
+  twentiesCount?: number | null;
+  atmTerminalId?: string | null;
+  deviceId?: string | null;
+  recordedVia?: "register" | "offline" | "back_office";
+  droppedAt?: string;
+}): Promise<{ ok: boolean; error?: string; id?: string; storedAs?: "columns" | "note_tag" }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   if (opts.amountMinor <= 0) return { ok: false, error: "Drop amount must be greater than zero." };
   const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("drawer_drops").insert({
-    session_id: opts.sessionId,
-    amount_minor: opts.amountMinor,
-    drop_window: opts.window,
-    dropped_by: opts.droppedBy,
-    witnessed_by: opts.witnessedBy,
-    notes: opts.notes ?? null,
-  });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  const rows = buildDropInsertRows(
+    {
+      session_id: opts.sessionId,
+      amount_minor: opts.amountMinor,
+      drop_window: opts.window,
+      dropped_by: opts.droppedBy,
+      witnessed_by: opts.witnessedBy,
+      notes: opts.notes ?? null,
+      ...(opts.droppedAt ? { dropped_at: opts.droppedAt } : {}),
+    },
+    {
+      destination: opts.destination ?? "safe",
+      twentiesCount: opts.twentiesCount ?? null,
+      terminalId: opts.atmTerminalId ?? null,
+      deviceId: opts.deviceId ?? null,
+      recordedVia: opts.recordedVia ?? "register",
+    },
+  );
+  return insertDrawerDropRow(admin, rows);
+}
+
+/**
+ * D198: insert a drop with the 0346 columns; if the database predates 0346 (missing column),
+ * retry in the old shape - an ATM drop then keeps its truth in the note tag (never lost).
+ */
+export async function insertDrawerDropRow(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  rows: { full: Record<string, unknown>; fallback: Record<string, unknown> },
+): Promise<{ ok: boolean; error?: string; id?: string; storedAs?: "columns" | "note_tag" }> {
+  const missingCol = (e: { code?: string; message?: string } | null) =>
+    !!e && (e.code === "42703" || e.code === "PGRST204");
+  const first = await admin.from("drawer_drops").insert(rows.full).select("id").maybeSingle<{ id: string }>();
+  if (!first.error) return { ok: true, id: first.data?.id, storedAs: "columns" };
+  if (!missingCol(first.error)) return { ok: false, error: first.error.message };
+  const second = await admin.from("drawer_drops").insert(rows.fallback).select("id").maybeSingle<{ id: string }>();
+  if (second.error) return { ok: false, error: second.error.message };
+  return { ok: true, id: second.data?.id, storedAs: "note_tag" };
 }
 
 /**

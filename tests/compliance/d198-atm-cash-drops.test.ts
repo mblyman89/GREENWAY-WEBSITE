@@ -95,3 +95,41 @@ describe("D198 S1 pure core", () => {
     expect(s.atmMinor).toBe(40000);
   });
 });
+
+describe("D198 S2 register ATM drop (online + offline)", () => {
+  it("till-core derives the ATM amount from the $20 count and passes destination through", async () => {
+    const { validateTillRequest } = await import("@/lib/pos/till-core");
+    const v = validateTillRequest({ action: "drop", pin: "1234", destination: "atm", twentiesCount: 80, window: "night" });
+    expect(v.ok && v.req.action === "drop" && v.req.amountMinor).toBe(80 * ATM_BILL_MINOR);
+    expect(v.ok && v.req.action === "drop" && v.req.destination).toBe("atm");
+    expect(validateTillRequest({ action: "drop", pin: "1234", destination: "atm", twentiesCount: 80, amountMinor: 160001, window: "night" }).ok).toBe(false);
+  });
+
+  it("offline replay keeps the same rule", async () => {
+    const { validateTillPayload } = await import("@/lib/pos/offline-till-core");
+    const pin = { employeeId: "11111111-1111-4111-8111-111111111111", armedAt: "2026-11-07T10:00:00Z", keyId: "e1" };
+    const v = validateTillPayload({ action: "drop", drawerRef: "22222222-2222-4222-8222-222222222222", reason: "offline", actor: pin, destination: "atm", twentiesCount: 10, window: "other" });
+    expect(v.ok && v.req.action === "drop" && v.req.amountMinor).toBe(20000);
+  });
+
+  it("route, offline store and back office write the 0346 columns with a note-tag fallback and a detailed audit", () => {
+    const route = read("src/app/api/pos/till/route.ts");
+    expect(route).toContain('action: "drawer.atm_drop"');
+    expect(route).toContain("atmWitnessCheck(");
+    expect(route).toContain("getAtmDropSettings()");
+    const off = read("src/lib/pos/offline-till-store.ts");
+    expect(off).toContain('audit("drawer.atm_drop"');
+    expect(off).toContain('recordedVia: "offline"');
+    const store = read("src/lib/registers/store.ts");
+    expect(store).toContain("export async function insertDrawerDropRow");
+    expect(store).toMatch(/42703|PGRST204/);
+    expect(read("src/app/admin/registers/actions.ts")).toContain('recordedVia: "back_office"');
+  });
+
+  it("the register asks for the NUMBER of $20 bills and the settings ride the bundle", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toContain("How many $20 bills are you taking for the ATM?");
+    expect(shell).toContain("parseTwentiesInput(twenties, atmDrop.maxTwentiesPerDrop)");
+    expect(read("src/app/api/pos/menu/route.ts")).toContain("getAtmDropSettings()");
+  });
+});

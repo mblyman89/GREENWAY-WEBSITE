@@ -13,7 +13,9 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
 import { denomTotalMinor } from "@/lib/registers/cash";
-import { getRegister } from "@/lib/registers/store";
+import { getRegister, insertDrawerDropRow } from "@/lib/registers/store";
+import { atmWitnessCheck, buildDropInsertRows } from "@/lib/registers/atm-drop-core";
+import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { floatCheck } from "@/lib/registers/shift-end-core";
 import { compactDenoms, denomWords } from "@/lib/registers/little-safe-core";
 import { POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
@@ -115,17 +117,53 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
     const { data: dupe } = await admin.from(table).select("id").eq("session_id", session.id).like("notes", `%${tag}%`).limit(1);
     if (!dupe || dupe.length === 0) {
       if (req.action === "drop") {
-        const { error } = await admin.from("drawer_drops").insert({
-          session_id: session.id,
-          amount_minor: req.amountMinor,
-          drop_window: req.window,
-          dropped_by: p.actor.employeeId,
-          witnessed_by: p.witness?.employeeId ?? null,
-          notes: offlineTillNote(envelope.clientUuid, req.notes),
-          dropped_at: at,
-        });
-        if (error) return { ok: false, reason: `Offline drop could not be saved: ${error.message}` };
-        await audit("drawer.drop", { amountMinor: req.amountMinor, window: req.window, witnessed: !!p.witness });
+        // D198: an ATM drop keeps its $20 count + the ATM it went into (0346 columns, or the note
+        // tag on an older database). The ATM terminal is the owner's setting at sync time.
+        const isAtm = req.destination === "atm";
+        const atmSettings = isAtm ? await getAtmDropSettings() : null;
+        const saved = await insertDrawerDropRow(
+          admin,
+          buildDropInsertRows(
+            {
+              session_id: session.id,
+              amount_minor: req.amountMinor,
+              drop_window: req.window,
+              dropped_by: p.actor.employeeId,
+              witnessed_by: p.witness?.employeeId ?? null,
+              notes: offlineTillNote(envelope.clientUuid, req.notes),
+              dropped_at: at,
+            },
+            {
+              destination: isAtm ? "atm" : "safe",
+              twentiesCount: isAtm ? (req.twentiesCount ?? null) : null,
+              terminalId: atmSettings?.terminalId ?? null,
+              deviceId: envelope.deviceId,
+              recordedVia: "offline",
+            },
+          ),
+        );
+        if (!saved.ok) return { ok: false, reason: `Offline drop could not be saved: ${saved.error ?? "unknown error"}` };
+        await audit("drawer.drop", { amountMinor: req.amountMinor, window: req.window, witnessed: !!p.witness, destination: isAtm ? "atm" : "safe", dropId: saved.id ?? null });
+        if (isAtm && atmSettings) {
+          const w = atmWitnessCheck(atmSettings.witness, !!p.witness);
+          await audit("drawer.atm_drop", {
+            dropId: saved.id ?? null,
+            sessionId: session.id,
+            registerId: envelope.registerId,
+            employeeId: p.actor.employeeId,
+            employeeName: actor?.full_name ?? null,
+            twentiesCount: req.twentiesCount ?? null,
+            amountMinor: req.amountMinor,
+            atmTerminalId: atmSettings.terminalId,
+            window: req.window,
+            witnessedBy: p.witness?.employeeId ?? null,
+            witnessPolicy: atmSettings.witness,
+            // Offline the iPad cannot enforce "required": record it and flag it loud for the owner.
+            flaggedNoWitness: w.flag || !w.allowed,
+            witnessRequiredButMissing: !w.allowed,
+            storedAs: saved.storedAs ?? null,
+          });
+        }
       } else {
         const base = {
           session_id: session.id,
