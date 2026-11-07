@@ -248,6 +248,14 @@ import {
   type RegisterAdvanceTarget,
 } from "@/lib/pos/pickup-progress-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
+import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
+import {
+  matchReceiptName,
+  parseReturnLookupInput,
+  receiptCodeFromScan,
+  returnLookupHint,
+  RETURN_INPUT_MAX_CHARS,
+} from "@/lib/pos/return-scan-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import {
   statusLabel,
@@ -566,6 +574,9 @@ export function RegisterShell({
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
   const [returnsOpen, setReturnsOpen] = useState(false); // AM-C
+  // D198d - a receipt code scanned on the home screen; ReturnsModal opens with
+  // it already looked up. Null = opened by hand from the menu / home button.
+  const [returnsPrefill, setReturnsPrefill] = useState<string | null>(null);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false); // B34
   const [printerSetupOpen, setPrinterSetupOpen] = useState(false); // SLICE 11
   /**
@@ -3088,7 +3099,22 @@ export function RegisterShell({
         dropDue={dropDue}
         onDayReport={() => setDayReportOpen(true)}
         onVoidSale={() => setVoidOpen(true)}
-        onReturnSale={() => setReturnsOpen(true)}
+        onReturnSale={() => {
+          setReturnsPrefill(null);
+          setReturnsOpen(true);
+        }}
+        // D198d - "i can not scan a receipt qr code to find the transaction".
+        // A receipt scan on the home screen (wedge OR Socket SDK) opens the
+        // Return screen with that sale already looked up. Stands down while
+        // any other window is open so a scan never lands behind a modal.
+        receiptScanEnabled={
+          !returnsOpen && !noSaleOpen && !dayReportOpen && !voidOpen && !pickupOpen && !tillMode &&
+          !printerSetupOpen && !leaderboardOpen && !interrupt
+        }
+        onReceiptScan={(code) => {
+          setReturnsPrefill(code);
+          setReturnsOpen(true);
+        }}
         returnPolicyLabel={returnPolicyShortLabel(normalizePosReturnPolicy(menuBundle?.returnPolicy))}
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         onPrinterSetup={() => setPrinterSetupOpen(true)}
@@ -3285,12 +3311,17 @@ export function RegisterShell({
       {returnsOpen && employee ? (
         <ReturnsModal
           creds={creds}
+          initialReceipt={returnsPrefill}
           offline={offlineReversal}
           policyText={returnPolicySummary(normalizePosReturnPolicy(menuBundle?.returnPolicy))}
           employeeName={employee.fullName}
-          onClose={() => setReturnsOpen(false)}
+          onClose={() => {
+            setReturnsOpen(false);
+            setReturnsPrefill(null);
+          }}
           onReturned={(receiptHtml, message) => {
             setReturnsOpen(false);
+            setReturnsPrefill(null);
             setBanner(message);
             // Print the refund receipt; the drawer POPS — the refund cash goes out.
             void printSlip(receiptHtml, true, "refund").then((msg) => {
@@ -4100,6 +4131,8 @@ function HomeScreen({
   onDayReport,
   onVoidSale,
   onReturnSale,
+  receiptScanEnabled,
+  onReceiptScan,
   returnPolicyLabel,
   onLeaderboard,
   onPrinterSetup,
@@ -4165,6 +4198,10 @@ function HomeScreen({
   onVoidSale?: () => void;
   /** AM-C — open the manager-gated counter-return flow (undefined offline). */
   onReturnSale?: () => void;
+  /** D198d - true while nothing is open over the home screen (scans may act). */
+  receiptScanEnabled?: boolean;
+  /** D198d - a RECEIPT code was scanned on the home screen: open Return with it. */
+  onReceiptScan?: (code: string) => void;
   /** Fix 6F — one-line return policy from Register Activity → Return policy. */
   returnPolicyLabel?: string;
   /** B34 — open the budtender leaderboard (undefined offline — it reads the server ledger). */
@@ -4229,6 +4266,50 @@ function HomeScreen({
   // AO-2 — the MORE ▾ dropdown holds every non-primary function so the home
   // screen can lead with the one thing budtenders do all day: start a sale.
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // D198d - scan a receipt QR on the home screen to start a return. ONLY a
+  // receipt code acts (receiptCodeFromScan: 8 hex or a whole sale UUID); a
+  // licence or a product barcode is ignored here, so nothing else changes.
+  // Two delivery paths, exactly like the cart: the Socket SDK (Application
+  // Mode hands over the whole payload) and the keyboard wedge (a fast burst
+  // ending in Enter with no field focused). Both read the latest props through
+  // refs so the listeners bind once.
+  const receiptScanOkRef = useRef(false);
+  const onReceiptScanRef = useRef(onReceiptScan);
+  useEffect(() => {
+    receiptScanOkRef.current = !!receiptScanEnabled && !!onReceiptScan;
+    onReceiptScanRef.current = onReceiptScan;
+  });
+  const deliverReceiptScan = useCallback((payload: string): boolean => {
+    if (!receiptScanOkRef.current) return false;
+    const code = receiptCodeFromScan(payload);
+    if (!code) return false;
+    setMoreOpen(false);
+    onReceiptScanRef.current?.(code);
+    return true;
+  }, []);
+  const homeSocket = useSocketScanner({
+    enabled: !!receiptScanEnabled && !!onReceiptScan,
+    onScan: (payload) => {
+      deliverReceiptScan(payload);
+    },
+  });
+  const homeSdkOwns = homeSocket.sdkOwnsScanning;
+  const homeWedgeRef = useRef<WedgeState>(emptyWedgeState());
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (homeSdkOwns()) return;
+      if (!receiptScanOkRef.current) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      const r = wedgeKey(homeWedgeRef.current, e.key, performance.now());
+      homeWedgeRef.current = r.state;
+      if (r.scan && deliverReceiptScan(r.scan)) e.preventDefault();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [deliverReceiptScan, homeSdkOwns]);
 
   return (
     <main className="pos-shell flex min-h-screen flex-col">
@@ -4588,6 +4669,20 @@ function HomeScreen({
             ) : null}
             <p className="mt-3 text-xs text-[var(--pos-text-faint)]">
               ID check → cart → cash tender · manual verification available at the gate
+            </p>
+            {/* D198d - returns no longer hide under MORE: one tap from home,
+                and a receipt QR scanned on this screen opens it pre-filled. */}
+            {onReturnSale ? (
+              <button
+                type="button"
+                onClick={onReturnSale}
+                className="pos-tile mt-5 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-6 py-3 text-sm font-bold"
+              >
+                📦 Return an item — find a receipt
+              </button>
+            ) : null}
+            <p className="mt-2 text-xs text-[var(--pos-text-faint)]">
+              Or just scan the QR code on a customer&apos;s receipt to start a return.
             </p>
           </section>
 
@@ -5280,6 +5375,7 @@ type ReturnableSale = {
  */
 function ReturnsModal({
   creds,
+  initialReceipt,
   offline,
   policyText,
   employeeName,
@@ -5287,6 +5383,8 @@ function ReturnsModal({
   onReturned,
 }: {
   creds: DeviceCreds;
+  /** D198d - a receipt code scanned on the home screen; looked up on open. */
+  initialReceipt?: string | null;
   offline: OfflineReversalApi;
   /** Fix 6F — the cached policy summary; the server's lookup summary wins once a sale is found. */
   policyText: string;
@@ -5330,6 +5428,9 @@ function ReturnsModal({
   // D170 O3 — the sale found in this iPad's own book (no server). Its line
   // ids are "book-<index>"; processing queues instead of calling.
   const [bookSale, setBookSale] = useState<{ entry: SaleBookEntry; reason: OfflineReason } | null>(null);
+  // D198d - what the box currently holds (receipt / name / empty), for the
+  // Find button and the hint line. Pure + self-tested (return-scan-core).
+  const receiptInput = parseReturnLookupInput(receipt);
 
   const findOffline = (code: string, why: OfflineReason) => {
     const entry = offline.find(code);
@@ -5492,12 +5593,82 @@ function ReturnsModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyQuery, showHistory]);
 
+  /**
+   * D198d - find a sale by its fun receipt name. Uses the SAME server-side
+   * history search the "Recent sales" panel uses (return window, newest
+   * first). Exactly one exact-name match with something left to return →
+   * run the normal receipt lookup on it. Several (names recycle) → open the
+   * list filtered to that name so the cashier picks. Never auto-picks a
+   * partial or ambiguous match.
+   */
+  const findByName = async (query: string) => {
+    setErrors([]);
+    setSale(null);
+    setLineId(null);
+    setBookSale(null);
+    if (!navigator.onLine) {
+      setErrors([
+        "Offline — a receipt name can only be searched with the internet. Scan the QR on the receipt or type the 8-character number instead.",
+      ]);
+      return;
+    }
+    setBusy(true);
+    let rows: TransactionRow[] = [];
+    try {
+      const res = await posFetch(historyRequestPath(query), {
+        headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+      });
+      const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!res.ok || !Array.isArray(json?.transactions)) {
+        setErrors([String(json?.error ?? "Could not search recent sales — try again, or scan the QR on the receipt.")]);
+        return;
+      }
+      rows = readHistoryResponse(json).transactions;
+    } catch {
+      setErrors(["Could not reach the server — scan the QR on the receipt or type the 8-character number."]);
+      return;
+    } finally {
+      setBusy(false);
+    }
+    const verdict = matchReceiptName(rows, query);
+    if (verdict.kind === "one") {
+      setReceipt(verdict.row.receiptNumber);
+      await lookup(verdict.row.receiptNumber);
+      return;
+    }
+    // Several sales share the name, or only partial matches exist: show the
+    // list filtered to it. The panel's debounced effect performs the search.
+    setHistoryQuery(query);
+    setShowHistory(true);
+    setErrors([
+      verdict.kind === "many"
+        ? `${verdict.rows.length} recent sales are called "${query}" — tap the right one below (check the time, total and items).`
+        : rows.length > 0
+          ? `No sale is called exactly "${query}" — the closest matches are listed below.`
+          : `No recent sale matches "${query}". Check the spelling on the receipt, or scan its QR code.`,
+    ]);
+  };
+
   const lookup = async (override?: string) => {
     // `override` lets a history row run this exact lookup without waiting a
     // render for `setReceipt` to land. Same call, same policy, same verdict —
     // the panel is a finder, it does not get its own refund path.
-    const code = (override ?? receipt).trim();
-    if (busy || code.length < 4) return;
+    //
+    // D198d - the box takes what is PRINTED on the paper: the 8-character
+    // number, a scanned QR, or the fun receipt name ("receipt overlay"). A
+    // name only FINDS the sale; it then runs this same receipt lookup.
+    const parsed = parseReturnLookupInput(override ?? receipt);
+    if (busy) return;
+    if (parsed.kind === "empty" || parsed.kind === "too_short") {
+      setErrors([returnLookupHint(parsed)]);
+      return;
+    }
+    if (parsed.kind === "name") {
+      await findByName(parsed.query);
+      return;
+    }
+    const code = parsed.code;
+    setReceipt(code);
     setBusy(true);
     setErrors([]);
     setSale(null);
@@ -5532,6 +5703,56 @@ function ReturnsModal({
       setBusy(false);
     }
   };
+
+  // D198d - SCAN WITH THIS WINDOW OPEN. The receipt QR carries the real
+  // receipt number. Before, only the box's own Enter handler could hear a
+  // scan, so (a) a Socket scanner in Application Mode (the SDK hands over the
+  // payload; nothing is typed) went nowhere, and (b) a wedge scan with the box
+  // NOT focused was lost. Now both paths look the sale up directly. Only a
+  // receipt code acts (receiptCodeFromScan) — a licence or product barcode is
+  // ignored. Latest-ref pattern: listeners bind once and call today's lookup.
+  const lookupRef = useRef(lookup);
+  useEffect(() => {
+    lookupRef.current = lookup;
+  });
+  const takeReceiptScan = useCallback((payload: string): boolean => {
+    const code = receiptCodeFromScan(payload);
+    if (!code) return false;
+    setReceipt(code);
+    void lookupRef.current(code);
+    return true;
+  }, []);
+  const returnsSocket = useSocketScanner({
+    enabled: true,
+    onScan: (payload) => {
+      takeReceiptScan(payload);
+    },
+  });
+  const returnsSdkOwns = returnsSocket.sdkOwnsScanning;
+  const returnsWedgeRef = useRef<WedgeState>(emptyWedgeState());
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (returnsSdkOwns()) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      // A focused field (the receipt box, the history search, the PIN) keeps
+      // its own typing; the receipt box already runs the lookup on Enter.
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      const r = wedgeKey(returnsWedgeRef.current, e.key, performance.now());
+      returnsWedgeRef.current = r.state;
+      if (r.scan && takeReceiptScan(r.scan)) e.preventDefault();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [takeReceiptScan, returnsSdkOwns]);
+
+  // D198d - opened by a home-screen receipt scan: look that sale up once.
+  const prefillDoneRef = useRef(false);
+  useEffect(() => {
+    if (prefillDoneRef.current || !initialReceipt) return;
+    prefillDoneRef.current = true;
+    takeReceiptScan(initialReceipt);
+  }, [initialReceipt, takeReceiptScan]);
 
   const returnOffline = async (entry: SaleBookEntry, why: OfflineReason, index: number) => {
     const bl = entry.lines[index];
@@ -5781,7 +6002,10 @@ function ReturnsModal({
                                 })}
                                 {t.employeeName ? ` · ${t.employeeName}` : ""}
                               </span>
-                              <span className="font-mono">{t.receiptNumber}</span>
+                              <span className="font-mono">
+                                {t.displayName ? `${t.displayName} · ` : ""}
+                                {t.receiptNumber}
+                              </span>
                             </span>
                             <span className="mt-0.5 block text-xs text-[var(--pos-text-muted)]">
                               {t.itemCount} item{t.itemCount === 1 ? "" : "s"}
@@ -5823,23 +6047,37 @@ function ReturnsModal({
           ) : null}
         </div>
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-          Receipt number
+        {/* D198d - scan first: the QR on the receipt carries the real receipt
+            number. A Socket scanner (SDK) or a keyboard-wedge scanner both
+            work with this window open — nothing to tap first. */}
+        <p className="mt-4 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold">
+          📷 Scan the QR code on the receipt — the sale opens by itself.
+        </p>
+        <label
+          htmlFor="pos-return-receipt"
+          className="mt-3 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]"
+        >
+          Or type the receipt name or number
         </label>
         <div className="mt-1 flex gap-2">
           <input
-            className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 font-mono text-lg uppercase"
+            id="pos-return-receipt"
+            className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
             value={receipt}
             autoComplete="off"
-            autoCapitalize="characters"
+            autoCapitalize="words"
             autoCorrect="off"
             spellCheck={false}
-            maxLength={8}
-            placeholder="8 characters"
+            enterKeyHint="search"
+            // D198d - was an 8-char limit + forced uppercase hex, which made the
+            // fun receipt name printed on the paper impossible to type.
+            maxLength={RETURN_INPUT_MAX_CHARS}
+            placeholder="e.g. Purple Rain  or  1A2B3C4D"
             onChange={(e) => {
-              setReceipt(e.target.value.toUpperCase());
+              setReceipt(e.target.value);
               setSale(null);
               setLineId(null);
+              if (errors.length > 0) setErrors([]);
             }}
             // A hardware receipt scanner is a KEYBOARD WEDGE: it types the
             // code and then sends Enter. That trailing Enter is the entire
@@ -5859,12 +6097,15 @@ function ReturnsModal({
           <button
             type="button"
             onClick={() => void lookup()}
-            disabled={busy || receipt.trim().length < 4}
+            disabled={busy || receiptInput.kind === "empty" || receiptInput.kind === "too_short"}
             className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold disabled:opacity-40"
           >
             {busy && !sale ? "…" : "Find"}
           </button>
         </div>
+        {!sale ? (
+          <p className="mt-1 text-xs text-[var(--pos-text-muted)]">{returnLookupHint(receiptInput)}</p>
+        ) : null}
 
         {sale ? (
           <>

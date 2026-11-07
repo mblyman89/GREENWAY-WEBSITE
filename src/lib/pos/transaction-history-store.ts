@@ -110,6 +110,7 @@ type OrderRow = {
   status: string | null;
   customer_id: string | null;
   total_minor_units: number | null;
+  display_name?: string | null;
 };
 
 type LineRow = {
@@ -170,10 +171,24 @@ export async function listRecentTransactions(
   );
 
   // ── Orders behind those events ───────────────────────────────────────────
-  const { data: orderData, error: orderError } = await admin
+  // D198d - display_name is the fun receipt name ("receipt overlay") printed
+  // on the paper. If the column were ever missing (0147 unapplied), retry the
+  // read without it rather than fail the whole panel: rows simply show the
+  // receipt number, which is exactly what such a receipt printed.
+  const withName = await admin
     .from("orders")
-    .select("id, order_number, status, customer_id, total_minor_units")
+    .select("id, order_number, status, customer_id, total_minor_units, display_name")
     .in("id", orderIds);
+  let orderData: unknown = withName.data;
+  let orderError: unknown = withName.error;
+  if (orderError) {
+    const plain = await admin
+      .from("orders")
+      .select("id, order_number, status, customer_id, total_minor_units")
+      .in("id", orderIds);
+    orderData = plain.data;
+    orderError = plain.error;
+  }
   if (orderError) {
     return { ok: false, error: "Could not read the orders behind these sales — try again." };
   }
@@ -270,6 +285,7 @@ export async function listRecentTransactions(
       customerLast: cust?.last ?? null,
       employeeName: ev.employee_id ? employees.get(ev.employee_id) ?? null : null,
       lines,
+      displayName: order.display_name ?? null,
     };
     rows.push(shapeTransaction(input));
   }
