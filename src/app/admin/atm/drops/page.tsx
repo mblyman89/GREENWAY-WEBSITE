@@ -419,7 +419,7 @@ export default async function AtmDropsPage({
               <input id="fill_to" name="fill_to" type="number" min={20} max={100000} step={20} defaultValue={inp.settings.fillToCents === null ? "" : inp.settings.fillToCents / 100} className={input} />
             </div>
             <p className="text-xs text-white/45 sm:col-span-5">
-              Fill-to (D198e): the cash you want in the ATM after it is filled. The deposit bag page&apos;s "Cash in the ATM" card
+              Fill-to (D198e): the cash you want in the ATM after it is filled. The deposit bag page&apos;s &ldquo;Cash in the ATM&rdquo; card
               uses it to say how many $20s, if any, to take out of the day&apos;s bag; taking more is flagged for you here.
             </p>
             <div className="sm:col-span-5">

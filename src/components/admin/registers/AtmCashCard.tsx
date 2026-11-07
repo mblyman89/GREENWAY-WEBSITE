@@ -33,8 +33,8 @@ export function AtmCashCard({ initial, staleMinutes }: { initial: AtmCashCardSta
     (prev, fd) => refreshAtmCashAction(prev, fd),
     initial,
   );
-  const ageMin = state.capturedAt ? Math.round((Date.now() - Date.parse(state.capturedAt)) / 60000) : null;
-  const stale = ageMin === null || ageMin > staleMinutes;
+  const ageMin = state.capturedAt ? Math.round((Date.parse(state.serverNowIso) - Date.parse(state.capturedAt)) / 60000) : null;
+  const stale = ageMin === null || !Number.isFinite(ageMin) || ageMin > staleMinutes;
   return (
     <form action={formAction} className="h-full">
       <button

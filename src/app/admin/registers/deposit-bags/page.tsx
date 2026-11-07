@@ -182,6 +182,7 @@ export default async function DepositBagsPage({
     needSentence: atmNeed.sentence,
     needTwenties: atmNeed.kind === "needs" ? atmNeed.twenties : null,
     message: null,
+    serverNowIso: new Date().toISOString(),
   };
   const atmFresh = isFreshReading(atmStatus ? { balanceCents: atmStatus.balanceCents, capturedAt: atmStatus.capturedAt } : null, new Date().toISOString());
   const suggestedTwenties = atmFresh ? (atmNeed.kind === "needs" ? atmNeed.twenties : atmNeed.kind === "full" ? 0 : null) : null;

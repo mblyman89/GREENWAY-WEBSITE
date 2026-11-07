@@ -642,6 +642,8 @@ export type AtmCashCardState = {
   needSentence: string;
   needTwenties: number | null;
   message: string | null;
+  /** The server's clock when this state was made; the card ages the reading against it (render stays pure). */
+  serverNowIso: string;
 };
 
 export async function refreshAtmCashAction(prev: AtmCashCardState | null, _form?: FormData): Promise<AtmCashCardState> {
@@ -651,7 +653,7 @@ export async function refreshAtmCashAction(prev: AtmCashCardState | null, _form?
   const terminalId = settings.terminalId;
   const shape = (balanceCents: number | null, capturedAt: string | null, message: string | null, ok: boolean): AtmCashCardState => {
     const need = atmCashNeed(balanceCents, settings.fillToCents);
-    return { ok, balanceCents, capturedAt, terminalId, needSentence: need.sentence, needTwenties: need.kind === "needs" ? need.twenties : null, message };
+    return { ok, balanceCents, capturedAt, terminalId, needSentence: need.sentence, needTwenties: need.kind === "needs" ? need.twenties : null, message, serverNowIso: new Date().toISOString() };
   };
   const latest = await getLatestAtmTerminalStatus(terminalId);
   const nowIso = new Date().toISOString();
