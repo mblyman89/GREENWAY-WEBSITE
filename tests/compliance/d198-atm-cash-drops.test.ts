@@ -212,3 +212,30 @@ describe("D198 S5 the owner's match page /admin/atm/drops", () => {
     expect(store).toContain('readDropDestination(r).destination === "atm"');
   });
 });
+
+describe("D198 S6 the ATM bank account auto-syncs; SOP + concierge", () => {
+  it("the daily ATM cron refreshes every ATM-role Plaid connection after the PAI pull, never failing it", () => {
+    const cron = read("src/app/api/cron/atm-sync/route.ts");
+    expect(cron).toContain('.eq("role", "atm")');
+    expect(cron).toContain("runPlaidSyncForItem(id)");
+    expect(cron.indexOf("runAtmLiveSync()")).toBeLessThan(cron.indexOf("syncAtmBankAccount()"));
+    expect(cron).toContain(".catch((e: unknown)");
+    expect(cron).toContain("export const maxDuration = 300;");
+    // still scheduled every morning
+    expect(read("vercel.json")).toMatch(/"path": "\/api\/cron\/atm-sync",\s*"schedule": "0 14 \* \* \*"/);
+  });
+
+  it("SOP-01 4.25a, SOP-02 4.12 and the concierge describe ATM drops with the owner's words", () => {
+    const sop1 = read("docs/sop/SOP-01-register-operations.md");
+    expect(sop1).toContain("### 4.25a Cash drops to the ATM (owner D198)");
+    expect(sop1).toMatch(/\| \*\*Version\*\* \| 1\.23 /);
+    expect(sop1).toContain("How many $20 bills are you taking for the ATM?");
+    const sop2 = read("docs/sop/SOP-02-master-till-safe.md");
+    expect(sop2).toMatch(/\| \*\*Version\*\* \| 1\.9 /);
+    expect(sop2).toContain("**ATM drops (D198)**");
+    expect(sop2).toContain("ATM drops in the books (D198, NOT BUILT on purpose)");
+    const kb = read("src/lib/admin/concierge-kb.ts");
+    expect(kb).toContain("ATM cash drops (D198;");
+    expect(kb).toContain("/admin/atm/drops");
+  });
+});
