@@ -796,6 +796,7 @@ import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-w
 import { __runCoaFromCultiveraCoreTests } from "../../src/lib/inventory/coa-from-cultivera-core";
 import { __runCoaBatchCultiveraCoreTests } from "../../src/lib/inventory/coa-batch-cultivera-core";
 import { __runCoaGmailSearchCoreTests } from "../../src/lib/inventory/coa-gmail-search-core";
+import { __runCoaGmailDeepCoreTests } from "../../src/lib/inventory/coa-gmail-deep-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
 import { __runCultiveraIntakeSuggestionCoreTests } from "../../src/lib/inventory/cultivera-intake-suggestion-core";
@@ -2827,6 +2828,7 @@ __runLiquidVolumeTests();
   assertRan("atm-drop-match-core", __runAtmDropMatchCoreTests(), 56); // D198 S4 ("i definitely want the plaid atm bank account connection to be reconciled against the atm drops from the tills"): exact $20 drop↔load matching, Plaid deposit cross-check, fraud-triangle signals
   assertRan("return-scan-core", __runReturnScanCoreTests(), 34); // D198d ("i can not scan a receipt qr code to find the transaction, nor can i enter the receipt overlay to look for the receipt by hand"): receipt QR / number / fun-name parsing, exact-name match, home + return-screen scan classifier
   assertRan("deposit-bag-atm-pull-core", __runDepositBagAtmPullTests(), 58); // D198e ("exclude 20s from the daily deposit for use in the atm"): pull parse (count / cap / witness / reason / never empties the bag), ATM need from the live reading, flags, pattern, ATM match feed
+  assertRan("coa-gmail-deep-core", __runCoaGmailDeepCoreTests(), 45); // D203 ("really deep dive and dig deep to find these last four ... tune the email fetcher to find them"): deep questions (manifest/LCB id/barcode forms, license, brands, rep senders, Spam+Trash), re-read plan (zip/txt/octet, every public link, pasted JSON), memory, notes
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
