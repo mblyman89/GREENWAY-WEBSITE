@@ -838,6 +838,35 @@ def cultivera_pos_start(
     return {"ok": True, **out}
 
 
+class CultiveraWciaStartRequest(BaseModel):
+    transfer_ids: list[int] = Field(
+        alias="transferIds", min_length=1, max_length=500,
+        description="D200: Cultivera incoming transfer ids whose vendor WCIA file (COAs) to fetch.")
+
+
+@app.post("/cultivera-pos/wcia-runs", status_code=202)
+def cultivera_pos_wcia_start(
+    req: CultiveraWciaStartRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> dict:
+    """D200: fetch ONLY the vendor WCIA files for the named transfers. 202 + run id; poll
+    GET /cultivera-pos/runs/{id}; download wcia_json.jsonl via the files endpoint."""
+    _require_secret(x_crawler_secret)
+    try:
+        out = pos_jobs.start_wcia_only(req.transfer_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        if str(exc) == "busy":
+            raise HTTPException(status_code=409, detail="A Cultivera crawl is already running.") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera POS crawl disabled (set CULTIVERA_POS_USERNAME / CULTIVERA_POS_PASSWORD).",
+        ) from exc
+    log.info("cultivera-pos wcia-only run %s (%d transfers)", out["runId"], len(out["transferIds"]))
+    return {"ok": True, **out}
+
+
 @app.get("/cultivera-pos/runs")
 def cultivera_pos_list(x_crawler_secret: str | None = Header(default=None)) -> dict:
     _require_secret(x_crawler_secret)

@@ -788,3 +788,92 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
     run.write_json("manifest.json", manifest)
     client.log(action="phase_a_end", status=state["status"], seconds=state["seconds"], calls=client.calls)
     return manifest
+
+
+# --------------------------------------------------------------------------- D200: WCIA for named transfers
+
+WCIA_ONLY_KIND = "cultivera_pos_wcia_only"
+WCIA_ONLY_STAGES = ("login", "transfer_details", "wcia_json")
+WCIA_ONLY_MAX_IDS = 500
+
+
+def clean_transfer_ids(ids: Any) -> list[int]:
+    """D200: the site sends the transfer ids that still have stocked lots with no COA. Only positive
+    integers (as int or digit string) are kept, de-duplicated and sorted. Anything else raises."""
+    if not isinstance(ids, (list, tuple)):
+        raise ValueError("transfer ids must be a list")
+    out: set[int] = set()
+    for v in ids:
+        if isinstance(v, bool):
+            raise ValueError("bad transfer id")
+        if isinstance(v, int):
+            n = v
+        elif isinstance(v, str) and v.isdigit() and len(v) <= 12:
+            n = int(v)
+        else:
+            raise ValueError("bad transfer id")
+        if n <= 0:
+            raise ValueError("bad transfer id")
+        out.add(n)
+    if not out:
+        raise ValueError("no transfer ids")
+    if len(out) > WCIA_ONLY_MAX_IDS:
+        raise ValueError(f"at most {WCIA_ONLY_MAX_IDS} transfer ids")
+    return sorted(out)
+
+
+def run_wcia_only(client: PosClient, transfer_ids: list[int], *, cancelled: Callable[[], bool] = lambda: False,
+                  clock: Callable[[], float] = time.time, budget_seconds: float = 1800.0) -> dict[str, Any]:
+    """D200: fetch ONLY the vendor WCIA files for the named transfers (the COAs for lots that came in
+    without one). Log in, read each transfer's detail (GET), then the existing read-only viewer call
+    (POST incoming-load-wcia-json). Writes transfer_details.jsonl + wcia_json.jsonl in the same run-dir
+    layout as Phase A, so the site downloads them the same way. Never raises; errors land in state.json."""
+    ids = clean_transfer_ids(transfer_ids)
+    run = client.run
+    state = run.read_json("state.json", {}) or {}
+    state.setdefault("stages", {})
+    state["kind"] = WCIA_ONLY_KIND
+    state["transferIds"] = ids
+    state.setdefault("startedAt", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock())))
+    state["status"] = "running"
+    run.write_json("state.json", state)
+    t0 = clock()
+    try:
+        for stage in WCIA_ONLY_STAGES:
+            if cancelled():
+                raise StageCancelled(stage)
+            s0 = clock()
+            if stage == "login":
+                client.login()
+                result: dict[str, Any] = {}
+            elif stage == "transfer_details":
+                result = _fetch_each(client, ids, lambda i: Q + f"transfers/incoming/{i}/detail",
+                                     "transfer_details.jsonl", "transfer_details", cancelled)
+            else:
+                result = stage_wcia_json(client, cancelled, lambda: not remaining_budget_ok(
+                    t0, clock() + ENRICHMENT_MARGIN_SECONDS, budget_seconds))
+            incomplete = bool(result.get("missing")) or (result.get("coverage") or {}).get("complete") is False
+            state["stages"][stage] = {"status": "partial" if incomplete else "done",
+                                      "seconds": round(clock() - s0, 1), **result}
+            if stage == "wcia_json":
+                warn = wcia_warning(result)
+                state["warnings"] = [warn] if warn else []
+            run.write_json("state.json", state)
+        state["status"] = "done"
+    except StageCancelled as e:
+        state["status"] = "cancelled"
+        state["error"] = f"cancelled before {e}"
+    except (CultiveraPosError, CultiveraPosRefused) as e:
+        state["status"] = "failed"
+        state["error"] = str(e)[:500]
+    except Exception as e:  # noqa: BLE001 - recorded, never a half-written state
+        state["status"] = "failed"
+        state["error"] = f"unexpected {type(e).__name__}: {str(e)[:400]}"
+    state["finishedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock()))
+    state["seconds"] = round(clock() - t0, 1)
+    run.write_json("state.json", state)
+    manifest = build_manifest(run, state)
+    manifest["kind"] = WCIA_ONLY_KIND
+    run.write_json("manifest.json", manifest)
+    client.log(action="wcia_only_end", status=state["status"], seconds=state["seconds"], calls=client.calls)
+    return manifest
