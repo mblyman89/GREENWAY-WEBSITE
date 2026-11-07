@@ -410,6 +410,9 @@ export default async function EodReportPage({
                   <td className="py-1 pr-2 text-right tabular-nums">{formatCents(r.openingMinor)}</td>
                   <td className="py-1 pr-2 text-right tabular-nums">
                     {r.dropCount > 0 ? `${formatCents(r.dropsMinor)} (${r.dropCount})` : "—"}
+                    {r.atmDropCount > 0 ? (
+                      <span className="block text-[0.65rem] font-semibold">incl. ATM {formatCents(r.atmDropsMinor)} ({r.atmDropCount})</span>
+                    ) : null}
                   </td>
                   <td className="py-1 pr-2 text-right tabular-nums">{dash(r.closedMinor)}</td>
                   <td className="py-1 pr-2 text-right tabular-nums">
@@ -423,6 +426,11 @@ export default async function EodReportPage({
                 <td className="py-1 pr-2 text-right font-black tabular-nums">{formatCents(totals.openingMinor)}</td>
                 <td className="py-1 pr-2 text-right font-black tabular-nums">
                   {totals.dropCount > 0 ? `${formatCents(totals.dropsMinor)} (${totals.dropCount})` : "—"}
+                  {totals.atmDropCount > 0 ? (
+                    <span className="block text-[0.65rem] font-semibold">
+                      incl. ATM {formatCents(totals.atmDropsMinor)} ({totals.atmDropCount}) - not in the bag
+                    </span>
+                  ) : null}
                 </td>
                 <td className="py-1 pr-2 text-right font-black tabular-nums">{dash(totals.closedMinor)}</td>
                 <td className="py-1 pr-2 text-right font-black tabular-nums">

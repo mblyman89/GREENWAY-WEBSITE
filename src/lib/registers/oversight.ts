@@ -1,4 +1,5 @@
 import "server-only";
+import { dropDestinationLabel, readDropDestination } from "@/lib/registers/atm-drop-core";
 import { cleanFlags, closerCountVisible, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
 
 /**
@@ -82,6 +83,9 @@ export type DropRow = {
   witnessLabel: string | null;
   atLabel: string;
   notes: string | null;
+  /** D198: "Safe" or "ATM HG26499 - 80 x $20". */
+  destinationLabel: string;
+  isAtm: boolean;
 };
 
 /** Per-register live status card + manager controls (Lightspeed-style). */
@@ -336,6 +340,8 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         witnessLabel: nameFor(d.witnessed_by),
         atLabel: pacificClock(d.dropped_at),
         notes: d.notes,
+        destinationLabel: dropDestinationLabel(d),
+        isAtm: readDropDestination(d).destination === "atm",
       })),
     };
   });
@@ -492,7 +498,10 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         kind: "drawer_drop",
         atISO: d.dropped_at,
         atLabel: pacificClock(d.dropped_at),
-        title: `${l.register.name} · cash dropped to safe`,
+        title:
+          readDropDestination(d).destination === "atm"
+            ? `${l.register.name} · cash loaded into the ${dropDestinationLabel(d)}`
+            : `${l.register.name} · cash dropped to safe`,
         detail: d.dropped_by ? `by ${nameFor(d.dropped_by)} · ${d.drop_window}` : d.drop_window,
         amountMinor: d.amount_minor,
       });

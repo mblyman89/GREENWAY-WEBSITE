@@ -23,6 +23,7 @@
  * the day's bag.
  */
 import "server-only";
+import { readDropDestination, type DropRowLike } from "@/lib/registers/atm-drop-core";
 import { closerCountVisible, countedCashMinor } from "@/lib/registers/count-integrity-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -130,20 +131,25 @@ export async function eodData(businessDay: string): Promise<EodData> {
 
   // Drops for those sessions (mapped back to their register).
   const regBySession = new Map(sessions.map((s) => [s.id, s.register_id]));
-  let drops: { registerId: string; amountMinor: number }[] = [];
+  let drops: { registerId: string; amountMinor: number; destination: "safe" | "atm" }[] = [];
   let sessionDrops: { sessionId: string; amountMinor: number }[] = [];
   if (sessions.length > 0) {
+    // D198: "*" so the 0346 destination columns ride along when applied (the note tag otherwise).
     const { data: dropRows, error: dropErr } = await admin
       .from("drawer_drops")
-      .select("session_id, amount_minor")
+      .select("*")
       .in("session_id", sessions.map((s) => s.id));
     if (dropErr) readProblems.push(`Drops could not be read: ${dropErr.message}`);
-    const rows = (dropRows as { session_id: string; amount_minor: number }[] | null) ?? [];
+    const rows = (dropRows as (DropRowLike & { session_id: string })[] | null) ?? [];
     drops = rows.map((d) => ({
       registerId: regBySession.get(d.session_id) ?? "",
       amountMinor: d.amount_minor,
+      destination: readDropDestination(d).destination,
     }));
-    sessionDrops = rows.map((d) => ({ sessionId: d.session_id, amountMinor: d.amount_minor }));
+    // D198: the night sheet's expected DEPOSIT counts SAFE drops only (ATM cash never reaches the bag).
+    sessionDrops = rows
+      .filter((d) => readDropDestination(d).destination === "safe")
+      .map((d) => ({ sessionId: d.session_id, amountMinor: d.amount_minor }));
   }
 
   // Store-wide sales facts from the ledger (ALL registers, processed only

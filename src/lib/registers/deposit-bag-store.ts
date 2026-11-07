@@ -10,6 +10,7 @@
  * Rule 46: a failed read is returned as an error, never as "no bags".
  */
 import "server-only";
+import { readDropDestination, type DropRowLike } from "@/lib/registers/atm-drop-core";
 import { countedCashMinor } from "@/lib/registers/count-integrity-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -188,9 +189,13 @@ export async function drawersForDay(day: string): Promise<DayDrawers> {
     }[] | null) ?? [];
   let drops: { sessionId: string; amountMinor: number }[] = [];
   if (sessions.length > 0) {
-    const d = await admin.from("drawer_drops").select("session_id, amount_minor").in("session_id", sessions.map((s) => s.id));
+    // D198: "*" so the 0346 destination columns ride along when applied (and the note tag otherwise).
+    const d = await admin.from("drawer_drops").select("*").in("session_id", sessions.map((s) => s.id));
     if (d.error) return { ok: false, error: `Drops could not be read: ${d.error.message}` };
-    drops = ((d.data as { session_id: string; amount_minor: number }[] | null) ?? []).map((x) => ({ sessionId: x.session_id, amountMinor: x.amount_minor }));
+    // D198: ATM drops went into the ATM, never into the safe - the bag only carries SAFE drops.
+    drops = ((d.data as (DropRowLike & { session_id: string })[] | null) ?? [])
+      .filter((x) => readDropDestination(x).destination === "safe")
+      .map((x) => ({ sessionId: x.session_id, amountMinor: x.amount_minor }));
   }
   const expected = expectedDeposit(
     sessions.map((s) => ({

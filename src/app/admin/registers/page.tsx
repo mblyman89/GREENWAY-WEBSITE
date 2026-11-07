@@ -478,6 +478,11 @@ export default async function RegisterActivityPage({
                                 <span className="truncate text-[var(--admin-text-faint)]">
                                   {d.atLabel} · {d.window}
                                   {d.byLabel ? ` · ${d.byLabel}` : ""}
+                                  {d.isAtm ? (
+                                    <span className="ml-1 rounded bg-[var(--admin-accent-soft,#e0f2fe)] px-1 font-semibold text-[var(--admin-text)]">
+                                      {d.destinationLabel}
+                                    </span>
+                                  ) : null}
                                 </span>
                                 <span className="whitespace-nowrap font-medium text-[var(--admin-text)]">
                                   {formatCents(d.amountMinor)}
