@@ -222,6 +222,19 @@ export async function listMessageIdsPage(
   return { ids, nextPageToken: next, resultSizeEstimate: est };
 }
 
+/**
+ * D203: every message id in one Gmail thread (threads.get, format=minimal: ids only,
+ * no bodies). A vendor JSON often arrives as a REPLY to the order email.
+ */
+export async function getThreadMessageIds(token: string, mailbox: string, threadId: string): Promise<string[]> {
+  if (!/^[0-9A-Za-z_-]{6,64}$/.test(threadId)) return [];
+  const u = `${GMAIL_BASE}/${encodeURIComponent(mailbox)}/threads/${encodeURIComponent(threadId)}?format=minimal`;
+  const { status, body } = await fetchJson(u, { headers: { authorization: `Bearer ${token}` } });
+  if (status !== 200) throw gmailError(`threads.get ${threadId}`, status, body);
+  const msgs = ((body ?? {}) as { messages?: { id?: string }[] }).messages ?? [];
+  return msgs.map((m) => m.id).filter((x): x is string => typeof x === "string" && x !== "");
+}
+
 /** One attachment as raw bytes (inline data, or attachments.get). Never decoded through UTF-8. */
 export async function getAttachmentBytes(token: string, mailbox: string, messageId: string, a: AttachmentRef): Promise<Uint8Array> {
   if (a.inlineData) return new Uint8Array(Buffer.from(a.inlineData, "base64url"));

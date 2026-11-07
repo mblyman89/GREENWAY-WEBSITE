@@ -110,3 +110,27 @@ export async function searchGmailForOneAction(formData: FormData) {
   revalidatePath("/admin/inventory");
   redirect(backGmail(extra));
 }
+
+// --- D203: the deep dig for the last deliveries ------------------------------------------------
+// "really deep dive and dig deep to find these last four ... tune the email fetcher to find them."
+
+/** "Deep dig": brand / sender / license / thread / zip / every-link search for the deliveries still missing COAs. */
+export async function deepDigGmailAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const manifestId = String(formData.get("manifestId") ?? "").trim();
+  if (manifestId && !UUID_RE.test(manifestId)) {
+    redirect(backGmail({ gm: "warn", gm_msg: "Deep dig not started: that delivery id is not valid." }));
+  }
+  const { deepDigGmail } = await import("@/lib/inventory/coa-gmail-deep-store");
+  const { deepNote, deepTone } = await import("@/lib/inventory/coa-gmail-deep-core");
+  let extra: Record<string, string>;
+  try {
+    const t = await deepDigGmail(session.userId, manifestId ? { manifestIds: [manifestId] } : {});
+    extra = { gm: deepTone(t), gm_msg: deepNote(t).slice(0, 1800) };
+  } catch (err) {
+    extra = { gm: "warn", gm_msg: `Stopped: ${errText(err)}` };
+  }
+  revalidatePath("/admin/inventory/fix-later");
+  revalidatePath("/admin/inventory");
+  redirect(backGmail(extra));
+}

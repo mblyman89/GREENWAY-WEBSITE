@@ -16,6 +16,7 @@
  * COA buttons (fetch from Cultivera, attach all): fill-only, audited.
  * D201 adds "COAs from Stephen's Gmail": a targeted search, attach (+ preview),
  * and a "Search Gmail" button on every No COA lot and every delivery.
+ * D203 adds "Deep dig" (all, or one delivery) for the last ones the search cannot find.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -27,7 +28,7 @@ import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefr
 import { readCoaPanel, type CoaPanel } from "@/lib/inventory/coa-from-cultivera-store";
 import { readGmailPanel, type GmailPanel } from "@/lib/inventory/coa-gmail-search-store";
 import { coaCrawlStatusLine, type BatchCoaStage, type TransferLotsStage } from "@/lib/inventory/coa-batch-cultivera-core";
-import { attachAllCoasAction, attachCoasFromGmailAction, fetchCoasFromCultiveraAction, searchGmailForCoasAction, searchGmailForOneAction } from "./actions";
+import { attachAllCoasAction, attachCoasFromGmailAction, deepDigGmailAction, fetchCoasFromCultiveraAction, searchGmailForCoasAction, searchGmailForOneAction } from "./actions";
 import {
   FIX_LATER_REASON_LABELS,
   REGISTER_STOP_LABELS,
@@ -197,6 +198,19 @@ function CoaFromGmail({ panel, tone, msg }: { panel: GmailPanel; tone: string | 
                 certificate prints its exact barcode. Only empty COAs are filled; the PDF is filed with the lab result. Safe to click again.
               </p>
             </li>
+            <li>
+              <form action={deepDigGmailAction} className="flex flex-wrap items-center gap-3">
+                <Button type="submit" variant="primary" size="sm" disabled={panel.rows.length === 0} data-testid="coa-gmail-deep-button">
+                  Deep dig (the last deliveries)
+                </Button>
+                <span>
+                  For deliveries the search above could not finish: also asks by the vendor&apos;s license number, its brand names, the people
+                  who sent its mail before (a rep&apos;s own Gmail too), the LCB manifest id, every barcode form and any JSON near the date, in
+                  Spam and Trash as well. Every matching email and every reply in its thread is re-read in full (zip files, .txt files, every
+                  link, a JSON pasted in the text), then the COAs are attached. Click again if it says it is not finished.
+                </span>
+              </form>
+            </li>
           </ol>
           {panel.rows.length > 0 ? (
             <details className="mt-4" data-testid="coa-gmail-deliveries">
@@ -221,12 +235,20 @@ function CoaFromGmail({ panel, tone, msg }: { panel: GmailPanel; tone: string | 
                       <td className="py-1 pr-3">{r.lots}</td>
                       <td className="py-1 pr-3">{r.searchedAt ? `${r.searchedAt.slice(0, 10)} (${r.emails} email${r.emails === 1 ? "" : "s"})` : "never"}</td>
                       <td className="py-1">
-                        <form action={searchGmailForOneAction}>
-                          <input type="hidden" name="manifestId" value={r.manifestId} />
-                          <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-delivery-button">
-                            Search Gmail
-                          </Button>
-                        </form>
+                        <div className="flex flex-wrap gap-2">
+                          <form action={searchGmailForOneAction}>
+                            <input type="hidden" name="manifestId" value={r.manifestId} />
+                            <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-delivery-button">
+                              Search Gmail
+                            </Button>
+                          </form>
+                          <form action={deepDigGmailAction}>
+                            <input type="hidden" name="manifestId" value={r.manifestId} />
+                            <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-deep-delivery-button">
+                              Deep dig
+                            </Button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   ))}

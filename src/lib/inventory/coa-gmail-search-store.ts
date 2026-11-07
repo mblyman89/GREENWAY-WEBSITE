@@ -132,20 +132,20 @@ export async function readMissingTargets(admin: Admin): Promise<TargetsRead> {
   return { ok: true, lots: lotsRead.rows, targets: [...groups.values()] };
 }
 
-async function readState(admin: Admin): Promise<{ ok: true; state: GmailSearchState } | { ok: false; error: string }> {
+export async function readState(admin: Admin): Promise<{ ok: true; state: GmailSearchState } | { ok: false; error: string }> {
   const { data, error } = await admin.from("site_settings").select("value_json").eq("key", COA_GMAIL_SETTING_KEY).maybeSingle();
   if (error) return { ok: false, error: short(error) };
   return { ok: true, state: parseGmailSearchState((data as { value_json?: unknown } | null)?.value_json) };
 }
 
-async function writeState(admin: Admin, state: GmailSearchState, actorId: string | null): Promise<string | null> {
+export async function writeState(admin: Admin, state: GmailSearchState, actorId: string | null): Promise<string | null> {
   const { error } = await admin
     .from("site_settings")
     .upsert({ key: COA_GMAIL_SETTING_KEY, label: COA_GMAIL_SETTING_LABEL, value_json: state, updated_by: actorId }, { onConflict: "key" });
   return error ? short(error) : null;
 }
 
-type DocRow = {
+export type DocRow = {
   id: string;
   gmail_id: string;
   doc_index: number;
@@ -162,7 +162,7 @@ type DocRow = {
 const DOC_COLS = "id, gmail_id, doc_index, email_at, subject, filename, kind, status, source_format, storage_key, manifest_number, barcodes";
 
 /** Kept documents that carry one of the barcodes (any format). */
-async function docsByBarcodes(admin: Admin, barcodes: readonly string[]): Promise<{ rows: DocRow[]; error: string | null }> {
+export async function docsByBarcodes(admin: Admin, barcodes: readonly string[]): Promise<{ rows: DocRow[]; error: string | null }> {
   const rows = new Map<string, DocRow>();
   let err: string | null = null;
   for (const part of chunkList([...barcodes].sort(), BARCODE_CHUNK)) {
@@ -189,7 +189,7 @@ async function docsByManifestNumbers(admin: Admin, numbers: readonly string[]): 
 }
 
 /** Every kept document of these emails. */
-async function docsByGmailIds(admin: Admin, mailbox: string | null, gmailIds: readonly string[]): Promise<{ rows: DocRow[]; error: string | null }> {
+export async function docsByGmailIds(admin: Admin, mailbox: string | null, gmailIds: readonly string[]): Promise<{ rows: DocRow[]; error: string | null }> {
   let err: string | null = null;
   const rows = await chunkedIn<string, DocRow>([...new Set(gmailIds)], async (part, from, to) => {
     let q = admin.from(HARVEST_DOCS_TABLE).select(DOC_COLS).in("gmail_id", part);
@@ -224,7 +224,7 @@ export type GmailSearchDeps = {
 };
 
 /** The real Gmail (read-only, the harvest's sign-in) and the real Transfer-link fetcher. */
-async function realHarvest(admin: Admin): Promise<{ io: HarvestIo | null; mailbox: string; setupError: string | null }> {
+export async function realHarvest(admin: Admin): Promise<{ io: HarvestIo | null; mailbox: string; setupError: string | null }> {
   const { harvestMailConfigFromEnv, harvestConfigLine } = await import("@/lib/pos/cultivera-mail-harvest-core");
   const cfg = harvestMailConfigFromEnv(process.env);
   if (!cfg.configured) return { io: null, mailbox: cfg.mailbox, setupError: harvestConfigLine(cfg).text };
@@ -245,7 +245,7 @@ async function realHarvest(admin: Admin): Promise<{ io: HarvestIo | null; mailbo
  * certificate is not read further. LlamaParse only for a lab-looking (priority 0) PDF whose
  * text layer cannot identify a certificate (a scanned COA).
  */
-const realReadCoaPdf: ReadCoaPdf = async (bytes, label, priority) => {
+export const realReadCoaPdf: ReadCoaPdf = async (bytes, label, priority) => {
   const { extractPdfText, readCoaBundleFromBase64 } = await import("@/lib/inventory/pdf-extract");
   const { isCertificateText } = await import("@/lib/inventory/coa-gmail-search-core");
   let layer = "";
