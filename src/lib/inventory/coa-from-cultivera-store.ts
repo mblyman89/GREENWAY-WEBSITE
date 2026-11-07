@@ -181,7 +181,7 @@ export async function startCoaFetch(actorId: string | null): Promise<{ ok: true;
 
 // --- button 2: attach -------------------------------------------------------------------
 
-type MailDocRow = { storage_key: string | null };
+type MailDocRow = { id: string; storage_key: string | null };
 
 export type CoaAttachOptions = { dryRun?: boolean; admin?: Admin; now?: () => number; budgetMs?: number };
 
@@ -264,18 +264,21 @@ export async function attachAllCoas(actorId: string | null, opts: CoaAttachOptio
     if (rest.length > 0) {
       const keys = new Set<string>();
       for (const part of chunk([...barcodes].sort(), MAIL_BARCODE_CHUNK)) {
-        const { data, error } = await admin
-          .from("cultivera_mail_docs")
-          .select("storage_key")
-          .eq("source_format", "wcia")
-          .eq("status", "parsed")
-          .overlaps("barcodes", part)
-          .limit(1000);
-        if (error) {
-          pushError(totals, `the Gmail files could not be searched (${short(error)})`);
-          continue;
-        }
-        for (const row of (data as MailDocRow[] | null) ?? []) if (isMailHarvestKey(row.storage_key)) keys.add(row.storage_key);
+        let firstError: string | null = null;
+        const found = await pagedAllChecked<MailDocRow>(async (from, to) => {
+          const { data, error } = await admin
+            .from("cultivera_mail_docs")
+            .select("id, storage_key")
+            .eq("source_format", "wcia")
+            .eq("status", "parsed")
+            .overlaps("barcodes", part)
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) firstError ??= short(error);
+          return { ok: !error, rows: (data as MailDocRow[] | null) ?? [] };
+        });
+        if (!found.verdict.complete) pushError(totals, `the Gmail files could not be searched in full (${firstError ?? found.verdict.message})`);
+        for (const row of found.rows) if (isMailHarvestKey(row.storage_key)) keys.add(row.storage_key);
       }
       const docs: ParsedLine[][] = [];
       for (const key of [...keys].sort()) {
