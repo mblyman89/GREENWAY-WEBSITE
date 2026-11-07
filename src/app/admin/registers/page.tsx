@@ -948,13 +948,7 @@ function ReconcileCard({
                   Held: the counts are {formatCents(Math.abs((item.secondCountMinor ?? 0) - (item.closingCountMinor ?? 0)))} apart. Choose the count to reconcile on.
                 </legend>
                 <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="count_basis"
-                    value="second"
-                    required
-                    defaultChecked={suggestedBasis(item.closingCountMinor, item.secondCountMinor, COUNT_GAP_HOLD_MINOR) === "second"}
-                  />
+                  <input type="radio" name="count_basis" value="second" required defaultChecked={suggestedBasis(item.closingCountMinor, item.secondCountMinor, COUNT_GAP_HOLD_MINOR) === "second"} />
                   Use the second count ({formatCents(item.secondCountMinor)}{item.secondCountedByName ? `, ${item.secondCountedByName}` : ""})
                   {suggestedBasis(item.closingCountMinor, item.secondCountMinor, COUNT_GAP_HOLD_MINOR) === "second" ? (
                     <span className="text-[var(--admin-gold)]"> (suggested: counted calmly in the office)</span>
