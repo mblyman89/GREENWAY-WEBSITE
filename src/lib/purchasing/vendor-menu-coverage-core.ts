@@ -1,9 +1,9 @@
 /**
  * src/lib/purchasing/vendor-menu-coverage-core.ts
  *
- * D208 — PURE logic behind the Vendor Menus coverage view
+ * D209 — PURE logic behind the Vendor Menus coverage view
  * (/admin/purchasing/menus). Owner (verbatim, docs/sop-program/
- * 00-OWNER-REQUEST-VERBATIM.md D208): "I want to add as much details to that
+ * 00-OWNER-REQUEST-VERBATIM.md D209): "I want to add as much details to that
  * table as possible ... I also want to add a table of all vendors we have
  * products from that have not yet been searched, so it's much easier for me
  * to see who I still need menus from."
@@ -12,7 +12,7 @@
  *
  *   1. SEARCHED — ONE row per vendor (not per snapshot), rolling up every
  *      saved menu from Cultivera, GrowFlow, LeafLink and email: which of OUR
- *      vendors it is and HOW we know (D208b), per-source age, freshness, the
+ *      vendors it is and HOW we know (D209b), per-source age, freshness, the
  *      latest menu's item count and change vs the previous pull, wholesale
  *      price spread (MINOR UNITS, rule 8), THC, top categories, photo / COA /
  *      in-stock coverage, our own lots, and the full pull history.
@@ -28,7 +28,7 @@
  *
  * Pure: no I/O, no Date.now() (callers pass `nowMs`). Self-tested below
  * (registered in scripts/compliance/run-pure-selftests.ts) and mirrored in
- * tests/compliance/d208-vendor-menu-coverage.test.ts.
+ * tests/compliance/d209-vendor-menu-coverage.test.ts.
  */
 
 import {
@@ -157,7 +157,7 @@ export function isUsableSnapshot(s: { status: string; itemCount: number }): bool
 
 export type Freshness = "fresh" | "aging" | "stale" | "unknown";
 
-/** fresh ≤ 7 days, aging ≤ 30 days, stale after that (D208a). */
+/** fresh ≤ 7 days, aging ≤ 30 days, stale after that (D209a). */
 export function menuFreshness(fetchedAt: string | null | undefined, nowMs: number): Freshness {
   const t = ts(fetchedAt);
   if (!t) return "unknown";
@@ -220,7 +220,7 @@ export function pct(part: number, whole: number): number | null {
 }
 
 /* ------------------------------------------------------------------
- * Vendor matching (D208b) — shown, never hidden
+ * Vendor matching (D209b) — shown, never hidden
  * ------------------------------------------------------------------ */
 
 export type MatchHow = "linked" | "license" | "name" | "alias" | "brand" | "ambiguous" | "none";
@@ -480,7 +480,7 @@ function groupKey(m: VendorMatch, s: CoverageSnapshot): string {
   return `n:${k}`;
 }
 
-/** Newest usable snapshot per (group, source) — the ONLY snapshots whose items are read (D208e). */
+/** Newest usable snapshot per (group, source) — the ONLY snapshots whose items are read (D209e). */
 export function latestUsableSnapshotIds(
   snapshots: readonly CoverageSnapshot[],
   match: VendorMatcher,
@@ -696,7 +696,7 @@ export function buildNeededRows(input: {
 }
 
 /* ------------------------------------------------------------------
- * KPIs (D208d)
+ * KPIs (D209d)
  * ------------------------------------------------------------------ */
 
 export type CoverageKpis = {

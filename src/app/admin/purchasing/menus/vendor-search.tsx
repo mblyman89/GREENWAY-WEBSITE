@@ -41,7 +41,7 @@ function hitKey(h: UnifiedVendorHit, i: number): string {
 }
 
 /**
- * `initialQuery` (D208): the "Search menus →" button on a needed-vendor row
+ * `initialQuery` (D209): the "Search menus →" button on a needed-vendor row
  * links here with ?find=<vendor name>#find. The box is seeded with that name
  * and the search runs ONCE on mount so the owner lands on the results. The
  * page passes `key={find}` so a new name remounts the island cleanly.
@@ -80,7 +80,7 @@ export function VendorSearch({ initialQuery = "" }: { initialQuery?: string } = 
     });
   }
 
-  // Auto-run once when arriving with a vendor name (D208 "Search menus →").
+  // Auto-run once when arriving with a vendor name (D209 "Search menus →").
   const autoRan = useRef(false);
   useEffect(() => {
     if (autoRan.current || !initialQuery.trim()) return;
