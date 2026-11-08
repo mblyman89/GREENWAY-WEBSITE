@@ -772,6 +772,7 @@ import { __runGrowflowMenuCoreTests } from "../../src/lib/purchasing/growflow-me
 import { __runLeaflinkMenuCoreTests } from "../../src/lib/purchasing/leaflink-menu-core";
 import { __runUnifiedSearchCoreTests } from "../../src/lib/purchasing/unified-search-core";
 import { __runUnifiedMenusUiCoreTests } from "../../src/lib/purchasing/unified-menus-ui-core";
+import { __runVendorMenuCoverageCoreTests } from "../../src/lib/purchasing/vendor-menu-coverage-core";
 import { __runEmailMenuCoreTests } from "../../src/lib/purchasing/email-menu-core";
 import { __runCultiveraMenusUiCoreTests } from "../../src/lib/purchasing/cultivera-menus-ui-core";
 import { __runCultiveraMediaCoreTests } from "../../src/lib/purchasing/cultivera-media-core";
@@ -1896,6 +1897,7 @@ __runLiquidVolumeTests();
   __runLeaflinkMenuCoreTests();
   __runUnifiedSearchCoreTests();
   __runUnifiedMenusUiCoreTests();
+  assertRan("vendor-menu-coverage-core", __runVendorMenuCoverageCoreTests(), 90);
   __runEmailMenuCoreTests();
   __runCultiveraMenusUiCoreTests();
   __runCultiveraMediaCoreTests();

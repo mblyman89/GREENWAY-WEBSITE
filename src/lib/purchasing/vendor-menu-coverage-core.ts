@@ -628,6 +628,12 @@ export function rememberedLabel(p: string | null): string {
   return "";
 }
 
+/** Badge tone for a remembered-platform string (unknown → neutral). */
+export function rememberedTone(p: string | null): "green" | "gold" | "orange" | "neutral" {
+  if (p === "cultivera" || p === "growflow" || p === "leaflink") return sourceTone(p);
+  return "neutral";
+}
+
 /* ------------------------------------------------------------------
  * NEEDED table — vendors we carry with no usable menu
  * ------------------------------------------------------------------ */
@@ -901,6 +907,7 @@ export function __runVendorMenuCoverageCoreTests(): { passed: number; failed: nu
     }
   };
   const NOW = Date.parse("2026-11-08T03:00:00Z"); // 2026-11-07 19:00 Pacific
+  ok(rememberedTone("growflow") === "gold" && rememberedTone("bogus") === "neutral" && rememberedTone(null) === "neutral", "rememberedTone");
   const V = (id: string, name: string, extra: Partial<CoverageVendor> = {}): CoverageVendor => ({
     id, display_name: name, slug: id, dba: null, legal_name: null, license_number: null, email: null, phone: null,
     website: null, is_active: true, total_accepted_ytd_cents: null, last_accepted_at: null, ...extra,
