@@ -64,9 +64,11 @@ export type CoverageVendor = {
   /** D212 — read so the page can show / fetch the vendor's logo. */
   status?: string | null;
   logo_media_id?: string | null;
+  /** D213 — survivor id parsed from an archived card's "Merged into … (<uuid>)" note (mergedIntoFromNotes). */
+  merged_into_id?: string | null;
 };
 
-export type CoverageAlias = { vendor_id: string; source_name: string };
+export type CoverageAlias = { vendor_id: string; source_name: string; source_system?: string | null };
 export type CoverageBrand = { vendor_id: string | null; display_name: string };
 
 export type CoverageLot = {
@@ -223,12 +225,45 @@ export function pct(part: number, whole: number): number | null {
 }
 
 /* ------------------------------------------------------------------
- * Vendor matching (D209b) — shown, never hidden
+ * Vendor matching (D209b, rebuilt in D213) — shown, never hidden
+ *
+ * D213 (owner, verbatim in 00-OWNER-REQUEST-VERBATIM.md): several vendors sat
+ * in BOTH tables and many menus said "not linked to a vendor". Live data
+ * showed three causes, each handled here:
+ *
+ *   A. Duplicate cards. One business often has 2–3 vendor cards (a license
+ *      per card from the statewide import, or a hand-made card next to an
+ *      imported one). A license or name that hit two cards used to match
+ *      NONE. Now the tie is broken in a fixed, explained order: a live card
+ *      beats an archived one; the card we actually receive from (has lots)
+ *      beats one we don't; a published card beats a draft. Only a tie that
+ *      survives all three is still "fits more than one vendor".
+ *   B. Merged (archived) cards. `merge_vendors()` archives a duplicate and
+ *      writes "Merged into "X" (<uuid>)" on it. Those cards stayed in the
+ *      lookup maps and created false ties. Now every archived merged card
+ *      resolves to its surviving card (chains followed, loops refused), and
+ *      the `license:<n>` aliases the merge writes count as license numbers.
+ *   C. Menus name the seller differently. Cultivera menus carry NO license at
+ *      all, and seller names add legal suffixes, marketing tails, brand lists
+ *      and trademark signs. The menu name is now also tried cleaned (see
+ *      `menuNameVariants`), suffix-insensitive, space-insensitive, by the web
+ *      address slug, and part by part — each step reported.
+ *
+ * A menu the owner links by hand ("Link to vendor", a `source_system='menu'`
+ * alias) wins over everything except a vendor id stamped on the menu itself.
  * ------------------------------------------------------------------ */
 
 export type MatchHow = "linked" | "license" | "name" | "alias" | "brand" | "ambiguous" | "none";
 
-export type VendorMatch = { vendorId: string | null; how: MatchHow; candidates: number };
+export type VendorMatch = {
+  vendorId: string | null;
+  how: MatchHow;
+  candidates: number;
+  /** D213 — plain-English reason when the match needed more than an exact hit (rule 3: show reasons). */
+  detail?: string | null;
+  /** D213 — other live cards that look like the same business (merge candidates). */
+  duplicateIds?: string[];
+};
 
 export function matchHowLabel(how: MatchHow): string {
   switch (how) {
@@ -251,65 +286,427 @@ export function matchHowLabel(how: MatchHow): string {
 
 export type VendorMatcher = (s: Pick<CoverageSnapshot, "vendorId" | "label" | "altLabel" | "license">) => VendorMatch;
 
+/** Alias rows written by "Link to vendor" on the menus page (D213). */
+export const MENU_LINK_ALIAS_SYSTEM = "menu";
+
+/** Where "Link to vendor" stamps vendor_id: the snapshot table and the column the menu's seller name came from. */
+export function menuLinkSnapshotTable(source: MenuSource): { table: string; nameColumn: string } {
+  if (source === "growflow") return { table: "growflow_menu_snapshots", nameColumn: "store_name" };
+  if (source === "leaflink") return { table: "leaflink_menu_snapshots", nameColumn: "brand_name" };
+  if (source === "email") return { table: "emailed_menu_snapshots", nameColumn: "from_name" };
+  return { table: "cultivera_menu_snapshots", nameColumn: "seller_name" };
+}
+
+/** One live vendor card in the "Link to vendor" picker. */
+export type VendorPickOption = { id: string; label: string };
+
+/** One (source, seller name) a row's "Link to vendor" will remember — deduped, at most 6. */
+export type MenuLinkTarget = { source: MenuSource; label: string };
+
+export function menuLinkTargets(history: readonly { source: MenuSource; label: string }[]): MenuLinkTarget[] {
+  const out: MenuLinkTarget[] = [];
+  const seen = new Set<string>();
+  for (const h of history) {
+    const label = (h.label ?? "").trim();
+    if (!label) continue;
+    const k = `${h.source}|${label}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ source: h.source, label });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+/** Parse the picker's hidden `targets` field; anything malformed is dropped (never trusted). */
+export function parseMenuLinkTargets(raw: string): MenuLinkTarget[] {
+  let v: unknown;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(v)) return [];
+  const out: MenuLinkTarget[] = [];
+  for (const t of v.slice(0, 6)) {
+    if (!t || typeof t !== "object") continue;
+    const src = (t as { source?: unknown }).source;
+    const label = (t as { label?: unknown }).label;
+    if (typeof src !== "string" || !(MENU_SOURCES as readonly string[]).includes(src)) continue;
+    if (typeof label !== "string" || !label.trim() || label.length > 300) continue;
+    out.push({ source: src as MenuSource, label: label.trim() });
+  }
+  return menuLinkTargets(out);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Build the matcher once per page render. Name keys map to SETS of vendor ids
- * so an ambiguous name (two vendors normalize the same) is detected, not won
- * by whichever row came first.
+ * The surviving card id from an archived card's Internal notes, as written by
+ * merge_vendors() (migration 0104): `Merged into "X" (<uuid>) on YYYY-MM-DD.`
+ * The LAST such note wins (a card merged, restored and merged again).
+ */
+export function mergedIntoFromNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const re = /Merged into "[^"]*" \(([0-9a-f-]{36})\)/gi;
+  let last: string | null = null;
+  for (let m = re.exec(notes); m; m = re.exec(notes)) last = m[1].toLowerCase();
+  return last && UUID_RE.test(last) ? last : null;
+}
+
+function isArchived(v: Pick<CoverageVendor, "status">): boolean {
+  return (v.status ?? "").trim().toLowerCase() === "archived";
+}
+
+/**
+ * id → the card that should stand for it: an archived merged card resolves to
+ * its survivor (following chains A→B→C); anything else resolves to itself. A
+ * survivor id we don't have, or a loop, leaves the card as itself.
+ */
+export function buildSurvivorResolver(vendors: readonly CoverageVendor[]): (id: string) => string {
+  const byId = new Map(vendors.map((v) => [v.id, v]));
+  const memo = new Map<string, string>();
+  return (id: string) => {
+    const hit = memo.get(id);
+    if (hit) return hit;
+    let cur = id;
+    const seen = new Set<string>([cur]);
+    for (let i = 0; i < 10; i += 1) {
+      const v = byId.get(cur);
+      if (!v || !isArchived(v) || !v.merged_into_id) break;
+      const next = v.merged_into_id;
+      if (!byId.has(next) || seen.has(next)) break;
+      seen.add(next);
+      cur = next;
+    }
+    memo.set(id, cur);
+    return cur;
+  };
+}
+
+/** Legal / filler words that never tell two sellers apart ("NCMX, LLC" = "NCMX"). */
+const LEGAL_WORDS = new Set([
+  "llc", "l l c", "inc", "incorporated", "co", "company", "corp", "corporation", "ltd", "limited", "lp", "llp", "pllc",
+  "spc", "proc", "processing", "processor", "the", "dba",
+]);
+
+/** Exact key with legal words dropped; falls back to the exact key when that would empty it. */
+export function looseVendorKey(raw: string | null | undefined): string {
+  const exact = normalizeVendorKey(raw);
+  if (!exact) return "";
+  const kept = exact.split(" ").filter((w) => !LEGAL_WORDS.has(w));
+  return kept.length ? kept.join(" ") : exact;
+}
+
+/** Industry words that many unrelated sellers share — dropped only by `familyVendorKey`. */
+const INDUSTRY_WORDS = new Set(["cannabis", "marijuana", "farms", "farm", "gardens", "garden", "brands", "brand", "group", "holdings", "enterprises"]);
+
+/**
+ * The "same business family" key: loose key minus industry words, spaces
+ * removed ("Blue Roots Cannabis Co." = "Blue Roots", "FIREBROS" = "Fire
+ * Bros."). Used for duplicate-card detection and as the LAST name tier. Under
+ * 5 letters it is too generic to trust and returns "".
+ */
+export function familyVendorKey(raw: string | null | undefined): string {
+  const loose = looseVendorKey(raw);
+  if (!loose) return "";
+  const kept = loose.split(" ").filter((w) => !INDUSTRY_WORDS.has(w));
+  const k = (kept.length ? kept : loose.split(" ")).join("");
+  return k.length >= 5 ? k : "";
+}
+
+/** Loose key with the spaces removed ("botanicaSEATTLE" = "Botanica Seattle"). */
+export function compactVendorKey(raw: string | null | undefined): string {
+  const k = looseVendorKey(raw).replace(/ /g, "");
+  return k.length >= 4 ? k : "";
+}
+
+/**
+ * The cleaned whole-name forms of a menu's seller name (no splitting):
+ * trailing license digits, trademark signs, "(…)" asides, a " - marketing
+ * tail", and wrapping quotes/underscores removed. Order = most literal first.
+ */
+export function menuNameVariants(raw: string | null | undefined): string[] {
+  const out: string[] = [];
+  const push = (s: string) => {
+    const t = s.replace(/[\u2122\u00ae\u00a9]/g, "").replace(/^[\s'"_`.\-]+|[\s'"_`.\-]+$/g, "").trim();
+    if (t && !out.includes(t)) out.push(t);
+  };
+  const base = stripLicenseSuffix(raw ?? "");
+  push(base);
+  const noParens = base.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ");
+  push(noParens);
+  // "Evergreen Herbal - NEW! THC Only ..." → "Evergreen Herbal"; "Artizen - Distro" → "Artizen"
+  const dash = noParens.split(/\s+[-\u2013\u2014|:]\s+/)[0];
+  push(dash);
+  return out;
+}
+
+/**
+ * Parts of a seller name that may each be a business or brand: "TILTED by
+ * Bellevue Cannabis Co", "Agro Couture / Slab Mechanix", "Seattle Marijuana
+ * Company, Mountain Hi, Hard Hat Extracts, and CANDY", "Viking & Absolute
+ * Fire". Only tried when no whole-name form matched; parts that point at two
+ * different vendors are reported as ambiguous, never picked.
+ */
+export function menuNameParts(raw: string | null | undefined): string[] {
+  const variants = menuNameVariants(raw);
+  const src = variants[variants.length - 1] ?? "";
+  const out: string[] = [];
+  for (const piece of src.split(/\s+by\s+|\s*\/\s*|\s*,\s*(?:and\s+)?|\s+&\s+|\s+and\s+/i)) {
+    const t = piece.trim();
+    if (t && normalizeVendorKey(t).length >= 3 && !LEGAL_WORDS.has(normalizeVendorKey(t)) && !out.includes(t)) out.push(t);
+  }
+  return out.length > 1 ? out : [];
+}
+
+export type VendorMatcherOptions = {
+  /** Vendor ids we receive from (have lots) — used to break duplicate-card ties (D213). */
+  carried?: ReadonlySet<string>;
+};
+
+/**
+ * Build the matcher once per page render. Keys map to SETS of (survivor)
+ * vendor ids so a tie is detected, then broken only by the explained rules
+ * above — never by whichever row came first.
  */
 export function buildVendorMatcher(
   vendors: readonly CoverageVendor[],
   aliases: readonly CoverageAlias[] = [],
   brands: readonly CoverageBrand[] = [],
+  opts: VendorMatcherOptions = {},
 ): VendorMatcher {
-  const byId = new Set(vendors.map((v) => v.id));
-  const byLicense = new Map<string, Set<string>>();
-  const byName = new Map<string, Set<string>>();
-  const byAlias = new Map<string, Set<string>>();
-  const byBrand = new Map<string, Set<string>>();
-  const add = (m: Map<string, Set<string>>, key: string, id: string) => {
+  const byId = new Map(vendors.map((v) => [v.id, v]));
+  const resolve = buildSurvivorResolver(vendors);
+  const carried = opts.carried ?? new Set<string>();
+  type Index = Map<string, Set<string>>;
+  const mk = (): Index => new Map();
+  const byLicense = mk();
+  const byMenuLink = mk();
+  const exact = { name: mk(), alias: mk(), brand: mk() };
+  const loose = { name: mk(), alias: mk(), brand: mk() };
+  const compact = { name: mk(), alias: mk(), brand: mk() };
+  const family = { name: mk(), alias: mk(), brand: mk() };
+  const add = (m: Index, key: string, id: string) => {
     if (!key) return;
     if (!m.has(key)) m.set(key, new Set());
     m.get(key)!.add(id);
   };
+  const addName = (kind: "name" | "alias" | "brand", raw: string | null | undefined, id: string) => {
+    const n = stripLicenseSuffix(raw ?? "");
+    add(exact[kind], normalizeVendorKey(n), id);
+    add(loose[kind], looseVendorKey(n), id);
+    add(compact[kind], compactVendorKey(n), id);
+    add(family[kind], familyVendorKey(n), id);
+  };
   for (const v of vendors) {
+    const id = resolve(v.id);
     const lic = normalizeLicense(v.license_number);
-    if (lic) add(byLicense, lic, v.id);
-    for (const n of [v.display_name, v.dba, v.legal_name]) {
-      add(byName, normalizeVendorKey(stripLicenseSuffix(n ?? "")), v.id);
-    }
+    if (lic) add(byLicense, lic, id);
+    for (const n of [v.display_name, v.dba, v.legal_name]) addName("name", n, id);
   }
   for (const a of aliases) {
-    if (byId.has(a.vendor_id)) add(byAlias, normalizeVendorKey(stripLicenseSuffix(a.source_name)), a.vendor_id);
+    if (!byId.has(a.vendor_id)) continue;
+    const id = resolve(a.vendor_id);
+    const src = (a.source_name ?? "").trim();
+    const licAlias = src.match(/^license:\s*(.+)$/i);
+    if (licAlias) {
+      // merge_vendors() keeps every merged card's license as `license:<n>`.
+      const lic = normalizeLicense(licAlias[1]);
+      if (lic) add(byLicense, lic, id);
+      continue;
+    }
+    if ((a.source_system ?? "") === MENU_LINK_ALIAS_SYSTEM) add(byMenuLink, normalizeVendorKey(src), id);
+    addName("alias", src, id);
   }
   for (const b of brands) {
-    if (b.vendor_id && byId.has(b.vendor_id)) add(byBrand, normalizeVendorKey(stripLicenseSuffix(b.display_name)), b.vendor_id);
+    if (b.vendor_id && byId.has(b.vendor_id)) addName("brand", b.display_name, resolve(b.vendor_id));
   }
 
+  /** Other live cards sharing the license or exact name — what "merge suggested" lists. */
+  const dupLicense = mk();
+  const dupName = mk();
+  for (const v of vendors) {
+    if (isArchived(v)) continue;
+    const lic = normalizeLicense(v.license_number);
+    if (lic) add(dupLicense, lic, v.id);
+    add(dupName, familyVendorKey(stripLicenseSuffix(v.display_name)), v.id);
+  }
+  const duplicatesOf = (id: string): string[] => {
+    const v = byId.get(id);
+    if (!v) return [];
+    const out = new Set<string>();
+    const lic = normalizeLicense(v.license_number);
+    for (const set of [lic ? dupLicense.get(lic) : undefined, dupName.get(familyVendorKey(stripLicenseSuffix(v.display_name)))]) {
+      // A key shared by more than 4 live cards is a generic word, not one business.
+      if (set && set.size <= 4) for (const x of set) if (x !== id) out.add(x);
+    }
+    return [...out].sort();
+  };
+
+  /** Tie-break (D213): live > archived, carried > not, published > draft. */
+  const pickOne = (hit: Set<string>): { id: string | null; why: string | null; size: number } => {
+    const ids = [...hit];
+    if (ids.length === 1) return { id: ids[0], why: null, size: 1 };
+    const steps: [string, (id: string) => boolean][] = [
+      ["the others are archived", (id) => { const v = byId.get(id); return Boolean(v && !isArchived(v)); }],
+      ["it is the one we receive from", (id) => carried.has(id)],
+      ["it is the published card", (id) => (byId.get(id)?.status ?? "").toLowerCase() === "published"],
+    ];
+    let pool = ids;
+    for (const [why, keep] of steps) {
+      const kept = pool.filter(keep);
+      if (kept.length === 1) return { id: kept[0], why: `${ids.length} cards fit — picked this one because ${why}`, size: ids.length };
+      if (kept.length > 1) pool = kept;
+    }
+    return { id: null, why: null, size: ids.length };
+  };
+
+  /**
+   * A menu that landed on a card we don't receive from, when exactly ONE live
+   * card with the same exact name IS carried, counts for that carried card
+   * (Fire Bros. 436479 menu → Fire Bros. 425450 we buy from).
+   */
+  const preferCarriedTwin = (id: string): { id: string; why: string | null } => {
+    if (carried.size === 0 || carried.has(id)) return { id, why: null };
+    const v = byId.get(id);
+    if (!v) return { id, why: null };
+    // Exact same name first (Fire Bros. = Fire Bros.), then the wider family
+    // (same license / FIREBROS); only a SINGLE carried twin is ever chosen.
+    const dups = duplicatesOf(id).filter((d) => carried.has(d));
+    const sameName = new Set([v.display_name, v.dba, v.legal_name].map((n) => normalizeVendorKey(stripLicenseSuffix(n ?? ""))).filter(Boolean));
+    const exactTwins = dups.filter((d) => {
+      const t = byId.get(d)!;
+      return [t.display_name, t.dba, t.legal_name].some((n) => sameName.has(normalizeVendorKey(stripLicenseSuffix(n ?? ""))));
+    });
+    const twin = exactTwins.length === 1 ? exactTwins[0] : dups.length === 1 ? dups[0] : null;
+    if (!twin) return { id, why: null };
+    return { id: twin, why: `the menu fits "${v.display_name}", a duplicate card of this vendor we receive from` };
+  };
+
+  const done = (id: string, how: MatchHow, size: number, why: string | null): VendorMatch => {
+    const twin = preferCarriedTwin(id);
+    const detail = [why, twin.why].filter(Boolean).join("; ") || null;
+    return { vendorId: twin.id, how, candidates: size, detail, duplicateIds: duplicatesOf(twin.id) };
+  };
+
   return (s) => {
-    if (s.vendorId && byId.has(s.vendorId)) return { vendorId: s.vendorId, how: "linked", candidates: 1 };
-    const lic = normalizeLicense(s.license) ?? normalizeLicense(extractLicenseFromLabel(s.label));
-    if (lic) {
-      const hit = byLicense.get(lic);
-      if (hit && hit.size === 1) return { vendorId: [...hit][0], how: "license", candidates: 1 };
-      if (hit && hit.size > 1) return { vendorId: null, how: "ambiguous", candidates: hit.size };
+    if (s.vendorId && byId.has(s.vendorId)) {
+      const id = resolve(s.vendorId);
+      return { vendorId: id, how: "linked", candidates: 1, detail: id !== s.vendorId ? "the linked card was merged into this one" : null, duplicateIds: duplicatesOf(id) };
     }
     let ambiguous = 0;
+    // 1. The owner's own "Link to vendor" choice for this menu name.
     for (const label of [s.label, s.altLabel]) {
-      const key = normalizeVendorKey(stripLicenseSuffix(label ?? ""));
-      if (!key) continue;
-      for (const [map, how] of [
-        [byName, "name"],
-        [byAlias, "alias"],
-        [byBrand, "brand"],
-      ] as const) {
-        const hit = map.get(key);
-        if (!hit) continue;
-        if (hit.size === 1) return { vendorId: [...hit][0], how, candidates: 1 };
-        ambiguous = Math.max(ambiguous, hit.size);
+      const hit = byMenuLink.get(normalizeVendorKey(label ?? ""));
+      if (hit) {
+        const p = pickOne(hit);
+        if (p.id) return done(p.id, "alias", p.size, "you linked this menu to this vendor");
       }
     }
-    if (ambiguous > 1) return { vendorId: null, how: "ambiguous", candidates: ambiguous };
-    return { vendorId: null, how: "none", candidates: 0 };
+    // 2. License number (GrowFlow / LeafLink / a "NAME - 412345" label).
+    const fieldLic = normalizeLicense(s.license);
+    const labelLic = fieldLic ? null : normalizeLicense(extractLicenseFromLabel(s.label));
+    let licenseHit: VendorMatch | null = null;
+    const lic = fieldLic ?? labelLic;
+    if (lic) {
+      const hit = byLicense.get(lic);
+      if (hit) {
+        const p = pickOne(hit);
+        if (p.id) licenseHit = done(p.id, "license", p.size, p.why);
+        else ambiguous = Math.max(ambiguous, p.size);
+      }
+    }
+    // A license from the source's own license field is trusted outright.
+    if (licenseHit && fieldLic) return licenseHit;
+
+    // 3. Names — seller-name evidence (our names + aliases) from the label,
+    //    then from the web-address slug, before any brand evidence; whole
+    //    forms before parts. Strictest key first.
+    const tiers: [Record<"name" | "alias" | "brand", Index>, (x: string) => string, string | null][] = [
+      [exact, normalizeVendorKey, null],
+      [loose, looseVendorKey, "ignoring LLC / Inc / Co"],
+      [compact, compactVendorKey, "ignoring spaces and LLC / Inc / Co"],
+      [family, familyVendorKey, "ignoring words like Cannabis / Farms / Brands"],
+    ];
+    type Kind = "name" | "alias" | "brand";
+    const tryWhole = (label: string | null, kinds: readonly Kind[], from: string | null): VendorMatch | null => {
+      for (const variant of menuNameVariants(label)) {
+        const cleaned = variant !== stripLicenseSuffix(label ?? "").trim() ? `cleaned to "${variant}"` : null;
+        for (const [idx, keyOf, tierWhy] of tiers) {
+          const key = keyOf(variant);
+          if (!key) continue;
+          for (const how of kinds) {
+            // Brand names are short and shared; the loosest tier never applies to them.
+            if (how === "brand" && idx === family) continue;
+            const hit = idx[how].get(key);
+            if (!hit) continue;
+            const p = pickOne(hit);
+            if (p.id) return done(p.id, how, p.size, [from, cleaned, tierWhy, p.why].filter(Boolean).join(", ") || null);
+            ambiguous = Math.max(ambiguous, p.size);
+          }
+        }
+      }
+      return null;
+    };
+    const SLUG = "from the menu's web address";
+    // The seller name the menu SHOWS (names, aliases, then brands) beats its web-address slug.
+    const byName =
+      tryWhole(s.label, ["name", "alias"], null) ??
+      (licenseHit ? null : tryWhole(s.label, ["brand"], null)) ??
+      (s.altLabel ? tryWhole(s.altLabel, ["name", "alias"], SLUG) : null);
+
+    // A license read out of the label text ("TWO HEADS CO LLC - 412851") that
+    // points at a DIFFERENT vendor than the name does is a conflict: shown,
+    // never guessed (rule 3). Same vendor → the license match stands.
+    if (licenseHit) {
+      if (byName && byName.vendorId !== licenseHit.vendorId) {
+        const a = byId.get(licenseHit.vendorId ?? "")?.display_name ?? "one vendor";
+        const b = byId.get(byName.vendorId ?? "")?.display_name ?? "another";
+        return {
+          vendorId: null,
+          how: "ambiguous",
+          candidates: 2,
+          detail: `the license # in the menu name belongs to "${a}" but the name fits "${b}" — use Link to vendor`,
+          duplicateIds: [],
+        };
+      }
+      return licenseHit;
+    }
+    if (byName) return byName;
+    const byBrand = s.altLabel ? tryWhole(s.altLabel, ["brand"], SLUG) : null;
+    if (byBrand) return byBrand;
+    for (const label of [s.label, s.altLabel]) {
+      const found = new Map<string, MatchHow>();
+      const parts = menuNameParts(label);
+      for (const part of parts) {
+        for (const [idx, keyOf] of tiers) {
+          const key = keyOf(part);
+          if (!key) continue;
+          let got = false;
+          for (const how of ["name", "alias", "brand"] as const) {
+            if (how === "brand" && idx === family) continue;
+            const hit = idx[how].get(key);
+            if (!hit) continue;
+            const p = pickOne(hit);
+            if (p.id) {
+              if (!found.has(p.id)) found.set(p.id, how);
+              got = true;
+              break;
+            }
+            ambiguous = Math.max(ambiguous, p.size);
+          }
+          if (got) break;
+        }
+      }
+      if (found.size === 1) {
+        const [[id, how]] = [...found.entries()];
+        return done(id, how, 1, `one part of the menu name ("${label}") fits this vendor`);
+      }
+      if (found.size > 1) ambiguous = Math.max(ambiguous, found.size);
+    }
+    if (ambiguous > 1) return { vendorId: null, how: "ambiguous", candidates: ambiguous, detail: null, duplicateIds: [] };
+    return { vendorId: null, how: "none", candidates: 0, detail: null, duplicateIds: [] };
   };
 }
 
@@ -335,16 +732,22 @@ export function lotReceivedDay(l: Pick<CoverageLot, "received_on" | "created_at"
   return t ? pacificDayKey(new Date(t)) : null;
 }
 
-export function rollupLots(lots: readonly CoverageLot[]): Map<string, LotRollup> {
+/**
+ * Lots per vendor. D213: pass `resolve` (buildSurvivorResolver) so lots still
+ * sitting on an archived, merged card count for the card it was merged into —
+ * live data had 10 archived cards still holding lots.
+ */
+export function rollupLots(lots: readonly CoverageLot[], resolve: (id: string) => string = (id) => id): Map<string, LotRollup> {
   const out = new Map<string, LotRollup>();
   const cats = new Map<string, Map<string, number>>();
   for (const l of lots) {
     if (!l.vendor_id) continue;
-    let r = out.get(l.vendor_id);
+    const vid = resolve(l.vendor_id);
+    let r = out.get(vid);
     if (!r) {
       r = { lotsTotal: 0, lotsInStock: 0, unitsOnHand: 0, firstReceived: null, lastReceived: null, categories: [] };
-      out.set(l.vendor_id, r);
-      cats.set(l.vendor_id, new Map());
+      out.set(vid, r);
+      cats.set(vid, new Map());
     }
     r.lotsTotal += 1;
     const qty = Number(l.on_hand_qty ?? 0);
@@ -360,7 +763,7 @@ export function rollupLots(lots: readonly CoverageLot[]): Map<string, LotRollup>
     }
     const c = (l.category ?? "").trim();
     if (c) {
-      const m = cats.get(l.vendor_id)!;
+      const m = cats.get(vid)!;
       m.set(c, (m.get(c) ?? 0) + 1);
     }
   }
@@ -463,6 +866,12 @@ export type SearchedRow = {
   menuNames: string[];
   match: MatchHow;
   ambiguousCandidates: number;
+  /** D213 — why this vendor was chosen when it took more than an exact hit (shown on the row). */
+  matchDetail: string | null;
+  /** D213 — other live cards for the same business (same license or same name): merge suggested. */
+  duplicateIds: string[];
+  /** D213 — the seller names "Link to vendor" remembers for this row. */
+  linkTargets: MenuLinkTarget[];
   sources: SourceSummary[];
   latest: HistoryEntry;
   latestUsable: HistoryEntry | null;
@@ -570,6 +979,9 @@ export function buildSearchedRows(input: {
       menuNames: labels.filter((l) => normalizeVendorKey(l) !== normalizeVendorKey(name)).slice(0, 3),
       match: g.m.how,
       ambiguousCandidates: g.m.candidates,
+      matchDetail: g.m.detail ?? null,
+      duplicateIds: g.m.duplicateIds ?? [],
+      linkTargets: menuLinkTargets(history),
       sources,
       latest: history[0],
       latestUsable,
@@ -660,6 +1072,11 @@ export type NeededRow = {
   mailto: string;
 };
 
+/** Archived cards never stand on their own in either table (D213): merged ones roll up to the survivor. */
+export function isListableVendor(v: Pick<CoverageVendor, "status">): boolean {
+  return !isArchived(v);
+}
+
 export const MENU_REQUEST_SUBJECT = "Menu request — Greenway Marijuana";
 
 export function buildNeededRows(input: {
@@ -669,18 +1086,22 @@ export function buildNeededRows(input: {
   memories?: readonly CoverageMemory[];
   nowMs: number;
 }): NeededRow[] {
+  // D213 — a usable menu covers its vendor AND that vendor's duplicate cards
+  // (same license / same name), so one business never sits in both tables.
   const covered = new Set<string>();
   const attemptsBy = new Map<string, HistoryEntry[]>();
   for (const r of input.searched) {
     if (!r.vendorId) continue;
-    if (r.hasUsable) covered.add(r.vendorId);
-    else attemptsBy.set(r.vendorId, r.history);
+    if (r.hasUsable) {
+      covered.add(r.vendorId);
+      for (const d of r.duplicateIds) covered.add(d);
+    } else attemptsBy.set(r.vendorId, r.history);
   }
   const memoryFor = buildMemoryLookup(input.memories ?? []);
   const out: NeededRow[] = [];
   for (const v of input.vendors) {
     const lots = input.lotsByVendor.get(v.id);
-    if (!lots || lots.lotsTotal === 0 || covered.has(v.id)) continue;
+    if (!lots || lots.lotsTotal === 0 || covered.has(v.id) || !isListableVendor(v)) continue;
     const days = pacificDaysSince(lots.lastReceived, input.nowMs);
     const group: NeedGroup =
       lots.lotsInStock > 0 ? "on_shelf" : days !== null && days <= RECENT_RECEIVED_DAYS ? "recent" : "older";
@@ -714,9 +1135,17 @@ export type CoverageKpis = {
   itemsOnFile: number;
 };
 
-export function coverageKpis(searched: readonly SearchedRow[], needed: readonly NeededRow[], lotsByVendor: ReadonlyMap<string, LotRollup>): CoverageKpis {
-  const carried = [...lotsByVendor.values()].filter((l) => l.lotsTotal > 0).length;
-  const covered = searched.filter((r) => r.vendorId && r.hasUsable && (lotsByVendor.get(r.vendorId)?.lotsTotal ?? 0) > 0).length;
+export function coverageKpis(
+  searched: readonly SearchedRow[],
+  needed: readonly NeededRow[],
+  lotsByVendor: ReadonlyMap<string, LotRollup>,
+  vendors?: readonly CoverageVendor[],
+): CoverageKpis {
+  // D213 — archived cards are never "carried" on their own (merged ones already rolled up).
+  const hidden = new Set((vendors ?? []).filter((v) => !isListableVendor(v)).map((v) => v.id));
+  const carried = [...lotsByVendor.entries()].filter(([id, l]) => l.lotsTotal > 0 && !hidden.has(id)).length;
+  // carried − needed, so the two tables and the KPI always add up (D213).
+  const covered = Math.max(0, carried - needed.length);
   return {
     carried,
     covered,

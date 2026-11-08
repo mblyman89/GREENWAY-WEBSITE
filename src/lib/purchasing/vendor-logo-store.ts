@@ -99,7 +99,7 @@ async function loadMatchContext(admin: Admin): Promise<MatchContext> {
     readAll<LogoVendor>("Vendors", (f, t) =>
       admin.from("vendors").select(VENDOR_COLS).order("id", { ascending: true }).range(f, t)),
     readAll<CoverageAlias>("Vendor aliases", (f, t) =>
-      admin.from("vendor_aliases").select("id, vendor_id, source_name").order("id", { ascending: true }).range(f, t)),
+      admin.from("vendor_aliases").select("id, vendor_id, source_name, source_system").order("id", { ascending: true }).range(f, t)),
     readAll<CoverageBrand & LogoBrand>("Brands", (f, t) =>
       admin.from("brands").select(BRAND_COLS).order("id", { ascending: true }).range(f, t)),
   ]);

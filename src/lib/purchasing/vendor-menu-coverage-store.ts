@@ -26,6 +26,8 @@ import { chunkedIn, pagedAll, ADMIN_PAGED_CONCURRENCY } from "@/lib/supabase/chu
 import { dbErrorForStaff } from "@/lib/db/rpc-fallback-core";
 import {
   buildVendorMatcher,
+  buildSurvivorResolver,
+  mergedIntoFromNotes,
   buildSearchedRows,
   buildNeededRows,
   coverageKpis,
@@ -42,6 +44,8 @@ import {
   type MenuSource,
   type NeededRow,
   type SearchedRow,
+  type VendorPickOption,
+  isListableVendor,
 } from "@/lib/purchasing/vendor-menu-coverage-core";
 import { missingLogoQueue } from "@/lib/purchasing/vendor-logo-core";
 import { publicMediaUrl } from "@/lib/vendors/store";
@@ -54,6 +58,10 @@ export type VendorMenuCoverage = {
   logos: Record<string, string>;
   /** D212 — vendors we carry with no logo yet (what "Fetch all missing logos" works through). */
   missingLogos: number;
+  /** D213 — every live vendor card, for the "Link to vendor" picker. */
+  linkOptions: VendorPickOption[];
+  /** D213 — names of the duplicate cards rows point at (id → "Name · Lic n"). */
+  duplicateNames: Record<string, string>;
   /** Plain-English problems from reads that failed; empty when everything loaded. */
   warnings: string[];
   configured: boolean;
@@ -220,6 +228,8 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
     kpis: coverageKpis([], [], new Map()),
     logos: {},
     missingLogos: 0,
+    linkOptions: [],
+    duplicateNames: {},
     warnings: [],
     configured: false,
   };
@@ -227,13 +237,14 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
   const admin = createSupabaseAdminClient();
   const warnings: string[] = [];
 
-  const [vendors, aliases, brands, lots, memories, snapshots] = await Promise.all([
-    readAll<CoverageVendor>("Vendors", warnings, (f, t) =>
+  type VendorRow = CoverageVendor & { internal_notes: string | null };
+  const [vendorRows, aliases, brands, lots, memories, snapshots] = await Promise.all([
+    readAll<VendorRow>("Vendors", warnings, (f, t) =>
       admin.from("vendors")
-        .select("id, display_name, slug, dba, legal_name, license_number, email, phone, website, is_active, total_accepted_ytd_cents, last_accepted_at, status, logo_media_id")
+        .select("id, display_name, slug, dba, legal_name, license_number, email, phone, website, is_active, total_accepted_ytd_cents, last_accepted_at, status, logo_media_id, internal_notes")
         .order("id", { ascending: true }).range(f, t)),
     readAll<CoverageAlias>("Vendor aliases", warnings, (f, t) =>
-      admin.from("vendor_aliases").select("id, vendor_id, source_name").order("id", { ascending: true }).range(f, t)),
+      admin.from("vendor_aliases").select("id, vendor_id, source_name, source_system").order("id", { ascending: true }).range(f, t)),
     readAll<CoverageBrand>("Brands", warnings, (f, t) =>
       admin.from("brands").select("id, vendor_id, display_name").not("vendor_id", "is", null).order("id", { ascending: true }).range(f, t)),
     readAll<CoverageLot>("Inventory lots", warnings, (f, t) =>
@@ -247,9 +258,16 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
     readSnapshots(admin, warnings),
   ]);
 
-  const match = buildVendorMatcher(vendors, aliases, brands);
+  // D213 — merged (archived) cards resolve to their survivor: parse the
+  // "Merged into … (<uuid>)" note merge_vendors() writes, then drop the notes.
+  const vendors: CoverageVendor[] = vendorRows.map(({ internal_notes, ...v }) => ({
+    ...v,
+    merged_into_id: (v.status ?? "").toLowerCase() === "archived" ? mergedIntoFromNotes(internal_notes) : null,
+  }));
+  const lotsByVendor = rollupLots(lots, buildSurvivorResolver(vendors));
+  const carried = new Set([...lotsByVendor.entries()].filter(([, l]) => l.lotsTotal > 0).map(([id]) => id));
+  const match = buildVendorMatcher(vendors, aliases, brands, { carried });
   const itemsBySnapshot = await readItems(admin, latestUsableSnapshotIds(snapshots, match), warnings);
-  const lotsByVendor = rollupLots(lots);
   const searched = buildSearchedRows({ snapshots, vendors, match, itemsBySnapshot, lotsByVendor, memories, nowMs });
   const needed = buildNeededRows({ vendors, lotsByVendor, searched, memories, nowMs });
   const logos = await readLogoUrls(admin, vendors, warnings);
@@ -258,12 +276,32 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
     lotsByVendor,
     Number.MAX_SAFE_INTEGER,
   ).length;
+  const vendorLabel = (v: CoverageVendor) => {
+    const extra = [v.dba && v.dba.toLowerCase() !== v.display_name.toLowerCase() ? `DBA ${v.dba}` : "", v.license_number ? `Lic ${v.license_number}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    return extra ? `${v.display_name} — ${extra}` : v.display_name;
+  };
+  const linkOptions = vendors
+    .filter(isListableVendor)
+    .map((v) => ({ id: v.id, label: vendorLabel(v) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const byId = new Map(vendors.map((v) => [v.id, v]));
+  const duplicateNames: Record<string, string> = {};
+  for (const r of searched) {
+    for (const d of r.duplicateIds) {
+      const v = byId.get(d);
+      if (v) duplicateNames[d] = vendorLabel(v);
+    }
+  }
   return {
     searched,
     needed,
-    kpis: coverageKpis(searched, needed, lotsByVendor),
+    kpis: coverageKpis(searched, needed, lotsByVendor, vendors),
     logos,
     missingLogos,
+    linkOptions,
+    duplicateNames,
     warnings,
     configured: true,
   };

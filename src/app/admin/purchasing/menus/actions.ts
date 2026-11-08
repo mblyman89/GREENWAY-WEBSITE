@@ -24,6 +24,8 @@ import { recordAudit } from "@/lib/auth/audit";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { fetchVendorLogo, fetchMissingLogos } from "@/lib/purchasing/vendor-logo-store";
 import { isGoodOutcome, logoResultMessage, type LogoResult } from "@/lib/purchasing/vendor-logo-core";
+import { linkMenuToVendor } from "@/lib/purchasing/vendor-menu-link-store";
+import { parseMenuLinkTargets } from "@/lib/purchasing/vendor-menu-coverage-core";
 import {
   searchCultiveraMarkets,
   fetchCultiveraMenu,
@@ -1232,4 +1234,37 @@ export async function fetchMissingLogosAction(formData: FormData): Promise<Fetch
   if (report.stoppedForTime) parts.push("Stopped early to stay inside the time limit.");
   if (report.remaining > 0) parts.push(`${report.remaining} still to try — click again to continue.`);
   return { ok: true, message: parts.join(" "), results: report.results, remaining: report.remaining };
+}
+
+/* ------------------------------------------------------------------
+ * D213 — "Link to vendor" for a menu the matcher couldn't place
+ * ------------------------------------------------------------------ */
+
+export type LinkMenuActionResult = { ok: boolean; message: string };
+
+export async function linkMenuToVendorAction(formData: FormData): Promise<LinkMenuActionResult> {
+  const session = await requirePermission("inventory.manage");
+  const vendorId = str(formData, "vendor_id");
+  const targets = parseMenuLinkTargets(str(formData, "targets"));
+  if (!vendorId) return { ok: false, message: "Pick a vendor from the list first." };
+  if (targets.length === 0) return { ok: false, message: "This row has no menu name to link." };
+  const messages: string[] = [];
+  let anyOk = false;
+  for (const t of targets) {
+    const r = await linkMenuToVendor({ source: t.source, sellerName: t.label, vendorId });
+    messages.push(r.message);
+    if (!r.ok) continue;
+    anyOk = true;
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "vendor.menu_linked",
+      entityType: "vendor",
+      entityId: vendorId,
+      before: r.previousVendorId ? { linked_vendor_id: r.previousVendorId } : null,
+      after: { source: t.source, seller_name: t.label, snapshots_linked: r.snapshotsLinked ?? 0 },
+    });
+  }
+  if (anyOk) revalidatePath("/admin/purchasing/menus");
+  return { ok: anyOk, message: messages.join(" ") };
 }

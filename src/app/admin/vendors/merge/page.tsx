@@ -22,6 +22,7 @@ export const dynamic = "force-dynamic";
  */
 
 const REASON_LABELS: Record<string, string> = {
+  "same-license": "Same license number",
   "same-name": "Same business name",
   "same-website": "Same website",
 };
