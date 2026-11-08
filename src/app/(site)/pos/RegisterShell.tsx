@@ -301,6 +301,8 @@ import {
 import type { PosCardCapture } from "@/lib/pos/medical-pos-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { PriceLookupScreen, SaleFlow, type PosMemberHit } from "./SaleFlow";
+import { RegisterBreakModal } from "./RegisterBreakModal";
+import { breakReasonLabel, type BreakRequest } from "@/lib/staffing/break-clock-core";
 import { parseProductDetailsResponse, type ProductDetailsFn } from "@/lib/pos/product-detail-view-core";
 // D170 O11 — lot details saved on the iPad so the info card works offline.
 import {
@@ -405,6 +407,12 @@ type UnlockedEmployee = {
   fullName: string;
   jobRole: string;
   clockedIn: boolean;
+  /**
+   * D211 — on a lunch / other break: off the clock (clockedIn is false) but the
+   * drawer is still theirs. The clock button becomes "Back from break".
+   */
+  onBreak?: boolean;
+  breakReason?: string | null;
   /** Slice 6 — SAW username ONLY (shown at the medical-verify step). May be null. */
   sawUsername?: string | null;
   /**
@@ -480,6 +488,10 @@ export function RegisterShell({
   const [screen, setScreen] = useState<Screen | "loading">("loading");
   const [creds, setCreds] = useState<DeviceCreds | null>(null);
   const [employee, setEmployee] = useState<UnlockedEmployee | null>(null);
+  // D211 — the lunch / other break picker (opened from MORE).
+  const [breakOpen, setBreakOpen] = useState(false);
+  const [breakBusy, setBreakBusy] = useState(false);
+  const [breakError, setBreakError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<DrawerInfo>(null);
   const [queue, setQueue] = useState<QueuedPosEvent[]>([]);
   const [rejected, setRejected] = useState<QueuedPosEvent[]>([]);
@@ -3147,9 +3159,15 @@ export function RegisterShell({
         onLock={lock}
         onSyncNow={() => void flush()}
         offlineApprovalOk={offlineApprovalOk}
+        onBreak={() => {
+          if (!employee || !employee.clockedIn) return;
+          setBreakError(null);
+          setBreakOpen(true);
+        }}
         onPunch={() => {
           if (!employee) return;
-          const intent = employee.clockedIn ? "out" : "in";
+          // D211 — on a break, the same button means "Back from break".
+          const intent = employee.clockedIn ? "out" : employee.onBreak ? "back" : "in";
           // Owner D124: ask the server directly and show its real answer.
           // The D84 rule (no clock-out while you own an open drawer) is
           // enforced by the server (toggleClock); its words are shown here,
@@ -3168,13 +3186,21 @@ export function RegisterShell({
                 body: JSON.stringify({ employeeId: employee.id, intent }),
               });
               const b = (await res.json().catch(() => null)) as
-                | { ok?: boolean; action?: "in" | "out"; at?: string | null; message?: string; error?: string; employee?: { clockedIn: boolean } }
+                | { ok?: boolean; action?: "in" | "out" | "break_start" | "break_end"; at?: string | null; message?: string; error?: string; employee?: { clockedIn: boolean; onBreak?: boolean; breakReason?: string | null } }
                 | null;
               answered = b !== null;
               if (b?.ok && b.employee) {
-                setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: b.employee!.clockedIn } : cur));
+                setEmployee((cur) =>
+                  cur && cur.id === employee.id
+                    ? { ...cur, clockedIn: b.employee!.clockedIn, onBreak: !!b.employee!.onBreak, breakReason: b.employee!.breakReason ?? null }
+                    : cur,
+                );
                 void noteOfflineClock(employee.id, b.employee.clockedIn);
-                setBanner(b.action && b.at ? punchSuccessMessage(employee.fullName, b.action, b.at) : (b.message ?? "Done."));
+                setBanner(
+                  (b.action === "in" || b.action === "out") && b.at
+                    ? punchSuccessMessage(employee.fullName, b.action, b.at)
+                    : (b.message ?? "Done."),
+                );
                 return;
               }
               if (answered) {
@@ -3185,9 +3211,12 @@ export function RegisterShell({
               // fall through to the offline queue
             }
             if (shouldQueueOffline(answered, navigator.onLine)) {
-              enqueue("punch", { intent }, employee.id);
-              void noteOfflineClock(employee.id, intent === "in");
-              setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: !employee.clockedIn } : cur));
+              // D211 — offline "back from break" queues as an explicit "in";
+              // the server ends the open break (toggleClock → endBreak).
+              const qIntent = intent === "back" ? "in" : intent;
+              enqueue("punch", { intent: qIntent }, employee.id);
+              void noteOfflineClock(employee.id, qIntent === "in");
+              setEmployee((cur) => (cur && cur.id === employee.id ? { ...cur, clockedIn: !employee.clockedIn, onBreak: false, breakReason: null } : cur));
               setBanner(
                 `${employee.fullName}: no connection. Clock-${intent} saved on this register and will send when it reconnects. Check the back office time clock later.`,
               );
@@ -3196,6 +3225,52 @@ export function RegisterShell({
           })();
         }}
       />
+      {/* D211 — clock out for lunch / other WITHOUT closing the drawer. The
+          server records a break punch (no D84 guard); on success the register
+          locks so nobody sells on the cashier's drawer while they are away.
+          Breaks need the server: offline, the cashier is told to try again. */}
+      {breakOpen && employee ? (
+        <RegisterBreakModal
+          name={employee.fullName}
+          busy={breakBusy}
+          error={breakError}
+          onCancel={() => {
+            if (breakBusy) return;
+            setBreakOpen(false);
+            setBreakError(null);
+          }}
+          onConfirm={(req: BreakRequest) => {
+            if (breakBusy) return;
+            setBreakBusy(true);
+            setBreakError(null);
+            void (async () => {
+              try {
+                const res = await posFetch("/api/pos/clock", {
+                  method: "POST",
+                  headers: {
+                    "content-type": "application/json",
+                    "x-pos-device-id": creds.deviceId,
+                    "x-pos-device-key": creds.deviceKey,
+                  },
+                  body: JSON.stringify({ employeeId: employee.id, intent: "break", reason: req.reason, note: req.note }),
+                });
+                const b = (await res.json().catch(() => null)) as { ok?: boolean; message?: string; error?: string } | null;
+                if (b?.ok) {
+                  setBreakOpen(false);
+                  lock();
+                  setBanner(b.message ?? `${employee.fullName}: on break.`);
+                  return;
+                }
+                setBreakError(b?.error ?? "The server refused the break. You are still clocked in.");
+              } catch {
+                setBreakError("No connection. A break needs the internet — you are still clocked in. Try again in a moment.");
+              } finally {
+                setBreakBusy(false);
+              }
+            })();
+          }}
+        />
+      ) : null}
       {/* SLICE L-14 — the blocking cancellation modal. Rendered FIRST among the
           modals and at a higher z-index than the sale flow, because it is the
           one message in this app that must never be worked around: by the time
@@ -3828,7 +3903,7 @@ function LockScreen({
     try {
       const r = await postPinRequest("/api/pos/clock", creds, { pin: typed });
       const b = r.body as
-        | { ok?: boolean; action?: "in" | "out"; at?: string | null; message?: string; error?: string; employee?: { fullName: string; clockedIn?: boolean }; offline?: unknown }
+        | { ok?: boolean; action?: "in" | "out" | "break_start" | "break_end"; at?: string | null; message?: string; error?: string; employee?: { fullName: string; clockedIn?: boolean }; offline?: unknown }
         | null;
       if (r.res && !offlineFallbackAllowed({ threw: false, status: r.res.status })) {
         setPin("");
@@ -3836,7 +3911,9 @@ function LockScreen({
           // D161 — a PIN-proven punch also arms offline unlock.
           void armOfflineFromOnline(typed, b.offline, typeof b.employee?.clockedIn === "boolean" ? b.employee.clockedIn : null);
           const text =
-            b.action && b.at && b.employee ? punchSuccessMessage(b.employee.fullName, b.action, b.at) : (b.message ?? "Done.");
+            (b.action === "in" || b.action === "out") && b.at && b.employee
+              ? punchSuccessMessage(b.employee.fullName, b.action, b.at)
+              : (b.message ?? "Done."); // D211 — a PIN punch while on break ends the break (server words)
           setClockNotice({ ok: true, text });
           onPunched(text);
           setMode("unlock");
@@ -4000,6 +4077,11 @@ function LockScreen({
         </div>
       ) : null}
       <h1 className="text-2xl font-semibold">{mode === "unlock" ? "Enter PIN to unlock" : "⏱️ Enter PIN to clock in / out"}</h1>
+      {mode === "clock" ? (
+        <p className="mt-1 max-w-sm text-center text-xs text-[var(--pos-text-muted)]">
+          Back from lunch or a break? Enter your PIN here to clock back in (owner D211). Going on a break? Unlock, then MORE → Clock out for a break.
+        </p>
+      ) : null}
       <div className="mt-4 flex gap-3" aria-label="PIN">
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <span
@@ -4156,6 +4238,7 @@ function HomeScreen({
   onLock,
   onSyncNow,
   onPunch,
+  onBreak,
   offlineApprovalOk,
 }: {
   creds: DeviceCreds;
@@ -4244,6 +4327,8 @@ function HomeScreen({
   onLock: () => void;
   onSyncNow: () => void;
   onPunch: () => void;
+  /** D211 — open the lunch / other break picker (no drawer close needed). */
+  onBreak: () => void;
   /** D161 — a manager/lead is armed to approve offline on this iPad. */
   offlineApprovalOk: boolean;
 }) {
@@ -4524,8 +4609,21 @@ function HomeScreen({
                   }}
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
                 >
-                  ⏱️ {employee.clockedIn ? "Clock out" : "Clock in"}
+                  ⏱️ {employee.clockedIn ? "Clock out" : employee.onBreak ? "Back from break" : "Clock in"}
                 </button>
+                {employee.clockedIn ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onBreak();
+                    }}
+                    title="Owner D211 — lunch or another break. Your drawer stays open and yours; the register locks behind you."
+                    className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                  >
+                    🍽️ Clock out for a break (lunch / other)
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -4542,7 +4640,7 @@ function HomeScreen({
         </nav>
         <div className="ml-auto py-2 text-right text-[11px] leading-tight">
           <div className="font-semibold">
-            {employee.fullName} ({employee.jobRole}) · {employee.clockedIn ? "clocked in" : "NOT clocked in"}
+            {employee.fullName} ({employee.jobRole}) · {employee.clockedIn ? "clocked in" : employee.onBreak ? `on ${breakReasonLabel(employee.breakReason).toLowerCase()} break` : "NOT clocked in"}
           </div>
           <div className="text-[var(--pos-chrome-muted)]">
             <span
@@ -4664,7 +4762,7 @@ function HomeScreen({
                     onClick={onPunch}
                     className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-5 py-2.5 text-sm font-bold text-white"
                   >
-                    ⏱️ Clock in now
+                    ⏱️ {employee.onBreak ? "Back from break now" : "Clock in now"}
                   </button>
                 ) : null}
               </div>
