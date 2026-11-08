@@ -41,6 +41,8 @@ export type TillOpenRequest = {
   action: "open";
   pin: string;
   denoms: DenomCounts;
+  /** D216: the count-in named an empty box; the employee counted again and confirmed. Audited. */
+  recountConfirmed?: true;
 };
 
 export type TillDropRequest = {
@@ -219,7 +221,7 @@ export function validateTillRequest(body: unknown): TillValidation {
     if (action === "open" && denomTotalMinor(denoms) <= 0) {
       return { ok: false, error: "Count in at least one bill or coin — an empty float cannot open a drawer." };
     }
-    if (action === "open") return { ok: true, req: { action, pin, denoms } };
+    if (action === "open") return { ok: true, req: { action, pin, denoms, ...(b.recountConfirmed === true ? { recountConfirmed: true as const } : {}) } };
     // A blind close of a genuinely empty drawer is legitimate (all cash was
     // dropped), but owner D125: a $0.00 close must be CONFIRMED. On
     // 2026-11-01 SR2 was closed at $0.00 by mistake with $2,678.10 in it.

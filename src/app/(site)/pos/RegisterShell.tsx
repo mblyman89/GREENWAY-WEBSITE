@@ -66,6 +66,7 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { emptyGroupWarnings } from "@/lib/registers/close-count-check-core";
+import { countGapHelp } from "@/lib/registers/count-gap-core";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
 import {
   buildDrawerCloseSlipHtml,
@@ -8336,7 +8337,21 @@ function TillModal({
   const floatWarn = mode === "open" && countedMinor > 0 ? floatCheck(countedMinor, standardFloatMinor) : null;
 
   const groupWarnings = mode === "close" ? emptyGroupWarnings(denoms) : [];
-  const needsRecount = mode === "close" && (groupWarnings.length > 0 || serverRecheck !== null);
+  // D216 (owner: "it did not tell her that there were no nickels entered into
+  // the box"): name every EMPTY box a drawer normally holds, at count-in and
+  // at close. At count-in it also gives the standard number for the box and
+  // says when the short total is exactly that box. The close stays blind.
+  const gapHelp = mode === "open" || mode === "close" ? countGapHelp(denoms, mode, standardFloatMinor) : null;
+  const coinKeys = ["pennies", "nickels", "dimes", "quarters", "half_dollars", "dollar_coins"];
+  const gapLines =
+    gapHelp === null
+      ? []
+      : gapHelp.blanks
+          .map((k, i) => ({ k, text: gapHelp.lines[i] }))
+          // the D204a group sentence already covers "no coins at all" / "no $1s"
+          .filter(({ k }) => !(groupWarnings.some((w) => w.key === "coins") && coinKeys.includes(k)) && !(groupWarnings.some((w) => w.key === "ones") && k === "ones"));
+  const openNeedsRecount = mode === "open" && gapHelp !== null && gapHelp.needsConfirm;
+  const needsRecount = (mode === "close" && (groupWarnings.length > 0 || gapLines.length > 0 || serverRecheck !== null)) || openNeedsRecount;
 
   const ready =
     pin.length >= 4 &&
@@ -8546,7 +8561,7 @@ function TillModal({
                     : { tipsMinor }
                   : {}),
               }
-            : { action: "open", drawerRef, reason, actor: a.pin, denoms };
+            : { action: "open", drawerRef, reason, actor: a.pin, denoms, ...(openNeedsRecount && recountConfirmed ? { recountConfirmed: true as const } : {}) };
     const v = validateTillPayload(payload, a.pin.employeeId);
     if (!v.ok) {
       setError(v.errors.join(" "));
@@ -8636,7 +8651,7 @@ function TillModal({
                     : { tipsMinor }
                   : {}),
               }
-            : { action: mode, pin, denoms };
+            : { action: mode, pin, denoms, ...(openNeedsRecount && recountConfirmed ? { recountConfirmed: true } : {}) };
       let res: Response;
       try {
         res = await posFetch("/api/pos/till", {
@@ -9009,6 +9024,23 @@ function TillModal({
                 <p className="mt-1 text-right text-xs text-[var(--pos-text-muted)]">Standard float: {formatCents(standardFloatMinor)}</p>
               )
             ) : null}
+            {/* D216: name the empty box(es) at count-in, with the standard number. */}
+            {mode === "open" && gapHelp && (gapHelp.needsConfirm || gapHelp.mixNote) ? (
+              <div className="mt-2 rounded-lg border border-[var(--pos-warn)] bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]" data-testid="open-count-gaps">
+                <p className="font-semibold">{gapHelp.needsConfirm ? "A box is empty. Please look again before saving." : "Please check the mix before saving."}</p>
+                {gapHelp.blanks.map((k, i) => (
+                  <p key={k} className="mt-1 text-xs" data-testid={`count-blank-${k}`}>{gapHelp.lines[i]}</p>
+                ))}
+                {gapHelp.explainsShort ? <p className="mt-1 text-xs font-semibold">{gapHelp.explainsShort}</p> : null}
+                {gapHelp.mixNote ? <p className="mt-1 text-xs">{gapHelp.mixNote}</p> : null}
+                {gapHelp.needsConfirm ? (
+                  <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
+                    <input type="checkbox" className="h-5 w-5" checked={recountConfirmed} onChange={(e) => setRecountConfirmed(e.target.checked)} />
+                    I counted again and the empty box is really empty
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
             {mode === "close" && countedMinor === 0 && (
               <div className="mt-2 rounded-lg border border-[var(--pos-warn)] bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]">
                 <p className="font-semibold">No bills or coins entered. The count is $0.00.</p>
@@ -9021,11 +9053,14 @@ function TillModal({
                 </label>
               </div>
             )}
-            {needsRecount && (
+            {mode === "close" && needsRecount && (
               <div className="mt-2 rounded-lg border border-[var(--pos-warn)] bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]" data-testid="close-recount">
                 <p className="font-semibold">Please look again before saving.</p>
                 {groupWarnings.map((w) => (
                   <p key={w.key} className="mt-1 text-xs">{w.text}</p>
+                ))}
+                {gapLines.map((g) => (
+                  <p key={g.k} className="mt-1 text-xs" data-testid={`count-blank-${g.k}`}>{g.text}</p>
                 ))}
                 {serverRecheck ? <p className="mt-1 text-xs">{serverRecheck}</p> : null}
                 <label className="mt-2 flex items-center gap-2 text-sm font-semibold">

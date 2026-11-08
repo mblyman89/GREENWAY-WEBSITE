@@ -201,6 +201,7 @@ import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
 import { __runOrderBoardSplitTests } from "../../src/lib/orders/order-board-split-core";
 import { __runBackofficeCompleteTests } from "../../src/lib/orders/backoffice-complete-core";
 import { __runCloseCountCheckTests } from "../../src/lib/registers/close-count-check-core";
+import { __runCountGapTests } from "../../src/lib/registers/count-gap-core";
 import { __runExceptionResolveTests } from "../../src/lib/pos/exception-resolve-core";
 // SLICE L-40 -- the ONE set of rules both order panels (Greenway and Leafly)
 // use for tabs, search, dates, totals, sort and paging. Pure: no I/O.
@@ -2376,6 +2377,7 @@ __runLiquidVolumeTests();
   assertRan("order-board-split-core", __runOrderBoardSplitTests(), 43);
   assertRan("backoffice-complete-core", __runBackofficeCompleteTests(), 15); // D204: online orders are completed at the register; back-office completion is owner/admin/manager + written reason, audited
   assertRan("close-count-check-core", __runCloseCountCheckTests(), 20); // D204a/b: iPad close look-again (empty coin/$1 groups, far below expected, blind) + reconcile row-by-row diffs, second count suggested
+  assertRan("count-gap-core", __runCountGapTests(), 24); // D216: name the empty box (the nickels case) at count-in and close; standard number + "short by exactly that box" at count-in; blind at close
   assertRan("exception-resolve-core", __runExceptionResolveTests(), 10); // D204c: a refused sale is resolved only by a checked re-ring or a written no-sale reason
   // SLICE L-40. Floor 88, from a measured 94. The owner asked for the Leafly
   // panel to "look and behave identically" to ours; this core is where that
