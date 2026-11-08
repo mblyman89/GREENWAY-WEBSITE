@@ -1940,3 +1940,19 @@ Verbatim:
 - Stores: `inbound-ingest.ts` (earlierStagingOfSameEmail), `intake-store.ts` (suspectedDuplicateOf, number-aware sibling reads), `invoice-adjustments-store.ts` (heal).
 - Actions/pages: `setLotStatusAction`, `finalizeManifestAction`, `/admin/inventory/[id]`, `/admin/inventory/intake/[id]`.
 - Test: `tests/compliance/d215-duplicate-intake-guard.test.ts`.
+
+## D216 — iPad count: name the empty box (the nickels case) (2026-11-08)
+### Verbatim
+"Thank you. I need your help now to add a guard to the count in process on the iPad registers. An employee this morning forgot to count their nickels and didn't realize. The system did warn her that the balance counted was wrong, but it did not tell her that there were no nickels entered into the box. Will you please protect the register from this in the future and help them out when they make a mistake like this. Follow the standing rules. Thank you!"
+### Findings (production, read only)
+- 2026-11-08 16:05 UTC: Sales Register 1 (drawer 3a4ff1f5) was counted in with **0 nickels** and **52 $1 bills**. The standard is 40 nickels and 50 $1s. The $2.00 of missing nickels was evened out with 2 extra $1s, so the saved total matched $167.50 and the audit row says floatCheck "match".
+- The count-in screen only compared the TOTAL with the $167.50 float. The close checked only "no coins at all" or "no $1s". A single empty box was never named.
+- This is the only count-in out of 30 with an empty normal box.
+### Decisions
+- D216a: New pure core `count-gap-core.ts`. It holds the sales float box by box (5×$10, 10×$5, 50×$1, 40 quarters, 50 dimes, 40 nickels, 50 pennies = $167.50).
+- D216b (count-in): Every empty box the float holds is named with its standard number ("The nickels (5¢) box is empty. A drawer starts with 40 nickels ($2.00)"). When the count is short by exactly that box, it says so. When the total matches but the mix is off, it names the boxes (the 52 × $1 case). Saving needs "I counted again and the empty box is really empty". Registers with another float (the manager till) get the everyday boxes, pennies to $5, with no standard numbers.
+- D216c (close, still blind): Any empty coin box or the $1 box is named in the existing look-again panel, with no figures. The same "I counted again" tick is required.
+- D216d: The server and the offline replay audit `drawer.count_blank_box` (box names and whether it was confirmed; never money). This never blocks a save, so an offline count can never be stranded.
+### As built
+- `src/lib/registers/count-gap-core.ts` (24 self-tests), `RegisterShell.tsx` (TillModal), `api/pos/till/route.ts`, `pos/till-core.ts`, `pos/offline-till-core.ts`, `pos/offline-till-store.ts`.
+- Test: `tests/compliance/d216-count-gap-guard.test.ts`.

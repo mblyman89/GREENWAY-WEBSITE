@@ -54,7 +54,7 @@ export type PosTillPayload = {
   tipsMinor?: number;
   tipPool?: { poolMinor: number; people: number };
   confirmEmpty?: true;
-  /** D204a: close only, the closer counted again after the look-again prompt. */
+  /** D204a: close (and D216: open), counted again after the look-again prompt. */
   recountConfirmed?: true;
   /** pop only: a repeat open needs a reason (D131). */
   popReason?: string;
@@ -114,6 +114,7 @@ export function validateTillPayload(
 
   const body: Record<string, unknown> = { action: p.action, pin: "offline" };
   if (p.action === "open" || p.action === "close") body.denoms = p.denoms ?? { ...EMPTY_DENOMS };
+  if (p.action === "open" && p.recountConfirmed) body.recountConfirmed = true; // D216
   if (p.action === "close") {
     if (p.confirmEmpty) body.confirmEmpty = true;
     if (p.recountConfirmed) body.recountConfirmed = true;

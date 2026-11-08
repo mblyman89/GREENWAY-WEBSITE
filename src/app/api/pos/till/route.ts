@@ -49,6 +49,7 @@ import { denomTotalMinor } from "@/lib/registers/cash";
 import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession, getRegister } from "@/lib/registers/store";
 import { loadDrawerFigure } from "@/lib/registers/drawer-figure-store";
 import { closeShortCheck } from "@/lib/registers/close-count-check-core";
+import { COUNT_BLANK_BOX_AUDIT, countGapAudit } from "@/lib/registers/count-gap-core";
 import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
 import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -148,6 +149,19 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         floatDiffMinor: fc.diffMinor,
       },
     });
+    // D216: a count-in saved with a normal box left empty (the nickels case),
+    // and whether the employee confirmed they counted again. Never blocks.
+    const gap = countGapAudit(till.denoms, "open", reg?.default_float_minor ?? null, till.recountConfirmed === true);
+    if (gap) {
+      await recordAudit({
+        actorId: employee.staff_id,
+        actorEmail: employee.full_name,
+        action: COUNT_BLANK_BOX_AUDIT,
+        entityType: "drawer_session",
+        entityId: result.sessionId,
+        after: { via: "register", deviceId: auth.device.id, employeeId: employee.id, ...gap },
+      });
+    }
     if (fc.state === "over" || fc.state === "short") {
       await recordAudit({
         actorId: employee.staff_id,
@@ -485,6 +499,21 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
     },
   });
+
+  // D216: a blind close saved with a coin or $1 box empty (box names only, no money).
+  {
+    const gap = countGapAudit(till.denoms, "close", null, till.recountConfirmed === true);
+    if (gap) {
+      await recordAudit({
+        actorId: employee.staff_id,
+        actorEmail: employee.full_name,
+        action: COUNT_BLANK_BOX_AUDIT,
+        entityType: "drawer_session",
+        entityId: session.id,
+        after: { via: "register", deviceId: auth.device.id, employeeId: employee.id, ...gap },
+      });
+    }
+  }
 
   // BLIND: no expected, no variance.
   // Fix Phase 6 (G-61, owner D84): closing does NOT clock anyone out.

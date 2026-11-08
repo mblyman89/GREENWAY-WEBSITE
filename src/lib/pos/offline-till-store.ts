@@ -17,6 +17,7 @@ import { getRegister, insertDrawerDropRow } from "@/lib/registers/store";
 import { atmWitnessCheck, buildDropInsertRows } from "@/lib/registers/atm-drop-core";
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { floatCheck } from "@/lib/registers/shift-end-core";
+import { COUNT_BLANK_BOX_AUDIT, countGapAudit } from "@/lib/registers/count-gap-core";
 import { compactDenoms, denomWords } from "@/lib/registers/little-safe-core";
 import { POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
 import { businessDayFor } from "@/lib/staffing/time";
@@ -103,6 +104,9 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
       const fc = floatCheck(openingMinor, reg?.default_float_minor ?? null);
       await audit("drawer.opened", { employeeId: p.actor.employeeId, openingMinor, standardFloatMinor: reg?.default_float_minor ?? null, floatCheck: fc.state, floatDiffMinor: fc.diffMinor });
       if (fc.state === "over" || fc.state === "short") await audit("drawer.float_warning", { employeeId: p.actor.employeeId, diffMinor: fc.diffMinor });
+      // D216: a count-in saved with a normal box empty.
+      const gap = countGapAudit(req.denoms, "open", reg?.default_float_minor ?? null, req.recountConfirmed === true);
+      if (gap) await audit(COUNT_BLANK_BOX_AUDIT, { employeeId: p.actor.employeeId, ...gap });
     }
     return verdict.ok ? { ok: true } : { ok: false, reason: verdict.reason };
   }
@@ -224,6 +228,9 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
       secondCount: "back_office",
       ...(req.confirmedEmpty ? { confirmedEmpty: true } : {}),
     });
+    // D216: a blind close saved with a coin or $1 box empty (box names only).
+    const gap = countGapAudit(req.denoms, "close", null, req.recountConfirmed === true);
+    if (gap) await audit(COUNT_BLANK_BOX_AUDIT, { employeeId: p.actor.employeeId, ...gap });
   }
   return verdict.ok ? { ok: true } : { ok: false, reason: verdict.reason };
 }
