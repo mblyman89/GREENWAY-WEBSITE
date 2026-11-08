@@ -130,7 +130,9 @@ describe("R74 S30 D — the wiring", () => {
     expect(page).toContain('id="lot-size"');
     expect(page).toContain("setLotSizeAction.bind(null, id)");
     expect(page).not.toMatch(/onboarded and published to the menu/);
-    expect(page).toContain("Onboarding is not required.");
+    // D207 superseded the old "Onboarding is not required." line: a not-on-menu
+    // lot now offers "Send to Product Onboarding" (see d207-lot-onboard.test.ts).
+    expect(page).toContain("Send to Product Onboarding");
   });
   it("the action enforces the shared floor and audits the size", () => {
     const act = read("src/app/admin/inventory/actions.ts");
