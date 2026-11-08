@@ -41,17 +41,18 @@ type Row = {
   inventory_type: string | null;
   lab_result_id: string | null;
   is_sample: boolean | null;
+  manifest_id?: string | null;
 };
 
 export type FixLaterRead =
-  | { ok: true; coverage: StockCoverage; lots: Map<string, FixLaterLot & { lotCode: string | null }>; complete: boolean }
+  | { ok: true; coverage: StockCoverage; lots: Map<string, FixLaterLot & { lotCode: string | null; delivery: string | null }>; complete: boolean }
   | { ok: false; error: string };
 
 export async function readFixLaterCoverage(): Promise<FixLaterRead> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
   const COLS =
-    "id, lot_code, pos_product_key, status, on_hand_qty, held_qty, product_name, unit_cost_minor_units, category, inventory_type, lab_result_id, is_sample";
+    "id, lot_code, pos_product_key, status, on_hand_qty, held_qty, product_name, unit_cost_minor_units, category, inventory_type, lab_result_id, is_sample, manifest_id";
   const { rows, verdict } = await pagedAllChecked<Row>(async (from, to) => {
     const { data, error } = await admin
       .from("inventory_lots")
@@ -108,7 +109,17 @@ export async function readFixLaterCoverage(): Promise<FixLaterRead> {
   const aRows = audits.rows;
   for (const a of (aRows as { entity_id: string | null }[] | null) ?? []) if (a.entity_id) fixedIds.add(a.entity_id);
 
-  const lots = new Map<string, FixLaterLot & { lotCode: string | null }>();
+  // D207e: each lot's delivery (vendor + manifest number), so the list says where it came from.
+  const manifestIds = [...new Set(rows.map((r) => r.manifest_id).filter((v): v is string => !!v))];
+  const deliveryOf = new Map<string, string>();
+  for (let i = 0; i < manifestIds.length; i += 200) {
+    const { data, error } = await admin.from("inbound_manifests").select("id, vendor_label, manifest_number").in("id", manifestIds.slice(i, i + 200));
+    if (error) break; // display only: the column shows blank, never a guess
+    for (const m of (data as { id: string; vendor_label: string | null; manifest_number: string | null }[] | null) ?? [])
+      deliveryOf.set(m.id, `${m.vendor_label ?? "Unknown vendor"}${m.manifest_number ? ` ${m.manifest_number}` : ""}`);
+  }
+
+  const lots = new Map<string, FixLaterLot & { lotCode: string | null; delivery: string | null }>();
   const facts: FixLaterLot[] = rows.map((r) => {
     const key = (r.pos_product_key ?? "").trim();
     const fact: FixLaterLot = {
@@ -129,7 +140,7 @@ export async function readFixLaterCoverage(): Promise<FixLaterRead> {
       hasMenuProduct: menuKeys.size === 0 ? undefined : key ? menuKeys.has(key) : false,
       fixedAtRegister: fixedIds.has(r.id),
     };
-    lots.set(r.id, { ...fact, lotCode: r.lot_code });
+    lots.set(r.id, { ...fact, lotCode: r.lot_code, delivery: r.manifest_id ? (deliveryOf.get(r.manifest_id) ?? null) : "No delivery (one-off lot)" });
     return fact;
   });
   return { ok: true, coverage: stockCoverage(facts), lots, complete: verdict.complete };

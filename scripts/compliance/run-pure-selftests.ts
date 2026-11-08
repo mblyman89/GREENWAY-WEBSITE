@@ -802,6 +802,8 @@ import { __runCoaFromCultiveraCoreTests } from "../../src/lib/inventory/coa-from
 import { __runCoaBatchCultiveraCoreTests } from "../../src/lib/inventory/coa-batch-cultivera-core";
 import { __runCoaGmailSearchCoreTests } from "../../src/lib/inventory/coa-gmail-search-core";
 import { __runCoaGmailDeepCoreTests } from "../../src/lib/inventory/coa-gmail-deep-core";
+import { __runLotCoaManualCoreTests } from "../../src/lib/inventory/lot-coa-manual-core";
+import { __runFixLaterViewCoreTests } from "../../src/lib/pos/fix-later-view-core";
 import { __runCoaTrustAllCoreTests } from "../../src/lib/inventory/coa-trust-all-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
@@ -2842,7 +2844,9 @@ __runLiquidVolumeTests();
   assertRan("return-scan-core", __runReturnScanCoreTests(), 34); // D198d ("i can not scan a receipt qr code to find the transaction, nor can i enter the receipt overlay to look for the receipt by hand"): receipt QR / number / fun-name parsing, exact-name match, home + return-screen scan classifier
   assertRan("deposit-bag-atm-pull-core", __runDepositBagAtmPullTests(), 60); // D198e ("exclude 20s from the daily deposit for use in the atm"): pull parse (count / cap / witness / reason / never empties the bag), ATM need from the live reading, flags, pattern, ATM match feed
   assertRan("atm-daily-fill-core", __runAtmDailyFillTests(), 43); // D198i ("set a daily fill amount so it always starts the day off with the same amount" / "loud on the deposit bag page that the atm needs x amount"): whole-$20 parse (never rounds), top-off math, pending loads since the reading, stale reading
-  assertRan("coa-gmail-deep-core", __runCoaGmailDeepCoreTests(), 45); // D203 ("really deep dive and dig deep to find these last four ... tune the email fetcher to find them"): deep questions (manifest/LCB id/barcode forms, license, brands, rep senders, Spam+Trash), re-read plan (zip/txt/octet, every public link, pasted JSON), memory, notes
+  assertRan("coa-gmail-deep-core", __runCoaGmailDeepCoreTests(), 57); // D203 ("really deep dive and dig deep to find these last four ... tune the email fetcher to find them"): deep questions (manifest/LCB id/barcode forms, license, brands, rep senders, Spam+Trash), re-read plan (zip/txt/octet, every public link, pasted JSON), memory, notes
+  assertRan("lot-coa-manual-core", __runLotCoaManualCoreTests(), 18); // D207d ("help me unlock ... the one off lots that need coas"): paste a COA link (Drive/Dropbox/lab) or upload the PDF on the lot page; pick the certificate for the lot, never guess between several
+  assertRan("fix-later-view-core", __runFixLaterViewCoreTests(), 8); // D207e ("a table with like 40 or 70 lots that say they don't have a coa, but their manifests ... are not one of the three"): the table says it lists every reason, shows the delivery, filters by reason
   assertRan("coa-trust-all-core", __runCoaTrustAllCoreTests(), 38);
   console.log("ALL PURE SELF-TESTS PASSED");
 }

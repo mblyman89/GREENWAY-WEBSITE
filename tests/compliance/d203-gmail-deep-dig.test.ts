@@ -286,6 +286,38 @@ describe("D203 - Deep dig for the last deliveries", () => {
     expect(none.errors.join()).toContain("not set up");
   });
 
+  it("D207c: the delivery with the most lots and the most junk email no longer starves the others; every delivery started is remembered", async () => {
+    // GREEN RESEARCH: many lots, 30 newsletter emails matching its brand word.
+    delivery(6, "GREEN RESEARCH NETWORK, LLC", "429047", "GF42904700003637", "2026-10-28");
+    for (let k = 0; k < 8; k++) st.db.rows("inventory_lots").push(lot(6, k, `GF4290470557484${k}`, `Frostco - Bubble Hash - ${k} - 1g`));
+    // EVERGREEN: one lot, its JSON is in ONE email found by the exact manifest number.
+    delivery(7, "EVERGREEN HERBAL", "78256", "M07825651675", "2026-10-12");
+    st.db.rows("inventory_lots").push(lot(7, 0, "07825682875", "MAJOR Shot - Blueberry - 100mg THC"));
+    const g = fakeGmail();
+    const junk = Array.from({ length: 30 }, (_, i) => `junkNews${String(i).padStart(4, "0")}`);
+    for (const id of junk) mail(g, id, { from: "news@frostco.com", subject: "Weekly menu drop", text: "no files here" });
+    g.answers.push([/"Frostco"/, junk]);
+    mail(g, "egJson000001", { from: "sales@forevergreenherbal.com", subject: "Transfer M07825651675", files: [["M07825651675.json", "application/json", new TextEncoder().encode(wcia([["07825682875", "EH-LAB-75"]]))]] });
+    g.answers.push([/"7825651675"/, ["egJson000001"]]);
+    // A clock that moves 1s per read; 20s for the whole click.
+    let clock = T0;
+    const tick = () => (clock += 1000);
+    const t = await deep.deepDigGmail(ACTOR, { ...opts(g), now: () => tick(), searchBudgetMs: 20_000, maxEmails: 60 });
+    // GREEN RESEARCH goes first (most lots) but only gets its share; EVERGREEN is still reached and linked.
+    expect(t.deliveries.map((d) => d.vendorLabel)).toEqual(["GREEN RESEARCH NETWORK, LLC", "EVERGREEN HERBAL"]);
+    expect(labOf(lid(7, 0))).toBeTruthy();
+    const gr = t.deliveries[0];
+    expect(gr.partial).toBe(true);
+    expect(core.deepDeliveryLine(gr)).toContain("share of this click ran out");
+    expect(core.deepDeliveryLine(gr)).not.toContain("ask the vendor");
+    // The broad brand question skipped Promotions/Social; the exact manifest question did not.
+    expect(g.queries.filter((q) => q.includes('"Frostco"')).every((q) => q.includes(core.DEEP_NO_JUNK))).toBe(true);
+    expect(g.queries.filter((q) => q.includes('"7825651675"') && !q.includes("after:")).every((q) => !q.includes("category:"))).toBe(true);
+    // Both deliveries are remembered as tried, so the next click starts with the one tried longest ago.
+    const mem = core.parseDeepState(st.db.rows("site_settings").find((r) => r.key === core.COA_GMAIL_DEEP_KEY)?.value_json ?? null);
+    expect(Object.keys(mem.targets).sort()).toEqual([mid(6), mid(7)]);
+  });
+
   it("unzips stored and deflated entries and ignores junk", () => {
     const z = deep.unzipEntries(zipOf("folder/t.json", '{"a":1}'));
     expect(z.map((e) => [e.name, new TextDecoder().decode(e.bytes)])).toEqual([["t.json", '{"a":1}']]);
@@ -300,7 +332,7 @@ describe("D203 - wiring", () => {
     expect(page).toContain('data-testid="coa-gmail-deep-delivery-button"');
     const actions = read("src/app/admin/inventory/fix-later/actions.ts");
     expect(actions).toMatch(/export async function deepDigGmailAction\(formData: FormData\) \{\n  const session = await requirePermission\("inventory\.manage"\);/);
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("coa-gmail-deep-core", __runCoaGmailDeepCoreTests(), 45)');
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("coa-gmail-deep-core", __runCoaGmailDeepCoreTests(), 57)');
     expect(read("src/lib/compliance/ccrs-mail-fetch.ts")).toContain("export async function getThreadMessageIds(");
     expect(read("docs/sop-program/00-OWNER-REQUEST-VERBATIM.md")).toContain("D203");
   });

@@ -72,6 +72,9 @@ import {
   jsonInBody,
   markDug,
   markTarget,
+  deepShare,
+  orderDeepQueue,
+  PRECISE_WHY,
   orderDeepTargets,
   parseDeepState,
   planDeepAttachments,
@@ -387,7 +390,8 @@ export async function deepDigGmail(actorId: string | null, opts: DeepDigOptions 
       byId.set(target.manifestId, d);
       t.deliveries.push(d);
     }
-    for (const target of targets) {
+    for (let ti = 0; ti < targets.length; ti++) {
+      const target = targets[ti];
       const d = byId.get(target.manifestId) as DeepDelivery;
       if (stop) break;
       if (now() - t0 > budget || opened >= maxEmails) {
@@ -395,8 +399,13 @@ export async function deepDigGmail(actorId: string | null, opts: DeepDigOptions 
         break;
       }
       touched.push(target.manifestId);
+      // D207c: this delivery's fair share of what is left of the click.
+      const share = deepShare(budget, maxEmails, now() - t0, opened, targets.length - ti);
+      const shareEnd = share.untilMs;
+      const openedAtStart = opened;
       // (1) the deep questions.
-      const matched = new Set<string>(hitIdsFor(gstate, [target.manifestId]));
+      const precise: string[] = [...hitIdsFor(gstate, [target.manifestId])];
+      const matched = new Set<string>(precise);
       const nearOnly = new Set<string>();
       for (const q of buildDeepQueries(target)) {
         try {
@@ -404,7 +413,10 @@ export async function deepDigGmail(actorId: string | null, opts: DeepDigOptions 
           d.queries += 1;
           for (const id of page.ids.slice(0, DEEP_IDS_PER_QUERY)) {
             if (q.why === "json-near-date" && !matched.has(id)) nearOnly.add(id);
-            else matched.add(id);
+            else {
+              if (PRECISE_WHY.has(q.why)) precise.push(id);
+              matched.add(id);
+            }
           }
         } catch (e) {
           const m = short(e);
@@ -421,7 +433,7 @@ export async function deepDigGmail(actorId: string | null, opts: DeepDigOptions 
       d.matched = matched.size;
 
       // (2) keep the new ones, then re-read every one (and its thread) in full.
-      const queue = [...matched];
+      const queue = orderDeepQueue(precise, [...matched]);
       const inQueue = new Set(queue);
       const dugNow: string[] = [];
       for (let i = 0; i < queue.length && !stop; i++) {
@@ -429,6 +441,11 @@ export async function deepDigGmail(actorId: string | null, opts: DeepDigOptions 
         if (dstate.dug[id]) continue;
         if (opened >= maxEmails || now() - t0 > budget) {
           stop = now() - t0 > budget ? "the time for one click ran out" : `${maxEmails} emails were re-read`;
+          break;
+        }
+        // D207c: its share is used up; the next delivery gets its turn (this one continues next click).
+        if (ti < targets.length - 1 && (opened - openedAtStart >= share.emails || now() - t0 > shareEnd)) {
+          d.partial = true;
           break;
         }
         try {
@@ -465,7 +482,10 @@ export async function deepDigGmail(actorId: string | null, opts: DeepDigOptions 
       d.matched = inQueue.size;
       dstate = markDug(dstate, dugNow, new Date(now()).toISOString());
       gstate = recordSearch(gstate, target.manifestId, queue.filter((id) => dstate.dug[id]), new Date(now()).toISOString());
-      if (!stop) dstate = markTarget(dstate, target.manifestId, new Date(now()).toISOString());
+      // D207c: every delivery started this click is remembered (even when the click
+      // stopped inside it), so the next click starts with the ones not tried yet.
+      if (stop && queue.some((id) => !dstate.dug[id])) d.partial = true;
+      dstate = markTarget(dstate, target.manifestId, new Date(now()).toISOString());
     }
     t.unfinished = stop !== null;
     t.stoppedBecause = stop;
