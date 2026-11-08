@@ -1762,3 +1762,27 @@ Same request (verbatim above): "The deep search isn't finding the last three ...
 Finding: D207 only gave these lots a "Send to Product Onboarding" button; the price still had to be set in onboarding. The 5 GF-key lots (GF41918905566981/88/89/90/91) still had no menu card and no onboarding row, so the lot page showed no price.
 
 Fix: the lot page now shows a price box for a lot that is not on the menu yet (`setOffMenuLotPriceAction`). Saving seeds that lot's onboarding row when missing and approves it at the typed after-tax price through `approveDraftWithPrice` (2x cost floor, category, compliance and volume gates), which stages and publishes the menu like onboarding. The lot's own Website category / Product type picks are passed as the classification. Audited as `inventory_lot.off_menu_price_set` / `_refused`.
+
+## D209 — Vendor Menus: a far more detailed searched-vendors table, and a "still need a menu" table (2026-11-07)
+
+Verbatim:
+
+> "I need your help enhancing my vendor menu table of searched vendors. I want to add as much details to that table as possible. All the things that would make it significantly more useful and powerful. I also want to add a table of all vendors we have products from that have not yet been searched, so it's much easier for me to see who I still need menus from. I want this page to be much more powerful and detailed. Clone the repo, read agents.md, the standing rules, then recon the vendor menu code so you can enhance it all for me. I have another agent working so complete all work and get it safely off the sandbox. It's unstable. There isn't enough memory in here either, scoped tsc on changed files only. Follow the standing rules. Thank you. Do not merge to git until I say it's safe. Thank you."
+
+### Findings (recon, read-only)
+
+- `/admin/purchasing/menus` showed ONE row per saved snapshot (Vendor, Platform, Status, Items, Fetched), the newest 50 per platform. The same vendor fetched five times was five rows. Nothing said which of OUR vendors a menu belongs to, how old it is, what it costs, or what it holds.
+- Snapshots carry a `vendor_id` column, but none of the three fetch actions sets it (only emailed menus do, by sender address). So a menu has to be matched to a vendor by license number or by name.
+- "Vendors we have products from" is a fact on `inventory_lots.vendor_id` (the receiving pipeline, standing rule 11). The Vendors page already uses it for its "current vendors" scope.
+- There was no list of vendors we carry who have no menu on file.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D209a | **One row per vendor, not per snapshot.** Each row rolls up every menu we hold for that vendor, from all four sources (Cultivera, GrowFlow, LeafLink, emailed). It shows: the matched Greenway vendor and how it was matched; each source with its age; the latest menu's status and item count, with the change since the previous pull; freshness (fresh up to 7 days, aging up to 30, stale after that); wholesale price low, median and high; average and highest THC; the top categories; the share of items with photos and with COAs; how many items show stock; our own lots (in stock, total, last received); and the full snapshot history, which expands. | "add as much details to that table as possible" |
+| D209b | **Matching is shown, never hidden (rule 3).** The order is: the snapshot's own vendor link, then the license number, then the normalized name (the receiving `normalizeVendorKey`, with aliases). Each row says which one matched. A name that fits two vendors matches neither, and the row says so. A menu that matches no vendor is labelled "not linked". | standing rule 3 |
+| D209c | **"Still need a menu" table.** It lists every vendor with at least one inventory lot who has no usable menu. A usable menu has a fetched or parsed status and at least one item. Each vendor is grouped as on the shelf now, received in the last 90 days (Pacific), or older. A vendor whose only pulls came back empty or failed shows that attempt. Each row has the remembered platform, lots in stock and total, first and last received, YTD accepted, and contact details. It also has three actions: "Search" (fills the search box), "Email for menu" (subject only, blank body, per the outreach rule) and the vendor profile. | "a table of all vendors we have products from that have not yet been searched" |
+| D209d | **Filters, sorts and CSV for both tables**, all in the URL so a view can be bookmarked. Coverage KPIs: vendors carried, covered %, still needed (on the shelf now), stale menus, and menus not linked to a vendor. | "much more powerful and detailed" |
+| D209e | **Performance (rule 18).** Every read selects named columns and is paged or chunked. Item facts are read only for the newest snapshot per vendor and source. The data sections stream in their own `<Suspense>`, and one `cache()`d loader is shared between them. Every read's error is shown to staff in plain words (rule 15). | standing rule 18 |
+| D209f | **Not merged.** The branch and PR wait for the owner's go-ahead. | "Do not merge to git until I say it's safe." |
