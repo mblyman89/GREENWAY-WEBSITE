@@ -16,7 +16,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { getEmployeeByPin, openWorkPunch, openDrawersOwnedBy } from "@/lib/staffing/store";
+import { getEmployeeByPin, openPunchAny, openDrawersOwnedBy } from "@/lib/staffing/store";
 import { clockOutBlockedMessage } from "@/lib/registers/shift-end-core";
 import { openSessionForRegister, getRegister } from "@/lib/registers/store";
 import { isValidPin } from "@/lib/staffing/time";
@@ -98,7 +98,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   }
 
   const [openPunch, drawerSession, ownedDrawers, registerRow, offline] = await Promise.all([
-    openWorkPunch(employee.id),
+    // D211: the open punch of either kind, so the register knows "on break" apart from "clocked in".
+    openPunchAny(employee.id),
     openSessionForRegister(auth.device.register_id),
     // Fix Phase 6 (G-61, owner D84): the open drawers this employee counted
     // in, so the register can refuse a clock-out before it is queued. The
@@ -125,7 +126,10 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       id: employee.id,
       fullName: employee.full_name,
       jobRole: employee.job_role,
-      clockedIn: !!openPunch,
+      clockedIn: !!openPunch && openPunch.punch_kind === "work",
+      // D211: out on a lunch / other break (not on the clock; the drawer stays theirs).
+      onBreak: !!openPunch && openPunch.punch_kind === "break",
+      breakReason: openPunch && openPunch.punch_kind === "break" ? (openPunch.break_reason ?? null) : null,
       // Slice 6: username ONLY, so the register can show the right SAW login at
       // the medical-verification step. Never a password.
       sawUsername: employee.saw_username ?? null,

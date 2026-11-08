@@ -28,15 +28,22 @@
  * refused while the employee owns an open drawer (owner D84). Closing a
  * drawer never clocks anyone out. Every punch is audited (timeclock.in/out,
  * or timeclock.refused with the reason).
+ *
+ * D211 (owner: "There needs to be an option to clock out for lunch, or, for
+ * an “other” reason"): intent "break" with { reason: "lunch"|"other", note }
+ * leaves for a break WITHOUT the drawer guard (startBreak); intent "back" (or
+ * a plain PIN toggle while on break) comes back (endBreak). Audited as
+ * timeclock.break_start / timeclock.break_end.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { getEmployee, getEmployeeByPin, openWorkPunch, toggleClock } from "@/lib/staffing/store";
+import { getEmployee, getEmployeeByPin, openPunchAny, toggleClock, startBreak, onClockAfter } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
-import { decideRegisterPunch } from "@/lib/pos/clock-core";
+import { punchTimeLabel } from "@/lib/pos/clock-core";
+import { breakSuccessMessage, clockStateOf, decideClockAction, parseBreakRequest, type ClockIntent } from "@/lib/staffing/break-clock-core";
 import { offlineArmFor } from "@/lib/pos/offline-unlock-store";
 
 export const runtime = "nodejs";
@@ -57,7 +64,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   const auth = await authenticateDevice(deviceId, deviceKey);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  let body: { pin?: unknown; employeeId?: unknown; intent?: unknown } = {};
+  let body: { pin?: unknown; employeeId?: unknown; intent?: unknown; reason?: unknown; note?: unknown } = {};
   try {
     body = ((await req.json()) as typeof body) ?? {};
   } catch {
@@ -65,7 +72,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   }
   const pin = typeof body.pin === "string" ? body.pin : "";
   const employeeId = typeof body.employeeId === "string" ? body.employeeId : "";
-  const intent = body.intent === "in" || body.intent === "out" ? body.intent : null;
+  const intent: ClockIntent | null =
+    body.intent === "in" || body.intent === "out" || body.intent === "break" || body.intent === "back" ? body.intent : null;
 
   let employee = null as Awaited<ReturnType<typeof getEmployeeByPin>>;
   if (pin) {
@@ -80,7 +88,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     }
     await notePinSuccess(throttleScope);
   } else if (employeeId) {
-    if (!intent) return NextResponse.json({ error: "Say whether this is a clock in or a clock out." }, { status: 400 });
+    if (!intent) return NextResponse.json({ error: "Say whether this is a clock in, a clock out, a break or back from break." }, { status: 400 });
     employee = await getEmployee(employeeId);
     if (!employee || !employee.active) {
       return NextResponse.json({ error: "Employee not found or inactive. Lock the register and use your PIN." }, { status: 404 });
@@ -91,20 +99,44 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
 
   // D161 — a PIN-proven punch also arms offline unlock (PIN path only).
   const offline = pin ? await offlineArmFor(auth.device, employee) : null;
-  const open = await openWorkPunch(employee.id);
-  const decision = decideRegisterPunch(intent, !!open);
+  const open = await openPunchAny(employee.id);
+  const state = clockStateOf(open);
+  const decision = decideClockAction(intent, state);
+  const employeeState = (clockedIn: boolean, onBreak: boolean, breakReason: string | null = null) => ({
+    id: employee.id,
+    fullName: employee.full_name,
+    clockedIn,
+    onBreak,
+    breakReason,
+  });
   if (decision.kind === "already") {
     return NextResponse.json({
       ok: true,
-      action: decision.state,
+      action: state === "off" ? "out" : "in",
       already: true,
-      employee: { id: employee.id, fullName: employee.full_name, clockedIn: decision.state === "in" },
+      employee: employeeState(state === "working", state === "on_break", open?.break_reason ?? null),
       message: `${employee.full_name}: ${decision.message}`,
       offline,
     });
   }
+  if (decision.kind === "refuse") {
+    return NextResponse.json(
+      {
+        error: `${employee.full_name} ${decision.message}`,
+        employee: employeeState(state === "working", state === "on_break", open?.break_reason ?? null),
+      },
+      { status: 409 },
+    );
+  }
 
-  const result = await toggleClock(employee.id, "register");
+  let breakReq = null as null | { reason: "lunch" | "other"; note: string | null };
+  if (decision.kind === "start_break") {
+    const parsed = parseBreakRequest(body.reason, body.note);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    breakReq = parsed.value;
+  }
+
+  const result = breakReq ? await startBreak(employee.id, breakReq, "register") : await toggleClock(employee.id, "register");
   if (!result.ok) {
     await recordAudit({
       actorId: employee.staff_id,
@@ -112,12 +144,12 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       action: "timeclock.refused",
       entityType: "employee",
       entityId: employee.id,
-      after: { via: "register", deviceId: auth.device.id, intent: open ? "out" : "in", reason: result.error },
+      after: { via: "register", deviceId: auth.device.id, intent: intent ?? decision.kind, reason: result.error, breakReason: breakReq?.reason ?? null },
     });
     return NextResponse.json(
       {
         error: result.error,
-        employee: { id: employee.id, fullName: employee.full_name, clockedIn: !!open },
+        employee: employeeState(state === "working", state === "on_break", open?.break_reason ?? null),
       },
       { status: 409 },
     );
@@ -129,15 +161,30 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     action: `timeclock.${result.action}`,
     entityType: "time_punch",
     entityId: result.punch.id,
-    after: { via: "register", deviceId: auth.device.id, employeeId: employee.id, shiftId: result.shiftId || null },
+    after: {
+      via: "register",
+      deviceId: auth.device.id,
+      employeeId: employee.id,
+      shiftId: result.shiftId || null,
+      breakReason: result.punch.break_reason ?? null,
+      breakNote: result.punch.break_note ?? null,
+    },
   });
 
+  const isBreak = result.action === "break_start" || result.action === "break_end";
+  const at = result.action === "in" || result.action === "break_start" ? result.punch.clock_in_at : result.punch.clock_out_at;
   return NextResponse.json({
     ok: true,
     action: result.action,
-    employee: { id: employee.id, fullName: employee.full_name, clockedIn: result.action === "in" },
-    at: result.action === "in" ? result.punch.clock_in_at : result.punch.clock_out_at,
-    message: `${employee.full_name}: clocked ${result.action === "in" ? "IN" : "OUT"}.`,
+    employee: employeeState(
+      onClockAfter(result.action),
+      result.action === "break_start",
+      result.action === "break_start" ? (result.punch.break_reason ?? null) : null,
+    ),
+    at,
+    message: isBreak
+      ? breakSuccessMessage(employee.full_name, result.action as "break_start" | "break_end", result.punch.break_reason, punchTimeLabel(at))
+      : `${employee.full_name}: clocked ${result.action === "in" ? "IN" : "OUT"}.`,
     offline,
   });
 }

@@ -15,6 +15,8 @@ import { hashPin, isPinHash, verifyPin } from "@/lib/security/pin-hash";
 import { decryptSecret } from "@/lib/security/at-rest-crypto";
 import { clockOutBlocked, type OwnedDrawer } from "@/lib/registers/shift-end-core";
 import { openDrawersWorkedBy } from "@/lib/registers/drawer-pop-store";
+import { isMissingColumn } from "@/lib/payments/payee-banking-store";
+import { BREAK_MIGRATION_MISSING, type BreakRequest } from "@/lib/staffing/break-clock-core";
 
 export type Employee = {
   id: string;
@@ -80,6 +82,10 @@ export type TimePunch = {
   minutes: number | null;
   source: string;
   notes: string | null;
+  /** D211 (0348): 'lunch' | 'other' on a break punch; absent until 0348 is applied. */
+  break_reason?: string | null;
+  /** D211 (0348): the employee's words for the break. */
+  break_note?: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -177,8 +183,31 @@ export async function listEmployeeBanking(): Promise<EmployeeBanking[]> {
 // Punches
 // ---------------------------------------------------------------------------
 
-/** The currently-open WORK punch for an employee (clock_out_at IS NULL). */
+/**
+ * The currently-open WORK punch for an employee (clock_out_at IS NULL).
+ *
+ * D211: filtered to punch_kind = 'work'. Someone out on a lunch / other
+ * break is NOT on the clock: the register treats them as not clocked in, and
+ * they cannot be the on-duty second person. Use `openPunchAny` when the
+ * question is "is there ANY open punch" (the toggle, offboarding).
+ */
 export async function openWorkPunch(employeeId: string): Promise<TimePunch | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("time_punches")
+    .select("*")
+    .eq("employee_id", employeeId)
+    .eq("punch_kind", "work")
+    .is("clock_out_at", null)
+    .order("clock_in_at", { ascending: false })
+    .limit(1);
+  const rows = (data as TimePunch[] | null) ?? [];
+  return rows[0] ?? null;
+}
+
+/** D211: the employee's open punch of EITHER kind (work or break), newest first. */
+export async function openPunchAny(employeeId: string): Promise<TimePunch | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
   const { data } = await admin
@@ -190,6 +219,27 @@ export async function openWorkPunch(employeeId: string): Promise<TimePunch | nul
     .limit(1);
   const rows = (data as TimePunch[] | null) ?? [];
   return rows[0] ?? null;
+}
+
+/** D211: everyone out on a break right now (an open break punch each). */
+export async function onBreakNow(): Promise<{ employee: Employee; punch: TimePunch }[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("time_punches")
+    .select("*")
+    .is("clock_out_at", null)
+    .eq("punch_kind", "break")
+    .order("clock_in_at", { ascending: true });
+  if (error) return [];
+  const punches = (data as TimePunch[] | null) ?? [];
+  if (punches.length === 0) return [];
+  const ids = [...new Set(punches.map((p) => p.employee_id))];
+  const { data: emps } = await admin.from("employees").select(EMPLOYEE_COLUMNS).in("id", ids);
+  const byId = new Map(((emps as Employee[] | null) ?? []).map((e) => [e.id, e]));
+  return punches
+    .map((p) => ({ employee: byId.get(p.employee_id), punch: p }))
+    .filter((x): x is { employee: Employee; punch: TimePunch } => Boolean(x.employee));
 }
 
 /** All employees currently on the clock (one open work punch each). */
@@ -235,9 +285,104 @@ export async function openDrawersOwnedBy(employeeId: string): Promise<OwnedDrawe
   return openDrawersWorkedBy(employeeId);
 }
 
+export type ClockAction = "in" | "out" | "break_start" | "break_end";
+
 export type ClockResult =
-  | { ok: true; action: "in" | "out"; punch: TimePunch; shiftId: string }
+  | { ok: true; action: ClockAction; punch: TimePunch; shiftId: string }
   | { ok: false; error: string };
+
+export type ClockSource = "web" | "station" | "phone" | "manager_edit" | "register";
+
+/** D211: is the person on the clock (working) after this action? */
+export function onClockAfter(action: ClockAction): boolean {
+  return action === "in" || action === "break_end";
+}
+
+/**
+ * D211 (owner: "There needs to be an option to clock out for lunch, or, for
+ * an “other” reason"): leave the floor for a break WITHOUT closing the drawer.
+ *
+ * The D84 drawer guard is deliberately NOT run: the employee is still on
+ * today's shift and the drawer stays theirs (the register locks behind
+ * them). The break punch is written FIRST, so a refusal (for example 0348
+ * not applied yet) leaves the work punch untouched; only then is the work
+ * punch closed. If that close fails the break punch is removed again.
+ */
+export async function startBreak(employeeId: string, req: BreakRequest, source: ClockSource): Promise<ClockResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const emp = await getEmployee(employeeId);
+  if (!emp || !emp.active) return { ok: false, error: "Employee not found or inactive." };
+  const open = await openPunchAny(employeeId);
+  if (!open) return { ok: false, error: "Not clocked in, so there is no shift to take a break from. Clock in first." };
+  if (open.punch_kind === "break") return { ok: false, error: "Already on a break. Tap Back from break first." };
+
+  const nowISO = new Date().toISOString();
+  const { data: brk, error: brkErr } = await admin
+    .from("time_punches")
+    .insert({
+      employee_id: employeeId,
+      shift_id: open.shift_id,
+      punch_kind: "break",
+      clock_in_at: nowISO,
+      source,
+      break_reason: req.reason,
+      break_note: req.note,
+    })
+    .select("*")
+    .single();
+  if (brkErr || !brk) {
+    if (isMissingColumn(brkErr)) return { ok: false, error: BREAK_MIGRATION_MISSING };
+    return { ok: false, error: `Could not start the break: ${brkErr?.message ?? "no row returned"}.` };
+  }
+  const minutes = punchMinutes(open.clock_in_at, nowISO);
+  const { error: closeErr } = await admin
+    .from("time_punches")
+    .update({ clock_out_at: nowISO, minutes })
+    .eq("id", open.id);
+  if (closeErr) {
+    const { error: undoErr } = await admin.from("time_punches").delete().eq("id", (brk as TimePunch).id);
+    return {
+      ok: false,
+      error:
+        `Could not close the work punch for the break: ${closeErr.message}.` +
+        (undoErr ? ` The break punch could not be removed either (${undoErr.message}); a manager should check Hours.` : " Nothing changed."),
+    };
+  }
+  return { ok: true, action: "break_start", punch: brk as TimePunch, shiftId: open.shift_id ?? "" };
+}
+
+/**
+ * D211: back from a break. A new work punch opens on the SAME shift first,
+ * then the break punch is closed (if that fails the new work punch is
+ * removed, so the record never shows both open by our hand for long).
+ */
+export async function endBreak(employeeId: string, source: ClockSource): Promise<ClockResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const open = await openPunchAny(employeeId);
+  if (!open || open.punch_kind !== "break") return { ok: false, error: "Not on a break." };
+  const nowISO = new Date().toISOString();
+  const { data: work, error: workErr } = await admin
+    .from("time_punches")
+    .insert({ employee_id: employeeId, shift_id: open.shift_id, punch_kind: "work", clock_in_at: nowISO, source })
+    .select("*")
+    .single();
+  if (workErr || !work) return { ok: false, error: `Could not clock back in: ${workErr?.message ?? "no row returned"}.` };
+  const minutes = punchMinutes(open.clock_in_at, nowISO);
+  const { data: closed, error: closeErr } = await admin
+    .from("time_punches")
+    .update({ clock_out_at: nowISO, minutes })
+    .eq("id", open.id)
+    .select("*")
+    .single();
+  if (closeErr || !closed) {
+    await admin.from("time_punches").delete().eq("id", (work as TimePunch).id);
+    return { ok: false, error: `Could not end the break: ${closeErr?.message ?? "no row returned"}. Nothing changed.` };
+  }
+  // The returned punch is the CLOSED break (it carries the reason for the banner and audit).
+  return { ok: true, action: "break_end", punch: closed as TimePunch, shiftId: open.shift_id ?? "" };
+}
 
 /**
  * Toggle clock in/out for an employee. On clock-in we open (or reuse) the
@@ -246,15 +391,18 @@ export type ClockResult =
  */
 export async function toggleClock(
   employeeId: string,
-  source: "web" | "station" | "phone" | "manager_edit" | "register" = "web",
+  source: ClockSource = "web",
 ): Promise<ClockResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
   const emp = await getEmployee(employeeId);
   if (!emp || !emp.active) return { ok: false, error: "Employee not found or inactive." };
 
-  const open = await openWorkPunch(employeeId);
+  const open = await openPunchAny(employeeId);
   const nowISO = new Date().toISOString();
+
+  // D211: a plain toggle while on a break means "I'm back".
+  if (open && open.punch_kind === "break") return endBreak(employeeId, source);
 
   if (open) {
     // Fix Phase 6 (G-61, owner D84, Q-E-6: "Block. I don't want to clock out
@@ -607,6 +755,8 @@ export async function createManualPunch(input: {
   clockInUtc: string;
   clockOutUtc: string | null;
   notes: string;
+  /** D211: a manager can record a missed lunch / other break (needs 0348). */
+  breakReq?: BreakRequest | null;
 }): Promise<{ ok: true; id: string; minutes: number | null } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
@@ -655,15 +805,19 @@ export async function createManualPunch(input: {
     .insert({
       employee_id: input.employeeId,
       shift_id: shiftId,
-      punch_kind: "work",
+      punch_kind: input.breakReq ? "break" : "work",
       clock_in_at: input.clockInUtc,
       clock_out_at: input.clockOutUtc,
       minutes,
       source: "manager_edit",
       notes: input.notes,
+      ...(input.breakReq ? { break_reason: input.breakReq.reason, break_note: input.breakReq.note } : {}),
     })
     .select("id")
     .single();
-  if (punchErr || !punch) return { ok: false, error: punchErr?.message ?? "Failed to create punch." };
+  if (punchErr || !punch) {
+    if (input.breakReq && isMissingColumn(punchErr)) return { ok: false, error: BREAK_MIGRATION_MISSING };
+    return { ok: false, error: punchErr?.message ?? "Failed to create punch." };
+  }
   return { ok: true, id: (punch as { id: string }).id, minutes };
 }

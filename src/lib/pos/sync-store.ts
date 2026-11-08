@@ -37,7 +37,7 @@ import { registerPickedUpNote } from "@/lib/pos/pickup-progress-core";
 import { shouldWriteDeviceHeartbeat } from "@/lib/pos/device-heartbeat-core";
 import { pushLeaflyPickedUp, scheduleAfterResponse } from "@/lib/pos/pickup-leafly-close";
 import { isMarketplaceOrigin, toOrderOrigin } from "@/lib/orders/order-origin-core";
-import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
+import { openWorkPunch, toggleClock, onClockAfter } from "@/lib/staffing/store";
 import { judgeOfflineAuth, offlineKeyId, validateOfflineAuthPayload, type OfflineAuthPayload } from "./offline-unlock-core";
 import { getOfflinePolicy } from "./offline-unlock-store";
 import { applyOfflineReversal } from "./offline-reversal-store";
@@ -1667,6 +1667,10 @@ async function processPunch(
     return markException(admin, ledgerId, envelope.clientUuid, `Invalid punch payload: ${check.errors.join(" ")}`);
   }
   const intent = (payload as PosPunchPayload).intent;
+  // D211: openWorkPunch is WORK punches only. Someone on a lunch / other break
+  // has no open work punch, so an offline "in" resolves to clock_in and
+  // toggleClock ends the break (back on the clock); an offline "out" while on a
+  // break becomes an exception for a manager (come back first, then clock out).
   const open = await openWorkPunch(envelope.employeeId);
   const resolution = resolvePunchIntent(intent, !!open);
 
@@ -1686,7 +1690,7 @@ async function processPunch(
       return {
         clientUuid: envelope.clientUuid,
         status: "processed",
-        punchAction: result.action === "in" ? "clock_in" : "clock_out",
+        punchAction: onClockAfter(result.action) ? "clock_in" : "clock_out",
       };
     }
   }
