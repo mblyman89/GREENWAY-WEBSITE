@@ -352,6 +352,24 @@ export function dispenseHistory(days: readonly DispenseDay[], todayYmd: string, 
   return rows;
 }
 
+/**
+ * Share (0..1) of a typical day's sales that happens after hour:minute,
+ * from a per-hour revenue profile. The current hour counts pro rata. With
+ * no profile it is 1 (the whole day still to come: the cautious choice, it
+ * makes the machine look emptier sooner, never later).
+ */
+export function shareOfDayRemaining(byHour: readonly { hour: number; revenueMinorUnits: number }[], hour: number, minute: number): number {
+  let total = 0;
+  let after = 0;
+  for (const h of byHour) {
+    const v = Math.max(0, h.revenueMinorUnits);
+    total += v;
+    if (h.hour > hour) after += v;
+    else if (h.hour === hour) after += v * Math.max(0, Math.min(1, (60 - minute) / 60));
+  }
+  return total > 0 ? Math.max(0, Math.min(1, after / total)) : 1;
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
@@ -435,6 +453,17 @@ export function __runAtmForecastTests(): { passed: number; failed: number; messa
   ok(h.length === 30 && h[29].date === "2026-11-06", "30 days ending yesterday");
   ok(h.find((r) => r.date === shiftYmd(today, -3))!.dispensedCents === null, "a missing day is a gap");
   ok(h[0].ma7Cents !== null, "moving average seeded from before the span");
+
+  // ── shareOfDayRemaining ──
+  const prof = [
+    { hour: 10, revenueMinorUnits: 100 },
+    { hour: 11, revenueMinorUnits: 100 },
+    { hour: 12, revenueMinorUnits: 200 },
+  ];
+  ok(shareOfDayRemaining(prof, 9, 0) === 1, "before the first sale hour: whole day to come");
+  ok(shareOfDayRemaining(prof, 13, 0) === 0, "after the last sale hour: nothing to come");
+  ok(shareOfDayRemaining(prof, 11, 30) === 0.625, "current hour counts pro rata (50 + 200 of 400)");
+  ok(shareOfDayRemaining([], 15, 0) === 1, "no profile: cautious whole day");
 
   return { passed, failed, messages };
 }

@@ -692,6 +692,82 @@ export function onShiftBoard(input: {
 }
 
 // ---------------------------------------------------------------------------
+// 7. Weekday x hour heatmap (when the rush really is)
+// ---------------------------------------------------------------------------
+
+export type HeatCell = {
+  dow: number;
+  hour: number;
+  /** Mean orders in this weekday-hour across the trading days of that weekday. */
+  avgOrders: number;
+  avgRevenueMinor: number;
+  /** 0..1 against the busiest cell (for colour). */
+  intensity: number;
+};
+
+export type WeekHourHeatmap = {
+  cells: HeatCell[];
+  hours: number[];
+  /** Trading days seen per weekday (0 = Sunday). */
+  daysPerDow: number[];
+  peak: { dow: number; hour: number; avgOrders: number } | null;
+};
+
+const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+export function dowLabel(dow: number): string {
+  return DOW_SHORT[((dow % 7) + 7) % 7];
+}
+
+function dowOf(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/**
+ * Average orders per weekday-hour over the given days. Closed days (no
+ * orders) do not count toward a weekday's average. Hours drawn: every hour
+ * that ever sold, widened to at least [openHour, closeHour).
+ */
+export function weekHourHeatmap(byDay: readonly DayIn[], byDayHour: readonly DayHourIn[], openHour = 9, closeHour = 22): WeekHourHeatmap {
+  const traded = new Set(byDay.filter((d) => int(d.orders) > 0).map((d) => d.date));
+  const daysPerDow = new Array<number>(7).fill(0);
+  for (const d of traded) if (/^\d{4}-\d{2}-\d{2}$/.test(d)) daysPerDow[dowOf(d)] += 1;
+  const ord = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+  const rev = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+  let lo = openHour;
+  let hi = closeHour - 1;
+  for (const p of byDayHour) {
+    if (!traded.has(p.date) || !Number.isInteger(p.hour) || p.hour < 0 || p.hour > 23) continue;
+    const w = dowOf(p.date);
+    ord[w][p.hour] += int(p.orders);
+    rev[w][p.hour] += int(p.revenueMinorUnits);
+    if (int(p.orders) > 0) {
+      lo = Math.min(lo, p.hour);
+      hi = Math.max(hi, p.hour);
+    }
+  }
+  const hours: number[] = [];
+  for (let h = Math.max(0, lo); h <= Math.min(23, hi); h += 1) hours.push(h);
+  const cells: HeatCell[] = [];
+  let max = 0;
+  let peak: WeekHourHeatmap["peak"] = null;
+  for (let w = 0; w < 7; w += 1) {
+    for (const h of hours) {
+      const n = daysPerDow[w];
+      const avgOrders = n > 0 ? Math.round((ord[w][h] / n) * 10) / 10 : 0;
+      const avgRevenueMinor = n > 0 ? Math.round(rev[w][h] / n) : 0;
+      if (avgOrders > max) {
+        max = avgOrders;
+        peak = { dow: w, hour: h, avgOrders };
+      }
+      cells.push({ dow: w, hour: h, avgOrders, avgRevenueMinor, intensity: 0 });
+    }
+  }
+  for (const c of cells) c.intensity = max > 0 ? Math.round((c.avgOrders / max) * 100) / 100 : 0;
+  return { cells, hours, daysPerDow, peak };
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -914,6 +990,28 @@ export function __runCockpitAnalyticsTests(): { passed: number; failed: number; 
   ok(!JSON.stringify(board).includes("99999"), "today's per-person dollars never leave the core");
   ok(board.leaderName === "Ava", "leader");
   ok(Math.abs(board.rows[0].shareOfSales - 0.4) < 1e-9, "share of sales");
+
+  // ── weekHourHeatmap ──
+  const hmDays: DayIn[] = [
+    { date: "2026-11-02", revenueMinorUnits: 1000, orders: 4, units: 4 }, // Mon
+    { date: "2026-10-26", revenueMinorUnits: 1000, orders: 2, units: 2 }, // Mon
+    { date: "2026-11-03", revenueMinorUnits: 0, orders: 0, units: 0 }, // Tue closed
+  ];
+  const hmHours: DayHourIn[] = [
+    { date: "2026-11-02", hour: 16, revenueMinorUnits: 800, orders: 3 },
+    { date: "2026-11-02", hour: 10, revenueMinorUnits: 200, orders: 1 },
+    { date: "2026-10-26", hour: 16, revenueMinorUnits: 400, orders: 1 },
+    { date: "2026-10-26", hour: 23, revenueMinorUnits: 600, orders: 1 },
+    { date: "2026-11-03", hour: 12, revenueMinorUnits: 999, orders: 9 }, // closed day ignored
+  ];
+  const hm = weekHourHeatmap(hmDays, hmHours);
+  ok(hm.daysPerDow[1] === 2 && hm.daysPerDow[2] === 0, "heatmap counts trading days per weekday");
+  const mon16 = hm.cells.find((c) => c.dow === 1 && c.hour === 16)!;
+  ok(mon16.avgOrders === 2 && mon16.avgRevenueMinor === 600, "heatmap averages over trading days");
+  ok(mon16.intensity === 1 && hm.peak?.dow === 1 && hm.peak.hour === 16, "heatmap peak is the busiest cell");
+  ok(hm.hours[0] === 9 && hm.hours[hm.hours.length - 1] === 23, "heatmap widens to a late sale");
+  ok(hm.cells.find((c) => c.dow === 2 && c.hour === 12)!.avgOrders === 0, "a closed day adds nothing");
+  ok(dowLabel(0) === "Sun" && dowLabel(6) === "Sat", "weekday labels");
 
   return { passed, failed, messages };
 }
