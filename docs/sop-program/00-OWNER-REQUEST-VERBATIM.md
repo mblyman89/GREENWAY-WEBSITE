@@ -1899,3 +1899,24 @@ Verbatim:
 | D213g | **Duplicate cards are surfaced, not auto-merged.** Each row lists its duplicate cards with a link to Merge vendors. `findDuplicateGroups` gains a **same-license** signal, checked before same-name and same-website, so the 13 license groups appear on `/admin/vendors/merge`. | Merging is irreversible-ish and the owner asked to do it themselves. |
 
 **Expected effect on the live data** (simulated against the read-only export with the new code): unlinked/ambiguous menu rows go from 13+ to 3: "Sitka Hash House™" and "Lucid Brands Co" (no card or alias by those names; brands "Sitka" (SITKA PACKAGING) and "Lucid" (FARMWEST 2) are too loose to trust), plus "TWO HEADS CO LLC - 412851" (the license conflict, D213d). No vendor is in both tables, and no archived card is listed. Carried vendors 111 → 109 (archived cards rolled into survivors); covered 39, still need 70.
+
+## D214 — GREEN RESEARCH NETWORK, LLC (GF42904700003637): keep the documents, a button to attach all COAs (2026-11-08)
+
+> "thank you. I was able to find all coas now except for the GREEN RESEARCH NETWORK, LLC, manifest #GF42904700003637. I searched my inbox directly for it. I am uploading it for you to add to the repo with a button to attach them all. follow the standing rules. thank you."
+>
+> (uploads: Invoice_2026-10-28T17_47_20.pdf, CCRS_Manifest_2026-10-28T17_47_20.pdf)
+>
+> "I apologize. you needed this too. please continue. follow the standing rules. thank you." (the Growflow WCIA "Transfer Data Link" for the transfer)
+
+**Finding (read-only).** Both uploaded PDFs hold no lab result. One is the HASH MILL ORGANICS invoice INV-2068 ($978.05, 19 lines); its QR code is a Growflow ad. The other is the CCRS transport manifest GF42904700003637 (Terpene Transit, 19 inventory ids). The WCIA transfer behind the link holds all 19 lines, each with `lab_result_status: pass` and a certificate link: 15 distinct PDFs, 12 at certs.conflabs.com and 3 at growflowweb.blob.core.windows.net, all Confidence Analytics. Each one downloads as a real PDF holding exactly one certificate with a lab test id (WA-yymmdd-nnn) that prints PASS. In the delivery (cee2bb7f…, accepted, `cultivera-reconstructed`) every lot code equals a transfer line's inventory id, exactly. 18 of the 19 lots have no lab result; the Fruit Cake Rosin Dab – Honey Belts lot already has WA-260507-004, from an emailed COA. The transfer's own summary prints 0% THC on four lines, so lab facts are read from the certificate PDFs, never from that summary.
+
+| # | Decision | Why |
+|---|---|---|
+| D214 | **The documents are kept in the repo.** The invoice and CCRS manifest go under `back-office/source-materials/manifests/GF42904700003637/`. The transfer JSON goes to `src/data/wcia-transfers/GF42904700003637.json`, with `document_origin` redacted because the link carries an access token and the repo is public. | "add to the repo" |
+| D214a | **"Attach all COAs from the vendor's transfer"** on the delivery page. It shows when the delivery has a kept transfer and lots without a lab result. The vendor's transfer decides which lot gets which certificate (line inventory id === lot code). Each distinct certificate link is fetched by the guarded lot-page fetcher (public hosts only, 20 s, 25 MB, must be a PDF) and read by the same certificate reader. It must hold exactly one certificate with a lab test id, or nothing attaches from it. Lab results are reused by exact lab test id or inserted with the one native builder. The write is fill-only (never replaces a lab result, never touches a destroyed lot). A lot code on two lines with different links is left alone. PDFs are archived. It is audited per lot as `inventory_lot.coa_attached_from_transfer` and per delivery as `manifest.coa_transfer_bundle_attached`, with a timeline event `coa_transfer_bundle`. | "a button to attach them all" |
+
+### As built
+- Pure: `src/lib/inventory/coa-transfer-bundle-core.ts` (plan, one-certificate rule, note; 15 self-tests).
+- Store: `src/lib/inventory/coa-transfer-bundle-store.ts`. Kept files: `src/data/wcia-transfers/index.ts`.
+- Action: `attachTransferCoasAction` in `src/app/admin/inventory/intake/actions.ts`. Page: `coa-transfer-bundle` box on `/admin/inventory/intake/[id]`.
+- Test: `tests/compliance/d214-coa-transfer-bundle.test.ts`.

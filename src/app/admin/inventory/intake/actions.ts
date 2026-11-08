@@ -1616,3 +1616,76 @@ export async function findInboundEmailAction(formData: FormData) {
   }
   backToEmailTab(params);
 }
+
+/**
+ * D214 - "add to the repo with a button to attach them all": attach every COA
+ * the vendor's kept WCIA transfer links (src/data/wcia-transfers) to the lots
+ * of this delivery that have none. Matching is the vendor's own declaration
+ * (line inventory id === lot code, exactly); each certificate PDF is fetched
+ * with the guarded fetcher, read, and must hold exactly one certificate.
+ * Fill-only (never replaces a lab result, never a destroyed lot). Audited per
+ * lot (inventory_lot.coa_attached_from_transfer) and once for the delivery.
+ */
+export async function attachTransferCoasAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+  const base = `/admin/inventory/intake/${manifestId}`;
+  const { attachTransferCoasForManifest } = await import("@/lib/inventory/coa-transfer-bundle-store");
+  const core = await import("@/lib/inventory/coa-transfer-bundle-core");
+  const { getManifestById } = await import("@/lib/inventory/store");
+  const manifest = await getManifestById(manifestId);
+  if (!manifest) redirect(`${base}?coa=error&coamsg=${encodeURIComponent("That delivery could not be loaded.")}#manifest-lines`);
+  const number = manifest.manifest_number ?? "";
+
+  const out = await attachTransferCoasForManifest(manifestId, session.userId);
+  const { recordAudit } = await import("@/lib/auth/audit");
+  if (!out.ok) {
+    await logManifestEvent(manifestId, core.TRANSFER_COA_EVENT, `COAs from the vendor's transfer not attached: ${out.error}`.slice(0, 2000), session.userId);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: core.TRANSFER_COA_MANIFEST_AUDIT,
+      entityType: "inbound_manifest",
+      entityId: manifestId,
+      before: null,
+      after: { ok: false, error: out.error },
+    });
+    redirect(`${base}?coa=error&coamsg=${encodeURIComponent(out.error.slice(0, 400))}#manifest-lines`);
+  }
+  const done = out as Extract<typeof out, { ok: true }>;
+  const note = core.transferCoaNote(number, done.result);
+  for (const l of done.linkedLotIds) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: core.TRANSFER_COA_AUDIT,
+      entityType: "inventory_lot",
+      entityId: l.lotId,
+      before: { lab_result_id: null },
+      after: {
+        lab_result_id: l.labId,
+        labtest_id: l.labtestId,
+        reused: l.reused,
+        matched_by: "the vendor's transfer (line inventory id = lot code)",
+        transfer: number,
+        changes: [`Attached COA ${l.labtestId} from the vendor's transfer ${number}`],
+      },
+    });
+  }
+  await logManifestEvent(manifestId, core.TRANSFER_COA_EVENT, note.slice(0, 2000), session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: core.TRANSFER_COA_MANIFEST_AUDIT,
+    entityType: "inbound_manifest",
+    entityId: manifestId,
+    before: null,
+    after: { ok: true, ...done.result, note },
+  });
+  revalidatePath(base);
+  revalidatePath("/admin/inventory/intake");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin/inventory/fix-later");
+  for (const l of done.linkedLotIds) revalidatePath(`/admin/inventory/${l.lotId}`);
+  const kind = done.result.attached > 0 ? "transfer" : "error";
+  redirect(`${base}?coa=${kind}&coamsg=${encodeURIComponent(note.slice(0, 600))}#manifest-lines`);
+}

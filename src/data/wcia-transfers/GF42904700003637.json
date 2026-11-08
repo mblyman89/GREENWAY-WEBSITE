@@ -1,0 +1,1259 @@
+{
+  "document_name": "WCIA Transfer Schema",
+  "document_schema_version": "2.2.0",
+  "document_origin": "(redacted: the Growflow transfer link carries an access token; the repo is public)",
+  "external_id": null,
+  "transfer_id": "GF42904700003637",
+  "from_license_number": "429047",
+  "from_license_name": "HASH MILL ORGANICS",
+  "to_license_number": "413541",
+  "to_license_name": "Greenway Marijuana",
+  "to_license_type": "Retailer + Medical",
+  "transporter_name": "TERPENE TRANSIT",
+  "transporter_license": "426061",
+  "manifest_type": "transporter",
+  "created_at": "2026-10-23T18:29:12.4927208Z",
+  "updated_at": "2026-10-30T20:56:06.8191856Z",
+  "transferred_at": "2026-10-28T17:46:34.5298718Z",
+  "est_departed_at": "2026-10-28T17:45:33.179Z",
+  "est_arrival_at": "2026-10-30T02:57:45.179Z",
+  "route": "Start: 236006 E LEGACY PR SE, Kennewick, WA 99337\nEnd: 4851 Geiger Rd Se, Port Orchard, WA 98366\n\nDistance: 271 mi\nDuration: 4 hours 12 mins\n\nDirections:\n1) 157 ft - 1 min - Head east\n2) 174 ft - 1 min - Turn right toward Legacy Pr SE\n3) 0.4 mi - 1 min - Turn right onto Legacy Pr SE\n4) 0.5 mi - 1 min - Turn left onto S Piert Rd\n5) 10.4 mi - 11 mins - Continue onto WA-397 S/E Riek RdContinue to follow WA-397 S\n6) 113 mi - 1 hour 41 mins - Turn right to merge onto I-82 W toward YakimaParts of this road may be closed at certain times or days\n7) 85.6 mi - 1 hour 16 mins - Take the exit onto I-90 W/US-97 N toward SeattleContinue to follow I-90 W\n8) 0.2 mi - 1 min - Take exit 25 for WA-18 W toward Auburn/Tacoma\n9) 436 ft - 1 min - Take the ramp to WA-18 W\n10) 27.1 mi - 28 mins - Continue onto WA-18 W\n11) 2.2 mi - 2 mins - Take the exit onto I-5 S toward Tacoma\n12) 7.7 mi - 8 mins - Keep right to stay on I-5 S\n13) 23.0 mi - 22 mins - Take exit 132B to merge onto WA-16 W toward Gig Harbor/Bremerton\n14) 0.3 mi - 1 min - Take the WA-160 E/Sedgwick Rd exit toward Southworth Fy\n15) 0.4 mi - 1 min - Turn right onto State Rte 160 E/WA-160 E/SE Sedgwick Rd\n16) 177 ft - 1 min - Turn right onto Geiger Rd SE\n17) 180 ft - 1 min - Turn leftDestination will be on the left\n",
+  "inventory_transfer_items": [
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705574845",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-03-11T17:45:50.721",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705574845",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Dab - Meowzer - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 8.33,
+      "line_price": 41.65,
+      "strain_name": "Meowzer",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DQqETW4wrvClU-2DWA-2D260312-2D049.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=CFUOxdO492VrOixkFrzVqstB4FuepymyP-0m_WW_GOjvTnLK9SBmsSnONJSCN9_W&s=2GvMmwjFlYKvnYEQklaZS-lLte9kopwTvrKbwrR_4A8&e=",
+      "sample_source_id": "GF42904705574845",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705574816",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-QqETW4wrvClU-WA-260312-049.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.3088,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 73.6,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1469,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 64.856,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.12883,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 64.98483,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705575061",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-04-08T23:23:07.403",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705575061",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Bubble Hash - GMO - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 6.0,
+      "line_price": 30.0,
+      "strain_name": "GMO",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DfXKIjfU3Dw9l-2DWA-2D260409-2D021.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=sH9Esk4Q0_lkEKKYnuiCAgMGmoO_OvYE06hTDH4LIx4qknqn3QL0Ec5usilQAzcw&s=ePpKuq7JEB7bXkSV0Pazns4V_6j_0BJ7yVEyj3lXVXE&e=",
+      "sample_source_id": "GF42904705575061",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705575060",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-fXKIjfU3Dw9l-WA-260409-021.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.632,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 71.63,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1549,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 63.45151,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.13585,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 63.58736,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705577491",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-05-21T00:03:42.453",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705577491",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Red Mane - Rosin Dab - JABA - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 13.33,
+      "line_price": 66.65,
+      "strain_name": "JABA",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2D7AH0wBTFe527-2DWA-2D260521-2D013.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=wDxcQlLgf5xEwuvRa_A2B-g3h5ZZyNGrCM7QacnvT3fJghwmqovg2RkJUIsyIQAS&s=FfeS_2vQxT6x02nxPIXEnOMPAvdqONlGxUept1WZRYw&e=",
+      "sample_source_id": "GF42904705577491",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576098",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-7AH0wBTFe527-WA-260521-013.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 3.094,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 75.07,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1669,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 68.93039,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.14637,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 69.07676,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705583883",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-06-23T21:40:02.928",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705583883",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Vape - GMO - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 18.33,
+      "line_price": 91.65,
+      "strain_name": "GMO",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DfXKIjfU3Dw9l-2DWA-2D260409-2D021.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=sH9Esk4Q0_lkEKKYnuiCAgMGmoO_OvYE06hTDH4LIx4qknqn3QL0Ec5usilQAzcw&s=ePpKuq7JEB7bXkSV0Pazns4V_6j_0BJ7yVEyj3lXVXE&e=",
+      "sample_source_id": "GF42904705583883",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705577461",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-fXKIjfU3Dw9l-WA-260409-021.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.632,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 71.63,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1549,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 63.45151,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.13585,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 63.58736,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584049",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-09-09T17:37:06.257",
+      "qty": 10.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584049",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Solventless Infused Pre-Rolls - Purple Petals - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Marijuana Mix Infused",
+      "product_price": 3.33,
+      "line_price": 33.3,
+      "strain_name": "Purple Petals",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DvcOME8K2h1cO-2DWA-2D260922-2D020.json&d=DwMFaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=2zJJGys5G0ciwd0FqQhpSyGmXFVvV6Z4ZZQVtXdiclSm6RPkMLnMTtvSRpqUN8tu&s=awfccOgOUhJUKG_DSOlPBGdUN3TQ3mCKLfag2x1bDXI&e=",
+      "sample_source_id": "GF42904705584049",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705583969",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-vcOME8K2h1cO-WA-260922-020.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.9995,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 40.36,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1072,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 36.39522,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.09401,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 36.48923,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584050",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-09-09T17:37:06.155",
+      "qty": 10.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584050",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Solventless Infused Pre-Rolls - Sour Banana H - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Marijuana Mix Infused",
+      "product_price": 3.33,
+      "line_price": 33.3,
+      "strain_name": "Sour Banana H",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2D22e3pWAm8975-2DWA-2D260922-2D022.json&d=DwMFaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=5J_Vy3cpjJxiedDYTN-Kqr7qcrzCjCstJ2tfOToMGlvWGWkfR-5LOTPNnwPhAb-r&s=aL6pqJhv8b0uFPIoiYYNxoYyJGXF7mEUI9j6lFs1VJI&e=",
+      "sample_source_id": "GF42904705584050",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705583968",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-22e3pWAm8975-WA-260922-022.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.111,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 31.17,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.0884,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 28.44709,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.07753,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 28.52462,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584895",
+      "created_at": "2026-10-27T20:37:40.5721703Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-10-13T19:34:21.17",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584895",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Vape - GMO-Strawberry Gogurt - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 18.33,
+      "line_price": 91.65,
+      "strain_name": "GMO-Strawberry Gogurt",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DlV5UtSEGVxad-2DWA-2D261015-2D002.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=GSp-IrSu6F-1Kt3nmYx5mTbsy13FVgqBh5oUQxuhiWzJhjOm5_sx8SwiX-P5EaS7&s=hizNMFZhZCcFDGy9aRSG0uc5IBjg_0TRblmh8nO6I4s&e=",
+      "sample_source_id": "GF42904705584895",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705584848",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-lV5UtSEGVxad-WA-261015-002.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.4,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 75.37,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1922,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 67.49949,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.16856,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 67.66805,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584896",
+      "created_at": "2026-10-27T20:37:40.5721703Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-05-07T00:38:01.568",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584896",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Vape - Honey Belts - Yard Sale - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 18.33,
+      "line_price": 91.65,
+      "strain_name": "Honey Belts - Yard Sale",
+      "lab_result_passed": "pass",
+      "lab_result_link": null,
+      "sample_source_id": "GF42904705584896",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576203",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://growflowweb.blob.core.windows.net/pdf/1780015092.2518_GF42904705575140RosinFrostco__Rosin_Dab__Honey_Belts__gWA260507004.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "total-thc",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.0,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584901",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-04-22T20:23:35.869",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584901",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Bubble Hash - Kush Mints - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 6.0,
+      "line_price": 30.0,
+      "strain_name": "Kush Mints",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DUBY0lQDL1M9N-2DWA-2D260423-2D054.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=M8Z1Ra9U-qVCuuafzdlvAp4PqqNwkEDCbtD_CvNSSr8suzL-EyvGG6V7NCLYykw-&s=v7Ju6cjOdqmuZkHbKNJlrAvEIpowQNH1zds0Zz3UfqI&e=",
+      "sample_source_id": "GF42904705575052",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705575079",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-UBY0lQDL1M9N-WA-260423-054.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 2.354,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 78.86,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.167,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 71.51422,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.14646,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 71.66068,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584902",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-05-07T00:38:01.568",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584902",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Fruit Cake Rosin Dab - Honey Belts - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 8.33,
+      "line_price": 41.65,
+      "strain_name": "Honey Belts",
+      "lab_result_passed": "pass",
+      "lab_result_link": null,
+      "sample_source_id": "GF42904705576202",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576203",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://growflowweb.blob.core.windows.net/pdf/1780015092.2518_GF42904705575140RosinFrostco__Rosin_Dab__Honey_Belts__gWA260507004.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "total-thc",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.0,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584903",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-04-25T00:44:58.552",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584903",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Red Mane - Rosin Dab - Ice Cream Cake - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 13.33,
+      "line_price": 66.65,
+      "strain_name": "Ice Cream Cake",
+      "lab_result_passed": "pass",
+      "lab_result_link": null,
+      "sample_source_id": "GF42904705576205",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576206",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://growflowweb.blob.core.windows.net/pdf/1780015511.89882_1777665329.19088_GF42904705575073RosinRed_Mane__Rosin_Dab__Ice_Cream_Cake__gWA260428031.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "total-thc",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.0,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584904",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-04-25T00:44:58.552",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584904",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Bubble Hash - Ice Cream Cake - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 6.0,
+      "line_price": 30.0,
+      "strain_name": "Ice Cream Cake",
+      "lab_result_passed": "pass",
+      "lab_result_link": null,
+      "sample_source_id": "GF42904705576207",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576206",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://growflowweb.blob.core.windows.net/pdf/1780015511.89882_1777665329.19088_GF42904705575073RosinRed_Mane__Rosin_Dab__Ice_Cream_Cake__gWA260428031.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "total-thc",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.0,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584905",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-05-21T00:56:37.527",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584905",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Bubble Hash - JABA - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 6.0,
+      "line_price": 30.0,
+      "strain_name": "JABA",
+      "lab_result_passed": "pass",
+      "lab_result_link": null,
+      "sample_source_id": "GF42904705576210",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576211",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://growflowweb.blob.core.windows.net/pdf/1780016206.50444_GF42904705576099RosinFrostco__Rosin_Dab__JABA__g__Trade_SampleWA260521013.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "total-thc",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.0,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584906",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-06-03T00:23:52.782",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584906",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Dab - Dosicle #1 - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 8.33,
+      "line_price": 41.65,
+      "strain_name": "Dosicle #1",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DEAQgIlXzbicC-2DWA-2D260604-2D046.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=2f-W9NgC--wiX3zu2CujuVP2m_2Gb82fREQogoLDOWNv_kiQtRJ6P2706_JXuqQC&s=1McqUsVD8V_F_N5hRkobtms_g2_Axxr1ZC4LgyUZbTc&e=",
+      "sample_source_id": "GF42904705576230",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705576638",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-EAQgIlXzbicC-WA-260604-046.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.5395,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 72.95,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1288,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 64.51665,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.11296,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 64.62961,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584907",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-06-23T21:40:02.928",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584907",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Red Mane - Rosin Dab - GMO - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 13.33,
+      "line_price": 66.65,
+      "strain_name": "GMO",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DfXKIjfU3Dw9l-2DWA-2D260409-2D021.json&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=sH9Esk4Q0_lkEKKYnuiCAgMGmoO_OvYE06hTDH4LIx4qknqn3QL0Ec5usilQAzcw&s=ePpKuq7JEB7bXkSV0Pazns4V_6j_0BJ7yVEyj3lXVXE&e=",
+      "sample_source_id": "GF42904705577423",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705577461",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-fXKIjfU3Dw9l-WA-260409-021.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.632,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 71.63,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1549,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 63.45151,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.13585,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 63.58736,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584908",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-06-30T19:42:18.488",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584908",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Dab - Yard Sale - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 8.33,
+      "line_price": 41.65,
+      "strain_name": "Yard Sale",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DorcEbuh0z4Xr-2DWA-2D260625-2D017.json&d=DwMFAg&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=sWz0ibpFME94rZAcJBDe_EV1id0dysPsGpI7qgpIFAwrSQWgw6bjFyeiAW42IUYe&s=bS6bKsdAEsgDmVR0V72yIOHjvdc8YjAaSNVEva5Lb_s&e=",
+      "sample_source_id": "GF42904705577472",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705577528",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-orcEbuh0z4Xr-WA-260625-017.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.5086,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 71.65,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1357,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 63.34565,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.11901,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 63.46466,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584909",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-06-30T19:41:04.303",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584909",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Red Mane - Rosin Dab - Super Boof - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 13.33,
+      "line_price": 66.65,
+      "strain_name": "Super Boof",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DTD423Eh9wx1H-2DWA-2D260625-2D013.json&d=DwMFAg&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=sWz0ibpFME94rZAcJBDe_EV1id0dysPsGpI7qgpIFAwrSQWgw6bjFyeiAW42IUYe&s=57UtSyj3EhnQbo-gtxYD8ABeyS47Ci-67cd5znKCEHM&e=",
+      "sample_source_id": "GF42904705577476",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705577527",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-TD423Eh9wx1H-WA-260625-013.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.4561,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 75.79,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1642,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 66.92393,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.144,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 67.06793,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584910",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-10-06T21:49:55.35",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584910",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Dab - Purple Petals - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 8.33,
+      "line_price": 41.65,
+      "strain_name": "Purple Petals",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DkE4yCUu5OVvm-2DWA-2D261008-2D082.json&d=DwMFaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=CCBZLO6QJqeFj2b9eiiYKFjrfURSwr7nBr2MJXI9EQvgEYlFfzmiGBhAWNMElzeK&s=E95OpNh1YHC6YF-2Q5ZafKkoPoRFjQDfg8i8sMZ7hSQ&e=",
+      "sample_source_id": "GF42904705584173",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705584177",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-kE4yCUu5OVvm-WA-261008-082.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.921,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 74.96,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1332,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 67.66092,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.11682,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 67.77774,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF42904705584911",
+      "created_at": "2026-10-23T18:29:12.4927208Z",
+      "updated_at": "2026-10-28T17:46:34.604081Z",
+      "sample_collection_date": "2026-10-06T21:49:55.449",
+      "qty": 5.0,
+      "uom": "ea",
+      "unit_weight": 1.0,
+      "unit_weight_uom": "g",
+      "product_sku": "GF42904705584911",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Frostco - Rosin Dab - Dosi-Berry - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 8.33,
+      "line_price": 41.65,
+      "strain_name": "Dosi-Berry",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__certs.conflabs.com_wcia_v2-5F1_WA-2DRSS24rgCd3f8-2DWA-2D261008-2D086.json&d=DwMFaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=_n_B8fFQDByAS7KTkotc33D7c0ISatMDfqCLW20dlac&m=CCBZLO6QJqeFj2b9eiiYKFjrfURSwr7nBr2MJXI9EQvgEYlFfzmiGBhAWNMElzeK&s=0LcWZhCmXiDUiGJFd7WwMx9dISWeObCBInV9gakoEpQ&e=",
+      "sample_source_id": "GF42904705584174",
+      "serving_weight": 0.0,
+      "lab_result_data": {
+        "lab_result_id": "GF42904705584178",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-RSS24rgCd3f8-WA-261008-086.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.954,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 71.21,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1393,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 64.40517,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.12217,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 64.52734,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    }
+  ]
+}
