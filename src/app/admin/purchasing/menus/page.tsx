@@ -32,6 +32,7 @@ import {
   type SearchedRow,
 } from "@/lib/purchasing/vendor-menu-coverage-core";
 import { VendorSearch } from "./vendor-search";
+import { FetchLogoButton, FetchAllLogosButton } from "./fetch-logo-button";
 
 export const dynamic = "force-dynamic";
 // D211: the logo-fetch actions search up to three marketplaces per vendor.
@@ -104,6 +105,7 @@ export default async function VendorMenusPage({ searchParams }: { searchParams: 
             "Click 'Fetch menu' to save a dated copy of that vendor's live menu. It joins the Menus on file table, one row per vendor.",
             "Menus on file shows each vendor's newest menu from every source, how old it is, the price spread, potency, photo and COA coverage, and our own stock from them. Open 'History' to see every pull.",
             "Still need a menu lists every vendor we have received product from with no usable menu on file. Vendors with stock on the shelf come first. Use 'Search' to look them up or 'Email' to ask for one.",
+            "'Fetch logo' pulls a vendor's logo from GrowFlow, Cultivera or LeafLink and attaches it, published, to the vendor and its brands so it shows on the website at once. 'Fetch all missing logos' does every vendor we carry that has none.",
           ]}
         >
           <p>
@@ -162,8 +164,8 @@ export default async function VendorMenusPage({ searchParams }: { searchParams: 
 
 function KpiSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-      {Array.from({ length: 6 }).map((_, i) => (
+    <div className="grid gap-4 sm:grid-cols-4 lg:grid-cols-7">
+      {Array.from({ length: 7 }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}
     </div>
@@ -199,7 +201,7 @@ async function CoverageKpis({ now, p }: { now: number; p: CoverageParams }) {
           </ul>
         </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-4 lg:grid-cols-7">
         <StatCard
           label="Vendors we carry"
           value={String(k.carried)}
@@ -240,7 +242,28 @@ async function CoverageKpis({ now, p }: { now: number; p: CoverageParams }) {
           accent={k.unlinked ? "gold" : "muted"}
           href={coverageHref(BASE, p, { slink: "unlinked" }, "#searched")}
         />
+        <StatCard
+          label="Missing a logo"
+          value={String(cov.missingLogos)}
+          hint="vendors we carry with no logo on the website"
+          accent={cov.missingLogos ? "gold" : "green"}
+          href="#logos"
+        />
       </div>
+      {cov.configured && (
+        <div id="logos" className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+          <div className="max-w-2xl text-sm text-[var(--admin-text-muted)]">
+            <p className="font-semibold text-[var(--admin-text)]">Vendor logos</p>
+            <p className="mt-0.5 text-xs">
+              &ldquo;Fetch logo&rdquo; finds the vendor&rsquo;s profile on GrowFlow, Cultivera or LeafLink, saves the logo to the
+              Media Library, and attaches it to the vendor and all of its brands, published, so it shows on the website right
+              away. A vendor that already has a logo is only changed when you click &ldquo;Replace logo&rdquo;. A profile that
+              fits more than one of our vendors is skipped, never guessed.
+            </p>
+          </div>
+          <FetchAllLogosButton missing={cov.missingLogos} />
+        </div>
+      )}
     </div>
   );
 }
@@ -347,7 +370,7 @@ async function NeededTable({ now, p }: { now: number; p: CoverageParams }) {
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
               {rows.map((r) => (
-                <NeededTr key={r.vendor.id} r={r} p={p} now={now} />
+                <NeededTr key={r.vendor.id} r={r} p={p} now={now} logoUrl={cov.logos[r.vendor.id] ?? null} />
               ))}
             </tbody>
           </table>
@@ -366,7 +389,7 @@ function needTone(g: NeedGroup): "danger" | "gold" | "neutral" {
   return "neutral";
 }
 
-function NeededTr({ r, p, now }: { r: NeededRow; p: CoverageParams; now: number }) {
+function NeededTr({ r, p, now, logoUrl }: { r: NeededRow; p: CoverageParams; now: number; logoUrl: string | null }) {
   const v = r.vendor;
   const searchName = (v.dba || v.display_name).trim();
   return (
@@ -450,6 +473,7 @@ function NeededTr({ r, p, now }: { r: NeededRow; p: CoverageParams; now: number 
           ) : (
             <Link href={`/admin/vendors/${v.id}`} className={`${FAINT} hover:underline`}>add an email</Link>
           )}
+          <FetchLogoButton vendorId={v.id} vendorName={v.display_name} logoUrl={logoUrl} />
         </div>
       </td>
     </tr>
@@ -523,7 +547,7 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
         <EmptyState icon="🔎" title="No menus match these filters" description="Clear the filters to see every vendor." />
       ) : (
         <div className={TABLE_SHELL}>
-          <table className="w-full min-w-[78rem] text-sm">
+          <table className="w-full min-w-[86rem] text-sm">
             <thead className={THEAD}>
               <tr>
                 <th className={TH}>Vendor</th>
@@ -536,11 +560,12 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
                 <th className={TH}>Menu quality</th>
                 <th className={`${TH} text-right`}>Our stock</th>
                 <th className={TH}>History</th>
+                <th className={TH}>Logo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
               {rows.map((r) => (
-                <SearchedTr key={r.key} r={r} now={now} />
+                <SearchedTr key={r.key} r={r} now={now} logoUrl={r.vendorId ? cov.logos[r.vendorId] ?? null : null} />
               ))}
             </tbody>
           </table>
@@ -553,7 +578,7 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
   );
 }
 
-function SearchedTr({ r, now }: { r: SearchedRow; now: number }) {
+function SearchedTr({ r, now, logoUrl }: { r: SearchedRow; now: number; logoUrl: string | null }) {
   const lu = r.latestUsable;
   const f = r.facts;
   const headDelta = lu ? r.sources.find((s) => s.latestId === lu.id)?.deltaItems ?? null : null;
@@ -674,6 +699,15 @@ function SearchedTr({ r, now }: { r: SearchedRow; now: number }) {
             ))}
           </ul>
         </details>
+      </td>
+      <td className={TD}>
+        {r.vendorId && r.vendor ? (
+          <FetchLogoButton vendorId={r.vendorId} vendorName={r.vendor.display_name} logoUrl={logoUrl} />
+        ) : (
+          <span className={FAINT} title="Link this menu to a vendor first, so the logo has a profile to attach to">
+            link a vendor first
+          </span>
+        )}
       </td>
     </tr>
   );
