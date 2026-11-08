@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * D209e: categories and the types inside them.
+ * D210e: categories and the types inside them.
  *
  *   Left   a two-ring sunburst: categories on the inner ring, each
  *          category's types on the outer ring in the same hue. Click a

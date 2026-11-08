@@ -154,7 +154,7 @@ export type CockpitSales = {
   /** False when today's sales could not be read (the tiles say so). */
   todayReadable: boolean;
   /**
-   * D209: the baseline span's own report (the days the basis compares
+   * D210: the baseline span's own report (the days the basis compares
    * against). The cockpit's hour-by-hour and category charts are built from
    * its sparse per-day series, so they follow the picker exactly.
    */

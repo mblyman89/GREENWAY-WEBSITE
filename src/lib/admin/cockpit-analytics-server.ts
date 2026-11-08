@@ -1,5 +1,5 @@
 /**
- * src/lib/admin/cockpit-analytics-server.ts  (D209, server-only)
+ * src/lib/admin/cockpit-analytics-server.ts  (D210, server-only)
  *
  * The reads behind the cockpit v2 visual sections on /admin. DISPLAY ONLY:
  * nothing here feeds a register, a report total, a filing or a write.
@@ -326,5 +326,5 @@ export const cockpitAtm = cache(async (): Promise<CockpitAtm> => {
   };
 });
 
-/** Exposed for the D209 test: the cached readers' names (keys carry no instants). */
+/** Exposed for the D210 test: the cached readers' names (keys carry no instants). */
 export const COCKPIT_ANALYTICS_CACHE_NAMES = ["labor-today", "sellers-7d"] as const;

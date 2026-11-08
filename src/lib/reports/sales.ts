@@ -55,14 +55,14 @@ export type SalesGroupRow = {
 export type DayPoint = { date: string; revenueMinorUnits: number; orders: number; units: number };
 export type HourPoint = { hour: number; label: string; revenueMinorUnits: number; orders: number };
 /**
- * D209 (cockpit v2): one Pacific day's one hour. SPARSE: only hours with at
+ * D210 (cockpit v2): one Pacific day's one hour. SPARSE: only hours with at
  * least one completed order are listed, so a 12-week span stays small. Lets
  * the cockpit build an hour-by-hour baseline for ANY comparison basis from
  * the exact baseline days (and honour the closed-day rule per day).
  */
 export type DayHourPoint = { date: string; hour: number; revenueMinorUnits: number; orders: number };
 /**
- * D209: one Pacific day's revenue for one category + type. SPARSE (only
+ * D210: one Pacific day's revenue for one category + type. SPARSE (only
  * pairs that sold). Category totals are the sum over its types.
  */
 export type DayCategoryTypePoint = {
@@ -102,9 +102,9 @@ export type SalesReport = {
   byProduct: SalesGroupRow[];
   byDay: DayPoint[];
   byHour: HourPoint[];
-  /** D209: sparse per-day, per-hour revenue + orders (see DayHourPoint). */
+  /** D210: sparse per-day, per-hour revenue + orders (see DayHourPoint). */
   byDayHour: DayHourPoint[];
-  /** D209: sparse per-day revenue + units by category and type. */
+  /** D210: sparse per-day revenue + units by category and type. */
   byDayCategoryType: DayCategoryTypePoint[];
   byCustomerType: CustomerTypeRow[];
 };
@@ -311,7 +311,7 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
   let totalDiscount = 0;
 
   const orderRevenue = new Map<string, number>(); // for per-order day/hour roll-up
-  // D209: sparse per-day series for the cockpit's basis-aware charts.
+  // D210: sparse per-day series for the cockpit's basis-aware charts.
   const dayHourMap = new Map<string, DayHourPoint>();
   const dayCatTypeMap = new Map<string, DayCategoryTypePoint>();
 

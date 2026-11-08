@@ -1,10 +1,10 @@
 /**
- * src/lib/atm/atm-forecast-core.ts  (D209f, cockpit v2)
+ * src/lib/atm/atm-forecast-core.ts  (D210f, cockpit v2)
  *
  * PURE ATM throughput statistics and a "when will it run empty" forecast.
  * No I/O, no clock (today and the reading are passed in). Money in CENTS.
  *
- * Owner, verbatim (D209): "Charts/ graphs showing how much the atm goes
+ * Owner, verbatim (D210): "Charts/ graphs showing how much the atm goes
  * through on average, a forecaster for when it will be empty."
  *
  * THE FACTS IT STANDS ON (each already verified elsewhere, not re-decided):

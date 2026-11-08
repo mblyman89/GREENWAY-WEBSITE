@@ -1,11 +1,11 @@
 /**
- * src/lib/admin/cockpit-analytics-core.ts  (D209, cockpit v2: visual analytics)
+ * src/lib/admin/cockpit-analytics-core.ts  (D210, cockpit v2: visual analytics)
  *
  * PURE math behind the /admin cockpit's charts. No I/O, no React, no clock:
  * every "now" is passed in, so it is tsx-testable and the self-tests below
  * run in scripts/compliance/run-pure-selftests.ts.
  *
- * Owner, verbatim (docs/sop-program/00-OWNER-REQUEST-VERBATIM.md, D209):
+ * Owner, verbatim (docs/sop-program/00-OWNER-REQUEST-VERBATIM.md, D210):
  *   "add more details to the bar chart, have it show more based on the
  *    selection of the top comparisons ... A line chart to compliment the bar
  *    chart ... overlaying labor hours or transactions over the hourly sales

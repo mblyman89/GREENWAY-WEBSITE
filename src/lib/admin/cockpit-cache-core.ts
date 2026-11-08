@@ -40,7 +40,7 @@ export const COCKPIT_STOCK_TTL_S = 120;
 /** One tag clears every cockpit figure at once (revalidateTag). */
 export const COCKPIT_CACHE_TAG = "admin-cockpit";
 /** Bump to invalidate every stored cockpit entry after a shape change. */
-export const COCKPIT_CACHE_VERSION = "v2"; // D209: SalesReport gained byDayHour + byDayCategoryType
+export const COCKPIT_CACHE_VERSION = "v2"; // D210: SalesReport gained byDayHour + byDayCategoryType
 
 /**
  * True when `v` survives JSON.stringify -> JSON.parse unchanged: null,

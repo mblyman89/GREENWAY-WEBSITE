@@ -1,5 +1,5 @@
 /**
- * D209 (owner 2026-11-07, docs/sop-program/00-OWNER-REQUEST-VERBATIM.md):
+ * D210 (owner 2026-11-07, docs/sop-program/00-OWNER-REQUEST-VERBATIM.md):
  *   "add more details to the bar chart, have it show more based on the selection of the top
  *    comparisons. I want to add pie and donut graphs. A line chart to compliment the bar chart.
  *    ... overlaying labor hours or transactions over the hourly sales ... who on shift currently
@@ -24,7 +24,7 @@ import { __runAtmForecastTests, dispenseStats, forecastDepletion, dispenseDays }
 const read = (p: string) => readFileSync(p, "utf8");
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
-describe("D209 cockpit v2: pure cores", () => {
+describe("D210 cockpit v2: pure cores", () => {
   it("cockpit-analytics-core passes and is registered", () => {
     const r = __runCockpitAnalyticsTests();
     expect(r.messages).toEqual([]);
@@ -112,7 +112,7 @@ describe("D209 cockpit v2: pure cores", () => {
   });
 });
 
-describe("D209 cockpit v2: wiring", () => {
+describe("D210 cockpit v2: wiring", () => {
   const page = () => strip(read("src/app/admin/page.tsx"));
   const server = () => read("src/lib/admin/cockpit-analytics-server.ts");
 

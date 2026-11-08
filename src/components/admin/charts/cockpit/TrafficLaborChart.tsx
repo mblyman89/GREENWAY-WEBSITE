@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * D209c: hourly foot traffic vs sales vs labor.
+ * D210c: hourly foot traffic vs sales vs labor.
  *
  * Bars: today's revenue by hour (left axis). Lines (right axis): orders
  * (transactions = foot traffic that bought), labor hours on the clock, and

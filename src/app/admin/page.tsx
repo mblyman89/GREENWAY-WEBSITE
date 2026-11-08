@@ -460,7 +460,7 @@ async function CockpitRefundsSection({ basis }: { basis?: string }) {
 
 /* ── Hourly sales + top sellers ── */
 /*
- * D209b (owner 2026-11-07: "add more details to the bar chart, have it show
+ * D210b (owner 2026-11-07: "add more details to the bar chart, have it show
  * more based on the selection of the top comparisons ... A line chart to
  * compliment the bar chart"): today's hours against the SAME basis the picker
  * chose, hour by hour (bars) or as running totals with a projection to close
@@ -598,7 +598,7 @@ function MiniStat({
   );
 }
 
-/* ── D209c: hourly foot traffic vs sales vs labor ── */
+/* ── D210c: hourly foot traffic vs sales vs labor ── */
 /*
  * Owner 2026-11-07: "an hourly foot traffic vs sales ... overlaying labor
  * hours or transactions over the hourly sales. This helps you visually
@@ -675,7 +675,7 @@ async function CockpitTrafficSection({ basis, showLabor }: { basis?: string; sho
   );
 }
 
-/* ── D209d: who on the clock is selling ── */
+/* ── D210d: who on the clock is selling ── */
 async function CockpitOnShiftSection() {
   const r = await cockpitOnShift();
   return (
@@ -695,7 +695,7 @@ async function CockpitOnShiftSection() {
   );
 }
 
-/* ── D209e: categories and the types inside them ── */
+/* ── D210e: categories and the types inside them ── */
 async function CockpitMixSection({ basis }: { basis?: string }) {
   const snap = await cockpitSales(basis);
   const mix = categoryMixVsBaseline({
@@ -726,7 +726,7 @@ async function CockpitMixSection({ basis }: { basis?: string }) {
   );
 }
 
-/* ── D209g: the last four weeks ── */
+/* ── D210g: the last four weeks ── */
 async function CockpitTrendSection({ basis }: { basis?: string }) {
   const [trend, snap] = await Promise.all([cockpitTrend(), cockpitSales(basis)]);
   const today = snap.todayYmd;
@@ -780,7 +780,7 @@ async function CockpitTrendSection({ basis }: { basis?: string }) {
   );
 }
 
-/* ── D209f: the ATM, what it dispenses and when it runs empty (owner only) ── */
+/* ── D210f: the ATM, what it dispenses and when it runs empty (owner only) ── */
 async function CockpitAtmSection() {
   const atm = await cockpitAtm();
   if (!atm.configured) return null;
@@ -1089,7 +1089,7 @@ export default async function AdminDashboardPage({
   const canOpenLeafly = can(session.profile.role, "settings.manage");
   // D181: every staff login sees the cash jobs (drop now, morning duties).
   const canSeeCash = can(session.profile.role, "orders.manage");
-  // D209d/g: per-person and staffing figures (and the four-week trend) for
+  // D210d/g: per-person and staffing figures (and the four-week trend) for
   // people who run the floor or read reports; the ATM panel is the owner's
   // (finances.view), the same gate as /admin/atm's money.
   const canSeeStaffing = can(session.profile.role, "staffing.manage") || can(session.profile.role, "reports.view");

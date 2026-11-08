@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * D209g: the last four weeks.
+ * D210g: the last four weeks.
  *
  *   SalesTrendChart   daily revenue bars (today's partial bar in gold) with
  *                     the 7-trading-day moving average as a line. A closed
