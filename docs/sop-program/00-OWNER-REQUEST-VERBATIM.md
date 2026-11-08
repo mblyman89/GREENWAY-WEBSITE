@@ -1956,3 +1956,21 @@ Verbatim:
 ### As built
 - `src/lib/registers/count-gap-core.ts` (24 self-tests), `RegisterShell.tsx` (TillModal), `api/pos/till/route.ts`, `pos/till-core.ts`, `pos/offline-till-core.ts`, `pos/offline-till-store.ts`.
 - Test: `tests/compliance/d216-count-gap-guard.test.ts`.
+
+## D217 — Cash drops: clear "how to take it out", ATM drops in the blind count, bill-by-bill safe drops (2026-11-08)
+### Verbatim
+"Thank you. Another thing that we discovered today. We built a message requiring the employee to drop cash after it goes over 2k in sales. That has now happened, the register told the employee to withdraw x amount of money, but it told them it needed to be in 20s. We also built a feature that allows the employee to drop cash for the atm via selecting that on the register. Will you please make sure the logic is correct, and that the system doesn't think this money is not included in the blind counts due to it going toward the atm. When the register tells the employee to make a drop, it should be more clear about how it wants that removed. Should we require they enter the quantities of the bills taken? Please fix what's wrong and then if it's enterprise grade, professional method, add the bill quantity to the fix. If it's not enterprise grade, don't build it, just fix the issues and then let me know what you fixed. Follow the standing rules. Thank you."
+### Findings (code + production, read only)
+- ATM logic is correct. A drawer's expected cash (blind-count reconcile, drawer-figure-core) subtracts ALL drops, safe and ATM. The $2,000 drop-due figure also subtracts all drops. The deposit bag and the EOD sheet expect SAFE drops only, because ATM cash never reaches the safe. No change needed.
+- Wrong: the drop-due message said "Drop about $X in twenties to the safe". The $20 was only a rounding step; it was never a rule that a safe drop must be twenties.
+- Wrong: a safe drop's amount was free-typed. 2026-11-08 SR2 recorded $2,080.00 (the suggested figure) while its note says "actual amount dropped 1540". SR1 wrote its bills into the note by hand ("3-$100. 1-$50 103-$20 10-$1" = $2,420.00, which matches).
+### Decisions
+- D217a: The drop-due message says "Take out about $X: big bills first ($100s, $50s, then $20s); leave the starting cash ($10s, $5s, $1s and coins). Tap Drop, then enter how many of each bill you took (ATM drops: $20s only) and get a witness PIN." The "unknown" messages say "Count the big bills" instead of "Count the twenties".
+- D217b (enterprise grade, built): an iPad SAFE drop is a count of each bill ($100 … $1). The register adds it up; the amount is never typed. This mirrors the ATM $20 count and the denomination counts used for the safe and the deposit. It is what removes the SR2 kind of error.
+- D217c: The server (and the offline replay) re-adds the bills and refuses a drop whose amount disagrees. Older iPad builds without bills are still accepted and audited `billsCounted:false`.
+- D217d: Stored in drawer_drops.bills (migration 0349: CHECK bills = amount, safe only; write-once like the rest of a drop's money). Until 0349 is applied, the bills ride in the note as "[bills: …]" and in the audit `drawer.drop` (bills, billsWords).
+- D217e: No money is edited. The SR2 drop is write-once (0346); the owner explains it on /admin/atm/drops or at reconcile.
+### As built
+- `src/lib/registers/drop-bills-core.ts` (25 self-tests, incl. addBillsToDropRows), `guided-cash-core.ts`, `store.ts`, `pos/till-core.ts`, `pos/offline-till-core.ts`, `pos/offline-till-store.ts`, `api/pos/till/route.ts`, `RegisterShell.tsx` (drop screen bill grid).
+- Migration `0349_drawer_drop_bills.sql` + rollback + `scripts/recon/drawer-drop-bills-0349-pg-check.sql`.
+- Test: `tests/compliance/d217-drop-bills.test.ts`.

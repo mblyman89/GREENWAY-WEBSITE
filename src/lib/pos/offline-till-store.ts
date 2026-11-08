@@ -15,6 +15,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { denomTotalMinor } from "@/lib/registers/cash";
 import { getRegister, insertDrawerDropRow } from "@/lib/registers/store";
 import { atmWitnessCheck, buildDropInsertRows } from "@/lib/registers/atm-drop-core";
+import { addBillsToDropRows, dropBillsWords } from "@/lib/registers/drop-bills-core";
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { floatCheck } from "@/lib/registers/shift-end-core";
 import { COUNT_BLANK_BOX_AUDIT, countGapAudit } from "@/lib/registers/count-gap-core";
@@ -127,7 +128,7 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
         const atmSettings = isAtm ? await getAtmDropSettings() : null;
         const saved = await insertDrawerDropRow(
           admin,
-          buildDropInsertRows(
+          addBillsToDropRows(buildDropInsertRows(
             {
               session_id: session.id,
               amount_minor: req.amountMinor,
@@ -144,10 +145,18 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
               deviceId: envelope.deviceId,
               recordedVia: "offline",
             },
-          ),
+          ), isAtm ? null : (req.bills ?? null)),
         );
         if (!saved.ok) return { ok: false, reason: `Offline drop could not be saved: ${saved.error ?? "unknown error"}` };
-        await audit("drawer.drop", { amountMinor: req.amountMinor, window: req.window, witnessed: !!p.witness, destination: isAtm ? "atm" : "safe", dropId: saved.id ?? null });
+        await audit("drawer.drop", {
+          amountMinor: req.amountMinor,
+          window: req.window,
+          witnessed: !!p.witness,
+          destination: isAtm ? "atm" : "safe",
+          dropId: saved.id ?? null,
+          // D217: a safe drop's bills (false = an older build typed the amount).
+          ...(isAtm ? {} : { billsCounted: !!req.bills, bills: req.bills ?? null, billsWords: req.bills ? dropBillsWords(req.bills) : null, billsStoredAs: req.bills ? (saved.storedAs ?? null) : null }),
+        });
         if (isAtm && atmSettings) {
           const w = atmWitnessCheck(atmSettings.witness, !!p.witness);
           await audit("drawer.atm_drop", {

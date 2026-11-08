@@ -67,7 +67,7 @@ import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receip
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { emptyGroupWarnings } from "@/lib/registers/close-count-check-core";
 import { countGapHelp } from "@/lib/registers/count-gap-core";
-import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
+import { tipsToMinor } from "@/lib/pos/till-core";
 import {
   buildDrawerCloseSlipHtml,
   drawerRef,
@@ -235,6 +235,7 @@ import {
   parseTwentiesInput,
   type AtmDropSettings,
 } from "@/lib/registers/atm-drop-core";
+import { DROP_BILL_FIELDS, DROP_HOW_TO, dropBillsWords, parseDropBills, type DropBillKey } from "@/lib/registers/drop-bills-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import {
@@ -8262,7 +8263,9 @@ function TillModal({
   ) => void;
 }) {
   const [denoms, setDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
-  const [amount, setAmount] = useState("");
+  // D217 (owner: "it should be more clear about how it wants that removed ... enter the quantities
+  // of the bills taken"): a SAFE drop is a COUNT of each bill; the amount is added up, never typed.
+  const [dropBills, setDropBills] = useState<Partial<Record<DropBillKey, string>>>({});
   const [dropWindow, setDropWindow] = useState<"afternoon" | "night" | "other">("afternoon");
   // D198 (owner: "i want the number of 20s taken from the till to be entered on the register"):
   // a drop goes to the safe (amount) or into the ATM (a COUNT of $20 bills; the amount is derived).
@@ -8313,6 +8316,8 @@ function TillModal({
   const swapOutMinor = denomTotalMinor(swapOut);
   const atmParse = mode === "drop" && dropDest === "atm" ? parseTwentiesInput(twenties, atmDrop.maxTwentiesPerDrop) : null;
   const atmWitness = mode === "drop" && dropDest === "atm" ? atmWitnessCheck(atmDrop.witness, witnessPin.length >= 4) : null;
+  const billsEntered = Object.values(dropBills).some((v) => (v ?? "").trim() !== "");
+  const billsParse = mode === "drop" && !atmParse ? parseDropBills(dropBills) : null;
   const amountMinor =
     mode === "swap"
       ? swapInMinor > 0
@@ -8322,7 +8327,9 @@ function TillModal({
         ? atmParse.ok
           ? atmParse.amountMinor
           : null
-        : dollarsToMinor(amount);
+        : billsParse && billsParse.ok
+          ? billsParse.amountMinor
+          : null;
   const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
   const tipPeopleN = Number(tipPeople);
   const poolSplit = tipMode === "pool" && tips.trim() && tipsMinor !== null ? splitTipPool(tipsMinor, tipPeopleN) : null;
@@ -8543,6 +8550,7 @@ function TillModal({
             ...(witness ? { witness } : {}),
             ...(notes.trim() ? { notes: notes.trim() } : {}),
             ...(dropDest === "atm" && atmParse?.ok ? { destination: "atm" as const, twentiesCount: atmParse.twenties } : {}),
+            ...(billsParse?.ok ? { bills: billsParse.bills } : {}),
           }
         : mode === "swap"
           ? { action: "swap", drawerRef, reason, actor: a.pin, ...(approver ? { approver } : {}), amountMinor: amountMinor ?? 0, inDenoms: swapIn, outDenoms: swapOut, ...(notes.trim() ? { notes: notes.trim() } : {}) }
@@ -8622,6 +8630,7 @@ function TillModal({
               ...(witnessPin ? { witnessPin } : {}),
               ...(notes.trim() ? { notes: notes.trim() } : {}),
               ...(dropDest === "atm" && atmParse?.ok ? { destination: "atm", twentiesCount: atmParse.twenties } : {}),
+              ...(billsParse?.ok ? { bills: billsParse.bills } : {}),
             }
           : mode === "swap"
             ? {
@@ -8721,7 +8730,12 @@ function TillModal({
             null,
           );
         } else {
-          onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`, null);
+          onDone(
+            "drop",
+            null,
+            `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow})` + (billsParse?.ok ? `: ${dropBillsWords(billsParse.bills)}.` : "."),
+            null,
+          );
         }
       } else if (mode === "swap") {
         onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`, null);
@@ -8873,15 +8887,44 @@ function TillModal({
             ) : (
               <>
                 <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-                  Amount dropped
+                  How many of each bill are you taking to the safe?
                 </label>
-                <input
-                  className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
-                  inputMode="decimal"
-                  placeholder="$0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
+                <p className="mt-1 text-xs text-[var(--pos-text-muted)]" data-testid="pos-drop-how-to">
+                  {DROP_HOW_TO}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2" data-testid="pos-drop-bills">
+                  {DROP_BILL_FIELDS.map((f) => (
+                    <label key={f.key} className="flex items-center gap-2 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5">
+                      <span className="w-12 text-sm font-semibold">{f.label}</span>
+                      <span className="text-xs text-[var(--pos-text-muted)]">x</span>
+                      <input
+                        className="w-full bg-transparent text-right text-lg font-semibold outline-none"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="0"
+                        aria-label={`Number of ${f.label} bills`}
+                        value={dropBills[f.key] ?? ""}
+                        maxLength={4}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setDropBills((b) => ({ ...b, [f.key]: v }));
+                          setError(null);
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-sm" aria-live="polite" data-testid="pos-drop-bills-total">
+                  {!billsEntered ? (
+                    <span className="text-[var(--pos-text-muted)]">Count the bills twice. The register adds them up.</span>
+                  ) : billsParse && billsParse.ok ? (
+                    <span className="font-semibold">
+                      Dropping {formatCents(billsParse.amountMinor)} ({dropBillsWords(billsParse.bills)})
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-[var(--pos-danger)]">{billsParse && !billsParse.ok ? billsParse.error : ""}</span>
+                  )}
+                </p>
               </>
             )}
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">

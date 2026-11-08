@@ -1187,6 +1187,7 @@ import { __runSaveOutcomeTests } from "../../src/lib/admin/save-outcome-core";
 import { __runCountIntegrityTests } from "../../src/lib/registers/count-integrity-core";
 import { __runGuidedCashTests } from "../../src/lib/registers/guided-cash-core";
 import { __runAtmDropCoreTests } from "../../src/lib/registers/atm-drop-core";
+import { __runDropBillsTests } from "../../src/lib/registers/drop-bills-core";
 import { __runAtmDropMatchCoreTests } from "../../src/lib/atm/atm-drop-match-core";
 import { __runReturnScanCoreTests } from "../../src/lib/pos/return-scan-core";
 import { __runDepositBagAtmPullTests } from "../../src/lib/registers/deposit-bag-atm-pull-core";
@@ -2839,7 +2840,7 @@ __runLiquidVolumeTests();
   assertRan("exception-retry-core", __runExceptionRetryTests(), 35); // D178 S1 ("if product left the shop and money was given to me in exchange, there can be no manual exceptions"): uniform line keys, plain-English exception classes, receipt-is-truth rate drift, retry permissions, replay dated when the money moved
   assertRan("save-outcome-core", __runSaveOutcomeTests(), 28); // D179 S2 ("ends with a big green check: 'Saved. You're done.'"): the landing card only claims what the redirect URL proves; errors are red with the server's words; silence otherwise
   assertRan("count-integrity-core", __runCountIntegrityTests(), 35); // D180 S3 ("beating the fraud triangle"): the closer's blind count is never overwritten and stays hidden until the second count; fast / copied / closer-login second counts are flagged loud
-  assertRan("guided-cash-core", __runGuidedCashTests(), 38); // D181 S4: floats 167.50/300.00, drop when undropped cash passes $2,000, morning duties in order, a bag every day, only Michael seals
+  assertRan("guided-cash-core", __runGuidedCashTests(), 39); // D181 S4: floats 167.50/300.00, drop when undropped cash passes $2,000, morning duties in order, a bag every day, only Michael seals
   assertRan("night-watch-core", __runNightWatchTests(), 36); // D182 S5: morning report from the night watch, red crew items first, a read error is never all clear; email and text built but OFF by default
   assertRan("ccrs-completeness-core", __runCcrsCompletenessTests(), 50); // D183 S6: every sale line filed or held with the same money, lot shortfalls diagnosed with one safe record-only fix
   assertRan("taxes-owed-core", __runTaxesOwedTests(), 20); // D183 S6: excise (LIQ-1295 by the 20th) and sales tax (DOR by the 25th rolled) per month, money check
@@ -2852,6 +2853,7 @@ __runLiquidVolumeTests();
   assertRan("db-vitals-core", __runDbVitalsTests(), 38); // DB HEALTH B (D193): database vital signs every 10 minutes, restart detection, plain-English findings, self-heal of stuck app sessions only
   assertRan("label-print-core", __runLabelPrintTests(), 69); // D196 ("the label maker is still not working right"): Auto sends every label straight at the exact label size (the turned page ran across two labels), Rollo web-page Orientation "A", Windows Rollo-driver steps, two-labels symptom first. D191 ("it prints two labels, the first blank, the second nearly prints off the bottom … better use of the available space"): wide labels sent as a portrait page with the artwork turned (Chromium 372435414), margin 0 !important over the admin 8mm print rule, no trailing page break, per-device per-size orientation/nudge/scale calibration with every corner proven on-page, test label, OS-specific dialog steps, symptom table
   assertRan("atm-drop-core", __runAtmDropCoreTests(), 57); // D198 S1 ("the ipad should only accept whole 20 dollar amounts. i want the number of 20s taken from the till to be entered"): $20 count only, amount derived, safe vs ATM split (deposit/EOD safe only; drawer + 2k banner all), pre-0346 note tag, witness policy
+  assertRan("drop-bills-core", __runDropBillsTests(), 25); // D217 ("Should we require they enter the quantities of the bills taken?"): a safe drop is a count of bills, the amount is added up, the SR2 $2,080-vs-$1,540 case refused, note tag before 0349
   assertRan("atm-drop-match-core", __runAtmDropMatchCoreTests(), 56); // D198 S4 ("i definitely want the plaid atm bank account connection to be reconciled against the atm drops from the tills"): exact $20 drop↔load matching, Plaid deposit cross-check, fraud-triangle signals
   assertRan("return-scan-core", __runReturnScanCoreTests(), 34); // D198d ("i can not scan a receipt qr code to find the transaction, nor can i enter the receipt overlay to look for the receipt by hand"): receipt QR / number / fun-name parsing, exact-name match, home + return-screen scan classifier
   assertRan("deposit-bag-atm-pull-core", __runDepositBagAtmPullTests(), 60); // D198e ("exclude 20s from the daily deposit for use in the atm"): pull parse (count / cap / witness / reason / never empties the bag), ATM need from the live reading, flags, pattern, ATM match feed

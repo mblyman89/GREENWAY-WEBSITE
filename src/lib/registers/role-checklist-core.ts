@@ -180,7 +180,7 @@ export function buildMyDay(f: MyDayFacts): MyDay {
       key: "drops",
       shift: "during",
       state: "unknown",
-      text: `Drops could not be checked (${f.drops.error}). Count the twenties in each open drawer; drop if it is over $2,000.`,
+      text: `Drops could not be checked (${f.drops.error}). Count the big bills ($100s, $50s, $20s) in each open drawer; drop if it is over $2,000.`,
       href: REG,
     });
   } else {

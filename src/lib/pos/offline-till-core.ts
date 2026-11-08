@@ -24,6 +24,7 @@
  *  - Blind discipline is unchanged: nothing here ever computes or returns an
  *    expected figure.
  */
+import type { DropBills } from "@/lib/registers/drop-bills-core";
 import { validateTillRequest, type TillRequest } from "./till-core";
 import { OFFLINE_APPROVER_ROLES, type OfflineReason } from "./offline-unlock-core";
 import { EMPTY_DENOMS, type DenomCounts } from "@/lib/registers/cash";
@@ -48,6 +49,8 @@ export type PosTillPayload = {
   /** D198: drop only. Absent = safe (every build before D198). "atm" carries the $20 count. */
   destination?: "safe" | "atm";
   twentiesCount?: number;
+  /** D217: safe drop only, the bills taken (the amount is added up from these). */
+  bills?: DropBills;
   inDenoms?: DenomCounts;
   outDenoms?: DenomCounts;
   notes?: string;
@@ -128,6 +131,7 @@ export function validateTillPayload(
     if (p.notes) body.notes = p.notes;
     if (p.destination !== undefined) body.destination = p.destination;
     if (p.twentiesCount !== undefined) body.twentiesCount = p.twentiesCount;
+    if (p.bills !== undefined) body.bills = p.bills; // D217: till-core re-adds them and checks the amount
   }
   if (p.action === "swap") {
     body.amountMinor = p.amountMinor;

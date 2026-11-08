@@ -57,7 +57,12 @@ export function standardFloatNotice(name: string, kind: RegisterKind, configured
 export const DROP_THRESHOLD_MINOR = 200000;
 /** From here the screen says a drop is coming (cents). */
 export const DROP_SOON_MINOR = 150000;
-/** Suggested drops are whole $20 bills, so the float's small bills stay put. */
+/**
+ * Suggested drops are rounded down to a $20 step so the figure can be made
+ * from big bills ($100s, $50s, $20s) and the float's small bills stay put.
+ * D217: this is a rounding step only. It does NOT mean "drop only twenties";
+ * safe drops are entered bill by bill (drop-bills-core).
+ */
 export const DROP_BILL_MINOR = 2000;
 
 export type DropState = "ok" | "soon" | "due" | "unknown";
@@ -66,7 +71,7 @@ export type DropStatus = {
   state: DropState;
   /** Cash sales minus cash refunds minus drops already made: cash above the float. */
   undroppedMinor: number;
-  /** What to drop now (whole $20s, leaving the float). 0 unless due. */
+  /** What to drop now (rounded down to $20, big bills, leaving the float). 0 unless due. */
   suggestedDropMinor: number;
   /** One plain sentence for the screen; empty when ok. */
   sentence: string;
@@ -94,7 +99,7 @@ export function dropStatus(input: {
       state: "unknown",
       undroppedMinor: und,
       suggestedDropMinor: 0,
-      sentence: `${input.registerName}: the cash sales could not all be read, so whether a drop is due is unknown. Count the twenties; drop if it is over ${formatCents(DROP_THRESHOLD_MINOR)}.`,
+      sentence: `${input.registerName}: the cash sales could not all be read, so whether a drop is due is unknown. Count the big bills ($100s, $50s, $20s); drop if the cash taken today is over ${formatCents(DROP_THRESHOLD_MINOR)}.`,
     };
   }
   if (und > DROP_THRESHOLD_MINOR) {
@@ -105,7 +110,8 @@ export function dropStatus(input: {
       suggestedDropMinor: suggested,
       sentence:
         `DROP NOW: ${input.registerName} has taken ${formatCents(und)} in cash since its last drop (over ${formatCents(DROP_THRESHOLD_MINOR)}). ` +
-        `Drop about ${formatCents(suggested)} in twenties to the safe, with a witness PIN. Leave the float and small bills.`,
+        `Take out about ${formatCents(suggested)}: big bills first ($100s, $50s, then $20s); leave the starting cash ($10s, $5s, $1s and coins). ` +
+        `Tap Drop, then enter how many of each bill you took (ATM drops: $20s only) and get a witness PIN.`,
     };
   }
   if (und >= DROP_SOON_MINOR) {
@@ -321,7 +327,8 @@ export function __runGuidedCashTests(): { passed: number; failed: number } {
   ok(dropStatus({ ...base, cashSalesMinor: 200000 }).state === "soon", "exactly $2,000 is not OVER $2,000");
   const due = dropStatus({ ...base, cashSalesMinor: 200001 });
   ok(due.state === "due", "over $2,000: due");
-  ok(due.suggestedDropMinor === 200000 && due.suggestedDropMinor % DROP_BILL_MINOR === 0, "suggestion in whole twenties");
+  ok(due.suggestedDropMinor === 200000 && due.suggestedDropMinor % DROP_BILL_MINOR === 0, "suggestion rounded to a $20 step");
+  ok(!/in twenties/.test(due.sentence) && /\$100s/.test(due.sentence) && /how many of each bill/.test(due.sentence), "D217: due says big bills + count each bill, not 'in twenties'");
   ok(due.sentence.startsWith("DROP NOW"), "due is loud");
   ok(dropStatus({ ...base, cashSalesMinor: 250000, dropsMinor: 100000 }).state === "soon", "a drop resets the clock");
   ok(dropStatus({ ...base, cashSalesMinor: 250000, refundsPaidMinor: 60000 }).state === "soon", "cash refunds leave the drawer");
