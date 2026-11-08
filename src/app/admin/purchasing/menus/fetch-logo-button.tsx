@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * D211 — "Fetch logo" / "Replace logo" for one vendor, and "Fetch all missing
+ * D212 — "Fetch logo" / "Replace logo" for one vendor, and "Fetch all missing
  * logos" for the whole list. One click finds the vendor's profile on GrowFlow,
  * Cultivera or LeafLink, saves the logo to the Media Library, publishes it, and
  * attaches it to the vendor AND its brands so it shows on the website — no

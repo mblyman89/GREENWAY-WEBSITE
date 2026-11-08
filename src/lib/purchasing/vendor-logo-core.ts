@@ -1,5 +1,5 @@
 /**
- * D211 — Vendor logo fetch (PURE core, rule 5).
+ * D212 — Vendor logo fetch (PURE core, rule 5).
  *
  * The owner wants ONE button on the Vendor Menus page that finds a vendor's
  * logo on its GrowFlow / Cultivera / LeafLink profile, saves it to the Media
@@ -19,14 +19,14 @@
  *     therefore never resurrected);
  *   - the plain-English result line staff read.
  *
- * Pinned shapes (see docs/sop-program/00-OWNER-REQUEST-VERBATIM.md § D211):
+ * Pinned shapes (see docs/sop-program/00-OWNER-REQUEST-VERBATIM.md § D212):
  *   GrowFlow  getStoreFrontsV2 store  → `LogoUrl`   (growflow_api.py)
  *   Cultivera /markets/connected rec  → `Logo`      ({ Id, Name, UniqueSlug, Logo, Status })
  *   LeafLink  brands/<id> header      → `image`     (LEAFLINK_PINNED.md; worker raw.brand)
  *
  * Self-tests: __runVendorLogoCoreTests() — registered in
  * scripts/compliance/run-pure-selftests.ts and mirrored in
- * tests/compliance/d211-vendor-logo.test.ts.
+ * tests/compliance/d212-vendor-logo.test.ts.
  */
 import { normalizeStore, type VendorPlatform } from "@/lib/purchasing/growflow-menu-core";
 import { marketId, marketName, marketSlug } from "@/lib/purchasing/cultivera-menus-ui-core";
@@ -299,7 +299,7 @@ export type LogoPlan =
     };
 
 /**
- * D211c/d. `replace` is the owner's explicit "Replace logo" click.
+ * D212c/d. `replace` is the owner's explicit "Replace logo" click.
  *   - A vendor that already has a (different) logo is left alone unless replace.
  *   - An archived vendor is never touched (archive is a deliberate owner act).
  *   - A draft vendor is published so the logo "always shows up".
@@ -421,7 +421,7 @@ export function isGoodOutcome(o: LogoOutcome): boolean {
 }
 
 /**
- * D211e bulk queue: vendors we carry (have lots) with no logo, archived and
+ * D212e bulk queue: vendors we carry (have lots) with no logo, archived and
  * inactive skipped, most urgent first (stock on the shelf, then most recently
  * received, then name). Capped per click.
  */

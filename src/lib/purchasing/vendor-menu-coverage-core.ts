@@ -61,7 +61,7 @@ export type CoverageVendor = {
   is_active: boolean | null;
   total_accepted_ytd_cents: number | null;
   last_accepted_at: string | null;
-  /** D211 — read so the page can show / fetch the vendor's logo. */
+  /** D212 — read so the page can show / fetch the vendor's logo. */
   status?: string | null;
   logo_media_id?: string | null;
 };

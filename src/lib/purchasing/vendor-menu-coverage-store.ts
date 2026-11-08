@@ -50,9 +50,9 @@ export type VendorMenuCoverage = {
   searched: SearchedRow[];
   needed: NeededRow[];
   kpis: CoverageKpis;
-  /** D211 — vendor id → public logo URL (only vendors whose logo resolved). */
+  /** D212 — vendor id → public logo URL (only vendors whose logo resolved). */
   logos: Record<string, string>;
-  /** D211 — vendors we carry with no logo yet (what "Fetch all missing logos" works through). */
+  /** D212 — vendors we carry with no logo yet (what "Fetch all missing logos" works through). */
   missingLogos: number;
   /** Plain-English problems from reads that failed; empty when everything loaded. */
   warnings: string[];
@@ -269,7 +269,7 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
   };
 }
 
-/** D211 — logo thumbnails: media_assets.storage_key → public bucket URL. */
+/** D212 — logo thumbnails: media_assets.storage_key → public bucket URL. */
 async function readLogoUrls(admin: Admin, vendors: readonly CoverageVendor[], warnings: string[]): Promise<Record<string, string>> {
   const ids = [...new Set(vendors.map((v) => v.logo_media_id).filter((x): x is string => Boolean(x)))];
   const out: Record<string, string> = {};
