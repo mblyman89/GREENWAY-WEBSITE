@@ -1695,3 +1695,35 @@ Picked up again by: "I want you to also complete all work related to what we wer
 - Fix later page: a new card, **"Re-read every COA and trust it"**, with a Stop button, a live progress line (auto-refresh while running) and recent errors. Actions `startTrustAllAction` / `stopTrustAllAction` (inventory.manage).
 - Tests: `tests/compliance/d206-coa-trust-all.test.ts` (14: core, the owner's example, dead-link keep, start/idle/lease/stop-race/out-of-time/reader-throws against the in-memory PostgREST, actions, wiring). The fake PostgREST now answers HEAD `count=exact`.
 - What it cannot fix: the 51 lab results with no COA link or file, and links the server cannot download (e.g. drive.google.com, unless the host is added). Those are counted as "no readable document" on the progress line and still need Fetch / Gmail.
+
+## D207 — CANNA prices, CONSCIOUS lots, Google Drive, the last three manifests (2026-11-08)
+
+Verbatim:
+
+> "Thank you. For the canna processing lots, I have fixed all that I can, but it won't let me add/ change the price. And I can't find them in onboarding like it tells me. Please do what you can to let me add/ adjust the price so I can finish fixing them. Please remind me what the 40 conscious cannabis lots are. Do you know when they were received? By us or Cultivera? If they were received today, they may just still be being onboarded, but I can't remember what this was. It might also be an invoice untested with that got stuck after doing the factory reset. If it's dated July of this year, it needs to be removed. The open destruction is a test as well for the CCRS upload. I will finish destroying it. Please unlock Google Drive. The deep search isn't finding the last three. I don't understand. Plus another thing I don't understand is on the fix it later page, under the deep search, it has a dropdown carrot that I can open to see the three manifests. Under this is a table with like 40 or 70 lots that say they don't have a coa, but their manifests listed in the table are not one of the three manifests from the above list. Please look into this for me. Then build everything to help me unlock these last three manifests and the one off lots that need coas. Follow the standing rules. Thank you!"
+
+### Findings (production, read-only, 2026-11-08)
+
+- **CANNA PROCESSING** (GF41918900002835-1634964-1, transfer 2026-06-08): the delivery was refused at the dock, so finalize never made onboarding rows. The owner put the 12 lots back to active ("rejected by accident"). 7 of them already had a $7.00 0.7g card (their price box works). **5 have no menu card and no onboarding row**: GF41918905566981 Cherry OG .7g, …988 Banana Cake 1g, …989 Cherry Blossom OG 1g, …990 Drunken Hashplant 1g, …991 Godfather OG 1g. The lot page told him to use onboarding, but there was nothing there.
+- **CONSCIOUS CANNABIS**: the 46-lot delivery 13035421236990021 (WCIA, transfer 2026-11-05) was received **by us** on 2026-11-07 (00:25 UTC). All 46 lots are onboarded now. The **July** delivery 13034384509368288 (transfer 2026-07-07, received 2026-07-08, 7 lots) still has **5 lots with 21 units on hand and 2 lots sold out** (real sales). It was **not removed**: the owner is asked first (standing rule 3).
+- **Google Drive**: 12 lab results have `drive.google.com/file/d/<id>/view?usp=drivesdk` COA links and were refused as "not a known lab host". From the server, the direct download (`uc?export=download&id=`) answers with one 303 to `drive.usercontent.google.com` and returns the real PDF.
+- **Open destruction**: a CCRS upload test. The owner will finish it, so nothing was built.
+
+### Decisions derived
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D207 | **"Send to Product Onboarding" on the lot page.** A live lot (active/quarantine, not a sample, with a key and a delivery) whose product is on no menu card and has no onboarding row gets a button. It seeds **exactly that lot's** draft through the same finalize seeder (suggested price, 2x floor, identity). If a draft is already waiting, the page links straight to it; if it was approved but not yet published, it links to Publish. A lot that is still refused is never sent. Audited as `inventory_lot.sent_to_onboarding`. | "it won't let me add/ change the price. And I can't find them in onboarding like it tells me" |
+| D207a | **Google Drive links are read.** A Drive or Docs **file** share link becomes its direct download, and Google's redirect to drive.usercontent.google.com is followed. The bytes must still be a real PDF. Folder and Doc-editor links are refused with a plain reason. Drive hosts get the public-address DNS check. | "Please unlock Google Drive" |
+| D207b | **The July CONSCIOUS delivery is not removed without the owner's yes**, because it holds stock and has sales. | "If it's dated July of this year, it needs to be removed" + standing rule 3 |
+
+### As built (D207, D207a)
+
+- `src/lib/inventory/lot-onboard-core.ts` (pure, 19 self-tests): `lotOnboardVerdict`, `onboardBanner`.
+- `seedDraftsForManifest(..., { lotIds })` narrows the lot read to the given lots.
+- `listDraftsForKey` in lot-link-store.
+- `sendLotToOnboardingAction` in inventory/actions.ts: re-checks the verdict, seeds, reads `firstError`, audits.
+- The lot page shows the button, link or reason where the old "Onboarding is not required" sentence was.
+- `coa-extract-core`: `FILE_SHARE_COA_HOSTS` and `driveDirectUrl`. `safeCoaUrl` converts Drive links, and `nextRedirectHop` follows Google's 303. 9 new self-tests (floor 141).
+- Test: `tests/compliance/d207-lot-onboard.test.ts`.
+- To re-read the 12 Drive COAs, press "Re-read every COA and trust it" once more. The job reads every row that is not ok.

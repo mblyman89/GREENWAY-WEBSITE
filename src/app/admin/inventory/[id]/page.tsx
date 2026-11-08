@@ -59,6 +59,7 @@ import {
   pushLotStrainTypeAction,
   updateLotWebsiteClassificationAction,
   updateLotAfterTaxPriceAction,
+  sendLotToOnboardingAction,
   updateLotReceivedDateAction,
   updateLotComplianceClassificationAction,
   linkLotProductAction,
@@ -82,7 +83,8 @@ import {
   type CoaCandidateView,
   type LotDraftHint,
 } from "@/lib/inventory/lot-link-core";
-import { findLabResultsByLabtestId, listDraftHintsForLot } from "@/lib/inventory/lot-link-store";
+import { findLabResultsByLabtestId, listDraftHintsForLot, listDraftsForKey } from "@/lib/inventory/lot-link-store";
+import { lotOnboardVerdict, onboardBanner, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
 import { LotProductLinkPanel, LotCoaAttach } from "@/components/admin/inventory/LotLinkPanels";
 // SLICE 18A: the compliance-classification panel. Status is derived by the
 // pure core from MENU truth (the only surface the register enforces from).
@@ -142,14 +144,14 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; fact_warn?: string; lot_msg?: string; class_warn?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; fact_warn?: string; lot_msg?: string; class_warn?: string; onb?: string }>;
 }) {
   const session = await requirePermission("inventory.manage");
   // Fix Phase 1.1 (G-22 req 4): only the owner / admin (recall coordinator,
   // D37) may lift a recall hold. The server action enforces it; the page says it.
   const canReleaseRecall = can(session.profile.role, "inventory.recall.release");
   const { id } = await params;
-  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, fact_warn, lot_msg, class_warn } = await searchParams;
+  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, fact_warn, lot_msg, class_warn, onb } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
   // Validated with the same guard the media actions use (in-app /admin paths
   // only), so a crafted link can never make this an open redirect.
@@ -294,6 +296,24 @@ export default async function LotDetailPage({
   const classificationAction = updateLotWebsiteClassificationAction.bind(null, id);
   const complianceAction = updateLotComplianceClassificationAction.bind(null, id);
   const priceAction = updateLotAfterTaxPriceAction.bind(null, id);
+  // D207: a lot whose product is on no menu card and has no onboarding row
+  // (e.g. a delivery refused by accident) gets a "Send to Product Onboarding".
+  const onboardVerdict =
+    priceState.status === "not-on-menu" && lot.pos_product_key
+      ? lotOnboardVerdict(
+          {
+            status: lot.status,
+            disposition: (lot as { disposition?: string | null }).disposition ?? null,
+            is_sample: lot.is_sample,
+            pos_product_key: lot.pos_product_key,
+            manifest_id: lot.manifest_id,
+          },
+          priceState.status,
+          await listDraftsForKey(lot.pos_product_key),
+        )
+      : null;
+  const onboardAction = sendLotToOnboardingAction.bind(null, id);
+  const onboardMsg = onboardBanner(onb);
   // SLICE 2: the owner's received-date entry form.
   const receivedDateAction = updateLotReceivedDateAction.bind(null, id);
   // Standing rule 8: the business clock is America/Los_Angeles. Using the UTC
@@ -1139,7 +1159,7 @@ export default async function LotDetailPage({
                 </Button>
               </form>
             ) : (
-              <p className="text-sm text-[var(--admin-text-faint)]" data-testid="lot-price-unavailable">
+              <div className="text-sm text-[var(--admin-text-faint)]" data-testid="lot-price-unavailable">
                 {priceState.status === "ambiguous" ? (
                   <>
                     This product has several sizes on one menu card and this lot isn&apos;t linked to one yet, so
@@ -1150,12 +1170,51 @@ export default async function LotDetailPage({
                 ) : priceState.status === "unavailable" ? (
                   <>The menu price couldn&apos;t be read right now, so it can&apos;t be edited. Reload the page in a moment.</>
                 ) : (
-                  <>
-                    This product isn&apos;t on the published menu, so there&apos;s no menu price to set yet. Publish
-                    its import (Menu imports) and the price field appears here. Onboarding is not required.
-                  </>
+                  <span id={ONBOARD_ANCHOR} data-testid="lot-onboard" className="block space-y-2">
+                    {onboardMsg ? (
+                      <span className={"block text-xs font-semibold " + (onboardMsg.tone === "ok" ? "text-[var(--admin-green,#15803d)]" : "text-[var(--admin-danger,#b91c1c)]")}>
+                        {onboardMsg.text}
+                      </span>
+                    ) : null}
+                    {onboardVerdict?.kind === "send" ? (
+                      <>
+                        <span className="block">
+                          This product isn&apos;t on the published menu and has no Product Onboarding row yet (its
+                          delivery never made one, for example a delivery refused by mistake). The price lives on the
+                          menu card, so send it to onboarding, set the price there and approve it. The price box then
+                          appears here.
+                        </span>
+                        <form action={onboardAction}>
+                          <Button type="submit" variant="save" size="sm" data-testid="lot-onboard-send">
+                            Send to Product Onboarding
+                          </Button>
+                        </form>
+                      </>
+                    ) : onboardVerdict?.kind === "open_draft" ? (
+                      <span className="block">
+                        This product isn&apos;t on the published menu yet. It is waiting in Product Onboarding:{" "}
+                        <a href={onboardVerdict.href} className="underline" data-testid="lot-onboard-open">
+                          open it, set the price and approve
+                        </a>
+                        . The price box appears here after that.
+                      </span>
+                    ) : onboardVerdict?.kind === "approved" ? (
+                      <span className="block">
+                        This product was approved but the menu with it isn&apos;t published yet.{" "}
+                        <a href={onboardVerdict.href} className="underline">
+                          Publish the menu
+                        </a>{" "}
+                        and the price box appears here.
+                      </span>
+                    ) : (
+                      <span className="block">
+                        This product isn&apos;t on the published menu, so there&apos;s no menu price to set yet.
+                        {onboardVerdict?.kind === "none" ? ` ${onboardVerdict.reason}` : " Publish its import (Menu imports) and the price field appears here."}
+                      </span>
+                    )}
+                  </span>
                 )}
-              </p>
+              </div>
             )
           ) : (
             <p className="text-sm text-[var(--admin-text-faint)]">

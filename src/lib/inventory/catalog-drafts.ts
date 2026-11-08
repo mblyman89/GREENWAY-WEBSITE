@@ -350,9 +350,13 @@ export async function seedDraftsForManifest(
    * suggestion, no 2x floor). Everything else - the insert, the identity
    * stamp, lotIdentities for the KB link - is the native path.
    */
-  opts: { reonboard?: boolean } = {},
+  opts: { reonboard?: boolean; lotIds?: readonly string[] } = {},
 ): Promise<CatalogMatchResult> {
   const reonboard = opts.reonboard === true;
+  // D207: the lot page's "Send to Product Onboarding" seeds ONE lot of a
+  // delivery (a lot that never got a draft, e.g. on a delivery refused by
+  // mistake). Same planner, same insert; only the lot read is narrowed.
+  const onlyLotIds = opts.lotIds && opts.lotIds.length > 0 ? [...opts.lotIds] : null;
   const empty: CatalogMatchResult = {
     matched: 0,
     unmatched: 0,
@@ -367,7 +371,7 @@ export async function seedDraftsForManifest(
   const published = await getPublishedVersion();
   const hasPublishedMenu = Boolean(published);
 
-  const { data: lotsData, error: lotsError } = await admin
+  let lotQuery = admin
     .from("inventory_lots")
     .select(SEED_LOT_COLUMNS)
     .eq("manifest_id", manifestId)
@@ -375,6 +379,8 @@ export async function seedDraftsForManifest(
     // Fix Phase 0.2 (G-51): a trade sample never gets a menu draft
     // (WAC 314-55-096(1)(i); owner D68). is_sample is NOT NULL (0024).
     .eq("is_sample", false);
+  if (onlyLotIds) lotQuery = lotQuery.in("id", onlyLotIds);
+  const { data: lotsData, error: lotsError } = await lotQuery;
   if (lotsError) {
     console.error("[catalog-drafts] lots read failed:", lotsError.message);
     return { ...empty, hasPublishedMenu, firstError: lotsError.message };

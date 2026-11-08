@@ -66,6 +66,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // T-324: after-tax price correction (pure math + write path).
 import { parsePriceCorrection } from "@/lib/inventory/price-correction-core";
 import { applyLotAfterTaxPrice, getLotPriceState } from "@/lib/inventory/price-write-store";
+import { lotOnboardVerdict, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
+import { listDraftsForKey } from "@/lib/inventory/lot-link-store";
+import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { sharedSizeFloor, sharedFloorRefusal, checkOwnerSizePick, type SizeLot } from "@/lib/inventory/lot-size-link-core";
 import { listLotsSharingSize, listActiveLotsForKey, setLotSizeLink } from "@/lib/inventory/lot-size-link-store";
 // SLICE 18A: the compliance-classification editor. The RULES are the same pure
@@ -1386,4 +1389,68 @@ export async function rereadLotCoaAction(lotId: string) {
   revalidatePath("/admin/inventory/drafts");
   revalidatePath("/admin/knowledge-base/products");
   redirect(`/admin/inventory/${lotId}?coa=${code}${restaged ? "&restaged=1" : ""}#${LAB_CERT_ANCHOR}`);
+}
+
+
+/**
+ * D207 - "Send to Product Onboarding" for ONE lot whose product is on no
+ * published menu card and has no onboarding row (e.g. a delivery refused by
+ * accident whose lots were set back to active). Re-checks the verdict on the
+ * server, then seeds exactly this lot's draft through the SAME finalize
+ * seeder (price suggestion, 2x floor, identity stamp), reads every error and
+ * audits. It never changes the lot itself, the menu, or CCRS.
+ */
+export async function sendLotToOnboardingAction(lotId: string) {
+  const session = await requirePermission("inventory.manage");
+  const lot = await getLotById(lotId);
+  if (!lot) lotErr(lotId, ONBOARD_ANCHOR, "That lot no longer exists.");
+  const key = (lot.pos_product_key ?? "").trim();
+  const state = await getLotPriceState({ posProductKey: lot.pos_product_key, menuSourceVariantId: lot.menu_source_variant_id ?? null });
+  const drafts = key ? await listDraftsForKey(key) : [];
+  const verdict = lotOnboardVerdict(
+    {
+      status: lot.status,
+      disposition: (lot as { disposition?: string | null }).disposition ?? null,
+      is_sample: lot.is_sample,
+      pos_product_key: lot.pos_product_key,
+      manifest_id: lot.manifest_id,
+    },
+    state.status,
+    drafts,
+  );
+  if (verdict.kind === "open_draft" || verdict.kind === "approved") {
+    redirect(`/admin/inventory/${lotId}?onb=exists#${ONBOARD_ANCHOR}`);
+  }
+  if (verdict.kind !== "send") lotErr(lotId, ONBOARD_ANCHOR, verdict.reason);
+
+  const res = await seedDraftsForManifest(lot.manifest_id as string, session.userId, { lotIds: [lotId] });
+  if (res.firstError) lotErr(lotId, ONBOARD_ANCHOR, `Onboarding row could not be made: ${res.firstError}`);
+  if (res.draftsCreated === 0) {
+    // The planner skipped it (a draft appeared, or the key reached the menu
+    // between the page load and the click) - say so, never pretend.
+    const again = await listDraftsForKey(key);
+    if (again && again.some((d) => d.status === "draft" || d.status === "approved")) {
+      redirect(`/admin/inventory/${lotId}?onb=exists#${ONBOARD_ANCHOR}`);
+    }
+    lotErr(lotId, ONBOARD_ANCHOR, "No onboarding row was made (the product may already be on the menu). Reload the page.");
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.sent_to_onboarding",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { on_menu: false, drafts: (drafts ?? []).length },
+    after: {
+      pos_product_key: key,
+      manifest_id: lot.manifest_id,
+      disposition: (lot as { disposition?: string | null }).disposition ?? null,
+      drafts_created: res.draftsCreated,
+      changes: [`Sent to Product Onboarding (key ${key})`],
+    },
+  });
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory/drafts");
+  redirect(`/admin/inventory/${lotId}?onb=sent#${ONBOARD_ANCHOR}`);
 }

@@ -745,6 +745,7 @@ import { __runGeminiModelsCoreTests } from "../../src/lib/ai/gemini-models-core"
 import { __runMasteringPreviewCoreTests } from "../../src/lib/inventory/mastering-preview-core";
 // R22 (S37): the lot page's fill-only-when-empty product-link + attach-COA doors.
 import { __runLotLinkCoreTests } from "../../src/lib/inventory/lot-link-core";
+import { __runLotOnboardCoreTests } from "../../src/lib/inventory/lot-onboard-core";
 import { __runMasteredMenuCoreTests } from "../../src/lib/products/mastered-menu-core";
 import { __runApprovedRowCoreTests } from "../../src/lib/catalog/approved-row-core";
 import { __runWaitingFactsCoreTests } from "../../src/lib/catalog/waiting-facts-core";
@@ -2565,6 +2566,8 @@ __runLiquidVolumeTests();
 
   // R22 (S37): lot-link-core. Floor = the exact count.
   assertRan("lot-link-core", __runLotLinkCoreTests(), 59);
+  // D207: lot page "Send to Product Onboarding" verdict.
+  assertRan("lot-onboard-core", __runLotOnboardCoreTests(), 19);
   // R22 (S35): mastered-menu-core. Floor = the exact count.
   assertRan("mastered-menu-core", __runMasteredMenuCoreTests(), 55);
 
@@ -2598,7 +2601,7 @@ __runLiquidVolumeTests();
   assertRan("wcia-lab-json-core", __runWciaLabJsonCoreTests(r28CoaFixtures(".wcia.json")), 107); // R28: the lab JSON behind lab_result_link
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 302); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
   assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 213); // R28: identity, agreement, edible facts, profile; R37 +8 COA outranks the 10 mg rule
-  assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 132); // R28: allow-list, best reading, LlamaParse gate, KB fill; R36: Cultivera, owner hosts, redirect hops, DNS answers
+  assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 141); // R28: allow-list, best reading, LlamaParse gate, KB fill; R36: Cultivera, owner hosts, redirect hops, DNS answers
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
