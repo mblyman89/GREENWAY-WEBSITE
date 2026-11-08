@@ -4685,7 +4685,9 @@ function HomeScreen({
               }`}
             >
               {dropDue.state === "due" ? "💰 " : ""}
-              {dropDue.sentence} <span className="underline">Tap to start the cash drop</span>
+              {dropDue.sentence}{" "}
+              {/* D218: "soon" is information, not an order; only "due" asks for a drop. */}
+              <span className="underline">{dropDue.state === "due" ? "Tap to start the cash drop" : "Tap only to drop early"}</span>
             </button>
           ) : null}
           {banner ? (

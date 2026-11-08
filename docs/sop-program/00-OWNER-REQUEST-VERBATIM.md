@@ -1974,3 +1974,19 @@ Verbatim:
 - `src/lib/registers/drop-bills-core.ts` (25 self-tests, incl. addBillsToDropRows), `guided-cash-core.ts`, `store.ts`, `pos/till-core.ts`, `pos/offline-till-core.ts`, `pos/offline-till-store.ts`, `api/pos/till/route.ts`, `RegisterShell.tsx` (drop screen bill grid).
 - Migration `0349_drawer_drop_bills.sql` + rollback + `scripts/recon/drawer-drop-bills-0349-pg-check.sql`.
 - Test: `tests/compliance/d217-drop-bills.test.ts`.
+
+## D218 — A second drop never empties the drawer (2026-11-08)
+### Verbatim
+"Thank you. My employer just told me, the register wants her to drop another 2k, but it would mean she'd have to empty her whole drawer. Will you make sure the logic for a second drop doesn't require taking the full cash amount from the drawer. Follow the standing rules. Thank you."
+### Findings
+- SR1 (session 3a4ff1f5, 2026-11-08): $4,119.49 cash sales, one safe drop of $2,420.00 at 20:34. Cash since that drop was about $1,699.50, which is the "soon" state (from $1,500 up to $2,000), not "due". SR1 closed at 23:44 with a count of $1,876.00.
+- The "soon" banner said "... has $1,699.50 in cash since its last drop. A drop is due at $2,000.00." followed by "Tap to start the cash drop". That reads like an order to drop now.
+- When a drop was due, the suggested amount was all the cash taken since the last drop, rounded down to $20. Taking it would leave only the starting cash, so the drawer had no working cash for change.
+### Decisions
+- D218a: Keep working cash. `DROP_KEEP_WORKING_MINOR = 50000` ($500). Suggested drop = (cash since last drop − $500), rounded down to $20. The cashier keeps about $500 plus the starting cash. After the suggested drop the register is back under $1,500, so the banner clears. The owner can change the $500 in one place.
+- D218b: The "soon" message is now information: "No drop needed yet; the next drop is due once this passes $2,000.00." The iPad link text says "Tap only to drop early" for soon and "Tap to start the cash drop" only when a drop is due.
+- D218c: The drop-screen how-to says to leave about $500 plus the starting cash and never empty the drawer. The drop thresholds, the expected-cash math and the blind count are unchanged. No migration.
+### As built
+- `src/lib/registers/guided-cash-core.ts` (DROP_KEEP_WORKING_MINOR, suggestion, due/soon wording; 42 self-tests, including a sweep showing the leftover is always ≥$500 and the register is no longer due after the drop).
+- `src/lib/registers/drop-bills-core.ts` (DROP_HOW_TO wording), `src/app/(site)/pos/RegisterShell.tsx` (banner tap text).
+- Tests: `tests/compliance/d217-drop-bills.test.ts` (D218 blocks).

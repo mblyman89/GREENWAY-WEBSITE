@@ -35,12 +35,12 @@ describe("D217 drop-due message", () => {
   it("is still loud and suggests an amount", () => {
     expect(due.state).toBe("due");
     expect(due.sentence.startsWith("DROP NOW")).toBe(true);
-    expect(due.suggestedDropMinor).toBe(212000);
+    expect(due.suggestedDropMinor).toBe(162000); // D218: leaves $500 working cash
   });
   it("no longer says 'in twenties'; says big bills first and count each bill", () => {
     expect(due.sentence).not.toMatch(/in twenties/);
-    expect(due.sentence).toMatch(/big bills first \(\$100s, \$50s, then \$20s\)/);
-    expect(due.sentence).toMatch(/leave the starting cash/);
+    expect(due.sentence).toMatch(/big bills \(\$100s, \$50s, then \$20s\)/);
+    expect(due.sentence).toMatch(/plus the starting cash in the drawer for change; do not empty it/);
     expect(due.sentence).toMatch(/how many of each bill/);
   });
   it("the unknown sentence does not say count the twenties", () => {
@@ -146,5 +146,35 @@ describe("D217 iPad drop screen", () => {
   });
   it("shows the how-to", () => {
     expect(shell).toContain("{DROP_HOW_TO}");
+  });
+});
+
+describe("D218 a second drop never empties the drawer", () => {
+  const base = { registerName: "Sales Register 1", refundsPaidMinor: 0, readsComplete: true };
+  it("the owner's case: SR1 after its $2,420 drop ($4,119.50 cash) is not due, and says so", () => {
+    const st = dropStatus({ ...base, cashSalesMinor: 411950, dropsMinor: 242000 });
+    expect(st.state).toBe("soon");
+    expect(st.suggestedDropMinor).toBe(0);
+    expect(st.sentence).toMatch(/No drop needed yet/);
+    expect(st.sentence).not.toMatch(/A drop is due at/);
+  });
+  it("when due, the suggestion leaves about $500 working cash (plus the float), first and second drop", () => {
+    const first = dropStatus({ ...base, cashSalesMinor: 210000, dropsMinor: 0 });
+    expect(first.suggestedDropMinor).toBe(160000);
+    const second = dropStatus({ ...base, cashSalesMinor: 210000 + 210000, dropsMinor: 160000 });
+    expect(second.state).toBe("due");
+    expect(second.undroppedMinor - second.suggestedDropMinor).toBeGreaterThanOrEqual(50000);
+    expect(second.sentence).toMatch(/do not empty it/);
+  });
+  it("the iPad only says 'start the cash drop' when a drop is due", () => {
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
+    expect(shell).toContain('dropDue.state === "due" ? "Tap to start the cash drop" : "Tap only to drop early"');
+  });
+});
+
+describe("D218 drop screen how-to keeps working cash", () => {
+  it("tells the cashier to leave about $500 plus the starting cash", () => {
+    expect(DROP_HOW_TO).toMatch(/Leave about \$500 plus the starting cash/);
+    expect(DROP_HOW_TO).toMatch(/never empty it/);
   });
 });
