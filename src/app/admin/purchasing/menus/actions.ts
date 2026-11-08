@@ -21,6 +21,9 @@
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { fetchVendorLogo, fetchMissingLogos } from "@/lib/purchasing/vendor-logo-store";
+import { isGoodOutcome, logoResultMessage, type LogoResult } from "@/lib/purchasing/vendor-logo-core";
 import {
   searchCultiveraMarkets,
   fetchCultiveraMenu,
@@ -1136,4 +1139,97 @@ export async function saveAllLeaflinkSnapshotMediaAction(formData: FormData): Pr
     remaining,
     done: remaining === 0,
   };
+}
+
+/* ------------------------------------------------------------------
+ * D211 — Fetch a vendor's logo from GrowFlow / Cultivera / LeafLink and
+ * attach + publish it on the vendor AND its brands in one click.
+ *
+ * Permission: inventory.manage, the same gate as the Vendor Menus page these
+ * buttons live on (owner/admin/manager). Every attach is audited
+ * (vendor.logo_fetched, plus vendor.published when a draft vendor was
+ * published), and the public pages ("/", "/vendor-delivery", menus) are
+ * revalidated so the logo shows on the customer-facing site immediately.
+ * ------------------------------------------------------------------ */
+
+export type FetchLogoActionResult = {
+  ok: boolean;
+  message: string;
+  results: LogoResult[];
+  remaining: number;
+};
+
+async function afterLogoResults(
+  session: { userId: string; email: string | null },
+  results: readonly LogoResult[],
+): Promise<void> {
+  let changed = false;
+  for (const r of results) {
+    if (r.outcome !== "attached") continue;
+    changed = true;
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "vendor.logo_fetched",
+      entityType: "vendor",
+      entityId: r.vendorId,
+      after: {
+        platform: r.platform,
+        logo_url: r.logoUrl,
+        media_asset_id: r.mediaAssetId,
+        brands_updated: r.brandsUpdated,
+        brands_kept_own_logo: r.brandsKept,
+        brands_archived_skipped: r.brandsArchived,
+      },
+    });
+    if (r.publishedVendor) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "vendor.published",
+        entityType: "vendor",
+        entityId: r.vendorId,
+        after: { status: "published", reason: "logo fetch (D211)" },
+      });
+    }
+    revalidatePath(`/admin/vendors/${r.vendorId}`);
+  }
+  if (changed) {
+    revalidatePublicMenuSurfaces();
+    revalidatePath("/admin/vendors");
+    revalidatePath("/admin/media");
+  }
+  revalidatePath("/admin/purchasing/menus");
+}
+
+export async function fetchVendorLogoAction(formData: FormData): Promise<FetchLogoActionResult> {
+  const session = await requirePermission("inventory.manage");
+  const vendorId = str(formData, "vendor_id");
+  const replace = str(formData, "replace") === "1";
+  if (!vendorId) return { ok: false, message: "Pick a vendor first.", results: [], remaining: 0 };
+  const r = await fetchVendorLogo({
+    vendorId,
+    replace,
+    actor: { id: session.userId, email: session.email },
+  });
+  await afterLogoResults(session, [r]);
+  return { ok: isGoodOutcome(r.outcome), message: logoResultMessage(r), results: [r], remaining: 0 };
+}
+
+export async function fetchMissingLogosAction(formData: FormData): Promise<FetchLogoActionResult> {
+  const session = await requirePermission("inventory.manage");
+  const skipIds = str(formData, "skip_ids").split(",").map((s) => s.trim()).filter(Boolean);
+  const report = await fetchMissingLogos({ id: session.userId, email: session.email }, { skipIds });
+  if (report.error) return { ok: false, message: report.error, results: [], remaining: 0 };
+  await afterLogoResults(session, report.results);
+  const attached = report.results.filter((r) => r.outcome === "attached").length;
+  const tried = report.results.length;
+  const parts = [
+    tried === 0
+      ? "Every vendor we carry already has a logo (or was already tried)."
+      : `Tried ${tried} vendor${tried === 1 ? "" : "s"}: ${attached} logo${attached === 1 ? "" : "s"} attached and published.`,
+  ];
+  if (report.stoppedForTime) parts.push("Stopped early to stay inside the time limit.");
+  if (report.remaining > 0) parts.push(`${report.remaining} still to try — click again to continue.`);
+  return { ok: true, message: parts.join(" "), results: report.results, remaining: report.remaining };
 }

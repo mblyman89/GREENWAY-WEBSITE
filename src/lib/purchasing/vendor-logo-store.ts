@@ -66,7 +66,9 @@ const HEADER_TIMEOUT_MS = 60_000;
 
 /** Bulk: vendors per click, and the wall-clock budget before we stop starting new ones. */
 export const BULK_LOGO_CAP = 5;
-const BULK_BUDGET_MS = 200_000;
+const BULK_BUDGET_MS = 170_000;
+/** One vendor: stop starting new searches after this (the page allows 300 s). */
+const SINGLE_BUDGET_MS = 170_000;
 
 export type LogoActor = { id: string | null; email: string | null };
 
@@ -146,6 +148,7 @@ async function searchPlatform(platform: LogoPlatform, term: string): Promise<{ c
 async function findLogo(
   vendor: LogoVendor,
   ctx: MatchContext,
+  deadline: number,
 ): Promise<{ found: LogoCandidate | null; notes: string[]; sawRefused: boolean }> {
   const match = buildLogoMatcher(ctx.vendors, ctx.aliases, ctx.brands);
   const memories = await getMemoriesForVendor(vendor.display_name);
@@ -155,10 +158,15 @@ async function findLogo(
   let sawRefused = false;
   let ambiguous = 0;
 
+  let outOfTime = false;
   for (const platform of order) {
     let skipPlatform = false;
     for (const term of terms) {
       if (skipPlatform) break;
+      if (Date.now() > deadline) {
+        outOfTime = true;
+        break;
+      }
       const { candidates, note } = await searchPlatform(platform, term);
       if (note) {
         notes.push(note);
@@ -193,6 +201,7 @@ async function findLogo(
       if (pick.refused.length || pick.noLogo.length || pick.needsHeader.length) skipPlatform = true;
     }
   }
+  if (outOfTime) notes.push("Stopped searching to stay inside the time limit — click again to finish the search.");
   if (ambiguous) {
     notes.push(
       `${ambiguous} marketplace profile${ambiguous === 1 ? "" : "s"} matched more than one of our vendors, so ${ambiguous === 1 ? "it was" : "they were"} skipped rather than guessed.`,
@@ -215,7 +224,10 @@ export async function fetchVendorLogo(input: {
   replace: boolean;
   actor: LogoActor;
   ctx?: MatchContext;
+  /** Epoch ms after which no new marketplace search is started. */
+  deadline?: number;
 }): Promise<LogoResult> {
+  const deadline = input.deadline ?? Date.now() + SINGLE_BUDGET_MS;
   const fallback = emptyResult({ id: input.vendorId, display_name: "This vendor" });
   if (!isSupabaseServiceConfigured) {
     return { ...fallback, outcome: "error", notes: ["The database isn't configured on this deployment."] };
@@ -231,7 +243,7 @@ export async function fetchVendorLogo(input: {
     if ((vendor.status ?? "").toLowerCase() === "archived") return { ...result, outcome: "archived" };
     if (vendor.logo_media_id && !input.replace) return { ...result, outcome: "already_has_logo" };
 
-    const { found, notes, sawRefused } = await findLogo(vendor, ctx);
+    const { found, notes, sawRefused } = await findLogo(vendor, ctx, deadline);
     result.notes.push(...notes);
     if (!found || !found.logoUrl) return { ...result, outcome: sawRefused ? "refused" : "not_found" };
     result.platform = found.platform;
@@ -354,7 +366,9 @@ export async function fetchMissingLogos(
         stoppedForTime = true;
         break;
       }
-      results.push(await fetchVendorLogo({ vendorId: v.id, replace: false, actor, ctx }));
+      results.push(
+        await fetchVendorLogo({ vendorId: v.id, replace: false, actor, ctx, deadline: started + BULK_BUDGET_MS }),
+      );
     }
     return { results, remaining: all.length - results.length, stoppedForTime, error: null };
   } catch (e) {
