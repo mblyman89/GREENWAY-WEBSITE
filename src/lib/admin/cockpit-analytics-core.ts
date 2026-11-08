@@ -768,6 +768,22 @@ export function weekHourHeatmap(byDay: readonly DayIn[], byDayHour: readonly Day
 }
 
 // ---------------------------------------------------------------------------
+// 8. Axis money: compact dollars from cents ($950, $1.2k, $14k, $1.1M)
+// ---------------------------------------------------------------------------
+
+export function compactMoney(minor: number): string {
+  if (!Number.isFinite(minor)) return "$0";
+  const neg = minor < 0;
+  const d = Math.abs(minor) / 100;
+  let s: string;
+  if (d >= 1_000_000) s = `${(Math.round(d / 100_000) / 10).toString()}M`;
+  else if (d >= 10_000) s = `${Math.round(d / 1000)}k`;
+  else if (d >= 1000) s = `${(Math.round(d / 100) / 10).toString()}k`;
+  else s = `${Math.round(d)}`;
+  return `${neg ? "-" : ""}$${s}`;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -1012,6 +1028,10 @@ export function __runCockpitAnalyticsTests(): { passed: number; failed: number; 
   ok(hm.hours[0] === 9 && hm.hours[hm.hours.length - 1] === 23, "heatmap widens to a late sale");
   ok(hm.cells.find((c) => c.dow === 2 && c.hour === 12)!.avgOrders === 0, "a closed day adds nothing");
   ok(dowLabel(0) === "Sun" && dowLabel(6) === "Sat", "weekday labels");
+
+  ok(compactMoney(95_000) === "$950" && compactMoney(123_400) === "$1.2k", "compact money small");
+  ok(compactMoney(1_440_000) === "$14k" && compactMoney(110_000_000) === "$1.1M", "compact money large");
+  ok(compactMoney(-50_000) === "-$500" && compactMoney(Number.NaN) === "$0", "compact money sign and junk");
 
   return { passed, failed, messages };
 }
