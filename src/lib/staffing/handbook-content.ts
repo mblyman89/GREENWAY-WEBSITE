@@ -144,8 +144,8 @@ export const HANDBOOK_SECTIONS: HandbookSection[] = [
       "You are paid at least Washington minimum wage on the regular payroll schedule. Non-exempt employees earn overtime at 1.5× the regular rate for hours over 40 in a workweek (RCW 49.46.130).",
     ],
     bullets: [
-      "Meal period: an unpaid 30-minute meal when you work more than 5 hours, starting between your 2nd and 5th hour (WAC 296-126-092).",
-      "Rest breaks: a paid 10-minute break for every 4 hours worked, as close to the middle of the period as practical.",
+      "Meal period: an unpaid 30-minute meal when you work more than 5 hours, starting between your 2nd and 5th hour (WAC 296-126-092). Clock out for it with Clock out for a break → Lunch (register MORE menu, Time Clock or phone); your drawer stays open and yours, and you clock back in with Back from break.",
+      "Rest breaks: a paid 10-minute break for every 4 hours worked, as close to the middle of the period as practical. Stay on the clock for these. If you must leave for another reason (an appointment, a family pickup), use Clock out for a break → Other and say why.",
       "Tips (if offered at the register) are pooled and paid out per the posted tip policy — tips belong to staff, never to the store (RCW 49.46.020(3)).",
       "Your final paycheck after separation is paid at the end of the established pay period (RCW 49.48.010).",
     ],
