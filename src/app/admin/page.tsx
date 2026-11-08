@@ -690,6 +690,12 @@ async function CockpitOnShiftSection() {
       ) : null}
       <Card>
         <OnShiftBoard board={r.board} />
+        {r.onBreak.length > 0 ? (
+          <p className="mt-2 text-[11px] text-[var(--admin-text-faint)]">
+            {"On break (off the clock): "}
+            {r.onBreak.map((b) => `${b.name} (${b.minutes}m)`).join(", ")}. Reasons are on Time Clock.
+          </p>
+        ) : null}
       </Card>
     </Section>
   );

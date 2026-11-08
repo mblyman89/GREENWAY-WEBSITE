@@ -46,12 +46,14 @@ import {
 } from "@/lib/registers/store";
 import {
   onTheClock,
+  onBreakNow,
   listRecentShifts,
   listEmployees,
   type Employee,
   type TimePunch,
   type Shift,
 } from "@/lib/staffing/store";
+import { breakReasonLabel, isLongOpenBreak } from "@/lib/staffing/break-clock-core";
 import { listOrders } from "@/lib/orders/orders-store";
 import type { OrderRow, OrderStatus } from "@/lib/orders/types";
 import { getCockpitSnapshot, type CockpitSnapshot } from "@/lib/admin/cockpit-data";
@@ -72,6 +74,19 @@ export type OnClockRow = {
   clockInLabel: string;
   /** Whole minutes on the clock so far (server-computed). */
   minutesOnClock: number;
+};
+
+/** D211 — one person out on a lunch / other break right now (off the clock). */
+export type OnBreakRow = {
+  employeeId: string;
+  name: string;
+  /** "Lunch" or "Other". */
+  reasonLabel: string;
+  note: string | null;
+  sinceLabel: string;
+  minutesOnBreak: number;
+  /** Longer than LONG_OPEN_BREAK_HOURS: someone should check in. */
+  long: boolean;
 };
 
 /** A single cash drop to the safe during an open session. */
@@ -182,6 +197,8 @@ export type RegisterActivitySnapshot = {
   configured: boolean;
   kpis: RegisterActivityKpis;
   onClock: OnClockRow[];
+  /** D211 — out on lunch / other now. */
+  onBreak: OnBreakRow[];
   registers: RegisterActivityRow[];
   attention: AttentionItem[];
   feed: ActivityEvent[];
@@ -227,6 +244,7 @@ function emptySnapshot(): RegisterActivitySnapshot {
       awaitingReconcile: 0,
     },
     onClock: [],
+    onBreak: [],
     registers: [],
     attention: [],
     feed: [],
@@ -272,6 +290,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     listOrders({ status: "all", limit: 40 }),
     listEmployees({ includeInactive: true }),
   ]);
+  const breaks = await onBreakNow();
 
   // Employee id → full name resolver (opened_by/closed_by/drops are FKs).
   const empName = new Map(allEmployees.map((e) => [e.id, e.full_name]));
@@ -312,6 +331,16 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     clockInAtISO: punch.clock_in_at,
     clockInLabel: pacificClock(punch.clock_in_at),
     minutesOnClock: minutesBetween(punch.clock_in_at, nowISO),
+  }));
+
+  const onBreak: OnBreakRow[] = breaks.map(({ employee, punch }) => ({
+    employeeId: employee.id,
+    name: employee.full_name,
+    reasonLabel: breakReasonLabel(punch.break_reason),
+    note: punch.break_note ?? null,
+    sinceLabel: pacificClock(punch.clock_in_at),
+    minutesOnBreak: minutesBetween(punch.clock_in_at, nowISO),
+    long: isLongOpenBreak(punch.clock_in_at, nowISO),
   }));
 
   // --- Register activity (read-only, Lightspeed Shifts-Summary style) -------
@@ -519,6 +548,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     configured: true,
     kpis,
     onClock,
+    onBreak,
     registers,
     attention,
     feed: feed.slice(0, 40),

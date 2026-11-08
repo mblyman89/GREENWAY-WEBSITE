@@ -7,7 +7,10 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { pacificDayKey } from "@/lib/reports/timezone";
+import { pacificDayKey, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { pagedAll } from "@/lib/supabase/chunked-in";
+import { isMissingColumn } from "@/lib/payments/payee-banking-store";
+import { dayBreakFlags, summarizeBreaks, EMPTY_BREAK_SUMMARY, type BreakFlagCode, type BreakPunch } from "@/lib/staffing/break-clock-core";
 import { LOYALTY_REWARDS, MIN_REWARD_POINTS } from "@/lib/loyalty/loyalty-reward-core";
 import { resolveEndorsement, type RawEndorsementRow } from "@/lib/medical/endorsement-switch-core";
 
@@ -332,10 +335,21 @@ export type EmployeeReportRow = {
   daysWorked: number;
   minutesWorked: number; // work punches only (break excluded)
   breakMinutes: number;
+  /** D211 — unpaid lunch / other breaks (closed), and breaks never ended. */
+  lunchCount: number;
+  lunchMinutes: number;
+  otherBreakCount: number;
+  otherBreakMinutes: number;
+  openBreaks: number;
+  /** D211 — days with a meal-break check (WAC 296-126-092), any code. */
+  mealFlagDays: number;
   avgShiftMinutes: number;
   ordersHandled: number;
   lastActiveDay: string | null;
 };
+
+/** D211 — one meal-break check, named, for the report table and the export. */
+export type EmployeeBreakFlagRow = { employeeId: string; name: string; day: string; code: BreakFlagCode; detail: string };
 
 export type EmployeeReport = {
   // headline
@@ -355,6 +369,12 @@ export type EmployeeReport = {
   roleBreakdown: { label: string; minutes: number }[];
   dailyCoverage: { date: string; minutes: number }[];
   rows: EmployeeReportRow[];
+  /** D211 — lunch vs other break totals, and the meal-break checks. */
+  totalLunchMinutes: number;
+  totalOtherBreakMinutes: number;
+  breakFlags: EmployeeBreakFlagRow[];
+  /** D211 — true while migration 0348 is not applied (reasons unknown). */
+  breakReasonsMissing: boolean;
 };
 
 export const EMPTY_EMPLOYEE_REPORT: EmployeeReport = {
@@ -372,6 +392,10 @@ export const EMPTY_EMPLOYEE_REPORT: EmployeeReport = {
   roleBreakdown: [],
   dailyCoverage: [],
   rows: [],
+  totalLunchMinutes: 0,
+  totalOtherBreakMinutes: 0,
+  breakFlags: [],
+  breakReasonsMissing: false,
 };
 
 const SHIFT_STATUS_LABELS: Record<string, string> = {
@@ -382,25 +406,74 @@ const SHIFT_STATUS_LABELS: Record<string, string> = {
 const PUNCH_SOURCE_LABELS: Record<string, string> = {
   web: "Web",
   station: "Station",
+  phone: "Phone",
+  register: "Register",
   manager_edit: "Manager edit",
 };
+
+type ReportPunchRow = {
+  id: string;
+  employee_id: string;
+  punch_kind: string;
+  minutes: number | null;
+  source: string;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  break_reason?: string | null;
+};
+
+/**
+ * D211 — the punches whose clock-in falls in the Pacific date range. The old query
+ * filtered time_punches.business_day, a column that table has never had, so the
+ * request errored and the report showed zero hours. Paged (rule 18) with a unique
+ * order, and tolerant of 0348 not being applied yet (break_reason missing).
+ */
+async function reportPunches(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  fromDate: string,
+  toDate: string,
+): Promise<{ rows: ReportPunchRow[]; reasonsMissing: boolean }> {
+  const lo = pacificWallTimeToUtcISO(fromDate, "start");
+  const hi = pacificWallTimeToUtcISO(toDate, "end");
+  const base = "id, employee_id, punch_kind, minutes, source, clock_in_at, clock_out_at";
+  const run = async (cols: string) => {
+    let err: { code?: string; message?: string } | null = null;
+    const rows = await pagedAll<ReportPunchRow>(async (a, b) => {
+      if (err) return [];
+      const { data, error } = await admin
+        .from("time_punches")
+        .select(cols)
+        .gte("clock_in_at", lo)
+        .lte("clock_in_at", hi)
+        .order("id", { ascending: true })
+        .range(a, b);
+      if (error) {
+        err = error;
+        return [];
+      }
+      return (data as unknown as ReportPunchRow[] | null) ?? [];
+    });
+    return { rows, err: err as { code?: string; message?: string } | null };
+  };
+  const first = await run(`${base}, break_reason`);
+  if (!first.err) return { rows: first.rows, reasonsMissing: false };
+  if (!isMissingColumn(first.err)) return { rows: [], reasonsMissing: false };
+  const second = await run(base);
+  return { rows: second.err ? [] : second.rows, reasonsMissing: true };
+}
 
 export async function getEmployeeReport(fromDate: string, toDate: string): Promise<EmployeeReport> {
   if (!isSupabaseServiceConfigured) return { ...EMPTY_EMPLOYEE_REPORT };
   const admin = createSupabaseAdminClient();
 
-  const [{ data: shifts }, { data: employees }, { data: punches }] = await Promise.all([
+  const [{ data: shifts }, { data: employees }, punchRead] = await Promise.all([
     admin
       .from("shifts")
       .select("id, employee_id, business_day, shift_role, status, scheduled_start, scheduled_end, started_at, ended_at")
       .gte("business_day", fromDate)
       .lte("business_day", toDate),
     admin.from("employees").select("id, full_name, job_role, active, staff_id"),
-    admin
-      .from("time_punches")
-      .select("employee_id, punch_kind, minutes, source, business_day, clock_in_at")
-      .gte("business_day", fromDate)
-      .lte("business_day", toDate),
+    reportPunches(admin, fromDate, toDate),
   ]);
 
   const empRows =
@@ -421,10 +494,23 @@ export async function getEmployeeReport(fromDate: string, toDate: string): Promi
           ended_at: string | null;
         }[]
       | null) ?? [];
-  const punchRows =
-    (punches as
-      | { employee_id: string; punch_kind: string; minutes: number | null; source: string; business_day: string; clock_in_at: string }[]
-      | null) ?? [];
+  const punchRows = punchRead.rows.map((p) => ({ ...p, business_day: pacificDayKey(p.clock_in_at) }));
+  // D211 — breaks by reason and the meal-break checks (flags, not blocks).
+  const breakPunches: BreakPunch[] = punchRows.map((p) => ({
+    employeeId: p.employee_id,
+    kind: p.punch_kind === "break" ? "break" : "work",
+    reason: p.break_reason ?? null,
+    clockInIso: p.clock_in_at,
+    clockOutIso: p.clock_out_at,
+  }));
+  const breakSummary = summarizeBreaks(breakPunches);
+  const rawFlags = dayBreakFlags(breakPunches);
+  const flagDays = new Map<string, Set<string>>();
+  for (const f of rawFlags) {
+    const set = flagDays.get(f.employeeId) ?? new Set<string>();
+    set.add(f.day);
+    flagDays.set(f.employeeId, set);
+  }
 
   // --- Orders handled per employee (via employees.staff_id -> orders.handled_by) ---
   const staffToEmp = new Map<string, string>();
@@ -479,6 +565,7 @@ export async function getEmployeeReport(fromDate: string, toDate: string): Promi
   const rows: EmployeeReportRow[] = [...byEmp.entries()]
     .map(([employeeId, v]) => {
       const emp = empById.get(employeeId);
+      const bs = breakSummary.get(employeeId) ?? EMPTY_BREAK_SUMMARY;
       return {
         employeeId,
         name: emp?.full_name ?? "Employee",
@@ -488,6 +575,12 @@ export async function getEmployeeReport(fromDate: string, toDate: string): Promi
         daysWorked: v.days.size,
         minutesWorked: v.workMinutes,
         breakMinutes: v.breakMinutes,
+        lunchCount: bs.lunchCount,
+        lunchMinutes: bs.lunchMinutes,
+        otherBreakCount: bs.otherCount,
+        otherBreakMinutes: bs.otherMinutes,
+        openBreaks: bs.openBreaks,
+        mealFlagDays: flagDays.get(employeeId)?.size ?? 0,
         avgShiftMinutes: v.shifts > 0 ? Math.round(v.workMinutes / v.shifts) : 0,
         ordersHandled: ordersHandled.get(employeeId) ?? 0,
         lastActiveDay: v.lastDay,
@@ -560,6 +653,10 @@ export async function getEmployeeReport(fromDate: string, toDate: string): Promi
     roleBreakdown,
     dailyCoverage,
     rows,
+    totalLunchMinutes: rows.reduce((a, r) => a + r.lunchMinutes, 0),
+    totalOtherBreakMinutes: rows.reduce((a, r) => a + r.otherBreakMinutes, 0),
+    breakFlags: rawFlags.map((f) => ({ ...f, name: empById.get(f.employeeId)?.full_name ?? "Employee" })),
+    breakReasonsMissing: punchRead.reasonsMissing,
   };
 }
 

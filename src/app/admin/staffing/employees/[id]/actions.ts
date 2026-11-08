@@ -22,7 +22,7 @@ import type { DocumentStatus, EmploymentStatus } from "@/lib/staffing/employee-l
 import { generateHrAdvice, isAiConfigured, type HrAdvice } from "@/lib/staffing/hr-advisor";
 import { rosterOverview } from "@/lib/staffing/employee-lifecycle-store";
 import { can } from "@/lib/auth/roles";
-import { openWorkPunch } from "@/lib/staffing/store";
+import { openWorkPunch, openPunchAny } from "@/lib/staffing/store";
 import { deactivateSignIn } from "@/lib/auth/sign-in-deactivate";
 import {
   getEmployeeSummary,
@@ -325,8 +325,9 @@ async function terminateWithOffboarding(
     });
   }
 
-  // 5. Open punch (flag only).
-  const punch = await openWorkPunch(employeeId);
+  // 5. Open punch (flag only). D211: an open lunch / other break counts too
+  // (openWorkPunch is work-only now), so check it when no work punch is open.
+  const punch = (await openWorkPunch(employeeId)) ?? (await openPunchAny(employeeId));
   if (punch) {
     await recordAudit({
       actorId: session.userId,
@@ -334,7 +335,13 @@ async function terminateWithOffboarding(
       action: "employee.offboarding_open_punch",
       entityType: "time_punch",
       entityId: punch.id,
-      after: { employee_id: employeeId, clock_in_at: punch.clock_in_at, note: "left open for a manager to close on Hours with a reason" },
+      after: {
+        employee_id: employeeId,
+        clock_in_at: punch.clock_in_at,
+        punch_kind: punch.punch_kind,
+        break_reason: punch.break_reason ?? null,
+        note: "left open for a manager to close on Hours with a reason",
+      },
     });
   }
 
