@@ -2,7 +2,7 @@ import { vendorOfDayReminder } from "@/lib/inventory/count-generators-core";
 import { vendorCountPlannedToday } from "@/lib/inventory/count-generators-store";
 import { fullCountReminder } from "@/lib/inventory/full-count-core";
 import { hasFullCountForYear } from "@/lib/inventory/full-count-store";
-import { pacificToday } from "@/lib/reports/timezone";
+import { formatHourLabel, pacificParts, pacificToday } from "@/lib/reports/timezone";
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireStaff } from "@/lib/auth/session";
@@ -33,12 +33,27 @@ import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import { getOverdueComplianceCount } from "@/lib/compliance/compliance-calendar-store";
 import { listAuditSessions } from "@/lib/inventory/audit-hub-store";
 import { loadCockpitLeafly, loadCockpitTaxes } from "@/lib/admin/cockpit-extras-server";
-import { hourWindow, leaflyTile } from "@/lib/admin/cockpit-extras-core";
+import { leaflyTile } from "@/lib/admin/cockpit-extras-core";
 import { describeElapsed } from "@/lib/leafly/schedule-core";
 import { GuidedCashPanel } from "@/components/admin/registers/GuidedCashPanel";
 import { MorningReportPanel } from "@/components/admin/registers/MorningReportPanel";
 import { MyDayHomePanel } from "@/components/admin/registers/MyDayPanel";
 import { canReadBooks } from "@/lib/accounting/books-view-core";
+import {
+  categoryMixVsBaseline,
+  dailyTrend,
+  hourlyVsBaseline,
+  trafficVsLabor,
+  weekHourHeatmap,
+} from "@/lib/admin/cockpit-analytics-core";
+import { cockpitAtm, cockpitLabor, cockpitOnShift, cockpitTrend } from "@/lib/admin/cockpit-analytics-server";
+import { HourlyComparisonChart } from "@/components/admin/charts/cockpit/HourlyComparisonChart";
+import { TrafficLaborChart } from "@/components/admin/charts/cockpit/TrafficLaborChart";
+import { CategoryMixExplorer } from "@/components/admin/charts/cockpit/CategoryMixExplorer";
+import { BasketTrendChart, CustomerMixDonut, SalesTrendChart } from "@/components/admin/charts/cockpit/TrendCharts";
+import { AtmDepletionChart, AtmDispenseChart, AtmWeekdayChart } from "@/components/admin/charts/cockpit/AtmCharts";
+import { WeekHourHeatmap } from "@/components/admin/charts/cockpit/WeekHourHeatmap";
+import { OnShiftBoard } from "@/components/admin/charts/cockpit/OnShiftBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -444,16 +459,36 @@ async function CockpitRefundsSection({ basis }: { basis?: string }) {
 }
 
 /* ── Hourly sales + top sellers ── */
+/*
+ * D209b (owner 2026-11-07: "add more details to the bar chart, have it show
+ * more based on the selection of the top comparisons ... A line chart to
+ * compliment the bar chart"): today's hours against the SAME basis the picker
+ * chose, hour by hour (bars) or as running totals with a projection to close
+ * (lines). The baseline is built from the basis's own days (closed days
+ * skipped; "max" = the best whole day), by hourlyVsBaseline (pure).
+ * CVB-D19's hourWindow still sets the drawn hours (8 AM to midnight, widened
+ * to any hour that sold) through the same 8/24 defaults.
+ */
 async function CockpitHourlySection({ basis }: { basis?: string }) {
   const snap = await cockpitSales(basis);
+  const now = pacificParts(new Date());
+  const hourly = hourlyVsBaseline({
+    todayByHour: snap.today.byHour,
+    baselineByDay: snap.baseline.byDay,
+    baselineByDayHour: snap.baseline.byDayHour,
+    windowDays: snap.comparison.window.days,
+    mode: snap.comparison.window.mode,
+    nowHour: now.hour,
+    nowMinute: now.minute,
+  });
   const peak = peakHour(snap.today.byHour);
-  // CVB-D19: the old chart scaled each bar as a % of a column with no height of its own, so every bar
-  // collapsed to its 3 px minimum. hourWindow draws 8 AM to midnight (widened to any hour with a sale).
-  const hourBars = hourWindow(snap.today.byHour);
   const topSellers = snap.today.byProduct.slice(0, 6);
+  const label = snap.comparison.window.comparisonLabel;
+  const hasBaseline = hourly.baseline.days.length > 0;
+  const pacePct = hourly.pace !== null ? Math.round((hourly.pace - 1) * 100) : null;
   return (
     <>
-      {/* ── Hourly sales + top sellers ───────────────────────────────── */}
+      {/* ── Hourly sales + top sellers ─────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2" padding="none">
           <CardHeader
@@ -461,34 +496,39 @@ async function CockpitHourlySection({ basis }: { basis?: string }) {
             title="Sales by hour (today)"
             subtitle={
               peak
-                ? `Busiest so far: ${peak.label} (${formatMoneyMinor(peak.revenueMinorUnits)})`
-                : "No sales recorded yet today."
+                ? `Busiest so far: ${peak.label} (${formatMoneyMinor(peak.revenueMinorUnits)}) \u00b7 ${label}${
+                    hourly.baseline.partial && hasBaseline ? ` (${hourly.baseline.days.length} of ${hourly.baseline.requested} days traded)` : ""
+                  }`
+                : `No sales recorded yet today \u00b7 ${label}`
             }
           />
-          <div className="p-5 pt-0">
-            {hourBars.some((b) => b.revenueMinorUnits > 0) ? (
-              <div className="flex h-44 gap-1" role="img" aria-label="Revenue by hour today">
-                {hourBars.map((b) => (
-                  <div key={b.hour} className="group flex h-full min-w-0 flex-1 flex-col items-center">
-                    {/* The track has a real height (flex-1 of h-44), so the bar's % height works. */}
-                    <div className="flex w-full flex-1 items-end">
-                      <div
-                        className="w-full rounded-t bg-[var(--admin-accent)]/70 transition group-hover:bg-[var(--admin-accent)]"
-                        style={{ height: `${b.heightPct}%` }}
-                        title={`${b.label}: ${formatMoneyMinor(b.revenueMinorUnits)} · ${b.orders} order${b.orders === 1 ? "" : "s"}`}
-                      />
-                    </div>
-                    <span className="mt-1 hidden text-[9px] text-[var(--admin-text-faint)] sm:block">
-                      {b.shortLabel}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-10 text-center text-sm text-[var(--admin-text-faint)]">
-                Sales will chart here as orders come through today.
-              </p>
-            )}
+          <div className="p-5 pt-3">
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <MiniStat label="Today so far" value={formatMoneyMinor(hourly.todaySoFarMinor)} />
+              <MiniStat
+                label="Basis by now"
+                value={hourly.baselineSoFarMinor !== null ? formatMoneyMinor(hourly.baselineSoFarMinor) : "\u2014"}
+                hint={label.replace(/^vs /, "")}
+              />
+              <MiniStat
+                label="Pace"
+                value={pacePct === null ? "\u2014" : `${pacePct >= 0 ? "+" : ""}${pacePct}%`}
+                tone={pacePct === null ? "muted" : pacePct >= 0 ? "green" : "orange"}
+                hint={pacePct === null ? "No basis at this hour" : pacePct >= 0 ? "ahead of the basis" : "behind the basis"}
+              />
+              <MiniStat
+                label="Projected close"
+                value={hourly.projectedDayMinor !== null ? formatMoneyMinor(hourly.projectedDayMinor) : "\u2014"}
+                hint={
+                  hourly.baselinePeakHour !== null
+                    ? `Basis rush: ${formatHourLabel(hourly.baselinePeakHour)}`
+                    : hourly.baselineDayMinor !== null
+                      ? `Basis day ${formatMoneyMinor(hourly.baselineDayMinor)}`
+                      : undefined
+                }
+              />
+            </div>
+            <HourlyComparisonChart rows={hourly.rows} basisLabel={label} hasBaseline={hasBaseline} />
           </div>
         </Card>
 
@@ -498,14 +538,22 @@ async function CockpitHourlySection({ basis }: { basis?: string }) {
             {topSellers.length > 0 ? (
               <ol className="space-y-2">
                 {topSellers.map((p, i) => (
-                  <li key={p.label} className="flex items-center gap-3 text-sm">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-surface-2)] text-xs font-bold text-[var(--admin-text-muted)]">
-                      {i + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[var(--admin-text)]">{p.label}</span>
-                    <span className="shrink-0 text-xs text-[var(--admin-text-muted)]">
-                      {p.units}× · {formatMoneyMinor(p.revenueMinorUnits)}
-                    </span>
+                  <li key={p.label} className="text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-surface-2)] text-xs font-bold text-[var(--admin-text-muted)]">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[var(--admin-text)]">{p.label}</span>
+                      <span className="shrink-0 text-xs text-[var(--admin-text-muted)]">
+                        {p.units}\u00d7 \u00b7 {formatMoneyMinor(p.revenueMinorUnits)}
+                      </span>
+                    </div>
+                    <div className="ml-9 mt-1 h-1 overflow-hidden rounded-full bg-[var(--admin-surface-2)]">
+                      <div
+                        className="h-full rounded-full bg-[var(--admin-accent)]/70"
+                        style={{ width: `${Math.max(3, Math.round((p.revenueMinorUnits / Math.max(1, topSellers[0].revenueMinorUnits)) * 100))}%` }}
+                      />
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -518,6 +566,303 @@ async function CockpitHourlySection({ basis }: { basis?: string }) {
         </Card>
       </div>
     </>
+  );
+}
+
+/** A small figure for the cockpit chart headers. */
+function MiniStat({
+  label,
+  value,
+  hint,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "default" | "green" | "orange" | "muted";
+}) {
+  const color =
+    tone === "green"
+      ? "text-[var(--admin-accent)]"
+      : tone === "orange"
+        ? "text-orange-400"
+        : tone === "muted"
+          ? "text-[var(--admin-text-muted)]"
+          : "text-[var(--admin-text)]";
+  return (
+    <div className="rounded-[var(--admin-radius)] bg-[var(--admin-surface-2)] px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-[var(--admin-text-faint)]">{label}</div>
+      <div className={`text-base font-bold tabular-nums ${color}`}>{value}</div>
+      {hint ? <div className="truncate text-[10px] text-[var(--admin-text-faint)]">{hint}</div> : null}
+    </div>
+  );
+}
+
+/* ── D209c: hourly foot traffic vs sales vs labor ── */
+/*
+ * Owner 2026-11-07: "an hourly foot traffic vs sales ... overlaying labor
+ * hours or transactions over the hourly sales. This helps you visually
+ * optimize budtender scheduling to match peak rush times." Labor (time
+ * punches) is drawn only for staffing.manage / reports.view; everyone else
+ * sees revenue and transactions against the basis.
+ */
+async function CockpitTrafficSection({ basis, showLabor }: { basis?: string; showLabor: boolean }) {
+  const [snap, labor] = await Promise.all([cockpitSales(basis), showLabor ? cockpitLabor() : Promise.resolve(null)]);
+  const now = pacificParts(new Date());
+  const hourly = hourlyVsBaseline({
+    todayByHour: snap.today.byHour,
+    baselineByDay: snap.baseline.byDay,
+    baselineByDayHour: snap.baseline.byDayHour,
+    windowDays: snap.comparison.window.days,
+    mode: snap.comparison.window.mode,
+    nowHour: now.hour,
+    nowMinute: now.minute,
+  });
+  const tl = trafficVsLabor({ hourly, labor: labor?.labor ?? [] });
+  const label = snap.comparison.window.comparisonLabel;
+  const laborShown = showLabor && labor !== null;
+  return (
+    <Section
+      title="Traffic, sales & labor by hour"
+      description={
+        laborShown
+          ? "Bars are revenue; lines are transactions, the basis's transactions for the same hour, and labor hours on the clock. Where transactions run well above labor, the floor is stretched."
+          : "Bars are revenue; lines are transactions today and on the basis for the same hour."
+      }
+    >
+      {laborShown && !labor!.ok ? (
+        <p role="status" className="mb-3 text-xs text-[var(--admin-gold)]">
+          Time punches could not be read just now, so the labor line is missing. Refresh in a moment.
+        </p>
+      ) : null}
+      <div className="grid gap-6 lg:grid-cols-4">
+        <Card className="lg:col-span-3" padding="none">
+          <div className="p-5">
+            <TrafficLaborChart rows={tl.rows} basisLabel={label} showLabor={laborShown} />
+          </div>
+        </Card>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+          <MiniStat label="Transactions today" value={String(snap.today.totalOrders)} hint={label.replace(/^vs /, "Basis: ")} />
+          {laborShown ? (
+            <>
+              <MiniStat label="Labor hours so far" value={tl.noLabor ? "\u2014" : String(tl.totalLaborHours)} hint={tl.noLabor ? "No punches recorded today" : undefined} />
+              <MiniStat
+                label="Sales per labor hour"
+                value={tl.splhMinor !== null ? formatMoneyMinor(tl.splhMinor) : "\u2014"}
+                hint="Revenue \u00f7 hours on the clock"
+              />
+              <MiniStat
+                label="Most stretched"
+                value={tl.mostStretchedHour !== null ? formatHourLabel(tl.mostStretchedHour) : "\u2014"}
+                hint={
+                  tl.idleStaffedHours.length > 0
+                    ? `Staffed, no sales: ${tl.idleStaffedHours.map((h) => formatHourLabel(h)).join(", ")}`
+                    : "Most orders per labor hour"
+                }
+                tone={tl.mostStretchedHour !== null ? "orange" : "muted"}
+              />
+            </>
+          ) : (
+            <MiniStat
+              label="Basis rush"
+              value={hourly.baselinePeakHour !== null ? formatHourLabel(hourly.baselinePeakHour) : "\u2014"}
+              hint="Busiest hour on the basis"
+            />
+          )}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ── D209d: who on the clock is selling ── */
+async function CockpitOnShiftSection() {
+  const r = await cockpitOnShift();
+  return (
+    <Section
+      title="On the clock now"
+      description={r.board.leaderName ? `${r.board.leaderName} has rung the most sales today among people on the clock.` : "Who is on the clock and what they have rung today."}
+    >
+      {!r.ok ? (
+        <p role="status" className="mb-3 text-xs text-[var(--admin-gold)]">
+          Time punches or register sales could not be read just now, so this board may be incomplete.
+        </p>
+      ) : null}
+      <Card>
+        <OnShiftBoard board={r.board} />
+      </Card>
+    </Section>
+  );
+}
+
+/* ── D209e: categories and the types inside them ── */
+async function CockpitMixSection({ basis }: { basis?: string }) {
+  const snap = await cockpitSales(basis);
+  const mix = categoryMixVsBaseline({
+    today: snap.today.byTypeWithinCategory,
+    baselineByDay: snap.baseline.byDay,
+    baselineByDayCategoryType: snap.baseline.byDayCategoryType,
+    windowDays: snap.comparison.window.days,
+    mode: snap.comparison.window.mode,
+  });
+  const label = snap.comparison.window.comparisonLabel;
+  const bits: string[] = [];
+  if (mix.topGainer) bits.push(`${mix.topGainer} is gaining share`);
+  if (mix.topLoser) bits.push(`${mix.topLoser} is losing share`);
+  return (
+    <Section
+      title="Category & type mix"
+      description={`Today's revenue by category and the types inside each, ${label}.${bits.length ? ` ${bits.join("; ")}.` : ""}`}
+    >
+      <Card>
+        <CategoryMixExplorer
+          categories={mix.categories}
+          basisLabel={label}
+          hasBaseline={mix.baseline.days.length > 0}
+          todayTotalMinor={mix.todayTotalMinor}
+        />
+      </Card>
+    </Section>
+  );
+}
+
+/* ── D209g: the last four weeks ── */
+async function CockpitTrendSection({ basis }: { basis?: string }) {
+  const [trend, snap] = await Promise.all([cockpitTrend(), cockpitSales(basis)]);
+  const today = snap.todayYmd;
+  const t = dailyTrend(
+    trend.history.byDay,
+    { date: today, revenueMinorUnits: snap.today.totalRevenueMinorUnits, orders: snap.today.totalOrders, units: snap.today.totalUnits },
+    today,
+  );
+  const heat = weekHourHeatmap(trend.history.byDay, trend.history.byDayHour);
+  const [y, m, d] = today.split("-").map(Number);
+  const todayDow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return (
+    <Section
+      title="Last four weeks"
+      description={`Daily revenue with its 7-day average (today in gold, so far), the basket, and when the rush really comes.${
+        t.avgDayMinor !== null ? ` Average trading day: ${formatMoneyMinor(t.avgDayMinor)}.` : ""
+      }${t.bestDay ? ` Best: ${t.bestDay.date} (${formatMoneyMinor(t.bestDay.revenueMinor)}).` : ""}`}
+    >
+      {!trend.ok ? (
+        <p role="status" className="mb-3 text-xs text-[var(--admin-gold)]">
+          The last four weeks could not be read just now. Refresh in a moment.
+        </p>
+      ) : null}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2" padding="none">
+          <CardHeader className="p-5 pb-0" title="Daily revenue" subtitle={`${t.tradingDays} trading days \u00b7 closed days are gaps, not $0`} />
+          <div className="p-5 pt-3">
+            <SalesTrendChart rows={t.rows} />
+          </div>
+        </Card>
+        <Card padding="none">
+          <CardHeader className="p-5 pb-0" title="Who is buying (today)" subtitle="Orders by customer type" />
+          <div className="p-5 pt-3">
+            <CustomerMixDonut rows={snap.today.byCustomerType} />
+          </div>
+        </Card>
+        <Card className="lg:col-span-2" padding="none">
+          <CardHeader className="p-5 pb-0" title="When the rush comes" subtitle="Average orders by weekday and hour, last 28 days. Today's row is outlined." />
+          <div className="p-5 pt-3">
+            <WeekHourHeatmap heat={heat} todayDow={todayDow} />
+          </div>
+        </Card>
+        <Card padding="none">
+          <CardHeader className="p-5 pb-0" title="The basket" subtitle="Average order and units per order" />
+          <div className="p-5 pt-3">
+            <BasketTrendChart rows={t.rows} />
+          </div>
+        </Card>
+      </div>
+    </Section>
+  );
+}
+
+/* ── D209f: the ATM, what it dispenses and when it runs empty (owner only) ── */
+async function CockpitAtmSection() {
+  const atm = await cockpitAtm();
+  if (!atm.configured) return null;
+  const f = atm.forecast;
+  const st = atm.stats;
+  const sourceLine =
+    atm.currentCashSource === "live"
+      ? `Read live from the machine${atm.capturedAt ? ` (${new Date(atm.capturedAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles", dateStyle: "medium", timeStyle: "short" })})` : ""}`
+      : atm.currentCashSource === "estimate"
+        ? `Estimated: last load minus settled withdrawals through ${atm.dispensedThroughDate ?? "the last settlement"}${atm.sameDayLoadCaveat ? " (a high estimate: load-day withdrawals are not split out)" : ""}`
+        : "No cash reading yet";
+  const emptyValue = !f.hasForecast
+    ? "\u2014"
+    : f.likelyEmptyDate === null
+      ? `${f.horizonDays}+ days`
+      : f.likelyDaysLeft === 0
+        ? "Today"
+        : `${f.likelyDaysLeft} day${f.likelyDaysLeft === 1 ? "" : "s"}`;
+  const rangeHint =
+    f.hasForecast && f.likelyEmptyDate
+      ? `Likely ${f.likelyEmptyDate}; range ${f.earlyEmptyDate ?? "?"} to ${f.lateEmptyDate ?? `${f.horizonDays}+ days`}`
+      : f.reason ?? undefined;
+  return (
+    <Section
+      title="ATM cash"
+      description="What the machine dispenses and when it is likely to run empty, from settled days and the weekday pattern. A planning range, not a guarantee."
+      action={
+        <Button href="/admin/atm" variant="neutral" size="sm">
+          Open ATM
+        </Button>
+      }
+    >
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <MiniStat label="Cash in machine" value={atm.currentCashCents !== null ? formatMoneyMinor(atm.currentCashCents) : "\u2014"} hint={sourceLine} />
+        <MiniStat
+          label="Runs empty in"
+          value={emptyValue}
+          hint={rangeHint}
+          tone={f.urgent || (f.likelyDaysLeft !== null && f.likelyDaysLeft <= 2) ? "orange" : "default"}
+        />
+        <MiniStat
+          label="Avg. dispensed / day"
+          value={st.avgDailyCents !== null ? formatMoneyMinor(st.avgDailyCents) : "\u2014"}
+          hint={`${st.daysObserved} settled days of the last ${st.windowDays}${st.trendPct !== null ? ` \u00b7 ${st.trendPct >= 0 ? "+" : ""}${st.trendPct}% week on week` : ""}`}
+        />
+        <MiniStat
+          label="Avg. withdrawal"
+          value={st.avgWithdrawalCents !== null ? formatMoneyMinor(st.avgWithdrawalCents) : "\u2014"}
+          hint={st.avgWithdrawalsPerDay !== null ? `${st.avgWithdrawalsPerDay} withdrawals a day` : undefined}
+        />
+        <MiniStat
+          label="PAI says"
+          value={atm.paiDaysUntilCashOut !== null ? `${atm.paiDaysUntilCashOut} days` : "\u2014"}
+          hint="PAI's own days-until-cash-out, for comparison"
+          tone="muted"
+        />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card padding="none">
+          <CardHeader className="p-5 pb-0" title="Cash left, projected" subtitle="Likely path and the early-to-late range" />
+          <div className="p-5 pt-3">
+            {f.hasForecast && f.startCents !== null ? (
+              <AtmDepletionChart points={f.points} startCents={f.startCents} startLabel="Now" thresholdCents={f.thresholdCents} />
+            ) : (
+              <p className="py-10 text-center text-sm text-[var(--admin-text-faint)]">{f.reason ?? "No forecast yet."}</p>
+            )}
+          </div>
+        </Card>
+        <Card padding="none">
+          <CardHeader className="p-5 pb-0" title="Dispensed per day" subtitle="Last 30 days, settled" />
+          <div className="p-5 pt-3">
+            <AtmDispenseChart rows={atm.history} />
+          </div>
+        </Card>
+        <Card padding="none">
+          <CardHeader className="p-5 pb-0" title="By weekday" subtitle="Average and typical range, last 12 weeks" />
+          <div className="p-5 pt-3">
+            <AtmWeekdayChart weekdays={st.weekdays} />
+          </div>
+        </Card>
+      </div>
+    </Section>
   );
 }
 
@@ -744,6 +1089,11 @@ export default async function AdminDashboardPage({
   const canOpenLeafly = can(session.profile.role, "settings.manage");
   // D181: every staff login sees the cash jobs (drop now, morning duties).
   const canSeeCash = can(session.profile.role, "orders.manage");
+  // D209d/g: per-person and staffing figures (and the four-week trend) for
+  // people who run the floor or read reports; the ATM panel is the owner's
+  // (finances.view), the same gate as /admin/atm's money.
+  const canSeeStaffing = can(session.profile.role, "staffing.manage") || can(session.profile.role, "reports.view");
+  const canSeeAtm = can(session.profile.role, "finances.view");
 
   // S-9: surface unset webhook secrets loudly. In production those endpoints
   // now refuse (fail closed), so this banner tells the owner exactly which env
@@ -854,6 +1204,26 @@ export default async function AdminDashboardPage({
 
         <Suspense fallback={<CockpitSectionSkeleton tiles={3} tall />}>
           <CockpitHourlySection basis={basis} />
+        </Suspense>
+
+        <Suspense fallback={<CockpitSectionSkeleton title="Traffic, sales & labor by hour" tiles={2} tall />}>
+          <CockpitTrafficSection basis={basis} showLabor={canSeeStaffing} />
+        </Suspense>
+
+        <Suspense fallback={canSeeStaffing ? <CockpitSectionSkeleton title="On the clock now" tiles={2} /> : null}>
+          {canSeeStaffing ? <CockpitOnShiftSection /> : null}
+        </Suspense>
+
+        <Suspense fallback={<CockpitSectionSkeleton title="Category & type mix" tiles={2} tall />}>
+          <CockpitMixSection basis={basis} />
+        </Suspense>
+
+        <Suspense fallback={canSeeStaffing ? <CockpitSectionSkeleton title="Last four weeks" tiles={3} tall /> : null}>
+          {canSeeStaffing ? <CockpitTrendSection basis={basis} /> : null}
+        </Suspense>
+
+        <Suspense fallback={canSeeAtm ? <CockpitSectionSkeleton title="ATM cash" tiles={3} tall /> : null}>
+          {canSeeAtm ? <CockpitAtmSection /> : null}
         </Suspense>
 
         <Suspense fallback={<CockpitSectionSkeleton tiles={2} tall />}>
