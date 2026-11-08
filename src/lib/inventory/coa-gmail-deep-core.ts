@@ -60,6 +60,10 @@ export const DEEP_WINDOW: readonly [number, number] = [45, 21];
 /** The narrow window for "any JSON / zip at all" (it matches every vendor). */
 export const JSON_NEAR_WINDOW: readonly [number, number] = [4, 6];
 export const DEEP_BARCODES_PER_QUERY = 12;
+/** D207c: kept out of the broad (dated) questions; the exact manifest / barcode / LCB-id questions still look everywhere. */
+export const DEEP_NO_JUNK = "-category:promotions -category:social";
+/** The exact questions: an email they match is opened before any broad match. */
+export const PRECISE_WHY: ReadonlySet<DeepQuery["why"]> = new Set(["manifest", "lcb-id", "barcodes"]);
 export const DEEP_MAX_BRANDS = 6;
 export const DEEP_MAX_SENDERS = 6;
 
@@ -160,12 +164,15 @@ export function buildDeepQueries(t: DeepTarget): DeepQuery[] {
   if (!after || !before) return out;
   const win = `after:${after} before:${before}`;
   const lic = safeToken(t.vendorLicense) ?? (/^\d{5,7}$/.test((t.vendorLicense ?? "").trim()) ? (t.vendorLicense ?? "").trim() : null);
-  if (lic) out.push({ why: "license", q: `"${lic}" ${win} ${S}` });
+  // D207c: the broad dated questions skip Gmail's Promotions/Social tabs (vendor
+  // newsletters and menu blasts ate a whole click without ever carrying a COA).
+  const NJ = DEEP_NO_JUNK;
+  if (lic) out.push({ why: "license", q: `"${lic}" ${win} ${NJ} ${S}` });
   const name = vendorSearchName(t.vendorLabel);
   const names = [name, vendorShortName(name)].filter((x): x is string => Boolean(x));
-  if (names.length > 0) out.push({ why: "vendor", q: `{${names.map((n) => `"${n}"`).join(" ")}} ${win} ${S}` });
+  if (names.length > 0) out.push({ why: "vendor", q: `{${names.map((n) => `"${n}"`).join(" ")}} ${win} ${NJ} ${S}` });
   const brands = brandWords(t.productNames).filter((b) => !names.some((n) => n.toLowerCase() === b.toLowerCase()));
-  if (brands.length > 0) out.push({ why: "brand", q: `{${brands.map((b) => `"${b}"`).join(" ")}} ${win} ${S}` });
+  if (brands.length > 0) out.push({ why: "brand", q: `{${brands.map((b) => `"${b}"`).join(" ")}} ${win} ${NJ} ${S}` });
 
   const senders = new Set<string>();
   const vendorMail = senderAddress(t.vendorEmail);
@@ -179,11 +186,11 @@ export function buildDeepQueries(t: DeepTarget): DeepQuery[] {
   if (personal.length > 0) out.push({ why: "sender", q: `{${personal.map((a) => `from:${a}`).join(" ")}} ${win} ${S}` });
   const words = [...names, ...brands].slice(0, 6);
   if (platform.length > 0 && words.length > 0)
-    out.push({ why: "sender", q: `{${platform.map((a) => `from:${a}`).join(" ")}} {${words.map((w) => `"${w}"`).join(" ")}} ${win} ${S}` });
+    out.push({ why: "sender", q: `{${platform.map((a) => `from:${a}`).join(" ")}} {${words.map((w) => `"${w}"`).join(" ")}} ${win} ${NJ} ${S}` });
 
   const na = gmailDayOffset(t.transferDate, -JSON_NEAR_WINDOW[0]);
   const nb = gmailDayOffset(t.transferDate, JSON_NEAR_WINDOW[1]);
-  if (na && nb) out.push({ why: "json-near-date", q: `{filename:json filename:zip filename:txt json "transfer data" wcia} after:${na} before:${nb} ${S}` });
+  if (na && nb) out.push({ why: "json-near-date", q: `{filename:json filename:zip filename:txt json "transfer data" wcia} after:${na} before:${nb} ${NJ} ${S}` });
   return out;
 }
 
@@ -343,6 +350,30 @@ export function markTarget(s: DeepState, manifestId: string, nowIso: string): De
   return { ...s, targets: { ...s.targets, [manifestId.toLowerCase()]: nowIso }, updatedAt: nowIso };
 }
 
+/**
+ * D207c: one delivery's fair share of a click, so the delivery with the most lots
+ * (and the most matched emails) can no longer eat every click while the others
+ * are never reached. The share is what is left of the time and of the email cap,
+ * split evenly over the deliveries not yet started (at least one email).
+ */
+export function deepShare(budgetMs: number, maxEmails: number, elapsedMs: number, opened: number, remainingTargets: number): { untilMs: number; emails: number } {
+  const n = Math.max(1, Math.floor(remainingTargets));
+  const leftMs = Math.max(0, budgetMs - Math.max(0, elapsedMs));
+  const leftEmails = Math.max(0, maxEmails - Math.max(0, opened));
+  return { untilMs: Math.max(0, elapsedMs) + Math.floor(leftMs / n), emails: leftEmails === 0 ? 0 : Math.max(1, Math.floor(leftEmails / n)) };
+}
+
+/** D207c: exact-question matches first (in their found order), then the broad ones. */
+export function orderDeepQueue(precise: readonly string[], broad: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of [...precise, ...broad]) if (!seen.has(id)) {
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 /** Never-dug deliveries first, then the longest-ago dug; most missing lots first. */
 export function orderDeepTargets<T extends { manifestId: string; lots: readonly unknown[] }>(targets: readonly T[], s: DeepState): T[] {
   return [...targets].sort((a, b) => {
@@ -400,6 +431,8 @@ export type DeepDelivery = {
   /** Kept vendor JSON files that name at least one of this delivery's missing barcodes. */
   jsonNamingLots: number;
   emails: DeepEmail[];
+  /** D207c: this delivery's share of the click ran out before every matched email was re-read. */
+  partial: boolean;
 };
 
 export type DeepTotals = {
@@ -433,6 +466,7 @@ export function emptyDeepDelivery(t: Pick<GmailTarget, "manifestId" | "vendorLab
     newPdf: 0,
     jsonNamingLots: 0,
     emails: [],
+    partial: false,
   };
 }
 
@@ -446,7 +480,8 @@ export function deepDeliveryLine(d: DeepDelivery): string {
     `${who}: ${s_(d.queries, "question")}, ${s_(d.matched, "email")} matched (${d.newEmails} newly kept, ${d.reread} re-read in full, ${s_(d.threadMates, "reply", "replies")} in their threads); ${s_(d.newJson, "new JSON")} and ${s_(d.newPdf, "new PDF")} found.`,
   ];
   if (linked !== null) parts.push(d.lotsAfter === 0 ? `All ${d.lotsBefore} lots now have their COA.` : `${linked} of ${d.lotsBefore} lots linked; ${d.lotsAfter} still missing.`);
-  if (d.lotsAfter !== 0) {
+  if (d.lotsAfter !== 0 && d.partial) parts.push("Its share of this click ran out before every matched email was re-read: click Deep dig again; it continues with the emails not read yet.");
+  else if (d.lotsAfter !== 0) {
     if (d.jsonNamingLots > 0) parts.push(`A vendor JSON naming these barcodes IS kept (${s_(d.jsonNamingLots, "file")}) but it has no lab data for them: ask the vendor for the COAs.`);
     else if (d.matched === 0) parts.push("Stephen's mailbox has no email naming this manifest, its barcodes, its license, vendor, brands or sender around that date: the JSON was not sent to this mailbox; ask the vendor to resend it.");
     else parts.push("None of those emails carries a JSON or a COA with these exact barcodes: ask the vendor to resend the transfer JSON.");
@@ -558,6 +593,24 @@ export function __runCoaGmailDeepCoreTests(): { passed: number; failed: number }
   ok(s2.targets[M1] === "2026-11-07T01:00:00Z" && markTarget(s2, "nope", "x") === s2 && Object.keys(s2.dug).length === 2, "delivery remembered");
   ok(parseDeepState(JSON.parse(JSON.stringify(s2))).targets[M1] === "2026-11-07T01:00:00Z", "memory round-trips");
   ok(orderDeepTargets([{ manifestId: M1, lots: [1] }, { manifestId: M2, lots: [1] }], s2)[0].manifestId === M2, "never-dug delivery first");
+  // D207c: fair shares, junk filter, exact matches first, rotation
+  const sh1 = deepShare(140_000, 60, 0, 0, 3);
+  ok(sh1.untilMs === 46_666 && sh1.emails === 20, "3 deliveries: a third of the time and of the emails each");
+  const sh2 = deepShare(140_000, 60, 100_000, 50, 2);
+  ok(sh2.untilMs === 120_000 && sh2.emails === 5, "the share is of what is left");
+  ok(deepShare(140_000, 60, 150_000, 60, 1).untilMs === 150_000 && deepShare(140_000, 60, 150_000, 60, 1).emails === 0, "nothing left: no share");
+  ok(deepShare(140_000, 60, 0, 59, 5).emails === 1 && deepShare(1000, 10, 0, 0, 0).untilMs === 1000, "at least one email; zero targets never divides by zero");
+  ok(q.filter((x) => ["license", "vendor", "brand", "json-near-date"].includes(x.why) || x.q.includes("getgrowflow")).every((x) => x.q.includes(DEEP_NO_JUNK)), "broad questions skip Promotions/Social");
+  ok(q.some((x) => x.q.startsWith("{from:bnetsov83@gmail.com}") && !x.q.includes("category:")), "the rep's own address still looks in every tab");
+  ok(q.filter((x) => PRECISE_WHY.has(x.why)).every((x) => !x.q.includes("category:")), "exact questions still look everywhere");
+  ok(orderDeepQueue(["b", "a"], ["c", "a", "d"]).join() === "b,a,c,d", "exact matches opened first, no duplicates");
+  const s3 = markTarget(markTarget(s2, M2, "2026-11-07T02:00:00Z"), M1, "2026-11-07T03:00:00Z");
+  ok(orderDeepTargets([{ manifestId: M1, lots: [1, 2, 3] }, { manifestId: M2, lots: [1] }], s3)[0].manifestId === M2, "a delivery tried last click goes to the back (rotation)");
+  const dp = emptyDeepDelivery({ manifestId: M1, vendorLabel: "GREEN RESEARCH", manifestNumber: "GF42904700003637", transferDate: "2026-10-02", lots: [] });
+  dp.partial = true;
+  dp.lotsAfter = 15;
+  dp.lotsBefore = 15;
+  ok(deepDeliveryLine(dp).includes("share of this click ran out") && !deepDeliveryLine(dp).includes("ask the vendor"), "partial: never blames the vendor yet");
   ok(jsonInBody('Hi, here it is:\n{"document_schema_version":"2.1.0","inventory_transfer_items":[]}\nThanks') === '{"document_schema_version":"2.1.0","inventory_transfer_items":[]}', "JSON pasted into the body");
   ok(jsonInBody("Order {see attached} thanks") === null && jsonInBody('{"a":1, "b": "not a transfer at all, just text"}') === null && jsonInBody('{"inventory_id": 1,') === null, "no JSON / not a transfer / broken");
   // notes

@@ -211,3 +211,39 @@ export function LotCoaAttach({
     </div>
   );
 }
+
+export const COA_DOC_TITLE = "Attach the COA document";
+
+/**
+ * D207d - "the one off lots that need coas": paste the COA link the vendor sent
+ * (Google Drive / Dropbox / a lab link) or upload the PDF. The certificate for
+ * this lot is read and attached (fill only, audited). Zero client JS: one POST
+ * form (multipart) to attachLotCoaDocumentAction.
+ */
+export function LotCoaDocumentAttach({ lotId, refusal, action }: { lotId: string; refusal: LinkRefusal | null; action: Action }) {
+  if (refusal) return null;
+  return (
+    <div id="coa-doc" className="mt-4 border-t border-[var(--admin-border)] pt-3" data-testid="lot-coa-doc" data-lot={lotId}>
+      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">{COA_DOC_TITLE}</h3>
+      <p className="mb-2 text-xs text-[var(--admin-text-faint)]">
+        Paste the COA link the vendor sent (a Google Drive or Dropbox share link, or the lab&apos;s own link), or upload
+        the COA PDF. The certificate that names this lot&apos;s barcode is attached; a PDF with only one certificate is
+        attached as &quot;attached by hand&quot;. It only fills an empty link, archives the PDF and is recorded in the
+        audit trail. A Google Drive file must be shared as &quot;Anyone with the link&quot;.
+      </p>
+      <form action={action} encType="multipart/form-data" className="flex flex-wrap items-end gap-2">
+        <label className="min-w-[16rem] flex-1 text-xs text-[var(--admin-text-faint)]">
+          COA link
+          <input name="coa_link" type="url" placeholder="https://drive.google.com/file/d/..." className={INPUT} autoComplete="off" data-testid="lot-coa-doc-link" />
+        </label>
+        <label className="text-xs text-[var(--admin-text-faint)]">
+          or the PDF
+          <input name="coa_file" type="file" accept="application/pdf,.pdf" className="block text-xs" data-testid="lot-coa-doc-file" />
+        </label>
+        <button type="submit" className={BTN} data-testid="lot-coa-doc-submit">
+          Read and attach the COA
+        </button>
+      </form>
+    </div>
+  );
+}

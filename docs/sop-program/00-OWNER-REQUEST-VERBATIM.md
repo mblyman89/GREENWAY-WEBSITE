@@ -1727,3 +1727,30 @@ Verbatim:
 - `coa-extract-core`: `FILE_SHARE_COA_HOSTS` and `driveDirectUrl`. `safeCoaUrl` converts Drive links, and `nextRedirectHop` follows Google's 303. 9 new self-tests (floor 141).
 - Test: `tests/compliance/d207-lot-onboard.test.ts`.
 - To re-read the 12 Drive COAs, press "Re-read every COA and trust it" once more. The job reads every row that is not ok.
+
+### D207c/d/e — the last three manifests, one-off lots, the Fix-later table (2026-11-08)
+
+Same request (verbatim above): "The deep search isn't finding the last three ... on the fix it later page ... a table with like 40 or 70 lots that say they don't have a coa, but their manifests listed in the table are not one of the three manifests ... Then build everything to help me unlock these last three manifests and the one off lots that need coas."
+
+**Findings (production, read-only):**
+- 2,387 lots have stock. Only **35 have no COA**, all on the three deliveries: GREEN RESEARCH GF42904700003637 (15), EVERGREEN HERBAL M07825651675 (14), ALIS GROUP 21055126467944359 (6). No lot outside those three is missing a COA.
+- **The deep dig starved.** Deliveries are ordered by "never dug first, then most lots", but a delivery was only marked as dug when the click finished it. GREEN RESEARCH has the most lots and the most matched email (newsletters included), so it used up the whole 140 s on every click. EVERGREEN and ALIS were never reached.
+- **The "Selling now, fix later" table** lists every stocked lot with ANY reason (no menu product, auto price, quarantine, no COA, fixed at the register), not only a missing COA. Its second column was the lot's own barcode, not its manifest. That is why its lots did not match the three deliveries.
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D207c | **The deep dig shares each click fairly.** Each delivery gets an equal share of what is left of the time and the email cap. Every delivery started is remembered even when the click stops inside it, so the next click starts with the one tried longest ago. Emails found by the exact questions (manifest, barcodes, LCB id) are opened first. The broad dated questions skip Gmail's Promotions and Social tabs; the exact questions and the rep's own address still look everywhere. A delivery cut short says "click again", never "ask the vendor". | "The deep search isn't finding the last three" |
+| D207d | **"Attach the COA document" on every lot page** without a COA, including lots with no delivery. Paste the link the vendor sent (Google Drive file, Dropbox, or the lab's link) or upload the PDF. The certificate that prints the lot's barcode is attached. If the PDF holds only one certificate, it is attached as "attached by hand". If it holds several and none names the lot, it is refused with the certificates listed, never guessed. The write is fill-only and never touches a destroyed lot. An existing lab result with the same lab test id is reused. The PDF is archived. Every redirect hop of a link must be a public host whose DNS answers are all public. Audited as `inventory_lot.coa_attached_from_document`. | "help me unlock ... the one off lots that need coas" |
+| D207e | **The Fix-later table explains itself.** One sentence says it lists every reason and how many of its lots have no COA, on how many deliveries. Reason chips with counts filter it (`?why=no_coa`). A "Delivery (vendor + manifest)" column was added. Every No COA row links to the lot page's document box. The delivery dropdown names its count. | "Please look into this for me" |
+
+### As built (D207c/d/e)
+
+- `coa-gmail-deep-core`: `deepShare`, `orderDeepQueue`, `PRECISE_WHY`, `DEEP_NO_JUNK`, and `DeepDelivery.partial`, with its own line in the report. 57 self-tests (floor 45 → 57).
+- `coa-gmail-deep-store` `deepDigGmail`: per-delivery share, exact matches first, `markTarget` always called.
+- d203 test: new starvation regression. A delivery with 8 lots and 30 newsletters no longer stops a 1-lot delivery from being linked in the same click, and both deliveries are remembered.
+- `src/lib/inventory/lot-coa-manual-core.ts` (pure, 18 self-tests): `parseManualCoaLink`, `checkManualCoaUpload`, `pickCertificateForLot` and `manualAttachNote`.
+- `src/lib/inventory/lot-coa-manual-store.ts`: `fetchManualCoaPdf` (hop-by-hop public and DNS guard, 20 s, 25 MB, `%PDF-` check) and `attachCoaDocumentToLot` (read, pick, reuse or insert, guarded link, archive).
+- `attachLotCoaDocumentAction` in inventory/actions.ts, behind `inventory.manage`.
+- `<LotCoaDocumentAttach>` in LotLinkPanels (anchor `#coa-doc`).
+- `src/lib/pos/fix-later-view-core.ts` (pure, 8 self-tests). `readFixLaterCoverage` adds each lot's delivery.
+- Test: `tests/compliance/d207-coa-unlock.test.ts`.

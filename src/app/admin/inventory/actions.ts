@@ -6,6 +6,9 @@ import { revalidatePromotionSurfaces } from "@/lib/promotions/revalidate-promoti
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
+// D207d: attach the COA document (pasted link / uploaded PDF) to one lot.
+import { MANUAL_COA_ANCHOR, MANUAL_COA_AUDIT, checkManualCoaUpload, parseManualCoaLink } from "@/lib/inventory/lot-coa-manual-core";
+import { attachCoaDocumentToLot, fetchManualCoaPdf } from "@/lib/inventory/lot-coa-manual-store";
 import { can } from "@/lib/auth/roles";
 import {
   evaluateLotLifecycleChange,
@@ -388,6 +391,79 @@ export async function linkLotCoaAction(lotId: string, formData: FormData) {
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
   redirect(`/admin/inventory/${lotId}?saved=1#${COA_ANCHOR}`);
+}
+
+/**
+ * D207d - "help me unlock these last three manifests and the one off lots that
+ * need coas": the lot page's "Attach the COA document" box. A pasted COA link
+ * (Google Drive / Dropbox / a lab's link) or an uploaded PDF; the certificate
+ * for this lot is read, attached fill-only (never replaces a lab result, never
+ * a destroyed lot) and audited. The upload wins when both are given.
+ */
+export async function attachLotCoaDocumentAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const before = await getLotById(lotId);
+  if (!before) lotErr(lotId, MANUAL_COA_ANCHOR, "That lot no longer exists.");
+  const gate = coaLinkEligibility(before);
+  if (!gate.ok) lotErr(lotId, MANUAL_COA_ANCHOR, refusalMessage(gate.reason));
+
+  const file = formData.get("coa_file");
+  const linkRaw = (formData.get("coa_link") as string | null) ?? "";
+  let bytes: Uint8Array | null = null;
+  let label = "";
+  let source = "";
+  if (file && typeof file === "object" && "arrayBuffer" in file && (file as File).size > 0) {
+    const f = file as File;
+    const buf = new Uint8Array(await f.arrayBuffer());
+    const chk = checkManualCoaUpload(f.name, f.size, buf.subarray(0, 8));
+    if (!chk.ok) lotErr(lotId, MANUAL_COA_ANCHOR, chk.error);
+    else {
+      bytes = buf;
+      label = chk.label;
+      source = "upload";
+    }
+  } else {
+    const link = parseManualCoaLink(linkRaw);
+    if (!link.ok) lotErr(lotId, MANUAL_COA_ANCHOR, link.error);
+    else {
+      const got = await fetchManualCoaPdf(link.url);
+      if (!got.ok) lotErr(lotId, MANUAL_COA_ANCHOR, got.error);
+      else {
+        bytes = got.bytes;
+        label = link.label;
+        source = link.url;
+      }
+    }
+  }
+  if (!bytes) lotErr(lotId, MANUAL_COA_ANCHOR, "Paste the COA link or choose the PDF first.");
+
+  const res = await attachCoaDocumentToLot(lotId, bytes as Uint8Array, label, session.userId);
+  if (!res.ok) lotErr(lotId, MANUAL_COA_ANCHOR, res.error);
+  const done = res as Extract<typeof res, { ok: true }>;
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: MANUAL_COA_AUDIT,
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { lab_result_id: before.lab_result_id ?? null },
+    after: {
+      lab_result_id: done.labId,
+      labtest_id: done.labtestId,
+      matched_by: done.by,
+      reused: done.reused,
+      archived: done.archived,
+      source: source === "upload" ? `uploaded ${label}` : source.slice(0, 300),
+      changes: [`Attached COA ${done.labtestId} from ${source === "upload" ? "an uploaded PDF" : "a pasted link"}`],
+    },
+  });
+
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin/inventory/fix-later");
+  redirect(`/admin/inventory/${lotId}?saved=1&lot_msg=${encodeURIComponent(done.note)}#${MANUAL_COA_ANCHOR}`);
 }
 
 /**

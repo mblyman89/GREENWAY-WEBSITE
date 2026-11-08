@@ -18,6 +18,9 @@
  * and a "Search Gmail" button on every No COA lot and every delivery.
  * D203 adds "Deep dig" (all, or one delivery) for the last ones the search cannot find.
  * D206 adds "Re-read every COA and trust it": the overnight server job (cron /api/cron/coa-trust-all).
+ * D207e: the "Selling now, fix later" table says it lists EVERY reason (not only a
+ * missing COA), shows each lot's delivery, filters by reason (?why=no_coa) and
+ * links each No COA lot to the lot page's "Attach the COA document" box.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -41,6 +44,7 @@ import {
   startTrustAllAction,
   stopTrustAllAction,
 } from "./actions";
+import { fixLaterChips, fixLaterExplain, fixLaterRows, parseFixLaterFilter } from "@/lib/pos/fix-later-view-core";
 import {
   FIX_LATER_REASON_LABELS,
   REGISTER_STOP_LABELS,
@@ -226,7 +230,7 @@ function CoaFromGmail({ panel, tone, msg }: { panel: GmailPanel; tone: string | 
           </ol>
           {panel.rows.length > 0 ? (
             <details className="mt-4" data-testid="coa-gmail-deliveries">
-              <summary className="cursor-pointer text-sm font-bold text-[var(--admin-text)]">Deliveries still missing COAs (search one at a time)</summary>
+              <summary className="cursor-pointer text-sm font-bold text-[var(--admin-text)]">Deliveries still missing COAs ({panel.rows.length}; {panel.rows.reduce((n, r) => n + r.lots, 0)} lots) - search one at a time</summary>
               <table className="mt-2 w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase text-[var(--admin-text-muted)]">
@@ -334,10 +338,15 @@ function CoaTrustAll({ panel, tone, msg }: { panel: TrustPanel; tone: string | u
   );
 }
 
-export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string; gm?: string; gm_msg?: string; tr?: string; tr_msg?: string }> }) {
+export default async function FixLaterPage({ searchParams }: { searchParams: Promise<{ coa?: string; coa_msg?: string; gm?: string; gm_msg?: string; tr?: string; tr_msg?: string; why?: string }> }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
   const [read, coaPanel, gmailPanel, trustPanel] = await Promise.all([readFixLaterCoverage(), readCoaPanel(), readGmailPanel(), readTrustPanel()]);
+  const filter = parseFixLaterFilter(sp.why);
+  const sellingRows = read.ok
+    ? read.coverage.rows.filter((r) => r.sells && r.fixLater.length > 0).map((r) => ({ ...r, delivery: read.lots.get(r.lotId)?.delivery ?? null }))
+    : [];
+  const shownRows = fixLaterRows(sellingRows, filter);
 
   return (
     <div className="space-y-5">
@@ -398,42 +407,68 @@ export default async function FixLaterPage({ searchParams }: { searchParams: Pro
           ) : null}
 
           <div className={CARD} id="fix-later-list" data-testid="fix-later-list">
-            <h2 className={H2}>Selling now, fix later ({read.coverage.rows.filter((r) => r.sells && r.fixLater.length > 0).length})</h2>
+            <h2 className={H2}>Selling now, fix later ({sellingRows.length})</h2>
+            {/* D207e: say what this table is (every reason, not only a missing COA) and filter by reason. */}
+            <p className="mb-3 text-sm text-[var(--admin-text-muted)]" data-testid="fix-later-explain">
+              {fixLaterExplain(sellingRows)}
+            </p>
+            <div className="mb-3 flex flex-wrap gap-2" data-testid="fix-later-filter">
+              {fixLaterChips(sellingRows).map((c) => (
+                <Link
+                  key={c.key}
+                  href={c.key === "all" ? "/admin/inventory/fix-later#fix-later-list" : `/admin/inventory/fix-later?why=${c.key}#fix-later-list`}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    filter === c.key ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black" : "border-[var(--admin-border)] text-[var(--admin-text)]"
+                  }`}
+                  data-testid={`fix-later-filter-${c.key}`}
+                >
+                  {c.key === "all" ? "All" : REASON_SHORT[c.key]} ({c.count})
+                </Link>
+              ))}
+            </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase text-[var(--admin-text-muted)]">
                   <th className="py-1 pr-3">Lot</th>
-                  <th className="py-1 pr-3">Package</th>
+                  <th className="py-1 pr-3">Delivery (vendor + manifest)</th>
+                  <th className="py-1 pr-3">Lot barcode</th>
                   <th className="py-1 pr-3">Units</th>
                   <th className="py-1">What to fix</th>
                 </tr>
               </thead>
               <tbody>
-                {read.coverage.rows
-                  .filter((r) => r.sells && r.fixLater.length > 0)
-                  .sort((a, b) => Number(b.fixLater.includes("fixed_at_register")) - Number(a.fixLater.includes("fixed_at_register")))
-                  .map((r) => (
-                    <tr key={r.lotId} className="border-t border-[var(--admin-border)] align-top">
-                      <td className="py-1 pr-3">
-                        <Link className="underline" href={`/admin/inventory/${r.lotId}`}>
-                          {r.label}
-                        </Link>
-                      </td>
-                      <td className="py-1 pr-3 font-mono text-xs">{read.lots.get(r.lotId)?.lotCode ?? ""}</td>
-                      <td className="py-1 pr-3">{r.units}</td>
-                      <td className="py-1">
-                        {r.fixLater.map((x) => REASON_SHORT[x]).join(" · ")}
-                        {r.fixLater.includes("no_coa") ? (
-                          <form action={searchGmailForOneAction} className="mt-1">
+                {shownRows.map((r) => (
+                  <tr key={r.lotId} className="border-t border-[var(--admin-border)] align-top">
+                    <td className="py-1 pr-3">
+                      <Link className="underline" href={`/admin/inventory/${r.lotId}`}>
+                        {r.label}
+                      </Link>
+                    </td>
+                    <td className="py-1 pr-3 text-xs">{r.delivery ?? ""}</td>
+                    <td className="py-1 pr-3 font-mono text-xs">{read.lots.get(r.lotId)?.lotCode ?? ""}</td>
+                    <td className="py-1 pr-3">{r.units}</td>
+                    <td className="py-1">
+                      {r.fixLater.map((x) => REASON_SHORT[x]).join(" · ")}
+                      {r.fixLater.includes("no_coa") ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <form action={searchGmailForOneAction}>
                             <input type="hidden" name="lotId" value={r.lotId} />
                             <Button type="submit" variant="neutral" size="sm" data-testid="coa-gmail-lot-button">
                               Search Gmail for this COA
                             </Button>
                           </form>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
+                          <Link
+                            className="self-center text-xs font-semibold text-[var(--admin-accent)] underline"
+                            href={`/admin/inventory/${r.lotId}#coa-doc`}
+                            data-testid="fix-later-attach-doc"
+                          >
+                            Paste a COA link / upload the PDF
+                          </Link>
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

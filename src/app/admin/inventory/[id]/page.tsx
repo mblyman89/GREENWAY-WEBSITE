@@ -60,6 +60,7 @@ import {
   updateLotWebsiteClassificationAction,
   updateLotAfterTaxPriceAction,
   sendLotToOnboardingAction,
+  attachLotCoaDocumentAction,
   updateLotReceivedDateAction,
   updateLotComplianceClassificationAction,
   linkLotProductAction,
@@ -85,7 +86,7 @@ import {
 } from "@/lib/inventory/lot-link-core";
 import { findLabResultsByLabtestId, listDraftHintsForLot, listDraftsForKey } from "@/lib/inventory/lot-link-store";
 import { lotOnboardVerdict, onboardBanner, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
-import { LotProductLinkPanel, LotCoaAttach } from "@/components/admin/inventory/LotLinkPanels";
+import { LotProductLinkPanel, LotCoaAttach, LotCoaDocumentAttach } from "@/components/admin/inventory/LotLinkPanels";
 // SLICE 18A: the compliance-classification panel. Status is derived by the
 // pure core from MENU truth (the only surface the register enforces from).
 import {
@@ -831,6 +832,8 @@ export default async function LotDetailPage({
               searchError={coaSearchError}
               action={coaLinkAction}
             />
+            {/* D207d: paste a COA link (Drive / Dropbox / lab) or upload the PDF. */}
+            <LotCoaDocumentAttach lotId={lot.id} refusal={coaGate.ok ? null : coaGate.reason} action={attachLotCoaDocumentAction.bind(null, id)} />
             {/* R15a: the Cultivera export's own potency figures (migration 0241),
                 labelled as NOT a COA. The COA above always outranks these. */}
             {(lot.pos_thc != null || lot.pos_cbd != null || lot.pos_thca != null || lot.pos_cbda != null ||
