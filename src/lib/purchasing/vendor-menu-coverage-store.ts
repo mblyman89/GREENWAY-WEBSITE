@@ -43,11 +43,17 @@ import {
   type NeededRow,
   type SearchedRow,
 } from "@/lib/purchasing/vendor-menu-coverage-core";
+import { missingLogoQueue } from "@/lib/purchasing/vendor-logo-core";
+import { publicMediaUrl } from "@/lib/vendors/store";
 
 export type VendorMenuCoverage = {
   searched: SearchedRow[];
   needed: NeededRow[];
   kpis: CoverageKpis;
+  /** D211 — vendor id → public logo URL (only vendors whose logo resolved). */
+  logos: Record<string, string>;
+  /** D211 — vendors we carry with no logo yet (what "Fetch all missing logos" works through). */
+  missingLogos: number;
   /** Plain-English problems from reads that failed; empty when everything loaded. */
   warnings: string[];
   configured: boolean;
@@ -212,6 +218,8 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
     searched: [],
     needed: [],
     kpis: coverageKpis([], [], new Map()),
+    logos: {},
+    missingLogos: 0,
     warnings: [],
     configured: false,
   };
@@ -222,7 +230,7 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
   const [vendors, aliases, brands, lots, memories, snapshots] = await Promise.all([
     readAll<CoverageVendor>("Vendors", warnings, (f, t) =>
       admin.from("vendors")
-        .select("id, display_name, slug, dba, legal_name, license_number, email, phone, website, is_active, total_accepted_ytd_cents, last_accepted_at")
+        .select("id, display_name, slug, dba, legal_name, license_number, email, phone, website, is_active, total_accepted_ytd_cents, last_accepted_at, status, logo_media_id")
         .order("id", { ascending: true }).range(f, t)),
     readAll<CoverageAlias>("Vendor aliases", warnings, (f, t) =>
       admin.from("vendor_aliases").select("id, vendor_id, source_name").order("id", { ascending: true }).range(f, t)),
@@ -244,7 +252,51 @@ async function loadUncached(nowMs: number): Promise<VendorMenuCoverage> {
   const lotsByVendor = rollupLots(lots);
   const searched = buildSearchedRows({ snapshots, vendors, match, itemsBySnapshot, lotsByVendor, memories, nowMs });
   const needed = buildNeededRows({ vendors, lotsByVendor, searched, memories, nowMs });
-  return { searched, needed, kpis: coverageKpis(searched, needed, lotsByVendor), warnings, configured: true };
+  const logos = await readLogoUrls(admin, vendors, warnings);
+  const missingLogos = missingLogoQueue(
+    vendors.map((v) => ({ ...v, status: v.status ?? null, logo_media_id: v.logo_media_id ?? null })),
+    lotsByVendor,
+    Number.MAX_SAFE_INTEGER,
+  ).length;
+  return {
+    searched,
+    needed,
+    kpis: coverageKpis(searched, needed, lotsByVendor),
+    logos,
+    missingLogos,
+    warnings,
+    configured: true,
+  };
+}
+
+/** D211 — logo thumbnails: media_assets.storage_key → public bucket URL. */
+async function readLogoUrls(admin: Admin, vendors: readonly CoverageVendor[], warnings: string[]): Promise<Record<string, string>> {
+  const ids = [...new Set(vendors.map((v) => v.logo_media_id).filter((x): x is string => Boolean(x)))];
+  const out: Record<string, string> = {};
+  if (ids.length === 0) return out;
+  let failed = false;
+  const rows = await chunkedIn<string, { id: string; storage_key: string | null }>(ids, async (chunk, from, to) => {
+    if (failed) return [];
+    const { data, error } = await admin
+      .from("media_assets")
+      .select("id, storage_key")
+      .in("id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      failed = true;
+      warnings.push(`Vendor logos: ${dbErrorForStaff(error, "the read failed")}`);
+      return [];
+    }
+    return (data as { id: string; storage_key: string | null }[] | null) ?? [];
+  });
+  const keyById = new Map(rows.map((r) => [r.id, r.storage_key]));
+  for (const v of vendors) {
+    if (!v.logo_media_id) continue;
+    const url = publicMediaUrl(keyById.get(v.logo_media_id));
+    if (url) out[v.id] = url;
+  }
+  return out;
 }
 
 /**
