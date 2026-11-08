@@ -33,6 +33,8 @@ import {
 } from "@/lib/purchasing/vendor-menu-coverage-core";
 import { VendorSearch } from "./vendor-search";
 import { FetchLogoButton, FetchAllLogosButton } from "./fetch-logo-button";
+import { LinkVendorButton, VendorPickList } from "./link-vendor-button";
+import type { VendorPickOption } from "@/lib/purchasing/vendor-menu-coverage-core";
 
 export const dynamic = "force-dynamic";
 // D212: the logo-fetch actions search up to three marketplaces per vendor.
@@ -105,13 +107,16 @@ export default async function VendorMenusPage({ searchParams }: { searchParams: 
             "Click 'Fetch menu' to save a dated copy of that vendor's live menu. It joins the Menus on file table, one row per vendor.",
             "Menus on file shows each vendor's newest menu from every source, how old it is, the price spread, potency, photo and COA coverage, and our own stock from them. Open 'History' to see every pull.",
             "Still need a menu lists every vendor we have received product from with no usable menu on file. Vendors with stock on the shelf come first. Use 'Search' to look them up or 'Email' to ask for one.",
+            "If a menu says 'not linked to a vendor', or is on the wrong vendor, click 'Link to vendor' and pick the right card. It is remembered for every future pull of that menu. Rows that show duplicate cards link to Merge vendors.",
             "'Fetch logo' pulls a vendor's logo from GrowFlow, Cultivera or LeafLink and attaches it, published, to the vendor and its brands so it shows on the website at once. 'Fetch all missing logos' does every vendor we carry that has none.",
           ]}
         >
           <p>
             A menu counts as on file once a pull came back with at least one item. Menus are matched to our vendors by the
-            link on the menu, then the license number, then the name. Each row says how it was matched, and a name that fits two
-            vendors is never guessed. Freshness: up to {FRESH_DAYS} days is fresh, up to {STALE_DAYS} is aging, after that is stale. Purchase
+            link on the menu, then a link you saved with &lsquo;Link to vendor&rsquo;, then the license number, then the name (also
+            ignoring LLC / Inc / Co, marketing words and the menu&rsquo;s web address). When a business has duplicate cards, the card we
+            receive from is used and the row suggests merging the duplicates. Each row says how and why it was matched. A tie that
+            can&rsquo;t be broken is never guessed: use &lsquo;Link to vendor&rsquo; once and every future pull follows it. Freshness: up to {FRESH_DAYS} days is fresh, up to {STALE_DAYS} is aging, after that is stale. Purchase
             orders live in{" "}
             <Link href="/admin/purchasing" className={LINK}>Purchasing</Link>.
           </p>
@@ -565,10 +570,18 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
               {rows.map((r) => (
-                <SearchedTr key={r.key} r={r} now={now} logoUrl={r.vendorId ? cov.logos[r.vendorId] ?? null : null} />
+                <SearchedTr
+                  key={r.key}
+                  r={r}
+                  now={now}
+                  logoUrl={r.vendorId ? cov.logos[r.vendorId] ?? null : null}
+                  linkOptions={cov.linkOptions}
+                  duplicateNames={cov.duplicateNames}
+                />
               ))}
             </tbody>
           </table>
+          <VendorPickList options={cov.linkOptions} />
         </div>
       )}
       {rows.length > 0 && rows.length !== all.length && (
@@ -578,7 +591,19 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
   );
 }
 
-function SearchedTr({ r, now, logoUrl }: { r: SearchedRow; now: number; logoUrl: string | null }) {
+function SearchedTr({
+  r,
+  now,
+  logoUrl,
+  linkOptions,
+  duplicateNames,
+}: {
+  r: SearchedRow;
+  now: number;
+  logoUrl: string | null;
+  linkOptions: VendorPickOption[];
+  duplicateNames: Record<string, string>;
+}) {
   const lu = r.latestUsable;
   const f = r.facts;
   const headDelta = lu ? r.sources.find((s) => s.latestId === lu.id)?.deltaItems ?? null : null;
@@ -599,7 +624,18 @@ function SearchedTr({ r, now, logoUrl }: { r: SearchedRow; now: number; logoUrl:
             {r.match === "ambiguous" ? ` (${r.ambiguousCandidates})` : ""}
           </span>
         </div>
+        {r.matchDetail && <div className={`${FAINT} max-w-[18rem]`}>why: {r.matchDetail}</div>}
         {r.menuNames.length > 0 && <div className={FAINT}>menu says: {r.menuNames.join(", ")}</div>}
+        {r.duplicateIds.length > 0 && (
+          <div className="max-w-[18rem] text-xs text-[var(--admin-gold)]">
+            {r.duplicateIds.length} duplicate card{r.duplicateIds.length === 1 ? "" : "s"}:{" "}
+            {r.duplicateIds.map((d) => duplicateNames[d] ?? "another card").join("; ")} —{" "}
+            <Link href="/admin/vendors/merge" className={LINK}>merge them</Link>
+          </div>
+        )}
+        <div className="mt-1">
+          <LinkVendorButton targets={r.linkTargets} options={linkOptions} relink={Boolean(r.vendorId)} />
+        </div>
       </td>
       <td className={TD}>
         <div className="flex flex-col gap-1">

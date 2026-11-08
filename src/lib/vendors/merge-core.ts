@@ -40,7 +40,7 @@ export type DuplicateGroup = {
   /** Stable key for the group (normalized name or website host). */
   key: string;
   /** Why we think these are the same business. */
-  reason: "same-name" | "same-website";
+  reason: "same-license" | "same-name" | "same-website";
   /** The card we suggest keeping (most complete). Always in `vendors`. */
   suggestedSurvivorId: string;
   /** All cards in the group, suggested survivor first. */
@@ -103,6 +103,11 @@ function bySurvivorPreference(a: MergeCandidate, b: MergeCandidate): number {
  *      Growers LLC" appears 2–3× with different license numbers.
  *   2. same-website — identical website host (only when 2+ cards share it and
  *      they were NOT already grouped by name).
+ *   0. same-license (D213, checked FIRST) — two live cards carrying the SAME
+ *      WA license number are the same licensee by definition (e.g. the
+ *      statewide import's "GREENLEAF GROWERS 412259" next to a hand-made
+ *      "Greenleaf MJ 412259"). These duplicates made menus match "more than
+ *      one vendor" on the Vendor Menus page.
  *
  * Never groups archived cards (already-merged duplicates live there), and a
  * group is only suggested when it has 2–5 members — anything larger is almost
@@ -114,9 +119,31 @@ export function findDuplicateGroups(vendors: MergeCandidate[]): DuplicateGroup[]
   const groups: DuplicateGroup[] = [];
   const groupedIds = new Set<string>();
 
+  // ── Signal 0: identical license number (D213) ─────────────────────────────
+  const byLicense = new Map<string, MergeCandidate[]>();
+  for (const v of eligible) {
+    const lic = normalizeLicense(v.license_number);
+    if (lic.replace(/\D/g, "").length < 4) continue;
+    const list = byLicense.get(lic);
+    if (list) list.push(v);
+    else byLicense.set(lic, [v]);
+  }
+  for (const [lic, list] of byLicense) {
+    if (list.length < 2 || list.length > 5) continue;
+    const sorted = [...list].sort(bySurvivorPreference);
+    for (const v of sorted) groupedIds.add(v.id);
+    groups.push({
+      key: `license:${lic}`,
+      reason: "same-license",
+      suggestedSurvivorId: sorted[0].id,
+      vendors: sorted,
+    });
+  }
+
   // ── Signal 1: identical normalized name ────────────────────────────────────
   const byName = new Map<string, MergeCandidate[]>();
   for (const v of eligible) {
+    if (groupedIds.has(v.id)) continue;
     const key = normalizeName(v.legal_name || v.display_name);
     if (!key) continue;
     const list = byName.get(key);
