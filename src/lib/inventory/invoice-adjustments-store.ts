@@ -39,7 +39,7 @@ import {
   type InvoiceAdjustment,
   type ManualAdjustment,
 } from "@/lib/inventory/invoice-adjustments-core";
-import { cleanVendorLabel, isLabelLikeVendor, senderDisplayName, vendorNameFromText } from "@/lib/inventory/manifest-sibling-core";
+import { cleanVendorLabel, hasShippingFormLabel, isLabelLikeVendor, senderDisplayName, vendorNameFromText } from "@/lib/inventory/manifest-sibling-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -141,7 +141,18 @@ export async function healVendorLabel(
     const admin = createSupabaseAdminClient();
     const { data } = await admin.from("inbound_manifests").select("vendor_label, vendor_id").eq("id", manifestId).maybeSingle();
     const row = data as { vendor_label: string | null; vendor_id: string | null } | null;
-    if (!row || !isLabelLikeVendor(row.vendor_label)) return null;
+    if (!row) return null;
+    // D215: "Green Revolution Vehicle ID" - a real name with a shipping-form
+    // label glued on. The label is cut (nothing else is guessed).
+    if (!isLabelLikeVendor(row.vendor_label) && hasShippingFormLabel(row.vendor_label)) {
+      const cut = cleanVendorLabel(row.vendor_label);
+      if (!cut) return null;
+      const { error: cutErr } = await admin.from("inbound_manifests").update({ vendor_label: cut, updated_by: opts.actorId }).eq("id", manifestId);
+      if (cutErr) return null;
+      await logEvent(admin, manifestId, "vendor_label_healed", `Vendor name "${row.vendor_label}" corrected to "${cut}" (a shipping-form label had been read as part of the name).`, opts.actorId);
+      return cut;
+    }
+    if (!isLabelLikeVendor(row.vendor_label)) return null;
     let name: string | null = null;
     let source = "";
     for (const d of docs) {
@@ -194,7 +205,7 @@ export async function healVendorLabel(
  * Bounded (default 10 rows); called on the Receiving page load. Never throws.
  */
 export async function healLabelVendors(rows: readonly { id: string; vendor_label: string | null; raw_payload?: unknown }[], limit = 10): Promise<number> {
-  const todo = rows.filter((r) => isLabelLikeVendor(r.vendor_label)).slice(0, limit);
+  const todo = rows.filter((r) => isLabelLikeVendor(r.vendor_label) || hasShippingFormLabel(r.vendor_label)).slice(0, limit);
   if (todo.length === 0 || !isSupabaseServiceConfigured) return 0;
   let healed = 0;
   try {

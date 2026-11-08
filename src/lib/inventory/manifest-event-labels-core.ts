@@ -72,6 +72,9 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   dismissed_duplicate: { label: "Dismissed as a duplicate row", group: "delivery", problem: false },
   duplicate_merged: { label: "Duplicate row dismissed \u00b7 its facts kept here", group: "delivery", problem: false },
   note: { label: "Note", group: "delivery", problem: false },
+  // D215: a shipping-form label ("Vehicle ID", "Driver", ...) read into the vendor name, cut back to the real name.
+  vendor_label_corrected: { label: "Vendor name corrected (matched to the original delivery)", group: "delivery", problem: false },
+  vendor_label_healed: { label: "Vendor name cleaned (shipping-form label removed)", group: "delivery", problem: false },
   // Fix Phase 3.1a: emailed lab certificates attached to the delivery's lines.
   coa_attach: { label: "Lab results attached from the emailed COAs", group: "delivery", problem: false },
   coa_attach_incomplete: { label: "Lab results \u00b7 some lines still need a COA (or a name match to verify)", group: "delivery", problem: true },
@@ -317,7 +320,7 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   // Fix Phase 3.1a pin update (on purpose): +coa_attach, +coa_attach_incomplete, +coa_reread, +coa_linked_by_hand.
   // Fix Phase 3.1 pin update (on purpose): +count_short, +count_short_cleared.
   // Fix Phase 3.2b pin update (on purpose): +lot_insert_failed.
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 44, "44 known types (R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows; Fix 3.1a adds the four COA rows; Fix 3.1 adds the two dock-count rows; Fix 3.2b adds lot_insert_failed)");
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 46, "46 known types (D215 adds vendor_label_corrected + vendor_label_healed; R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows; Fix 3.1a adds the four COA rows; Fix 3.1 adds the two dock-count rows; Fix 3.2b adds lot_insert_failed)");
   ok(labelForEvent("lot_insert_failed").problem && labelForEvent("lot_insert_failed").group === "delivery", "Fix 3.2b: a line that did not save is a delivery problem");
   ok(isKnownEventType("count_short") && isKnownEventType("count_short_cleared") && !labelForEvent("count_short").problem && labelForEvent("count_short").group === "delivery", "Fix 3.1 dock count: known delivery labels, not problems");
   ok(labelForEvent("coa_attach_incomplete").problem && !labelForEvent("coa_attach").problem && labelForEvent("coa_attach").group === "delivery", "Fix 3.1a COA attach: incomplete is a delivery problem, complete is not");

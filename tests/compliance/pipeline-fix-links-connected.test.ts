@@ -585,7 +585,8 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'danger\u2192error === "sample_cap"',
     'danger\u2192notified === "failed"',
     // Fix 3.2b pin update (on purpose): missing_lines has its own banner.
-    'danger\u2192error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && error !== "missing_lines" && !error.startsWith("notify_")',
+    'danger\u2192error && error !== "sample_cap" && error !== "suspected_duplicate" && error !== "polink" && error !== "partial_note" && error !== "missing_lines" && !error.startsWith("notify_")',
+    'danger\u2192error === "suspected_duplicate"', // D215: finalize refused because the delivery looks like a duplicate
     'danger\u2192error === "polink"',
     "gold\u2192transportSuggestion.usedUsual", // hint on the transport form
     "danger\u2192dismisserr", // R36: result of the Dismiss duplicate action

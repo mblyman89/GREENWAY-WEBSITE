@@ -1034,17 +1034,18 @@ export async function updateLotStatus(
  * reads them (intake-store.ts: ccrs_inventory_external_id, lab_result_id and
  * the joined lab_results.passed). Null when the lot is not found.
  */
-export async function getLotGateFacts(id: string): Promise<{ status: string; facts: LotGateFacts } | null> {
+export async function getLotGateFacts(id: string): Promise<{ status: string; facts: LotGateFacts; manifestId?: string | null } | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("inventory_lots")
-    .select("id, product_name, status, ccrs_inventory_external_id, lab_result_id, lab_results ( passed )")
+    .select("id, product_name, status, manifest_id, ccrs_inventory_external_id, lab_result_id, lab_results ( passed )")
     .eq("id", id)
     .maybeSingle();
   if (error || !data) return null;
   const r = data as unknown as {
     id: string;
+    manifest_id?: string | null;
     product_name: string | null;
     status: string;
     ccrs_inventory_external_id: string | null;
@@ -1054,6 +1055,8 @@ export async function getLotGateFacts(id: string): Promise<{ status: string; fac
   const lab = Array.isArray(r.lab_results) ? r.lab_results[0] : r.lab_results;
   return {
     status: r.status,
+    // D215: the delivery, for the suspected-duplicate guard on Active.
+    manifestId: r.manifest_id ?? null,
     facts: {
       id: r.id,
       label: r.product_name,
