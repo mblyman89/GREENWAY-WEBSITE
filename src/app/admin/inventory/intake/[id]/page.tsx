@@ -33,6 +33,7 @@ import {
   listManifestEvents,
   listLabFactsByIds,
   findDuplicateTwinsFor,
+  suspectedDuplicateOf,
 } from "@/lib/inventory/intake-store";
 import { DismissDuplicateForm } from "@/components/admin/inventory/DismissDuplicateForm";
 import { summarizeStagedIntake } from "@/lib/inventory/intake-review-adapter";
@@ -379,9 +380,11 @@ export default async function ManifestReviewPage({
   const reExtractAiAction = reExtractManifestAiAction.bind(null, id);
   // R36 #2: is this row a second copy of a live manifest? Then offer Dismiss.
   const isDismissed = manifest.status === "dismissed";
+  // D215: with the reason (same manifest # read under another vendor name, same lots ...).
+  const dupSuspect = isDismissed ? null : await suspectedDuplicateOf(id);
   const twinKeepId = isDismissed
     ? null
-    : ((await findDuplicateTwinsFor([manifest])).get(id) ?? null);
+    : (dupSuspect?.keepId ?? (await findDuplicateTwinsFor([manifest])).get(id) ?? null);
   // PR-A: document-AI parse status for the plain-English statement in the
   // transport section (what LlamaParse read, or the honest reason it didn't).
   const parseStatus = await getParseStatusForManifestNumber(manifest.manifest_number);
@@ -570,9 +573,11 @@ export default async function ManifestReviewPage({
         {twinKeepId && (
           <div className="space-y-2 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]" data-testid="duplicate-warning">
             <p>
-              <strong>Duplicate row.</strong> Another row in Receiving has the same manifest # and
-              vendor - the same email was delivered twice. Keep the one you want and dismiss the
-              other (dismissing is not a rejection).{" "}
+              <strong>This looks like a duplicate of delivery {twinKeepId.slice(0, 8)}.</strong>{" "}
+              {dupSuspect ? `Why: ${dupSuspect.why}.` : "Another row in Receiving has the same manifest # and vendor."} The
+              same email was most likely read twice. Keep the one you want and dismiss the other
+              (dismissing is not a rejection). Until then its lots cannot be made Active and it
+              cannot be finalized (D215).{" "}
               <Link href={`/admin/inventory/intake/${twinKeepId}`} className="font-semibold underline-offset-2 hover:underline">
                 Open the other copy &rarr;
               </Link>
@@ -740,6 +745,13 @@ export default async function ManifestReviewPage({
             ))}
           </div>
         )}
+        {error === "suspected_duplicate" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]" data-testid="finalize-duplicate-refused">
+            <strong>Not finalized.</strong> This delivery looks like a duplicate of another delivery (see the
+            warning above). Nothing was changed. Use Dismiss duplicate - or, if you have checked and they are two
+            separate deliveries, tick &ldquo;I checked: this is NOT a duplicate&rdquo; next to the Finalize button.
+          </div>
+        )}
         {error === "missing_lines" && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-orange)]">
             <strong>Not finalized.</strong> Some lines did not save at staging. Nothing was changed. Tick
@@ -840,7 +852,7 @@ export default async function ManifestReviewPage({
             note next to the Finalize button and finalize again.
           </div>
         )}
-        {error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && error !== "missing_lines" && !error.startsWith("notify_") && (
+        {error && error !== "sample_cap" && error !== "suspected_duplicate" && error !== "polink" && error !== "partial_note" && error !== "missing_lines" && !error.startsWith("notify_") && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
           </div>
@@ -1611,6 +1623,13 @@ export default async function ManifestReviewPage({
                   <label className="flex items-center gap-2 text-xs text-[var(--admin-danger)]">
                     <input type="checkbox" name="missing_lines_confirmed" value="1" required />
                     The missing line{finalizePlan.missing === 1 ? "" : "s"} ({finalizePlan.missing}) go{finalizePlan.missing === 1 ? "es" : ""} back with the driver
+                  </label>
+                )}
+                {/* D215: a suspected duplicate cannot be finalized without the owner's check. */}
+                {twinKeepId && (
+                  <label className="flex items-center gap-2 text-xs text-[var(--admin-danger)]" data-testid="finalize-not-duplicate">
+                    <input type="checkbox" name="not_duplicate" value="1" />
+                    I checked: this is NOT a duplicate of delivery {twinKeepId.slice(0, 8)}
                   </label>
                 )}
                 <Button type="submit" variant={finalizePlan.reject > 0 && finalizePlan.accept === 0 ? "danger" : "save"} size="sm">

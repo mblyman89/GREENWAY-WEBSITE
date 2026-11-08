@@ -45,9 +45,17 @@ export type SiblingCandidate = {
   /** invoice_number_override ?? invoice_number_detected. */
   invoice: string | null;
   lots: readonly SiblingLot[];
+  /** D215: the printed manifest / transfer number (optional for older callers). */
+  number?: string | null;
 };
 
-export type SiblingEvidence = { kind: "invoice"; invoice: string; sharedLots: number } | { kind: "lots"; lots: number };
+export type SiblingEvidence =
+  | { kind: "invoice"; invoice: string; sharedLots: number }
+  | { kind: "lots"; lots: number }
+  /** D215: same manifest # from the same vendor record, whatever the vendor NAME reads. */
+  | { kind: "number_vendor"; number: string }
+  /** D215: same manifest # and the identical lots + quantities, whatever the vendor reads. */
+  | { kind: "number_lots"; number: string; lots: number };
 
 /** "INV-1010497" / " inv 1010497 " -> "INV1010497"; null when blank. PURE. */
 export function normInvoice(v: string | null | undefined): string | null {
@@ -59,6 +67,12 @@ export function normInvoice(v: string | null | undefined): string | null {
 export function normLot(v: string | null | undefined): string | null {
   const k = String(v ?? "").replace(/\s+/g, "").toUpperCase();
   return k.length >= 6 ? k : null;
+}
+
+/** D215: manifest # key (whitespace dropped, upper case); null when blank or too short to mean anything. PURE. */
+export function normManifestNumber(v: string | null | undefined): string | null {
+  const k = String(v ?? "").replace(/\s+/g, "").toUpperCase();
+  return k.length >= 4 ? k : null;
 }
 
 function lotMap(lots: readonly SiblingLot[]): Map<string, number | null> {
@@ -81,12 +95,25 @@ function lotMap(lots: readonly SiblingLot[]): Map<string, number | null> {
  * Never true across vendors, never true for a vendor-less row.
  */
 export function siblingEvidence(
-  a: Pick<SiblingCandidate, "vendor_id" | "invoice" | "lots">,
-  b: Pick<SiblingCandidate, "vendor_id" | "invoice" | "lots">,
+  a: Pick<SiblingCandidate, "vendor_id" | "invoice" | "lots" | "number">,
+  b: Pick<SiblingCandidate, "vendor_id" | "invoice" | "lots" | "number">,
 ): SiblingEvidence | null {
-  if (!a.vendor_id || !b.vendor_id || a.vendor_id !== b.vendor_id) return null;
   const la = lotMap(a.lots);
   const lb = lotMap(b.lots);
+  // D215 (owner: Green Revolution order 69055 staged twice - once as "Green
+  // Revolution", once as "Green Revolution Vehicle ID", and the two rows also
+  // printed different "invoice" numbers: the order # 69055 vs invoice
+  // 0000069638). The SAME manifest # is the same transfer when either the
+  // vendor RECORD is the same (the name is just read differently) or every
+  // lot and quantity is identical. A vendor never reuses its own manifest #
+  // for a second transfer.
+  const na = normManifestNumber(a.number);
+  if (na && na === normManifestNumber(b.number)) {
+    if (a.vendor_id && b.vendor_id && a.vendor_id === b.vendor_id) return { kind: "number_vendor", number: na };
+    const n = identicalLotCount(la, lb);
+    if (n > 0) return { kind: "number_lots", number: na, lots: n };
+  }
+  if (!a.vendor_id || !b.vendor_id || a.vendor_id !== b.vendor_id) return null;
   if (la.size === 0 || lb.size === 0) return null;
   let shared = 0;
   for (const k of la.keys()) if (lb.has(k)) shared += 1;
@@ -96,18 +123,25 @@ export function siblingEvidence(
   if (ia && ib && ia === ib) return { kind: "invoice", invoice: ia, sharedLots: shared };
   // Two DIFFERENT printed invoices are two orders - whatever the lots say.
   if (ia && ib) return null;
-  if (la.size >= 2 && la.size === lb.size && shared === la.size) {
-    for (const [k, q] of la) {
-      const q2 = lb.get(k);
-      if (q === null || q2 === null || q2 === undefined || q !== q2) return null;
-    }
-    return { kind: "lots", lots: la.size };
+  const n = identicalLotCount(la, lb);
+  return n > 0 ? { kind: "lots", lots: n } : null;
+}
+
+/** 2+ lots, the same set, the same quantity on every lot: the count; else 0. PURE. */
+function identicalLotCount(la: Map<string, number | null>, lb: Map<string, number | null>): number {
+  if (la.size < 2 || la.size !== lb.size) return 0;
+  for (const [k, q] of la) {
+    if (!lb.has(k)) return 0;
+    const q2 = lb.get(k);
+    if (q === null || q2 === null || q2 === undefined || q !== q2) return 0;
   }
-  return null;
+  return la.size;
 }
 
 /** Plain-English evidence for the timeline / the Dismiss button. PURE. */
 export function describeSiblingEvidence(e: SiblingEvidence): string {
+  if (e.kind === "number_vendor") return `same manifest # ${e.number} from the same vendor (the vendor name was read differently)`;
+  if (e.kind === "number_lots") return `same manifest # ${e.number} and the identical ${e.lots} lot ids with identical quantities`;
   return e.kind === "invoice"
     ? `same vendor, same invoice ${e.invoice} and ${e.sharedLots} shared lot id${e.sharedLots === 1 ? "" : "s"}`
     : `same vendor and the identical ${e.lots} lot ids with identical quantities`;
@@ -118,7 +152,7 @@ export function describeSiblingEvidence(e: SiblingEvidence): string {
  * PURE. `incoming` is the manifest about to stage (vendor resolved).
  */
 export function findLiveSibling(
-  incoming: Pick<SiblingCandidate, "vendor_id" | "invoice" | "lots">,
+  incoming: Pick<SiblingCandidate, "vendor_id" | "invoice" | "lots" | "number">,
   candidates: readonly SiblingCandidate[],
 ): { id: string; evidence: SiblingEvidence } | null {
   let best: { row: SiblingCandidate; evidence: SiblingEvidence } | null = null;
@@ -180,9 +214,35 @@ export function isLabelLikeVendor(label: string | null | undefined): boolean {
   return words.length > 0 && words.every((w) => LABEL_WORDS.has(w));
 }
 
-/** The vendor label to stage: null when it is a field label. PURE. */
-export function cleanVendorLabel(label: string | null | undefined): string | null {
+/**
+ * D215 - a SHIPPING-FORM label glued onto a vendor name. The owner's Green
+ * Revolution delivery was staged as "Green Revolution Vehicle ID": the reader
+ * ran on into the transport block of the manifest. That name then failed the
+ * vendor-scoped dedupe (same manifest #, "different" vendor) and the same
+ * email staged twice. Everything from the first transport label on is cut:
+ * "Vehicle", "VIN", "Driver", "Transporter", "License Plate", "Plate #",
+ * "Est. Departure/Arrival", "Departure", "Arrival". The label must follow a
+ * space, so a name that merely starts with such letters ("PLATEAU GROWERS")
+ * or with such a word ("Driver Farms") is kept.
+ */
+const SHIPPING_LABEL_TAIL =
+  /\s+(?:vehicle|vin|driver|drivers|transporter|transport|license\s+plate|plate\s*(?:#|no\b|number\b)|est\.?\s*(?:departure|arrival)|departure|arrival)\b.*$/i;
+
+/** The name with any shipping-form label tail cut off (unchanged when there is none). PURE. */
+export function stripShippingFormLabels(label: string | null | undefined): string {
   const t = String(label ?? "").replace(/\s+/g, " ").trim();
+  return t.replace(SHIPPING_LABEL_TAIL, "").replace(/[\s,:;#.-]+$/, "").trim();
+}
+
+/** True when the name carries a shipping-form label tail ("Green Revolution Vehicle ID"). PURE. */
+export function hasShippingFormLabel(label: string | null | undefined): boolean {
+  const t = String(label ?? "").replace(/\s+/g, " ").trim();
+  return t.length > 0 && stripShippingFormLabels(t) !== t;
+}
+
+/** The vendor label to stage: null when it is a field label; a shipping-form tail is cut (D215). PURE. */
+export function cleanVendorLabel(label: string | null | undefined): string | null {
+  const t = stripShippingFormLabels(label);
   return t && !isLabelLikeVendor(t) ? t : null;
 }
 
@@ -259,5 +319,23 @@ export function __runManifestSiblingTests(): { passed: number; failed: number } 
   ok(vendorNameFromText("Date: 06/09/2026 Invoice From: Canna Processing 2835 Ocean Ave Ste B Raymond") === "Canna Processing", "Invoice From (GrowFlow)");
   ok(vendorNameFromText("Licensee Name: Manifest ID 1575241667413695") === null, "a label is never the vendor");
   ok(senderDisplayName("Canna Processing <legit.invoice@gmail.com>") === "Canna Processing" && senderDisplayName("x@y.com") === null, "sender display name");
+  // D215: the same manifest # is the same transfer when the vendor RECORD matches or the lots are identical.
+  const gr = (o: Partial<SiblingCandidate>): SiblingCandidate => ({ id: "x", status: "accepted", vendor_id: "v-gr", invoice: "0000069638", lots: lots(10, 15), number: "11025403383270277", ...o });
+  ok(siblingEvidence(gr({}), gr({ id: "y", invoice: "69055" }))?.kind === "number_vendor", "D215: same # + same vendor record, conflicting invoice #s -> duplicate");
+  ok(siblingEvidence(gr({}), gr({ id: "y", vendor_id: "junk", invoice: "69055" }))?.kind === "number_lots", "D215: same # + identical lots, other vendor record -> duplicate");
+  ok(siblingEvidence(gr({}), gr({ id: "y", vendor_id: "junk", lots: lots(10, 14) })) === null, "D215: same # but other vendor and other counts -> not a duplicate");
+  ok(siblingEvidence(gr({}), gr({ id: "y", number: " 1102 5403 3832 70277 " }))?.kind === "number_vendor", "D215: manifest # compared without spaces");
+  ok(siblingEvidence(gr({ number: "12" }), gr({ id: "y", number: "12", invoice: "1" , vendor_id: "v-gr", lots: lots(1) }))?.kind !== "number_vendor", "D215: a 2-char # is never an identity");
+  ok(findLiveSibling(gr({ id: "new", status: "pending", invoice: "69055" }), [gr({})])?.id === "x", "D215: staging blocks the second copy");
+  ok(findSiblingTwins([gr({}), gr({ id: "copy", status: "in_transit", invoice: "69055", created_at: "2026-11-08T03:37:46Z" })]).get("copy") === "x", "D215: the copy offers Dismiss pointing at the accepted delivery");
+  ok(describeSiblingEvidence({ kind: "number_vendor", number: "N1" }).includes("same manifest # N1"), "D215: plain-English evidence");
+  // D215: a shipping-form label is never part of a vendor name.
+  ok(cleanVendorLabel("Green Revolution Vehicle ID") === "Green Revolution", "D215: 'Vehicle ID' tail cut");
+  ok(cleanVendorLabel("Green Revolution Vehicle ID: 4471 Ford Transit") === "Green Revolution", "D215: tail with its value cut");
+  ok(cleanVendorLabel("Canna Processing Driver Name: Bob") === "Canna Processing" && cleanVendorLabel("Xtracted Labs VIN 1FT") === "Xtracted Labs", "D215: Driver / VIN tails cut");
+  ok(cleanVendorLabel("Acme Farms Transporter Name") === "Acme Farms" && cleanVendorLabel("Acme Farms License Plate ABC123") === "Acme Farms", "D215: Transporter / License Plate tails cut");
+  ok(cleanVendorLabel("PLATEAU GROWERS") === "PLATEAU GROWERS" && cleanVendorLabel("Driver Farms") === "Driver Farms", "D215: real names that start with those letters/words kept");
+  ok(cleanVendorLabel("Vehicle ID") === null && cleanVendorLabel("Driver Name:") === null, "D215: a bare shipping label is still no vendor");
+  ok(hasShippingFormLabel("Green Revolution Vehicle ID") && !hasShippingFormLabel("Green Revolution"), "D215: hasShippingFormLabel");
   return { passed, failed };
 }

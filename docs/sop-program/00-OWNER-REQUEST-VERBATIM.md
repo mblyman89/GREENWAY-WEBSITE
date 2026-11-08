@@ -1920,3 +1920,23 @@ Verbatim:
 - Store: `src/lib/inventory/coa-transfer-bundle-store.ts`. Kept files: `src/data/wcia-transfers/index.ts`.
 - Action: `attachTransferCoasAction` in `src/app/admin/inventory/intake/actions.ts`. Page: `coa-transfer-bundle` box on `/admin/inventory/intake/[id]`.
 - Test: `tests/compliance/d214-coa-transfer-bundle.test.ts`.
+
+## D215 — Green Revolution duplicate manifest removed; guards against the same email being read twice (2026-11-08)
+### Verbatim (investigation request)
+"Thank you. Please log back in to supabase and look for the most recently received manifest from green revolution... Fix it, then return back with a summary report letting me know why that happened and how we can deal with it better from the system rather than my needing to ask you to fix it for me. Follow the standing rules. Thank you."
+### Verbatim (build request)
+"Thank you. It's a duplicate, please remove it. Then build 1-3, we can hold off on number 4. Complete all tasks before returning back with a summary report of what was done and what I need to do. Follow the standing rules. Thank you."
+### Findings
+- Manifest 156b8d15 was a copy of accepted delivery 1de6e4f4. The same email (one Message-ID) arrived twice: through the Resend webhook on 11-05 and again through the Gmail reconcile on 11-08.
+- Dedupe missed the copy because its vendor name read "Green Revolution Vehicle ID" (a shipping-form label), and the two rows had different invoice numbers (69055 vs 0000069638). The copy's 10 lots were activated by hand, which added 150 units with no cost.
+### Decisions
+- D215a: The copy was dismissed with `dismiss_duplicate_manifest`. Its 10 lots went back to quarantine with audit rows, then merged away. The real delivery keeps its 10 lots with costs (139 on hand).
+- D215b (item 1): The same Message-ID already staged is refused at ingest (`same-email-guard-core`). Sibling evidence gains `number_vendor` (same manifest # and same vendor) and `number_lots` (same manifest # and identical lots/qtys, any vendor name).
+- D215c (item 2): A duplicate warning appears on the delivery page and the lot page. Activating a lot or finalizing a delivery is refused until the owner either dismisses the duplicate or ticks "this is not a duplicate" (`duplicate-delivery-guard-core`). Both outcomes are audited.
+- D215d (item 3): Shipping-form labels ("Vehicle ID", "VIN", "Driver", "Transporter", "License plate", departure/arrival) are cut from vendor names at staging and at heal time. New events `vendor_label_corrected` and `vendor_label_healed` are labelled.
+- Item 4 (copy costs from the matching delivery): DEFERRED by the owner.
+### As built
+- Pure: `src/lib/inbound-email/same-email-guard-core.ts` (9), `src/lib/inventory/duplicate-delivery-guard-core.ts` (8), `manifest-sibling-core.ts` (21→36).
+- Stores: `inbound-ingest.ts` (earlierStagingOfSameEmail), `intake-store.ts` (suspectedDuplicateOf, number-aware sibling reads), `invoice-adjustments-store.ts` (heal).
+- Actions/pages: `setLotStatusAction`, `finalizeManifestAction`, `/admin/inventory/[id]`, `/admin/inventory/intake/[id]`.
+- Test: `tests/compliance/d215-duplicate-intake-guard.test.ts`.

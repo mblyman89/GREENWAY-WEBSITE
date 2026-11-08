@@ -6,6 +6,8 @@ import { revalidatePromotionSurfaces } from "@/lib/promotions/revalidate-promoti
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
+import { duplicateDeliveryGuard, guardStepForStatus } from "@/lib/inventory/duplicate-delivery-guard-core";
+import { suspectedDuplicateOf } from "@/lib/inventory/intake-store";
 // D207d: attach the COA document (pasted link / uploaded PDF) to one lot.
 import { MANUAL_COA_ANCHOR, MANUAL_COA_AUDIT, checkManualCoaUpload, parseManualCoaLink } from "@/lib/inventory/lot-coa-manual-core";
 import { attachCoaDocumentToLot, fetchManualCoaPdf } from "@/lib/inventory/lot-coa-manual-store";
@@ -189,6 +191,35 @@ export async function setLotStatusAction(lotId: string, formData: FormData) {
   const current = await getLotGateFacts(lotId);
   if (!current) redirect(`/admin/inventory/${lotId}?error=save`);
 
+  // D215 (owner: "It's a duplicate, please remove it. Then build 1-3"): a lot
+  // whose delivery is a suspected DUPLICATE of another live delivery is never
+  // made Active without the owner's explicit "this is NOT a duplicate" tick -
+  // the Green Revolution copy's ten lots were activated one by one and showed
+  // 150 phantom units. Taking stock off the shelf is never blocked.
+  const dupStep = guardStepForStatus(toStatus);
+  const dupGuard = duplicateDeliveryGuard({
+    step: dupStep,
+    suspect: dupStep === "activate" && current.manifestId ? await suspectedDuplicateOf(current.manifestId) : null,
+    confirmedNotDuplicate: formData.get("not_duplicate") === "1",
+  });
+  if (!dupGuard.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: LOT_STATUS_REFUSED_AUDIT_ACTION,
+      entityType: "inventory_lot",
+      entityId: lotId,
+      before: { status: current.status },
+      after: {
+        requested: toStatus,
+        reason: reason.trim().slice(0, 500) || null,
+        reference: reference.trim().slice(0, 200) || null,
+        refusals: [dupGuard.code],
+      },
+    });
+    redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(dupGuard.message.slice(0, 900))}#lifecycle`);
+  }
+
   const decision = evaluateLotLifecycleChange({
     fromStatus: current.status,
     toStatus,
@@ -236,6 +267,7 @@ export async function setLotStatusAction(lotId: string, formData: FormData) {
       reference: decision.reference,
       releases_recall: decision.releasesRecall,
       go_live_checked: decision.to === "active",
+      ...(dupGuard.overridden ? { confirmed_not_duplicate: true } : {}),
     },
   });
   // A status change moves what the register and the website may sell.

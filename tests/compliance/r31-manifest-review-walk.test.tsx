@@ -79,6 +79,8 @@ vi.mock("@/lib/inventory/intake-store", () => ({
   setLotDisposition: vi.fn(),
   gatherSampleCapNotice: vi.fn(),
   setManifestInvoiceOverride: vi.fn(),
+  // D215: the duplicate-delivery guard reads this before finalize; no twin here.
+  suspectedDuplicateOf: async () => null,
 }));
 vi.mock("@/lib/accounting/receipt-evidence", () => ({
   findReceiptJournal: async () => {

@@ -27,6 +27,41 @@ import {
 } from "@/lib/inbound-email/inbound-store";
 import { ingestFromText } from "@/lib/regulatory/regulatory-ingest";
 import { processMenuEmail } from "@/lib/purchasing/emailed-menu-store";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import {
+  findEarlierStagingOfSameEmail,
+  normMessageId,
+  sameEmailSkipNote,
+  type SameEmailRow,
+} from "@/lib/inbound-email/same-email-guard-core";
+
+/**
+ * D215: the earlier row of this SAME email (same RFC Message-ID) that already
+ * staged a delivery, or null. A read error never blocks staging (a real
+ * delivery is never dropped on a hiccup) - it is logged and staging goes on.
+ */
+async function earlierStagingOfSameEmail(email: NormalizedInboundEmail, logId: string | null): Promise<SameEmailRow | null> {
+  const mid = normMessageId(email.messageId);
+  if (!mid || !isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("inbound_email_log")
+      .select("id, message_id, disposition, manifest_id, to_intake, received_at")
+      .eq("message_id", mid)
+      .order("received_at", { ascending: true })
+      .limit(50);
+    if (error) {
+      console.warn(`[inbound-ingest] same-email check skipped: ${error.message}`);
+      return null;
+    }
+    return findEarlierStagingOfSameEmail(mid, (data as SameEmailRow[] | null) ?? [], logId);
+  } catch (err) {
+    console.warn("[inbound-ingest] same-email check skipped:", err);
+    return null;
+  }
+}
 
 export type IngestSource = "webhook" | "reconcile" | "retry" | "find";
 
@@ -152,6 +187,31 @@ export async function routeAndStage(
       note: "not addressed to the intake mailbox",
     });
     return { kind: "ignored", disposition: "ignored", staged: 0, manifestIds: [], logId, body: { ok: true, ignored: "not-intake-mailbox" } };
+  }
+
+  // D215: the SAME email (same Message-ID) already staged a delivery through
+  // another path (the webhook, then the mailbox check three days later): it
+  // is never staged a second time, whatever the vendor name reads this time.
+  const earlier = await earlierStagingOfSameEmail(email, logId);
+  if (earlier) {
+    await logInboundEmail({
+      email,
+      signatureOk,
+      toIntake: true,
+      disposition: "duplicate",
+      manifestId: earlier.manifest_id,
+      logId,
+      ingestSource,
+      note: [sameEmailSkipNote(earlier), fetchNote].filter(Boolean).join(" \u2014 "),
+    });
+    return {
+      kind: "intake",
+      disposition: "duplicate",
+      staged: 0,
+      manifestIds: [],
+      logId: logId,
+      body: { ok: true, staged: 0, duplicateOf: earlier.manifest_id },
+    };
   }
 
   // Stage any manifest attachments as DRAFTS (webhook has no signed-in user).

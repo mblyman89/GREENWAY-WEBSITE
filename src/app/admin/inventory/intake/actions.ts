@@ -16,7 +16,10 @@ import {
   dismissDuplicateManifest,
   setLotVendorInventoryId,
   setLotDockCount,
+  suspectedDuplicateOf,
 } from "@/lib/inventory/intake-store";
+import { recordAudit } from "@/lib/auth/audit";
+import { duplicateDeliveryGuard } from "@/lib/inventory/duplicate-delivery-guard-core";
 import { normalizeOwnerVendorId } from "@/lib/compliance/ccrs-transfer-core";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
@@ -976,6 +979,36 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
   // pending / in transit is stamped received (status + received_at + timeline)
   // BEFORE the line decisions run, exactly as if the button had been pressed.
   // Never blocks the finalize; see markArrivedOnFinalize below.
+  // D215 (owner: "It's a duplicate, please remove it. Then build 1-3"): a
+  // delivery that looks like a DUPLICATE of another live delivery is never
+  // finalized (its lots would go Active a second time) unless the owner ticks
+  // "I checked: this is NOT a duplicate". Checked BEFORE anything is touched.
+  const dupGuard = duplicateDeliveryGuard({
+    step: "finalize",
+    suspect: await suspectedDuplicateOf(manifestId),
+    confirmedNotDuplicate: formData?.get("not_duplicate") === "1",
+  });
+  if (!dupGuard.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "manifest.finalize_refused_duplicate",
+      entityType: "inbound_manifest",
+      entityId: manifestId,
+      after: { refusals: [dupGuard.code], message: dupGuard.message.slice(0, 500) },
+    });
+    redirect(`/admin/inventory/intake/${manifestId}?error=suspected_duplicate`);
+  }
+  if (dupGuard.overridden) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "manifest.finalize_confirmed_not_duplicate",
+      entityType: "inbound_manifest",
+      entityId: manifestId,
+      after: { confirmed_not_duplicate: true },
+    });
+  }
   await markArrivedOnFinalize(manifestId, session.userId);
   // Fix Phase 3.2b (F-04-11): the "missing lines go back with the driver"
   // tick, shown only when lines did not save at staging.

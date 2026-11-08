@@ -894,6 +894,8 @@ import { __runInboundReconcileCoreTests } from "../../src/lib/inbound-email/inbo
 import { __runOffboardingCoreTests } from "../../src/lib/staffing/offboarding-core";
 import { __runGrowFlowInvoiceTests } from "../../src/lib/inventory/pdf-growflow-invoice-core";
 import { __runManifestSiblingTests } from "../../src/lib/inventory/manifest-sibling-core";
+import { __runSameEmailGuardTests } from "../../src/lib/inbound-email/same-email-guard-core";
+import { __runDuplicateDeliveryGuardTests } from "../../src/lib/inventory/duplicate-delivery-guard-core";
 import { __runNcPosCatalogTests } from "../../src/lib/noncannabis/pos-catalog-core";
 import { __runInvoiceAdjustmentsTests } from "../../src/lib/inventory/invoice-adjustments-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
@@ -2773,7 +2775,7 @@ __runLiquidVolumeTests();
   assertRan("pdf-growflow-invoice-core", __runGrowFlowInvoiceTests(), 11); // Fix Phase 3.3 (F-04-22): GrowFlow invoice -> unit prices by lot (split ids rejoined, qty x unit = total checked)
   assertRan("nc-pos-catalog-core", { passed: __runNcPosCatalogTests(), failed: 0 }, 40); // Phase 4 (G-29/G-30/G-32): Other Inventory on the register - nc- keys, menu cards, barcode merge (cannabis wins), COGS by line, moving-average cost, direction by reason, price/cost edit rules, sales summary, website in-store cards
   assertRan("invoice-adjustments-core", __runInvoiceAdjustmentsTests(), 25); // Fix Phase 3.4 (F-04-24): credits / discounts / negative lines read off the invoice; manual credits validated; invoice amount = lines + credits
-  assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
+  assertRan("manifest-sibling-core", __runManifestSiblingTests(), 36); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
   assertRan("audit-count-flow-core", { passed: __runAuditCountFlowTests(), failed: 0 }, 29); // Fix Phase 4.1-4.3 (G-33/G-34/G-36): one counter, +1 per scan, ask on re-scan, third count, I'm done, owner stage buttons, movement note; 4.4a (G-39): Pacific default name + hub date
   assertRan("daily-checklist-core", { passed: __runDailyChecklistCoreTests(), failed: 0 }, 32); // Fix Phase 4.4b (G-38, D51, D57): sheet per day / week / month / year, staff initial daily lists, manager weekly + sign-off, owner edits, SOP links, live counts line
   assertRan("count-generators-core", { passed: __runCountGeneratorsCoreTests(), failed: 0 }, 30); // Fix Phase 4.4c (G-40, D58): vendor of the day rotation in whole-product chunks, high value, exceptions, expiring, why each lot, one open count per lot
@@ -2858,6 +2860,8 @@ __runLiquidVolumeTests();
   assertRan("coa-trust-all-core", __runCoaTrustAllCoreTests(), 38);
   assertRan("cockpit-analytics-core", __runCockpitAnalyticsTests(), 79); // D210 ("have it show more based on the selection of the top comparisons" / "overlaying labor hours or transactions over the hourly sales" / "who on shift currently is selling more"): basis-following hourly baseline + pace projection, labor by hour + SPLH, category/type mix vs basis, 28-day trend, on-shift board (no same-day dollars), weekday x hour heatmap
   assertRan("atm-forecast-core", __runAtmForecastTests(), 34); // D210f ("how much the atm goes through on average, a forecaster for when it will be empty"): settled-day throughput, weekday profile p25/p75, depletion walk with a planning range, share of the day still to trade
+  assertRan("same-email-guard-core", __runSameEmailGuardTests(), 9); // D215 ("It's a duplicate, please remove it. Then build 1-3"): the same email (same Message-ID) already staged by another path is never staged twice
+  assertRan("duplicate-delivery-guard-core", __runDuplicateDeliveryGuardTests(), 8); // D215: a suspected duplicate delivery's lots are never made Active / finalized without the owner's "NOT a duplicate" tick
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

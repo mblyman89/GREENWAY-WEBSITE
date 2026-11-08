@@ -653,7 +653,7 @@ export async function resolveBrandIdDetailed(
 /** One live delivery of a vendor, with its lots, for the sibling rules. */
 async function readSiblingCandidates(
   admin: ReturnType<typeof createSupabaseAdminClient>,
-  filter: { vendorIds?: string[]; lotCodes?: string[]; ids?: string[] },
+  filter: { vendorIds?: string[]; lotCodes?: string[]; ids?: string[]; numbers?: string[] },
 ): Promise<SiblingCandidate[] | null> {
   // Lots first (the evidence), then their deliveries.
   let manifestIds: string[] = [];
@@ -682,17 +682,20 @@ async function readSiblingCandidates(
     if (manifestIds.length > 0) q = q.in("id", manifestIds.slice(0, 200));
     if (filter.ids && filter.ids.length > 0) q = q.in("id", filter.ids.slice(0, 200));
     if (filter.vendorIds && filter.vendorIds.length > 0) q = q.in("vendor_id", filter.vendorIds);
+    // D215: every live row printing one of these manifest #s, whatever its vendor reads.
+    if (filter.numbers && filter.numbers.length > 0) q = q.in("manifest_number", filter.numbers.slice(0, 200));
     return await q;
   };
-  let { data: mRows, error: mErr } = await readManifests("id, status, created_at, vendor_id, invoice_number_detected, invoice_number_override");
+  let { data: mRows, error: mErr } = await readManifests("id, status, created_at, vendor_id, manifest_number, invoice_number_detected, invoice_number_override");
   // Before 0151 / 0245 there are no invoice columns - the lot rule still works.
-  if (mErr && isMissingColumnError(mErr)) ({ data: mRows, error: mErr } = await readManifests("id, status, created_at, vendor_id"));
+  if (mErr && isMissingColumnError(mErr)) ({ data: mRows, error: mErr } = await readManifests("id, status, created_at, vendor_id, manifest_number"));
   if (mErr) return null;
   const ms = (mRows ?? []) as unknown as {
     id: string;
     status: string | null;
     created_at: string | null;
     vendor_id: string | null;
+    manifest_number?: string | null;
     invoice_number_detected?: string | null;
     invoice_number_override?: string | null;
   }[];
@@ -736,24 +739,34 @@ async function readSiblingCandidates(
     vendor_id: m.vendor_id,
     invoice: (m.invoice_number_override ?? "").trim() || (m.invoice_number_detected ?? "").trim() || null,
     lots: byManifest.get(m.id) ?? [],
+    number: m.manifest_number ?? null,
   }));
 }
 
 /** Fix 3.3: the live delivery this parsed manifest is the same transfer as, or null. Never throws. */
 async function findStagingSibling(
   admin: ReturnType<typeof createSupabaseAdminClient>,
-  vendorId: string,
+  vendorId: string | null,
   parsed: ParsedManifest,
   invoiceNumber: string | null,
 ): Promise<ReturnType<typeof findLiveSibling>> {
   const lotCodes = [...new Set(parsed.lines.map((l) => normLot(l.lot_code)).filter((x): x is string => Boolean(x)))];
-  if (lotCodes.length === 0) return null;
+  const number = (parsed.manifest_number ?? "").trim();
+  if (lotCodes.length === 0 && !number) return null;
   try {
     // lot_code is stored as printed; the parsers print GF / 16-digit ids without spaces.
-    const cands = await readSiblingCandidates(admin, { vendorIds: [vendorId], lotCodes: [...new Set([...lotCodes, ...parsed.lines.map((l) => (l.lot_code ?? "").trim()).filter(Boolean)])] });
-    if (!cands || cands.length === 0) return null;
+    const byLots =
+      vendorId && lotCodes.length > 0
+        ? await readSiblingCandidates(admin, { vendorIds: [vendorId], lotCodes: [...new Set([...lotCodes, ...parsed.lines.map((l) => (l.lot_code ?? "").trim()).filter(Boolean)])] })
+        : [];
+    // D215: the live rows printing the SAME manifest #, whatever vendor name
+    // they were staged under (the owner's "Green Revolution" / "Green
+    // Revolution Vehicle ID" pair).
+    const byNumber = number ? await readSiblingCandidates(admin, { numbers: [number] }) : [];
+    const cands = [...new Map([...(byLots ?? []), ...(byNumber ?? [])].map((c) => [c.id, c])).values()];
+    if (cands.length === 0) return null;
     return findLiveSibling(
-      { vendor_id: vendorId, invoice: invoiceNumber, lots: parsed.lines.map((l) => ({ lot: l.lot_code, qty: l.received_qty })) },
+      { vendor_id: vendorId, invoice: invoiceNumber, lots: parsed.lines.map((l) => ({ lot: l.lot_code, qty: l.received_qty })), number: parsed.manifest_number },
       cands,
     );
   } catch (err) {
@@ -798,6 +811,10 @@ export async function stageManifest(
   if (parsed.vendor_label !== null && cleanVendorLabel(parsed.vendor_label) === null) {
     console.warn(`[intake-store] vendor label "${parsed.vendor_label}" is a field label, not a vendor - ignored`);
     parsed = { ...parsed, vendor_label: null };
+  } else if (parsed.vendor_label !== null && cleanVendorLabel(parsed.vendor_label) !== parsed.vendor_label.replace(/\s+/g, " ").trim()) {
+    // D215: "Green Revolution Vehicle ID" -> "Green Revolution" (a shipping-form label is never part of the name).
+    console.warn(`[intake-store] vendor label "${parsed.vendor_label}" carried a shipping-form label - cut`);
+    parsed = { ...parsed, vendor_label: cleanVendorLabel(parsed.vendor_label) };
   }
 
   const vendorId = await resolveOrCreateVendor(
@@ -851,7 +868,7 @@ export async function stageManifest(
   // duplicate path (the caller backfills transport / invoice / documents onto
   // the live row). Read failures never block staging (a real delivery is
   // never dropped on a hiccup).
-  if (vendorId) {
+  {
     const sibling = await findStagingSibling(admin, vendorId, parsed, meta?.invoiceNumber ?? null);
     if (sibling) {
       return {
@@ -3110,12 +3127,14 @@ export async function dismissDuplicateManifest(
   // duplicate too - same vendor + same invoice and a shared lot, or the
   // identical lots and quantities. The SQL function (0321) re-checks it.
   let sibling: string | null = null;
+  let sameNumber = false;
   try {
     const cands = await readSiblingCandidates(admin, { ids: [duplicateId, keepId] });
     const a = cands?.find((c) => c.id === duplicateId);
     const b = cands?.find((c) => c.id === keepId);
     const ev = a && b ? siblingEvidence(a, b) : null;
     sibling = ev ? describeSiblingEvidence(ev) : null;
+    sameNumber = ev?.kind === "number_vendor" || ev?.kind === "number_lots";
   } catch {
     sibling = null;
   }
@@ -3125,6 +3144,29 @@ export async function dismissDuplicateManifest(
     sibling,
   );
   if (!check.ok) return { ok: false, error: check.reason };
+
+  // D215: the same manifest # whose vendor NAME was misread on the copy
+  // ("Green Revolution Vehicle ID"). The database's own check (0321) compares
+  // manifest # + vendor name, so the copy's name is first corrected to the
+  // kept delivery's - the same correction a person would make - and the
+  // timeline says so. Only the duplicate row is touched.
+  if (sameNumber) {
+    const dup = rows.find((r) => r.id === duplicateId);
+    const keep = rows.find((r) => r.id === keepId);
+    if (dup && keep && keep.vendor_label && (dup.vendor_label ?? "") !== keep.vendor_label) {
+      const { error: lblErr } = await admin
+        .from("inbound_manifests")
+        .update({ vendor_label: keep.vendor_label, updated_by: actorId })
+        .eq("id", duplicateId);
+      if (lblErr) return { ok: false, error: `Could not correct the copy's vendor name - nothing was dismissed (${lblErr.message}).` };
+      await logManifestEvent(
+        duplicateId,
+        "vendor_label_corrected",
+        `Vendor name "${dup.vendor_label ?? "(none)"}" corrected to "${keep.vendor_label}" to match delivery ${keepId} (the same manifest # - the name had been misread).`,
+        actorId,
+      );
+    }
+  }
 
   const { data, error } = await admin.rpc("dismiss_duplicate_manifest", {
     p_dup: duplicateId,
@@ -3152,14 +3194,53 @@ async function findSiblingTwinsFor(
     if (!listed || listed.length === 0) return new Map();
     const lotCodes = [...new Set(listed.flatMap((c) => c.lots.map((l) => (l.lot ?? "").trim()).filter(Boolean)))];
     const vendorIds = [...new Set(listed.map((c) => c.vendor_id).filter((v): v is string => Boolean(v)))];
-    if (lotCodes.length === 0 || vendorIds.length === 0) return new Map();
-    const others = (await readSiblingCandidates(admin, { vendorIds, lotCodes })) ?? [];
+    const numbers = [...new Set(listed.map((c) => (c.number ?? "").trim()).filter(Boolean))];
+    const others = lotCodes.length > 0 && vendorIds.length > 0 ? ((await readSiblingCandidates(admin, { vendorIds, lotCodes })) ?? []) : [];
+    // D215: the same manifest # under another vendor name (the label was read differently).
+    const sameNumber = numbers.length > 0 ? ((await readSiblingCandidates(admin, { numbers })) ?? []) : [];
     const byId = new Map<string, SiblingCandidate>();
-    for (const c of [...listed, ...others]) byId.set(c.id, c);
+    for (const c of [...listed, ...others, ...sameNumber]) byId.set(c.id, c);
     return findSiblingTwins([...byId.values()]);
   } catch (err) {
     console.warn("[intake-store] sibling twin lookup skipped:", err);
     return new Map();
+  }
+}
+
+/**
+ * D215 (owner: "It's a duplicate, please remove it. Then build 1-3") - is this
+ * delivery a suspected DUPLICATE of another live delivery? Returns the
+ * delivery to keep and the plain-English reason, or null. Used by the
+ * delivery page banner, the lot status change (Active is refused while the
+ * lot's delivery is a suspected duplicate) and Finalize. Never throws; an
+ * unreadable answer is null (the guards then behave exactly as before).
+ */
+export async function suspectedDuplicateOf(
+  manifestId: string,
+): Promise<{ keepId: string; why: string } | null> {
+  if (!isSupabaseServiceConfigured || !manifestId) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("inbound_manifests")
+      .select("id, manifest_number, vendor_label, status, created_at")
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const row = data as TwinRow;
+    if ((row.status ?? "") === "dismissed") return null;
+    const keepId = (await findDuplicateTwinsFor([row])).get(manifestId) ?? null;
+    if (!keepId) return null;
+    let why = "the same manifest # and vendor (the same email was delivered twice)";
+    const cands = await readSiblingCandidates(admin, { ids: [manifestId, keepId] });
+    const a = cands?.find((c) => c.id === manifestId);
+    const b = cands?.find((c) => c.id === keepId);
+    const ev = a && b ? siblingEvidence(a, b) : null;
+    if (ev) why = describeSiblingEvidence(ev);
+    return { keepId, why };
+  } catch (err) {
+    console.warn("[intake-store] suspected-duplicate check skipped:", err);
+    return null;
   }
 }
 

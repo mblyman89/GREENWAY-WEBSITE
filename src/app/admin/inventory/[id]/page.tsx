@@ -1,3 +1,4 @@
+import { suspectedDuplicateOf } from "@/lib/inventory/intake-store";
 import { notFound } from "next/navigation";
 import { safeAdminPath } from "@/lib/media/return-state-core";
 import { requirePermission } from "@/lib/auth/session";
@@ -164,6 +165,9 @@ export default async function LotDetailPage({
 
   const lot = await getLotById(id);
   if (!lot) notFound();
+  // D215: is this lot's delivery a suspected duplicate of another delivery?
+  // (Shown above the status form; Active is refused without the tick.)
+  const dupSuspect = lot.manifest_id && lot.status !== "active" ? await suspectedDuplicateOf(lot.manifest_id) : null;
 
   // SLICE 77: vendors + brands feed the correction form's pickers; the
   // enrichment record (keyed by the lot's POS product key) surfaces the
@@ -1677,6 +1681,31 @@ export default async function LotDetailPage({
               </p>
             ) : (
             <form action={statusAction} className="space-y-4" data-testid="lifecycle-form">
+              {dupSuspect && (
+                <div
+                  className="space-y-2 rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-3 py-2 text-sm text-[var(--admin-danger)]"
+                  data-testid="lot-duplicate-delivery-warning"
+                >
+                  <p>
+                    <strong>This lot&apos;s delivery looks like a DUPLICATE</strong> of delivery{" "}
+                    <Link href={`/admin/inventory/intake/${dupSuspect.keepId}`} className="font-semibold underline">
+                      {dupSuspect.keepId.slice(0, 8)}
+                    </Link>{" "}
+                    ({dupSuspect.why}). Making it Active would count the same product twice. Open{" "}
+                    {lot.manifest_id ? (
+                      <Link href={`/admin/inventory/intake/${lot.manifest_id}`} className="font-semibold underline">
+                        this lot&apos;s delivery
+                      </Link>
+                    ) : (
+                      "this lot's delivery"
+                    )}{" "}
+                    and use <strong>Dismiss duplicate</strong>.
+                  </p>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" name="not_duplicate" value="1" /> I checked: this is NOT a duplicate (two separate deliveries) - allow Active.
+                  </label>
+                </div>
+              )}
               <Field
                 label="Set status"
                 help="Active runs the go-live check (CCRS identifier, a COA on file, not FAILED). Recalled lots are blocked at the register. Destroyed is never set here: use Returns & Destruction."
