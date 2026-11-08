@@ -1786,3 +1786,17 @@ Verbatim:
 | D209d | **Filters, sorts and CSV for both tables**, all in the URL so a view can be bookmarked. Coverage KPIs: vendors carried, covered %, still needed (on the shelf now), stale menus, and menus not linked to a vendor. | "much more powerful and detailed" |
 | D209e | **Performance (rule 18).** Every read selects named columns and is paged or chunked. Item facts are read only for the newest snapshot per vendor and source. The data sections stream in their own `<Suspense>`, and one `cache()`d loader is shared between them. Every read's error is shown to staff in plain words (rule 15). | standing rule 18 |
 | D209f | **Not merged.** The branch and PR wait for the owner's go-ahead. | "Do not merge to git until I say it's safe." |
+
+### As built (D209)
+
+- **Pure core** `src/lib/purchasing/vendor-menu-coverage-core.ts`: vendor matching (linked → license → name/alias/brand; a name that fits two vendors matches neither), lot rollup (destroyed lots never count as stock; Pacific received day), searched rows and needed rows, KPIs, URL filter and sort params, and formula-safe CSV. `__runVendorMenuCoverageCoreTests` runs 100 assertions, registered in `run-pure-selftests.ts` with a floor of 90 and mirrored in `tests/compliance/d208-vendor-menu-coverage.test.ts`.
+- **Store** `src/lib/purchasing/vendor-menu-coverage-store.ts` (server-only): reads named columns from all four snapshot sources, vendors, aliases, brands, `inventory_lots` and platform memory, using `pagedAll` / `chunkedIn`. Items are read only for each vendor's latest usable menu. Every DB error becomes a staff-visible warning (rule 15). Wrapped in `cache()`.
+- **Page** `/admin/purchasing/menus`:
+  - KPI cards: vendors carried, menu coverage %, needed with stock on the shelf, stale menus, menus not linked to a vendor, menus and items on file.
+  - Find a vendor: the old search box. It now accepts `?find=<name>` and runs the search automatically.
+  - **Vendors we carry with no menu yet**: grouped by priority (on the shelf now, received in the last 90 days, older). Shows our stock, received dates, what we buy, YTD accepted, where to look (remembered platform), contact, failed pull attempts, "Search menus →" and "Email for menu" (subject only, blank body).
+  - **Vendors we have menus for**: the detailed per-vendor rollup.
+  - Emailed menus inbox: unchanged.
+  - Each section streams in its own Suspense boundary.
+- **CSV** `GET /admin/purchasing/menus/csv?table=searched|needed`: honours the same filters and sort as the page. If any read is incomplete, it refuses with 409 rather than send a short file.
+- Verified: scoped tsc (changed files only, 0 errors), eslint on changed files, vitest (15/15), all pure self-tests, and the DB contract check (unchanged).
