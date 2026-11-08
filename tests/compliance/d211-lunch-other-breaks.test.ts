@@ -132,6 +132,7 @@ describe("D211 migration 0348", () => {
     expect(existsSync(join(ROOT, "supabase/rollbacks/0348_time_punch_breaks.rollback.sql"))).toBe(true);
     expect(existsSync(join(ROOT, "scripts/recon/time-punch-breaks-0348-pg-check.sql"))).toBe(true);
     expect(read("scripts/compliance/verify-migrations-execute.ts")).toContain("0348");
+    expect(read("docs/MIGRATIONS_TO_RUN.md")).toContain("supabase/migrations/0348_time_punch_breaks.sql");
   });
 });
 

@@ -3884,3 +3884,33 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0347_deposit_bag_atm_pull.rollback.sql` (writes "[ATM pull: N x
   $20 = $X into HG26499 at ...]" into each bag's night note first, also on sealed bags, then drops the columns).
+
+- [ ] **`supabase/migrations/0348_time_punch_breaks.sql`** — D211 clock out for lunch or an "other" break (owner:
+  "My employees told me they cannot clock out for a lunch break. The logic currently requires them to close their
+  drawer first. There needs to be an option to clock out for lunch, or, for an “other” reason."). Adds to
+  `time_punches`: `break_reason` (`lunch` / `other`) and `break_note` (3–200 characters, required for Other), with
+  CHECKs `time_punches_break_reason_values`, `time_punches_break_shape` (a work punch has no reason; a break has
+  one), `time_punches_break_note_len` and `time_punches_break_other_needs_note`, plus the index
+  `time_punches_open_break_idx`. Any break punch written before 0348 is backfilled as Other with the note "Recorded
+  before migration 0348 (no reason was captured)." No new table.
+
+  Until it is applied, clocking in and out works exactly as before; the break buttons answer "Breaks need database
+  migration 0348 (time punch breaks). Ask the owner to run it in Supabase; until then use a full clock-out." and
+  nothing is saved half-way. Reports still show hours; Reports → Employees says break reasons need 0348.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) filter (where punch_kind = 'break')                                       as break_punches,
+         (select count(*) from pg_constraint where conname like 'time_punches_break%')      as checks,  -- 4
+         (select count(*) from information_schema.columns
+           where table_schema = 'public' and table_name = 'time_punches'
+             and column_name in ('break_reason', 'break_note'))                                as columns  -- 2
+    from public.time_punches;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0348_time_punch_breaks.rollback.sql` (writes "[Break: lunch -
+  <note>]" into each break punch's notes first, then drops the checks, the index and the columns; the break punches
+  themselves stay and remain unpaid).
