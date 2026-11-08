@@ -1017,6 +1017,7 @@ import { __runEodSheetTests } from "../../src/lib/registers/eod-sheet-core";
 import { __runMasterTillTests } from "../../src/lib/registers/master-till-core";
 import { __runShiftEndCoreTests } from "../../src/lib/registers/shift-end-core";
 import { __runClockCoreTests } from "../../src/lib/pos/clock-core";
+import { __runBreakClockCoreTests } from "../../src/lib/staffing/break-clock-core";
 import { __runLittleSafeTests } from "../../src/lib/registers/little-safe-core";
 import { __runSupplyRunTests } from "../../src/lib/registers/supply-run-core";
 import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
@@ -2778,6 +2779,7 @@ __runLiquidVolumeTests();
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
   assertRan("shift-end-core", __runShiftEndCoreTests(), 47); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   assertRan("clock-core", __runClockCoreTests(), 16); // Owner D124: register clock in/out answered by the server directly (refusals shown, never hidden in the queue)
+  assertRan("break-clock-core", __runBreakClockCoreTests(), 45); // Owner D211: clock out for lunch / other without closing the drawer; WAC 296-126-092 meal flags
   assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt
   assertRan("no-receipt-return-core", __runNoReceiptReturnCoreTests(), 20); // D205: loyalty members may return without a receipt (toggle), member must own the sale, window applies, product scan must match the line
   assertRan("db-contract-core", __runDbContractCoreTests(), 30); // G-71a (owner message 12): daily DB health check: contract parse, unreachable = FAIL (run 0330), missing = WARN, call errors explained, one alert per Pacific day, escaped email
