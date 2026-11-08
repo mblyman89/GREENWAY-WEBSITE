@@ -23,6 +23,8 @@ import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 import { sendStaffAlertEmail } from "@/lib/orders/staff-alert-email";
 import { isSmsConfigured, sendStaffSms } from "@/lib/notifications/sms";
 import { publicSiteOrigin } from "@/lib/site/site-domain-core";
+import { isMissingColumn } from "@/lib/payments/payee-banking-store";
+import { breakReasonLabel, LONG_OPEN_BREAK_HOURS } from "@/lib/staffing/break-clock-core";
 import {
   buildMorningReport,
   nightWatchKey,
@@ -57,6 +59,20 @@ function daysBetween(fromIso: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(fromIso).getTime()) / 86_400_000));
 }
 
+type OpenBreakRow = { employee_id: string; clock_in_at: string; break_reason?: string | null };
+
+/** D211 — open break punches older than the cutoff; tolerant of 0348 not applied. */
+async function readOpenBreaks(admin: Admin, cutoff: string): Promise<{ rows: OpenBreakRow[]; error: string | null }> {
+  const q = (cols: string) =>
+    admin.from("time_punches").select(cols).is("clock_out_at", null).eq("punch_kind", "break").lt("clock_in_at", cutoff);
+  const first = await q("employee_id, clock_in_at, break_reason");
+  if (!first.error) return { rows: (first.data as unknown as OpenBreakRow[] | null) ?? [], error: null };
+  if (!isMissingColumn(first.error)) return { rows: [], error: first.error.message };
+  const second = await q("employee_id, clock_in_at");
+  if (second.error) return { rows: [], error: second.error.message };
+  return { rows: (second.data as unknown as OpenBreakRow[] | null) ?? [], error: null };
+}
+
 /** Read everything the report needs. Never throws. */
 export async function gatherFindings(now: Date = new Date()): Promise<WatchFindings> {
   const day = pacificToday();
@@ -87,7 +103,8 @@ export async function gatherFindings(now: Date = new Date()): Promise<WatchFindi
   const admin: Admin = createSupabaseAdminClient();
   const punchCutoff = new Date(now.getTime() - OPEN_PUNCH_HOURS * 3_600_000).toISOString();
 
-  const [regs, sess, bags, exc, punches, health] = await Promise.all([
+  const breakCutoff = new Date(now.getTime() - LONG_OPEN_BREAK_HOURS * 3_600_000).toISOString();
+  const [regs, sess, bags, exc, punches, health, breaks] = await Promise.all([
     admin.from("registers").select("id, name"),
     admin
       .from("drawer_sessions")
@@ -99,6 +116,8 @@ export async function gatherFindings(now: Date = new Date()): Promise<WatchFindi
     admin.from("pos_sale_events").select("received_at").eq("status", "exception").order("received_at", { ascending: true }).limit(500),
     admin.from("time_punches").select("employee_id, clock_in_at").is("clock_out_at", null).eq("punch_kind", "work").lt("clock_in_at", punchCutoff),
     admin.from("platform_health_runs").select("status, created_at").eq("kind", "db_contract").order("created_at", { ascending: false }).limit(1),
+    // D211 — breaks still open after LONG_OPEN_BREAK_HOURS (break_reason needs 0348).
+    readOpenBreaks(admin, breakCutoff),
   ]);
 
   const names = new Map(((regs.data as { id: string; name: string }[] | null) ?? []).map((r) => [r.id, r.name]));
@@ -166,6 +185,17 @@ export async function gatherFindings(now: Date = new Date()): Promise<WatchFindi
         hours: Math.floor((now.getTime() - new Date(x.clock_in_at).getTime()) / 3_600_000),
       }));
     }
+  }
+
+  if (breaks.error) f.readErrors.push(`breaks on the time clock (${breaks.error}).`);
+  else if (breaks.rows.length > 0) {
+    const { data: emps } = await admin.from("employees").select("id, full_name").in("id", [...new Set(breaks.rows.map((x) => x.employee_id))]);
+    const en = new Map(((emps as { id: string; full_name: string }[] | null) ?? []).map((x) => [x.id, x.full_name]));
+    f.longOpenBreaks = breaks.rows.map((x) => ({
+      name: en.get(x.employee_id) ?? "Someone",
+      hours: Math.floor((now.getTime() - new Date(x.clock_in_at).getTime()) / 3_600_000),
+      reason: breakReasonLabel(x.break_reason),
+    }));
   }
 
   if (!health.error) {

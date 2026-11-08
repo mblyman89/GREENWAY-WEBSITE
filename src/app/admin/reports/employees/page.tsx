@@ -18,6 +18,7 @@ import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 import { resolveRange } from "@/lib/reports/range";
 import { getEmployeeReport, type EmployeeReportRow } from "@/lib/reports/operations";
 import { formatMinutes } from "@/lib/staffing/time";
+import { BREAK_FLAG_TEXT } from "@/lib/staffing/break-clock-core";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,23 @@ const columns: ReportColumn<EmployeeReportRow & Record<string, unknown>>[] = [
   { key: "daysWorked", header: "Days", align: "right", render: (r) => String(r.daysWorked) },
   { key: "minutesWorked", header: "Hours worked", align: "right", render: (r) => formatMinutes(r.minutesWorked) },
   { key: "breakMinutes", header: "Break", align: "right", render: (r) => formatMinutes(r.breakMinutes) },
+  // D211 — lunch vs other (unpaid, off the clock), and days with a meal-break check.
+  {
+    key: "lunchMinutes",
+    header: "Lunch",
+    align: "right",
+    render: (r) => (r.lunchCount > 0 ? `${r.lunchCount} · ${formatMinutes(r.lunchMinutes)}` : "—"),
+  },
+  {
+    key: "otherBreakMinutes",
+    header: "Other breaks",
+    align: "right",
+    render: (r) =>
+      r.otherBreakCount > 0 || r.openBreaks > 0
+        ? `${r.otherBreakCount} · ${formatMinutes(r.otherBreakMinutes)}${r.openBreaks > 0 ? ` (+${r.openBreaks} open)` : ""}`
+        : "—",
+  },
+  { key: "mealFlagDays", header: "Meal checks", align: "right", render: (r) => (r.mealFlagDays > 0 ? `${r.mealFlagDays} day(s)` : "—") },
   { key: "avgShiftMinutes", header: "Avg shift", align: "right", render: (r) => formatMinutes(r.avgShiftMinutes) },
   { key: "ordersHandled", header: "Orders", align: "right", render: (r) => String(r.ordersHandled) },
   { key: "lastActiveDay", header: "Last active", align: "right", render: (r) => r.lastActiveDay ?? "—" },
@@ -129,6 +147,51 @@ export default async function EmployeeReportPage({
           rows={r.rows as (EmployeeReportRow & Record<string, unknown>)[]}
           emptyLabel="No shifts in this window."
         />
+      </Section>
+
+      {/* D211 — lunch / other breaks and the meal-break checks */}
+      <Section
+        title="Breaks and meal-break checks"
+        subtitle="Lunch and Other breaks are unpaid time off the clock (the drawer stays open). Checks follow WAC 296-126-092; they are reminders to review, not findings."
+      >
+        <div className="mb-4 grid gap-4 sm:grid-cols-3">
+          <StatCard label="Lunch time" value={formatMinutes(r.totalLunchMinutes)} hint="Unpaid meal periods" accent="green" />
+          <StatCard label="Other break time" value={formatMinutes(r.totalOtherBreakMinutes)} hint="Unpaid, with a reason" accent="gold" />
+          <StatCard label="Meal-break checks" value={String(r.breakFlags.length)} hint="Employee-days to review" accent={r.breakFlags.length > 0 ? "orange" : "muted"} />
+        </div>
+        {r.breakReasonsMissing ? (
+          <p className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+            Break reasons are not recorded yet: apply migration 0348 (time punch breaks) in Supabase. Until then every break shows as Other.
+          </p>
+        ) : null}
+        {r.breakFlags.length === 0 ? (
+          <p className="text-sm text-white/50">No meal-break checks in this window.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase text-white/40">
+                  <th className="py-2 pr-4">Day</th>
+                  <th className="py-2 pr-4">Employee</th>
+                  <th className="py-2 pr-4">Check</th>
+                  <th className="py-2">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.breakFlags.map((f, i) => (
+                  <tr key={`${f.employeeId}-${f.day}-${f.code}-${i}`} className="border-t border-white/10">
+                    <td className="py-2 pr-4 text-white/70">{f.day}</td>
+                    <td className="py-2 pr-4 text-white">{f.name}</td>
+                    <td className="py-2 pr-4 text-white/80" title={BREAK_FLAG_TEXT[f.code].rule}>
+                      {BREAK_FLAG_TEXT[f.code].label}
+                    </td>
+                    <td className="py-2 text-white/60">{f.detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Section>
 
       {/* Breakdowns */}

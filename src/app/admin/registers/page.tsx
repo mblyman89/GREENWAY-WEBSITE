@@ -98,7 +98,7 @@ export default async function RegisterActivityPage({
   const openRuns = openRunsRes.ok ? openRunsRes.runs : [];
   const undeclared = undeclaredRes.ok ? undeclaredRes.bags : [];
   const undeclaredWarning = undeclaredBagWarning(undeclared.map((b) => ({ bagNo: b.bagNo, businessDay: b.businessDay, status: "undeclared" as const })));
-  const { kpis, onClock, registers, attention, feed, employees } = data;
+  const { kpis, onClock, onBreak, registers, attention, feed, employees } = data;
   // GW-027 — devices holding server-REJECTED rows (which exist ONLY on the
   // device). Surface them loudly here so a manager knows to walk over.
   const rejectedDevices = devicesResult.ok
@@ -441,6 +441,27 @@ export default async function RegisterActivityPage({
             </div>
           )}
         </Section>
+
+        {/* D211 — out on lunch / other: off the clock, drawer still theirs */}
+        {onBreak.length > 0 ? (
+          <Section title="On break" description="Clocked out for lunch or another reason. Their drawer stays theirs; they clock back in when they return.">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {onBreak.map((p) => (
+                <Card key={p.employeeId} padding="md">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-[var(--admin-text)]">{p.name}</div>
+                    <Badge tone={p.long ? "danger" : "gold"}>{p.reasonLabel}</Badge>
+                  </div>
+                  <div className="mt-3 text-xs text-[var(--admin-text-faint)]">
+                    Out at {p.sinceLabel} · {formatDuration(p.minutesOnBreak)}
+                    {p.note ? ` · ${p.note}` : ""}
+                    {p.long ? " · long break, check in" : ""}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </Section>
+        ) : null}
 
         {/* Registers — live status + manager cash controls */}
         <Section

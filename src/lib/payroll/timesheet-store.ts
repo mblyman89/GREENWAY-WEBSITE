@@ -47,6 +47,8 @@ import "server-only";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { isMissingColumn } from "@/lib/payments/payee-banking-store";
+import { dayBreakFlags, type BreakPunch, type DayBreakFlag } from "@/lib/staffing/break-clock-core";
 
 import {
   computePeriodHours,
@@ -342,6 +344,12 @@ export type TimesheetComputation = {
   readonly totalGrossCents: number;
   /** How many employees could not be computed at all. */
   readonly refusedCount: number;
+  /**
+   * D211 — meal-break checks (WAC 296-126-092) for the period, by employee.
+   * INFORMATION ONLY: they never refuse a sheet or block approval. A lunch is
+   * already unpaid (a break punch is not work), so nothing here changes pay.
+   */
+  readonly breakFlags: readonly DayBreakFlag[];
 };
 
 /**
@@ -462,6 +470,38 @@ export async function computeTimesheetForPeriod(
     punchesByEmployee.set(row.employee_id, list);
   }
 
+  // D211 — break reasons for the meal checks. A separate read so the pay read
+  // above never depends on migration 0348; before 0348 every break counts as Other.
+  const breakReasonById = new Map<string, string | null>();
+  {
+    const { data: brData, error: brErr } = await admin
+      .from("time_punches")
+      .select("id, break_reason")
+      .eq("punch_kind", "break")
+      .gte("clock_in_at", pacificWallTimeToUtcISO(period.start_date, "start"))
+      .lt("clock_in_at", pacificWallTimeToUtcISO(nextDay(period.end_date), "start"));
+    if (!brErr) {
+      for (const r of (brData ?? []) as unknown as { id: string; break_reason: string | null }[]) {
+        breakReasonById.set(r.id, r.break_reason);
+      }
+    } else if (!isMissingColumn(brErr)) {
+      // Not fatal: the flags are advisory. Pay is computed from the read above.
+    }
+  }
+  const breakFlags = dayBreakFlags(
+    ((punchData ?? []) as unknown as PunchRow[])
+      .filter((r) => r.clock_in_at)
+      .map(
+        (r): BreakPunch => ({
+          employeeId: r.employee_id,
+          kind: r.punch_kind === "break" ? "break" : "work",
+          reason: breakReasonById.get(r.id) ?? null,
+          clockInIso: r.clock_in_at as string,
+          clockOutIso: r.clock_out_at,
+        }),
+      ),
+  );
+
   const engineSettings: TimesheetSettings = {
     workweekStartsOn: settingsRes.workweekStartsOn,
     overtimeThresholdHundredthHours: WA_OVERTIME_THRESHOLD_HUNDREDTH_HOURS,
@@ -513,6 +553,7 @@ export async function computeTimesheetForPeriod(
     totalOvertimeHundredthHours: totalOvertime,
     totalGrossCents: totalGross,
     refusedCount,
+    breakFlags,
   };
 }
 

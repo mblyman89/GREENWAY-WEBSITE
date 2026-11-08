@@ -49,7 +49,8 @@ import {
   linkedEmployeesBySignIn,
   scheduledShiftsFrom,
 } from "@/lib/staffing/employee-login-link-store";
-import { openWorkPunch } from "@/lib/staffing/store";
+import { openPunchAny } from "@/lib/staffing/store";
+import { breakReasonLabel } from "@/lib/staffing/break-clock-core";
 import { ROLE_LABELS, ROLE_RANK } from "@/lib/auth/roles";
 import { namesLookDifferent } from "@/lib/staffing/offboarding-core";
 import { pinAllowedForStatus } from "@/lib/staffing/candidate-start-core";
@@ -123,7 +124,7 @@ export default async function EmployeeFilePage({
       })()
     : [];
   const upcomingShifts = canLifecycle && status !== "terminated" ? await scheduledShiftsFrom(employee.id, todayYmd) : [];
-  const openPunch = canLifecycle && status !== "terminated" ? await openWorkPunch(employee.id) : null;
+  const openPunch = canLifecycle && status !== "terminated" ? await openPunchAny(employee.id) : null; // D211: an open break counts too
 
   // SLICE 94: vault lookup for the badge. listEmployeeBanking() is the ONLY
   // employee banking read path (decrypts server-side); we keep just the masked
@@ -838,7 +839,9 @@ export default async function EmployeeFilePage({
                   )}
                   {openPunch && (
                     <p className="rounded-md border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]">
-                      They are clocked in right now (since{" "}
+                      {openPunch.punch_kind === "break"
+                        ? `They are out on a ${breakReasonLabel(openPunch.break_reason).toLowerCase()} break right now (since `
+                        : "They are clocked in right now (since "}
                       {new Date(openPunch.clock_in_at).toLocaleString("en-US", {
                         timeZone: "America/Los_Angeles",
                         month: "short",

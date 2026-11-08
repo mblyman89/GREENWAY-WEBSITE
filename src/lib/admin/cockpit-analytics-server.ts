@@ -68,6 +68,8 @@ export type LaborRaw = {
   punches: PunchIn[];
   /** Open WORK punches (on the clock now), with names. */
   onClock: OnClockIn[];
+  /** D211 — open BREAK punches (out on lunch / other now), with names. */
+  onBreak?: OnClockIn[];
 };
 
 async function employeeNames(ids: string[]): Promise<Map<string, EmployeeDbRow>> {
@@ -117,14 +119,27 @@ async function readLabor(todayYmd: string): Promise<LaborRaw> {
     const cur = openWork.get(r.employee_id);
     if (!cur || r.clock_in_at < cur) openWork.set(r.employee_id, r.clock_in_at);
   }
-  const names = await employeeNames([...openWork.keys()]);
+  // D211 — out on a break = an open BREAK punch (the reason is on Time Clock).
+  const openBreak = new Map<string, string>();
+  for (const r of rows) {
+    if (r.punch_kind !== "break" || r.clock_out_at !== null) continue;
+    const cur = openBreak.get(r.employee_id);
+    if (!cur || r.clock_in_at < cur) openBreak.set(r.employee_id, r.clock_in_at);
+  }
+  const names = await employeeNames([...new Set([...openWork.keys(), ...openBreak.keys()])]);
   const onClock: OnClockIn[] = [...openWork.entries()].map(([employeeId, clockInIso]) => ({
     employeeId,
     name: names.get(employeeId)?.full_name ?? "Unknown",
     role: names.get(employeeId)?.job_role ?? "",
     clockInIso,
   }));
-  return { punches, onClock };
+  const onBreak: OnClockIn[] = [...openBreak.entries()].map(([employeeId, clockInIso]) => ({
+    employeeId,
+    name: names.get(employeeId)?.full_name ?? "Unknown",
+    role: names.get(employeeId)?.job_role ?? "",
+    clockInIso,
+  }));
+  return { punches, onClock, onBreak };
 }
 
 const cachedLabor = cockpitCached("labor-today", COCKPIT_TODAY_TTL_S, readLabor);
@@ -133,6 +148,8 @@ export type CockpitLabor = {
   ok: boolean;
   labor: LaborHour[];
   onClock: OnClockIn[];
+  /** D211 — out on lunch / other now. */
+  onBreak: OnClockIn[];
   nowIso: string;
 };
 
@@ -141,10 +158,10 @@ export const cockpitLabor = cache(async (): Promise<CockpitLabor> => {
   const todayYmd = pacificToday();
   const nowIso = new Date().toISOString();
   if (!isSupabaseServiceConfigured) {
-    return { ok: true, labor: laborByHour([], todayYmd, nowIso), onClock: [], nowIso };
+    return { ok: true, labor: laborByHour([], todayYmd, nowIso), onClock: [], onBreak: [], nowIso };
   }
-  const r = await safeData(() => cachedLabor(todayYmd), { punches: [], onClock: [] } as LaborRaw);
-  return { ok: r.ok, labor: laborByHour(r.data.punches, todayYmd, nowIso), onClock: r.data.onClock, nowIso };
+  const r = await safeData(() => cachedLabor(todayYmd), { punches: [], onClock: [], onBreak: [] } as LaborRaw);
+  return { ok: r.ok, labor: laborByHour(r.data.punches, todayYmd, nowIso), onClock: r.data.onClock, onBreak: r.data.onBreak ?? [], nowIso };
 });
 
 // ---------------------------------------------------------------------------
@@ -195,6 +212,8 @@ const cachedSellers = cockpitCached("sellers-7d", COCKPIT_TODAY_TTL_S, readSelle
 export type CockpitOnShift = {
   ok: boolean;
   board: OnShiftBoard;
+  /** D211 — people out on lunch / other now (not on the board: off the clock). */
+  onBreak: { name: string; minutes: number }[];
 };
 
 /**
@@ -212,6 +231,10 @@ export const cockpitOnShift = cache(async (): Promise<CockpitOnShift> => {
   return {
     ok: labor.ok && sellers.ok,
     board: onShiftBoard({ onClock: labor.onClock, today: sellers.data.today, week: sellers.data.week, nowIso: labor.nowIso }),
+    onBreak: labor.onBreak.map((b) => ({
+      name: b.name,
+      minutes: Math.max(0, Math.floor((Date.parse(labor.nowIso) - Date.parse(b.clockInIso)) / 60_000)),
+    })),
   };
 });
 

@@ -215,6 +215,13 @@ export const BREAK_FLAG_TEXT: Record<BreakFlagCode, { label: string; rule: strin
 
 export type DayBreakFlag = { employeeId: string; day: string; code: BreakFlagCode; detail: string };
 
+/** "12:02 PM" in Pacific (the store's clock), for flag details. */
+function pacificClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
+}
+
 function mins(aIso: string, bIso: string): number {
   return Math.max(0, Math.round((Date.parse(bIso) - Date.parse(aIso)) / 60_000));
 }
@@ -246,7 +253,7 @@ export function dayBreakFlags(punches: readonly BreakPunch[], opts: { nowIso?: s
       const end = p.clockOutIso ?? (p.kind === "work" && opts.includeOpenWork && opts.nowIso ? opts.nowIso : null);
       if (p.kind === "break") {
         if (!p.clockOutIso) {
-          out.push({ employeeId, day, code: "OPEN_BREAK", detail: `${breakReasonLabel(p.reason)} since ${p.clockInIso}` });
+          out.push({ employeeId, day, code: "OPEN_BREAK", detail: `${breakReasonLabel(p.reason)} since ${pacificClock(p.clockInIso)}` });
           continue;
         }
         const len = mins(p.clockInIso, p.clockOutIso);

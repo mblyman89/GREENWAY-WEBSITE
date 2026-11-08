@@ -8,6 +8,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { resolveRange } from "@/lib/reports/range";
 import { getEmployeeReport } from "@/lib/reports/operations";
+import { BREAK_FLAG_TEXT } from "@/lib/staffing/break-clock-core";
 import {
   exportResponse,
   parseFormat,
@@ -30,6 +31,12 @@ const EMP_COLUMNS: TableColumn[] = [
   { key: "daysWorked", header: "Days", type: "integer" },
   { key: "hoursWorked", header: "Hours worked", type: "number" },
   { key: "breakHours", header: "Break hrs", type: "number" },
+  { key: "lunchCount", header: "Lunches", type: "integer" },
+  { key: "lunchHours", header: "Lunch hrs", type: "number" },
+  { key: "otherBreakCount", header: "Other breaks", type: "integer" },
+  { key: "otherBreakHours", header: "Other break hrs", type: "number" },
+  { key: "openBreaks", header: "Breaks never ended", type: "integer" },
+  { key: "mealFlagDays", header: "Days with meal-break checks", type: "integer" },
   { key: "avgShiftHours", header: "Avg shift hrs", type: "number" },
   { key: "ordersHandled", header: "Orders handled", type: "integer" },
   { key: "lastActiveDay", header: "Last active", type: "text" },
@@ -43,6 +50,15 @@ const STATUS_COLUMNS: TableColumn[] = [
 const SOURCE_COLUMNS: TableColumn[] = [
   { key: "label", header: "Punch source", type: "text" },
   { key: "count", header: "Punches", type: "integer" },
+];
+
+// D211 — the meal-break checks (WAC 296-126-092), one row per employee-day-check.
+const FLAG_COLUMNS: TableColumn[] = [
+  { key: "day", header: "Day (Pacific)", type: "text" },
+  { key: "name", header: "Employee", type: "text" },
+  { key: "check", header: "Check", type: "text" },
+  { key: "detail", header: "Detail", type: "text" },
+  { key: "rule", header: "Rule", type: "text" },
 ];
 
 const SUMMARY_COLUMNS: TableColumn[] = [
@@ -71,6 +87,9 @@ export async function GET(request: Request) {
     { metric: "Total shifts", value: String(r.totalShifts) },
     { metric: "Hours worked", value: String(hours(r.totalMinutes)) },
     { metric: "Break hours", value: String(hours(r.totalBreakMinutes)) },
+    { metric: "Lunch hours (unpaid)", value: String(hours(r.totalLunchMinutes)) },
+    { metric: "Other break hours (unpaid)", value: String(hours(r.totalOtherBreakMinutes)) },
+    { metric: "Meal-break checks", value: String(r.breakFlags.length) },
     { metric: "Avg shift hours", value: String(hours(r.avgShiftMinutes)) },
     { metric: "Scheduled hours", value: String(hours(r.scheduledMinutes)) },
     { metric: "Schedule adherence", value: r.scheduledMinutes > 0 ? pct(r.scheduleAdherence) : "—" },
@@ -85,6 +104,12 @@ export async function GET(request: Request) {
     daysWorked: e.daysWorked,
     hoursWorked: hours(e.minutesWorked),
     breakHours: hours(e.breakMinutes),
+    lunchCount: e.lunchCount,
+    lunchHours: hours(e.lunchMinutes),
+    otherBreakCount: e.otherBreakCount,
+    otherBreakHours: hours(e.otherBreakMinutes),
+    openBreaks: e.openBreaks,
+    mealFlagDays: e.mealFlagDays,
     avgShiftHours: hours(e.avgShiftMinutes),
     ordersHandled: e.ordersHandled,
     lastActiveDay: e.lastActiveDay ?? "—",
@@ -95,6 +120,12 @@ export async function GET(request: Request) {
     { name: "By employee", columns: EMP_COLUMNS, rows: empRows },
     { name: "Shifts by status", columns: STATUS_COLUMNS, rows: r.shiftsByStatus },
     { name: "Punch source", columns: SOURCE_COLUMNS, rows: r.punchesBySource },
+    {
+      name: "Meal-break checks",
+      caption: "WAC 296-126-092 reminders from the time clock (flags, not violations found by a person)",
+      columns: FLAG_COLUMNS,
+      rows: r.breakFlags.map((f) => ({ day: f.day, name: f.name, check: BREAK_FLAG_TEXT[f.code].label, detail: f.detail, rule: BREAK_FLAG_TEXT[f.code].rule })),
+    },
   ];
 
   const spec: WorkbookSpec = {

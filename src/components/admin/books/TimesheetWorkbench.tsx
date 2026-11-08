@@ -51,6 +51,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { BREAK_FLAG_TEXT } from "@/lib/staffing/break-clock-core";
 
 import { Badge, Button, Card, CardHeader, Select } from "@/components/admin/ui";
 import {
@@ -599,6 +600,24 @@ export function TimesheetWorkbench({
                 <EmployeeRow key={s.employee.employeeId} sheet={s} />
               ))}
             </div>
+
+            {/* D211 — meal-break checks. Information, never a block: lunch
+                and Other breaks are already unpaid (break punches are not work). */}
+            {computation.breakFlags && computation.breakFlags.length > 0 ? (
+              <div className="mt-4 rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3 text-sm">
+                <p className={LABEL}>Meal-break checks (WAC 296-126-092) — review, does not block approval</p>
+                <ul className="mt-2 space-y-1">
+                  {computation.breakFlags.map((f, i) => (
+                    <li key={`${f.employeeId}-${f.day}-${f.code}-${i}`} className="text-[var(--admin-text)]">
+                      <span className="tabular-nums">{f.day}</span> ·{" "}
+                      {computation.sheets.find((x) => x.employee.employeeId === f.employeeId)?.employee.fullName ?? "Employee"}:{" "}
+                      {BREAK_FLAG_TEXT[f.code].label} ({f.detail}).{" "}
+                      <span className="text-[var(--admin-text-muted)]">{BREAK_FLAG_TEXT[f.code].rule}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </Card>
         ) : null}
       </div>

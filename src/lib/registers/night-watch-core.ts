@@ -75,6 +75,12 @@ export type WatchFindings = {
   unexplainedOverShort: readonly { registerName: string; businessDay: string; overShortMinor: number }[];
   /** People whose work punch has been open more than OPEN_PUNCH_HOURS. */
   longOpenPunches: readonly { name: string; hours: number }[];
+  /**
+   * D211 — people whose lunch / other break is still open after
+   * LONG_OPEN_BREAK_HOURS (they likely went home without clocking back in or out).
+   * Optional so older callers and fixtures still type-check.
+   */
+  longOpenBreaks?: readonly { name: string; hours: number; reason: string }[];
   /** The last platform health check, if read. */
   platformStatus: "ok" | "warn" | "fail" | null;
   /** Any read that failed: shown, never treated as all clear (rule 135). */
@@ -217,6 +223,19 @@ export function buildMorningReport(f: WatchFindings): MorningReport {
         .slice(0, 3)
         .map((x) => `${x.name} (${x.hours} h)`)
         .join(", ")}. Fix the punch so pay is right.`,
+      href: P_TIMECLOCK,
+    });
+  }
+  if (f.longOpenBreaks && f.longOpenBreaks.length > 0) {
+    const b = f.longOpenBreaks;
+    items.push({
+      key: "long_open_breaks",
+      severity: "amber",
+      who: "crew",
+      sentence: `Break never ended: ${b
+        .slice(0, 3)
+        .map((x) => `${x.name} (${x.reason}, ${x.hours} h)`)
+        .join(", ")}${b.length > 3 ? ` and ${b.length - 3} more` : ""}. Fix the punch on Hours so pay is right; their drawer may still be open.`,
       href: P_TIMECLOCK,
     });
   }
@@ -521,6 +540,13 @@ export function __runNightWatchTests(): { passed: number; failed: number } {
   const html = reportEmailHtml({ ...busy, items: [{ ...busy.items[0]!, sentence: "<b>x</b>" }] }, "https://g.co");
   ok(html.includes("&lt;b&gt;") && !html.includes("<b>x"), "email escapes");
   ok(reportSubject(busy).includes("urgent") && reportSubject(clear).endsWith("all clear"), "subjects");
+
+  // D211 — a break left open shows as amber crew work on Hours.
+  const brk = buildMorningReport({ ...empty, longOpenBreaks: [{ name: "Ana", hours: 5, reason: "Lunch" }] });
+  const bi = brk.items.find((x) => x.key === "long_open_breaks");
+  ok(!!bi && bi.severity === "amber" && bi.who === "crew" && bi.href === P_TIMECLOCK, "long open break item");
+  ok(!!bi && bi.sentence.includes("Ana (Lunch, 5 h)"), "long open break names the person and reason");
+  ok(buildMorningReport({ ...empty, longOpenBreaks: [] }).status === "clear", "no open breaks stays clear");
 
   return { passed, failed };
 }
