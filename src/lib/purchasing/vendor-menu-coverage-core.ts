@@ -375,7 +375,11 @@ export function buildSurvivorResolver(vendors: readonly CoverageVendor[]): (id: 
       const v = byId.get(cur);
       if (!v || !isArchived(v) || !v.merged_into_id) break;
       const next = v.merged_into_id;
-      if (!byId.has(next) || seen.has(next)) break;
+      if (!byId.has(next)) break;
+      if (seen.has(next)) {
+        cur = id; // a loop: trust none of it
+        break;
+      }
       seen.add(next);
       cur = next;
     }
@@ -411,7 +415,7 @@ export function familyVendorKey(raw: string | null | undefined): string {
   const loose = looseVendorKey(raw);
   if (!loose) return "";
   const kept = loose.split(" ").filter((w) => !INDUSTRY_WORDS.has(w));
-  const k = (kept.length ? kept : loose.split(" ")).join("");
+  const k = kept.join("");
   return k.length >= 5 ? k : "";
 }
 
@@ -1540,6 +1544,115 @@ export function __runVendorMenuCoverageCoreTests(): { passed: number; failed: nu
   const nc = neededCsv(needed);
   ok(nc.split("\r\n").length === needed.length + 2, "needed csv rows + header + trailing");
   ok(nc.includes("2500.00"), "needed csv YTD dollars");
+
+  // ---- D213: duplicate cards, merged cards, cleaner names, owner links ----
+  ok(mergedIntoFromNotes('x\nMerged into "Two Heads Co." (30ef7ae1-1851-463a-b121-33c60725d4f9) on 2026-07-26.') === "30ef7ae1-1851-463a-b121-33c60725d4f9", "merge note parsed");
+  ok(mergedIntoFromNotes('Merged into "A" (11111111-1111-1111-1111-111111111111) on x. Merged into "B" (22222222-2222-2222-2222-222222222222) on y.') === "22222222-2222-2222-2222-222222222222", "last merge note wins");
+  ok(mergedIntoFromNotes("Merged in \"X\" from somewhere") === null && mergedIntoFromNotes(null) === null, "survivor-side note / null ignored");
+  ok(looseVendorKey("NCMX, LLC") === "ncmx" && looseVendorKey("CONSCIOUS CANNABIS Proc") === "conscious cannabis", "loose key drops legal words");
+  ok(looseVendorKey("LLC") === "llc", "loose key never empties");
+  ok(compactVendorKey("botanicaSEATTLE") === compactVendorKey("Botanica Seattle"), "compact key ignores spaces");
+  ok(familyVendorKey("Blue Roots Cannabis Co.") === familyVendorKey("Blue Roots") && familyVendorKey("FIREBROS") === familyVendorKey("Fire Bros."), "family key");
+  ok(familyVendorKey("Farms") === "", "family key too generic → blank");
+  const mv = menuNameVariants("Evergreen Herbal - NEW! THC Only Sugar Free Gummies!");
+  ok(mv.includes("Evergreen Herbal"), `marketing tail stripped (${mv.join("|")})`);
+  ok(menuNameVariants("EVERIGREENE (ZEN)").includes("EVERIGREENE"), "paren aside stripped");
+  ok(menuNameVariants("Sitka Hash House\u2122")[0] === "Sitka Hash House", "trademark sign stripped");
+  ok(menuNameVariants("____ThunderChief")[0] === "ThunderChief", "wrapping underscores stripped");
+  ok(menuNameVariants("BOTANICAL ARTS - 431389")[0] === "BOTANICAL ARTS", "license suffix stripped");
+  ok(JSON.stringify(menuNameParts("TILTED by Bellevue Cannabis Co")) === JSON.stringify(["TILTED", "Bellevue Cannabis Co"]), "by-split");
+  ok(menuNameParts("Seattle Marijuana Company, Mountain Hi, Hard Hat Extracts, and CANDY").includes("Mountain Hi"), "comma/and split");
+  ok(menuNameParts("Agro Couture / Slab Mechanix").length === 2 && menuNameParts("Plain Name").length === 0, "slash split; single name → no parts");
+
+  const D = [
+    V("gg", "GREENLEAF GROWERS", { license_number: "412259", status: "draft" }),
+    V("gm", "Greenleaf MJ", { license_number: "412259", status: "draft" }),
+    V("th", "Two Heads Co.", { license_number: "412904", status: "draft" }),
+    V("tha", "TWO HEADS CO. LLC", { license_number: "434211", status: "archived", merged_into_id: "th" }),
+    V("lime", "LIMELIGHT", { license_number: "412851", status: "draft" }),
+    V("fb1", "Fire Bros.", { license_number: "425450", status: "draft" }),
+    V("fb2", "Fire Bros.", { license_number: "436479", status: "draft" }),
+    V("c1", "CERES", { license_number: "417050" }),
+    V("c2", "CERES", { license_number: "435011" }),
+    V("c3", "CERES", { license_number: "435012" }),
+    V("x1", "Twin Co", { license_number: "500001" }),
+    V("x2", "Twin Co", { license_number: "500002" }),
+    V("nc", "NCMX, LLC", { license_number: "416278" }),
+    V("ev", "Evergreen Herbal", { license_number: "412229" }),
+    V("eva", "EVERGREEN HERBAL", { license_number: "78256", status: "archived", merged_into_id: "ev" }),
+    V("loop1", "Loop A", { status: "archived", merged_into_id: "loop2" }),
+    V("loop2", "Loop B", { status: "archived", merged_into_id: "loop1" }),
+    V("pub1", "Same Pub", { status: "published" }),
+    V("pub2", "Same Pub", { status: "draft" }),
+    V("bel", "BELLEVUE CANNABIS COMPANY", { license_number: "412692" }),
+  ];
+  const resolveD = buildSurvivorResolver(D);
+  ok(resolveD("tha") === "th" && resolveD("th") === "th", "archived merged card → survivor");
+  ok(resolveD("loop1") === "loop1", "merge loop refused (stays itself)");
+  const lotsD = rollupLots(
+    [
+      { vendor_id: "gg", on_hand_qty: 1, status: "active", received_on: "2026-10-01", created_at: null, category: null },
+      { vendor_id: "fb1", on_hand_qty: 1, status: "active", received_on: "2026-10-01", created_at: null, category: null },
+      { vendor_id: "c1", on_hand_qty: 1, status: "active", received_on: "2026-10-01", created_at: null, category: null },
+      { vendor_id: "x1", on_hand_qty: 1, status: "active", received_on: "2026-10-01", created_at: null, category: null },
+      { vendor_id: "x2", on_hand_qty: 1, status: "active", received_on: "2026-10-01", created_at: null, category: null },
+      { vendor_id: "eva", on_hand_qty: 2, status: "active", received_on: "2026-10-02", created_at: null, category: null },
+      { vendor_id: "tha", on_hand_qty: 1, status: "active", received_on: "2026-10-03", created_at: null, category: null },
+    ],
+    resolveD,
+  );
+  ok(lotsD.get("ev")?.lotsTotal === 1 && !lotsD.has("eva"), "lots on an archived merged card roll up to the survivor");
+  const carriedD = new Set([...lotsD.keys()]);
+  const mD = buildVendorMatcher(D, [
+    { vendor_id: "eva", source_name: "license:78256", source_system: "merge" },
+    { vendor_id: "nc", source_name: "Wyld Wholesale", source_system: "menu" },
+  ], [], { carried: carriedD });
+  const q = (label: string, license: string | null = null, altLabel: string | null = null, vendorId: string | null = null) =>
+    mD({ vendorId, label, altLabel, license });
+  const g1 = q("Greenleaf Growers", "412259");
+  ok(g1.vendorId === "gg" && g1.how === "license" && (g1.detail ?? "").includes("receive from"), "license on 2 cards → the carried card, reason shown");
+  ok((g1.duplicateIds ?? []).includes("gm"), "duplicate card listed for merging");
+  const c = q("CERES");
+  ok(c.vendorId === "c1" && c.candidates === 3, "name on 3 cards → carried card");
+  const twin = q("Twin Co");
+  ok(twin.vendorId === null && twin.how === "ambiguous", "both carried, both draft → still refused (rule 3)");
+  ok(q("Same Pub").vendorId === "pub1", "published card wins a remaining tie");
+  ok(q("Evergreen Herbal - NEW! THC Only Sugar Free Gummies!").vendorId === "ev", "marketing tail → survivor (archived dup ignored)");
+  ok(q("Old Herbal", "78256").vendorId === "ev", "merge license:<n> alias counts as a license");
+  ok(q("Whatever", null, null, "tha").vendorId === "th", "stamped vendor_id on a merged card resolves to survivor");
+  const ncm = q("NCMX, LLC (Wyld & Good Tide)");
+  ok(ncm.vendorId === "nc" && ncm.how === "name", "paren aside + LLC");
+  ok(q("Wyld Wholesale").how === "alias" && (q("Wyld Wholesale").detail ?? "").includes("you linked"), "owner menu link wins");
+  const thc = q("TWO HEADS CO LLC - 412851");
+  ok(thc.vendorId === null && thc.how === "ambiguous" && (thc.detail ?? "").includes("LIMELIGHT"), "label license that contradicts the name → conflict shown, not guessed");
+  ok(q("Two Heads", "412851").vendorId === "lime", "a license FIELD is trusted outright");
+  const fb = q("Fire Bros NEW", "436479");
+  ok(fb.vendorId === "fb1" && (fb.detail ?? "").includes("duplicate card"), "menu on an uncarried twin counts for the carried card");
+  ok(q("TILTED by Bellevue Cannabis Co").vendorId === "bel", "multi-part name: one part fits");
+  ok(q("Unknown Seller", null, "bellevue cannabis co").vendorId === "bel", "web-address slug fallback");
+  ok(q("Nobody Here").how === "none", "no match stays none");
+
+  // Coverage across duplicates: a menu on fb2 or gg covers its duplicates; archived never listed.
+  const snapsD: CoverageSnapshot[] = [
+    S("gfG", "growflow", "Greenleaf Growers", "2026-11-05T00:00:00Z", { license: "412259" }),
+    S("gfF", "growflow", "Fire Bros NEW", "2026-11-05T00:00:00Z", { license: "436479" }),
+    S("cvE", "cultivera", "Evergreen Herbal - NEW!", "2026-11-05T00:00:00Z"),
+  ];
+  const searchedD = buildSearchedRows({ snapshots: snapsD, vendors: D, match: mD, itemsBySnapshot: new Map(), lotsByVendor: lotsD, nowMs: NOW });
+  const neededD = buildNeededRows({ vendors: D, lotsByVendor: lotsD, searched: searchedD, nowMs: NOW });
+  const needIds = neededD.map((n) => n.vendor.id).sort();
+  ok(!needIds.includes("gg") && !needIds.includes("fb1") && !needIds.includes("ev"), `covered vendors not in Still need (${needIds.join(",")})`);
+  ok(!needIds.includes("eva") && !needIds.includes("tha"), "archived cards never listed");
+  ok(needIds.includes("th") && needIds.includes("c1"), "survivor with rolled-up lots listed when no menu");
+  const kD = coverageKpis(searchedD, neededD, lotsD, D);
+  ok(kD.covered + kD.needed === kD.carried, `covered + still-need = carried (${kD.covered}+${kD.needed}=${kD.carried})`);
+  const rowG = searchedD.find((r) => r.vendorId === "gg")!;
+  ok(rowG.matchDetail !== null && rowG.duplicateIds.includes("gm"), "row carries reason + duplicates");
+  ok(rowG.linkTargets.length === 1 && rowG.linkTargets[0].source === "growflow" && rowG.linkTargets[0].label === "Greenleaf Growers", "link targets");
+  ok(menuLinkSnapshotTable("cultivera").nameColumn === "seller_name" && menuLinkSnapshotTable("growflow").nameColumn === "store_name", "link stamps the right column");
+  ok(parseMenuLinkTargets('[{"source":"cultivera","label":"X"},{"source":"evil","label":"Y"},{"source":"growflow","label":""}]').length === 1, "link targets parse: bad source/blank dropped");
+  ok(parseMenuLinkTargets("not json").length === 0 && parseMenuLinkTargets('{"a":1}').length === 0, "link targets parse: garbage → none");
+  ok(isListableVendor({ status: "archived" }) === false && isListableVendor({ status: "draft" }), "listable");
 
   return { passed, failed };
 }
