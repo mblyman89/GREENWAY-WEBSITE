@@ -78,11 +78,45 @@ export function safeCoaUrl(raw: string | null | undefined, extraHosts: readonly 
   if (u.username || u.password) return { ok: false, reason: "links with credentials are not read" };
   if (u.port && u.port !== "443") return { ok: false, reason: `port ${u.port} is not read` };
   const host = u.hostname.toLowerCase();
+  // D207 ("Please unlock Google Drive"): a vendor's Drive share link is read
+  // as its direct download. Only a FILE link (an id) is accepted; Google
+  // answers with one 303 to drive.usercontent.google.com, also allowed. The
+  // bytes must still be a real PDF (looksLikePdf), so a sign-in page or a
+  // folder view is refused, never read as a COA.
+  if (FILE_SHARE_COA_HOSTS.includes(host)) {
+    const direct = driveDirectUrl(u);
+    return direct ? { ok: true, url: direct } : { ok: false, reason: `that ${host} link is not a single shared file (open the file in Drive and copy its share link)` };
+  }
   const allow = mergeHosts([{ coaHosts: extraHosts }]);
   if (!allow.includes(host)) {
     return { ok: false, reason: `${host} is not a known lab host (known: ${allow.join(", ")}; add it on Inventory -> Testing labs)` };
   }
   return { ok: true, url: u.toString() };
+}
+
+/** D207: Google Drive file-share hosts a COA link may point at. */
+export const FILE_SHARE_COA_HOSTS: readonly string[] = ["drive.google.com", "docs.google.com", "drive.usercontent.google.com"];
+
+const DRIVE_ID = /^[A-Za-z0-9_-]{10,200}$/;
+
+/**
+ * A Google Drive share link -> its direct download link, or null when it is
+ * not one shared FILE (a folder, a Google Doc editor link, no id).
+ *   drive.google.com/file/d/<id>/view?usp=drivesdk   (the vendors' form)
+ *   drive.google.com/open?id=<id> | /uc?id=<id>&export=download
+ *   docs.google.com/uc?id=<id>  | docs.google.com/file/d/<id>/...
+ *   drive.usercontent.google.com/download?id=<id>   (Google's own redirect; kept)
+ */
+export function driveDirectUrl(u: URL): string | null {
+  const host = u.hostname.toLowerCase();
+  const fromPath = /^\/file\/d\/([^/]+)/.exec(u.pathname)?.[1] ?? null;
+  const id = fromPath ?? u.searchParams.get("id");
+  if (!id || !DRIVE_ID.test(id)) return null;
+  if (host === "drive.usercontent.google.com") {
+    return u.pathname === "/download" ? `https://drive.usercontent.google.com/download?id=${id}&export=download` : null;
+  }
+  if (fromPath || u.pathname === "/open" || u.pathname === "/uc") return `https://drive.google.com/uc?export=download&id=${id}`;
+  return null;
 }
 
 /** Does this already-safe URL's host need the DNS public-address check? (owner-added hosts do) */
@@ -382,6 +416,20 @@ export function __runCoaExtractCoreTests(fixtures: Record<string, string>): { pa
   const up = safeCoaUrl("  HTTPS://CERTS.CONFLABS.COM/full/WA-x.pdf ");
   ok(up.ok && up.url === "https://certs.conflabs.com/full/WA-x.pdf", "trimmed + host lower-cased");
   ok(safeCoaUrl("https://certs.conflabs.com:443/x").ok, "explicit 443 allowed");
+
+  // ---- D207: Google Drive share links read as direct downloads ----
+  const drv = safeCoaUrl("https://drive.google.com/file/d/1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA/view?usp=drivesdk");
+  ok(drv.ok && drv.url === "https://drive.google.com/uc?export=download&id=1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA", "D207: vendor Drive share -> direct download");
+  const op = safeCoaUrl("https://drive.google.com/open?id=1M9AaPhGzel_hg7dTkhID5zEwz7xnmYK4");
+  ok(op.ok && op.url.endsWith("id=1M9AaPhGzel_hg7dTkhID5zEwz7xnmYK4"), "D207: open?id= form");
+  const driveHop = nextRedirectHop("https://drive.google.com/uc?export=download&id=1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA", "https://drive.usercontent.google.com/download?id=1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA&export=download");
+  ok(driveHop.ok && driveHop.url === "https://drive.usercontent.google.com/download?id=1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA&export=download", "D207: Google's 303 to usercontent is followed");
+  ok(!safeCoaUrl("https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp").ok, "D207: a folder link is refused");
+  ok(!safeCoaUrl("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit").ok, "D207: a Google Doc editor link is refused");
+  ok(!safeCoaUrl("https://drive.google.com/file/d/short/view").ok, "D207: a bad id is refused");
+  ok(!safeCoaUrl("http://drive.google.com/file/d/1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA/view").ok, "D207: http Drive refused (https only)");
+  ok(!safeCoaUrl("https://evil.google.com.attacker.io/file/d/1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA/view").ok, "D207: look-alike host refused");
+  ok(needsDnsCheck("https://drive.google.com/uc?export=download&id=1i3E_Y3Gz6xcMdrQ_vCl7D1lZXjDRH7pA"), "D207: Drive hosts get the public-address DNS check");
 
   // ---- R36: Cultivera built in, owner hosts added, redirects + DNS ----
   const cv = "https://files.cultivera.com/435553542D5753353031/Coas/WA-1BXA5DQ1Z-WA-251230-005.pdf";

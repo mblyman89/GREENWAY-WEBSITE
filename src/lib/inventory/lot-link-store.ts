@@ -221,3 +221,25 @@ export async function listDraftHintsForLot(lotId: string): Promise<LotDraftHint[
   if (error) return [];
   return (data as LotDraftHint[] | null) ?? [];
 }
+
+/**
+ * D207: every onboarding draft for ONE product key (status + key only), for
+ * the lot page's "Send to Product Onboarding" verdict. null = the read failed
+ * (the page then offers nothing rather than guessing).
+ */
+export async function listDraftsForKey(key: string): Promise<{ status: string | null; pos_product_key: string | null }[] | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const k = key.trim();
+  if (!k) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("catalog_product_drafts")
+    .select("status, pos_product_key")
+    .eq("pos_product_key", k)
+    .limit(50);
+  if (error) {
+    console.error("[lot-link-store] drafts-for-key read failed:", error.message);
+    return null;
+  }
+  return (data as { status: string | null; pos_product_key: string | null }[] | null) ?? [];
+}
