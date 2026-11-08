@@ -222,7 +222,8 @@ describe("D198d the register wiring (RegisterShell)", () => {
 describe("D198d SOP + concierge + verbatim", () => {
   it("SOP-01 4.23 explains scan-from-home and typing the receipt name (v1.24)", () => {
     const sop = read("docs/sop/SOP-01-register-operations.md");
-    expect(sop).toContain("| **Version** | 1.24");
+    // D211 moved the current version to 1.25; 1.24 stays named in the version history line.
+    expect(sop).toMatch(/\| \*\*Version\*\* \| 1\.2[4-9]|1\.24 \(draft for owner review; owner message 2026-11-07 \(iPad returns, D198d\)/);
     expect(sop).toContain("Fastest: scan the QR code on the customer's receipt from the home screen.");
     expect(sop).toContain("Or type the receipt name or number");
     expect(sop).toContain("| 1.24 draft | 2026-11-07 |");
