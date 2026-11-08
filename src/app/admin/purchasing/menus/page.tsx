@@ -34,6 +34,8 @@ import {
 import { VendorSearch } from "./vendor-search";
 
 export const dynamic = "force-dynamic";
+// D211: the logo-fetch actions search up to three marketplaces per vendor.
+export const maxDuration = 300;
 
 /**
  * Vendor Menus command center (GF-5 → D209).
