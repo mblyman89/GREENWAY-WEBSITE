@@ -69,9 +69,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // T-324: after-tax price correction (pure math + write path).
 import { parsePriceCorrection } from "@/lib/inventory/price-correction-core";
 import { applyLotAfterTaxPrice, getLotPriceState } from "@/lib/inventory/price-write-store";
-import { lotOnboardVerdict, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
-import { listDraftsForKey } from "@/lib/inventory/lot-link-store";
-import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
+import { lotOnboardVerdict, offMenuPriceStep, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
+import { listDraftsForKey, findOpenDraftForLot } from "@/lib/inventory/lot-link-store";
+import { seedDraftsForManifest, approveDraftWithPrice } from "@/lib/inventory/catalog-drafts";
 import { sharedSizeFloor, sharedFloorRefusal, checkOwnerSizePick, type SizeLot } from "@/lib/inventory/lot-size-link-core";
 import { listLotsSharingSize, listActiveLotsForKey, setLotSizeLink } from "@/lib/inventory/lot-size-link-store";
 // SLICE 18A: the compliance-classification editor. The RULES are the same pure
@@ -1529,4 +1529,127 @@ export async function sendLotToOnboardingAction(lotId: string) {
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory/drafts");
   redirect(`/admin/inventory/${lotId}?onb=sent#${ONBOARD_ANCHOR}`);
+}
+
+/**
+ * D208 - "I want to set the price in the detail page like all the others."
+ *
+ * A lot whose product is on no menu card (the five CANNA PROCESSING lots on a
+ * delivery refused by mistake) had no price box: the price lives on the menu
+ * card, and the card only appears when an onboarding row is approved. This
+ * action does that from the lot page, in one step, through the SAME doors:
+ *   1. re-check the lot (lotOnboardVerdict, never the form);
+ *   2. no onboarding row yet -> seed exactly this lot's row (finalize seeder);
+ *   3. approve that row at the typed after-tax price (approveDraftWithPrice:
+ *      the 2x cost floor, category, compliance and volume gates all run, and
+ *      the approval stages + publishes the menu as onboarding does);
+ *   4. re-read the menu to say honestly whether it is live or waiting.
+ * The lot's own Website category / Product type picks are passed as the
+ * classification so the gate has a person's answer. Every outcome is audited.
+ */
+export async function setOffMenuLotPriceAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const lot = await getLotById(lotId);
+  if (!lot) lotErr(lotId, ONBOARD_ANCHOR, "That lot no longer exists.");
+  const key = (lot.pos_product_key ?? "").trim();
+
+  const resolution = await resolveWebsiteCategoryForLot({
+    posProductKey: lot.pos_product_key,
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    category: lot.category,
+  });
+  const parsed = parsePriceCorrection({
+    afterTaxDollars: formData.get("after_tax_price") as string | null,
+    costMinor: lot.unit_cost_minor_units,
+    category: resolution.websiteCategory,
+  });
+  if (!parsed.ok) lotErr(lotId, ONBOARD_ANCHOR, parsed.error);
+
+  const state = await getLotPriceState({ posProductKey: lot.pos_product_key, menuSourceVariantId: lot.menu_source_variant_id ?? null });
+  if (state.status === "priced" || state.status === "ambiguous") {
+    // It reached the menu since the page loaded: the normal price box applies.
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("This product is on the menu now. Reload the page and use the price box."));
+  }
+  if (state.status === "unavailable") lotErr(lotId, ONBOARD_ANCHOR, "The menu couldn't be read right now, so nothing was saved. Try again in a moment.");
+
+  const drafts = key ? await listDraftsForKey(key) : [];
+  const verdict = lotOnboardVerdict(
+    {
+      status: lot.status,
+      disposition: (lot as { disposition?: string | null }).disposition ?? null,
+      is_sample: lot.is_sample,
+      pos_product_key: lot.pos_product_key,
+      manifest_id: lot.manifest_id,
+    },
+    state.status,
+    drafts,
+  );
+  const step = offMenuPriceStep(verdict);
+  if (step.kind === "refuse") lotErr(lotId, ONBOARD_ANCHOR, step.reason);
+
+  let seeded = 0;
+  if (step.kind === "seed_then_approve") {
+    const res = await seedDraftsForManifest(lot.manifest_id as string, session.userId, { lotIds: [lotId] });
+    if (res.firstError) lotErr(lotId, ONBOARD_ANCHOR, `Onboarding row could not be made: ${res.firstError}`);
+    seeded = res.draftsCreated;
+  }
+  const found = await findOpenDraftForLot(key, lotId);
+  if (!found.ok) lotErr(lotId, ONBOARD_ANCHOR, found.error);
+  if (!found.draftId) {
+    lotErr(lotId, ONBOARD_ANCHOR, "No onboarding row could be found or made for this product, so the price was not saved. Reload the page.");
+  }
+
+  // The person's own classification picks on this lot (Website category /
+  // Product type), so the approval gate has a human answer.
+  const override = await getOverrideForKey(key);
+  const result = await approveDraftWithPrice(found.draftId, parsed.afterTaxMinor, session.userId, {
+    chosenWebsiteCategory: override?.website_category ?? null,
+    chosenHouseType: override?.house_type ?? null,
+  });
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inventory_lot.off_menu_price_refused",
+      entityType: "inventory_lot",
+      entityId: lotId,
+      after: { pos_product_key: key, draft_id: found.draftId, drafts_seeded: seeded, after_tax_minor_units: parsed.afterTaxMinor, error: result.error ?? null },
+    });
+    lotErr(
+      lotId,
+      ONBOARD_ANCHOR,
+      `The price was not saved: ${result.error ?? "the approval was refused"}` +
+        (seeded > 0 ? " (An onboarding row was made for it; you can also finish it in Product Onboarding.)" : ""),
+    );
+  }
+
+  const after = await getLotPriceState({ posProductKey: lot.pos_product_key, menuSourceVariantId: lot.menu_source_variant_id ?? null });
+  const live = after.status === "priced";
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.off_menu_price_set",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { on_menu: false, drafts: (drafts ?? []).length },
+    after: {
+      pos_product_key: key,
+      draft_id: found.draftId,
+      drafts_seeded: seeded,
+      after_tax_minor_units: parsed.afterTaxMinor,
+      pre_tax_base_minor_units: parsed.baseMinor,
+      website_category: override?.website_category ?? resolution.websiteCategory,
+      house_type: override?.house_type ?? null,
+      live_menu_price_minor_units: live ? after.priceMinor : null,
+      on_menu: live,
+      changes: [`Price set to $${(parsed.afterTaxMinor / 100).toFixed(2)} out-the-door from the lot page (approved onto the menu)`],
+    },
+  });
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePromotionSurfaces();
+  revalidatePublicMenuSurfaces();
+  redirect(`/admin/inventory/${lotId}?onb=${live ? "priced" : "priced_pending"}#${ONBOARD_ANCHOR}`);
 }

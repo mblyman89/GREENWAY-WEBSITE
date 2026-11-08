@@ -1754,3 +1754,11 @@ Same request (verbatim above): "The deep search isn't finding the last three ...
 - `<LotCoaDocumentAttach>` in LotLinkPanels (anchor `#coa-doc`).
 - `src/lib/pos/fix-later-view-core.ts` (pure, 8 self-tests). `readFixLaterCoverage` adds each lot's delivery.
 - Test: `tests/compliance/d207-coa-unlock.test.ts`.
+
+## D208 — set the price of the 5 CANNA PROCESSING lots on the lot page
+
+> "Thank you. Will you tell me if I can modify the 5 canna processing lots? They are the only things I've found that came over from Cultivera that doesn't let me change or even see what the price is on the menu if one were to be scanned on the register. Please let me know if that's fixed. I want to set the price in the detail page like all the others. If not, please fix it and then return with a summary report. Follow the standing rules. Thank you."
+
+Finding: D207 only gave these lots a "Send to Product Onboarding" button; the price still had to be set in onboarding. The 5 GF-key lots (GF41918905566981/88/89/90/91) still had no menu card and no onboarding row, so the lot page showed no price.
+
+Fix: the lot page now shows a price box for a lot that is not on the menu yet (`setOffMenuLotPriceAction`). Saving seeds that lot's onboarding row when missing and approves it at the typed after-tax price through `approveDraftWithPrice` (2x cost floor, category, compliance and volume gates), which stages and publishes the menu like onboarding. The lot's own Website category / Product type picks are passed as the classification. Audited as `inventory_lot.off_menu_price_set` / `_refused`.

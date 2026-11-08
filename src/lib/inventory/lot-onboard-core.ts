@@ -79,6 +79,10 @@ export function lotOnboardVerdict(
 /** The banner after the send action (query `onb=`). */
 export function onboardBanner(code: string | null | undefined): { tone: "ok" | "error"; text: string } | null {
   switch (code) {
+    case "priced":
+      return { tone: "ok", text: "Price saved. The product was approved and is on the menu at that price; the register shows it on its next refresh." };
+    case "priced_pending":
+      return { tone: "ok", text: "Price saved and the product approved. Its menu update is waiting at Publish Menu (it could not go live on its own); publish it there." };
     case "sent":
       return { tone: "ok", text: "Sent to Product Onboarding. Open it there, set the price and approve; the price box here works as soon as it is on the menu." };
     case "exists":
@@ -86,6 +90,32 @@ export function onboardBanner(code: string | null | undefined): { tone: "ok" | "
     default:
       return null;
   }
+}
+
+/**
+ * D208 ("I want to set the price in the detail page like all the others."):
+ * what the lot page's price box does for a lot that is NOT on the menu yet.
+ *  - "seed_then_approve": no onboarding row -> make it, then approve it at
+ *    the typed price (the approval puts it on the menu, same as onboarding);
+ *  - "approve": an onboarding row is waiting -> approve it at the price;
+ *  - "refuse": nothing to approve here, with the plain reason.
+ * Every approval gate (2x cost floor, category, compliance) still runs in
+ * approveDraftWithPrice; this only decides which path is allowed.
+ */
+export type OffMenuPriceStep = { kind: "seed_then_approve" } | { kind: "approve" } | { kind: "refuse"; reason: string };
+
+export function offMenuPriceStep(verdict: OnboardVerdict): OffMenuPriceStep {
+  if (verdict.kind === "send") return { kind: "seed_then_approve" };
+  if (verdict.kind === "open_draft") return { kind: "approve" };
+  if (verdict.kind === "approved") {
+    return { kind: "refuse", reason: "This product is already approved; its menu update is waiting at Publish Menu. Publish it, then edit the price here." };
+  }
+  return { kind: "refuse", reason: verdict.reason };
+}
+
+/** True when the lot page should show the off-menu price box. */
+export function showOffMenuPriceBox(verdict: OnboardVerdict | null): boolean {
+  return verdict?.kind === "send" || verdict?.kind === "open_draft";
 }
 
 export function __runLotOnboardCoreTests(): { passed: number; failed: number } {
@@ -118,5 +148,15 @@ export function __runLotOnboardCoreTests(): { passed: number; failed: number } {
   ok(lotOnboardVerdict(base, "not-on-menu", [{ status: "draft", pos_product_key: "OTHER" }]).kind === "send", "another key's draft ignored");
   ok(onboardingHref("A&B") === "/admin/inventory/drafts?status=draft&q=A%26B", "href encoded");
   ok(onboardBanner("sent")?.tone === "ok" && onboardBanner("x") === null, "banner");
+
+  // D208: the off-menu price box.
+  ok(offMenuPriceStep({ kind: "send" }).kind === "seed_then_approve", "no draft -> seed then approve");
+  ok(offMenuPriceStep({ kind: "open_draft", href: "x" }).kind === "approve", "open draft -> approve it");
+  ok(offMenuPriceStep({ kind: "approved", href: PUBLISH_HREF }).kind === "refuse", "approved -> refuse (publish first)");
+  const r = offMenuPriceStep({ kind: "none", reason: "Trade samples never go on the menu." });
+  ok(r.kind === "refuse" && r.reason === "Trade samples never go on the menu.", "none -> refuse with its reason");
+  ok(showOffMenuPriceBox({ kind: "send" }) && showOffMenuPriceBox({ kind: "open_draft", href: "x" }), "box shows for send/open");
+  ok(!showOffMenuPriceBox(null) && !showOffMenuPriceBox({ kind: "approved", href: "x" }) && !showOffMenuPriceBox({ kind: "none", reason: "r" }), "box hidden otherwise");
+  ok(onboardBanner("priced")?.tone === "ok" && onboardBanner("priced_pending")?.tone === "ok", "price banners");
   return { passed, failed: 0 };
 }
