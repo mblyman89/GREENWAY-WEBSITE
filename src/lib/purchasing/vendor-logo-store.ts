@@ -1,12 +1,12 @@
 /**
  * src/lib/purchasing/vendor-logo-store.ts
  *
- * D211 — "Fetch logo" for the Vendor Menus page. The owner's words:
+ * D212 — "Fetch logo" for the Vendor Menus page. The owner's words:
  *   "I want the fetch button to find and automatically attach the photo to the
  *    vendor profile and publish it so it shows up on the customer facing
  *    website … It should attach to both the vendor and brands."
  *
- * One call does the WHOLE pipeline (D211a): find the vendor's profile on
+ * One call does the WHOLE pipeline (D212a): find the vendor's profile on
  * GrowFlow / Cultivera / LeafLink → download the logo into the Media Library →
  * publish the asset → set vendors.logo_media_id → set every brand's logo →
  * publish a draft vendor / draft brands → record media usages → remember the
@@ -216,8 +216,8 @@ async function checked(what: string, p: PromiseLike<{ error: DbErr }>): Promise<
 }
 
 /**
- * D211a — fetch ONE vendor's logo and attach + publish it everywhere.
- * `replace` is the owner's explicit "Replace logo" click (D211d).
+ * D212a — fetch ONE vendor's logo and attach + publish it everywhere.
+ * `replace` is the owner's explicit "Replace logo" click (D212d).
  */
 export async function fetchVendorLogo(input: {
   vendorId: string;
@@ -267,7 +267,7 @@ export async function fetchVendorLogo(input: {
     }
     result.mediaAssetId = assetId;
 
-    // 2) Publish the asset with provenance (D211f). RLS only serves published media.
+    // 2) Publish the asset with provenance (D212f). RLS only serves published media.
     await checked(
       "Publishing the logo",
       admin
@@ -280,7 +280,7 @@ export async function fetchVendorLogo(input: {
         .eq("id", assetId),
     );
 
-    // 3) Plan + write vendor and brands (D211c/d).
+    // 3) Plan + write vendor and brands (D212c/d).
     const vendorBrands = ctx.brands.filter((b) => b.vendor_id === vendor.id);
     const plan = planLogoWrite(vendor, vendorBrands, assetId, input.replace);
     if (plan.kind === "skip") {
@@ -336,7 +336,7 @@ export type BulkLogoReport = {
   error: string | null;
 };
 
-/** D211e — "Fetch all missing logos": the most urgent vendors first, capped per click. */
+/** D212e — "Fetch all missing logos": the most urgent vendors first, capped per click. */
 export async function fetchMissingLogos(
   actor: LogoActor,
   opts: { cap?: number; skipIds?: readonly string[] } = {},

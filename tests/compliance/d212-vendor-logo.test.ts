@@ -1,5 +1,5 @@
 /**
- * D211 — Vendor Menus "Fetch logo": find a vendor's logo on GrowFlow /
+ * D212 — Vendor Menus "Fetch logo": find a vendor's logo on GrowFlow /
  * Cultivera / LeafLink, attach it to the vendor AND its brands, and publish it
  * so it shows on the customer-facing website in one click.
  * Vitest mirror of the pure self-tests plus structural locks on the store,
@@ -20,7 +20,7 @@ import {
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
-describe("vendor-logo-core (D211)", () => {
+describe("vendor-logo-core (D212)", () => {
   it("passes its own pure self-tests", () => {
     const r = __runVendorLogoCoreTests();
     expect(r.failed).toBe(0);
@@ -81,7 +81,7 @@ describe("vendor-logo-core (D211)", () => {
   });
 });
 
-describe("D211 structural locks", () => {
+describe("D212 structural locks", () => {
   const store = read("src/lib/purchasing/vendor-logo-store.ts");
   const actions = read("src/app/admin/purchasing/menus/actions.ts");
   const page = read("src/app/admin/purchasing/menus/page.tsx");
@@ -102,7 +102,7 @@ describe("D211 structural locks", () => {
   });
 
   it("actions are permission-gated, audited, and revalidate the public site", () => {
-    const tail = actions.slice(actions.indexOf("D211"));
+    const tail = actions.slice(actions.indexOf("D212"));
     expect(tail).toMatch(/fetchVendorLogoAction[\s\S]*requirePermission\("inventory\.manage"\)/);
     expect(tail).toMatch(/fetchMissingLogosAction[\s\S]*requirePermission\("inventory\.manage"\)/);
     expect(tail).toContain('action: "vendor.logo_fetched"');

@@ -35,7 +35,7 @@ import { VendorSearch } from "./vendor-search";
 import { FetchLogoButton, FetchAllLogosButton } from "./fetch-logo-button";
 
 export const dynamic = "force-dynamic";
-// D211: the logo-fetch actions search up to three marketplaces per vendor.
+// D212: the logo-fetch actions search up to three marketplaces per vendor.
 export const maxDuration = 300;
 
 /**

@@ -1142,7 +1142,7 @@ export async function saveAllLeaflinkSnapshotMediaAction(formData: FormData): Pr
 }
 
 /* ------------------------------------------------------------------
- * D211 — Fetch a vendor's logo from GrowFlow / Cultivera / LeafLink and
+ * D212 — Fetch a vendor's logo from GrowFlow / Cultivera / LeafLink and
  * attach + publish it on the vendor AND its brands in one click.
  *
  * Permission: inventory.manage, the same gate as the Vendor Menus page these
@@ -1189,7 +1189,7 @@ async function afterLogoResults(
         action: "vendor.published",
         entityType: "vendor",
         entityId: r.vendorId,
-        after: { status: "published", reason: "logo fetch (D211)" },
+        after: { status: "published", reason: "logo fetch (D212)" },
       });
     }
     revalidatePath(`/admin/vendors/${r.vendorId}`);
