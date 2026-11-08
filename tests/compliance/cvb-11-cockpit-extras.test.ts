@@ -39,9 +39,13 @@ describe("CVB-11 cockpit extras", () => {
     expect(page).toContain('label="Excise tax (37%)"');
     expect(page).toContain('label="Sales tax"');
     expect(page).toContain("loadCockpitTaxes()");
-    // The bar sits in a track with a real height (flex-1 inside h-44), the root cause of the broken chart.
-    expect(page).toContain('<div className="flex w-full flex-1 items-end">');
-    expect(page).toContain("hourWindow(snap.today.byHour)");
+    // D210b (owner 2026-11-07, "add more details to the bar chart, have it show more based on the
+    // selection of the top comparisons"): the hand-drawn CSS bars (whose track height was the CVB-D19
+    // bug) are replaced on purpose by a real chart that follows the comparison basis. The hours drawn
+    // keep CVB-D19's window (8 AM to midnight, widened to any hour that sold) via hourlyVsBaseline.
+    expect(page).not.toContain('<div className="flex w-full flex-1 items-end">');
+    expect(page).toContain("<HourlyComparisonChart rows={hourly.rows}");
+    expect(page).toContain("todayByHour: snap.today.byHour,");
     expect(page).not.toContain("Last POS import");
     expect(page).toContain('label="Leafly"');
     expect(page).toContain('can(session.profile.role, "settings.manage")');

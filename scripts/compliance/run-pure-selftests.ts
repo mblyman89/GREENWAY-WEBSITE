@@ -1326,6 +1326,8 @@ import { __runOfflineReversalCoreTests } from "../../src/lib/pos/offline-reversa
 import { __runOutageResilienceCoreTests } from "../../src/lib/pos/outage-resilience-core";
 import { __runMemberBookCoreTests } from "../../src/lib/pos/member-book-core";
 import { __runDrawerCloseSlipTests } from "../../src/lib/registers/drawer-close-slip-core";
+import { __runCockpitAnalyticsTests } from "../../src/lib/admin/cockpit-analytics-core";
+import { __runAtmForecastTests } from "../../src/lib/atm/atm-forecast-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2850,6 +2852,8 @@ __runLiquidVolumeTests();
   assertRan("lot-coa-manual-core", __runLotCoaManualCoreTests(), 18); // D207d ("help me unlock ... the one off lots that need coas"): paste a COA link (Drive/Dropbox/lab) or upload the PDF on the lot page; pick the certificate for the lot, never guess between several
   assertRan("fix-later-view-core", __runFixLaterViewCoreTests(), 8); // D207e ("a table with like 40 or 70 lots that say they don't have a coa, but their manifests ... are not one of the three"): the table says it lists every reason, shows the delivery, filters by reason
   assertRan("coa-trust-all-core", __runCoaTrustAllCoreTests(), 38);
+  assertRan("cockpit-analytics-core", __runCockpitAnalyticsTests(), 79); // D210 ("have it show more based on the selection of the top comparisons" / "overlaying labor hours or transactions over the hourly sales" / "who on shift currently is selling more"): basis-following hourly baseline + pace projection, labor by hour + SPLH, category/type mix vs basis, 28-day trend, on-shift board (no same-day dollars), weekday x hour heatmap
+  assertRan("atm-forecast-core", __runAtmForecastTests(), 34); // D210f ("how much the atm goes through on average, a forecaster for when it will be empty"): settled-day throughput, weekday profile p25/p75, depletion walk with a planning range, share of the day still to trade
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

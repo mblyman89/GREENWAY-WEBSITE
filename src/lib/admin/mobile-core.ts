@@ -208,6 +208,8 @@ export function __runMobileCoreTests(): { passed: number } {
     byProduct: [],
     byDay: [],
     byHour: [],
+    byDayHour: [],
+    byDayCategoryType: [],
     byCustomerType: [],
   };
   const zeroMeasure = {

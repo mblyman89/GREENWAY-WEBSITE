@@ -54,6 +54,24 @@ export type SalesGroupRow = {
 
 export type DayPoint = { date: string; revenueMinorUnits: number; orders: number; units: number };
 export type HourPoint = { hour: number; label: string; revenueMinorUnits: number; orders: number };
+/**
+ * D210 (cockpit v2): one Pacific day's one hour. SPARSE: only hours with at
+ * least one completed order are listed, so a 12-week span stays small. Lets
+ * the cockpit build an hour-by-hour baseline for ANY comparison basis from
+ * the exact baseline days (and honour the closed-day rule per day).
+ */
+export type DayHourPoint = { date: string; hour: number; revenueMinorUnits: number; orders: number };
+/**
+ * D210: one Pacific day's revenue for one category + type. SPARSE (only
+ * pairs that sold). Category totals are the sum over its types.
+ */
+export type DayCategoryTypePoint = {
+  date: string;
+  category: string;
+  type: string;
+  revenueMinorUnits: number;
+  units: number;
+};
 
 export type CustomerTypeRow = {
   label: "New customers" | "Returning customers" | "Guest / no email";
@@ -84,6 +102,10 @@ export type SalesReport = {
   byProduct: SalesGroupRow[];
   byDay: DayPoint[];
   byHour: HourPoint[];
+  /** D210: sparse per-day, per-hour revenue + orders (see DayHourPoint). */
+  byDayHour: DayHourPoint[];
+  /** D210: sparse per-day revenue + units by category and type. */
+  byDayCategoryType: DayCategoryTypePoint[];
   byCustomerType: CustomerTypeRow[];
 };
 
@@ -113,6 +135,8 @@ export const EMPTY_SALES_REPORT: SalesReport = {
   byProduct: [],
   byDay: [],
   byHour: [],
+  byDayHour: [],
+  byDayCategoryType: [],
   byCustomerType: [],
 };
 
@@ -287,6 +311,9 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
   let totalDiscount = 0;
 
   const orderRevenue = new Map<string, number>(); // for per-order day/hour roll-up
+  // D210: sparse per-day series for the cockpit's basis-aware charts.
+  const dayHourMap = new Map<string, DayHourPoint>();
+  const dayCatTypeMap = new Map<string, DayCategoryTypePoint>();
 
   for (const l of lines) {
     const qty = l.quantity ?? 0;
@@ -319,6 +346,18 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     }
     pushAcc(typeMap, type, lineRevenue, qty, lineDiscount, l.order_id);
 
+    const lineOrder = orderById.get(l.order_id);
+    if (lineOrder) {
+      const dct = `${dayKey(lineOrder.placed_at)}\u0000${category}\u0000${type}`;
+      let pt = dayCatTypeMap.get(dct);
+      if (!pt) {
+        pt = { date: dayKey(lineOrder.placed_at), category, type, revenueMinorUnits: 0, units: 0 };
+        dayCatTypeMap.set(dct, pt);
+      }
+      pt.revenueMinorUnits += lineRevenue;
+      pt.units += qty;
+    }
+
     orderRevenue.set(l.order_id, (orderRevenue.get(l.order_id) ?? 0) + lineRevenue);
   }
 
@@ -339,6 +378,15 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
         hourOrderSeen[hour].add(orderId);
         hourPoints[hour].orders += 1;
       }
+      // orderRevenue has one entry per order, so each order counts once here.
+      const dhk = `${dk}\u0000${hour}`;
+      let dh = dayHourMap.get(dhk);
+      if (!dh) {
+        dh = { date: dk, hour, revenueMinorUnits: 0, orders: 0 };
+        dayHourMap.set(dhk, dh);
+      }
+      dh.revenueMinorUnits += revenue;
+      dh.orders += 1;
     }
   }
   // units per day (separate pass keyed by order day)
@@ -411,6 +459,10 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     byProduct: finalizeGroups(byProduct, totalRevenue, 25),
     byDay: [...dayMap.values()],
     byHour: hourPoints,
+    byDayHour: [...dayHourMap.values()].sort((a, b) => (a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1)),
+    byDayCategoryType: [...dayCatTypeMap.values()].sort((a, b) =>
+      a.date === b.date ? b.revenueMinorUnits - a.revenueMinorUnits : a.date < b.date ? -1 : 1,
+    ),
     byCustomerType: [
       custTypes["New customers"],
       custTypes["Returning customers"],

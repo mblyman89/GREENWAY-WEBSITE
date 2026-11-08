@@ -153,6 +153,12 @@ export type CockpitSales = {
   comparison: ComparisonBundle;
   /** False when today's sales could not be read (the tiles say so). */
   todayReadable: boolean;
+  /**
+   * D210: the baseline span's own report (the days the basis compares
+   * against). The cockpit's hour-by-hour and category charts are built from
+   * its sparse per-day series, so they follow the picker exactly.
+   */
+  baseline: SalesReport;
 };
 
 export type CockpitOps = {
@@ -192,6 +198,7 @@ function readSales(basis: ComparisonBasis, todayYmd: string): Promise<CockpitSal
     yesterday,
     comparison: await buildComparison(basis, todayYmd, todayR.data, baselineP),
     todayReadable: todayR.ok,
+    baseline: await baselineP,
   }));
 }
 
@@ -207,6 +214,7 @@ export const cockpitSales = cache(async (rawBasis?: string): Promise<CockpitSale
       yesterday: EMPTY_SALES_REPORT,
       comparison: emptyComparisonBundle(basis, todayYmd),
       todayReadable: true,
+      baseline: EMPTY_SALES_REPORT,
     };
   }
   return readSales(basis, todayYmd);

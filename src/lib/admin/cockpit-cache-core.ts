@@ -40,7 +40,7 @@ export const COCKPIT_STOCK_TTL_S = 120;
 /** One tag clears every cockpit figure at once (revalidateTag). */
 export const COCKPIT_CACHE_TAG = "admin-cockpit";
 /** Bump to invalidate every stored cockpit entry after a shape change. */
-export const COCKPIT_CACHE_VERSION = "v1";
+export const COCKPIT_CACHE_VERSION = "v2"; // D210: SalesReport gained byDayHour + byDayCategoryType
 
 /**
  * True when `v` survives JSON.stringify -> JSON.parse unchanged: null,
@@ -139,7 +139,7 @@ export function __runCockpitCacheTests(): { passed: number; failed: number; mess
   ok(COCKPIT_TODAY_TTL_S <= 60, "today's figures are never more than a minute old");
   ok(COCKPIT_STOCK_TTL_S <= 300, "low stock is never more than five minutes old");
 
-  ok(cockpitCacheKey("today", "2026-11-05").join("|") === "admin-cockpit|v1|today|2026-11-05", "date key");
+  ok(cockpitCacheKey("today", "2026-11-05").join("|") === "admin-cockpit|v2|today|2026-11-05", "date key");
   ok(cockpitCacheKey("baseline", "yesterday", "2026-11-05").length === 5, "basis + date key");
   let threw = false;
   try {
