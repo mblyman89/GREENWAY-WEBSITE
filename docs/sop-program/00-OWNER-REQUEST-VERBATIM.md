@@ -1789,7 +1789,7 @@ Verbatim:
 
 ### As built (D209)
 
-- **Pure core** `src/lib/purchasing/vendor-menu-coverage-core.ts`: vendor matching (linked → license → name/alias/brand; a name that fits two vendors matches neither), lot rollup (destroyed lots never count as stock; Pacific received day), searched rows and needed rows, KPIs, URL filter and sort params, and formula-safe CSV. `__runVendorMenuCoverageCoreTests` runs 100 assertions, registered in `run-pure-selftests.ts` with a floor of 90 and mirrored in `tests/compliance/d208-vendor-menu-coverage.test.ts`.
+- **Pure core** `src/lib/purchasing/vendor-menu-coverage-core.ts`: vendor matching (linked → license → name/alias/brand; a name that fits two vendors matches neither), lot rollup (destroyed lots never count as stock; Pacific received day), searched rows and needed rows, KPIs, URL filter and sort params, and formula-safe CSV. `__runVendorMenuCoverageCoreTests` runs 100 assertions, registered in `run-pure-selftests.ts` with a floor of 90 and mirrored in `tests/compliance/d209-vendor-menu-coverage.test.ts`.
 - **Store** `src/lib/purchasing/vendor-menu-coverage-store.ts` (server-only): reads named columns from all four snapshot sources, vendors, aliases, brands, `inventory_lots` and platform memory, using `pagedAll` / `chunkedIn`. Items are read only for each vendor's latest usable menu. Every DB error becomes a staff-visible warning (rule 15). Wrapped in `cache()`.
 - **Page** `/admin/purchasing/menus`:
   - KPI cards: vendors carried, menu coverage %, needed with stock on the shelf, stale menus, menus not linked to a vendor, menus and items on file.

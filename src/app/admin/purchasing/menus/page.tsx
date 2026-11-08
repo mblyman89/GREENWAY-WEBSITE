@@ -36,9 +36,9 @@ import { VendorSearch } from "./vendor-search";
 export const dynamic = "force-dynamic";
 
 /**
- * Vendor Menus command center (GF-5 → D208).
+ * Vendor Menus command center (GF-5 → D209).
  *
- * D208 (owner, verbatim in docs/sop-program/00-OWNER-REQUEST-VERBATIM.md):
+ * D209 (owner, verbatim in docs/sop-program/00-OWNER-REQUEST-VERBATIM.md):
  * "add as much details to that table as possible ... a table of all vendors
  * we have products from that have not yet been searched".
  *

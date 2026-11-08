@@ -1,5 +1,5 @@
 /**
- * D208 — Vendor Menus coverage command center.
+ * D209 — Vendor Menus coverage command center.
  * Vitest mirror of the pure self-tests plus structural locks on the store,
  * page, and CSV route (rule 18: named columns, Suspense, cache()).
  */
@@ -18,7 +18,7 @@ import {
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
-describe("vendor-menu-coverage-core (D208)", () => {
+describe("vendor-menu-coverage-core (D209)", () => {
   it("passes its own pure self-tests", () => {
     const r = __runVendorMenuCoverageCoreTests();
     expect(r.failed).toBe(0);
@@ -49,7 +49,7 @@ describe("vendor-menu-coverage-core (D208)", () => {
   });
 });
 
-describe("D208 structure", () => {
+describe("D209 structure", () => {
   const store = read("src/lib/purchasing/vendor-menu-coverage-store.ts");
   const page = read("src/app/admin/purchasing/menus/page.tsx");
   const route = read("src/app/admin/purchasing/menus/csv/route.ts");

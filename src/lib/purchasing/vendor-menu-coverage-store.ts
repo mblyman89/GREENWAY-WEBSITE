@@ -1,7 +1,7 @@
 /**
  * src/lib/purchasing/vendor-menu-coverage-store.ts
  *
- * D208 — the reads behind the Vendor Menus coverage tables. Decisions live in
+ * D209 — the reads behind the Vendor Menus coverage tables. Decisions live in
  * vendor-menu-coverage-core.ts (pure); this file only reads rows.
  *
  * Rule 18 (speed) — every read here:
