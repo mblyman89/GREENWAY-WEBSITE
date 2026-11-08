@@ -149,7 +149,7 @@ export function addBillsToDropRows(
 
 /** The "how to take it out" sentence the drop reminder and the drop screen show. */
 export const DROP_HOW_TO =
-  "Take the big bills first ($100s, $50s, then $20s) and leave the starting cash ($10s, $5s, $1s and coins) in the drawer. " +
+  "Take the big bills first ($100s, $50s, then $20s). Leave about $500 plus the starting cash ($10s, $5s, $1s and coins) in the drawer for change; never empty it. " +
   "To the safe: enter how many of each bill you took and the register adds it up. " +
   "To the ATM: $20 bills only, enter how many.";
 

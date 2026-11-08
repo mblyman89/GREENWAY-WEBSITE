@@ -64,6 +64,14 @@ export const DROP_SOON_MINOR = 150000;
  * safe drops are entered bill by bill (drop-bills-core).
  */
 export const DROP_BILL_MINOR = 2000;
+/**
+ * D218 (owner: "the register wants her to drop another 2k, but it would mean she'd have to empty
+ * her whole drawer"): a drop takes the BIG bills and leaves working cash for change. The suggested
+ * drop leaves about this much of the cash taken since the last drop in the drawer, on top of the
+ * starting cash, so the cashier is never told to strip the drawer. Retail practice is "drop down to
+ * a working level", not "drop everything above the float". One constant, easy to change.
+ */
+export const DROP_KEEP_WORKING_MINOR = 50000;
 
 export type DropState = "ok" | "soon" | "due" | "unknown";
 
@@ -71,7 +79,7 @@ export type DropStatus = {
   state: DropState;
   /** Cash sales minus cash refunds minus drops already made: cash above the float. */
   undroppedMinor: number;
-  /** What to drop now (rounded down to $20, big bills, leaving the float). 0 unless due. */
+  /** What to drop now: the cash above the float LESS about $500 of working cash, rounded down to $20. 0 unless due. */
   suggestedDropMinor: number;
   /** One plain sentence for the screen; empty when ok. */
   sentence: string;
@@ -103,14 +111,16 @@ export function dropStatus(input: {
     };
   }
   if (und > DROP_THRESHOLD_MINOR) {
-    const suggested = Math.floor(und / DROP_BILL_MINOR) * DROP_BILL_MINOR;
+    // D218: leave working cash. Over $2,000 the suggestion is always at least $1,500, and after it the
+    // drawer is back under the line (und - suggested <= $500 + $19.99), so the banner clears.
+    const suggested = Math.floor(Math.max(0, und - DROP_KEEP_WORKING_MINOR) / DROP_BILL_MINOR) * DROP_BILL_MINOR;
     return {
       state: "due",
       undroppedMinor: und,
       suggestedDropMinor: suggested,
       sentence:
         `DROP NOW: ${input.registerName} has taken ${formatCents(und)} in cash since its last drop (over ${formatCents(DROP_THRESHOLD_MINOR)}). ` +
-        `Take out about ${formatCents(suggested)}: big bills first ($100s, $50s, then $20s); leave the starting cash ($10s, $5s, $1s and coins). ` +
+        `Take out about ${formatCents(suggested)} in big bills ($100s, $50s, then $20s). Keep about ${formatCents(DROP_KEEP_WORKING_MINOR)} plus the starting cash in the drawer for change; do not empty it. ` +
         `Tap Drop, then enter how many of each bill you took (ATM drops: $20s only) and get a witness PIN.`,
     };
   }
@@ -119,7 +129,7 @@ export function dropStatus(input: {
       state: "soon",
       undroppedMinor: und,
       suggestedDropMinor: 0,
-      sentence: `${input.registerName} has ${formatCents(und)} in cash since its last drop. A drop is due at ${formatCents(DROP_THRESHOLD_MINOR)}.`,
+      sentence: `${input.registerName}: ${formatCents(und)} in cash since the last drop. No drop needed yet; the next drop is due once this passes ${formatCents(DROP_THRESHOLD_MINOR)}.`,
     };
   }
   return { state: "ok", undroppedMinor: und, suggestedDropMinor: 0, sentence: "" };
@@ -327,7 +337,18 @@ export function __runGuidedCashTests(): { passed: number; failed: number } {
   ok(dropStatus({ ...base, cashSalesMinor: 200000 }).state === "soon", "exactly $2,000 is not OVER $2,000");
   const due = dropStatus({ ...base, cashSalesMinor: 200001 });
   ok(due.state === "due", "over $2,000: due");
-  ok(due.suggestedDropMinor === 200000 && due.suggestedDropMinor % DROP_BILL_MINOR === 0, "suggestion rounded to a $20 step");
+  ok(due.suggestedDropMinor === 150000 && due.suggestedDropMinor % DROP_BILL_MINOR === 0, "D218: suggestion leaves $500 working cash, rounded to a $20 step");
+  ok(/do not empty it/.test(due.sentence) && /Keep about \$500\.00/.test(due.sentence), "D218: due says keep working cash, do not empty the drawer");
+  // D218: the owner's 2026-11-08 SR1 second drop: $4,119.50 cash, $2,420 dropped -> $1,699.50, not due.
+  const sr1 = dropStatus({ ...base, cashSalesMinor: 411950, dropsMinor: 242000 });
+  ok(sr1.state === "soon" && /No drop needed yet/.test(sr1.sentence) && !/A drop is due at/.test(sr1.sentence), "D218: SR1 after its first drop: soon, says no drop needed yet");
+  let after = true;
+  for (const u of [200001, 212345, 250000, 400000, 999999]) {
+    const st = dropStatus({ ...base, cashSalesMinor: u });
+    const left = st.undroppedMinor - st.suggestedDropMinor;
+    if (!(st.state === "due" && left >= DROP_KEEP_WORKING_MINOR && left < DROP_KEEP_WORKING_MINOR + DROP_BILL_MINOR && dropStatus({ ...base, cashSalesMinor: u, dropsMinor: st.suggestedDropMinor }).state !== "due")) after = false;
+  }
+  ok(after, "D218: after the suggested drop about $500 working cash stays and the banner clears (second drop too)");
   ok(!/in twenties/.test(due.sentence) && /\$100s/.test(due.sentence) && /how many of each bill/.test(due.sentence), "D217: due says big bills + count each bill, not 'in twenties'");
   ok(due.sentence.startsWith("DROP NOW"), "due is loud");
   ok(dropStatus({ ...base, cashSalesMinor: 250000, dropsMinor: 100000 }).state === "soon", "a drop resets the clock");
