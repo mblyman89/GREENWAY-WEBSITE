@@ -156,6 +156,26 @@ export function breakSuccessMessage(
   return `${name}: back from ${breakReasonLabel(reason).toLowerCase()}${at}. On the clock again.`;
 }
 
+/**
+ * Back-office banner after a clock form posts (?clocked=<action>&who=<name>).
+ * Unknown actions fall back to plain words so an old link never shows junk.
+ */
+export function clockedBannerText(action: string | null | undefined, who?: string | null): string {
+  const name = who ? `${who} ` : "";
+  switch (action) {
+    case "in":
+      return `${name}clocked IN.`;
+    case "out":
+      return `${name}clocked OUT.`;
+    case "break_start":
+      return `${name}is out on a break (off the clock). Clock in again when back.`;
+    case "break_end":
+      return `${name}is back from break and on the clock again.`;
+    default:
+      return `${name}clock updated.`;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Meal-break checks (WAC 296-126-092) and summaries
 // ---------------------------------------------------------------------------
@@ -418,6 +438,13 @@ export function __runBreakClockCoreTests(): { passed: number; failed: number } {
   ok(sum.get("e2")?.otherCount === 1 && sum.get("e2")?.otherMinutes === 15, "other summary");
   ok(sum.get("e3")?.openBreaks === 1 && sum.get("e3")?.lunchCount === 0, "open break summary");
   ok(isLongOpenBreak(at(0), at(3, 1)) && !isLongOpenBreak(at(0), at(3)), "long open break at 3h");
+
+  // back-office banner
+  ok(clockedBannerText("in", "Ana") === "Ana clocked IN.", "banner in");
+  ok(clockedBannerText("out") === "clocked OUT.", "banner out no name");
+  ok(clockedBannerText("break_start", "Ana").includes("break"), "banner break start");
+  ok(clockedBannerText("break_end", "Ana").includes("back from break"), "banner break end");
+  ok(clockedBannerText("junk") === "clock updated.", "banner unknown");
 
   return { passed, failed };
 }

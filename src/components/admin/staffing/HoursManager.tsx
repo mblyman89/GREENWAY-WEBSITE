@@ -19,6 +19,7 @@ import {
   createPunchAction,
   type PunchActionResult,
 } from "@/app/admin/staffing/actions";
+import { BREAK_NOTE_MAX, breakReasonLabel, type BreakReason } from "@/lib/staffing/break-clock-core";
 
 export type HoursPunchRow = {
   id: string;
@@ -30,6 +31,10 @@ export type HoursPunchRow = {
   inLocal: string;
   outLocal: string; // "" when still open
   note: string | null;
+  /** D211 — "work" or "break"; a break shows its reason and is unpaid. */
+  kind?: "work" | "break";
+  breakReason?: string | null;
+  breakNote?: string | null;
 };
 
 export type HoursEmployeeOption = { id: string; name: string };
@@ -105,6 +110,11 @@ export function HoursManager({
                   {fmtLocalTime(p.inLocal)} → {p.outLocal ? fmtLocalTime(p.outLocal) : <span className="text-[var(--admin-accent)]">still in</span>}
                 </span>
                 <span className="text-white/40">{fmtMinutes(p.minutes)}</span>
+                {p.kind === "break" ? (
+                  <Badge tone="gold">
+                    {breakReasonLabel(p.breakReason)} break (unpaid){p.breakNote ? ` — ${p.breakNote}` : ""}
+                  </Badge>
+                ) : null}
                 {p.source === "manager_edit" && <Badge tone="gold">edited</Badge>}
                 <Button variant="neutral" size="sm" onClick={() => setEditingId(p.id)}>
                   Adjust
@@ -197,6 +207,9 @@ function AddPunchForm({
   const [outLocal, setOutLocal] = useState("");
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  // D211 — a manager can record a missed lunch / other break too.
+  const [kind, setKind] = useState<"work" | BreakReason>("work");
+  const [breakNote, setBreakNote] = useState("");
 
   function submit() {
     setErrors([]);
@@ -206,6 +219,8 @@ function AddPunchForm({
         clockInLocal: inLocal,
         clockOutLocal: outLocal || undefined,
         reason,
+        breakReason: kind === "work" ? null : kind,
+        breakNote: kind === "work" ? null : breakNote,
       });
       if (res.ok) {
         toast({ tone: "success", message: "Punch added." });
@@ -237,6 +252,20 @@ function AddPunchForm({
         <Field label="Clock out (Pacific)" help="Optional">
           <input type="datetime-local" className={controlClassName} value={outLocal} onChange={(e) => setOutLocal(e.target.value)} />
         </Field>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Field label="Punch type" help="A break is unpaid time off the clock (start = left, end = back).">
+          <Select value={kind} onChange={(e) => setKind(e.target.value as "work" | BreakReason)}>
+            <option value="work">Work (on the clock)</option>
+            <option value="lunch">Lunch break</option>
+            <option value="other">Other break</option>
+          </Select>
+        </Field>
+        {kind !== "work" ? (
+          <Field label={kind === "other" ? "Break note (required)" : "Break note (optional)"}>
+            <input className={controlClassName} maxLength={BREAK_NOTE_MAX} value={breakNote} onChange={(e) => setBreakNote(e.target.value)} placeholder="e.g. doctor call" />
+          </Field>
+        ) : null}
       </div>
       <div className="mt-3">
         <Field label="Reason (required)">

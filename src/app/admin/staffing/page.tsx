@@ -5,7 +5,9 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Badge } from "@/components/admin/ui";
-import { listEmployees, onTheClock, listRecentShifts } from "@/lib/staffing/store";
+import { listEmployees, onTheClock, onBreakNow, listRecentShifts } from "@/lib/staffing/store";
+import { breakReasonLabel, clockedBannerText, isLongOpenBreak } from "@/lib/staffing/break-clock-core";
+import { BreakReasonFields } from "@/components/admin/staffing/BreakReasonFields";
 import { formatMinutes, punchMinutes } from "@/lib/staffing/time";
 import { pacificParts } from "@/lib/reports/timezone";
 import { can } from "@/lib/auth/roles";
@@ -46,13 +48,16 @@ export default async function StaffingPage({
     );
   }
 
-  const [employees, clockedIn, recentShifts] = await Promise.all([
+  const [employees, clockedIn, onBreak, recentShifts] = await Promise.all([
     listEmployees(),
     onTheClock(),
+    onBreakNow(),
     canManage ? listRecentShifts(40) : Promise.resolve([]),
   ]);
 
   const clockedIds = new Set(clockedIn.map((c) => c.employee.id));
+  // D211 — out on lunch / other: off the clock, shift still open.
+  const breakById = new Map(onBreak.map((b) => [b.employee.id, b.punch]));
   const nowISO = new Date().toISOString();
 
   return (
@@ -69,6 +74,8 @@ export default async function StaffingPage({
               "Tap your name to clock in. Tap it again to clock out.",
               "Or use the PIN pad — handy for a shared back-office station.",
               "Clocking in automatically opens your shift for the day.",
+              "Going to lunch or out for another reason? Pick Lunch or Other under “Break?” before you clock out. Your drawer stays open and yours. Clock in again when you are back (D211).",
+              "Short paid rest breaks (10 minutes per 4 hours) stay ON the clock — do not clock out for those.",
               "Managers can add employees, set PINs, and correct punches.",
             ]}
           >
@@ -98,15 +105,16 @@ export default async function StaffingPage({
         )}
         {sp.clocked && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
-            {sp.who ? `${decodeURIComponent(sp.who)} ` : ""}clocked {sp.clocked === "in" ? "IN" : "OUT"}.
+            {clockedBannerText(sp.clocked, sp.who ? decodeURIComponent(sp.who) : null)}
           </div>
         )}
         {sp.saved && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">Saved.</div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <StatCard label="On the clock" value={clockedIn.length} accent={clockedIn.length > 0 ? "green" : "muted"} />
+          <StatCard label="On break" value={onBreak.length} accent={onBreak.length > 0 ? "gold" : "muted"} />
           <StatCard label="Active employees" value={employees.length} accent="muted" />
           <StatCard label="Now (Pacific)" value={fmtTime(nowISO)} accent="gold" />
         </div>
@@ -128,6 +136,27 @@ export default async function StaffingPage({
           </div>
         )}
 
+        {/* D211 — out on lunch / other right now */}
+        {onBreak.length > 0 && (
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5">
+            <h3 className="mb-3 text-sm font-semibold text-[var(--admin-gold)]">On break now (off the clock)</h3>
+            <ul className="space-y-2">
+              {onBreak.map(({ employee, punch }) => (
+                <li key={punch.id} className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="flex-1 font-semibold text-white">{employee.full_name}</span>
+                  <Badge tone="gold">{breakReasonLabel(punch.break_reason)}</Badge>
+                  {punch.break_note ? <span className="text-white/50">{punch.break_note}</span> : null}
+                  <span className="text-white/50">since {fmtTime(punch.clock_in_at)}</span>
+                  <span className={isLongOpenBreak(punch.clock_in_at, nowISO) ? "font-semibold text-red-300" : "text-white/40"}>
+                    ({formatMinutes(punchMinutes(punch.clock_in_at, nowISO))}
+                    {isLongOpenBreak(punch.clock_in_at, nowISO) ? " — long break, check in" : ""})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* PIN pad */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <h3 className="mb-3 text-sm font-semibold text-white">Clock in/out by PIN</h3>
@@ -135,6 +164,7 @@ export default async function StaffingPage({
             <div className="w-40">
               <Input name="pin" inputMode="numeric" pattern="\d{4,6}" placeholder="4–6 digit PIN" autoComplete="off" />
             </div>
+            <BreakReasonFields />
             <Button type="submit">Clock in / out</Button>
           </form>
           <p className="mt-3 text-xs text-white/40">
@@ -155,8 +185,10 @@ export default async function StaffingPage({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {employees.map((e) => {
                 const isIn = clockedIds.has(e.id);
+                const brk = breakById.get(e.id);
                 return (
-                  <form key={e.id} action={clockToggleAction}>
+                  <div key={e.id} className="space-y-1">
+                  <form action={clockToggleAction}>
                     <input type="hidden" name="employee_id" value={e.id} />
                     <button
                       type="submit"
@@ -171,10 +203,21 @@ export default async function StaffingPage({
                         <span className="text-xs text-white/40">{e.job_role}</span>
                       </span>
                       <span className={`text-xs font-semibold ${isIn ? "text-[var(--admin-accent)]" : "text-white/50"}`}>
-                        {isIn ? "Clock OUT" : "Clock IN"}
+                        {isIn ? "Clock OUT" : brk ? `Back from ${breakReasonLabel(brk.break_reason).toLowerCase()}` : "Clock IN"}
                       </span>
                     </button>
                   </form>
+                  {isIn ? (
+                    <form action={clockToggleAction} className="flex flex-wrap items-center gap-2 px-1">
+                      <input type="hidden" name="employee_id" value={e.id} />
+                      <input type="hidden" name="break_required" value="1" />
+                      <BreakReasonFields compact blankLabel="Break: pick Lunch / Other" />
+                      <button type="submit" className="text-xs font-semibold text-[var(--admin-gold)] underline">
+                        Clock out for break
+                      </button>
+                    </form>
+                  ) : null}
+                  </div>
                 );
               })}
             </div>
