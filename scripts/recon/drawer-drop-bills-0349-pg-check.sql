@@ -95,6 +95,10 @@ begin
   update public.drawer_drops set notes = 'counted twice' where id = v_sr1;
   assert (select notes from public.drawer_drops where id = v_sr1) = 'counted twice', 'notes writable';
 
+  assert has_function_privilege('service_role', 'public.drawer_drop_bills_total(jsonb)', 'execute'),
+         'service_role can run the CHECK helper (the server inserts drops)';
+  assert not has_function_privilege('anon', 'public.drawer_drop_bills_total(jsonb)', 'execute'), 'anon cannot';
+
   insert into _c0349 values ('sr1', v_sr1), ('old', v_old), ('atm', v_atm);
 end
 $$;

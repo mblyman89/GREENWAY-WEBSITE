@@ -120,6 +120,7 @@ describe("D217 storage", () => {
     expect(up).toMatch(/drawer_drop_bills_total\(bills\) = amount_minor/);
     expect(up).toMatch(/destination = 'safe'/);
     expect(up).toMatch(/new\.bills is distinct from old\.bills/);
+    expect(up).toMatch(/grant execute on function public\.drawer_drop_bills_total\(jsonb\) to service_role/);
     expect(read("supabase/rollbacks/0349_drawer_drop_bills.rollback.sql")).toMatch(/\[bills: /);
     expect(read("scripts/recon/drawer-drop-bills-0349-pg-check.sql")).toMatch(/DRAWER DROP BILLS 0349 CHECK PASSED/);
     expect(read("scripts/compliance/verify-migrations-execute.ts")).toContain("drawer-drop-bills-0349-pg-check.sql");

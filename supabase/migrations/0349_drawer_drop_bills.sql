@@ -88,6 +88,9 @@ end
 $$;
 
 revoke all on function public.drawer_drop_bills_total(jsonb) from public, anon, authenticated;
+-- The CHECK below calls this function with the INSERTING role's rights: the server (service_role)
+-- must be able to execute it, or every counted drop would be refused.
+grant execute on function public.drawer_drop_bills_total(jsonb) to service_role;
 
 -- 3. Bills only on a safe drop, and they ARE the amount.
 do $m$
