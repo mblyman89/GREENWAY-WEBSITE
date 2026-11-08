@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (Phase 5: G-53 sign-in link and G-54 one-step offboarding BUILT; migration 0324. Before: 1.2 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; Phase 0.3 fix G-52 + G-59 built; draft for owner review) |
+| **Version** | 1.4 (owner D211, 2026-11-07: employees **clock out for a lunch break or an Other break** without closing their drawer; managers see who is on break, break minutes and meal-break checks; Terminate flags an open break too (§4.3 table, §4.21). Before: 1.3 (Phase 5: G-53 sign-in link and G-54 one-step offboarding BUILT; migration 0324. Before: 1.2 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; Phase 0.3 fix G-52 + G-59 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Employees** (`/admin/staffing/employees` and each employee file): owner, admin and manager (`staffing.manage`). **Users** (`/admin/users`): owner and admin (`users.manage`). **Time Clock** (`/admin/staffing`, `/admin/staffing/clock`): every role with `timeclock.use` (owner, admin, manager, budtender). The new hire takes part in onboarding (I-9 Section 1, handbook, training, badge photo). |
@@ -158,8 +158,9 @@ Files that were copied from users by the original 2023 set-up (migration 0037 L1
 | One person's file: status, checklist, documents, training, basics (name, job role, PIN, SAW username), hire info, deadlines, sick leave, terminate | Click the person on the roster | Owner, admin, manager |
 | Schedule | Employees → **Schedule** | Owner, admin, manager |
 | Handbook (read, print) | Employees → **Handbook & Policies** | Owner, admin, manager |
-| Time clock (station PIN pad), phone clock | Employees → **Time Clock** (`/admin/staffing`), `/admin/staffing/clock` | Anyone with `timeclock.use` |
-| Hours (fix a missed punch) | Employees → Time Clock → **Hours** | Owner, admin, manager |
+| Time clock (station PIN pad), phone clock, **clock out for a lunch / Other break** (D211) | Employees → **Time Clock** (`/admin/staffing`), `/admin/staffing/clock`, and the register (MORE → Clock out for a break; SOP-01 §4.2a) | Anyone with `timeclock.use` |
+| Hours (fix a missed punch, add or fix a **break** punch with its reason) | Employees → Time Clock → **Hours** | Owner, admin, manager |
+| Who is on break now; break minutes and meal-break checks | Time Clock (**On break now**), Reports → **Employees** (and export), Books → **Timesheets** | Owner, admin, manager |
 | Sign-ins, roles, deactivate, access-change log | Admin → **Users** | Owner, admin |
 | Pay, W-4, direct deposit, Payroll Setup (W-4) | Accounting (D69, skipped) | Owner |
 
@@ -359,7 +360,7 @@ Owner or admin (`staffing.lifecycle`). Owner basis (D71): *"yes."*
 3. Check the boxes the box shows:
    - **Deactivate their sign-in too ({email})**, ticked by default when a sign-in is linked. Untick it only if they keep back-office access (rare). If no sign-in is linked, the box says so in gold: deactivate it on Users (step 6) or link it first (§4.1).
    - **Delete scheduled shifts after the last day**, ticked by default when shifts exist from today on; it lists the dates. A shift **on** the last day stays.
-   - A gold note if they are **clocked in right now**: Terminate leaves that punch open on purpose (the real clock-out time is a fact only a person knows).
+   - A gold note if they are **clocked in right now**, or **out on a lunch / Other break right now** (D211): Terminate leaves that punch open on purpose (the real clock-out time is a fact only a person knows).
 4. Press **Terminate** and confirm the pop-up, which repeats what will happen to the sign-in and the shifts (`TerminateSubmitButton.tsx`).
 5. The app, in this order (`src/app/admin/staffing/employees/[id]/actions.ts` `terminateWithOffboarding` L262):
    - checks the date and reason first, so nothing is written on a typo;
@@ -657,6 +658,7 @@ Each has an interim rule in this SOP until the owner answers.
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-28 | First draft, verified against `main@bad718b4`, after the owner asked for this SOP (D69). State texts read: RCW 69.50.357, WAC 314-55-083, WAC 314-55-087. Findings F-08-1…F-08-10 and F-08-C; gaps G-52…G-58 proposed; questions Q-08-1…Q-08-5. Forms 8.1–8.6, cards 9.1–9.3. Payroll, direct deposit and the Lyman menu are pointers only (D69). No code changed | SOP program |
+| 1.4 | 2026-11-07 | Owner message (*"My employees told me they cannot clock out for a lunch break. … There needs to be an option to clock out for lunch, or, for an “other” reason."*), D211. Where-things-are table: breaks on the time clock and register, break punches on Hours, break minutes and meal-break checks on Reports → Employees and Timesheets; Terminate notes an open break. Detail in SOP-01 §4.2a. Migration 0348. | Fix program |
 | 1.3 | Fix phase | Phase 5 (owner D70: *"yes, built right, professionally and of enterprise grade standards."*; D71: *"yes."*). G-53 BUILT: owner/admin link and unlink an existing sign-in on the employee file (one per employee, rank rule, confirmation, audited before/after; never creates or edits either record, books-87); Users shows the linked employee. G-54 BUILT: Terminate deactivates the linked sign-in first (Users guard rails and ban), deletes scheduled shifts after the last day, flags an open punch, ticks the boxes it did, one message naming anything not done; confirmation pop-up. Migration 0324 (one sign-in, one employee). §4.1, §4.10, §4.14, §4.21, §4.22, §5, form 8.3, card 9.2, Appendix A, B. F-08-2, F-08-3 FIXED. | Fix program |
 | 1.2 | Fix phase | Phase 0.3 (owner D76). G-52 BUILT: Add a person and Payroll Setup create a **Candidate** (`active = false`, no PIN); a PIN can be set only once Active (server check); roster PIN field removed. G-59 BUILT: new permission `staffing.lifecycle` (owner, admin) on Start onboarding, Activate, Terminate and Rehire; buttons hidden for managers. Payroll roster still lists candidates and onboarding people (migration 0306). "One thing to know", §2, §4.3, §4.6, §4.13, §5, §7, card 9.1 and Appendix B updated. F-08-1 FIXED. | Fix program |
 | 1.1 | 2026-10-28 | Owner answers Q-08-1...Q-08-5 applied (D70-D74): G-53 and G-54 APPROVED; visitor log stays on paper (G-57 DEFERRED); every employee gets a sign-in; Activate, Terminate and Rehire are owner and admin only (§2, §6; new G-59). The SOP Library page (Employee -> SOP Library) now shows every SOP. | SOP program |

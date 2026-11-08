@@ -284,6 +284,16 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/staffing",
       },
       {
+        q: "How does someone clock out for lunch without closing their drawer?",
+        a: "Use a break, not a clock-out (owner rule D211). On the register: MORE \u2192 Clock out for a break (lunch / other), pick Lunch or Other (Other needs a short reason), then Start break. The drawer stays open and theirs and the register locks. To come back, enter the PIN on Clock in / Clock out or tap Back from break. On Time Clock or the phone clock, pick Lunch or Other before the PIN. Short paid 10-minute rests stay on the clock. A full clock-out at the end of the shift still needs the drawer closed. Breaks need migration 0348 (SOP-01 \u00a74.2a).",
+        href: "/admin/staffing",
+      },
+      {
+        q: "Where do I see breaks and meal-break checks?",
+        a: "Time Clock, the phone clock, Register Activity and the dashboard list who is On break now. Hours shows each break with its reason and lets a manager add a Break punch. Reports \u2192 Employees (and its export) shows lunch and other break minutes per person and the meal-break checks: more than 5 hours without a lunch, a lunch under 30 minutes, a lunch after the 5th hour, a short Other break, or a break never ended (WAC 296-126-092). Timesheets in Books show the same checks beside the payroll numbers. They are reminders only; fix a punch on Hours with a reason. Break time is unpaid.",
+        href: "/admin/reports/employees",
+      },
+      {
         q: "Where do I manage the employee list?",
         a: "Under the Employees area of staffing. You add employees, set their details, and review their time.",
         href: "/admin/staffing/employees",
