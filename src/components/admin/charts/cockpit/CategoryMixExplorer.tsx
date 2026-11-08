@@ -83,7 +83,10 @@ export function CategoryMixExplorer({
                   paddingAngle={1}
                   stroke={CHART_COLORS.charcoal}
                   isAnimationActive={false}
-                  onClick={(d: { name?: string }) => setSelected((s) => (s === d.name ? null : d.name ?? null))}
+                  onClick={(_d, i: number) => {
+                    const name = inner[i]?.name ?? null;
+                    setSelected((s) => (s === name ? null : name));
+                  }}
                 >
                   {inner.map((d) => (
                     <Cell key={d.name} fill={d.fill} opacity={selected && selected !== d.name ? 0.3 : 1} cursor="pointer" />
@@ -98,7 +101,10 @@ export function CategoryMixExplorer({
                   paddingAngle={0.5}
                   stroke={CHART_COLORS.charcoal}
                   isAnimationActive={false}
-                  onClick={(d: { category?: string }) => setSelected((s) => (s === d.category ? null : d.category ?? null))}
+                  onClick={(_d, i: number) => {
+                    const cat = outer[i]?.category ?? null;
+                    setSelected((s) => (s === cat ? null : cat));
+                  }}
                 >
                   {outer.map((d) => (
                     <Cell key={d.name} fill={d.fill} opacity={selected && selected !== d.category ? 0.25 : 1} cursor="pointer" />
