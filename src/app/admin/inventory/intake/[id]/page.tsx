@@ -79,8 +79,10 @@ import {
   dismissDuplicateManifestAction,
   rereadDeliveryCoasAction,
   attachDeliveryCoaAction,
+  attachTransferCoasAction,
 } from "../actions";
 import { readDeliveryCoas, listLabProvenanceByIds } from "@/lib/inventory/coa-delivery-store";
+import { hasKeptTransfer } from "@/lib/inventory/coa-transfer-bundle-store";
 import { choosableCertificates, coaCellText, labProvenance } from "@/lib/inventory/coa-bundle-core";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -338,6 +340,9 @@ export default async function ManifestReviewPage({
   const certChoices = choosableCertificates(deliveryCoas.certs);
   const rereadCoasAction = rereadDeliveryCoasAction.bind(null, id);
   const attachCoaAction = attachDeliveryCoaAction.bind(null, id);
+  // D214: the vendor's kept WCIA transfer (src/data/wcia-transfers) can attach every COA at once.
+  const transferCoaBox = missingCoa > 0 && hasKeptTransfer(manifest.manifest_number);
+  const transferCoasAction = attachTransferCoasAction.bind(null, id);
   const countOn = shortCounts.kind === "loaded";
   const sampleCount = lots.filter((l) => l.is_sample).length;
   // SLICE 101 — any line already marked refused makes this a PARTIAL finalize,
@@ -713,7 +718,7 @@ export default async function ManifestReviewPage({
             }
           >
             <strong>
-              {coa === "reread" ? "Documents re-read." : coa === "linked" ? "Lab result attached." : coa === "nodocs" ? "No COA could be read." : "Lab result not attached."}
+              {coa === "reread" ? "Documents re-read." : coa === "transfer" ? "COAs attached from the vendor's transfer." : coa === "linked" ? "Lab result attached." : coa === "nodocs" ? "No COA could be read." : "Lab result not attached."}
             </strong>{" "}
             {coamsg ?? ""}
           </div>
@@ -1064,6 +1069,27 @@ export default async function ManifestReviewPage({
             <form action={rereadCoasAction}>
               <button type="submit" className="font-semibold text-[var(--admin-accent)] underline hover:brightness-110">
                 Re-read every document in this delivery&apos;s email (COAs, costs, credits, vendor)
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* D214: "a button to attach them all" - the vendor's kept transfer links every line's COA. */}
+        {transferCoaBox && (
+          <div
+            data-testid="coa-transfer-bundle"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-2 text-sm text-[var(--admin-text)]"
+          >
+            <span>
+              {`${missingCoa} line${missingCoa === 1 ? " has" : "s have"} no lab result. The vendor's transfer ${manifest.manifest_number} is on file and links each line's COA: attach them all at once. Each certificate is read from its PDF; a line that already has a lab result is kept.`}
+            </span>
+            <form action={transferCoasAction}>
+              <button
+                type="submit"
+                data-testid="coa-transfer-bundle-attach"
+                className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 font-semibold text-white hover:brightness-110"
+              >
+                Attach all COAs from the vendor&apos;s transfer
               </button>
             </form>
           </div>
