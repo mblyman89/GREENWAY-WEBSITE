@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -20,6 +20,7 @@ import {
   needGroupLabel,
   parseCoverageParams,
   rememberedLabel,
+  rememberedTone,
   sourceLabel,
   sourceTone,
   FRESH_DAYS,
@@ -254,7 +255,7 @@ function Hidden({ p, keep }: { p: CoverageParams; keep: (keyof CoverageParams)[]
   );
 }
 
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+function Chip({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
   return (
     <Link
       href={href}
@@ -312,7 +313,7 @@ async function NeededTable({ now, p }: { now: number; p: CoverageParams }) {
           <option value="ytd">Sort: YTD accepted $</option>
           <option value="name">Sort: name A–Z</option>
         </Select>
-        <Button type="submit" variant="secondary" size="sm">Apply</Button>
+        <Button type="submit" variant="neutral" size="sm">Apply</Button>
         {(p.nq || p.ngrp || p.nsort !== "stock") && (
           <Link href={coverageHref(BASE, p, { nq: "", ngrp: "", nsort: "stock" }, "#needed")} className={`${FAINT} hover:underline`}>
             Clear
@@ -422,7 +423,7 @@ function NeededTr({ r, p, now }: { r: NeededRow; p: CoverageParams; now: number 
       </td>
       <td className={TD}>
         {r.rememberedPlatform ? (
-          <Badge tone={sourceTone(r.rememberedPlatform as "cultivera")}>{rememberedLabel(r.rememberedPlatform)}</Badge>
+          <Badge tone={rememberedTone(r.rememberedPlatform)}>{rememberedLabel(r.rememberedPlatform)}</Badge>
         ) : (
           <span className={FAINT}>not seen yet</span>
         )}
@@ -506,7 +507,7 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
           <option value="price">Sort: lowest median price</option>
           <option value="name">Sort: name A–Z</option>
         </Select>
-        <Button type="submit" variant="secondary" size="sm">Apply</Button>
+        <Button type="submit" variant="neutral" size="sm">Apply</Button>
         {(p.sq || p.ssrc || p.slink || p.sfresh || p.ssort !== "newest") && (
           <Link href={coverageHref(BASE, p, { sq: "", ssrc: "", slink: "", sfresh: "", ssort: "newest" }, "#searched")} className={`${FAINT} hover:underline`}>
             Clear

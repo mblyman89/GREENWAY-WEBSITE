@@ -20,7 +20,7 @@
  * page (/admin/purchasing/menus/<id> or /admin/purchasing/menus/growflow/<id>).
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Input } from "@/components/admin/ui";
 import {
@@ -40,9 +40,15 @@ function hitKey(h: UnifiedVendorHit, i: number): string {
   return `${h.platform}:${h.refId || h.slug || i}`;
 }
 
-export function VendorSearch() {
+/**
+ * `initialQuery` (D208): the "Search menus →" button on a needed-vendor row
+ * links here with ?find=<vendor name>#find. The box is seeded with that name
+ * and the search runs ONCE on mount so the owner lands on the results. The
+ * page passes `key={find}` so a new name remounts the island cleanly.
+ */
+export function VendorSearch({ initialQuery = "" }: { initialQuery?: string } = {}) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [hits, setHits] = useState<UnifiedVendorHit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -73,6 +79,15 @@ export function VendorSearch() {
       }
     });
   }
+
+  // Auto-run once when arriving with a vendor name (D208 "Search menus →").
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current || !initialQuery.trim()) return;
+    autoRan.current = true;
+    runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
 
   function runFetch(h: UnifiedVendorHit, key: string) {
     setError(null);
