@@ -3914,3 +3914,29 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0348_time_punch_breaks.rollback.sql` (writes "[Break: lunch -
   <note>]" into each break punch's notes first, then drops the checks, the index and the columns; the break punches
   themselves stay and remain unpaid).
+
+- [ ] **`supabase/migrations/0349_drawer_drop_bills.sql`** — D217 a safe drop is a count of bills (owner: "Should we
+  require they enter the quantities of the bills taken? ... if it's enterprise grade, professional method, add the bill
+  quantity to the fix."). Adds `drawer_drops.bills` (jsonb, e.g. `{"hundreds":3,"twenties":103}`), the helper
+  `drawer_drop_bills_total(jsonb)`, CHECK `drawer_drops_bills_shape` (bills only on a safe drop and they must add up
+  exactly to `amount_minor`), and adds `bills` to the write-once trigger `drawer_drops_money_immutable`. No new table;
+  existing drops keep `bills` NULL.
+
+  Until it is applied, drops work exactly as before: the iPad still counts the bills, and the count is saved in the
+  drop's note as "[bills: 3 × $100, ...]" and in the audit log (`drawer.drop`). Nothing is lost.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) filter (where bills is not null)                                         as counted_drops,
+         (select count(*) from pg_constraint where conname = 'drawer_drops_bills_shape')    as checks,   -- 1
+         (select count(*) from information_schema.columns
+           where table_schema = 'public' and table_name = 'drawer_drops'
+             and column_name = 'bills')                                                     as columns   -- 1
+    from public.drawer_drops;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0349_drawer_drop_bills.rollback.sql` (writes "[bills: {...}]"
+  into each counted drop's note first, restores the 0346 trigger, then drops the check, the column and the helper).

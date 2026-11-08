@@ -15,6 +15,7 @@ import { checkSecondCounter, closeErrorMessage } from "@/lib/registers/second-co
 import { checkOverShortReason, isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 import { DENOM_KEYS, secondCountFlags, type SecondCountFlag } from "@/lib/registers/count-integrity-core";
 import { buildDropInsertRows } from "@/lib/registers/atm-drop-core";
+import { addBillsToDropRows, type DropBills } from "@/lib/registers/drop-bills-core";
 
 export type Register = {
   id: string;
@@ -217,6 +218,8 @@ export async function recordDrop(opts: {
   deviceId?: string | null;
   recordedVia?: "register" | "offline" | "back_office";
   droppedAt?: string;
+  /** D217: bills a safe drop carried (amount was added up from these). */
+  bills?: DropBills | null;
 }): Promise<{ ok: boolean; error?: string; id?: string; storedAs?: "columns" | "note_tag" }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   if (opts.amountMinor <= 0) return { ok: false, error: "Drop amount must be greater than zero." };
@@ -239,7 +242,7 @@ export async function recordDrop(opts: {
       recordedVia: opts.recordedVia ?? "register",
     },
   );
-  return insertDrawerDropRow(admin, rows);
+  return insertDrawerDropRow(admin, addBillsToDropRows(rows, opts.destination === "atm" ? null : opts.bills));
 }
 
 /**
@@ -248,13 +251,19 @@ export async function recordDrop(opts: {
  */
 export async function insertDrawerDropRow(
   admin: ReturnType<typeof createSupabaseAdminClient>,
-  rows: { full: Record<string, unknown>; fallback: Record<string, unknown> },
+  rows: { full: Record<string, unknown>; fullNoBills?: Record<string, unknown>; fallback: Record<string, unknown> },
 ): Promise<{ ok: boolean; error?: string; id?: string; storedAs?: "columns" | "note_tag" }> {
   const missingCol = (e: { code?: string; message?: string } | null) =>
     !!e && (e.code === "42703" || e.code === "PGRST204");
   const first = await admin.from("drawer_drops").insert(rows.full).select("id").maybeSingle<{ id: string }>();
   if (!first.error) return { ok: true, id: first.data?.id, storedAs: "columns" };
   if (!missingCol(first.error)) return { ok: false, error: first.error.message };
+  // D217: 0346 applied but not 0349 (drawer_drops.bills): keep the 0346 columns, bills in the note tag.
+  if (rows.fullNoBills) {
+    const mid = await admin.from("drawer_drops").insert(rows.fullNoBills).select("id").maybeSingle<{ id: string }>();
+    if (!mid.error) return { ok: true, id: mid.data?.id, storedAs: "note_tag" };
+    if (!missingCol(mid.error)) return { ok: false, error: mid.error.message };
+  }
   const second = await admin.from("drawer_drops").insert(rows.fallback).select("id").maybeSingle<{ id: string }>();
   if (second.error) return { ok: false, error: second.error.message };
   return { ok: true, id: second.data?.id, storedAs: "note_tag" };

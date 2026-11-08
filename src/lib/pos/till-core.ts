@@ -28,6 +28,7 @@
 
 import { type DenomCounts, EMPTY_DENOMS, denomTotalMinor } from "@/lib/registers/cash";
 import { validateAtmDropFields } from "@/lib/registers/atm-drop-core";
+import { type DropBills, parseDropBills, dropBillsTotalMinor } from "@/lib/registers/drop-bills-core";
 import { validateSwapAmount } from "@/lib/registers/safe-core";
 import { checkSwapDenoms } from "@/lib/registers/little-safe-core";
 import { splitTipPool } from "@/lib/registers/shift-end-core";
@@ -60,6 +61,12 @@ export type TillDropRequest = {
    */
   destination?: "safe" | "atm";
   twentiesCount?: number;
+  /**
+   * D217: a SAFE drop counted bill by bill (iPad builds from D217 on). The amount is ADDED UP from
+   * these; a drop whose amount disagrees with its bills is refused. Absent on older builds and on
+   * ATM drops (an ATM drop is a $20 count).
+   */
+  bills?: DropBills;
 };
 
 export type TillCloseRequest = {
@@ -272,7 +279,19 @@ export function validateTillRequest(body: unknown): TillValidation {
     // D198: an ATM drop is a COUNT of $20 bills; the amount is derived from it, never trusted.
     const atm = validateAtmDropFields({ destination: b.destination, twentiesCount: b.twentiesCount, amountMinor: b.amountMinor });
     if (!atm.ok) return { ok: false, error: atm.error };
-    const amountMinor = atm.destination === "atm" ? atm.amountMinor : Number(b.amountMinor);
+    // D217: a safe drop counted bill by bill. The amount comes FROM the bills; a typed amount that
+    // disagrees is refused (the 2026-11-08 SR2 drop recorded $2,080 while $1,540 left the drawer).
+    let bills: DropBills | undefined;
+    if (b.bills !== undefined && b.bills !== null) {
+      if (atm.destination === "atm") return { ok: false, error: "An ATM drop is a count of $20 bills only; leave the bill-by-bill count for safe drops." };
+      const pb = parseDropBills(b.bills);
+      if (!pb.ok) return { ok: false, error: pb.error };
+      if (b.amountMinor !== undefined && b.amountMinor !== null && Number(b.amountMinor) !== pb.amountMinor) {
+        return { ok: false, error: `The bills add up to ${(dropBillsTotalMinor(pb.bills) / 100).toFixed(2)} dollars, not the amount sent. Count the bills again.` };
+      }
+      bills = pb.bills;
+    }
+    const amountMinor = atm.destination === "atm" ? atm.amountMinor : bills ? dropBillsTotalMinor(bills) : Number(b.amountMinor);
     if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
       return { ok: false, error: "Drop amount must be a positive whole number of cents." };
     }
@@ -298,6 +317,7 @@ export function validateTillRequest(body: unknown): TillValidation {
         ...(witnessPin ? { witnessPin } : {}),
         ...(notesRaw ? { notes: notesRaw } : {}),
         ...(atm.destination === "atm" ? { destination: "atm" as const, twentiesCount: atm.twentiesCount } : {}),
+        ...(bills ? { bills } : {}),
       },
     };
   }

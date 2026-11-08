@@ -50,7 +50,7 @@ export async function GuidedCashPanel({ isOwner, compact = false }: { isOwner: b
     <section data-testid="guided-cash" aria-label="Cash jobs" className="space-y-3">
       {!drops.ok ? (
         <Alert tone="danger" title="Drops could not be checked">
-          {drops.error}. Count the twenties in each open drawer; drop if it is over {formatCents(DROP_THRESHOLD_MINOR)}.
+          {drops.error}. Count the big bills ($100s, $50s, $20s) in each open drawer; drop if it is over {formatCents(DROP_THRESHOLD_MINOR)}.
         </Alert>
       ) : null}
       {loudDrops.map((d) => (

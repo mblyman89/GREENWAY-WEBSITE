@@ -58,6 +58,7 @@ import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { compactDenoms, denomWords } from "@/lib/registers/little-safe-core";
 import { checkPop } from "@/lib/registers/drawer-pop-core";
 import { atmDropSuccessMessage, atmWitnessCheck } from "@/lib/registers/atm-drop-core";
+import { dropBillsWords } from "@/lib/registers/drop-bills-core";
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
 import { drawerCustodian, popsForSession, POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
 
@@ -300,6 +301,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       atmTerminalId: isAtm ? (atmSettings?.terminalId ?? null) : null,
       deviceId: auth.device.id,
       recordedVia: "register",
+      bills: isAtm ? null : (till.bills ?? null),
     });
     if (!result.ok) return NextResponse.json({ error: result.error ?? "Drop failed." }, { status: 409 });
 
@@ -317,6 +319,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         witnessed: !!witnessedBy,
         destination: isAtm ? "atm" : "safe",
         dropId: result.id ?? null,
+        // D217: a safe drop's bills (added up on the iPad, re-added here). false = an older build typed it.
+        ...(isAtm ? {} : { billsCounted: !!till.bills, bills: till.bills ?? null, billsWords: till.bills ? dropBillsWords(till.bills) : null, billsStoredAs: till.bills ? (result.storedAs ?? null) : null }),
       },
     });
     if (isAtm && atmSettings) {

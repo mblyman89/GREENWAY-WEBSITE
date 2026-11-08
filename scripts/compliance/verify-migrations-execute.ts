@@ -178,6 +178,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/atm-cash-drops-0346-pg-check.sql", mustPrint: "ATM CASH DROPS 0346 CHECK PASSED" }, // D198 S1 ATM cash drops
   { file: "scripts/recon/deposit-bag-atm-pull-0347-pg-check.sql", mustPrint: "DEPOSIT BAG ATM PULL 0347 CHECK PASSED" }, // D198e $20s out of the deposit bag for the ATM
   { file: "scripts/recon/time-punch-breaks-0348-pg-check.sql", mustPrint: "TIME PUNCH BREAKS 0348 CHECK PASSED" }, // D211 clock out for lunch / other break
+  { file: "scripts/recon/drawer-drop-bills-0349-pg-check.sql", mustPrint: "DRAWER DROP BILLS 0349 CHECK PASSED" }, // D217 safe drop = a count of bills
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */
