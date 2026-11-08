@@ -41,6 +41,9 @@ import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-st
 import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
 // T-324: after-tax price correction (current price read + pure formula math).
 import { getLotPriceState } from "@/lib/inventory/price-write-store";
+// D208: the onboarding floor for the off-menu price box (same math the approval enforces).
+import { getPricingSettings } from "@/lib/inventory/pricing";
+import { computePriceFloorMinor } from "@/lib/inventory/price-explain-core";
 import { sharedSizeFloor, sizeOptionLabel, priceScopeNote, type SizeLot } from "@/lib/inventory/lot-size-link-core";
 import { listLotsSharingSize, listActiveLotsForKey } from "@/lib/inventory/lot-size-link-store";
 // S26: fix links land here (#coa, #website-category); KB + enrichment buttons
@@ -59,6 +62,7 @@ import {
   pushLotStrainTypeAction,
   updateLotWebsiteClassificationAction,
   updateLotAfterTaxPriceAction,
+  setOffMenuLotPriceAction,
   sendLotToOnboardingAction,
   attachLotCoaDocumentAction,
   updateLotReceivedDateAction,
@@ -85,7 +89,7 @@ import {
   type LotDraftHint,
 } from "@/lib/inventory/lot-link-core";
 import { findLabResultsByLabtestId, listDraftHintsForLot, listDraftsForKey } from "@/lib/inventory/lot-link-store";
-import { lotOnboardVerdict, onboardBanner, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
+import { lotOnboardVerdict, onboardBanner, showOffMenuPriceBox, ONBOARD_ANCHOR } from "@/lib/inventory/lot-onboard-core";
 import { LotProductLinkPanel, LotCoaAttach, LotCoaDocumentAttach } from "@/components/admin/inventory/LotLinkPanels";
 // SLICE 18A: the compliance-classification panel. Status is derived by the
 // pure core from MENU truth (the only surface the register enforces from).
@@ -314,6 +318,9 @@ export default async function LotDetailPage({
         )
       : null;
   const onboardAction = sendLotToOnboardingAction.bind(null, id);
+  // D208: the off-menu price box (set the price here; it approves onto the menu).
+  const offMenuPriceAction = setOffMenuLotPriceAction.bind(null, id);
+  const offMenuBox = showOffMenuPriceBox(onboardVerdict);
   const onboardMsg = onboardBanner(onb);
   // SLICE 2: the owner's received-date entry form.
   const receivedDateAction = updateLotReceivedDateAction.bind(null, id);
@@ -346,6 +353,10 @@ export default async function LotDetailPage({
   // T-324: everything the price row + edit field need. The category that drives
   // the tax divisor/floor is the SAME website category the menu/cart use.
   const priceCategory = categoryResolution.websiteCategory;
+  // The onboarding floor (2x cost + tax, whole dollar) is what the approval enforces.
+  const offMenuFloorMinor = offMenuBox
+    ? computePriceFloorMinor(lot.unit_cost_minor_units, (await getPricingSettings()).min_markup_multiple, priceCategory)
+    : null;
   const priceFormula = priceFormulaLabel(currentAfterTaxMinor, priceCategory);
   const priceFloorMinor = afterTaxFloorMinor(lot.unit_cost_minor_units, priceCategory);
   const currentBaseMinor =
@@ -429,6 +440,12 @@ export default async function LotDetailPage({
             <strong>Partly saved.</strong> The register is enforcing the new purchase-limit classification, but the
             copy on this lot didn&apos;t save ({class_warn.slice(0, 300)}), so the classification worklist may still list
             this product as unclassified. Save the classification again; if this keeps showing, tell the owner.
+          </div>
+        ) : null}
+        {/* D208: the off-menu price was saved (the product may now show the normal price box). */}
+        {onboardMsg && (onb === "priced" || onb === "priced_pending") ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]" data-testid="lot-offmenu-price-banner">
+            {onboardMsg.text}
           </div>
         ) : null}
         {saved && !class_warn && (
@@ -558,7 +575,9 @@ export default async function LotDetailPage({
                     ? "This product has several sizes on its menu card. Pick this lot\u2019s size in \u201cWhich size is this lot?\u201d below to see and set its price."
                     : priceState.status === "unavailable" && priceState.reason !== "no-key"
                       ? "The menu price couldn\u2019t be read right now. Reload the page in a moment."
-                      : "No published price yet. A price appears once this product\u2019s import is published to the menu."}
+                      : offMenuBox
+                        ? "Not on the menu yet. Set its price in \u201cCorrect the sell price\u201d below \u2193"
+                        : "No published price yet. A price appears once this product\u2019s import is published to the menu."}
                 </p>
               )}
             </div>
@@ -1179,27 +1198,53 @@ export default async function LotDetailPage({
                         {onboardMsg.text}
                       </span>
                     ) : null}
-                    {onboardVerdict?.kind === "send" ? (
-                      <>
+                    {offMenuBox ? (
+                      <span className="block space-y-3" data-testid="lot-offmenu-price">
                         <span className="block">
-                          This product isn&apos;t on the published menu and has no Product Onboarding row yet (its
-                          delivery never made one, for example a delivery refused by mistake). The price lives on the
-                          menu card, so send it to onboarding, set the price there and approve it. The price box then
-                          appears here.
+                          This product isn&apos;t on the menu yet, so it has no price. Set it here: saving approves it
+                          onto the menu at this price (the same as approving it in Product Onboarding), and the register
+                          sells it at this price on its next refresh.
                         </span>
-                        <form action={onboardAction}>
-                          <Button type="submit" variant="save" size="sm" data-testid="lot-onboard-send">
-                            Send to Product Onboarding
+                        <form action={offMenuPriceAction} className="space-y-3">
+                          <Field
+                            label="After-tax price ($)"
+                            help={
+                              offMenuFloorMinor != null
+                                ? `The out-the-door price the customer pays. Minimum for a new product is ${fmtUsd(offMenuFloorMinor)} (2\u00d7 cost + tax, the same floor as onboarding).`
+                                : "Cost is unknown for this lot, so no price can be saved. Enter the cost from the vendor\u2019s CCRS manifest first."
+                            }
+                            htmlFor="offmenu_after_tax_price"
+                            required
+                          >
+                            <Input
+                              id="offmenu_after_tax_price"
+                              name="after_tax_price"
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={offMenuFloorMinor != null ? (offMenuFloorMinor / 100).toFixed(2) : "0.00"}
+                            />
+                          </Field>
+                          <Button type="submit" variant="save" size="sm" disabled={offMenuFloorMinor == null} data-testid="lot-offmenu-price-save">
+                            Save sell price
                           </Button>
                         </form>
-                      </>
-                    ) : onboardVerdict?.kind === "open_draft" ? (
-                      <span className="block">
-                        This product isn&apos;t on the published menu yet. It is waiting in Product Onboarding:{" "}
-                        <a href={onboardVerdict.href} className="underline" data-testid="lot-onboard-open">
-                          open it, set the price and approve
-                        </a>
-                        . The price box appears here after that.
+                        {onboardVerdict?.kind === "open_draft" ? (
+                          <span className="block text-xs">
+                            It also has a row waiting in{" "}
+                            <a href={onboardVerdict.href} className="underline" data-testid="lot-onboard-open">
+                              Product Onboarding
+                            </a>{" "}
+                            if you prefer to finish it there.
+                          </span>
+                        ) : (
+                          <form action={onboardAction} className="text-xs">
+                            Or{" "}
+                            <button type="submit" className="underline" data-testid="lot-onboard-send">
+                              Send to Product Onboarding
+                            </button>{" "}
+                            to set everything there instead.
+                          </form>
+                        )}
                       </span>
                     ) : onboardVerdict?.kind === "approved" ? (
                       <span className="block">

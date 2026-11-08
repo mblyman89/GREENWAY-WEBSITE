@@ -223,6 +223,38 @@ export async function listDraftHintsForLot(lotId: string): Promise<LotDraftHint[
 }
 
 /**
+ * D208: the OPEN onboarding draft for one lot's product key, so the lot page
+ * can approve it with the price typed there. Prefers the draft made from THIS
+ * lot; otherwise the only open draft for the key. Several open drafts for the
+ * key with none from this lot = ambiguous -> null with a reason (never guess).
+ */
+export async function findOpenDraftForLot(
+  key: string,
+  lotId: string,
+): Promise<{ ok: true; draftId: string | null } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const k = key.trim();
+  if (!k) return { ok: true, draftId: null };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("catalog_product_drafts")
+    .select("id, lot_id, status")
+    .eq("pos_product_key", k)
+    .eq("status", "draft")
+    .order("created_at", { ascending: true })
+    .limit(50);
+  if (error) return { ok: false, error: `Could not read Product Onboarding: ${error.message}` };
+  const rows = (data as { id: string; lot_id: string | null; status: string | null }[] | null) ?? [];
+  const mine = rows.find((r) => r.lot_id === lotId);
+  if (mine) return { ok: true, draftId: mine.id };
+  if (rows.length === 1) return { ok: true, draftId: rows[0].id };
+  if (rows.length > 1) {
+    return { ok: false, error: "This product has several open onboarding rows, so the price was not saved. Open Product Onboarding and approve the right one." };
+  }
+  return { ok: true, draftId: null };
+}
+
+/**
  * D207: every onboarding draft for ONE product key (status + key only), for
  * the lot page's "Send to Product Onboarding" verdict. null = the read failed
  * (the page then offers nothing rather than guessing).
