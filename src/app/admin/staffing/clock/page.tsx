@@ -1,11 +1,12 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { onTheClock } from "@/lib/staffing/store";
+import { onTheClock, onBreakNow } from "@/lib/staffing/store";
 import { formatMinutes, punchMinutes } from "@/lib/staffing/time";
 import { pacificParts, pacificToday } from "@/lib/reports/timezone";
 import { PhonePinPad } from "@/components/admin/staffing/PhonePinPad";
 import { SickLeaveRequestPad } from "@/components/admin/staffing/SickLeaveRequestPad";
 import { BackLink } from "@/components/admin/ux";
+import { breakReasonLabel, clockedBannerText } from "@/lib/staffing/break-clock-core";
 import { clockByPinPhoneAction } from "../actions";
 import { submitSickLeaveRequestAction } from "../leave-actions";
 
@@ -43,7 +44,7 @@ export default async function PhoneClockPage({
     );
   }
 
-  const clockedIn = await onTheClock();
+  const [clockedIn, onBreak] = await Promise.all([onTheClock(), onBreakNow()]);
   const nowISO = new Date().toISOString();
 
   return (
@@ -60,11 +61,11 @@ export default async function PhoneClockPage({
       )}
       {sp.clocked && (
         <div className="mb-5 rounded-xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-4 text-center text-base font-semibold text-[var(--admin-accent)]">
-          {sp.who ? `${decodeURIComponent(sp.who)} — ` : ""}Clocked {sp.clocked === "in" ? "IN" : "OUT"} ✓
+          {clockedBannerText(sp.clocked, sp.who ? decodeURIComponent(sp.who) : null)} ✓
         </div>
       )}
 
-      <PhonePinPad action={clockByPinPhoneAction} />
+      <PhonePinPad action={clockByPinPhoneAction} breakOption />
 
       {/*
         THE SICK-LEAVE REQUEST PAD (books-35, Michael's "option 1").
@@ -90,6 +91,22 @@ export default async function PhoneClockPage({
                 <span className="font-semibold text-white">{employee.full_name}</span>
                 <span className="text-white/50">
                   {fmtTime(punch.clock_in_at)} · {formatMinutes(punchMinutes(punch.clock_in_at, nowISO))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {onBreak.length > 0 && (
+        <div className="mt-4 rounded-xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold-soft)] p-4">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-gold)]">On break now</h2>
+          <ul className="space-y-1.5">
+            {onBreak.map(({ employee, punch }) => (
+              <li key={punch.id} className="flex items-center justify-between text-sm">
+                <span className="font-semibold text-white">{employee.full_name}</span>
+                <span className="text-white/50">
+                  {breakReasonLabel(punch.break_reason)} · {fmtTime(punch.clock_in_at)} · {formatMinutes(punchMinutes(punch.clock_in_at, nowISO))}
                 </span>
               </li>
             ))}

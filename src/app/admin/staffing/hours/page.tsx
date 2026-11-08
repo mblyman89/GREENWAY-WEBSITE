@@ -8,6 +8,7 @@ import { listEmployees, listPunchesForDayAll } from "@/lib/staffing/store";
 import { pacificParts, pacificToday, addPacificDays } from "@/lib/reports/timezone";
 import { can } from "@/lib/auth/roles";
 import { backHref } from "@/lib/admin/back-link-core";
+import { BREAK_FLAG_TEXT, dayBreakFlags } from "@/lib/staffing/break-clock-core";
 import {
   HoursManager,
   type HoursPunchRow,
@@ -67,7 +68,21 @@ export default async function HoursPage({
     inLocal: toPacificLocal(p.clock_in_at),
     outLocal: toPacificLocal(p.clock_out_at),
     note: p.notes,
+    kind: p.punch_kind === "break" ? "break" : "work",
+    breakReason: p.break_reason ?? null,
+    breakNote: p.break_note ?? null,
   }));
+  // D211 — meal-break checks for the day (WAC 296-126-092): flags, not blocks.
+  const flags = dayBreakFlags(
+    punches.map((p) => ({
+      employeeId: p.employee_id,
+      kind: p.punch_kind === "break" ? ("break" as const) : ("work" as const),
+      reason: p.break_reason ?? null,
+      clockInIso: p.clock_in_at,
+      clockOutIso: p.clock_out_at,
+    })),
+  );
+  const nameById = new Map(punches.map((p) => [p.employee_id, p.employee_name]));
 
   const empOptions: HoursEmployeeOption[] = employees.map((e) => ({ id: e.id, name: e.full_name }));
   const defaultInLocal = `${day}T09:00`;
@@ -87,6 +102,8 @@ export default async function HoursPage({
               "Tap Adjust on a punch to change the clock-in or clock-out time.",
               "Use “Add missing punch” when someone forgot to clock in entirely.",
               "A reason is required on every change and is saved to the audit log.",
+              "Lunch and Other breaks show as gold “break (unpaid)” rows. Use Add missing punch → Punch type to record a break someone forgot to clock (D211).",
+              "Meal-break checks below are reminders of WAC 296-126-092, not blocks.",
             ]}
           >
             <p>All times are Pacific. Editing a punch recomputes worked minutes automatically.</p>
@@ -109,6 +126,20 @@ export default async function HoursPage({
             <Button variant="neutral" size="sm">Next day →</Button>
           </Link>
         </div>
+
+        {flags.length > 0 ? (
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-4 text-sm">
+            <h3 className="mb-2 font-semibold text-[var(--admin-gold)]">Meal-break checks for this day</h3>
+            <ul className="space-y-1">
+              {flags.map((f, i) => (
+                <li key={`${f.employeeId}-${f.code}-${i}`} className="text-white/80">
+                  <span className="font-semibold text-white">{nameById.get(f.employeeId) ?? "Employee"}</span>: {BREAK_FLAG_TEXT[f.code].label} ({f.detail}).{" "}
+                  <span className="text-white/50">{BREAK_FLAG_TEXT[f.code].rule}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <HoursManager
           punches={rows}

@@ -11,7 +11,12 @@ import {
   getPunch,
   updatePunchTimes,
   createManualPunch,
+  startBreak,
+  openPunchAny,
+  type ClockResult,
+  type ClockSource,
 } from "@/lib/staffing/store";
+import { clockStateOf, decideClockAction, parseBreakRequest, type BreakRequest } from "@/lib/staffing/break-clock-core";
 import { isValidPin } from "@/lib/staffing/time";
 import { parsePunchEdit, composeEditNote } from "@/lib/staffing/timeclock-core";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -34,12 +39,30 @@ function str(formData: FormData, key: string): string {
 // Clock in/out
 // ---------------------------------------------------------------------------
 
+/**
+ * D211 — the shared clock step. With a break reason in the form it is "clock
+ * out for a break" (lunch / other): no drawer guard, the shift stays open.
+ * Without one it is the old toggle (in / out / back from break).
+ */
+async function clockStep(formData: FormData, employeeId: string, source: ClockSource): Promise<ClockResult> {
+  const rawReason = str(formData, "break_reason");
+  // A "Clock out for break" button must never turn into a full clock-out.
+  if (!rawReason && str(formData, "break_required") === "1") return { ok: false, error: "Pick a break reason: Lunch or Other." };
+  if (!rawReason) return toggleClock(employeeId, source);
+  const parsed = parseBreakRequest(rawReason, str(formData, "break_note"));
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const open = await openPunchAny(employeeId);
+  const decision = decideClockAction("break", clockStateOf(open));
+  if (decision.kind === "already" || decision.kind === "refuse") return { ok: false, error: `This person ${decision.message}` };
+  return startBreak(employeeId, parsed.value, source);
+}
+
 /** Clock in/out for a known employee (button on the clock page). */
 export async function clockToggleAction(formData: FormData): Promise<void> {
   const session = await requirePermission("timeclock.use"); // any active staff member
   const employeeId = str(formData, "employee_id");
   if (!employeeId) redirect(`${BASE}?error=` + encodeURIComponent("Missing employee."));
-  const result = await toggleClock(employeeId, "web");
+  const result = await clockStep(formData, employeeId, "web");
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
   await recordAudit({
     actorId: session.userId,
@@ -47,6 +70,7 @@ export async function clockToggleAction(formData: FormData): Promise<void> {
     action: `timeclock.${result.action}`,
     entityType: "employee",
     entityId: employeeId,
+    after: { via: "web", breakReason: result.punch.break_reason ?? null },
   });
   revalidatePath(BASE);
   redirect(`${BASE}?clocked=${result.action}`);
@@ -66,7 +90,7 @@ export async function clockByPinAction(formData: FormData): Promise<void> {
     redirect(`${BASE}?error=` + encodeURIComponent("No active employee for that PIN."));
   }
   await notePinSuccess(TIMECLOCK_THROTTLE_SCOPE);
-  const result = await toggleClock(emp.id, "station");
+  const result = await clockStep(formData, emp.id, "station");
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
   await recordAudit({
     actorId: emp.staff_id,
@@ -74,6 +98,7 @@ export async function clockByPinAction(formData: FormData): Promise<void> {
     action: `timeclock.${result.action}`,
     entityType: "employee",
     entityId: emp.id,
+    after: { breakReason: result.punch.break_reason ?? null },
   });
   revalidatePath(BASE);
   redirect(`${BASE}?clocked=${result.action}&who=${encodeURIComponent(emp.full_name)}`);
@@ -99,7 +124,7 @@ export async function clockByPinPhoneAction(formData: FormData): Promise<void> {
     redirect(`${CLOCK}?error=` + encodeURIComponent("No active employee for that PIN."));
   }
   await notePinSuccess(TIMECLOCK_THROTTLE_SCOPE);
-  const result = await toggleClock(emp.id, "phone");
+  const result = await clockStep(formData, emp.id, "phone");
   if (!result.ok) redirect(`${CLOCK}?error=` + encodeURIComponent(result.error));
   await recordAudit({
     actorId: emp.staff_id,
@@ -107,6 +132,7 @@ export async function clockByPinPhoneAction(formData: FormData): Promise<void> {
     action: `timeclock.${result.action}`,
     entityType: "employee",
     entityId: emp.id,
+    after: { breakReason: result.punch.break_reason ?? null },
   });
   revalidatePath(CLOCK);
   revalidatePath(BASE);
@@ -281,9 +307,18 @@ export async function createPunchAction(input: {
   clockInLocal: string;
   clockOutLocal?: string;
   reason: string;
+  /** D211 — set to record a lunch / other break punch instead of work. */
+  breakReason?: string | null;
+  breakNote?: string | null;
 }): Promise<PunchActionResult> {
   const session = await requirePermission("staffing.manage");
   if (!input.employeeId) return { ok: false, error: "Choose an employee." };
+  let breakReq: BreakRequest | null = null;
+  if (input.breakReason) {
+    const b = parseBreakRequest(input.breakReason, input.breakNote ?? "");
+    if (!b.ok) return { ok: false, error: b.error };
+    breakReq = b.value;
+  }
 
   const parsed = parsePunchEdit({
     clockInLocal: input.clockInLocal,
@@ -301,6 +336,7 @@ export async function createPunchAction(input: {
     clockInUtc,
     clockOutUtc,
     notes,
+    breakReq,
   });
   if (!res.ok) return { ok: false, error: res.error };
 
@@ -310,7 +346,16 @@ export async function createPunchAction(input: {
     action: "timepunch.created",
     entityType: "time_punch",
     entityId: res.id,
-    after: { employee_id: input.employeeId, clock_in_at: clockInUtc, clock_out_at: clockOutUtc, minutes: res.minutes, reason: parsed.value.reason },
+    after: {
+      employee_id: input.employeeId,
+      clock_in_at: clockInUtc,
+      clock_out_at: clockOutUtc,
+      minutes: res.minutes,
+      reason: parsed.value.reason,
+      punch_kind: breakReq ? "break" : "work",
+      break_reason: breakReq?.reason ?? null,
+      break_note: breakReq?.note ?? null,
+    },
   });
   revalidatePath(`${BASE}/hours`);
   revalidatePath(BASE);
