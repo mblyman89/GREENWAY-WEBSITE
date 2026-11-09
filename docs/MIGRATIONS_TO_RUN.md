@@ -3940,3 +3940,33 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0349_drawer_drop_bills.rollback.sql` (writes "[bills: {...}]"
   into each counted drop's note first, restores the 0346 trigger, then drops the check, the column and the helper).
+
+- [ ] **`supabase/migrations/0350_vendor_merge_v2.sql`** — D220 finish merging vendors (owner: "I thought I had merged
+  the remaining duplicate vendors. can you help me finish merging all the vendors."). Adds `vendors.merged_into_id` /
+  `merged_at` (backfilled from the "Merged into ... (<uuid>)" note on every merged card), `vendor_survivor_id()`,
+  `vendor_repoint_references()` (moves EVERY vendor foreign key, read from the catalog; never moves banking, ACH, payee
+  contacts or e-sign rows - it reports them), `merge_vendors_v2()` (the Merge screen uses it automatically once this is
+  applied), the trigger `trg_vendor_follow_merge` (a lot, manifest or draft written against a merged card lands on the
+  surviving card) and `sweep_merged_vendor_rows()`. Before a manifest moves, the old card's license is written onto the
+  manifest so the CCRS transfer report never changes. Then it finishes three merges: Alpha Crux 412306 (half-merged,
+  still published), FIREBROS 416025 into Fire Bros. 425450, BOTANICA SEATTLE 412724 into Botanica Seattle 412723, and
+  sweeps the 240 lots / 41 manifests / 244 knowledge-base products / 627 catalog drafts still on merged cards.
+  No new table. Nothing is deleted.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select count(*) filter (where merged_into_id is not null)                                  as merged_cards,  -- about 299
+         (select count(*) from public.inventory_lots l join public.vendors v on v.id = l.vendor_id
+           where v.merged_into_id is not null)                                               as lots_on_merged, -- 0
+         (select count(*) from public.catalog_product_drafts d join public.vendors v on v.id = d.vendor_id
+           where v.merged_into_id is not null)                                               as drafts_on_merged, -- 0
+         (select count(*) from pg_trigger where tgname = 'trg_vendor_follow_merge')            as triggers   -- 17
+    from public.vendors;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0350_vendor_merge_v2.rollback.sql` (drops the triggers, the four
+  functions and the two columns; merged cards stay merged and moved rows stay on the survivor - every merge is still
+  written in both cards' Internal notes, which is what 0350 rebuilds `merged_into_id` from).

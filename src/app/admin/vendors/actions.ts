@@ -1049,6 +1049,8 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
       duplicate_ids: summary.duplicateIds,
       tables: summary.tables,
       total_rows_repointed: summary.totalRowsRepointed,
+      merge_version: summary.version,
+      needs_attention: summary.needsAttention,
     },
   });
 
@@ -1059,7 +1061,13 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
   revalidatePath("/vendor-delivery");
 
   const cards = summary.duplicateIds.length + 1;
-  const note = `Combined ${cards} cards into “${survivor!.display_name}”. ${summary.totalRowsRepointed} linked record${summary.totalRowsRepointed === 1 ? "" : "s"} moved over; the duplicate card${summary.duplicateIds.length === 1 ? " was" : "s were"} archived (nothing deleted).`;
+  // D220: rows the merge deliberately left on the old card (banking, ACH,
+  // payee contacts, e-sign, a second GL profile) are named so nothing is lost.
+  const held = Object.entries(summary.needsAttention).filter(([, n]) => n > 0);
+  const heldNote = held.length
+    ? ` Left on the old card for you to review (money records are never moved automatically): ${held.map(([t, n]) => `${t.replace(/_/g, " ")} (${n})`).join(", ")}.`
+    : "";
+  const note = `Combined ${cards} cards into “${survivor!.display_name}”. ${summary.totalRowsRepointed} linked record${summary.totalRowsRepointed === 1 ? "" : "s"} moved over; the duplicate card${summary.duplicateIds.length === 1 ? " was" : "s were"} archived (nothing deleted).${heldNote}`;
   redirect(`${back}?saved=1&note=${encodeURIComponent(note)}`);
 }
 

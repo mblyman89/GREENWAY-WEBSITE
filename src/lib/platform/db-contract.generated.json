@@ -386,6 +386,7 @@
     "label_template_set_default",
     "latest_menu_facts",
     "merge_vendors",
+    "merge_vendors_v2",
     "ofac_record_run",
     "orders_board_snapshot",
     "platform_db_contract_check",

@@ -23,6 +23,13 @@ export type MergeVendorsSummary = {
   /** table name -> rows repointed to the survivor. */
   tables: Record<string, number>;
   totalRowsRepointed: number;
+  /** 1 = migration 0104 merge_vendors, 2 = migration 0350 merge_vendors_v2. */
+  version: 1 | 2;
+  /**
+   * D220: rows on the duplicate the merge deliberately did NOT move (banking,
+   * ACH, payee contacts, e-sign, a second GL profile). table -> rows.
+   */
+  needsAttention: Record<string, number>;
 };
 
 export const MERGE_MIGRATION_HINT =
@@ -31,6 +38,16 @@ export const MERGE_MIGRATION_HINT =
 /** True when the RPC error means migration 0104 hasn't been applied. */
 export function isMergeFunctionMissing(message: string): boolean {
   return /could not find|function|does not exist|schema cache/i.test(message);
+}
+
+/**
+ * D220: true only when PostgREST says merge_vendors_v2 itself is not installed
+ * (migration 0350 not applied yet) - never for the function's own refusals,
+ * which start with "merge_vendors_v2:".
+ */
+export function isMergeV2Missing(message: string): boolean {
+  if (/^merge_vendors_v2:/i.test(message.trim())) return false;
+  return /merge_vendors_v2/i.test(message) && /could not find|does not exist|schema cache/i.test(message);
 }
 
 /**
@@ -43,13 +60,21 @@ export async function mergeVendors(
   duplicateIds: string[],
 ): Promise<MergeVendorsSummary> {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.rpc("merge_vendors", {
-    survivor_id: survivorId,
-    duplicate_ids: duplicateIds,
-  });
+  const args = { survivor_id: survivorId, duplicate_ids: duplicateIds };
+
+  // D220: merge_vendors_v2 (0350) repoints EVERY vendor foreign key (read from
+  // the catalog), keeps each moved manifest's license for CCRS, and stamps
+  // merged_into_id so later deliveries follow the merge. Until 0350 is applied
+  // the call falls back to 0104's merge_vendors, exactly as before.
+  let { data, error } = await admin.rpc("merge_vendors_v2", args);
+  if (error && isMergeV2Missing(error.message)) {
+    ({ data, error } = await admin.rpc("merge_vendors", args));
+  }
 
   if (error) {
-    if (isMergeFunctionMissing(error.message)) throw new Error(MERGE_MIGRATION_HINT);
+    if (isMergeFunctionMissing(error.message) && !/^merge_vendors(_v2)?:/i.test(error.message.trim())) {
+      throw new Error(MERGE_MIGRATION_HINT);
+    }
     throw new Error(`Merge failed: ${error.message}`);
   }
 
@@ -60,6 +85,8 @@ export async function mergeVendors(
     duplicate_ids?: string[];
     tables?: Record<string, number>;
     total_rows_repointed?: number;
+    version?: number;
+    needs_attention?: Record<string, number>;
   };
 
   return {
@@ -69,5 +96,7 @@ export async function mergeVendors(
     duplicateIds: raw.duplicate_ids ?? duplicateIds,
     tables: raw.tables ?? {},
     totalRowsRepointed: raw.total_rows_repointed ?? 0,
+    version: raw.version === 2 ? 2 : 1,
+    needsAttention: raw.needs_attention ?? {},
   };
 }

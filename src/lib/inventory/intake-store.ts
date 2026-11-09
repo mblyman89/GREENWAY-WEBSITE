@@ -29,6 +29,7 @@
  * On reject: manifest → 'rejected', its lots → 'destroyed' (never sellable).
  */
 import "server-only";
+import { MAX_SURVIVOR_HOPS, mergedTargetOf, resolveSurvivor, type SurvivorCard } from "@/lib/vendors/vendor-survivor-core";
 import { nativeLabRow } from "@/lib/inventory/cultivera-wcia-core";
 import { PAYLOAD_KIND_SELECT } from "@/lib/accounting/migration-stock-core";
 import { NOT_REBUILT_OR, isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
@@ -333,6 +334,61 @@ export async function countManifestsByStatus(): Promise<StageCounts> {
  * returns null exactly like before (staging never breaks on vendor lookup).
  */
 export async function resolveOrCreateVendor(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  label: string | null,
+  license: string | null,
+  actorId: string | null,
+): Promise<string | null> {
+  const found = await resolveOrCreateVendorCard(admin, label, license, actorId);
+  return found ? followVendorMerge(admin, found) : null;
+}
+
+/**
+ * D220 - a merged (archived) card keeps its license number, so the license
+ * lookup below kept finding it and deliveries landed on the old card (240 lots
+ * and 41 manifests on production). Walk to the live survivor: merged_into_id
+ * (migration 0350) or, before 0350, the "Merged into ... (<uuid>)" note. Best
+ * effort - any read failure keeps the card that was found (the 0350 trigger is
+ * the database-side backstop).
+ */
+export async function followVendorMerge(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  vendorId: string,
+): Promise<string> {
+  const cards = new Map<string, SurvivorCard>();
+  const read = async (id: string): Promise<SurvivorCard | undefined> => {
+    if (cards.has(id)) return cards.get(id);
+    let res = await admin.from("vendors").select("id, status, internal_notes, merged_into_id").eq("id", id).limit(1);
+    if (res.error && /merged_into_id/i.test(res.error.message)) {
+      res = await admin.from("vendors").select("id, status, internal_notes").eq("id", id).limit(1);
+    }
+    if (res.error) return undefined;
+    const row = ((res.data as SurvivorCard[] | null) ?? [])[0];
+    if (row) cards.set(id, row);
+    return row;
+  };
+  try {
+    let cur = vendorId;
+    for (let i = 0; i < MAX_SURVIVOR_HOPS; i += 1) {
+      const card = await read(cur);
+      if (!card) break;
+      const next = mergedTargetOf(card);
+      if (!next || cards.has(next)) break;
+      if (!(await read(next))) break;
+      cur = next;
+    }
+    const { survivorId } = resolveSurvivor(vendorId, (id) => cards.get(id));
+    if (survivorId !== vendorId) {
+      console.info(`[intake-store] vendor ${vendorId} was merged; delivery follows to ${survivorId}`);
+    }
+    return survivorId;
+  } catch (err) {
+    console.error("[intake-store] follow vendor merge failed:", err);
+    return vendorId;
+  }
+}
+
+async function resolveOrCreateVendorCard(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   label: string | null,
   license: string | null,
