@@ -271,6 +271,8 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
     // out of step. The comments were reworded and these copies ship as well.
     expect(found).toContain("0350_vendor_merge_v2");
     expect(found).toContain("0351_kb_crawl_campaigns");
+    // D221 M1+M2. Ships a copy too (comments carry the owner quotes).
+    expect(found).toContain("0352_media_library_v2");
   });
 
   it("every copy has a real migration behind it", () => {

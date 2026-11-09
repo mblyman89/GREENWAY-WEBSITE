@@ -277,7 +277,7 @@ describe("R21 (C) product page wiring", () => {
 
   it("reads the library with the GET params and marks the gallery", () => {
     expect(page).toContain("const libraryScope = parseLibraryScope(lscope);");
-    expect(page).toContain("readLibraryPickerAssets(libraryScope)");
+    expect(page).toContain("readLibraryPickerAssets(libraryScope, {"); // D221 M1: + vendor/brand/query pool
     expect(page).toContain("query: parseLibraryQuery(lq),");
     expect(page).toContain("galleryIds,");
     expect(page).toContain("readOk={libraryRead.ok}");

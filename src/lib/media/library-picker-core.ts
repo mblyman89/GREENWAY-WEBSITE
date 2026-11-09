@@ -38,6 +38,13 @@ export type LibraryPickerAsset = {
   created_at: string | null;
   /** Thumbnail URL resolved by the server reader (null = no thumbnail). */
   url: string | null;
+  /** D221 M1 (0352) provenance + vision text; absent before 0352 is applied. */
+  vendor_id?: string | null;
+  brand_id?: string | null;
+  product_name?: string | null;
+  visible_text?: string | null;
+  ai_caption?: string | null;
+  role?: string | null;
 };
 
 export type LibraryScope = "product" | "all";
@@ -154,7 +161,7 @@ export function isPickableImage(a: LibraryPickerAsset): boolean {
 function haystack(a: LibraryPickerAsset): Set<string> {
   return new Set(
     pickerTokens(
-      `${a.title ?? ""} ${a.filename ?? ""} ${a.alt_text ?? ""} ${(a.tags ?? []).join(" ")} ${a.usage_type ?? ""}`,
+      `${a.title ?? ""} ${a.filename ?? ""} ${a.alt_text ?? ""} ${(a.tags ?? []).join(" ")} ${a.usage_type ?? ""} ${a.product_name ?? ""} ${a.visible_text ?? ""} ${a.ai_caption ?? ""}`,
     ),
   );
 }
