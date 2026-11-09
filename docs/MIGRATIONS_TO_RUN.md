@@ -3953,11 +3953,14 @@ in Vercel.
   sweeps the 240 lots / 41 manifests / 244 knowledge-base products / 627 catalog drafts still on merged cards.
   No new table. Nothing is deleted.
 
-  Safe to re-run. **Paste `supabase/migrations/editor-safe/0350_vendor_merge_v2.EDITOR_SAFE.sql`** (the same SQL with no
-  comments). The first version made the SQL editor answer `42P01: relation "[^" does not exist`: apostrophes in its
-  comments put the editor's quote tracking out of step, so a regex text (`'Merged into "[^"]*" ...'`) was read as a
-  table name. Nothing ran, because the editor stops at the first error. The comments are fixed and the file passes
-  a real Postgres 15 run of all 351 migrations, but the editor-safe copy is the safest one to paste.
+  Safe to re-run. Paste the file (or `supabase/migrations/editor-safe/0350_vendor_merge_v2.EDITOR_SAFE.sql`, the same
+  SQL with no comments). **If the editor shows "Potential issue detected", click "Run without RLS".** The other button,
+  "Run and enable RLS", makes the editor scan the SQL for table names, and it misreads the regex text
+  `'Merged into "[^"]*"'` as a table called `"[^"`, then adds `alter table "[^" enable row level security`. That added
+  line is what fails with `42P01: relation "[^" does not exist`. The migration itself is fine: it passes a real
+  Postgres 15 run of every migration and was confirmed fully applied on 2026-11-09. (An earlier version of this note
+  blamed apostrophes in comments. That was wrong.) The same applies to every migration: choose "Run without RLS",
+  because each migration already enables RLS on its own tables.
 
   **Check** (run in the SQL editor):
 
@@ -3984,8 +3987,9 @@ in Vercel.
   `vendor_website_candidates` (websites proposed for vendors that have none, waiting for approval). Also raises the
   harvest tier page caps from 1..50 to 1..120. Nothing existing is changed or deleted.
 
-  Safe to re-run. **Paste `supabase/migrations/editor-safe/0351_kb_crawl_campaigns.EDITOR_SAFE.sql`** (the same SQL
-  with no comments).
+  Safe to re-run. Paste the file (or `supabase/migrations/editor-safe/0351_kb_crawl_campaigns.EDITOR_SAFE.sql`, the same
+  SQL with no comments). If the editor shows "Potential issue detected", click **"Run without RLS"** (this migration
+  already enables RLS on its five tables).
 
   **Check** (run in the SQL editor):
 
@@ -3997,4 +4001,40 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0351_kb_crawl_campaigns.rollback.sql` (drops the five tables -
   crawler reference data, re-crawlable - and restores the 1..50 caps, clamping any value above 50 first).
+
+- [ ] **`supabase/migrations/0352_media_library_v2.sql`** — D221 media library v2 (owner: "please archive the
+  duplicates ... if there is a smarter, better way to utilize the one image for multiple products, then lets clean up
+  all the duplicates"). What it does:
+  - **One row per file.** The library had about 9,900 live rows but only about 4,000 distinct files (one vendor-menu
+    picture saved once per product). Every copy is folded into one kept row: every place that used a copy (menu items,
+    product cards, KB cards, galleries, vendor/brand logos, carousels, image memory, usages) now points at the kept row,
+    and the copies are **archived, not deleted** (`canonical_id` says which row they were folded into). One picture
+    serves every product it belongs to through `media_usages` rows. A unique index then stops a second live row for
+    the same file from ever being created again.
+  - **Provenance.** New columns on `media_assets`: vendor, brand, KB card, platform, source URL, product name, menu
+    item, category, pack size, role (product / logo / COA ...), plus empty slots the AI pass (next slice) fills:
+    description, caption, package text, tags, SEO title / alt / description, credit. They are filled now from the menu
+    items, KB cards, logo slots, tags and source host (gap-fill only, nothing a person typed is overwritten).
+  - **Auto-publish** (AGENTS.md rule 3, amended at your request): a picture from a vendor's own menu or website whose
+    vendor is known is published to the library (`publish_reason = vendor-source-auto`). Attaching it to a product is
+    still your click.
+  - **Search**: ranked full-text + typo-tolerant `media_search`, `media_library_health()`, and the new table
+    `media_ai_runs` (service role only, RLS on) for the AI passes.
+
+  Safe to re-run. It takes a few seconds; a menu save made in another tab while it runs simply waits for it.
+  Paste the file (or `supabase/migrations/editor-safe/0352_media_library_v2.EDITOR_SAFE.sql`, the same SQL with no
+  comments). If the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select public.media_library_health();                -- archived_copies about 5,900; published, with_vendor up
+  select public.media_canonicalize(true);              -- {"copies": 0, ...}  (nothing left to fold)
+  select count(*) from public.media_assets
+   where status <> 'archived' group by content_hash having count(*) > 1;   -- no rows
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0352_media_library_v2.rollback.sql` (drops the new columns,
+  functions, index and `media_ai_runs`). It does not un-archive the copies: every slot still shows the same picture
+  (same file), so nothing on the site changes. To bring a copy back, set its status to draft on Content → Media.
 

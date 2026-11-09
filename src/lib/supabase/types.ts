@@ -43,6 +43,33 @@ export type MediaAsset = {
   uploaded_by: string | null;
   created_at: string;
   updated_at: string;
+  // D221 M1+M2 (0352). Optional: absent on a database without 0352 and in
+  // reads that name their columns.
+  vendor_id?: string | null;
+  brand_id?: string | null;
+  kb_product_id?: string | null;
+  platform?: string | null;
+  source_url?: string | null;
+  product_name?: string | null;
+  menu_item_ref?: string | null;
+  role?: string | null;
+  category?: string | null;
+  pack_size?: string | null;
+  ai_description?: string | null;
+  ai_caption?: string | null;
+  visible_text?: string | null;
+  ai_tags?: string[];
+  ai_status?: string | null;
+  seo_title?: string | null;
+  seo_alt?: string | null;
+  credit_text?: string | null;
+  content_hash?: string | null;
+  canonical_id?: string | null;
+  duplicate_count?: number | null;
+  publish_reason?: string | null;
+  published_at?: string | null;
+  review_state?: string | null;
+  review_note?: string | null;
 };
 
 export type AuditLog = {

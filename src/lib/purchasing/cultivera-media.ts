@@ -15,6 +15,8 @@
  *     sides know about each other and re-saves are no-ops.
  */
 import "server-only";
+import { resolveMediaVendorId } from "@/lib/media/vendor-resolve-server";
+import type { MediaProvenance } from "@/lib/media/provenance-core";
 import {
   importImageFromUrl,
   importDocumentFromUrl,
@@ -81,6 +83,7 @@ export async function saveItemMedia(
             altText: mediaAltForItem(item, vendorLabel),
             uploadedBy,
             tags,
+            provenance: await menuProvenance("cultivera", item, vendorLabel, "image"),
           })
         : await importDocumentFromUrl({
             imageUrl: url,
@@ -89,6 +92,7 @@ export async function saveItemMedia(
             altText: mediaTitleForItem(item, "coa"),
             uploadedBy,
             tags,
+            provenance: await menuProvenance("cultivera", item, vendorLabel, "coa"),
           });
 
     await linkItemMedia(
@@ -181,6 +185,7 @@ export async function saveCultiveraItemToKb(
         altText: mediaAltForItem(item, vendorLabel),
         uploadedBy,
         tags,
+        provenance: await menuProvenance("cultivera", item, vendorLabel, "image"),
       });
       assetId = imported.asset.id;
       deduped = imported.deduped;
@@ -380,6 +385,15 @@ export async function saveCultiveraDetailStrainsToKb(
         altText: mediaAltForItem({ name: strain.strainName, brand: line.brand }, vendorLabel),
         uploadedBy,
         tags,
+        provenance: {
+          platform: "cultivera",
+          vendorId: await resolveMediaVendorId(vendorLabel),
+          productName: strain.strainName,
+          strainName: strain.strainName,
+          category: line.category,
+          role: "product",
+          creditText: vendorLabel || null,
+        },
       });
       if (deduped) result.deduped += 1;
       else result.saved += 1;
@@ -442,4 +456,27 @@ export async function saveCultiveraDetailStrainsToKb(
 
   result.ok = result.failed === 0;
   return result;
+}
+
+/**
+ * D221 M1: what the library should know about a menu picture - the vendor
+ * (resolved from the seller name), the platform, the product and the menu
+ * row it came with. With a known vendor the picture is auto-published.
+ */
+async function menuProvenance(
+  platform: "cultivera" | "growflow" | "leaflink",
+  item: { id: string; name: string | null; category: string | null; size_label?: string | null },
+  vendorLabel: string,
+  kind: "image" | "coa",
+): Promise<MediaProvenance> {
+  return {
+    platform,
+    vendorId: await resolveMediaVendorId(vendorLabel),
+    productName: item.name,
+    category: item.category,
+    packSize: item.size_label ?? null,
+    menuItemRef: `${platform}:${item.id}`,
+    role: kind === "coa" ? "coa" : "product",
+    creditText: vendorLabel || null,
+  };
 }

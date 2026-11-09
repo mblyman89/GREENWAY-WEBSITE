@@ -16,6 +16,8 @@
  *     both sides know about each other and re-saves are no-ops.
  */
 import "server-only";
+import { resolveMediaVendorId } from "@/lib/media/vendor-resolve-server";
+import type { MediaProvenance } from "@/lib/media/provenance-core";
 import {
   importImageFromUrl,
   importDocumentFromUrl,
@@ -79,6 +81,7 @@ export async function saveGrowflowItemMedia(
             altText: growflowMediaAltForItem(item, vendorLabel),
             uploadedBy,
             tags,
+            provenance: await menuProvenance("growflow", item, vendorLabel, "image"),
           })
         : await importDocumentFromUrl({
             imageUrl: url,
@@ -87,6 +90,7 @@ export async function saveGrowflowItemMedia(
             altText: growflowMediaTitleForItem(item, "coa"),
             uploadedBy,
             tags,
+            provenance: await menuProvenance("growflow", item, vendorLabel, "coa"),
           });
 
     await linkGrowflowItemMedia(
@@ -151,4 +155,27 @@ export async function saveGrowflowItemMedia(
       error: err instanceof Error ? err.message : "Unexpected error saving media.",
     };
   }
+}
+
+/**
+ * D221 M1: what the library should know about a menu picture - the vendor
+ * (resolved from the seller name), the platform, the product and the menu
+ * row it came with. With a known vendor the picture is auto-published.
+ */
+async function menuProvenance(
+  platform: "cultivera" | "growflow" | "leaflink",
+  item: { id: string; name: string | null; category: string | null; size_label?: string | null },
+  vendorLabel: string,
+  kind: "image" | "coa",
+): Promise<MediaProvenance> {
+  return {
+    platform,
+    vendorId: await resolveMediaVendorId(vendorLabel),
+    productName: item.name,
+    category: item.category,
+    packSize: item.size_label ?? null,
+    menuItemRef: `${platform}:${item.id}`,
+    role: kind === "coa" ? "coa" : "product",
+    creditText: vendorLabel || null,
+  };
 }

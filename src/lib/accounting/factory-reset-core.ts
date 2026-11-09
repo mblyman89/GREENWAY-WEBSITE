@@ -890,6 +890,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "shop_carousel_slides", disposition: "KEEP", because: "Shop page carousel you built." },
   { table: "media_assets", disposition: "KEEP", because: "Your uploaded photographs and artwork." },
   { table: "media_usages", disposition: "KEEP", because: "Where each image is used." },
+  // media_ai_runs (0352, D221): the AI describe / SEO passes run over the
+  // media library - model, cost, progress. KEEP with the media it describes;
+  // it holds no money, stock or customer data.
+  { table: "media_ai_runs", disposition: "KEEP", because: "The AI passes that described and tagged your photo library, with their cost." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

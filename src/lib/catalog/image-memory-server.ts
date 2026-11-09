@@ -40,6 +40,9 @@ export type ImageDraftRow = {
   category: string | null;
   chosen_website_category?: string | null;
   identity_key?: string | null;
+  /** D221 M1: the draft's vendor / brand cards (same-vendor boost + pool). */
+  vendor_id?: string | null;
+  brand_id?: string | null;
 };
 
 /** Identity keys for one draft, stamped key first. Never contains "". */
@@ -134,7 +137,12 @@ export async function loadOnboardingImageRecommendations(
   const keysByDraft = new Map(drafts.map((d) => [d.id, imageIdentityKeys(d)] as const));
   const allKeys = [...keysByDraft.values()].flat();
   const [library, memory, onRecord, galleries] = await Promise.all([
-    readLibraryPickerAssets("all"),
+    // D221 M1: every picture filed under these drafts' vendors / brands joins
+    // the pool, not only the newest 400 rows of the whole library.
+    readLibraryPickerAssets("all", {
+      vendorIds: drafts.map((d) => d.vendor_id),
+      brandIds: drafts.map((d) => d.brand_id),
+    }),
     loadImageMemory(allKeys),
     loadOnRecordImageIds(allKeys),
     loadGalleryIds([...targetKeys.values()]),
@@ -148,7 +156,14 @@ export async function loadOnboardingImageRecommendations(
       d.id,
       recommendImages({
         assets: library.assets,
-        product: { name: d.name, brand: d.brand_name, vendor: d.vendor_name, category: d.chosen_website_category ?? d.category },
+        product: {
+          name: d.name,
+          brand: d.brand_name,
+          vendor: d.vendor_name,
+          category: d.chosen_website_category ?? d.category,
+          vendorId: d.vendor_id ?? null,
+          brandId: d.brand_id ?? null,
+        },
         memory: mem,
         onRecordIds: rec,
         galleryIds: target ? galleries.get(target) ?? [] : [],

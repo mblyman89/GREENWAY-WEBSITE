@@ -390,6 +390,8 @@
     "inventory_audit_submit",
     "label_template_set_default",
     "latest_menu_facts",
+    "media_resolve_vendor",
+    "media_search",
     "merge_vendors",
     "merge_vendors_v2",
     "ofac_record_run",

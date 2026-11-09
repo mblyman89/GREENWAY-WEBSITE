@@ -510,6 +510,6 @@ describe("S-15 wiring and guards", () => {
   });
   it("no migration is added for S-15 (the merge is plain SQL under the existing grants)", () => {
     const last = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f: string) => /^\d{4}_.*\.sql$/.test(f)).sort().at(-1);
-    expect(last).toBe("0351_kb_crawl_campaigns.sql"); // D220 S3 added 0351, D220 added 0350, D217 added 0349, D211 added 0348, D198e added 0347, D198 added 0346, D193 added 0345, D161 added 0339, D170 O1 added 0340, D170 O2/O3 added 0341 after this slice, D177 S6 added 0342, D180 S3 added 0343, PERF P1 added 0344
+    expect(last).toBe("0352_media_library_v2.sql"); // D221 M1+M2 added 0352, D220 S3 added 0351, D220 added 0350, D217 added 0349, D211 added 0348, D198e added 0347, D198 added 0346, D193 added 0345, D161 added 0339, D170 O1 added 0340, D170 O2/O3 added 0341 after this slice, D177 S6 added 0342, D180 S3 added 0343, PERF P1 added 0344
   });
 });

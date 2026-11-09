@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { countMedia, publicUrlForKey } from "@/lib/media/store";
 import { listAllMedia, buildMediaUses, loadMediaUseSources } from "@/lib/media/folders-server";
+import { mediaMatchesQuery } from "@/lib/media/provenance-core";
 import { folderIndex, buildFolderTree, folderTrail, safeFolderId, type FolderNode } from "@/lib/media/folders-core";
 import { MediaFolderTree } from "@/components/admin/media/MediaFolderTree";
 import type { MediaAsset } from "@/lib/supabase/types";
@@ -63,11 +64,9 @@ export default async function MediaPage({
     .filter((m) => folder === "all" || (index.get(m.id) ?? []).includes(folder))
     .filter((m) => !usage || m.usage_type === usage)
     .filter((m) => !status || m.status === status)
-    .filter(
-      (m) =>
-        !ql ||
-        [m.title, m.filename, m.alt_text, m.description, m.source, ...(m.tags ?? [])].some((v) => (v ?? "").toLowerCase().includes(ql)),
-    )
+    // D221 M1: every word must match, across the 0352 fields too (product
+    // name from the menu, package text, AI caption, vendor credit).
+    .filter((m) => !ql || mediaMatchesQuery(m, ql))
     .sort((a, b) =>
       sort === "oldest"
         ? a.created_at.localeCompare(b.created_at)
@@ -192,7 +191,7 @@ export default async function MediaPage({
               {/* Filters (inside the open folder) */}
               <form className="flex flex-wrap items-center gap-2" method="get">
                 {folder !== "all" && <input type="hidden" name="folder" value={folder} />}
-                <Input name="q" defaultValue={q ?? ""} placeholder={folder === "all" ? "Search everything — title, file name, tags, source…" : "Search in this folder…"} className="min-w-48 flex-1" />
+                <Input name="q" defaultValue={q ?? ""} placeholder={folder === "all" ? "Search everything — product, vendor, package text, title, tags…" : "Search in this folder…"} className="min-w-48 flex-1" />
                 <Select name="usage" defaultValue={usage ?? ""} className="w-auto">
                   <option value="">All purposes</option>
                   {MEDIA_PURPOSES.map((p) => (

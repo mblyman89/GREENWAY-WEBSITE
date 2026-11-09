@@ -2181,3 +2181,43 @@ Pending owner answers (all four are open questions, nothing is decided yet):
 ### As built
 
 Docs only: this section and the strategy doc. No code or schema changed.
+
+## D221 (M1 + M2) — Media library v2: one picture per file, provenance, vendor-scoped suggestions, auto-publish (2026-11-09)
+
+### Owner request (verbatim)
+
+> thank you. yes please change agents.md to allow the ai to auto publish assets. please archive the duplicates. the reason there are so many duplicates is because when I scrape a vendor menu, it often uses the same image for all products on that menu, so I save it for each item individually so the system knows to use it for each one of them. if there is a smarter, better way to utilize the one image for multiple products, then lets clean up all the duplicates so we have a more manageable library. I would like the closer look option, I am fine with spending a little more for better results. for the ai model, use a stronger one. we are using luna now for the new tier 1 vendor scrape, so lets use it if you think it would be better. I have looked at the github application page and I do not see how i can update the access, it shows you have full access still. yes please fix the note from before so it shows the real fix. let me know if you are able to push and merge to github, if not, tell me what I need to do to give you access again. please complete 2 slices before returning back with a summary report of whats been done, and what I need to do. follow the standing rules. thank you.
+
+### Findings
+
+1. Production (read-only query, 2026-11-09): 9,931 live `media_assets` rows hold only 4,028 distinct files, so 5,903 are copies of the same bytes. Only 133 rows were published.
+2. The copies are not only from saving one picture per product. The menu saves looked for an existing copy by the hash of the **downloaded** bytes, but `uploadMedia` stores the file under the hash of the **web-optimised (WebP)** bytes. The look-up almost never hit, so every save inserted another row. `.maybeSingle()` also returned nothing as soon as two copies existed. Parallel saves raced the same check-then-insert.
+3. The onboarding and enrichment suggestions only ever looked at the newest 400 rows of the whole library (`LIBRARY_READ_LIMIT`), so most of a vendor's own pictures were never considered. That is why suggestions came from other vendors.
+4. Menu snapshots mostly have no `vendor_id` (cultivera 7/43, growflow 0/12). The seller name and license resolve 37 of 52 menu labels to vendor cards. 3,680 rows carry an exact vendor-slug tag.
+5. GitHub: pushing and merging work (PR #1737 merged this round). No action needed from the owner.
+6. The earlier 0350 note blamed comment apostrophes. That was wrong. The real cause is the editor's "Run and enable RLS" button, which misreads `'Merged into "[^"]*"'` as a table name and appends `alter table "[^" enable row level security`. "Run without RLS" is the fix.
+
+### Decisions
+
+- **One row per file, many usages.** This is the "smarter, better way". One kept `media_assets` row per file, every reference repointed onto it, one `media_usages` row per product that uses it. Copies are archived with `canonical_id`, never deleted. A unique live `content_hash` index makes a new copy impossible.
+- **AGENTS.md rule 3 amended (owner-authorized):** vendor-sourced library assets with a known vendor are auto-published (`publish_reason = vendor-source-auto`), as are AI-written descriptions and SEO fields on them. This is reversible and recorded, and never overwrites a person's value. Attaching to a live product stays human.
+- **Closer look, stronger model:** the M4 AI pass will use `gpt-6-luna` at `detail: "high"`. `media_ai_runs` (0352) records the model, detail, cost and budget per run.
+
+### As built
+
+- **M1 + M2 shipped together** in migration `0352_media_library_v2.sql`:
+  - provenance, vision, SEO, dedupe and governance columns;
+  - a weighted search document and trigger;
+  - `media_canonicalize` (dry run by default), `media_resolve_vendor`, `media_backfill_provenance` (gap-fill), `media_auto_publish`, `media_search` (ranked full text plus trigram) and `media_library_health`;
+  - `media_ai_runs`;
+  - the fold, the unique index, the backfill and auto-publish run under a table lock.
+- It is proven on real Postgres 15 by `scripts/recon/media-library-v2-0352-pg-check.sql`. That check covers: three copies → one live row, refs/arrays/usages/memory repointed, tags merged, alt gap-filled, vendor resolved, auto-published, search found, a fourth insert refused, then rollback and re-apply.
+- App changes:
+  - `store.ts` dedupes on the stored key and reuses the winner on a unique violation.
+  - `harvest.ts` dedupes on `content_hash` and writes provenance, then auto-publishes.
+  - The cultivera, growflow and leaflink menu saves pass provenance (the vendor is resolved from the seller name).
+  - The picker and onboarding suggestions read every picture filed under the product's own vendor and brand (range-paged), plus `media_search` hits.
+  - Same-vendor boost (+8, may pass the no-brand cap); a picture filed under a different vendor is held at 60 or below.
+  - The media page search matches every word across the new fields.
+- Docs: MIGRATIONS_TO_RUN 0350/0351 notes corrected ("Run without RLS") and a 0352 entry with checks.
+- Next slices: M3 (review queue + folders on the new columns), M4 (luna high-detail describe / SEO / embeddings using `media_ai_runs`), M5–M8 as in the D221 strategy doc.

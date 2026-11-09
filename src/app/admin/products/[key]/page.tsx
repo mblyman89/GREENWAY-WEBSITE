@@ -94,7 +94,16 @@ export default async function ProductEditorPage({
   const brandsP = listAllBrands();
   const productLotsP = listLotsForProductKey(key, 6);
   const suggestionsP = listSuggestions("product", key, "pending");
-  const libraryP = readLibraryPickerAssets(libraryScope);
+  // D221 M1: the picker pool includes every picture filed under this
+  // product's own vendor / brand, plus the ranked media_search hits for the
+  // typed search - not only the newest 400 rows.
+  const libraryP = enrichmentP.then((e) =>
+    readLibraryPickerAssets(libraryScope, {
+      vendorIds: [e?.vendor_id],
+      brandIds: [e?.brand_id],
+      query: parseLibraryQuery(lq),
+    }),
+  );
   for (const p of [enrichmentP, brandsP, productLotsP, suggestionsP, libraryP]) p.catch(() => undefined);
 
   const published = await getPublishedVersion();

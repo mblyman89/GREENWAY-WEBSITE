@@ -13,15 +13,27 @@
  *     sharing a CDN asset can't pile up duplicates.
  *   • provenance kept: `source = crawl:<imageUrl>`, `license_status =
  *     'pending-review'` (harvested art needs a rights check before wide use).
- *   • drafts-only: saved assets land as `status='draft'`. Assigning as a
- *     vendor/brand logo is the human's explicit publish decision (same as the
- *     manual logo upload path, which publishes immediately).
+ *   • saved as `status='draft'`; D221 (AGENTS.md rule 3, amended): when the
+ *     caller passes provenance with a known vendor and a vendor-source
+ *     platform (their menu / website), the library row is auto-published
+ *     (publish_reason = vendor-source-auto). Assigning it to a live product or
+ *     as a vendor/brand logo is still the human's explicit decision.
+ *   • D221 M2: one row per file. Dedupe runs on the hash of the bytes that are
+ *     actually stored (store.ts uploadMediaDetailed) and a racing second save
+ *     reuses the winner (0352 unique live content_hash).
  */
 import "server-only";
 import crypto from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { MediaAsset } from "@/lib/supabase/types";
-import { uploadMedia } from "./store";
+import { uploadMediaDetailed } from "./store";
+import {
+  AUTO_PUBLISH_REASON,
+  isMissingColumn,
+  provenancePatch,
+  shouldAutoPublish,
+  type MediaProvenance,
+} from "./provenance-core";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // matches the manual logo upload cap
 const FETCH_TIMEOUT_MS = 20_000;
@@ -155,6 +167,12 @@ export type ImportImageInput = {
   uploadedBy: string | null;
   /** Extra tags beside "harvested". */
   tags?: string[];
+  /**
+   * D221 M1: where this file came from, written gap-fill onto the library row
+   * (vendor, platform, product, menu item). With a vendor and a vendor-source
+   * platform the row is auto-published (AGENTS.md rule 3, amended D221).
+   */
+  provenance?: MediaProvenance;
 };
 
 export type ImportImageResult = {
@@ -170,13 +188,62 @@ export type ImportImageResult = {
  */
 async function findExistingByHash(hash16: string): Promise<MediaAsset | null> {
   const admin = createSupabaseAdminClient();
+  // D221 M2: content_hash (0352) is indexed and unique among live rows.
+  // `.maybeSingle()` used to error (and return null) as soon as there were two
+  // copies, which is how one copy turned into many; order + limit(1) cannot.
+  const byHash = await admin
+    .from("media_assets")
+    .select("*")
+    .eq("content_hash", hash16)
+    .neq("status", "archived")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (!byHash.error) return (byHash.data as MediaAsset[] | null)?.[0] ?? null;
+  if (!isMissingColumn(byHash.error)) return null;
+  // Before 0352 is applied: the old storage-key look-up.
   const { data } = await admin
     .from("media_assets")
     .select("*")
     .like("storage_key", `%/${hash16}-%`)
-    .limit(1)
-    .maybeSingle();
-  return (data as MediaAsset | null) ?? null;
+    .neq("status", "archived")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  return (data as MediaAsset[] | null)?.[0] ?? null;
+}
+
+/**
+ * D221 M1+M2: write what the caller knows about the file onto its library row
+ * (gap-fill only), then publish it if it is the vendor's own material with a
+ * known vendor. Best-effort: a database without 0352 keeps working unchanged,
+ * and a failure here never fails the save.
+ */
+async function applyProvenance(asset: MediaAsset, provenance: MediaProvenance | undefined): Promise<MediaAsset> {
+  if (!provenance) return asset;
+  try {
+    const row = asset as unknown as Record<string, unknown>;
+    const patch: Record<string, unknown> = provenancePatch(row, provenance);
+    const merged = { ...row, ...patch };
+    if (
+      shouldAutoPublish({
+        platform: merged.platform as string | null,
+        vendorId: merged.vendor_id as string | null,
+        mimeType: asset.mime_type,
+        status: asset.status,
+        canonicalId: (row.canonical_id as string | null) ?? null,
+        reviewState: (row.review_state as string | null) ?? null,
+      })
+    ) {
+      patch.status = "published";
+      patch.publish_reason = AUTO_PUBLISH_REASON;
+    }
+    if (Object.keys(patch).length === 0) return asset;
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.from("media_assets").update(patch).eq("id", asset.id).select("*").single();
+    if (error || !data) return asset;
+    return data as MediaAsset;
+  } catch {
+    return asset;
+  }
 }
 
 function filenameFromUrl(u: URL, mime: string): string {
@@ -306,9 +373,9 @@ export async function importImageFromUrl(input: ImportImageInput): Promise<Impor
   // Content-hash dedupe: same bytes → reuse the existing asset.
   const hash16 = crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16);
   const existing = await findExistingByHash(hash16);
-  if (existing) return { asset: existing, deduped: true };
+  if (existing) return { asset: await applyProvenance(existing, input.provenance), deduped: true };
 
-  const asset = await uploadMedia({
+  const { asset, deduped } = await uploadMediaDetailed({
     buffer: raw,
     filename: filenameFromUrl(parsed, mime),
     mimeType: mime,
@@ -317,11 +384,13 @@ export async function importImageFromUrl(input: ImportImageInput): Promise<Impor
     usageType: input.usageType,
     tags: Array.from(new Set(["harvested", ...(input.tags ?? [])])),
     uploadedBy: input.uploadedBy,
-    status: "draft", // drafts-only; assigning is the human's publish decision
+    // Saved as a draft; applyProvenance publishes it when it is the vendor's
+    // own material with a known vendor (D221). Attaching stays a human click.
+    status: "draft",
     source: `crawl:${parsed.toString()}`.slice(0, 500),
     licenseStatus: "pending-review",
   });
-  return { asset, deduped: false };
+  return { asset: await applyProvenance(asset, withSourceUrl(input.provenance, parsed)), deduped };
 }
 
 // ---------------------------------------------------------------------------
@@ -385,13 +454,13 @@ export async function importDocumentFromUrl(input: ImportImageInput): Promise<Im
 
   const hash16 = crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16);
   const existing = await findExistingByHash(hash16);
-  if (existing) return { asset: existing, deduped: true };
+  if (existing) return { asset: await applyProvenance(existing, input.provenance), deduped: true };
 
   const last = parsed.pathname.split("/").filter(Boolean).pop() ?? "";
   const clean = last.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60);
   const filename = clean && /\.pdf$/i.test(clean) ? clean : (clean || "harvested-document") + ".pdf";
 
-  const asset = await uploadMedia({
+  const { asset, deduped } = await uploadMediaDetailed({
     buffer: raw,
     filename,
     mimeType: mime,
@@ -404,5 +473,10 @@ export async function importDocumentFromUrl(input: ImportImageInput): Promise<Im
     source: `crawl:${parsed.toString()}`.slice(0, 500),
     licenseStatus: "pending-review",
   });
-  return { asset, deduped: false };
+  return { asset: await applyProvenance(asset, withSourceUrl(input.provenance, parsed)), deduped };
+}
+
+function withSourceUrl(p: MediaProvenance | undefined, u: URL): MediaProvenance | undefined {
+  if (!p) return undefined;
+  return { ...p, sourceUrl: p.sourceUrl ?? u.toString() };
 }

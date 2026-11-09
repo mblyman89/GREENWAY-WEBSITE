@@ -94,6 +94,9 @@ export type ImageRecommendInput = {
     vendor?: string | null;
     /** Website category word (e.g. "flower", "edibles"). */
     category?: string | null;
+    /** D221: the vendor / brand cards, for the same-vendor boost. */
+    vendorId?: string | null;
+    brandId?: string | null;
   };
   /** Memory rows for THIS identity key. */
   memory?: readonly ImageMemoryRow[];
@@ -149,7 +152,34 @@ function idTokens(s: string | null | undefined): string[] {
 }
 
 function assetWords(a: LibraryPickerAsset): Set<string> {
-  return new Set(idTokens(`${a.title ?? ""} ${a.filename ?? ""} ${a.alt_text ?? ""} ${(a.tags ?? []).join(" ")}`));
+  // D221 M1: the product the picture came with on the vendor's menu and the
+  // words printed on the package count as much as the title.
+  return new Set(
+    idTokens(
+      `${a.title ?? ""} ${a.filename ?? ""} ${a.alt_text ?? ""} ${(a.tags ?? []).join(" ")} ${a.product_name ?? ""} ${a.visible_text ?? ""} ${a.ai_caption ?? ""}`,
+    ),
+  );
+}
+
+/**
+ * D221 M1: the picture is on file under this product's own vendor / brand
+ * card (0352 provenance). Owner: suggestions were "not even the same vendor".
+ * A same-vendor image is lifted and may pass the no-brand cap (we KNOW whose
+ * picture it is); an image filed under a DIFFERENT vendor is held below High.
+ */
+export const SAME_VENDOR_BOOST = 8;
+export const OTHER_VENDOR_CAP = 60;
+export function vendorMatch(
+  a: Pick<LibraryPickerAsset, "vendor_id" | "brand_id">,
+  product: { vendorId?: string | null; brandId?: string | null },
+): "same" | "other" | "unknown" {
+  const av = (a.vendor_id ?? "").trim();
+  const ab = (a.brand_id ?? "").trim();
+  const pv = (product.vendorId ?? "").trim();
+  const pb = (product.brandId ?? "").trim();
+  if ((av && pv && av === pv) || (ab && pb && ab === pb)) return "same";
+  if (av && pv && av !== pv && !(ab && pb && ab === pb)) return "other";
+  return "unknown";
 }
 
 /**
@@ -187,7 +217,15 @@ export function nameMatchScore(
   }
   let confidence = Math.round(Math.min(1, score) * 100);
   confidence = Math.min(confidence, NAME_MATCH_MAX);
-  if (brandTokens.length > 0 && brandHit.length === 0 && confidence > NO_BRAND_CAP) {
+  const vm = vendorMatch(a, product);
+  if (vm === "same") {
+    confidence = Math.min(NAME_MATCH_MAX, confidence + SAME_VENDOR_BOOST);
+    reasons.push("Filed under this product's own vendor.");
+  } else if (vm === "other" && confidence > OTHER_VENDOR_CAP) {
+    confidence = OTHER_VENDOR_CAP;
+    reasons.push("Filed under a different vendor, so it stays below High.");
+  }
+  if (vm !== "same" && brandTokens.length > 0 && brandHit.length === 0 && confidence > NO_BRAND_CAP) {
     confidence = NO_BRAND_CAP;
     reasons.push("No brand word in the image text, so it stays below High.");
   }

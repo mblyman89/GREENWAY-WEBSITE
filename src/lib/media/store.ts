@@ -20,6 +20,7 @@ import { probeImageDimensions } from "./image-dimensions";
 import { usageEntityId } from "@/lib/ai/kb/writeback-text-core";
 import { makeBlurDataUrl, saveBlurForAsset } from "./blur-server";
 import { optimizeImageBuffer } from "./image-optimize-server";
+import { contentHashFromStorageKey, isMissingColumn, isUniqueViolation } from "./provenance-core";
 
 /** Public bucket for site imagery (public = true after migration 0012). */
 const MEDIA_BUCKET = "media";
@@ -79,7 +80,52 @@ export type UploadMediaInput = {
   optimize?: boolean;
 };
 
+/**
+ * D221 M2: the live row already holding this file, or null. Looks by exact
+ * storage key first (works before and after 0352), then by content_hash
+ * (0352; same bytes saved under another folder). Archived copies never count.
+ */
+export async function findLiveMediaForKey(storageKey: string): Promise<MediaAsset | null> {
+  const admin = createSupabaseAdminClient();
+  const byKey = await admin
+    .from("media_assets")
+    .select("*")
+    .eq("storage_key", storageKey)
+    .neq("status", "archived")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const hit = (byKey.data as MediaAsset[] | null)?.[0];
+  if (hit) return hit;
+  const hash = contentHashFromStorageKey(storageKey);
+  if (!hash) return null;
+  const byHash = await admin
+    .from("media_assets")
+    .select("*")
+    .eq("content_hash", hash)
+    .neq("status", "archived")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (byHash.error && isMissingColumn(byHash.error)) return null; // 0352 not applied yet
+  return (byHash.data as MediaAsset[] | null)?.[0] ?? null;
+}
+
 export async function uploadMedia(rawInput: UploadMediaInput): Promise<MediaAsset> {
+  return (await uploadMediaDetailed(rawInput)).asset;
+}
+
+/**
+ * D221 M2: upload, or reuse the row that already holds these exact bytes.
+ *
+ * Why this exists: the menu saves looked for an existing copy by the hash of
+ * the DOWNLOADED bytes, but the file is stored under the hash of the
+ * web-optimised (WebP) bytes - so the look-up missed and every re-save of the
+ * same menu picture inserted another row for the same file. Dedupe now
+ * happens here, on the key that is actually stored, and a racing second save
+ * that hits 0352's unique index re-reads the winner instead of failing.
+ */
+export async function uploadMediaDetailed(
+  rawInput: UploadMediaInput,
+): Promise<{ asset: MediaAsset; deduped: boolean }> {
   const admin = createSupabaseAdminClient();
   // R54 Slice A: one web-ready master (WebP, ≤ 3840 px) for every upload path
   // that goes through here. Skips GIF/SVG/PDF; any failure keeps the original.
@@ -98,6 +144,9 @@ export async function uploadMedia(rawInput: UploadMediaInput): Promise<MediaAsse
   // Storage CDN (and browsers) to hold it for a year instead of storage-js's
   // default 1 hour, so repeat views of menu/brand photos are served from the
   // CDN edge rather than re-egressing from the bucket every hour.
+  const already = await findLiveMediaForKey(storageKey);
+  if (already) return { asset: already, deduped: true };
+
   const { error: upErr } = await admin.storage.from(MEDIA_BUCKET).upload(storageKey, input.buffer, {
     contentType: input.mimeType,
     upsert: true,
@@ -132,12 +181,17 @@ export async function uploadMedia(rawInput: UploadMediaInput): Promise<MediaAsse
     })
     .select("*")
     .single();
+  if (error && isUniqueViolation(error)) {
+    // Another save of the same file won the race (0352 unique content_hash).
+    const winner = await findLiveMediaForKey(storageKey);
+    if (winner) return { asset: winner, deduped: true };
+  }
   if (error || !data) throw new Error(`media_assets insert failed: ${error?.message}`);
   // R45-S2: tiny blur preview for banners (best-effort, separate UPDATE so a
   // database without migration 0266 still accepts the upload unchanged).
   const blur = await makeBlurDataUrl(input.buffer, input.mimeType);
   if (blur) await saveBlurForAsset((data as MediaAsset).id, blur);
-  return data as MediaAsset;
+  return { asset: data as MediaAsset, deduped: false };
 }
 
 /**
@@ -186,6 +240,11 @@ export async function registerUploadedMedia(input: RegisterUploadedMediaInput): 
     })
     .select("*")
     .single();
+  if (error && isUniqueViolation(error)) {
+    // D221 M2: this exact file is already in the library - reuse that row.
+    const existing = await findLiveMediaForKey(input.storageKey);
+    if (existing) return existing;
+  }
   if (error || !data) throw new Error(`media_assets insert failed: ${error?.message}`);
   return data as MediaAsset;
 }

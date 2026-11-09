@@ -1359,7 +1359,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D198 S1: +1 KEEP atm_drop_reviews (0346; the owner's append-only ATM drop sign-offs, no FK).
     // D220 S3: +5 KEEP kb_crawl_campaigns, kb_crawl_sites, kb_crawl_pages, kb_crawl_images (kb_ prefix rule)
     // and vendor_website_candidates (0351; crawler reference catalog about vendors, no FK into a wiped table).
-    expect(plan.keep.length).toBe(204);
+    // + media_ai_runs (0352, D221; AI passes over the media library, KEEP with the media).
+    expect(plan.keep.length).toBe(205);
     expect(plan.wipe.length).toBe(139);
   });
 
