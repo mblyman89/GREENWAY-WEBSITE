@@ -2133,3 +2133,51 @@ Follow-ups: "Please continue. Follow the standing rules. Thank you." (several ti
   - On Railway: keep AI_API_KEY and CRAWL_ALLOW_DOMAINS; attach a volume and set CRAWL_CACHE_DIR; optionally set
     CAMPAIGN_PARALLEL_SITES=4; redeploy.
   - Decide the Clarity and Everigreene pairs.
+
+## D221 — Media Library overhaul: recon and strategy (2026-11-09, read-only round)
+
+### Verbatim
+
+"thank you. will you log back in and query the database looking at all of the vendor menus I have scraped. I need your help cataloging everything better into the media library. I need your help making them easier to find and attach. right now the options it gives as suggestions on the onboarding page and enrichment page are terrible. not even from the same vendor. nor does it allow me to look for a better picture. it may be because the asset library is all drafts, and they need to be published? there are now thousands of images, and the system knows where they came from, which vendor, which types and categories they are, the names, what they look like most of the time. I need help making the library more usable, tagged, labeled, described, etc. I need the ai to do the heavy lifting. SEO titles and descriptions, use visual llm ai for seeing and describing them. I need more advanced features to help me make this curated asset library incredibly impressive and easy to use, easy to attach and assign. I want you to be more aggressive with publishing images and such you know are correct because we scraped them from the horses mouth itself. every ai lookup has data about it right? so we should use this data to make the asset library incredibly powerful. and then upgrade and enhance the onboarding and enrichment image assigner. surely there are far more powerful, professional, enterprise grade solutions that can auto manage an asset library with the extensive data we collect in addition to the images and descriptions and such. please use all of your brain power to clean up and organize the media/ asset library. add any and all meta data, any and all seo data, any and all visual descriptors from the ai looking at the image, etc. I want you to go above and beyond and add in any additional value add on you can think of that adds to what I want and need. I want all my assets to be published, with as much auto attached info as possible. expand the fields so the ai can fill in everything as described. this is a major overhaul that has huge implications for our workflow. it will be significantly easier and more efficient if the asset library was extremely clean and well organized and is connected to both onboarding and enrichment in a complimentary way, a powerful way, an intelligent way. it should allow me to type in anything and have the system try and find it, because it has visual descriptions to use as reference for showing results. for this first round, login, query, recon the code, then strategize how we can make this an incredibly powerful and useful system. I want you to think of every possible solution and method to help you design this. I want you to research the internet and find every possible enterprise grade professional solution and method for building this and executing it properly. we have a ton of assets now, so I need a way for you to go back through all of them and work your magic so they are all well organized, easily findable via any and all references used. they should all have the seo added automatically. I want the ai to publish assets for me. please let me know your plan for this next round of slices. no code edits yet. follow the standing rules. thank you."
+
+### Findings
+
+- **Library size and state:** 6,936 media_assets: 127 published, 6,809 draft, 6,806 crawled.
+- **Duplicates:** only 3,581 distinct storage keys. About 3,355 rows are duplicates; one image has 195 copies, because of a
+  harvest dedupe race.
+- **Descriptions:** 43 assets have one.
+- **Missing structure:** no vendor/brand/category columns, and no full-text, trigram or vector index.
+- **Available extensions:** pgvector 0.8.0 is available; pg_trgm is installed.
+- **Why suggestions are wrong:** the picker and onboarding recommender read only the 400 newest assets
+  (`LIBRARY_READ_LIMIT`), unscoped by vendor, and match on boilerplate title/alt tokens. That is why the suggestions are
+  from the wrong vendor.
+- **Missing brand:** 4,658 of 4,896 kb_product image usages are on `unknown-brand` cards, so vendor_id (not brand) is the
+  key we can rely on.
+- Full detail: docs/sop-program/D221-media-library-strategy.md.
+
+### Strategy
+
+Slices M1–M8 (see the strategy doc):
+
+- **M1:** schema (provenance, AI, SEO, search, dedupe and governance fields; pgvector + hybrid search RPC).
+- **M2:** dedupe/canonicalize (dry-run first, archive, never delete).
+- **M3:** provenance backfill.
+- **M4:** vision + SEO + embedding backfill on Railway.
+- **M5:** auto-publish rules + review queue.
+- **M6:** recommender v2 + "search for a better picture" in onboarding and enrichment.
+- **M7:** Media Library UI v2.
+- **M8:** storefront image SEO.
+
+### Decisions
+
+Pending owner answers (all four are open questions, nothing is decided yet):
+
+1. Proposed policy change, not yet approved: amend AGENTS.md rule 3 so that vendor-sourced images are auto-published to the
+   library under confidence rules. Attaching to a live product would stay human.
+2. Archive duplicates instead of deleting them.
+3. AI budget for the backfill: low or high detail.
+4. Vision model choice.
+
+### As built
+
+Docs only: this section and the strategy doc. No code or schema changed.
