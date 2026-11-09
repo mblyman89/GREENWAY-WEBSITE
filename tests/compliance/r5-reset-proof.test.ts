@@ -83,8 +83,8 @@ describe("1. everything the Clean Slate rehearsal writes is emptied", () => {
 
 describe("2. the knowledge base and the CCRS ledger survive", () => {
   const kb = listSchemaTables().filter((t) => t.startsWith("kb_"));
-  it("there are 16 kb_ tables and every one is KEEP and absent from 0240", () => {
-    expect(kb.length).toBe(16);
+  it("there are 20 kb_ tables (16 + the four D220 crawl-campaign tables, 0351) and every one is KEEP and absent from 0240", () => {
+    expect(kb.length).toBe(20);
     for (const t of kb) {
       expect(keep.has(t), `${t} must be KEEP`).toBe(true);
       expect(sqlList.has(t), `${t} must not be truncated`).toBe(false);

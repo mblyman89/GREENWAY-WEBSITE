@@ -162,6 +162,18 @@ export default async function KnowledgeBasePage({
               accent="orange"
             />
             <KbNavCard
+              href="/admin/knowledge-base/campaigns"
+              title="Crawl Campaigns"
+              description="One button crawls every current vendor's site until complete — every page catalogued, every image tagged and matched to product cards."
+              accent="green"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/campaigns/images"
+              title="Image catalog"
+              description="Every crawled image with its role, AI label and best product-card match — confirm to put it on the card."
+              accent="gold"
+            />
+            <KbNavCard
               href="/admin/knowledge-base/harvest"
               title="Harvest Console"
               description="Batch-research vendor & prospect websites into reviewable drafts, with live progress and a coverage heatmap."
