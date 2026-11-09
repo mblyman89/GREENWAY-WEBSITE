@@ -1,6 +1,6 @@
 -- Rollback for 0351_kb_crawl_campaigns.sql (D220).
 -- Drops the crawl campaign / page / image catalog and the website candidates
--- (crawler reference data only — re-crawlable), and restores the 1..50 tier caps
+-- (crawler reference data only - re-crawlable), and restores the 1..50 tier caps
 -- (values above 50 are clamped to 50 first so the old constraint can be added).
 -- Run MANUALLY only if needed.
 drop table if exists public.kb_crawl_images;

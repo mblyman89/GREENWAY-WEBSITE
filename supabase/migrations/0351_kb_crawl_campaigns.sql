@@ -1,6 +1,9 @@
 -- =============================================================================
--- 0351 — crawl campaigns + the page / image catalog + website candidates (D220)
+-- 0351 - crawl campaigns + the page / image catalog + website candidates (D220)
 -- =============================================================================
+-- SQL EDITOR: if the Supabase SQL editor rejects this file, paste the copy with
+-- no comments instead: supabase/migrations/editor-safe/0351_kb_crawl_campaigns.EDITOR_SAFE.sql
+-- (the same SQL, token for token, checked by migration-editor-safe-copy.test).
 -- Owner (D220): "get to work making the new vendor crawler so much more amazing
 -- ... we need this to be fantastic so we can have as much detail as possible for
 -- our vendor profiles. please do your best to tag and label and catalog
@@ -8,15 +11,15 @@
 -- incredibly inteligent as possible."
 --
 -- WHY. A harvest job (crawler/app/harvest.py) lives in one JSON file on the
--- worker's disk, reads at most 120 pages per site in one go, and keeps nothing
+-- worker disk, reads at most 120 pages per site in one go, and keeps nothing
 -- per page or per image except a few draft text blocks. The D219 recon showed
--- a Tier 1 run dying silently for ~20 hours and sites marked COMPLETE after 3–4
+-- a Tier 1 run dying silently for ~20 hours and sites marked COMPLETE after 3-4
 -- pages. This migration gives the worker DURABLE state in the database:
 --
 --   kb_crawl_campaigns  one "harvest these vendors to the end" run (the board).
 --   kb_crawl_sites      one row per site in a campaign: the frontier (pending /
---                       visited URLs) so a slice can stop and the next slice —
---                       even after a redeploy — continues exactly where it was;
+--                       visited URLs) so a slice can stop and the next slice -
+--                       even after a redeploy - continues exactly where it was;
 --                       live counts (pages, images, products), status, errors.
 --   kb_crawl_pages      every page read: type (home / about / product / ...),
 --                       title, a text excerpt, the product names it shows, and
@@ -25,14 +28,14 @@
 --                       what (role: product / packaging / logo / lifestyle ...),
 --                       which product / strain / category / size, the text on
 --                       the package (vision), tags, and the best kb_products
---                       match with a score — so an image can be put on the
+--                       match with a score - so an image can be put on the
 --                       right product card in one click.
 --   vendor_website_candidates  websites proposed for vendors that have none
 --                       (OpenAI web search + a verification fetch), waiting for
 --                       one-click approval in the back office.
 --
--- Also raises the harvest tier page caps (kb_harvest_settings 1..50 → 1..120)
--- to match the worker's per-job ceiling (MAX_PAGES_PER_SITE = 120).
+-- Also raises the harvest tier page caps (kb_harvest_settings 1..50 -> 1..120)
+-- to match the per-job ceiling of the worker (MAX_PAGES_PER_SITE = 120).
 --
 -- Everything is service-role only (the back office and the worker); the public
 -- site never reads these tables. All new tables are reference material about
@@ -40,7 +43,7 @@
 -- Idempotent. Apply MANUALLY in the Supabase SQL editor (one run = one transaction).
 -- =============================================================================
 
--- ── 1. kb_crawl_campaigns ────────────────────────────────────────────────────
+-- -- 1. kb_crawl_campaigns ----------------------------------------------------
 create table if not exists public.kb_crawl_campaigns (
   id                uuid primary key default gen_random_uuid(),
   label             text not null default '',
@@ -66,7 +69,7 @@ create table if not exists public.kb_crawl_campaigns (
 create index if not exists kb_crawl_campaigns_status_idx
   on public.kb_crawl_campaigns (status, created_at desc);
 
--- ── 2. kb_crawl_sites ────────────────────────────────────────────────────────
+-- -- 2. kb_crawl_sites --------------------------------------------------------
 create table if not exists public.kb_crawl_sites (
   id                uuid primary key default gen_random_uuid(),
   campaign_id       uuid not null references public.kb_crawl_campaigns(id) on delete cascade,
@@ -112,7 +115,7 @@ create unique index if not exists kb_crawl_sites_campaign_entity_uq
 create index if not exists kb_crawl_sites_status_idx on public.kb_crawl_sites (campaign_id, status);
 create index if not exists kb_crawl_sites_vendor_idx on public.kb_crawl_sites (vendor_id);
 
--- ── 3. kb_crawl_pages ────────────────────────────────────────────────────────
+-- -- 3. kb_crawl_pages --------------------------------------------------------
 create table if not exists public.kb_crawl_pages (
   id                uuid primary key default gen_random_uuid(),
   site_id           uuid not null references public.kb_crawl_sites(id) on delete cascade,
@@ -141,7 +144,7 @@ create table if not exists public.kb_crawl_pages (
 create unique index if not exists kb_crawl_pages_site_url_uq on public.kb_crawl_pages (site_id, url);
 create index if not exists kb_crawl_pages_vendor_type_idx on public.kb_crawl_pages (vendor_id, page_type);
 
--- ── 4. kb_crawl_images ───────────────────────────────────────────────────────
+-- -- 4. kb_crawl_images -------------------------------------------------------
 create table if not exists public.kb_crawl_images (
   id                uuid primary key default gen_random_uuid(),
   site_id           uuid not null references public.kb_crawl_sites(id) on delete cascade,
@@ -194,7 +197,7 @@ create index if not exists kb_crawl_images_match_idx
   on public.kb_crawl_images (matched_kb_product_id) where matched_kb_product_id is not null;
 create index if not exists kb_crawl_images_review_idx on public.kb_crawl_images (vendor_id, match_status);
 
--- ── 5. vendor_website_candidates ─────────────────────────────────────────────
+-- -- 5. vendor_website_candidates ---------------------------------------------
 create table if not exists public.vendor_website_candidates (
   id                uuid primary key default gen_random_uuid(),
   vendor_id         uuid not null references public.vendors(id) on delete cascade,
@@ -223,7 +226,7 @@ create unique index if not exists vendor_website_candidates_vendor_host_uq
 create index if not exists vendor_website_candidates_status_idx
   on public.vendor_website_candidates (status, confidence desc);
 
--- ── 6. updated_at triggers ───────────────────────────────────────────────────
+-- -- 6. updated_at triggers ---------------------------------------------------
 drop trigger if exists set_updated_at_kb_crawl_campaigns on public.kb_crawl_campaigns;
 create trigger set_updated_at_kb_crawl_campaigns
   before update on public.kb_crawl_campaigns
@@ -241,7 +244,7 @@ create trigger set_updated_at_vendor_website_candidates
   before update on public.vendor_website_candidates
   for each row execute function public.set_updated_at();
 
--- ── 7. Lock down: service role only ──────────────────────────────────────────
+-- -- 7. Lock down: service role only ------------------------------------------
 alter table public.kb_crawl_campaigns enable row level security;
 alter table public.kb_crawl_sites enable row level security;
 alter table public.kb_crawl_pages enable row level security;
@@ -260,7 +263,7 @@ grant select, insert, update, delete on table public.kb_crawl_pages to service_r
 grant select, insert, update, delete on table public.kb_crawl_images to service_role;
 grant select, insert, update, delete on table public.vendor_website_candidates to service_role;
 
--- ── 8. Harvest tier caps 1..50 → 1..120 (the worker's per-job ceiling) ──────
+-- -- 8. Harvest tier caps 1..50 -> 1..120 (the per-job ceiling of the worker) ------
 do $$
 begin
   if to_regclass('public.kb_harvest_settings') is not null then
