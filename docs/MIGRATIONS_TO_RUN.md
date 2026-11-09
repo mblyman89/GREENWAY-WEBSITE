@@ -3953,7 +3953,11 @@ in Vercel.
   sweeps the 240 lots / 41 manifests / 244 knowledge-base products / 627 catalog drafts still on merged cards.
   No new table. Nothing is deleted.
 
-  Safe to re-run.
+  Safe to re-run. **Paste `supabase/migrations/editor-safe/0350_vendor_merge_v2.EDITOR_SAFE.sql`** (the same SQL with no
+  comments). The first version made the SQL editor answer `42P01: relation "[^" does not exist`: apostrophes in its
+  comments put the editor's quote tracking out of step, so a regex text (`'Merged into "[^"]*" ...'`) was read as a
+  table name. Nothing ran, because the editor stops at the first error. The comments are fixed and the file passes
+  a real Postgres 15 run of all 351 migrations, but the editor-safe copy is the safest one to paste.
 
   **Check** (run in the SQL editor):
 
@@ -3980,7 +3984,8 @@ in Vercel.
   `vendor_website_candidates` (websites proposed for vendors that have none, waiting for approval). Also raises the
   harvest tier page caps from 1..50 to 1..120. Nothing existing is changed or deleted.
 
-  Safe to re-run.
+  Safe to re-run. **Paste `supabase/migrations/editor-safe/0351_kb_crawl_campaigns.EDITOR_SAFE.sql`** (the same SQL
+  with no comments).
 
   **Check** (run in the SQL editor):
 

@@ -5,7 +5,7 @@
 --
 -- What it does NOT undo (on purpose, nothing is ever deleted by a merge): rows that 0350 moved from an
 -- archived duplicate card to its surviving card stay on the survivor, and the cards 0350 merged stay
--- archived. Every merge is still written on both cards' Internal notes ('Merged into "<name>" (<uuid>)'),
+-- archived. Every merge is still written in the Internal notes of both cards (Merged into <name> (<uuid>)),
 -- which is exactly what 0350 backfills merged_into_id from, so re-applying 0350 restores the columns.
 -- Run the whole file as ONE transaction (the Supabase SQL editor does).
 

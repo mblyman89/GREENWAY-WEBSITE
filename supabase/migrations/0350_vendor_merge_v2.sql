@@ -1,6 +1,9 @@
 -- =============================================================================
--- 0350 — vendor merge v2: a merged card can never collect new rows again (D220)
+-- 0350 - vendor merge v2: a merged card can never collect new rows again (D220)
 -- =============================================================================
+-- SQL EDITOR: if the Supabase SQL editor rejects this file, paste the copy with
+-- no comments instead: supabase/migrations/editor-safe/0350_vendor_merge_v2.EDITOR_SAFE.sql
+-- (the same SQL, token for token, checked by migration-editor-safe-copy.test).
 -- Owner (D220): "I thought I had merged the remaining duplicate vendors. can you
 -- help me finish merging all the vendors."
 --
@@ -14,29 +17,29 @@
 -- cards, many created AFTER the merge.
 --
 -- WHAT THIS ADDS (no table, no deletes):
---   1. vendors.merged_into_id / merged_at — the merge as DATA, not just a note.
+--   1. vendors.merged_into_id / merged_at - the merge as DATA, not just a note.
 --      Backfilled from the exact note 0104 stamps on every archived duplicate:
---      'Merged into "<name>" (<uuid>) on <date>.'
---   2. vendor_survivor_id(uuid) — follows merged_into_id to the live card
+--      Merged into <name> (<uuid>) on <date>.
+--   2. vendor_survivor_id(uuid) - follows merged_into_id to the live card
 --      (chains of merges, max 16 hops, cycle-safe).
---   3. vendor_repoint_references(survivor, dups) — CATALOG-DRIVEN repoint: every
+--   3. vendor_repoint_references(survivor, dups) - CATALOG-DRIVEN repoint: every
 --      single-column foreign key to vendors(id) found in pg_constraint, so a
 --      table added next year is covered without editing this function. Guarded
 --      money-identity tables (banking, ACH, payee contacts, e-sign) are NEVER
 --      moved here; they are counted and reported as needs_attention.
 --      gl_vendor_profiles (one per vendor) moves only when the survivor has none.
---      CCRS SAFETY: before a manifest moves, the duplicate card's license is
+--      CCRS SAFETY: before a manifest moves, the license of the duplicate card is
 --      written onto the manifest itself (raw_payload.from_license_number) when the
---      manifest carries no sending license — the CCRS InventoryTransfer export
+--      manifest carries no sending license - the CCRS InventoryTransfer export
 --      reads that first, so the license reported for an old delivery never
 --      changes because of a merge.
---   4. merge_vendors_v2(survivor, dups) — 0104's merge (same gap-fill, aliases,
+--   4. merge_vendors_v2(survivor, dups) - the 0104 merge (same gap-fill, aliases,
 --      notes, archive) using (3), stamping merged_into_id, refusing a survivor
 --      that is itself archived or merged.
---   5. trg_vendor_follow_merge — BEFORE INSERT/UPDATE OF vendor_id on the
+--   5. trg_vendor_follow_merge - BEFORE INSERT/UPDATE OF vendor_id on the
 --      operational tables: a row written against a merged card lands on the
 --      survivor (the backstop behind the intake fix in intake-store.ts).
---   6. sweep_merged_vendor_rows() — moves everything still sitting on a merged
+--   6. sweep_merged_vendor_rows() - moves everything still sitting on a merged
 --      card to its survivor. Run once at the end of this migration.
 --   7. Finishes the production merge that was left half-done (Alpha Crux 412306,
 --      noted as merged but still published), plus the two duplicate pairs the
@@ -47,7 +50,7 @@
 -- Idempotent. Apply MANUALLY in the Supabase SQL editor (one run = one transaction).
 -- =============================================================================
 
--- ── 1. merged_into_id / merged_at ────────────────────────────────────────────
+-- -- 1. merged_into_id / merged_at --------------------------------------------
 alter table public.vendors add column if not exists merged_into_id uuid;
 alter table public.vendors add column if not exists merged_at timestamptz;
 
@@ -70,7 +73,7 @@ create index if not exists idx_vendors_merged_into on public.vendors(merged_into
 comment on column public.vendors.merged_into_id is
   '0350 (D220): the card this one was merged into (archived duplicate -> survivor). Follow with vendor_survivor_id().';
 
--- Backfill from 0104's note. Only archived cards; the target must exist and not be the card itself.
+-- Backfill from the 0104 note. Only archived cards; the target must exist and not be the card itself.
 update public.vendors v
    set merged_into_id = t.target,
        merged_at      = coalesce(v.merged_at, t.on_day)
@@ -97,7 +100,7 @@ update public.vendors v
    and t.target <> v.id
    and exists (select 1 from public.vendors s where s.id = t.target);
 
--- ── 2. vendor_survivor_id ────────────────────────────────────────────────────
+-- -- 2. vendor_survivor_id ----------------------------------------------------
 create or replace function public.vendor_survivor_id(p_vendor_id uuid)
 returns uuid
 language plpgsql
@@ -126,7 +129,7 @@ $$;
 revoke all on function public.vendor_survivor_id(uuid) from public, anon, authenticated;
 grant execute on function public.vendor_survivor_id(uuid) to service_role;
 
--- ── 3. vendor_repoint_references ─────────────────────────────────────────────
+-- -- 3. vendor_repoint_references ---------------------------------------------
 create or replace function public.vendor_repoint_references(survivor_id uuid, duplicate_ids uuid[])
 returns jsonb
 language plpgsql
@@ -147,7 +150,7 @@ begin
     return jsonb_build_object('tables', counts, 'needs_attention', attention, 'total', 0);
   end if;
 
-  -- CCRS safety: keep each old delivery's sending license on the manifest itself.
+  -- CCRS safety: keep the sending license of each old delivery on the manifest itself.
   update public.inbound_manifests m
      set raw_payload = coalesce(m.raw_payload, '{}'::jsonb)
                        || jsonb_build_object('from_license_number', btrim(d.license_number),
@@ -224,7 +227,7 @@ $$;
 revoke all on function public.vendor_repoint_references(uuid, uuid[]) from public, anon, authenticated;
 grant execute on function public.vendor_repoint_references(uuid, uuid[]) to service_role;
 
--- ── 4. merge_vendors_v2 ──────────────────────────────────────────────────────
+-- -- 4. merge_vendors_v2 ------------------------------------------------------
 create or replace function public.merge_vendors_v2(survivor_id uuid, duplicate_ids uuid[])
 returns jsonb
 language plpgsql
@@ -263,7 +266,7 @@ begin
     raise exception 'merge_vendors_v2: surviving vendor % not found', survivor_id;
   end if;
   if survivor.merged_into_id is not null then
-    raise exception 'merge_vendors_v2: "%" was itself merged into another card (%); merge into that card instead',
+    raise exception 'merge_vendors_v2: "%" was itself merged into another card (%) - merge into that card instead',
       survivor.display_name, public.vendor_survivor_id(survivor_id);
   end if;
   if survivor.status = 'archived' then
@@ -388,9 +391,9 @@ revoke all on function public.merge_vendors_v2(uuid, uuid[]) from public, anon, 
 grant execute on function public.merge_vendors_v2(uuid, uuid[]) to service_role;
 
 comment on function public.merge_vendors_v2(uuid, uuid[]) is
-  '0350 (D220): merge_vendors (0104) + catalog-driven repoint of EVERY vendor FK, CCRS license stamping on moved manifests, merged_into_id, survivor guards. Banking/ACH/payee/e-sign rows are never moved; they are reported under needs_attention.';
+  '0350 (D220): merge_vendors (0104) + catalog-driven repoint of EVERY vendor FK, CCRS license stamping on moved manifests, merged_into_id, survivor guards. Banking/ACH/payee/e-sign rows are never moved - they are reported under needs_attention.';
 
--- ── 5. Follow-the-merge trigger ──────────────────────────────────────────────
+-- -- 5. Follow-the-merge trigger ----------------------------------------------
 create or replace function public.vendor_follow_merge()
 returns trigger
 language plpgsql
@@ -444,7 +447,7 @@ begin
 end
 $$;
 
--- ── 6. sweep_merged_vendor_rows ──────────────────────────────────────────────
+-- -- 6. sweep_merged_vendor_rows ----------------------------------------------
 create or replace function public.sweep_merged_vendor_rows()
 returns jsonb
 language plpgsql
@@ -477,7 +480,7 @@ $$;
 revoke all on function public.sweep_merged_vendor_rows() from public, anon, authenticated;
 grant execute on function public.sweep_merged_vendor_rows() to service_role;
 
--- ── 7. Finish the production merges (no-op where the cards don't exist) ──────
+-- -- 7. Finish the production merges (no-op where the cards do not exist) ------
 do $$
 declare
   pair record;

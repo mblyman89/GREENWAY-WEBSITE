@@ -5,7 +5,7 @@
 --   * 0350 applies twice (idempotent);
 --   * a card archived by the OLD merge (0104 note only) gets merged_into_id from its note when 0350
 --     runs, and the lots / manifests / catalog drafts left on it are swept to the survivor;
---   * a manifest moved off a duplicate keeps the duplicate's license (raw_payload.from_license_number),
+--   * a manifest moved off a duplicate keeps the license of the duplicate (raw_payload.from_license_number),
 --     and a manifest that already names its sending license is left as it is;
 --   * chains resolve (D -> C -> A gives A) and a brand-new lot / manifest / draft written against a
 --     merged card lands on the survivor (trigger);

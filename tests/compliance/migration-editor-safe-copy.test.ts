@@ -238,7 +238,7 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
     // lost was the guarantee that 0201's copy could not be DELETED unnoticed.
     // Both 0201 and 0202 are named explicitly below and the floor is now 8.
     const found = pairs().map((p) => p.base);
-    expect(found.length).toBeGreaterThanOrEqual(8);
+    expect(found.length).toBeGreaterThanOrEqual(10);
     expect(found).toContain("0195_employee_payroll_setup");
     expect(found).toContain("0196_company_profile");
     expect(found).toContain("0197_timesheet_workweek");
@@ -265,6 +265,12 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
     // the watchman nags forever with no way to satisfy it, and he learns to
     // ignore the one alert that carries whole-support-debt liability.
     expect(found).toContain("0202_wage_order_answer_log");
+    // D220. Michael pasted 0350 and the editor answered 42P01: relation "[^" does
+    // not exist - a regex literal ('Merged into "[^"]*" ...') read as a quoted
+    // identifier after comment apostrophes knocked the editor's quote tracking
+    // out of step. The comments were reworded and these copies ship as well.
+    expect(found).toContain("0350_vendor_merge_v2");
+    expect(found).toContain("0351_kb_crawl_campaigns");
   });
 
   it("every copy has a real migration behind it", () => {
