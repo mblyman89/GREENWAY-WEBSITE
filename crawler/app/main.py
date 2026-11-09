@@ -8,6 +8,8 @@ Auth: every request must carry `X-Crawler-Secret` matching CRAWLER_SHARED_SECRET
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 
 from fastapi import FastAPI, Header, HTTPException
@@ -23,10 +25,15 @@ from .harvest import (
     create_job,
     list_jobs,
     load_job,
+    heartbeat_snapshot,
     prepare_resume,
     request_cancel,
+    resume_stalled_jobs,
     schedule_job,
+    watchdog_tick,
 )
+from . import ai_client
+from .browser_pool import POOL
 from .cultivera_api import CultiveraApiError, CultiveraApiResult, CultiveraClient
 from .cultivera_auth import CultiveraAuthError
 from .growflow_api import GrowflowApiError, GrowflowApiResult, GrowflowClient
@@ -61,6 +68,41 @@ def _enforce_production_config() -> None:
             "CRAWLER_ENV=production requires CRAWL_ALLOW_DOMAINS to be set "
             "(comma-separated hostnames the crawler may research). Refusing to start."
         )
+
+
+_watchdog_task: asyncio.Task | None = None
+
+
+async def _watchdog_loop() -> None:
+    """D220: every 30s — recycle the browser for a silent job, cancel a job
+    that stays silent, and re-queue anything the watchdog interrupted."""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            watchdog_tick()
+            resume_stalled_jobs()
+        except Exception:  # noqa: BLE001 — the watchdog must never die
+            log.exception("watchdog tick failed")
+
+
+@app.on_event("startup")
+async def _start_watchdog() -> None:
+    global _watchdog_task
+    if _watchdog_task is None or _watchdog_task.done():
+        _watchdog_task = asyncio.get_running_loop().create_task(_watchdog_loop())
+
+
+@app.on_event("shutdown")
+async def _shutdown_browser() -> None:
+    """D220: close the shared Chromium cleanly on redeploy/stop."""
+    global _watchdog_task
+    if _watchdog_task is not None:
+        _watchdog_task.cancel()
+        with contextlib.suppress(BaseException):
+            await _watchdog_task
+        _watchdog_task = None
+    with contextlib.suppress(Exception):
+        await POOL.shutdown()
 
 
 class ResearchRequest(BaseModel):
@@ -168,7 +210,7 @@ def _require_secret(provided: str | None) -> None:
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
     s = get_settings()
     return {
         "ok": True,
@@ -179,6 +221,21 @@ def health() -> dict:
         "respect_robots": s.crawl_respect_robots,
         "proxy_enabled": bool(s.proxy_url),
         "allow_domains": s.allow_domains,
+        # D220: live vitals — the 20-hour silent hang is now visible at a glance.
+        "browser": POOL.stats(),
+        "job_heartbeats_s": heartbeat_snapshot(),
+        "ai_models": {
+            "text": s.model_chain("text"),
+            "vision": s.model_chain("vision"),
+            "search": s.model_chain("search"),
+        },
+        "ai_usage": ai_client.USAGE.as_dict(),
+        "limits": {
+            "page_hard_timeout_s": s.crawl_page_hard_timeout_seconds,
+            "slice_timeout_s": s.crawl_slice_timeout_seconds,
+            "stall_s": s.crawl_stall_seconds,
+            "parallel_pages": s.crawl_parallel_pages,
+        },
     }
 
 
@@ -342,8 +399,9 @@ def harvest_cancel(
     job_id: str,
     x_crawler_secret: str | None = Header(default=None),
 ) -> HarvestJobResponse:
-    """Flag a job for cancellation (takes effect between targets — a site is
-    either fully researched or untouched, never half-written)."""
+    """Flag a job for cancellation. D220: takes effect before the NEXT PAGE
+    (not just between sites); whatever the site already yielded is kept in
+    its resume state, nothing is half-written."""
     _require_secret(x_crawler_secret)
     job = request_cancel(job_id)
     if job is None:

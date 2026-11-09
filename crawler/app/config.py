@@ -107,6 +107,54 @@ class Settings(BaseSettings):
     # image-heavy catalogs legitimately take a while.
     crawl_page_timeout_seconds: float = Field(default=90.0, alias="CRAWL_PAGE_TIMEOUT_SECONDS")
 
+    # --- D220 S2: hardening (the 20-hour hang can never happen again) --------
+    # Hard ceiling on starting Chromium. A start that hangs past this fails the
+    # page (httpx fallback) and the next fetch tries a brand-new browser.
+    crawl_browser_start_timeout_seconds: float = Field(default=45.0, alias="CRAWL_BROWSER_START_TIMEOUT_SECONDS")
+    # Swap the shared browser for a fresh one after this many pages (0 = never).
+    crawl_browser_recycle_pages: int = Field(default=40, ge=0, alias="CRAWL_BROWSER_RECYCLE_PAGES")
+    # How many pages may render at the same time in the ONE shared browser
+    # (different sites — politeness is still per domain). 8 GB Railway: 4 is safe.
+    crawl_parallel_pages: int = Field(default=4, ge=1, le=12, alias="CRAWL_PARALLEL_PAGES")
+    # Whole-page hard ceiling (browser + fallback). Anything slower is abandoned.
+    crawl_page_hard_timeout_seconds: float = Field(default=150.0, alias="CRAWL_PAGE_HARD_TIMEOUT_SECONDS")
+    # Ceiling for ONE site slice (fetch loop + AI). A slice past this stops
+    # reading, keeps what it has, and saves the frontier for the next slice.
+    crawl_slice_timeout_seconds: float = Field(default=1500.0, alias="CRAWL_SLICE_TIMEOUT_SECONDS")
+    # A running harvest/campaign that reports no progress for this long is
+    # declared stalled by the watchdog (its task is cancelled and retried once).
+    crawl_stall_seconds: float = Field(default=600.0, alias="CRAWL_STALL_SECONDS")
+    # Every AI HTTP call is bounded by this (seconds).
+    ai_timeout_seconds: float = Field(default=60.0, alias="AI_TIMEOUT_SECONDS")
+
+    # --- D220 S3: campaigns ("keep crawling until the site is done") ---------
+    campaign_enabled: bool = Field(default=True, alias="CAMPAIGN_ENABLED")
+    # Sites crawled at the same time (each one politely, one page at a time).
+    campaign_parallel_sites: int = Field(default=3, ge=1, le=8, alias="CAMPAIGN_PARALLEL_SITES")
+    # Pages per slice; a site gets slice after slice until it is complete.
+    campaign_slice_pages: int = Field(default=60, ge=5, le=300, alias="CAMPAIGN_SLICE_PAGES")
+    # Absolute per-site ceiling across all slices (duplicate URLs collapsed).
+    campaign_max_pages_per_site: int = Field(default=1500, ge=10, le=10000, alias="CAMPAIGN_MAX_PAGES_PER_SITE")
+    # How often the worker looks for queued campaign work (seconds).
+    campaign_poll_seconds: float = Field(default=20.0, ge=2.0, alias="CAMPAIGN_POLL_SECONDS")
+    # Resume running campaigns automatically when the worker boots.
+    campaign_auto_resume: bool = Field(default=True, alias="CAMPAIGN_AUTO_RESUME")
+    # Per-image AI vision labelling (role, product, packaging text). Costs a
+    # fraction of a cent per image on the small model; off = heuristics only.
+    campaign_vision_enabled: bool = Field(default=True, alias="CAMPAIGN_VISION_ENABLED")
+    campaign_vision_max_images_per_site: int = Field(default=400, ge=0, le=5000, alias="CAMPAIGN_VISION_MAX_IMAGES_PER_SITE")
+    # Per-page AI classification + product extraction on product-ish pages.
+    campaign_page_ai_enabled: bool = Field(default=True, alias="CAMPAIGN_PAGE_AI_ENABLED")
+
+    # --- D220: which OpenAI model does what -----------------------------------
+    # Comma-separated fallback chain: the first model the account can use wins
+    # (a "model not found / deprecated" answer moves to the next one).
+    # gpt-4o-mini shuts down 2027-01-14 per OpenAI's deprecations page; its
+    # named replacement gpt-6-luna is cheaper and also does vision + web search.
+    ai_vision_model: str = Field(default="", alias="AI_VISION_MODEL")
+    ai_search_model: str = Field(default="gpt-6-luna", alias="AI_SEARCH_MODEL")
+    ai_fallback_models: str = Field(default="gpt-6-luna,gpt-4o-mini", alias="AI_FALLBACK_MODELS")
+
     # --- URL seeding (Slice H2) ------------------------------------------------
     # Two-phase cost control: BEFORE spending expensive browser fetches, ask
     # crawl4ai's AsyncUrlSeeder for the site's full URL inventory (sitemap
@@ -289,6 +337,19 @@ class Settings(BaseSettings):
     def ai_enabled(self) -> bool:
         """The schema-extraction LLM step runs only when a key is configured."""
         return bool(self.ai_api_key.strip())
+
+    def model_chain(self, purpose: str = "text") -> list[str]:
+        """Ordered, de-duplicated model ids for a purpose: text | vision | search."""
+        first = {
+            "vision": self.ai_vision_model or self.ai_model,
+            "search": self.ai_search_model,
+        }.get(purpose, self.ai_model)
+        out: list[str] = []
+        for part in f"{first},{self.ai_fallback_models}".split(","):
+            m = part.strip()
+            if m and m not in out:
+                out.append(m)
+        return out
 
     @property
     def supabase_enabled(self) -> bool:

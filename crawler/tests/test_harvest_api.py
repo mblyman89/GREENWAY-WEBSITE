@@ -25,7 +25,7 @@ SECRET = "test-secret"
 
 
 @pytest.fixture()
-def client(tmp_path: Path, monkeypatch) -> TestClient:
+def client(tmp_path: Path, monkeypatch):
     settings = Settings(
         CRAWLER_SHARED_SECRET=SECRET,
         CRAWL_CACHE_DIR=str(tmp_path / "cache"),
@@ -48,7 +48,10 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
         harvest_mod, "write_drafts",
         lambda rows, settings=None: {"written": len(rows), "skipped": 0, "configured": True},
     )
-    return TestClient(app)
+    # D220: run the app lifecycle (one persistent loop, like uvicorn) so a
+    # background job that awaits worker threads isn't cut off between requests.
+    with TestClient(app) as c:
+        yield c
 
 
 def _payload(n: int = 2) -> dict:
