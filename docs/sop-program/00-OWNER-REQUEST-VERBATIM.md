@@ -1990,3 +1990,35 @@ Verbatim:
 - `src/lib/registers/guided-cash-core.ts` (DROP_KEEP_WORKING_MINOR, suggestion, due/soon wording; 42 self-tests, including a sweep showing the leftover is always ≥$500 and the register is no longer due after the drop).
 - `src/lib/registers/drop-bills-core.ts` (DROP_HOW_TO wording), `src/app/(site)/pos/RegisterShell.tsx` (banner tap text).
 - Tests: `tests/compliance/d217-drop-bills.test.ts` (D218 blocks).
+
+## D219 — Harvest console hung on a Tier 1 harvest: recon and strategy (2026-11-09, read-only round)
+### Verbatim
+"thank you. I will test that the next time I am at the shop. I would like to pivot now and focus on the harvest console in the knowledge base. it hung when trying to do a tier one harvest. I stopped it, but it is still stuck. I downloaded a log report of the last 30 hours so you can read it and find what is wrong with it. I really like the crawler we built, so far it has yet to fail me, except for now. so I would like to fix it up, upgrade and enhance it, and harden it to be more robust and reliable. I want the crawler to be more thorough with regard to each vendors website. if it needs more than one crawl per site, then it should keep crawling until that site is completely scraped. I am fine with slowly working through them all. I want a better way to unleash this crawler, automatically stepping through every page, of all my active vendors, meticulously scraping every image, every text, everything important for our curated library of knowledge. it costs pennies to use, and I only have 100 or so vendors, so lets dig deep for everything. when I tried the harvest console tier one feature, I forgot to make sure all the vendors it stepped through had a website to go to. so I am thinking for this enhancement, can we utilize gpt-4o or gemini to find the website for me, so I dont have to enter them all. please log back into supabase so you can query the database and see if there is anything wrong that needs to be fixed. then recon the code to see how it all works currently and how we can make it much better, so I can unleash it and come back when its all done with all of them. can we have it run on the server, continuing itself over and over until it finishes all 100 or so vendors. please read the logs from railway as well. I want this to be a read only, no code edits round. just read, recon, research, and strategy. please let me know your professional opinion about how we can knock out all of my current vendors in as little time as possible. please go above and beyond. follow the standing rules. thank you."
+
+Follow-up: "you are now logged in. please do not break anything. please continue and then let me know your professional plan to enhance and upgrade the feature. follow the standing rules. thank you."
+
+### Findings (read-only; no code, data or Railway settings changed)
+- Why it hung (job 217766fa, Tier 1 refresh, 16 sites, 2026-11-08 10:06Z):
+  - At 10:08:26Z Chromium crashed ("BrowserContext.new_page: Target crashed"). After that, every page failed within 0.1 s.
+  - The last log line is a new Crawl4AI browser start at 10:08:56Z. Nothing followed for about 20 hours.
+- Causes in the code (crawler/app):
+  - fetcher.py starts and stops a whole new Chromium for EVERY page.
+  - There are no Chromium memory flags (--disable-dev-shm-usage), and no timeout on browser start or on a page as a whole.
+  - harvest.py has no time limit per site or per job, and cancel only works between sites. A browser start that hangs therefore holds the single-job lock forever, and the cancel never takes effect.
+  - The LLM call, the robots/httpx calls and the rate-limit time.sleep are synchronous inside async code. They block the server, which is why a status poll took 8.3 s.
+- Job and resume state live in /tmp/greenway-crawl-cache. A restart or redeploy loses them unless a volume is attached.
+- The 20 SKIPPED Railway deploys are expected: no commit since 070b663 touched crawler/.
+- The console is far too shallow:
+  - Tier 1 is set to 25 pages, and the back-office settings cap it at 50, although the worker allows 120.
+  - 10 of 27 sites stopped at "BUDGET REACHED", with 63, 62, 110, 133, 182 and 110 pages left unread. Nothing continues them automatically.
+- Some "COMPLETE" results are false. Blue Roots: 1 page read, 0 links found (a JavaScript or age-gate shell). Evergreen: 3 pages read.
+- Websites:
+  - 107 vendors have stock on hand (108 have lots). Only 30 have a website.
+  - 77 have none, and none of their brands, matched discovery leads or social_json fill the gap.
+- Data hygiene:
+  - Duplicate vendor rows share a site (Blue Roots x2, Quality Green Tree x2, Klaritie x2, Edgemont x2).
+  - The console lists every vendor with a website (1,784 rows), not the 107 that have inventory.
+- Drafts: 183 vendor drafts and 3,971 product drafts are pending review.
+- Railway: this browser login has 0 projects, so the crawler service is under another account. The owner's uploaded report was used.
+### Strategy (proposed, not built)
+See docs/sop-program/D219-harvest-strategy.md.
