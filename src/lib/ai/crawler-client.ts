@@ -426,6 +426,152 @@ export async function resumeHarvestJob(jobId: string): Promise<HarvestJob | null
   return data.job;
 }
 
+/* ------------------------------------------------------------------ *
+ * D220 — durable crawl CAMPAIGNS (crawl each site until complete, catalog
+ * every page + image, match images to product cards) and the WEBSITE
+ * FINDER (OpenAI web search + homepage verification). State lives in the
+ * kb_crawl_* / vendor_website_candidates tables (migration 0351), so the
+ * board reads the DB directly; these calls only start/stop work.
+ * ------------------------------------------------------------------ */
+
+export type CampaignTargetInput = {
+  entity_type: "vendor" | "brand";
+  entity_id: string;
+  vendor_id?: string | null;
+  display_name?: string;
+  url: string;
+};
+
+export type CampaignOptionsInput = {
+  write?: boolean;
+  feeds?: boolean;
+  vision?: boolean;
+  page_ai?: boolean;
+  parallel_sites?: number;
+  slice_pages?: number;
+  max_pages_per_site?: number;
+  vision_max_images?: number;
+  page_ai_max_pages?: number;
+};
+
+export type CrawlCampaign = {
+  id: string;
+  label: string;
+  scope: string;
+  status: "queued" | "running" | "paused" | "completed" | "cancelled" | "failed";
+  totals?: Record<string, number>;
+  running_here?: boolean;
+  skipped?: { display_name?: string; url?: string; reason: string }[];
+};
+
+async function campaignJson<T>(path: string, init?: RequestInit, timeoutMs = 20_000): Promise<T> {
+  const res = await harvestFetch(path, init, timeoutMs);
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  return (await res.json()) as T;
+}
+
+/** Start a durable campaign (returns immediately; progress is in kb_crawl_sites). */
+export async function startCampaign(input: {
+  label: string;
+  scope: "current_vendors" | "all_vendors" | "custom" | "single";
+  targets: CampaignTargetInput[];
+  options?: CampaignOptionsInput;
+  createdBy?: string | null;
+}): Promise<CrawlCampaign> {
+  const data = await campaignJson<{ ok: boolean; campaign: CrawlCampaign }>("/campaigns", {
+    method: "POST",
+    body: JSON.stringify({
+      label: input.label.slice(0, 200),
+      scope: input.scope,
+      targets: input.targets,
+      options: input.options ?? {},
+      created_by: input.createdBy ?? null,
+    }),
+  });
+  return data.campaign;
+}
+
+export async function cancelCampaign(id: string): Promise<CrawlCampaign> {
+  const data = await campaignJson<{ ok: boolean; campaign: CrawlCampaign }>(
+    `/campaigns/${encodeURIComponent(id)}/cancel`,
+    { method: "POST" },
+  );
+  return data.campaign;
+}
+
+export async function resumeCampaign(id: string): Promise<CrawlCampaign> {
+  const data = await campaignJson<{ ok: boolean; campaign: CrawlCampaign }>(
+    `/campaigns/${encodeURIComponent(id)}/resume`,
+    { method: "POST" },
+  );
+  return data.campaign;
+}
+
+/** Re-run image → product matching for one site (after new products were added). */
+export async function rematchCampaignSite(siteId: string): Promise<{ products: number; imagesMatched: number }> {
+  const data = await campaignJson<{ ok: boolean; products?: number; images_matched?: number }>(
+    `/campaigns/sites/${encodeURIComponent(siteId)}/rematch`,
+    { method: "POST" },
+    60_000,
+  );
+  return { products: data.products ?? 0, imagesMatched: data.images_matched ?? 0 };
+}
+
+export type WebsiteFinderVendorInput = {
+  vendor_id: string;
+  name: string;
+  legal_name?: string;
+  dba?: string;
+  license_number?: string;
+  city?: string;
+};
+
+export type WebsiteFinderJob = {
+  id: string;
+  status: "running" | "completed" | "cancelled";
+  total: number;
+  done: number;
+  found: number;
+  verified: number;
+  written: number;
+  errors: string[];
+  results: {
+    vendor_id: string;
+    name: string;
+    candidates: number;
+    best_url: string | null;
+    best_status: string | null;
+    best_confidence: number | null;
+  }[];
+  started_at: string;
+  finished_at: string | null;
+  use_ai: boolean;
+};
+
+/** Search + verify websites for vendors without one. Results land as PENDING candidates. */
+export async function findVendorWebsites(input: {
+  vendors: WebsiteFinderVendorInput[];
+  useAi?: boolean;
+}): Promise<WebsiteFinderJob> {
+  const data = await campaignJson<{ ok: boolean; job: WebsiteFinderJob }>("/websites/find", {
+    method: "POST",
+    body: JSON.stringify({ vendors: input.vendors, use_ai: input.useAi ?? true, write: true }),
+  });
+  return data.job;
+}
+
+export async function listWebsiteFinderJobs(): Promise<WebsiteFinderJob[]> {
+  const data = await campaignJson<{ ok: boolean; jobs: WebsiteFinderJob[] }>("/websites/jobs");
+  return data.jobs ?? [];
+}
+
+export async function cancelWebsiteFinderJob(id: string): Promise<WebsiteFinderJob | null> {
+  const res = await harvestFetch(`/websites/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  return ((await res.json()) as { job: WebsiteFinderJob }).job;
+}
+
 async function safeDetail(res: Response): Promise<string> {
   try {
     const data = (await res.json()) as { detail?: string };

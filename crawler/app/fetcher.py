@@ -13,7 +13,9 @@ steps can do CSS-first extraction (HTML) and LLM extraction (markdown).
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import logging
 import ipaddress
 import json
 import random
@@ -30,6 +32,8 @@ import httpx
 from .config import Settings, get_settings
 from .http_identity import browser_headers, pick_user_agent
 from .image_urls import best_image_url, is_placeholder_url, parse_srcset
+
+log = logging.getLogger("greenway.crawler.fetch")
 
 # Per-domain last-fetch timestamps for rate limiting (process-local).
 _last_fetch_at: dict[str, float] = {}
@@ -53,19 +57,53 @@ def _domain(url: str) -> str:
     return urlparse(url).netloc.lower()
 
 
+# D220: hosts admitted at runtime by a crawl CAMPAIGN. A campaign's entry URLs
+# come from vendors.website values that staff entered or approved in the back
+# office (never from page content), so they are trusted the same way the static
+# CRAWL_ALLOW_DOMAINS list is. Links on those sites to OTHER hosts are still
+# refused unless they are allow-listed. The SSRF guard always runs first.
+_dynamic_allow: set[str] = set()
+
+
+def _bare_host(host: str) -> str:
+    host = (host or "").lower().strip()
+    host = host.rsplit(":", 1)[0] if ":" in host and not host.endswith("]") else host
+    return host[4:] if host.startswith("www.") else host
+
+
+def allow_hosts(hosts: list[str] | set[str]) -> None:
+    """Admit campaign hosts (bare hostnames or URLs) for this process."""
+    for h in hosts:
+        h = (h or "").strip()
+        if "://" in h:
+            h = urlparse(h).netloc
+        h = _bare_host(h)
+        if h:
+            _dynamic_allow.add(h)
+
+
+def dynamic_allowed_hosts() -> list[str]:
+    return sorted(_dynamic_allow)
+
+
 def domain_allowed(settings: Settings, url: str) -> bool:
     """If an allow-list is configured, only those hosts may be researched.
 
     In DEVELOPMENT an empty allow-list allows whatever host the operator
     submits (the operator is a trusted staff member typing a URL into the back
     office). In PRODUCTION (CRAWLER_ENV=production) an allow-list is REQUIRED
-    (S-5): with none configured, every fetch is refused."""
-    allow = settings.allow_domains
-    if not allow:
-        return not settings.is_production
+    (S-5): with none configured, every fetch is refused — except hosts a
+    staff-started campaign admitted via `allow_hosts` (D220)."""
     host = _domain(url)
     # Strip a :port suffix so "host:8080" still matches the allow-list entry.
     host = host.rsplit(":", 1)[0] if ":" in host and not host.endswith("]") else host
+    if _dynamic_allow:
+        bare = _bare_host(host)
+        if any(bare == d or bare.endswith("." + d) for d in _dynamic_allow):
+            return True
+    allow = settings.allow_domains
+    if not allow:
+        return not settings.is_production
     return any(host == d or host.endswith("." + d) for d in allow)
 
 
@@ -221,6 +259,20 @@ def _respect_rate_limit(settings: Settings, url: str) -> None:
     if wait > 0:
         time.sleep(wait)
     _last_fetch_at[dom] = time.time()
+
+
+async def _respect_rate_limit_async(settings: Settings, url: str) -> None:
+    """D220: the same per-domain politeness gap, without blocking the server.
+
+    The slot is RESERVED before sleeping, so two concurrent fetches to one
+    domain queue up (gap, then gap again) instead of both firing at once."""
+    dom = _domain(url)
+    now = time.time()
+    slot = max(now, _last_fetch_at.get(dom, 0.0) + settings.crawl_min_delay_seconds)
+    _last_fetch_at[dom] = slot
+    wait = slot - now
+    if wait > 0:
+        await asyncio.sleep(wait)
 
 
 # Lazy-load attributes used by the common gallery/lightbox/theme libraries
@@ -479,25 +531,36 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
     and the caller falls back to httpx when the browser path fails entirely.
     """
     try:
+        import crawl4ai as _c4  # type: ignore
         from crawl4ai import AsyncWebCrawler  # type: ignore
     except Exception:
         return None
+    from .browser_pool import POOL, is_crash_error
+
+    # D220: every browser step is bounded. The page_timeout inside crawl4ai is
+    # advisory; this outer ceiling is the one that can't be ignored.
+    arun_timeout = max(15.0, float(settings.crawl_page_timeout_seconds) + 30.0)
     try:
         ua = pick_user_agent(
             realistic=settings.crawl_realistic_headers,
             fallback=settings.crawl_user_agent,
         )
-        crawler_kwargs: dict = {"headless": True, "verbose": False}
-        # Route the real browser through the optional egress proxy if configured.
-        if settings.proxy_url:
-            crawler_kwargs["proxy"] = settings.proxy_url
-        async with AsyncWebCrawler(**crawler_kwargs) as crawler:
+        # D220: borrow the ONE shared, self-healing browser (no per-page
+        # Chromium start/stop — that churn is what crashed on Railway).
+        async with POOL.session(AsyncWebCrawler, _c4, settings) as crawler:
             result = None
             run_config = _crawl4ai_run_config(settings)
             if run_config is not None:
                 try:
-                    result = await crawler.arun(url=url, config=run_config, user_agent=ua)
-                except Exception:
+                    result = await asyncio.wait_for(
+                        crawler.arun(url=url, config=run_config, user_agent=ua),
+                        timeout=arun_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    result = None  # hung render → legacy arun gets one bounded try
+                except Exception as e:
+                    if is_crash_error(e):
+                        raise  # the browser died → pool restarts it; httpx fallback
                     result = None  # advanced path unsupported → legacy arun below
             # C7: fall back to the plain legacy arun when the advanced run is
             # missing/empty OR came back as a thin shell (age-gate/overlay
@@ -517,12 +580,15 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
                 or _looks_like_thin_shell(adv_html, str(adv_md))
             )
             if need_fallback:
-                legacy = await crawler.arun(
-                    url=url,
-                    user_agent=ua,
-                    # fit_markdown prunes boilerplate to the meaningful content.
-                    word_count_threshold=10,
-                    bypass_cache=True,
+                legacy = await asyncio.wait_for(
+                    crawler.arun(
+                        url=url,
+                        user_agent=ua,
+                        # fit_markdown prunes boilerplate to the meaningful content.
+                        word_count_threshold=10,
+                        bypass_cache=True,
+                    ),
+                    timeout=arun_timeout,
                 )
                 # Keep whichever run produced the most real content \u2014 never let
                 # the fallback REGRESS a good advanced result (defensive).
@@ -549,7 +615,11 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
             html=html, markdown=str(markdown),
             image_urls=_extract_image_urls(html, url) if html else [],
         )
+    except asyncio.TimeoutError:
+        return FetchResult(url=url, ok=False, error="crawl4ai: timed out")
     except Exception as e:  # pragma: no cover - browser env dependent
+        if is_crash_error(e):
+            POOL.mark_current_broken(e)
         return FetchResult(url=url, ok=False, error=f"crawl4ai: {e}")
 
 
@@ -614,9 +684,30 @@ async def fetch_page(
     can't mask the fix on a re-crawl. Robots + SSRF + rate-limit are unchanged.
     """
     settings = settings or get_settings()
+    hard = max(10.0, float(settings.crawl_page_hard_timeout_seconds))
+    try:
+        res = await asyncio.wait_for(
+            _fetch_page_inner(url, prefer_browser=prefer_browser, settings=settings,
+                              force_fresh=force_fresh),
+            timeout=hard,
+        )
+    except asyncio.TimeoutError:
+        log.warning("fetch: %s abandoned after %.0fs hard ceiling", url, hard)
+        return FetchResult(url=url, ok=False, error=f"timed out after {hard:.0f}s")
+    return res
 
+
+async def _fetch_page_inner(
+    url: str,
+    *,
+    prefer_browser: bool,
+    settings: Settings,
+    force_fresh: bool,
+) -> FetchResult:
+    started = time.time()
     # S-5: SSRF guard first (scheme + private/loopback/link-local addresses)…
-    safe, reason = url_is_safe(url)
+    # D220: DNS resolution happens in a worker thread — never on the event loop.
+    safe, reason = await asyncio.to_thread(url_is_safe, url)
     if not safe:
         return FetchResult(url=url, ok=False, error=f"unsafe URL: {reason}")
 
@@ -632,17 +723,19 @@ async def fetch_page(
         if cached:
             return cached
 
-    if not _robots_allows(settings, url):
+    if not await asyncio.to_thread(_robots_allows, settings, url):
         return FetchResult(url=url, ok=False, error="blocked by robots.txt")
 
-    _respect_rate_limit(settings, url)
+    await _respect_rate_limit_async(settings, url)
 
     res: FetchResult | None = None
     if prefer_browser:
         res = await _fetch_with_crawl4ai(settings, url)
     if res is None or not res.ok:
-        # crawl4ai missing or failed → plain HTTP fallback.
-        res = _fetch_with_httpx(settings, url)
+        # crawl4ai missing or failed → plain HTTP fallback (off the event loop).
+        res = await asyncio.to_thread(_fetch_with_httpx, settings, url)
 
+    log.info("fetch %s ok=%s status=%s %.1fs%s", url, res.ok, res.status,
+             time.time() - started, f" err={res.error[:120]}" if res.error else "")
     _write_cache(settings, res)
     return res

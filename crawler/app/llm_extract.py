@@ -15,6 +15,7 @@ from typing import Type, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from .ai_client import AiUnavailable, chat_json
 from .config import Settings, get_settings
 
 T = TypeVar("T", bound=BaseModel)
@@ -97,13 +98,26 @@ def extract_with_llm(
     if not settings.ai_enabled or not page_text.strip():
         return None
     try:
-        raw = _call_model(settings, _SYSTEM, _build_user_prompt(model, page_text, hint))
-        parsed = _parse_json(raw)
+        # D220: one bounded caller with the model fallback chain + usage tally.
+        parsed = chat_json(settings, _SYSTEM, _build_user_prompt(model, page_text, hint))
         return model.model_validate(parsed)
-    except (httpx.HTTPError, json.JSONDecodeError, ValidationError, KeyError):
+    except (AiUnavailable, httpx.HTTPError, json.JSONDecodeError, ValidationError, KeyError):
         return None
     except Exception:
         return None
+
+
+async def extract_with_llm_async(
+    model: Type[T],
+    page_text: str,
+    hint: str,
+    *,
+    settings: Settings | None = None,
+) -> T | None:
+    """D220: same as extract_with_llm, off the event loop (never blocks /health)."""
+    import asyncio
+
+    return await asyncio.to_thread(extract_with_llm, model, page_text, hint, settings=settings)
 
 
 # ---------------------------------------------------------------------------

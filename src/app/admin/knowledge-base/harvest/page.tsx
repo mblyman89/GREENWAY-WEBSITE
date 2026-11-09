@@ -121,6 +121,13 @@ export default async function HarvestConsolePage({
 
       <div className="px-5 py-6 sm:px-8 space-y-8">
         <KbFlash msg={msg} error={error} />
+        <a
+          href="/admin/knowledge-base/campaigns"
+          className="block rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5 px-4 py-3 text-sm text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/10"
+        >
+          New: <strong>Crawl Campaigns</strong> — crawl every current vendor until each site is complete, with page-by-page
+          and image-by-image cataloguing and image → product-card matching →
+        </a>
 
         {/* Worker status */}
         <div

@@ -27,8 +27,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import logging
 import time
+import inspect
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -56,6 +58,9 @@ _tasks: dict[str, asyncio.Task] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 # Single-flight: only one job crawls at a time; others queue on this lock.
 _run_lock = asyncio.Lock()
+# D220: last sign of life per running job (wall clock) — read by /health and
+# the watchdog so a stuck job is visible instead of silent.
+_heartbeat: dict[str, float] = {}
 
 
 @dataclass
@@ -141,7 +146,12 @@ def save_job(job: JobState, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     payload = asdict(job)
     try:
-        _job_file(settings, job.id).write_text(json.dumps(payload), "utf-8")
+        # D220: atomic replace — a concurrent reader (the status endpoint)
+        # never sees a half-written file (that surfaced as a spurious 404).
+        target = _job_file(settings, job.id)
+        tmp = target.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+        tmp.write_text(json.dumps(payload), "utf-8")
+        os.replace(tmp, target)
     except Exception:  # pragma: no cover - disk-full etc.; job keeps running
         log.exception("could not persist job %s", job.id)
 
@@ -253,8 +263,19 @@ def create_job(
     return job
 
 
+
+def _supported_kwargs(fn, kwargs: dict) -> dict:
+    """D220: pass only the kwargs ``fn`` accepts (keeps older/test fakes working)."""
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return kwargs
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        return kwargs
+    return {k: v for k, v in kwargs.items() if k in sig.parameters}
+
 def request_cancel(job_id: str, settings: Settings | None = None) -> JobState | None:
-    """Flag a job for cancellation (takes effect between targets)."""
+    """Flag a job for cancellation (D220: takes effect before the next page)."""
     settings = settings or get_settings()
     job = load_job(job_id, settings)
     if job is None:
@@ -325,8 +346,9 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
         for t in job.targets:
             if t.status != "pending":
                 continue
-            # Cancellation is honored BETWEEN targets — a site is either fully
-            # researched or untouched, never half-written.
+            # Cancellation is checked between targets AND (D220) before every
+            # page inside a site; a cancelled site keeps whatever it already
+            # read (resume state is persisted), nothing is half-written.
             fresh = load_job(job_id, settings)
             if (cancel_ev and cancel_ev.is_set()) or (fresh and fresh.cancel_requested):
                 job.cancel_requested = True
@@ -338,8 +360,19 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
 
             t.status = "running"
             save_job(job, settings)
+            _heartbeat[job_id] = time.time()
+
+            def _stop_now(_ev=cancel_ev) -> bool:
+                # D220: polled before EVERY page — cancel works mid-site now.
+                _heartbeat[job_id] = time.time()
+                return bool(_ev and _ev.is_set())
+
+            slice_s = max(60.0, float(settings.crawl_slice_timeout_seconds))
             try:
-                result = await research_target(
+                # D220: a soft deadline (stop reading, keep what we have) plus
+                # a HARD outer ceiling — no single site can ever hold the
+                # job lock forever again (the D219 20-hour hang).
+                rt_kwargs = _supported_kwargs(research_target, dict(
                     url=t.url,
                     entity_type=t.entity_type,
                     entity_id=t.entity_id,
@@ -348,6 +381,12 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                     max_pages=job.max_pages_per_site,
                     force_fresh=job.force_fresh,
                     continue_crawl=job.continue_crawl,
+                    should_stop=_stop_now,
+                    deadline=time.monotonic() + slice_s,
+                ))
+                result = await asyncio.wait_for(
+                    research_target(**rt_kwargs),
+                    timeout=slice_s + 600.0,
                 )
                 t.pages = len(result.pages)
                 # C4: surface the crawl's completeness verdict on the target.
@@ -363,7 +402,9 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                     t.error = result.error or "fetch failed"
                 else:
                     if job.write:
-                        summary = write_drafts(result_to_draft_rows(result), settings=settings)
+                        summary = await asyncio.to_thread(
+                            write_drafts, result_to_draft_rows(result), settings=settings,
+                        )
                         t.drafts_written = summary.get("written", 0)
                         t.drafts_skipped = summary.get("skipped", 0)
                         # H9b: also stage structured kb_products DRAFT rows from
@@ -375,11 +416,26 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                                 entity_id=result.entity_id,
                                 display_name=result.display_name,
                                 source_url=result.url,
-                                banned=fetch_banned_phrases(settings),
+                                banned=await asyncio.to_thread(fetch_banned_phrases, settings),
                             )
-                            prod = write_product_drafts(built.rows, settings=settings)
+                            prod = await asyncio.to_thread(
+                                write_product_drafts, built.rows, settings=settings,
+                            )
                             t.products_written = prod.get("written", 0)
                     t.status = "done"
+            except asyncio.CancelledError:
+                # D220: the watchdog (or shutdown) cancelled us mid-site. Put the
+                # site back in the queue and persist, so it resumes cleanly.
+                t.status = "pending"
+                t.error = "interrupted (watchdog/shutdown) — will resume"
+                job.status = "stalled"
+                save_job(job, settings)
+                _heartbeat.pop(job_id, None)
+                raise
+            except asyncio.TimeoutError:
+                t.status = "failed"
+                t.error = f"site exceeded the {int(slice_s + 600)}s hard ceiling — skipped"
+                log.error("harvest %s: target %s hit the hard ceiling", job.id, t.url)
             except Exception as e:  # noqa: BLE001 — one bad site never kills the batch
                 t.status = "failed"
                 t.error = str(e)[:300]
@@ -407,5 +463,74 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
         job.status = "completed"
         job.finished_at = time.time()
         save_job(job, settings)
+        _heartbeat.pop(job_id, None)
         log.info("harvest %s: completed — %s", job.id, job.counts())
         return job
+
+
+# --- D220: watchdog ----------------------------------------------------------
+_stall_flags: dict[str, int] = {}
+
+
+def watchdog_tick(settings: Settings | None = None, *, now: float | None = None) -> list[dict]:
+    """Inspect every running job's heartbeat ONCE. Returns what it did.
+
+    • quiet for > CRAWL_STALL_SECONDS  → the shared browser is marked broken
+      (the next page gets a fresh Chromium — the usual cure for a wedged page);
+    • quiet for > 2 × CRAWL_STALL_SECONDS → the job task is cancelled; the
+      running target goes back to 'pending' so /harvest/{id}/resume (or the
+      campaign runner) picks up exactly where it stopped.
+    Pure bookkeeping + asyncio.Task.cancel — safe to call from any loop tick."""
+    from .browser_pool import POOL
+
+    settings = settings or get_settings()
+    now = time.time() if now is None else now
+    stall = max(30.0, float(settings.crawl_stall_seconds))
+    actions: list[dict] = []
+    for job_id, beat in list(_heartbeat.items()):
+        task = _tasks.get(job_id)
+        if task is None or task.done():
+            _heartbeat.pop(job_id, None)
+            _stall_flags.pop(job_id, None)
+            continue
+        quiet = now - beat
+        if quiet <= stall:
+            _stall_flags.pop(job_id, None)
+            continue
+        level = _stall_flags.get(job_id, 0)
+        if quiet > 2 * stall and level < 2:
+            task.cancel()
+            _stall_flags[job_id] = 2
+            actions.append({"job_id": job_id, "action": "cancelled_task", "quiet_s": round(quiet)})
+            log.error("watchdog: job %s silent %.0fs — task cancelled (resumable)", job_id, quiet)
+        elif level < 1:
+            POOL.mark_current_broken(f"watchdog: job {job_id} silent {quiet:.0f}s")
+            _stall_flags[job_id] = 1
+            actions.append({"job_id": job_id, "action": "browser_recycled", "quiet_s": round(quiet)})
+            log.warning("watchdog: job %s silent %.0fs — browser recycled", job_id, quiet)
+    return actions
+
+
+def heartbeat_snapshot(now: float | None = None) -> dict:
+    now = time.time() if now is None else now
+    return {jid: round(now - beat, 1) for jid, beat in _heartbeat.items()}
+
+
+def resume_stalled_jobs(settings: Settings | None = None) -> list[str]:
+    """D220: re-queue jobs the watchdog interrupted (status 'stalled').
+
+    Called from the watchdog loop, so a wedged site costs minutes, not a day."""
+    settings = settings or get_settings()
+    resumed: list[str] = []
+    for job in list_jobs(50, settings):
+        if job.status != "stalled":
+            continue
+        task = _tasks.get(job.id)
+        if task is not None and not task.done():
+            continue
+        fresh = prepare_resume(job.id, settings)
+        if fresh is not None and fresh.status == "queued":
+            schedule_job(fresh.id, settings)
+            resumed.append(fresh.id)
+            log.warning("watchdog: re-queued stalled job %s", fresh.id)
+    return resumed

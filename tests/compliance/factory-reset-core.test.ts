@@ -1357,7 +1357,9 @@ describe("D-65 — the connections survive the reset", () => {
     // D177 S6: +2 KEEP label_templates, label_print_log (0342; owner configuration + append-only print history).
     // PERF round: +1 KEEP product_latest_facts (0344; derived lookup, emptied by its own TRUNCATE trigger with menu_items).
     // D198 S1: +1 KEEP atm_drop_reviews (0346; the owner's append-only ATM drop sign-offs, no FK).
-    expect(plan.keep.length).toBe(199);
+    // D220 S3: +5 KEEP kb_crawl_campaigns, kb_crawl_sites, kb_crawl_pages, kb_crawl_images (kb_ prefix rule)
+    // and vendor_website_candidates (0351; crawler reference catalog about vendors, no FK into a wiped table).
+    expect(plan.keep.length).toBe(204);
     expect(plan.wipe.length).toBe(139);
   });
 

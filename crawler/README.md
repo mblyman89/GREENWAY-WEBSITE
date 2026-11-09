@@ -112,6 +112,65 @@ discovery still work) when crawl4ai < 0.7 is installed or the seeder errors —
 it can never break a crawl. `pip install -r requirements.txt` now pulls a
 seeder-capable crawl4ai.
 
+## Crawl campaigns: harvest every vendor to the end (D220)
+
+A **campaign** is one run of "crawl these vendors' websites until every site is finished". It replaces the
+single-pass Tier 1 harvest for deep work.
+
+**How a campaign runs**
+- The state lives in Supabase, not in `/tmp`. A redeploy or crash does not lose it.
+- The tables are `kb_crawl_campaigns`, `kb_crawl_sites`, `kb_crawl_pages` and `kb_crawl_images` (migration 0351).
+- Each site is read in **slices** of `CAMPAIGN_SLICE_PAGES` pages. After every slice the remaining frontier is
+  saved, so the next slice continues where it stopped, up to `CAMPAIGN_MAX_PAGES_PER_SITE`.
+- When the worker boots, it resumes running campaigns (`CAMPAIGN_AUTO_RESUME`).
+
+**What each page and image gets**
+- **Pages:** each page is classified (product / category / about / lab / ...).
+- **Feeds:** the public product feed is read as well (Shopify `/products.json`, the WooCommerce Store API). A
+  JavaScript or age-gate shell therefore no longer reports a false "COMPLETE".
+- **Images:** every image is catalogued with its role, product, strain, category, packaging text, tags and colors.
+  The vision labels are optional, capped by `CAMPAIGN_VISION_MAX_IMAGES_PER_SITE`.
+- **Matching:** each image is scored against the vendor's product cards (`app/catalog.py`). Names are compared
+  number-aware, so "Gelato 33" never matches "Gelato 41". The best match is stored for review in the back office
+  (Knowledge Base → Crawl Campaigns → Image catalog).
+
+**Reliability**
+- **One browser:** a single shared Chromium (`app/browser_pool.py`), recycled every `CRAWL_BROWSER_RECYCLE_PAGES`
+  pages.
+- **Timeouts:** bounded browser start, page, slice and AI calls.
+- **Cancel:** works in the middle of a site.
+- **Watchdog:** a stalled run is cancelled and retried, up to `CAMPAIGN_MAX_SITE_ATTEMPTS` per site.
+
+**Website finder (`app/website_finder.py`)**
+- For vendors with no website, OpenAI web search (`AI_SEARCH_MODEL`) proposes candidates.
+- Every candidate is fetched and verified: vendor name, license number and WA / cannabis evidence. Marketplaces
+  (Leafly, Weedmaps, Dutchie, ...) are refused.
+- Candidates land in `vendor_website_candidates` for approval. Nothing is written to a vendor card without approval.
+
+**Endpoints (all require `X-Crawler-Secret`)**
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /campaigns` | Start a campaign. Body: `{label, scope, targets:[{entity_type, entity_id, vendor_id?, display_name, url}], options}` |
+| `GET /campaigns` and `GET /campaigns/{id}` | List campaigns and read their progress |
+| `POST /campaigns/{id}/cancel` and `/resume` | Stop or resume a campaign |
+| `POST /campaigns/sites/{site_id}/rematch` | Re-score one site's images against the current product cards |
+| `POST /websites/find` | Find websites. Body: `{vendors:[{vendor_id, name, legal_name?, dba?, license_number?, city?}]}` |
+| `GET /websites/jobs`, `GET /websites/jobs/{id}` and `POST /websites/jobs/{id}/cancel` | List, read and cancel finder jobs |
+
+**Environment (defaults in brackets)**
+
+| Setting | Variables |
+|---|---|
+| Campaigns | `CAMPAIGN_ENABLED` [true], `CAMPAIGN_PARALLEL_SITES` [3], `CAMPAIGN_SLICE_PAGES` [60], `CAMPAIGN_MAX_PAGES_PER_SITE` [1500], `CAMPAIGN_POLL_SECONDS` [20], `CAMPAIGN_AUTO_RESUME` [true], `CAMPAIGN_MAX_SITE_ATTEMPTS` [3], `CAMPAIGN_FEEDS_ENABLED` [true] |
+| AI labelling | `CAMPAIGN_VISION_ENABLED` [true], `CAMPAIGN_VISION_MAX_IMAGES_PER_SITE` [400], `CAMPAIGN_PAGE_AI_ENABLED` [true], `CAMPAIGN_PAGE_AI_MAX_PAGES` [250] |
+| Browser | `CRAWL_PARALLEL_PAGES` [4], `CRAWL_BROWSER_RECYCLE_PAGES` [40] |
+| Timeouts | `CRAWL_BROWSER_START_TIMEOUT_SECONDS` [45], `CRAWL_PAGE_TIMEOUT_SECONDS` [90], `CRAWL_PAGE_HARD_TIMEOUT_SECONDS` [150], `CRAWL_SLICE_TIMEOUT_SECONDS` [1500], `CRAWL_STALL_SECONDS` [600], `AI_TIMEOUT_SECONDS` [60] |
+| Models | `AI_MODEL` [gpt-4o-mini], `AI_VISION_MODEL` [= AI_MODEL], `AI_SEARCH_MODEL` [gpt-6-luna], `AI_FALLBACK_MODELS` [gpt-6-luna,gpt-4o-mini]. The first model the account can use wins. gpt-4o-mini shuts down 2027-01-14. |
+
+On an 8 GB Railway service, `CAMPAIGN_PARALLEL_SITES=3`–`4` with `CRAWL_PARALLEL_PAGES=4` is comfortable. Attach a
+volume and set `CRAWL_CACHE_DIR` to it, so the page cache also survives a redeploy.
+
 ## Quick start
 
 For a temporary desktop / work-VM test, start with **[`docs/LOCAL_TESTING_GUIDE.md`](docs/LOCAL_TESTING_GUIDE.md)**.

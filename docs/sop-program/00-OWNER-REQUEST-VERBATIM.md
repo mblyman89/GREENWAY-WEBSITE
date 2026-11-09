@@ -2022,3 +2022,114 @@ Follow-up: "you are now logged in. please do not break anything. please continue
 - Railway: this browser login has 0 projects, so the crawler service is under another account. The owner's uploaded report was used.
 ### Strategy (proposed, not built)
 See docs/sop-program/D219-harvest-strategy.md.
+
+## D220 — Finish merging vendors + Crawler v2: campaigns that crawl every vendor to the end, website finder, image catalog (2026-11-09)
+### Verbatim
+"thank you. I have restarted the crawler now. lets get started building all enhancements in the order you think is best. lets stick with openAI. my railway account says I have access to 8GB of RAM and up to 100GB of shared disk if that helps. I thought I had merged the remaining duplicate vendors. can you help me finish merging all the vendors. then get to work making the new vendor crawler so much more amazing. please work through every task, slice by slice, do not stop until it is all done. report back with a summary report of whats been done, and what I need to do to test it. please go above and beyond for me, we need this to be fantastic so we can have as much detail as possible for our vendor profiles. please do your best to tag and label and catalog everything so it is easy to match images to product cards. please make it as incredibly inteligent as possible. follow the standing rules. thank you."
+
+Follow-ups: "Please continue. Follow the standing rules. Thank you." (several times).
+
+### Findings
+- **Vendor merges were incomplete.** The earlier merge (0104) moved only the foreign keys it knew about. After that:
+  - 240 inventory lots, 41 manifests, 244 knowledge-base products and 627 catalog drafts were still on cards marked
+    "Merged into …".
+  - Every new intake on an old card made another orphan, because nothing redirected it.
+- **Three merges were unfinished:**
+  - Alpha Crux 412306: half-merged and still published.
+  - FIREBROS 416025 / Fire Bros. 425450.
+  - BOTANICA SEATTLE 412724 / Botanica Seattle 412723.
+- **Two pairs look like the same company but are not certain.** Neither was merged:
+  - CLARITY FARMS cce1e12a (Monroe, 412901) / Clarity Farms f3234d2a (Othello, 419690, clarityfarms.net). Different
+    cities, so possibly different licensees.
+  - Everigreene c25873f0 (431776) / EVERI GREENE 99baf1a9 (412840, Stanwood).
+- **Different companies:** CERES / Ceres Garden, GREENLEAF GROWERS / GREENLEAF INDUSTRIES, and the two High End cards.
+  These must not be merged.
+- **The D219 hang causes** (a new Chromium per page, no timeouts, cancel only between sites, blocking calls, state in
+  /tmp) are fixed by S2 and S3, as listed below.
+- **OpenAI:** gpt-4o-mini shuts down 2027-01-14, and its named replacement is gpt-6-luna. Both are used, behind a
+  fallback chain.
+
+### Decisions
+- OpenAI only (owner). The models are AI_MODEL (gpt-4o-mini), AI_SEARCH_MODEL (gpt-6-luna) and AI_FALLBACK_MODELS
+  (gpt-6-luna,gpt-4o-mini). The first model the account can use wins.
+- Merges are never destructive:
+  - Nothing is deleted.
+  - Banking, ACH, payee and e-sign rows are reported, never moved.
+  - A manifest keeps its original license text, so CCRS transfer reports do not change.
+- The Clarity and Everigreene pairs are left for the owner to decide. The Merge screen now uses merge_vendors_v2, so
+  either is one click once decided.
+- Websites found by AI are only **proposals** (vendor_website_candidates). A human approves each one before it is
+  written to a vendor card. Marketplaces are refused.
+- An image is attached to a product card only when a human presses "Put on card". The AI only suggests.
+- Campaign state lives in Supabase, not /tmp, so a redeploy loses nothing. 8 GB RAM means 3–4 sites in parallel with
+  4 pages at a time is safe.
+
+### As built (branch feat/d220-vendor-merge-crawler-v2)
+- **S1: migration 0350 (vendor merge v2)**
+  - New pieces:
+    - `vendors.merged_into_id` / `merged_at`, backfilled from the merge notes and chain-resolved.
+    - `vendor_survivor_id()`.
+    - `vendor_repoint_references()`: every FK to vendors, read from the catalog, unique-conflict safe.
+    - `merge_vendors_v2()`.
+    - `trg_vendor_follow_merge` on 17 operational tables: a row written to a merged card lands on the survivor.
+    - `sweep_merged_vendor_rows()`.
+  - Finishes the three merges and sweeps the orphans.
+  - Intake (TS) resolves the surviving card.
+  - Rollback and pg-check included.
+- **S2: crawler hardening**
+  - `browser_pool.py`: one shared, self-healing Chromium with memory flags, a start timeout, recycling every 40 pages,
+    and a restart on crash.
+  - Hard timeouts per page, slice and AI call.
+  - Cancel works in the middle of a site.
+  - Blocking calls moved off the event loop.
+  - Watchdog: recycles the browser, then cancels a stalled run.
+  - `ai_client.py`: OpenAI with a model fallback chain and usage counters.
+- **S3: campaigns (migration 0351, `campaign.py`, `campaign_store.py`, `campaign_feeds.py`)**
+  - Tables: `kb_crawl_campaigns`, `kb_crawl_sites`, `kb_crawl_pages`, `kb_crawl_images` and
+    `vendor_website_candidates` (RLS on, service role only). Harvest tier caps raised from 50 to 120.
+  - Crawling:
+    - A site is read in slices (60 pages). The frontier is saved to the database after each slice, and the next
+      slice continues until the site is finished (cap 1,500 pages per site).
+    - Campaigns resume on boot and after a stall, with up to 3 attempts per site.
+    - Campaign hosts are added to the allow-list dynamically.
+  - Shopify `/products.json` and the WooCommerce Store API are read, so JavaScript or age-gate shells are no longer
+    reported as a false "COMPLETE".
+- **S4: intelligence (`catalog.py`, vision pass, page-AI pass, matching)**
+  - Every page is classified (product / category / about / lab / …), with product names, size, category, strain
+    type and THC.
+  - Every image is catalogued:
+    - role (12 roles), product, brand, strain, variant, category, packaging text, tags and colors;
+    - OpenAI vision for up to 400 images per site, with logos and icons skipped.
+  - Each image is matched to the vendor's product cards with a score, reason and alternatives:
+    - Names are compared number-aware, so "Gelato 33" ≠ "Gelato 41".
+    - Ambiguous matches are flagged.
+    - Human decisions are never overwritten.
+    - A site can be re-matched after new cards are added.
+  - Page AI pulls grounded product facts (a fact is kept only if its product name appears on the page). Drafts are
+    written as before for review.
+- **S5: website finder (`website_finder.py`)**
+  - OpenAI web search with marketplaces blocked, falling back to DuckDuckGo.
+  - Every candidate's homepage is fetched and scored: name in the title or text, host-name match, the WSLCB license
+    number on the page, WA signals, cannabis words and an age gate.
+  - Each candidate is marked verified / likely / mismatch / unreachable / marketplace, and saved as pending.
+- **S6: back office (Knowledge Base → Crawl Campaigns)**
+  - **Board:**
+    - "Harvest all current vendors": vendors with stock on hand and an approved website, deduped by host. Options:
+      vision, page AI, parallel sites and a page cap.
+    - A custom picker.
+    - Live progress, AI usage, Stop / Resume, a per-site table and re-match.
+  - **Websites:** "Find websites" for stocked vendors that have none; approve / reject with the evidence shown;
+    manual entry.
+  - **Image catalog:** filters (match, role, site, vendor, search), AI labels, the best match, "Put on card" (imports
+    into the media library and attaches it to the product card) and "Wrong".
+  - Every action is permission-checked and audited.
+- **Tests**
+  - Crawler pytest: 716 passed.
+  - vitest: 1,135 files, all green after the reset-proof pin (20 kb_ tables, all KEEP) and the regenerated DB
+    contract. Includes 17 new core tests.
+  - Scoped tsc and eslint are clean.
+- **Owner to-dos**
+  - Apply 0350, then 0351, and run the checks in docs/MIGRATIONS_TO_RUN.md.
+  - On Railway: keep AI_API_KEY and CRAWL_ALLOW_DOMAINS; attach a volume and set CRAWL_CACHE_DIR; optionally set
+    CAMPAIGN_PARALLEL_SITES=4; redeploy.
+  - Decide the Clarity and Everigreene pairs.

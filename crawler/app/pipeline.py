@@ -13,7 +13,11 @@ found, what was dropped (and why), and what was written — full transparency.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from dataclasses import dataclass, field
+from typing import Awaitable, Callable
 
 from .compliance import check_compliance
 from .prose import build_research_text, field_fit_flags
@@ -23,10 +27,10 @@ from .css_extract import extract_css
 from .discovery import discover_nav_links, discover_sitemap_urls
 from .frontier import CrawlFrontier, discover_pagination_links
 from .logos import detect_logo_candidates
-from .resume_state import clear_resume_state, load_resume_state, save_resume_state
+from .resume_state import ResumeState, clear_resume_state, load_resume_state, save_resume_state
 from .seeding import seed_site_urls
-from .fetcher import fetch_page
-from .llm_extract import extract_with_llm, supported_by_source
+from .fetcher import FetchResult, fetch_page
+from .llm_extract import extract_with_llm_async, supported_by_source
 from .page_intelligence import ImageContext, extract_image_contexts
 from .schemas import ProductExtraction, ProductLine, ProductLineupExtraction, VendorBrandExtraction
 from .social_links import (
@@ -36,6 +40,13 @@ from .social_links import (
     instagram_handle,
 )
 from .store import DraftRow, fetch_banned_phrases
+
+log = logging.getLogger("greenway.crawler.pipeline")
+
+# D220: per-page hook. Called for EVERY successfully read page (entry page
+# included) with (url, FetchResult). Campaigns use it to catalogue pages and
+# images as they arrive; exceptions inside it are logged, never fatal.
+PageHook = Callable[[str, FetchResult], Awaitable[None]]
 
 # Which fields each entity kind can produce, and their human labels.
 VENDOR_BRAND_FIELDS = ["about", "mission_statement", "product_philosophy"]
@@ -88,6 +99,11 @@ class ResearchResult:
     # single-page product lookups and social research, where it's meaningless).
     coverage: CrawlCoverage | None = None
     error: str = ""
+    # D220: frontier state after this run, so campaigns can persist it in the
+    # database (durable across redeploys) and continue in the next slice.
+    pending_urls: list[str] = field(default_factory=list)
+    failed_pages: list[str] = field(default_factory=list)
+    stopped_reason: str = ""  # "" | "cancelled" | "deadline"
 
     @property
     def accepted_drafts(self) -> list[FieldOutcome]:
@@ -193,6 +209,13 @@ async def research_target(
     max_pages: int | None = None,
     force_fresh: bool = False,
     continue_crawl: bool = False,
+    should_stop: Callable[[], bool] | None = None,
+    deadline: float | None = None,
+    on_page: PageHook | None = None,
+    resume_override: ResumeState | None = None,
+    persist_resume: bool = True,
+    prior_corpus: list[tuple[str, str]] | None = None,
+    run_ai: bool = True,
 ) -> ResearchResult:
     """Research one target. `max_pages` (when given) overrides the worker-wide
     CRAWL_MAX_PAGES budget for THIS run only — harvest jobs use it to give
@@ -205,17 +228,53 @@ async def research_target(
     over: previously read pages are pre-marked visited (never re-fetched, no
     wasted time or credits) and the saved leftover queue seeds the frontier,
     so the whole page budget goes to pages no run has read yet. Falls back to
-    a normal fresh crawl when no saved state exists."""
+    a normal fresh crawl when no saved state exists.
+
+    D220 (campaigns + hardening):
+      • `should_stop()` is polled before every page — a cancel takes effect
+        MID-site (pages already read are kept and analysed).
+      • `deadline` (time.monotonic() value): the page loop ends when it
+        passes, leaving the rest of the frontier for the next slice.
+      • `on_page(url, fetched)` runs for every page read (entry included).
+      • `resume_override` injects a frontier state (from the database) instead
+        of the on-disk resume file; `persist_resume=False` skips the file.
+      • `prior_corpus` = (url, text) pairs read by EARLIER slices, so the
+        whole-site AI synthesis on the final slice sees the entire site.
+      • `run_ai=False` skips the corpus-level AI steps (middle slices).
+    """
     settings = settings or get_settings()
+
+    def _must_stop() -> str:
+        if should_stop is not None:
+            try:
+                if should_stop():
+                    return "cancelled"
+            except Exception:  # pragma: no cover - defensive
+                pass
+        if deadline is not None and time.monotonic() >= deadline:
+            return "deadline"
+        return ""
+
+    async def _hook(page_url: str, page: FetchResult) -> None:
+        if on_page is None:
+            return
+        try:
+            await on_page(page_url, page)
+        except Exception as e:  # noqa: BLE001 — cataloguing never kills a crawl
+            log.warning("on_page hook failed for %s: %s", page_url, e)
+
     is_product = entity_type == "product"
     page_budget = max_pages if (max_pages and max_pages > 0) else settings.crawl_max_pages
 
     # R1: load the saved frontier state up front (None = fresh crawl).
-    prior = (
-        load_resume_state(entity_type, entity_id, url, settings=settings)
-        if (continue_crawl and not is_product)
-        else None
-    )
+    if resume_override is not None and not is_product:
+        prior = resume_override
+    else:
+        prior = (
+            load_resume_state(entity_type, entity_id, url, settings=settings)
+            if (continue_crawl and not is_product)
+            else None
+        )
     resumed = prior is not None and prior.resumable
 
     fetched = await fetch_page(url, prefer_browser=True, settings=settings, force_fresh=force_fresh)
@@ -223,7 +282,8 @@ async def research_target(
         return ResearchResult(url=url, entity_type=entity_type, entity_id=entity_id,
                               fetched_ok=False, from_cache=fetched.from_cache, error=fetched.error)
 
-    banned = fetch_banned_phrases(settings)
+    await _hook(url, fetched)
+    banned = await asyncio.to_thread(fetch_banned_phrases, settings)
     css = extract_css(fetched.html, url)
 
     pages_read: list[str] = [url]
@@ -256,6 +316,7 @@ async def research_target(
     # Products are a single-page lookup, so deep crawl applies to vendor/brand.
     frontier = CrawlFrontier(base_url=url)
     failed_pages: list[str] = []
+    stopped_reason = ""
     # R1: a CONTINUED crawl never re-reads what previous runs read — every
     # previously visited URL is pre-marked (can't be enqueued), and the saved
     # leftover queue seeds the frontier at a priority bonus so the budget
@@ -271,7 +332,7 @@ async def research_target(
         # Seed the frontier from the entry page + the site's own machine maps.
         frontier.add(discover_nav_links(fetched.html, url, limit=60))
         frontier.add(discover_pagination_links(fetched.html, url))
-        frontier.add(discover_sitemap_urls(url, settings, limit=100))
+        frontier.add(await asyncio.to_thread(discover_sitemap_urls, url, settings, limit=100))
         # Slice H2: cheap URL inventory (sitemap / Common Crawl — no page
         # fetches) scored by BM25 against the KB target fields. Best-effort;
         # returns [] on old crawl4ai or any seeder error. Seeder-vetted URLs
@@ -287,6 +348,11 @@ async def research_target(
         # where the override gated the `if` above but not the loop budget.
         budget = max(0, page_budget - 1)
         while budget > 0:
+            stop_reason = _must_stop()
+            if stop_reason:
+                stopped_reason = stop_reason
+                log.info("crawl %s: stopping early (%s) with %d queued", url, stop_reason, frontier.pending())
+                break
             extra_url = frontier.pop()
             if extra_url is None:
                 break  # site exhausted — we saw everything reachable
@@ -296,6 +362,7 @@ async def research_target(
                 failed_pages.append(extra_url)
                 continue
             pages_read.append(extra_url)
+            await _hook(extra_url, sub)
             html_pages.append((extra_url, sub.html))
             sub_css = extract_css(sub.html, extra_url)
             _merge_css_values(css_values, sub_css, is_product=False)
@@ -312,6 +379,16 @@ async def research_target(
             frontier.add(discover_nav_links(sub.html, extra_url, limit=60))
             frontier.add(discover_pagination_links(sub.html, extra_url))
 
+    # D220: earlier slices' page texts join the corpus (synthesis sees the
+    # whole site, not just this slice). Their text is verification ground
+    # truth too — it was literally read from the vendor's own pages.
+    if prior_corpus:
+        seen_urls = {u for u, _ in page_texts}
+        for purl, ptext in prior_corpus:
+            if purl not in seen_urls and ptext:
+                corpus_parts.append(ptext)
+                page_texts.append((purl, ptext))
+                seen_urls.add(purl)
     corpus = "\n\n".join(p for p in corpus_parts if p)
 
     # ---- C4: completeness validation -----------------------------------------
@@ -325,7 +402,9 @@ async def research_target(
         # this one stopped (leftover queue in priority order + all visited).
         # A fully exhausted site clears its state — nothing left to resume.
         leftover_urls = frontier.pending_urls()
-        if leftover_urls:
+        if not persist_resume:
+            saved = None
+        elif leftover_urls:
             saved = save_resume_state(
                 entity_type=entity_type,
                 entity_id=entity_id,
@@ -363,6 +442,9 @@ async def research_target(
         image_candidates=list(dict.fromkeys(image_candidates))[:MAX_IMAGE_LINES],
         pages=pages_read,
         coverage=coverage,
+        pending_urls=frontier.pending_urls() if not is_product else [],
+        failed_pages=list(failed_pages),
+        stopped_reason=stopped_reason,
     )
 
     # ---- LLM synthesis over the WHOLE crawled corpus --------------------------
@@ -374,7 +456,7 @@ async def research_target(
               if not css_values.get(f) or len(css_values[f]) < THIN_VALUE_CHARS]
     llm_values: dict[str, str] = {}
     llm_conf = 0.0
-    if wanted and settings.ai_enabled and corpus.strip():
+    if run_ai and wanted and settings.ai_enabled and corpus.strip():
         hint = (
             f"Extract the requested fields for the {entity_type} "
             f"\"{display_name or url}\" from the page content (multiple pages of "
@@ -383,13 +465,13 @@ async def research_target(
             f"Leave anything not on the pages empty."
         )
         if is_product:
-            extracted = extract_with_llm(ProductExtraction, corpus, hint, settings=settings)
+            extracted = await extract_with_llm_async(ProductExtraction, corpus, hint, settings=settings)
             if extracted:
                 llm_conf = extracted.confidence
                 if "description" in wanted and extracted.description:
                     llm_values["description"] = extracted.description
         else:
-            extracted = extract_with_llm(VendorBrandExtraction, corpus, hint, settings=settings)
+            extracted = await extract_with_llm_async(VendorBrandExtraction, corpus, hint, settings=settings)
             if extracted:
                 llm_conf = extracted.confidence
                 if "about" in wanted and extracted.about:
@@ -405,8 +487,8 @@ async def research_target(
     # Shipped as ONE research_products draft for staff — reference data, not an
     # auto-import.
     lineup_text = ""
-    if not is_product and settings.ai_enabled and corpus.strip():
-        lineup = extract_with_llm(
+    if run_ai and not is_product and settings.ai_enabled and corpus.strip():
+        lineup = await extract_with_llm_async(
             ProductLineupExtraction, corpus,
             f"List EVERY product, strain, and product line that "
             f"{display_name or 'this company'}'s pages show — flower, rosin, "
@@ -568,7 +650,8 @@ async def research_target(
     # harvest a public about/bio candidate. No login, no paid API, no scraping
     # behind an auth wall. Instagram prefers the sanctioned Business Discovery
     # API when a Meta token is configured; otherwise it uses the public fetch.
-    if not is_product and settings.follow_social_links:
+    # D220: middle campaign slices (run_ai=False) skip this; the final slice does it once.
+    if run_ai and not is_product and settings.follow_social_links:
         social: list[SocialLink] = []
         seen_social: set[str] = set()
         for page_url, page_html in html_pages:
