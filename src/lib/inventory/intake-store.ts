@@ -358,10 +358,12 @@ export async function followVendorMerge(
   const cards = new Map<string, SurvivorCard>();
   const read = async (id: string): Promise<SurvivorCard | undefined> => {
     if (cards.has(id)) return cards.get(id);
-    let res = await admin.from("vendors").select("id, status, internal_notes, merged_into_id").eq("id", id).limit(1);
-    if (res.error && /merged_into_id/i.test(res.error.message)) {
-      res = await admin.from("vendors").select("id, status, internal_notes").eq("id", id).limit(1);
-    }
+    const first = await admin.from("vendors").select("id, status, internal_notes, merged_into_id").eq("id", id).limit(1);
+    // Before 0350 the column does not exist: retry without it (the note still names the survivor).
+    const res: { data: unknown; error: { message: string } | null } =
+      first.error && /merged_into_id/i.test(first.error.message)
+        ? await admin.from("vendors").select("id, status, internal_notes").eq("id", id).limit(1)
+        : first;
     if (res.error) return undefined;
     const row = ((res.data as SurvivorCard[] | null) ?? [])[0];
     if (row) cards.set(id, row);
