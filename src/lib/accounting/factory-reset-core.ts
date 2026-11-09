@@ -546,6 +546,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ach_esign_sessions", disposition: "KEEP", because: "The in-person e-sign record for each signed ACH form: ID check, consent, code proof. Kept with the authorization it created." },
   { table: "vendor_esign_invites", disposition: "KEEP", because: "The remote vendor e-sign record for each signed vendor ACH form: link, code, consent, signer, bank-proof evidence. Signed invites cannot be deleted and reference the kept documents." },
   { table: "payee_contacts", disposition: "KEEP", because: "Payee phone numbers and emails with the date each was first on file, used for fraud callbacks." },
+  { table: "vendor_website_candidates", disposition: "KEEP", because: "Websites the crawler proposed for your vendors (D220, 0351) and your approve / reject decisions. Reference data about vendors, not test activity; no foreign key into a wiped table." },
   { table: "vendor_platform_map", disposition: "KEEP", because: "Which vendor corresponds to which menu platform." },
   { table: "brands", disposition: "KEEP", because: "Your brand list, used to match products on every vendor menu." },
   { table: "brand_aliases", disposition: "KEEP", because: "Alternate brand spellings for matching." },

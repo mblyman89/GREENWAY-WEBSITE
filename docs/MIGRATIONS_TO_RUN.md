@@ -3970,3 +3970,26 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0350_vendor_merge_v2.rollback.sql` (drops the triggers, the four
   functions and the two columns; merged cards stay merged and moved rows stay on the survivor - every merge is still
   written in both cards' Internal notes, which is what 0350 rebuilds `merged_into_id` from).
+
+- [ ] **`supabase/migrations/0351_kb_crawl_campaigns.sql`** — D220 crawler v2 (owner: "tag and label and catalog
+  everything so it is easy to match images to product cards"). New tables (service role only, RLS on):
+  `kb_crawl_campaigns` (one "harvest these vendors to the end" run), `kb_crawl_sites` (per site: the crawl frontier,
+  so a slice can stop and the next slice continues even after a redeploy; pages / images / products counts; status),
+  `kb_crawl_pages` (every page read: type, title, excerpt, product names), `kb_crawl_images` (every image: role,
+  product, strain, category, size, packaging text, tags, best product-card match + score) and
+  `vendor_website_candidates` (websites proposed for vendors that have none, waiting for approval). Also raises the
+  harvest tier page caps from 1..50 to 1..120. Nothing existing is changed or deleted.
+
+  Safe to re-run.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select (select count(*) from pg_class where relname in ('kb_crawl_campaigns','kb_crawl_sites','kb_crawl_pages',
+            'kb_crawl_images','vendor_website_candidates') and relrowsecurity)                 as tables_with_rls, -- 5
+         (select pg_get_constraintdef(oid) from pg_constraint where conname = 'kb_hs_t1_range')  as tier1_cap;      -- <= 120
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0351_kb_crawl_campaigns.rollback.sql` (drops the five tables -
+  crawler reference data, re-crawlable - and restores the 1..50 caps, clamping any value above 50 first).
+

@@ -113,7 +113,7 @@ const SECTIONS: KnobSection[] = [
   {
     title: "Crawl depth presets — pages per site, per tier",
     blurb:
-      "Depth is where crawl budget goes. Current vendors earn deep reads; the whole-market pass skims. The crawler worker hard-caps every job at 50 pages/site and stays polite (robots.txt, per-domain rate limit) no matter what you set here.",
+      "Depth is where crawl budget goes. Current vendors earn deep reads; the whole-market pass skims. The crawler worker hard-caps every job at 120 pages/site (whole-site campaigns go further, in resumable slices) and stays polite (robots.txt, per-domain rate limit) no matter what you set here.",
     knobs: [
       {
         key: "tier1MaxPages",
@@ -242,7 +242,7 @@ export default async function HarvestTuningPage({
             <p className="mt-2">
               <strong>Safety net, in plain terms:</strong> every value is clamped to a safe range on
               save AND on load, the database enforces the same ranges, and the crawler worker keeps its
-              own hard ceilings (50 pages/site max, politeness always on). Every accept — batch or
+              own hard ceilings (120 pages/site per job, politeness always on). Every accept — batch or
               single — still runs the WA I-502 compliance re-scan at the moment of acceptance. No knob
               on this page can turn that off. And <strong>Reset to defaults</strong> takes you back to
               the vetted numbers in one click.

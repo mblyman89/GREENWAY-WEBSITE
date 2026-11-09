@@ -51,10 +51,10 @@ describe("harvest tuning defaults (the vetted numbers)", () => {
     }
   });
 
-  it("tier depths never exceed the crawler worker's hard ceiling (50)", () => {
-    expect(HARVEST_CLAMPS.tier1MaxPages.max).toBeLessThanOrEqual(50);
-    expect(HARVEST_CLAMPS.tier2MaxPages.max).toBeLessThanOrEqual(50);
-    expect(HARVEST_CLAMPS.tier3MaxPages.max).toBeLessThanOrEqual(50);
+  it("tier depths never exceed the crawler worker's hard ceiling (120 since D220 / 0351)", () => {
+    expect(HARVEST_CLAMPS.tier1MaxPages.max).toBeLessThanOrEqual(120);
+    expect(HARVEST_CLAMPS.tier2MaxPages.max).toBeLessThanOrEqual(120);
+    expect(HARVEST_CLAMPS.tier3MaxPages.max).toBeLessThanOrEqual(120);
     expect(HARVEST_CLAMPS.tier3DelaySeconds.max).toBeLessThanOrEqual(3600);
   });
 
@@ -108,7 +108,7 @@ describe("clampHarvestSettings / mergeHarvestSettings", () => {
       tier3MaxPages: 999,
     });
     expect(merged.staleAfterDays).toBe(30);
-    expect(merged.tier3MaxPages).toBe(50); // clamped to crawler ceiling
+    expect(merged.tier3MaxPages).toBe(120); // clamped to crawler ceiling (D220)
     expect(merged.fastLaneMinConfidence).toBe(HARVEST_DEFAULTS.fastLaneMinConfidence);
     expect(merged.refreshBatch).toBe(HARVEST_DEFAULTS.refreshBatch);
   });

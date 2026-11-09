@@ -13,7 +13,7 @@
  *                 AND every save, so neither a UI typo nor a direct DB edit
  *                 can push the pipeline outside its safe envelope. The DB
  *                 mirrors these as CHECK constraints; the crawler worker
- *                 additionally enforces its own ceilings (pages 1..50,
+ *                 additionally enforces its own ceilings (pages 1..120 since D220 / 0351,
  *                 delay 0..3600s — crawler/app/harvest.py).
  *   • clampHarvestSettings / mergeHarvestSettings — pure helpers pinned by
  *                 tests/compliance/harvest-settings.test.ts.
@@ -76,9 +76,13 @@ export const HARVEST_CLAMPS: Record<keyof HarvestSettings, { min: number; max: n
   trickleBatch: { min: 1, max: 100 },
   batchAcceptCap: { min: 1, max: 200 },
   pendingLimit: { min: 100, max: 5000 },
-  tier1MaxPages: { min: 1, max: 50 }, // crawler worker hard ceiling: 50
-  tier2MaxPages: { min: 1, max: 50 },
-  tier3MaxPages: { min: 1, max: 50 },
+  // D220: crawler worker per-job ceiling is 120 (MAX_PAGES_PER_SITE); the DB
+  // CHECKs follow in 0351 (until 0351 is applied a save above 50 is refused by
+  // the database, never silently stored). Whole-site crawls beyond 120 pages
+  // run as campaigns (sliced, resumable, up to CAMPAIGN_MAX_PAGES_PER_SITE).
+  tier1MaxPages: { min: 1, max: 120 },
+  tier2MaxPages: { min: 1, max: 120 },
+  tier3MaxPages: { min: 1, max: 120 },
   tier3DelaySeconds: { min: 0, max: 3600 }, // crawler worker ceiling: 3600
 };
 
