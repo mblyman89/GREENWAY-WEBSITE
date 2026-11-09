@@ -33,7 +33,11 @@ from .harvest import (
     watchdog_tick,
 )
 from . import ai_client
+from . import campaign as campaigns
+from . import website_finder
 from .browser_pool import POOL
+from .campaign_store import get_store
+from .fetcher import dynamic_allowed_hosts
 from .cultivera_api import CultiveraApiError, CultiveraApiResult, CultiveraClient
 from .cultivera_auth import CultiveraAuthError
 from .growflow_api import GrowflowApiError, GrowflowApiResult, GrowflowClient
@@ -81,6 +85,8 @@ async def _watchdog_loop() -> None:
         try:
             watchdog_tick()
             resume_stalled_jobs()
+            campaigns.campaign_watchdog_tick()
+            await campaigns.resume_active_campaigns()
         except Exception:  # noqa: BLE001 — the watchdog must never die
             log.exception("watchdog tick failed")
 
@@ -90,6 +96,9 @@ async def _start_watchdog() -> None:
     global _watchdog_task
     if _watchdog_task is None or _watchdog_task.done():
         _watchdog_task = asyncio.get_running_loop().create_task(_watchdog_loop())
+    # D220: campaigns survive redeploys — pick up anything that was running.
+    with contextlib.suppress(Exception):
+        await campaigns.resume_active_campaigns()
 
 
 @app.on_event("shutdown")
@@ -101,6 +110,8 @@ async def _shutdown_browser() -> None:
         with contextlib.suppress(BaseException):
             await _watchdog_task
         _watchdog_task = None
+    with contextlib.suppress(Exception):
+        await campaigns.shutdown_campaigns()
     with contextlib.suppress(Exception):
         await POOL.shutdown()
 
@@ -224,6 +235,8 @@ async def health() -> dict:
         # D220: live vitals — the 20-hour silent hang is now visible at a glance.
         "browser": POOL.stats(),
         "job_heartbeats_s": heartbeat_snapshot(),
+        "campaign_heartbeats_s": campaigns.campaign_heartbeats(),
+        "campaign_hosts_allowed": len(dynamic_allowed_hosts()),
         "ai_models": {
             "text": s.model_chain("text"),
             "vision": s.model_chain("vision"),
@@ -235,6 +248,10 @@ async def health() -> dict:
             "slice_timeout_s": s.crawl_slice_timeout_seconds,
             "stall_s": s.crawl_stall_seconds,
             "parallel_pages": s.crawl_parallel_pages,
+            "campaign_parallel_sites": s.campaign_parallel_sites,
+            "campaign_slice_pages": s.campaign_slice_pages,
+            "campaign_max_pages_per_site": s.campaign_max_pages_per_site,
+            "campaign_vision_max_images_per_site": s.campaign_vision_max_images_per_site,
         },
     }
 
@@ -1082,3 +1099,176 @@ def cultivera_archive_file(run_id: str, name: str, x_crawler_secret: str | None 
     if p is None:
         raise HTTPException(status_code=404, detail="No such file in this run.")
     return FileResponse(p, filename=name)
+
+
+# ---------------------------------------------------------------------------
+# D220 S4 — crawl CAMPAIGNS ("keep crawling until every site is complete")
+# ---------------------------------------------------------------------------
+class CampaignTarget(BaseModel):
+    entity_type: str = Field(default="vendor", pattern="^(vendor|brand)$")
+    entity_id: str = Field(..., min_length=1, max_length=64)
+    vendor_id: str | None = Field(default=None, max_length=64)
+    display_name: str = Field(default="", max_length=200)
+    url: str = Field(..., min_length=4, max_length=500)
+
+
+class CampaignOptions(BaseModel):
+    write: bool = True
+    feeds: bool = True
+    vision: bool | None = None
+    page_ai: bool | None = None
+    parallel_sites: int | None = Field(default=None, ge=1, le=8)
+    slice_pages: int | None = Field(default=None, ge=5, le=300)
+    max_pages_per_site: int | None = Field(default=None, ge=10, le=10000)
+    vision_max_images: int | None = Field(default=None, ge=0, le=5000)
+    page_ai_max_pages: int | None = Field(default=None, ge=0, le=5000)
+
+
+class CampaignRequest(BaseModel):
+    label: str = Field(default="Crawl campaign", max_length=200)
+    scope: str = Field(default="custom", pattern="^(current_vendors|all_vendors|custom|single)$")
+    targets: list[CampaignTarget] = Field(..., min_length=1, max_length=500)
+    options: CampaignOptions = Field(default_factory=CampaignOptions)
+    created_by: str | None = Field(default=None, max_length=64)
+
+
+def _campaign_view(camp: dict, sites: list[dict] | None = None) -> dict:
+    out = dict(camp)
+    out["running_here"] = campaigns.campaign_running(camp["id"])
+    if sites is not None:
+        out["sites"] = sites
+        out["totals"] = campaigns.summarize_sites(sites)
+    return out
+
+
+def _require_campaigns() -> None:
+    if not get_settings().campaign_enabled:
+        raise HTTPException(status_code=503, detail="Campaigns are disabled (CAMPAIGN_ENABLED=false).")
+
+
+@app.post("/campaigns", status_code=202)
+async def campaign_start(req: CampaignRequest, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    """Start a durable campaign. Returns immediately; poll GET /campaigns/{id}."""
+    _require_secret(x_crawler_secret)
+    _require_campaigns()
+    opts = {k: v for k, v in req.options.model_dump().items() if v is not None}
+    try:
+        camp = await campaigns.start_campaign(
+            label=req.label, scope=req.scope, targets=[t.model_dump() for t in req.targets], options=opts,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if req.created_by:
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(get_store(get_settings()).update_campaign, camp["id"],
+                                    {"created_by": req.created_by})
+    log.info("campaign %s started (%d targets)", camp["id"], len(req.targets))
+    return {"ok": True, "campaign": _campaign_view(camp)}
+
+
+@app.get("/campaigns")
+async def campaign_list(x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    store = get_store(get_settings())
+    rows = await asyncio.to_thread(store.list_campaigns, 20)
+    return {"ok": True, "campaigns": [_campaign_view(c) for c in rows]}
+
+
+@app.get("/campaigns/{campaign_id}")
+async def campaign_get(campaign_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    store = get_store(get_settings())
+    camp = await asyncio.to_thread(store.get_campaign, campaign_id)
+    if camp is None:
+        raise HTTPException(status_code=404, detail="Unknown campaign id.")
+    sites = await asyncio.to_thread(store.list_sites, campaign_id)
+    return {"ok": True, "campaign": _campaign_view(camp, sites)}
+
+
+@app.post("/campaigns/{campaign_id}/cancel")
+async def campaign_cancel(campaign_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    """Stops before the NEXT PAGE; everything read so far stays catalogued and
+    the frontier is saved, so /resume continues exactly where it stopped."""
+    _require_secret(x_crawler_secret)
+    camp = await campaigns.cancel_campaign(campaign_id)
+    if camp is None:
+        raise HTTPException(status_code=404, detail="Unknown campaign id.")
+    return {"ok": True, "campaign": _campaign_view(camp)}
+
+
+@app.post("/campaigns/{campaign_id}/resume")
+async def campaign_resume(campaign_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    _require_campaigns()
+    camp = await campaigns.resume_campaign(campaign_id)
+    if camp is None:
+        raise HTTPException(status_code=404, detail="Unknown campaign id.")
+    return {"ok": True, "campaign": _campaign_view(camp)}
+
+
+@app.post("/campaigns/sites/{site_id}/rematch")
+async def campaign_rematch(site_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    """Re-score a site's images against the vendor's CURRENT product cards
+    (run after staff add/rename cards). Confirmed/rejected links are kept."""
+    _require_secret(x_crawler_secret)
+    try:
+        out = await campaigns.rematch_site(site_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Unknown site id.") from e
+    return {"ok": True, **out}
+
+
+# ---------------------------------------------------------------------------
+# D220 S5 — website finder (OpenAI web search → verify → staged candidates)
+# ---------------------------------------------------------------------------
+class WebsiteVendor(BaseModel):
+    vendor_id: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=200)
+    legal_name: str = Field(default="", max_length=200)
+    dba: str = Field(default="", max_length=200)
+    license_number: str = Field(default="", max_length=40)
+    city: str = Field(default="", max_length=100)
+
+
+class WebsiteFindRequest(BaseModel):
+    vendors: list[WebsiteVendor] = Field(..., min_length=1, max_length=website_finder.MAX_VENDORS_PER_JOB)
+    use_ai: bool = True
+    write: bool = True
+
+
+@app.post("/websites/find", status_code=202)
+async def websites_find(req: WebsiteFindRequest, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    """Search + verify official websites for vendors that have none. Results
+    land in vendor_website_candidates as PENDING for a human to approve."""
+    _require_secret(x_crawler_secret)
+    try:
+        job = website_finder.start_job([v.model_dump() for v in req.vendors], use_ai=req.use_ai, write=req.write)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return {"ok": True, "job": job}
+
+
+@app.get("/websites/jobs")
+async def websites_jobs(x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "jobs": website_finder.list_jobs()}
+
+
+@app.get("/websites/jobs/{job_id}")
+async def websites_job(job_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    job = website_finder.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown website-finder job (jobs live until a redeploy; "
+                                                    "their results are already saved as candidates).")
+    return {"ok": True, "job": job}
+
+
+@app.post("/websites/jobs/{job_id}/cancel")
+async def websites_job_cancel(job_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    job = website_finder.cancel_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown website-finder job.")
+    return {"ok": True, "job": job}
+

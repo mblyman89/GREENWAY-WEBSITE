@@ -57,19 +57,53 @@ def _domain(url: str) -> str:
     return urlparse(url).netloc.lower()
 
 
+# D220: hosts admitted at runtime by a crawl CAMPAIGN. A campaign's entry URLs
+# come from vendors.website values that staff entered or approved in the back
+# office (never from page content), so they are trusted the same way the static
+# CRAWL_ALLOW_DOMAINS list is. Links on those sites to OTHER hosts are still
+# refused unless they are allow-listed. The SSRF guard always runs first.
+_dynamic_allow: set[str] = set()
+
+
+def _bare_host(host: str) -> str:
+    host = (host or "").lower().strip()
+    host = host.rsplit(":", 1)[0] if ":" in host and not host.endswith("]") else host
+    return host[4:] if host.startswith("www.") else host
+
+
+def allow_hosts(hosts: list[str] | set[str]) -> None:
+    """Admit campaign hosts (bare hostnames or URLs) for this process."""
+    for h in hosts:
+        h = (h or "").strip()
+        if "://" in h:
+            h = urlparse(h).netloc
+        h = _bare_host(h)
+        if h:
+            _dynamic_allow.add(h)
+
+
+def dynamic_allowed_hosts() -> list[str]:
+    return sorted(_dynamic_allow)
+
+
 def domain_allowed(settings: Settings, url: str) -> bool:
     """If an allow-list is configured, only those hosts may be researched.
 
     In DEVELOPMENT an empty allow-list allows whatever host the operator
     submits (the operator is a trusted staff member typing a URL into the back
     office). In PRODUCTION (CRAWLER_ENV=production) an allow-list is REQUIRED
-    (S-5): with none configured, every fetch is refused."""
-    allow = settings.allow_domains
-    if not allow:
-        return not settings.is_production
+    (S-5): with none configured, every fetch is refused — except hosts a
+    staff-started campaign admitted via `allow_hosts` (D220)."""
     host = _domain(url)
     # Strip a :port suffix so "host:8080" still matches the allow-list entry.
     host = host.rsplit(":", 1)[0] if ":" in host and not host.endswith("]") else host
+    if _dynamic_allow:
+        bare = _bare_host(host)
+        if any(bare == d or bare.endswith("." + d) for d in _dynamic_allow):
+            return True
+    allow = settings.allow_domains
+    if not allow:
+        return not settings.is_production
     return any(host == d or host.endswith("." + d) for d in allow)
 
 

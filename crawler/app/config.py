@@ -145,6 +145,14 @@ class Settings(BaseSettings):
     campaign_vision_max_images_per_site: int = Field(default=400, ge=0, le=5000, alias="CAMPAIGN_VISION_MAX_IMAGES_PER_SITE")
     # Per-page AI classification + product extraction on product-ish pages.
     campaign_page_ai_enabled: bool = Field(default=True, alias="CAMPAIGN_PAGE_AI_ENABLED")
+    # At most this many product/strain/listing pages per site get the per-page
+    # AI fact extraction (the rest still get the free heuristic catalogue).
+    campaign_page_ai_max_pages: int = Field(default=250, ge=0, le=5000, alias="CAMPAIGN_PAGE_AI_MAX_PAGES")
+    # A site whose crawl is interrupted (watchdog/redeploy) is retried this many times.
+    campaign_max_site_attempts: int = Field(default=3, ge=1, le=10, alias="CAMPAIGN_MAX_SITE_ATTEMPTS")
+    # Read the platform's public product feed (Shopify /products.json,
+    # WooCommerce Store API) — catches catalog items the HTML crawl can't reach.
+    campaign_feeds_enabled: bool = Field(default=True, alias="CAMPAIGN_FEEDS_ENABLED")
 
     # --- D220: which OpenAI model does what -----------------------------------
     # Comma-separated fallback chain: the first model the account can use wins
