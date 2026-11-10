@@ -2568,3 +2568,17 @@ Fix:
 - S3: the hub knows the message (known-messages list, playbook, triage rule, scoreboard next step).
 - S4: a one-click "re-send refused rows" on an errored Sale file.
 - S5: bible / audit docs, pins, mutation checks.
+
+### As built
+
+- **S1 (PR #1746):** `ccrsSaleLineMoney` / `ccrsPrintedExciseMinor` in `tax-base-core.ts`, used by `ccrs-sales.ts` and the return snapshot in `disposition.ts`. Partial-return Updates in `ccrs-sale-correction-core.ts` print excise as 37% of the printed remaining base. Test `d227-ccrs-sale-excise-identity` runs on the real sent and error files.
+- **S3 (PR #1747):** the message is in `CCRS_KNOWN_MESSAGES` and `STRATEGY_PLAYBOOK` (fix-resend), with triage rule `excise_not_37pct`, a scoreboard next step and the verbatim guide/FAQ lines. The evidence error file was added to the s18b and s12c corpora.
+- **S4 (PR #1748):** **Re-send refused rows** on an errored Sale file with refused rows (CCRS files panel). It uses the pure `ccrs-resend-refused-core.ts`, the paged store read `fileRowsWithState` and `resendRefusedRowsAction`.
+  - It keeps only `rejected` rows, rebuilt by today's exporter, each one checked against the identity.
+  - The file passes the verifier and the ledger self-check, is stored through the outbox and is audited.
+- **S5 (PR #1749):** bible Part 04 A.22 and vocabulary #17, Part 09 D227, audit C2e, Part 03 regenerated, mutations M526–M532 (all killed). A test proves the waiting 2026-11-10 email now classifies as error-rows with exactly the 2 rows refused.
+- **To test in PREprod:**
+  1. Apply the waiting error email in the CCRS mail panel.
+  2. Press **Re-send refused rows** on `Sale_413541_20261110101609.csv`.
+  3. Download the new file, upload it, mark it uploaded, then apply the answer.
+- No migration is needed.
