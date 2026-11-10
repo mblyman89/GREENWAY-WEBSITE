@@ -28,8 +28,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
 import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
-import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
-import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-core";
+import { getTaxSettings, getCannabisCategorySet, isCannabisCategory } from "@/lib/reports/tax";
+import { ccrsSaleLineMoney } from "@/lib/reports/tax-base-core";
 import {
   deriveInventoryExternalId,
   resolveSaleInventoryExternalId,
@@ -378,19 +378,20 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     // base + still-due tax, so exempted tax was never inside the stored price.
     const exempt = l.product_id ? exemptByOrderSku.get(`${l.order_id}|${l.product_id}`) : undefined;
 
-    // UnitPrice = price of ONE unit BEFORE discount/tax
-    // (docs/CCRS_SELF_REPORTING_GUIDE.md): pre-tax regular unit. Regular shelf
-    // prices always carry the full rate for the line type — a medical
-    // exemption changes what the patient PAID, not the shelf price.
-    const unitPriceCents = preTaxUnitMinor({
-      unitPriceMinorUnits: regularUnit,
-      isCannabis,
-      combinedSalesRateBps: combinedSalesBps,
-      exciseRateBps: settings.exciseRateBps,
-    });
-    // Taxable base = pre-tax post-discount line total (exemption-aware).
-    const baseCents = preTaxLineBaseMinor({
-      unitPriceMinorUnits: soldUnit,
+    // UnitPrice = price of ONE unit BEFORE discount/tax [FAQ L0153-L0154]:
+    // pre-tax regular unit. Regular shelf prices always carry the full rate
+    // for the line type - a medical exemption changes what the patient PAID,
+    // not the shelf price. Taxable base = pre-tax post-discount line total
+    // (exemption-aware). Discount (whole line, pre-tax) = qty x UnitPrice -
+    // base, so an exemption is never misreported as a discount.
+    // D227: ONE helper computes all five money columns so the PRINTED row
+    // satisfies CCRS's check exactly: CannabisExciseTax == 37% of
+    // (Quantity x UnitPrice - Discount) [G L1374, L1377]. On 2026-11-10 two
+    // $18.00 x 3 / x 2 lines printed 12.30 x qty - 0.00 while the excise was
+    // 37% of a base one cent higher, and CCRS refused both.
+    const money = ccrsSaleLineMoney({
+      soldUnitMinorUnits: soldUnit,
+      regularUnitMinorUnits: regularUnit,
       quantity: qty,
       isCannabis,
       salesExempt: exempt?.salesExempt,
@@ -398,14 +399,10 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
       combinedSalesRateBps: combinedSalesBps,
       exciseRateBps: settings.exciseRateBps,
     });
-    // Discount (whole line, pre-tax): regular pre-tax − sold pre-tax. Keeps
-    // the CCRS identity qty × UnitPrice − Discount ≈ pre-tax base, and an
-    // exemption is never misreported as a discount.
-    const lineDiscountCents = Math.max(0, unitPriceCents * qty - baseCents);
-
-    const salesTaxCents = exempt?.salesExempt ? 0 : applyBps(baseCents, combinedSalesBps);
-    const exciseCents =
-      isCannabis && !exempt?.exciseExempt ? applyBps(baseCents, settings.exciseRateBps) : 0;
+    const unitPriceCents = money.unitPriceMinor;
+    const lineDiscountCents = money.discountMinor;
+    const salesTaxCents = money.salesTaxMinor;
+    const exciseCents = money.exciseMinor;
     if (exempt?.salesExempt || exempt?.exciseExempt) exemptZeroedLines += 1;
 
     // External identifiers (deterministic, stable, idempotent), hardened to the
