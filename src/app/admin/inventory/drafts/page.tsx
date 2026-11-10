@@ -44,7 +44,8 @@ import { AiLookupPanel } from "./AiLookupPanel";
 import { attachWaitingFactAction } from "./ai-lookup-actions";
 import { WaitingFactsPanel } from "@/components/admin/catalog/WaitingFactsPanel";
 import { OnboardingImagesPanel } from "@/components/admin/catalog/OnboardingImagesPanel";
-import { loadOnboardingImageRecommendations, type OnboardingImagesRead } from "@/lib/catalog/image-memory-server";
+import { loadOnboardingImageRecommendations, loadOnboardingImageSearch, type OnboardingImagesRead } from "@/lib/catalog/image-memory-server";
+import { parseImageSearchScope } from "@/lib/catalog/image-recommend-core";
 import { imageResultBanner } from "@/lib/catalog/image-recommend-core";
 import { attachOnboardingImageAction, importOnboardingImageAction } from "./image-actions";
 import { buildWaitingFacts, waitingResultBanner } from "@/lib/catalog/waiting-facts-core";
@@ -253,7 +254,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; cv_vendor?: string; cv_vendors?: string; cvv?: string; cvv_msg?: string; cvv_next?: string; cvl?: string; cvl_msg?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string; tools?: string; obl?: string; obl_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; cv_vendor?: string; cv_vendors?: string; cvv?: string; cvv_msg?: string; cvv_next?: string; cvl?: string; cvl_msg?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string; imgd?: string; imgq?: string; imgs?: string; imgsim?: string; tools?: string; obl?: string; obl_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -344,6 +345,18 @@ export default async function CatalogDraftsPage({
   const waitingP = early(() => (earlyRowsOpen ? loadWaitingSuggestions(Array.from(earlyWaitingKeys.values())) : { ok: true as const, rows: [] }));
   const labP = early(() => (earlyRowsOpen ? loadLabViewsForDrafts(drafts) : null));
   const imagesP = early(() => (earlyRowsOpen ? loadOnboardingImageRecommendations(drafts, earlyWaitingKeys) : (null as OnboardingImagesRead | null)));
+  // D221 M6: "Search for a better picture" / "Find similar" on ONE row (?imgd=<draft>&imgq=&imgs=&imgsim=).
+  const imgSearchDraft = earlyRowsOpen && sp.imgd ? drafts.find((d) => d.id === sp.imgd) ?? null : null;
+  const imgSimRaw = String(sp.imgsim ?? "").trim();
+  const imageSearchP = early(() =>
+    imgSearchDraft
+      ? loadOnboardingImageSearch(imgSearchDraft, earlyWaitingKeys.get(imgSearchDraft.id) ?? null, {
+          query: String(sp.imgq ?? "").trim().slice(0, 200),
+          scope: sp.imgs ? parseImageSearchScope(sp.imgs) : imgSearchDraft.vendor_id ? "vendor" : "all",
+          similarTo: /^[0-9a-f-]{36}$/i.test(imgSimRaw) ? imgSimRaw : null,
+        })
+      : null,
+  );
   const savedFactsP = early(() => (earlyRowsOpen && onboardingV2RowEnabled(process.env[ONBOARDING_V2_ROW_ENV]) ? loadSavedProductFacts(earlyFactRows) : null));
   // R50 S3: rows whose delivery was rebuilt from the Cultivera export (cards
   // already selling) + the "Cultivera manifests" section. Both best-effort:
@@ -663,6 +676,7 @@ export default async function CatalogDraftsPage({
     // name match, with confidence) for each open row. Never throws.
     imagesP,
   ]);
+  const imageSearch = await imageSearchP;
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
 
   // (S34: runs after the strain-signal read so each row carries its lot's size label.)
@@ -1921,6 +1935,9 @@ export default async function CatalogDraftsPage({
                         returnStatus={view}
                         libraryFailed={!imageRead.libraryOk}
                         memoryMissing={imageRead.memoryMissing}
+                        search={imageSearch && imageSearch.draftId === d.id ? imageSearch : null}
+                        hasVendor={Boolean(d.vendor_id)}
+                        hasBrand={Boolean(d.brand_id)}
                       />
                     )}
                     <AiLookupPanel

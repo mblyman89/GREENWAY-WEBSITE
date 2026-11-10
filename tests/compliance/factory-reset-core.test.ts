@@ -1360,7 +1360,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D220 S3: +5 KEEP kb_crawl_campaigns, kb_crawl_sites, kb_crawl_pages, kb_crawl_images (kb_ prefix rule)
     // and vendor_website_candidates (0351; crawler reference catalog about vendors, no FK into a wiped table).
     // + media_ai_runs (0352, D221; AI passes over the media library, KEEP with the media).
-    expect(plan.keep.length).toBe(205);
+    // D221 M7: +3 KEEP media_collections, media_collection_items, media_search_log (0354; photo groups + search log).
+    expect(plan.keep.length).toBe(208);
     expect(plan.wipe.length).toBe(139);
   });
 

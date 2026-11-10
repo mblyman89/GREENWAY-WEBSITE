@@ -94,6 +94,15 @@ export default async function MediaReviewPage({
         title="Media review queue"
         subtitle="Pictures the library is not sure about. One click each; nothing is ever deleted."
         breadcrumbs={<Breadcrumbs items={[{ label: "Digital Assets", href: "/admin/media" }, { label: "Review queue" }]} />}
+        action={
+          <Link
+            href="/admin/media"
+            data-testid="media-review-back-button"
+            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
+          >
+            ← Back to media library
+          </Link>
+        }
       />
       <div className="space-y-4 px-5 py-6 sm:px-8">
         {saved && <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">Saved.</div>}

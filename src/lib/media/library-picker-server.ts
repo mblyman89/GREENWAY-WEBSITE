@@ -29,7 +29,7 @@ import { isMissingColumn } from "./provenance-core";
 const BASE_COLUMNS =
   "id, storage_key, public_url, filename, title, alt_text, tags, usage_type, status, mime_type, license_status, created_at";
 /** D221 M1 (0352) columns. */
-const V2_COLUMNS = "vendor_id, brand_id, product_name, visible_text, ai_caption, role";
+const V2_COLUMNS = "vendor_id, brand_id, product_name, visible_text, ai_caption, role, pack_size";
 export const LIBRARY_PICKER_COLUMNS = `${BASE_COLUMNS}, ${V2_COLUMNS}`;
 
 /** Page size for the vendor/brand-scoped read (well under PostgREST's 1,000). */
@@ -58,6 +58,7 @@ type Row = {
   visible_text?: string | null;
   ai_caption?: string | null;
   role?: string | null;
+  pack_size?: string | null;
 };
 
 export type LibraryPickerRead = { ok: true; assets: LibraryPickerAsset[] } | { ok: false; assets: [] };
@@ -90,6 +91,7 @@ function toAsset(r: Row): LibraryPickerAsset {
     visible_text: r.visible_text ?? null,
     ai_caption: r.ai_caption ?? null,
     role: r.role ?? null,
+    pack_size: r.pack_size ?? null,
   };
 }
 
@@ -189,5 +191,100 @@ export async function readLibraryPickerAssets(
     return { ok: true, assets };
   } catch {
     return { ok: false, assets: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// D221 M6: "Search for a better picture" and "Find similar"
+// ---------------------------------------------------------------------------
+
+export type ImageSearchRequest = {
+  /** Typed words (2+ characters), or empty. */
+  query?: string | null;
+  /** vendor = this product's vendor only, brand = this brand only, all = whole library. */
+  scope: "vendor" | "brand" | "all";
+  vendorId?: string | null;
+  brandId?: string | null;
+  /** A media id: list the pictures like it (0354 media_similar) instead. */
+  similarTo?: string | null;
+  /** "product" limits to product-purpose pictures (the enrichment picker's default). */
+  usage?: LibraryScope;
+};
+
+export type ImageSearchRead = {
+  ok: boolean;
+  /** In the order to show (best first). */
+  assets: LibraryPickerAsset[];
+  /** media id -> why-chips from media_similar (Find similar only). */
+  chips: Map<string, string[]>;
+  /** Plain words when something is not available yet (never a silent empty). */
+  note: string | null;
+};
+
+const SIMILAR_LABEL: Record<string, string> = {
+  "same-file": "Same file",
+  "same-vendor": "Same vendor",
+  "same-brand": "Same brand",
+  "similar-name": "Similar name",
+  "same-strain": "Same strain",
+  "similar-label": "Similar label text",
+  "same-category": "Same category",
+};
+
+/** The ordered pool for one search / find-similar request. Never throws. */
+export async function readImageSearch(req: ImageSearchRequest): Promise<ImageSearchRead> {
+  const empty = (note: string | null, ok = true): ImageSearchRead => ({ ok, assets: [], chips: new Map(), note });
+  if (!isSupabaseServiceConfigured) return empty("The database isn't configured on this deployment.", false);
+  try {
+    const admin = createSupabaseAdminClient();
+    const vendorId = cleanIds([req.vendorId])[0] ?? null;
+    const brandId = cleanIds([req.brandId])[0] ?? null;
+    const similarTo = cleanIds([req.similarTo])[0] ?? null;
+    let ids: string[] = [];
+    const chips = new Map<string, string[]>();
+    if (similarTo) {
+      const { data, error } = await admin.rpc("media_similar", { p_id: similarTo, p_limit: 48 });
+      if (error) return empty(/does not exist|could not find|schema cache/i.test(error.message) ? "Find similar needs the 0354 database update." : error.message, false);
+      for (const r of (data as { media_id: string; reasons: string[] | null }[] | null) ?? []) {
+        ids.push(r.media_id);
+        chips.set(r.media_id, (r.reasons ?? []).map((x) => SIMILAR_LABEL[x] ?? x));
+      }
+    } else {
+      const q = (req.query ?? "").trim();
+      if (q.length >= 2) {
+        const { data, error } = await admin.rpc("media_search", {
+          p_query: q,
+          p_vendor_id: req.scope === "vendor" ? vendorId : null,
+          p_limit: SEARCH_HITS,
+          p_offset: 0,
+        });
+        if (error) return empty(/does not exist|could not find|schema cache/i.test(error.message) ? "Search needs the 0352 database update." : error.message, false);
+        ids = ((data as { media_id: string }[] | null) ?? []).map((r) => r.media_id).filter(Boolean);
+      } else if ((req.scope === "vendor" && vendorId) || (req.scope === "brand" && brandId)) {
+        const rows = await readScoped(admin, req.usage ?? "all", req.scope === "vendor" && vendorId ? [vendorId] : [], req.scope === "brand" && brandId ? [brandId] : []);
+        ids = rows.map((r) => r.id);
+      } else {
+        return empty(req.scope === "all" ? "Type at least two letters to search the whole library." : "This product has no vendor / brand card yet. Search the whole library instead.");
+      }
+    }
+    if (ids.length === 0) return { ok: true, assets: [], chips, note: null };
+    const rows: Row[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await admin.from("media_assets").select(LIBRARY_PICKER_COLUMNS).in("id", ids.slice(i, i + 200)).range(0, 199);
+      if (error) return empty(error.message, false);
+      rows.push(...((data as Row[] | null) ?? []));
+    }
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const assets: LibraryPickerAsset[] = [];
+    for (const id of ids) {
+      const r = byId.get(id);
+      if (!r || r.status === "archived") continue;
+      if (req.usage === "product" && r.usage_type !== "product") continue;
+      if (!similarTo && req.scope === "brand" && brandId && (r.brand_id ?? "") !== brandId) continue;
+      assets.push(toAsset(r));
+    }
+    return { ok: true, assets, chips, note: null };
+  } catch (e) {
+    return empty(e instanceof Error ? e.message : "Search failed.", false);
   }
 }

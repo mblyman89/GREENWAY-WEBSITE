@@ -73,6 +73,17 @@ export type MediaAsset = {
   // D221 M3 (0353).
   reviewed_by?: string | null;
   reviewed_at?: string | null;
+  // D221 M7 (detail page: SEO / provenance view; columns from 0352).
+  seo_description?: string | null;
+  seo_slug?: string | null;
+  seo_keywords?: string[] | null;
+  strain_name?: string | null;
+  source_page_url?: string | null;
+  captured_at?: string | null;
+  field_provenance?: Record<string, unknown> | null;
+  published_by?: string | null;
+  ai_model?: string | null;
+  ai_described_at?: string | null;
 };
 
 export type AuditLog = {

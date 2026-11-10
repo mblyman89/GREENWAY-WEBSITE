@@ -50,8 +50,15 @@ export function MediaGrid({
   returnTo,
   bulkDeleteAction,
   organizeAction,
+  bulkV2Action,
+  vendors = [],
+  collections = [],
 }: {
   items: MediaGridItem[];
+  /** D221 M7: the v2 bulk bar (publish / archive / re-describe / set vendor / undo auto-publish / add to collection). */
+  bulkV2Action?: (formData: FormData) => void | Promise<void>;
+  vendors?: { id: string; name: string }[];
+  collections?: { id: string; name: string }[];
   /** R65 S4: bulk organise (purpose / labels / status / auto-file). */
   organizeAction?: (formData: FormData) => void | Promise<void>;
   /** The current (filtered) library URL to return to after a bulk delete. */
@@ -165,6 +172,43 @@ export function MediaGrid({
           <Button type="submit" name="mode" value="auto" size="sm" variant="neutral" disabled={count === 0} title="Let the rules pick each file's purpose from its name, source and size (only applied when confident).">
             ✨ Auto-file
           </Button>
+        </form>
+      )}
+
+      {/* D221 M7: the v2 bulk bar. Nothing is deleted; human values are kept. */}
+      {selectMode && bulkV2Action && (
+        <form action={bulkV2Action} data-testid="media-bulk-v2" className="flex flex-wrap items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-2 text-xs">
+          <input type="hidden" name="returnTo" value={returnTo} />
+          {Array.from(selected).map((id) => (
+            <input key={id} type="hidden" name="ids" value={id} />
+          ))}
+          <span className="font-semibold text-[var(--admin-text)]">⚡ Library {count || "…"}:</span>
+          <Button type="submit" name="bulk" value="publish" size="sm" variant="confirm" disabled={count === 0}>Publish</Button>
+          <Button type="submit" name="bulk" value="archive" size="sm" variant="neutral" disabled={count === 0}>Archive</Button>
+          <Button type="submit" name="bulk" value="redescribe" size="sm" variant="neutral" disabled={count === 0} title="Queue for a fresh AI closer look (AI text never replaces what a person typed).">Re-describe</Button>
+          <Button type="submit" name="bulk" value="undo-auto" size="sm" variant="neutral" disabled={count === 0} title="Set auto-published pictures back to draft.">Undo auto-publish</Button>
+          {vendors.length > 0 && (
+            <span className="flex items-center gap-1">
+              <select name="vendor_id" defaultValue="" aria-label="Vendor to set" className="max-w-44 rounded border border-[var(--admin-border)] bg-black px-2 py-1">
+                <option value="">Vendor…</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+              <Button type="submit" name="bulk" value="set-vendor" size="sm" variant="neutral" disabled={count === 0}>Set vendor</Button>
+            </span>
+          )}
+          {collections.length > 0 && (
+            <span className="flex items-center gap-1">
+              <select name="collection_id" defaultValue="" aria-label="Collection" className="max-w-44 rounded border border-[var(--admin-border)] bg-black px-2 py-1">
+                <option value="">Collection…</option>
+                {collections.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <Button type="submit" name="bulk" value="add-to-collection" size="sm" variant="neutral" disabled={count === 0}>Add to collection</Button>
+            </span>
+          )}
         </form>
       )}
 

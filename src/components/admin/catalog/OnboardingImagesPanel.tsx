@@ -14,8 +14,10 @@
  * https://nextjs.org/docs/app/guides/forms). The form carries only WHICH
  * image; the server re-reads the asset and the draft.
  */
-import type { ImageRecommendView } from "@/lib/catalog/image-recommend-core";
+import type { ImageRecommendView, ImageRecommendation } from "@/lib/catalog/image-recommend-core";
 import { confidenceText } from "@/lib/catalog/image-recommend-core";
+import type { OnboardingImageSearch } from "@/lib/catalog/image-memory-server";
+import { draftsHref, type DraftView } from "@/lib/catalog/draft-deep-link-core";
 
 export const IMAGES_HEADING = "Photos for this product";
 export const IMAGES_HELP =
@@ -35,7 +37,15 @@ export function OnboardingImagesPanel({
   returnStatus,
   libraryFailed = false,
   memoryMissing = false,
+  search = null,
+  hasVendor = false,
+  hasBrand = false,
 }: {
+  /** D221 M6: the "Search for a better picture" / "Find similar" result for THIS row (null = not searching). */
+  search?: OnboardingImageSearch | null;
+  /** The draft has a vendor / brand card (enables those scope chips). */
+  hasVendor?: boolean;
+  hasBrand?: boolean;
   draftId: string;
   productName: string;
   view: ImageRecommendView;
@@ -54,6 +64,81 @@ export function OnboardingImagesPanel({
       <input type="hidden" name="return_manifest" value={returnManifest ?? ""} />
       <input type="hidden" name="return_status" value={returnStatus} />
     </>
+  );
+  const here = (extra?: Record<string, string>) =>
+    draftsHref({ status: (returnStatus as DraftView) || null, manifestId: returnManifest, draftId, extra });
+  const tile = (r: ImageRecommendation) => (
+    <li
+      key={r.id}
+      data-testid="onboarding-image"
+      data-confidence={r.confidence}
+      className="flex flex-col gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1"
+    >
+      {r.url ? (
+        // Library thumbnails come from Supabase storage / any host; a
+        // plain <img> avoids next/image remotePatterns for admin-only use.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={r.url} alt={r.alt || r.label} loading="lazy" className="aspect-square w-full rounded object-cover" />
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded bg-[var(--admin-surface-2)] text-[10px] text-[var(--admin-text-faint)]">No preview</div>
+      )}
+      <p className="truncate text-[11px] text-[var(--admin-text)]" title={r.label}>
+        {r.label}
+      </p>
+      <p className="flex flex-wrap gap-1">
+        <span
+          className={`${BADGE} ${
+            r.band === "high"
+              ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+              : r.band === "medium"
+                ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
+                : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]"
+          }`}
+          data-testid="onboarding-image-confidence"
+        >
+          {confidenceText(r)}
+        </span>
+        {r.remembered ? <span className={`${BADGE} bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]`}>Remembered</span> : null}
+        {r.onRecord && !r.remembered ? <span className={`${BADGE} bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]`}>On record</span> : null}
+        {r.draft ? <span className={`${BADGE} bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]`}>Unpublished</span> : null}
+        {r.rightsPending ? <span className={`${BADGE} bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]`}>Rights pending</span> : null}
+      </p>
+      {/* D221 M6: the "why" chips */}
+      {r.chips.length > 0 ? (
+        <p className="flex flex-wrap gap-0.5" data-testid="onboarding-image-chips">
+          {r.chips.map((c) => (
+            <span key={c} className="rounded-full bg-[var(--admin-surface-2)] px-1.5 text-[9px] text-[var(--admin-text-muted)]">{c}</span>
+          ))}
+        </p>
+      ) : null}
+      {r.reasons.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-[10px] text-[var(--admin-text-muted)]">Why?</summary>
+          <ul className="mt-0.5 list-disc pl-3 text-[10px] leading-snug text-[var(--admin-text-muted)]" data-testid="onboarding-image-why">
+            {r.reasons.map((why) => (
+              <li key={why}>{why}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      <a href={here({ imgd: draftId, imgsim: r.id })} className="text-[10px] text-[var(--admin-accent)] hover:underline" data-testid="onboarding-image-similar">
+        Find similar
+      </a>
+      {r.attached ? (
+        <p className="text-[10px] font-semibold text-[var(--admin-accent)]" data-testid="onboarding-image-attached">
+          On this product
+        </p>
+      ) : (
+        <form action={attachAction}>
+          {hidden}
+          <input type="hidden" name="media_id" value={r.id} />
+          <input type="hidden" name="source" value={r.remembered ? "memory" : "library"} />
+          <button type="submit" className={`${BTN} w-full`} data-testid="onboarding-image-attach" aria-label={`Attach ${r.label} (${confidenceText(r)})`}>
+            Attach
+          </button>
+        </form>
+      )}
+    </li>
   );
   return (
     <section
@@ -86,71 +171,51 @@ export function OnboardingImagesPanel({
       ) : null}
       {view.items.length > 0 ? (
         <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" data-testid="onboarding-images-list">
-          {view.items.map((r) => (
-            <li
-              key={r.id}
-              data-testid="onboarding-image"
-              data-confidence={r.confidence}
-              className="flex flex-col gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1"
-            >
-              {r.url ? (
-                // Library thumbnails come from Supabase storage / any host; a
-                // plain <img> avoids next/image remotePatterns for admin-only use.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={r.url} alt={r.alt || r.label} loading="lazy" className="aspect-square w-full rounded object-cover" />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center rounded bg-[var(--admin-surface-2)] text-[10px] text-[var(--admin-text-faint)]">
-                  No preview
-                </div>
-              )}
-              <p className="truncate text-[11px] text-[var(--admin-text)]" title={r.label}>
-                {r.label}
-              </p>
-              <p className="flex flex-wrap gap-1">
-                <span
-                  className={`${BADGE} ${
-                    r.band === "high"
-                      ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
-                      : r.band === "medium"
-                        ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
-                        : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]"
-                  }`}
-                  data-testid="onboarding-image-confidence"
-                >
-                  {confidenceText(r)}
-                </span>
-                {r.remembered ? <span className={`${BADGE} bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]`}>Remembered</span> : null}
-                {r.onRecord && !r.remembered ? <span className={`${BADGE} bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]`}>On record</span> : null}
-                {r.draft ? <span className={`${BADGE} bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]`}>Unpublished</span> : null}
-                {r.rightsPending ? <span className={`${BADGE} bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]`}>Rights pending</span> : null}
-              </p>
-              {r.reasons.length > 0 ? (
-                <details>
-                  <summary className="cursor-pointer text-[10px] text-[var(--admin-text-muted)]">Why?</summary>
-                  <ul className="mt-0.5 list-disc pl-3 text-[10px] leading-snug text-[var(--admin-text-muted)]" data-testid="onboarding-image-why">
-                    {r.reasons.map((why) => (
-                      <li key={why}>{why}</li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
-              {r.attached ? (
-                <p className="text-[10px] font-semibold text-[var(--admin-accent)]" data-testid="onboarding-image-attached">
-                  On this product
-                </p>
-              ) : (
-                <form action={attachAction}>
-                  {hidden}
-                  <input type="hidden" name="media_id" value={r.id} />
-                  <input type="hidden" name="source" value={r.remembered ? "memory" : "library"} />
-                  <button type="submit" className={`${BTN} w-full`} data-testid="onboarding-image-attach" aria-label={`Attach ${r.label} (${confidenceText(r)})`}>
-                    Attach
-                  </button>
-                </form>
-              )}
-            </li>
-          ))}
+          {view.items.map((r) => tile(r))}
         </ul>
+      ) : null}
+      {/* D221 M6: search for a better picture (this vendor / this brand / everything) + find similar. */}
+      <form method="get" action="/admin/inventory/drafts" className="flex flex-wrap items-center gap-1.5" data-testid="onboarding-image-search">
+        <input type="hidden" name="draft" value={draftId} />
+        <input type="hidden" name="imgd" value={draftId} />
+        {returnManifest ? <input type="hidden" name="manifest" value={returnManifest} /> : null}
+        {returnStatus && returnStatus !== "draft" ? <input type="hidden" name="status" value={returnStatus} /> : null}
+        <input
+          name="imgq"
+          defaultValue={search?.similarTo ? "" : search?.query ?? ""}
+          placeholder="Search for a better picture…"
+          aria-label="Search for a better picture"
+          className="min-w-[12rem] flex-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-2 py-1 text-xs text-[var(--admin-text)]"
+        />
+        {(["vendor", "brand", "all"] as const).map((sc) => {
+          const disabled = (sc === "vendor" && !hasVendor) || (sc === "brand" && !hasBrand);
+          const on = (search?.scope ?? (hasVendor ? "vendor" : "all")) === sc;
+          return (
+            <button
+              key={sc}
+              type="submit"
+              name="imgs"
+              value={sc}
+              disabled={disabled}
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${on ? "border-[var(--admin-accent)] text-[var(--admin-accent)]" : "border-[var(--admin-border)] text-[var(--admin-text-muted)]"} disabled:opacity-40`}
+              title={disabled ? "This product has no card for that yet" : undefined}
+            >
+              {sc === "vendor" ? "This vendor" : sc === "brand" ? "This brand" : "Everything"}
+            </button>
+          );
+        })}
+        {search ? (
+          <a href={here()} className="text-[10px] text-[var(--admin-text-faint)] hover:text-[var(--admin-accent)]">Close search</a>
+        ) : null}
+      </form>
+      {search ? (
+        <div className="space-y-1" data-testid="onboarding-image-search-results">
+          <p className="text-[10px] font-semibold text-[var(--admin-text-muted)]">
+            {search.similarTo ? "Pictures like that one" : search.query ? `Results for “${search.query}”` : "This card's pictures"} ({search.items.length})
+          </p>
+          {search.note ? <p className="text-[10px] text-[var(--admin-gold)]">{search.note}</p> : null}
+          {search.items.length > 0 ? <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">{search.items.map((r) => tile(r))}</ul> : null}
+        </div>
       ) : null}
       <form action={importAction} className="flex flex-wrap items-end gap-1.5" data-testid="onboarding-image-import">
         {hidden}
