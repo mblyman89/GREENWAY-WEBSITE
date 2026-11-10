@@ -19,6 +19,9 @@ import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { EmptyState } from "@/components/admin/ux";
 import { MediaGrid } from "@/components/admin/media/MediaGrid";
+import { MediaAiPanel } from "@/components/admin/media/MediaAiPanel";
+import { loadDescribePanel } from "@/lib/media/media-describe-store";
+import { startDescribeRunAction, setDescribeRunStatusAction, retryFailedDescribesAction } from "./ai-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +58,7 @@ export default async function MediaPage({
   // PARALLEL (they used to be three serial steps).
   const sourcesPromise = loadMediaUseSources();
   sourcesPromise.catch(() => undefined);
-  const [counts, everything] = await Promise.all([countMedia(), listAllMedia()]);
+  const [counts, everything, aiPanel] = await Promise.all([countMedia(), listAllMedia(), loadDescribePanel()]);
   const uses = await buildMediaUses(everything, sourcesPromise);
   const index = folderIndex(everything, uses);
   const tree = buildFolderTree(index);
@@ -145,6 +148,9 @@ export default async function MediaPage({
           <StatCard label="Published" value={counts.published} accent="green" />
           <StatCard label="Drafts" value={counts.total - counts.published} accent="orange" />
         </div>
+
+        {/* D221 M4: the AI closer look run + the M3 review queue link */}
+        <MediaAiPanel panel={aiPanel} startAction={startDescribeRunAction} statusAction={setDescribeRunStatusAction} retryAction={retryFailedDescribesAction} />
 
         {/* Upload (drag & drop) */}
         <MediaDropzone />

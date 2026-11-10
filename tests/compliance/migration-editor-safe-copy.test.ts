@@ -273,6 +273,7 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
     expect(found).toContain("0351_kb_crawl_campaigns");
     // D221 M1+M2. Ships a copy too (comments carry the owner quotes).
     expect(found).toContain("0352_media_library_v2");
+    expect(found).toContain("0353_media_library_m3_m4");
   });
 
   it("every copy has a real migration behind it", () => {

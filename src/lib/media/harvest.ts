@@ -239,9 +239,16 @@ async function applyProvenance(asset: MediaAsset, provenance: MediaProvenance | 
     if (Object.keys(patch).length === 0) return asset;
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin.from("media_assets").update(patch).eq("id", asset.id).select("*").single();
-    if (error || !data) return asset;
+    if (error || !data) {
+      // D221 M3: say why (rule 15) - a silent failure here is how saves right
+      // after the 0352 deploy landed with no platform or vendor. The save
+      // itself still succeeds; the provenance backfill fills the gap later.
+      console.warn(`[media/harvest] provenance not written for ${asset.id}: ${error?.message ?? "no row returned"}`);
+      return asset;
+    }
     return data as MediaAsset;
-  } catch {
+  } catch (e) {
+    console.warn(`[media/harvest] provenance not written for ${asset.id}: ${e instanceof Error ? e.message : String(e)}`);
     return asset;
   }
 }

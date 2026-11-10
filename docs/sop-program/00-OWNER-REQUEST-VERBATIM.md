@@ -2221,3 +2221,59 @@ Docs only: this section and the strategy doc. No code or schema changed.
   - The media page search matches every word across the new fields.
 - Docs: MIGRATIONS_TO_RUN 0350/0351 notes corrected ("Run without RLS") and a 0352 entry with checks.
 - Next slices: M3 (review queue + folders on the new columns), M4 (luna high-detail describe / SEO / embeddings using `media_ai_runs`), M5–M8 as in the D221 strategy doc.
+
+## D221 (M3 + M4) — Media library: finish the vendor links, a review queue, and the gpt-6-luna "closer look" describe + SEO pass (2026-11-10)
+
+### Owner request (verbatim)
+
+> thank you! please work on the next two slices. follow the standing rules. thank you.
+
+(The next two slices of docs/sop-program/D221-media-library-strategy.md section 5: **M3** provenance backfill + misfiled-logo rule, **M4** vision + SEO backfill worker, resumable, budget-capped, recorded in `media_ai_runs`, and new pictures going forward. Model and detail as decided in D221 M1+M2: `gpt-6-luna`, `detail: "high"`.)
+
+### Findings
+
+Read-only on the live database, 2026-11-10, after 0352 was applied:
+- **988 live pictures had no vendor.** Most were Cultivera menu photos saved from the product card, so they were never linked to a menu item row and the 0352 menu-item step could not see them.
+- **Seller folder code.** Cultivera keeps each seller's pictures under a folder named with a seller code (`.../435553542D.../ProductImages/...`). Every code seen on the saved menus belongs to exactly one seller. This resolves **297** of the 988.
+- **Seller tag.** The menu save tags every picture with the seller name in kebab case (40 characters). 0352 only tried the tag as a vendor *name*, which a long seller name never matches. Matched against the saved menu snapshots instead, it resolves **569** (cultivera 500, growflow 45, no platform 24).
+- **Harvested title.** Website logos are saved as "<Vendor> (harvested)", and the host is a CDN (squarespace, wix), so the 0352 host rule could not match. The title resolves **76 of 76** logos and **51 of 59** product shots.
+- **Placeholder vendor.** The "Sub X" brand sits under the placeholder vendor "INDEPENDENT / UNLISTED VENDOR", while a real SUBX vendor exists. The placeholder must never win a match.
+- **Merged cards.** Some seller names belong to a merged vendor card (BOTANICAL ARTS - 431389 -> Buddies). The 0352 resolver skipped merged cards instead of following them to the survivor.
+- **Pictures with no platform (saved 23:23-23:49 UTC on 2026-11-09).** The edge logs show the *pre-0352* query shape (`storage_key like %/hash-% limit 1`, no `content_hash` read, no `media_resolve_vendor` call ever). So these were saved by an old deployment instance or an admin tab left open from before the deploy (version skew), not by the new code. Re-running the backfill in 0353 fixes those rows. **A hard refresh of open admin tabs after each deploy avoids this.**
+- **Review flags.** 203 pictures were flagged by 0352 step h ("Filed as a logo, but the file name looks like a product photo"), and there was no screen for deciding them.
+- **Two importers saved without provenance.** The vendor-editor "import harvested image" action and the vendor-logo finder saved logos with no provenance. `applyProvenance` also swallowed its error silently.
+- **No gpt-6-luna use yet** in `ai_usage`. There is no OpenAI key in the build sandbox, so the live vision call is first exercised on production.
+
+### Decisions
+
+- **The worker runs as a Vercel cron**, not on Railway as the strategy doc said. `/api/cron/media-describe` runs every 5 minutes at :02 (`2-59/5 * * * *`). The run is leased by compare-and-set (rule 12), an idle tick is one read, and the run row carries a dollar budget. This keeps it in the same, already-monitored platform, and Pro allows it.
+- **Model `gpt-6-luna`, image detail `high`** (env `MEDIA_AI_MODEL` / `MEDIA_AI_DETAIL` may override). Estimate for about 4,100 pictures: about $1-5. The run stops *before* the call that could cross its budget, and pauses when the monthly AI budget is reached.
+- **"Inline at harvest"** = a run started with "keep describing new pictures" stays open after the backlog. New pictures are saved with `ai_status = pending`, so each one is described within one tick (about 5 minutes) of its save. This avoids putting a 10-30 second AI call inside the menu save.
+- **AI writes follow the AGENTS.md rule 3 D221 exception.** The AI only fills its own fields (description, caption, package text, tags, SEO, alt text when empty or AI-written, role when empty). It never touches a person's title, description or alt text. Anything doubtful goes to the review queue instead of being changed: logo vs product, a different brand on the package, wording blocked by the compliance lint, or low confidence. Attaching a picture to a product stays a human click.
+- **Review decisions:** Looks right / It's a product photo (refused while a vendor or brand still uses it as its logo) / It's a logo / Reject. Reject un-publishes only an *auto*-published picture and never deletes anything. A rejected picture can be un-rejected, and the AI never reopens it.
+- **Embeddings are deferred** to the slice that needs them (M6 recommender). M4 builds describe + SEO only.
+
+### As built
+
+- **Migration `0353_media_library_m3_m4.sql`** (no new table):
+  - `media_resolve_vendor` follows merges to `vendor_survivor_id`.
+  - New `media_vendor_tag()`.
+  - New `media_backfill_vendor_links()` with rules j (seller code), k (seller tag) and l (harvested title). Each rule needs a single agreeing vendor and the placeholder is excluded; credit text is then filled.
+  - `media_ai_runs` gets lease_token, lease_until, follow_new, input/output tokens and last_tick_at.
+  - `media_assets` gets reviewed_by and reviewed_at.
+  - `media_library_health` adds ai_failed, ai_skipped, rejected and ai_spend_usd.
+  - Re-runs the 0352 backfill, then the links, then auto-publish.
+  - Comes with an editor-safe copy (hazards 0), a rollback, and the pg-check `scripts/recon/media-library-m3-0353-pg-check.sql`, which is added to POST_APPLY_CHECKS.
+- **Vision provider:** `generateVisionJson()` in `src/lib/ai/provider.ts` requests JSON output, uses image detail high, and handles reasoning-model parameters, retrying with a reduced request on a 400. Usage is recorded as `media.describe`.
+- **Pure core `src/lib/media/media-describe-core.ts`** (42 self-tests): eligibility, prompt, parse, patch rules, cost, budget and lease verdicts.
+- **Pure core `src/lib/media/media-review-core.ts`** (22 self-tests): the review decisions. Both are registered in run-pure-selftests.
+- **Store `src/lib/media/media-describe-store.ts`:** start / pause / resume / stop / retry failed / describe one now / tick / panel.
+- **Cron `src/app/api/cron/media-describe/route.ts`** in vercel.json (22 crons). The cron-count pins, cadence map and AGENTS.md rule 12 schedule are updated.
+- **Admin:**
+  - "AI closer look" panel on /admin/media: counts, estimate, budget, Start with "keep describing new pictures", Pause / Resume (may raise the budget) / Stop, Retry failed, and a link to the queue.
+  - New /admin/media/review queue with Needs review and Rejected tabs, range-paged.
+  - "Describe now" plus the review buttons on each picture's page.
+  - Every action requires media.manage, writes an audit row, and the review write is compare-and-set on review_state.
+- **Provenance fixes:** both logo importers now pass provenance (role logo, vendor, credit). `applyProvenance` and the vendor resolver log their errors instead of hiding them, and the resolver no longer caches an error.
+- **Tests:** `tests/compliance/d221-m3-m4-media-ai.test.ts`. Migration pins are shifted to 0353.
+- **Verified:** tsc 0, eslint 0, pure self-tests all passed, the touched vitest suites pass, and `verify-migrations-execute` applies all 353 migrations, passes the 0353 check and re-applies 0353 cleanly.

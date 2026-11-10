@@ -2,7 +2,8 @@
  * D221 M1: which vendor card a menu's seller name belongs to, for media
  * provenance. Calls public.media_resolve_vendor (0352): license first, then the
  * normalised display / legal name / slug, then a long-enough name prefix.
- * Merged-away vendors are never returned.
+ * Merged-away vendors are never returned (0353: a merged card resolves to
+ * its survivor).
  *
  * Best-effort by design: null when unknown or when 0352 is not applied yet -
  * the image is still saved, it just stays a draft until a person (or the
@@ -24,10 +25,16 @@ export async function resolveMediaVendorId(label: string | null | undefined, lic
   try {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin.rpc("media_resolve_vendor", { p_label: l || null, p_license: lic || null });
-    const id = !error && typeof data === "string" && data ? data : null;
+    if (error) {
+      // D221 M3 (rule 15): read the error. Not cached, so the next save retries.
+      console.warn(`[media/vendor-resolve] media_resolve_vendor failed: ${error.message}`);
+      return null;
+    }
+    const id = typeof data === "string" && data ? data : null;
     cache.set(key, { at: Date.now(), id });
     return id;
-  } catch {
+  } catch (e) {
+    console.warn(`[media/vendor-resolve] media_resolve_vendor threw: ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }

@@ -70,6 +70,9 @@ export type MediaAsset = {
   published_at?: string | null;
   review_state?: string | null;
   review_note?: string | null;
+  // D221 M3 (0353).
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
 };
 
 export type AuditLog = {
