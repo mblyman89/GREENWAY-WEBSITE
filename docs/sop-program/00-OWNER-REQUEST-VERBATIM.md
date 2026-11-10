@@ -2482,3 +2482,9 @@ Fix:
 - **Tests:** `tests/compliance/d224-menu-card-fallback.test.ts`. The migration pins are shifted to 0355.
 - **To go live:** apply migration 0355 in Supabase.
 
+## D225 — Menu card fallbacks: many pictures per category, and fallback cards rotate (2026-11-10)
+
+### Owner request (verbatim)
+
+> thank you. now lets enhance the fallback page some more. I want to be able to add many fallback images to the categories, so that the menu has a variety of images used. it should make it look better. and to really make it cooler, the cards with fallback images, should rotate images. that would be fun I think. please add these features for me. follow the standing rules. thank you.
+
