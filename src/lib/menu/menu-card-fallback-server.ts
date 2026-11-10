@@ -30,6 +30,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { publicUrlForKey } from "@/lib/media/store";
 import { MENU_CACHE_TAG } from "@/lib/menu/menu-cache-policy-core";
 import { PUBLIC_SNAPSHOT_TTL_SECONDS } from "@/lib/site/public-snapshot-core";
+import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import {
   applyMenuCardFallbacks,
   parseFallbackCategory,
@@ -143,6 +144,28 @@ export async function menuCardFallbackUrlFor(category: string | null | undefined
   const cat = parseFallbackCategory(category);
   if (!cat) return null;
   return (await menuCardFallbackUrls()).get(cat) ?? null;
+}
+
+/**
+ * One product (the register info card, the admin product page): the card's
+ * FINAL website category is the owner's re-file when there is one, else its
+ * own category, so the picture matches the one the shop shows. Never throws.
+ */
+export async function menuCardFallbackUrlForProduct(
+  posKey: string | null | undefined,
+  category: string | null | undefined,
+): Promise<string | null> {
+  try {
+    let finalCategory = category ?? null;
+    const key = (posKey ?? "").trim();
+    if (key) {
+      const ov = (await getOverridesForKeys([key])).get(key);
+      if (ov?.website_category) finalCategory = ov.website_category;
+    }
+    return await menuCardFallbackUrlFor(finalCategory);
+  } catch {
+    return null;
+  }
 }
 
 /**

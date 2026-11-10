@@ -20,6 +20,7 @@ import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 import { withProductTags } from "@/lib/menu/product-tags-server";
+import { withMenuCardFallbacks } from "@/lib/menu/menu-card-fallback-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
 import { ShopBannerSkeleton, ShopBrowserSkeleton } from "@/components/menu/MenuSkeleton";
@@ -90,13 +91,16 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
   // overlaps the menu chain; awaited after the batch below. Kept out of the
   // SLICE D Promise.all on purpose - that batch's shape is pinned by tests.
   const merchAdPromise = loadMerchAdView();
-  const enrichedMenuItems = await withProductTags(await withCategoryOverride(
+  // D224: + withMenuCardFallbacks on the very outside - the owner's picture
+  // for the card's FINAL website category (after the re-file above), only on
+  // cards with no photo of their own. Snapshot-cached; identity when unset.
+  const enrichedMenuItems = await withMenuCardFallbacks(await withProductTags(await withCategoryOverride(
     await withDohCompliance(
       await withDisplayKnowledge(
         await withResolvedImages(await withMenuProfile(await loadLiveMenuItemsCached())),
       ),
     ),
-  ));
+  )));
   // SLICE E: drop fields the grid never renders before this array is serialized
   // into the response for every shopper.
   const menuItems = toMenuGridItems(enrichedMenuItems);

@@ -44,6 +44,7 @@ import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-pi
 import { parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
 import { logMediaSearch } from "@/lib/media/library-v2-server";
 import type { PickerImageSearch } from "./MediaLibraryPicker";
+import { fallbackSourceLabel, MENU_CARD_FALLBACK_PAGE } from "@/lib/menu/menu-card-fallback-core";
 import {
   updateProductEnrichment,
   setEnrichmentStatus,
@@ -365,7 +366,7 @@ export default async function ProductEditorPage({
                 <p className="text-[11px] text-white/50">
                   {center.liveImage.isFallback ? (
                     <span className="rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-gold)]">
-                      Fallback: {center.liveImage.source.replace(/-/g, " ")}
+                      Fallback: {fallbackSourceLabel(center.liveImage.source)}
                     </span>
                   ) : (
                     <span className="rounded bg-[var(--admin-accent-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-accent)]">
@@ -387,7 +388,10 @@ export default async function ProductEditorPage({
                 </div>
                 <p className="text-[11px] text-white/50">
                   Approved fallback for <span className="text-white/75">{center.substitute.key}</span> covers this card
-                  automatically — no action needed unless you want a real photo.
+                  automatically — no action needed unless you want a real photo.{" "}
+                  <Link href={MENU_CARD_FALLBACK_PAGE} className="underline underline-offset-2 hover:text-white">
+                    Menu Card Fallbacks
+                  </Link>
                 </p>
               </div>
             )}
