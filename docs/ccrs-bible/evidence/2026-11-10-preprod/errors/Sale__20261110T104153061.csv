@@ -1,0 +1,3 @@
+LicenseNumber,SoldToLicenseNumber,InventoryExternalIdentifier,PlantExternalIdentifier,SaleType,SaleDate,Quantity,UnitPrice,Discount,SalesTax,OtherTax,SaleExternalIdentifier,SaleDetailExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation,ErrorMessage
+413541,,GF41583505719517,,RecreationalRetail,11/06/2026,3,12.30,0.00,3.43,13.66,GWY-AZ3ALV,GWY-AZ3ALV-5a216511,Michael Lyman,11/06/2026,,,Insert,Cannabis Excise Tax does not equal 37% of Unit Price
+413541,,GF41583505719517,,RecreationalRetail,11/06/2026,2,12.30,0.00,2.29,9.11,GWY-7DPS89,GWY-7DPS89-c54049ac,Michael Lyman,11/06/2026,,,Insert,Cannabis Excise Tax does not equal 37% of Unit Price

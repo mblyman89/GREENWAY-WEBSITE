@@ -74,6 +74,9 @@ function dayNumber(mmddyyyy: string): number {
   return Number(`${yyyy}${mm}${dd}`) || 0;
 }
 
+/** The 37% cannabis excise CCRS checks every retail Sale row against [G L1374]. */
+export const CCRS_EXCISE_RATE_BPS = 3700;
+
 /** Pro-rate a whole-line money amount to a remaining quantity. */
 export function prorateLineMinor(lineMinor: number, remainingQty: number, originalQty: number): number {
   if (!(originalQty > 0)) return 0;
@@ -102,9 +105,22 @@ export function mapSaleCorrectionRow(
   const remaining = src.originalQuantity - src.returnQuantity;
   const isDelete = src.correctionOperation === "Delete" || remaining <= 0;
   const qty = isDelete ? src.originalQuantity : remaining;
-  const discount = isDelete ? src.discountMinor : prorateLineMinor(src.discountMinor, remaining, src.originalQuantity);
+  // D227: a partial Update must still satisfy CCRS's printed check,
+  // CannabisExciseTax == 37% of (Quantity x UnitPrice - Discount)
+  // [G L1374, L1377]. Pro-rating discount and excise SEPARATELY can break it
+  // by a cent (e.g. 3 x 12.30, excise 13.66, one returned: 2 x 12.30 - 0.00
+  // gives 9.10, pro-rated excise 9.11). So the remaining BASE is pro-rated
+  // once, Discount is what makes the row print that base, and excise is 37%
+  // of it. A line with no excise (medical, [G L1378]) keeps 0.
+  const originalBase = Math.max(0, src.unitPriceMinor * src.originalQuantity - src.discountMinor);
+  const remainingBase = prorateLineMinor(originalBase, remaining, src.originalQuantity);
+  const discount = isDelete ? src.discountMinor : Math.max(0, src.unitPriceMinor * qty - remainingBase);
   const salesTax = isDelete ? src.salesTaxMinor : prorateLineMinor(src.salesTaxMinor, remaining, src.originalQuantity);
-  const excise = isDelete ? src.exciseMinor : prorateLineMinor(src.exciseMinor, remaining, src.originalQuantity);
+  const excise = isDelete
+    ? src.exciseMinor
+    : src.exciseMinor > 0
+      ? Math.round((remainingBase * CCRS_EXCISE_RATE_BPS) / 10000)
+      : 0;
 
   const saleDate = ccrsDateLoose(src.saleDateISO);
   // "Updated Date cannot be prior to Created Date" — clamp forward if needed
@@ -204,9 +220,54 @@ export function __runSaleCorrectionTests(): { passed: number; failed: number } {
   );
   eq(upd.row?.[17], "Update", "Operation Update");
   eq(upd.row?.[6], "1", "Update reports remaining quantity");
-  eq(upd.row?.[8], "2.50", "discount pro-rated");
+  // base 2 x 25.00 - 5.00 = 45.00 -> remaining base 22.50 -> discount 2.50.
+  eq(upd.row?.[8], "2.50", "discount from the pro-rated base");
   eq(upd.row?.[9], "2.10", "sales tax pro-rated");
-  eq(upd.row?.[10], "8.33", "excise pro-rated (rounded)");
+  eq(upd.row?.[10], "8.33", "excise = 37% of the remaining printed base (22.50 -> 8.325 -> 8.33)");
+
+  // D227: the 2026-11-10 refused shape. 3 x 12.31 - 0.02 = 36.91, excise 13.66;
+  // one returned -> 2 x 12.31 - disc must print a base whose 37% IS the excise.
+  const d227 = mapSaleCorrectionRow(
+    { ...base, correctionOperation: "Update", originalQuantity: 3, returnQuantity: 1, unitPriceMinor: 1231, discountMinor: 2, salesTaxMinor: 343, exciseMinor: 1366 },
+    lic,
+  );
+  {
+    const q = Number(d227.row?.[6]);
+    const u = Math.round(Number(d227.row?.[7]) * 100);
+    const d = Math.round(Number(d227.row?.[8]) * 100);
+    const e = Math.round(Number(d227.row?.[10]) * 100);
+    eq([q, u, d, e], [2, 1231, 1, 911], "D227 partial Update prints 2 x 12.31 - 0.01 = 24.61, excise 9.11");
+    ok(Math.round(((q * u - d) * 3700) / 10000) === e, "D227 partial Update passes the printed 37% check");
+  }
+  // Old pre-D227 snapshot (3 x 12.30, disc 0, excise 13.66 on a 36.91 base): the Update
+  // still prints consistently (37% of 2 x 12.30 - 0 = 9.10, never the pro-rated 9.11).
+  const legacy = mapSaleCorrectionRow(
+    { ...base, correctionOperation: "Update", originalQuantity: 3, returnQuantity: 1, unitPriceMinor: 1230, discountMinor: 0, salesTaxMinor: 343, exciseMinor: 1366 },
+    lic,
+  );
+  eq([legacy.row?.[7], legacy.row?.[8], legacy.row?.[10]], ["12.30", "0.00", "9.10"], "D227 legacy snapshot Update consistent");
+  // Medical (0 excise) stays 0 on Update [G L1378].
+  const med = mapSaleCorrectionRow({ ...base, correctionOperation: "Update", returnQuantity: 1, exciseMinor: 0, saleType: "RecreationalMedical" }, lic);
+  eq(med.row?.[10], "0.00", "D227 0-excise line stays 0 on Update");
+  // Sweep: every partial Update passes the printed check.
+  for (let u = 100; u <= 6000; u += 37) {
+    for (let oq = 2; oq <= 8; oq += 1) {
+      for (let rq = 1; rq < oq; rq += 1) {
+        const disc = (u * oq) % 97;
+        const b0 = u * oq - disc;
+        const r = mapSaleCorrectionRow(
+          { ...base, correctionOperation: "Update", originalQuantity: oq, returnQuantity: rq, unitPriceMinor: u, discountMinor: disc, salesTaxMinor: Math.round(b0 * 0.093), exciseMinor: Math.round(b0 * 0.37) },
+          lic,
+        ).row!;
+        const q = Number(r[6]);
+        const pu = Math.round(Number(r[7]) * 100);
+        const pd = Math.round(Number(r[8]) * 100);
+        const pe = Math.round(Number(r[10]) * 100);
+        if (Math.round(((q * pu - pd) * 3700) / 10000) !== pe || pd < 0) ok(false, `D227 sweep Update ${u}x${oq} return ${rq}`);
+      }
+    }
+  }
+  passed += 1;
 
   // A "Update" that returns everything degrades safely to Delete.
   const updAll = mapSaleCorrectionRow({ ...base, correctionOperation: "Update" }, lic);

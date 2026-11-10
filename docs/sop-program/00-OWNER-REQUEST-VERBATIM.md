@@ -2547,3 +2547,24 @@ Fix:
   - The provider is mounted in the site layout.
 - **Tests:** a new `tests/compliance/d225-fallback-variety-rotation.test.ts`, and the d224 test pins now follow the new actions.
 - **To go live:** apply migration 0356 in Supabase (after 0355).
+
+## D227 — CCRS weekly Sale upload: 2 rows refused "Cannabis Excise Tax does not equal 37% of Unit Price" (2026-11-10)
+
+### Owner request (verbatim)
+
+> Thank you. Let's build 1, 3, 4, and 5 first. I can use preprod to test if needed. It's always available. Complete all tasks. Break it up into slices. Push and merge often, the sandbox is unstable. Follow the standing rules. Thank you
+
+(Items from the recon plan: 1 = exporter fix, 3 = triage hub knows the message, 4 = one-click re-send of refused rows, 5 = tests. Item 2, strict preflight, is not requested now.)
+
+### Findings
+
+- PREprod file `Sale_413541_20261110101609.csv` (1,332 rows): 2 rows were refused with `Cannabis Excise Tax does not equal 37% of Unit Price`.
+- CCRS checks `round_half_up(37% × (Quantity × UnitPrice − Discount)) == CannabisExciseTax` exactly [G L1374, L1377] [FAQ L0153-L0160]. All 1,330 accepted rows pass this identity (0 mismatches).
+- The exporter backed the tax out twice: UnitPrice = round(shelf/1.463) for one unit, but the line base and the excise came from round(qty × shelf/1.463). For 3 × $18.00 the printed row was 3 × 12.30 − 0.00 = 36.90 (37% = 13.65), while the excise sent was 13.66 (37% of 36.91).
+
+### Decisions (slices)
+
+- S1: one helper `ccrsSaleLineMoney` decides UnitPrice / Discount / taxes so the printed row equals the taxed base. When the shelf unit × qty is under the base, UnitPrice is lifted by at most 1¢ and Discount absorbs the rest. Used by the weekly Sale exporter and the return snapshot. Partial-return Updates now take excise as 37% of the printed remaining base.
+- S3: the hub knows the message (known-messages list, playbook, triage rule, scoreboard next step).
+- S4: a one-click "re-send refused rows" on an errored Sale file.
+- S5: bible / audit docs, pins, mutation checks.

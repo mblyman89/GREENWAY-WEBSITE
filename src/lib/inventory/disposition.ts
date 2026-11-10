@@ -31,8 +31,8 @@ import {
   type CustomerReturnDisposition,
 } from "@/lib/inventory/disposition-core";
 import { pacificDayKey, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
-import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
-import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-core";
+import { getTaxSettings, getCannabisCategorySet, isCannabisCategory } from "@/lib/reports/tax";
+import { ccrsSaleLineMoney } from "@/lib/reports/tax-base-core";
 import {
   deriveInventoryExternalId,
   resolveSaleInventoryExternalId,
@@ -667,14 +667,13 @@ export async function createCustomerReturn(
   // the original Sale row reported (UnitPrice pre-tax, taxes on the pre-tax
   // base, exemption-aware still-due rate).
   const combinedBps = taxSettings.stateSalesRateBps + taxSettings.localSalesRateBps;
-  const preTaxRegularUnit = preTaxUnitMinor({
-    unitPriceMinorUnits: regularUnit,
-    isCannabis,
-    combinedSalesRateBps: combinedBps,
-    exciseRateBps: taxSettings.exciseRateBps,
-  });
-  const baseCents = preTaxLineBaseMinor({
-    unitPriceMinorUnits: soldUnit,
+  // D227: the SAME helper as the Sale.csv builder, so the snapshot restates
+  // exactly the money the Sale row printed, and Quantity x UnitPrice -
+  // Discount == base keeps CannabisExciseTax at 37% of the printed base
+  // [G L1374, L1377] on the Update / Delete correction too.
+  const money = ccrsSaleLineMoney({
+    soldUnitMinorUnits: soldUnit,
+    regularUnitMinorUnits: regularUnit,
     quantity: qty,
     isCannabis,
     salesExempt,
@@ -682,9 +681,10 @@ export async function createCustomerReturn(
     combinedSalesRateBps: combinedBps,
     exciseRateBps: taxSettings.exciseRateBps,
   });
-  const discountCents = Math.max(0, preTaxRegularUnit * qty - baseCents);
-  const salesTaxCents = salesExempt ? 0 : applyBps(baseCents, combinedBps);
-  const exciseCents = isCannabis && !exciseExempt ? applyBps(baseCents, taxSettings.exciseRateBps) : 0;
+  const preTaxRegularUnit = money.unitPriceMinor;
+  const discountCents = money.discountMinor;
+  const salesTaxCents = money.salesTaxMinor;
+  const exciseCents = money.exciseMinor;
 
   const saleExternalId = o.order_number || o.id;
   const saleDetailExternalId = `${saleExternalId}-${l.id.slice(0, 8)}`;

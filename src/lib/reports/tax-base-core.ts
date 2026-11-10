@@ -100,6 +100,96 @@ export function preTaxUnitMinor(opts: {
 }
 
 // ---------------------------------------------------------------------------
+// D227 — the money columns of ONE CCRS Sale.csv row, consistent as printed.
+// ---------------------------------------------------------------------------
+
+/**
+ * WHY (2026-11-10, PREprod Sale_413541_20261110101609.csv): CCRS refused 2 of
+ * 1,332 rows with "Cannabis Excise Tax does not equal 37% of Unit Price"
+ * [G L1374, L1377]. Both were the same $18.00 infused pre-roll sold 3 and 2 at
+ * a time. The builder backed the tax out TWICE, rounding each:
+ *   UnitPrice = round(1800 / 1.463)     = 1230  ($12.30)
+ *   line base = round(3 × 1800 / 1.463) = 3691  ($36.91), excise 37% = 1366
+ * and Discount = max(0, 3 × 1230 − 3691) = 0, so the PRINTED row says
+ * 3 × 12.30 − 0.00 = 36.90 and 37% of that is 13.65, not 13.66.
+ *
+ * CCRS checks the printed numbers: on all 1,330 rows it accepted, excise ==
+ * round_half_up(37% × (Quantity × UnitPrice − Discount)) exactly, with no
+ * tolerance (FAQ example, [FAQ L0153-L0160]: 3 × $5.00 − $3.00 = $12.00,
+ * Other Tax (37%) = $4.44).
+ *
+ * THE RULE. The line base (what the register actually collected tax on) stays
+ * the source of truth, so SalesTax and CannabisExciseTax never change. When a
+ * rounded UnitPrice × Quantity falls SHORT of that base, UnitPrice is lifted to
+ * the smallest cent that covers it, and Discount absorbs the remainder. Then
+ *   Quantity × UnitPrice − Discount == base   (exactly, in cents)
+ * so 37% of the printed base IS the excise we report. With no discount the
+ * lift is at most 1 cent (self-tested).
+ *
+ * Scope: the lift applies only to rows that carry excise. An excise-exempt row
+ * (medical, [G L1378]) reports 0 excise, the 37% check does not apply, and its
+ * UnitPrice stays the regular shelf price as before.
+ */
+export type CcrsSaleLineMoney = {
+  /** UnitPrice column: one unit, pre-discount, pre-tax (minor units). */
+  unitPriceMinor: number;
+  /** Discount column: whole line (minor units). */
+  discountMinor: number;
+  /** Taxable base = Quantity × UnitPrice − Discount (minor units). */
+  baseMinor: number;
+  salesTaxMinor: number;
+  exciseMinor: number;
+  /** True when UnitPrice was lifted above the backed-out shelf price to keep the identity. */
+  unitLifted: boolean;
+};
+
+export function ccrsSaleLineMoney(opts: {
+  /** Stored tax-INCLUSIVE sold (post-discount) unit price. */
+  soldUnitMinorUnits: number;
+  /** Stored tax-INCLUSIVE regular (pre-discount) unit price. */
+  regularUnitMinorUnits: number;
+  quantity: number;
+  isCannabis: boolean;
+  salesExempt?: boolean;
+  exciseExempt?: boolean;
+  combinedSalesRateBps: number;
+  exciseRateBps: number;
+}): CcrsSaleLineMoney {
+  const qty = Math.max(0, Math.round(opts.quantity));
+  const rates = { combinedSalesRateBps: opts.combinedSalesRateBps, exciseRateBps: opts.exciseRateBps };
+  const shelfUnit = preTaxUnitMinor({ unitPriceMinorUnits: opts.regularUnitMinorUnits, isCannabis: opts.isCannabis, ...rates });
+  const baseMinor = preTaxLineBaseMinor({
+    unitPriceMinorUnits: opts.soldUnitMinorUnits,
+    quantity: qty,
+    isCannabis: opts.isCannabis,
+    salesExempt: opts.salesExempt,
+    exciseExempt: opts.exciseExempt,
+    ...rates,
+  });
+  const chargesExcise = opts.isCannabis && !opts.exciseExempt && opts.exciseRateBps > 0;
+  const salesTaxMinor = opts.salesExempt ? 0 : Math.round((baseMinor * Math.max(0, opts.combinedSalesRateBps)) / 10000);
+  const exciseMinor = chargesExcise ? Math.round((baseMinor * opts.exciseRateBps) / 10000) : 0;
+
+  let unitPriceMinor = shelfUnit;
+  let unitLifted = false;
+  if (chargesExcise && qty > 0 && shelfUnit * qty < baseMinor) {
+    unitPriceMinor = Math.ceil(baseMinor / qty);
+    unitLifted = true;
+  }
+  const discountMinor = Math.max(0, unitPriceMinor * qty - baseMinor);
+  return { unitPriceMinor, discountMinor, baseMinor, salesTaxMinor, exciseMinor, unitLifted };
+}
+
+/**
+ * The excise CCRS expects from a row's PRINTED money, in cents:
+ * round_half_up(37% × (Quantity × UnitPrice − Discount)). Inputs are minor
+ * units, so there is no float drift. Same formula as the preflight E12 check.
+ */
+export function ccrsPrintedExciseMinor(quantity: number, unitPriceMinor: number, discountMinor: number, exciseRateBps = 3700): number {
+  return Math.round((Math.max(0, quantity * unitPriceMinor - discountMinor) * exciseRateBps) / 10000);
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (pure; run via scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 

@@ -160,7 +160,12 @@ describe("CCRS Sale correction row", () => {
     expect(row![6]).toBe("2"); // 3 sold − 1 returned
     expect(row![8]).toBe("2.00"); // 300 × 2/3
     expect(row![9]).toBe("1.80"); // 270 × 2/3
-    expect(row![10]).toBe("7.40"); // 1110 × 2/3
+    // D227 [G L1374, L1377]: excise is 37% of the PRINTED remaining base,
+    // 2 x 10.00 - 2.00 = 18.00 -> 6.66. (The fixture's 11.10 is 37% of the
+    // pre-discount 30.00, which CCRS itself would refuse; pro-rating it gave
+    // 7.40, which is not 37% of the row CCRS reads.)
+    expect(row![10]).toBe("6.66");
+    expect(Math.round(((2 * 1000 - 200) * 3700) / 10000)).toBe(666);
     expect(row![11]).toBe("GW-1001");
     expect(row![12]).toBe("GW-1001-abcd1234");
     expect(row![15]).toBe("greenway"); // UpdatedBy required on corrections

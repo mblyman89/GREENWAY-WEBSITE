@@ -108,7 +108,9 @@ describe("planReturnCorrections: one row per sale line, from the cumulative retu
     expect(col(r, "Quantity")).toBe("3");
     expect(col(r, "Discount")).toBe("3.00");
     expect(col(r, "RetailSalesTax")).toBe("6.00");
-    expect(col(r, "CannabisExciseTax")).toBe("22.20");
+    // D227 [G L1374, L1377]: 37% of the PRINTED row, 3 x 20.00 - 3.00 = 57.00 -> 21.09.
+    // (Pro-rating the fixture's 29.60 gave 22.20, which CCRS refuses for this row.)
+    expect(col(r, "CannabisExciseTax")).toBe("21.09");
     expect(col(r, "SaleDetailExternalIdentifier")).toBe("GWY-AAA111-0a1b2c3d");
     expect(col(r, "SaleExternalIdentifier")).toBe("GWY-AAA111");
     expect(col(r, "InventoryExternalIdentifier")).toBe("LOT-1");
