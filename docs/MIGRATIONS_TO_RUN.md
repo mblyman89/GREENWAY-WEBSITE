@@ -4130,3 +4130,29 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0356_menu_card_fallback_many.rollback.sql` (keeps the FIRST
   picture of each category, removes the extra ones from the list; the pictures stay in the media library).
+
+- [ ] **`supabase/migrations/0357_ccrs_adopt_and_reopen.sql`** — D228 CCRS: adopt a hand-made file CCRS accepted, and
+  reopen a set-aside CCRS email (owner: "can you help me apply the success message so the system recognizes it").
+  Run it AFTER 0356. No new table. Adds three history columns to `ccrs_mail_messages` (`reopened_at`, `reopened_by`,
+  `reopen_note`, append only), lets a SET-ASIDE email go back to waiting through `ccrs_reopen_mail` (reason of 10+
+  characters, the old note is kept; an APPLIED email stays final), and adds `ccrs_adopt_handmade_file`, which stores
+  the exact bytes of a file you made by hand under the exact name CCRS saw and marks it uploaded at CCRS's "Date
+  Submitted" time. Both functions are service role only. Until it is applied, the new "Reopen" and "Adopt a hand-made
+  file" buttons say the migration is missing; nothing else changes.
+
+  Safe to re-run. Paste the file as is (its comments have no apostrophes or semicolons, so no editor-safe copy is
+  needed). If the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select proname from pg_proc where proname in ('ccrs_reopen_mail', 'ccrs_adopt_handmade_file') order by 1;
+  -- two rows
+  select column_name from information_schema.columns
+   where table_name = 'ccrs_mail_messages' and column_name like 'reopen%' order by 1;
+  -- reopen_note, reopened_at, reopened_by
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0357_ccrs_adopt_and_reopen.rollback.sql` (drops the two
+  functions and puts the 0282 guard back, so a set-aside email is final again; the history columns and any adopted
+  file stay, as records).

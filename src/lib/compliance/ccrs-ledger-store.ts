@@ -20,6 +20,7 @@ import { decodeSaleSlice, SALE_SLICE_RPC, type SaleSliceOutcome } from "./ccrs-r
 import { decodeTransferSlice, decodeTransferTold, TRANSFER_SLICE_RPC, TRANSFER_TOLD_RPC, type TransferSliceOutcome, type TransferToldOutcome } from "./ccrs-transfer-core";
 import { decodeInventoryTold, INVENTORY_TOLD_RPC, type InventoryToldOutcome } from "./ccrs-inventory-delta-core";
 import type { CcrsRetailerFileType } from "./ccrs-batch-core";
+import { MIGRATION_0357_MISSING, is0357Missing, type AdoptPayload } from "./ccrs-adopt-core";
 import type { CcrsOutcomeKind, OurRow, RejectedRow } from "./ccrs-outcome-core";
 import {
   decodeAbandon,
@@ -341,6 +342,39 @@ export async function recordOutcome(
   });
   if (error) rpcError("ccrs_record_outcome", error);
   return decodeOutcome(fileId, outcome, data);
+}
+
+/** D228 (0357): what ccrs_adopt_handmade_file answered. */
+export type AdoptAnswer = { id: string; fileName: string; uploadedAt: string; overridden: boolean; waitingOn: string[] };
+
+/**
+ * D228 (0357): store a hand-made file CCRS accepted, under its exact name,
+ * as uploaded at CCRS's Date Submitted. The payload comes from planAdoptFile.
+ */
+export async function adoptHandmadeFile(
+  admin: Admin,
+  env: LedgerEnv,
+  payload: AdoptPayload,
+  uploadedAtISO: string,
+  byProfileId: string,
+  reason: string,
+): Promise<AdoptAnswer> {
+  const { data, error } = await admin.rpc("ccrs_adopt_handmade_file", {
+    p_env: env, p_file: payload, p_uploaded_at: uploadedAtISO, p_by: byProfileId, p_reason: reason,
+  });
+  if (error && is0357Missing(error)) throw new Error(MIGRATION_0357_MISSING);
+  if (error) rpcError("ccrs_adopt_handmade_file", error);
+  const d = data as { id?: unknown; file_name?: unknown; state?: unknown; uploaded_at?: unknown; overridden?: unknown; waiting_on?: unknown } | null;
+  if (!d || typeof d.id !== "string" || d.file_name !== payload.file_name || d.state !== "uploaded") {
+    throw new Error("ccrs_adopt_handmade_file: unexpected answer");
+  }
+  return {
+    id: d.id,
+    fileName: payload.file_name,
+    uploadedAt: typeof d.uploaded_at === "string" ? d.uploaded_at : uploadedAtISO,
+    overridden: d.overridden === true,
+    waitingOn: Array.isArray(d.waiting_on) ? d.waiting_on.map(String) : [],
+  };
 }
 
 export async function abandonFile(admin: Admin, fileId: string, reason: string): Promise<{ id: string; fileName: string }> {

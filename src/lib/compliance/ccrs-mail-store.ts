@@ -16,6 +16,7 @@
  * owner, through the same 0249 function the paste boxes use.
  */
 import "server-only";
+import { MIGRATION_0357_MISSING, is0357Missing } from "./ccrs-adopt-core";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -213,6 +214,20 @@ export async function markCcrsMailHandled(admin: Admin, id: string, state: "appl
     .select("id");
   if (error) throw new Error(`ccrs_mail_messages: ${error.message}`);
   return ((data as unknown[] | null) ?? []).length === 1;
+}
+
+/**
+ * D228 (0357): a SET-ASIDE email back to waiting, so it can be applied. The
+ * reason and the earlier set-aside note are kept in reopen_note (append
+ * only). An applied email stays final; the database refuses it.
+ */
+export async function reopenCcrsMail(admin: Admin, id: string, byProfileId: string, reason: string): Promise<{ id: string; note: string }> {
+  const { data, error } = await admin.rpc("ccrs_reopen_mail", { p_id: id, p_by: byProfileId, p_reason: reason });
+  if (error && is0357Missing(error)) throw new Error(MIGRATION_0357_MISSING);
+  if (error) throw new Error(`ccrs_reopen_mail: ${error.message ?? "no answer"}`);
+  const d = data as { id?: unknown; state?: unknown; note?: unknown } | null;
+  if (!d || d.id !== id || d.state !== "new") throw new Error("ccrs_reopen_mail: unexpected answer");
+  return { id, note: typeof d.note === "string" ? d.note : "" };
 }
 
 /** R74 S48: every CCRS email still waiting to be applied, oldest first (the order "Answer all" works in). */

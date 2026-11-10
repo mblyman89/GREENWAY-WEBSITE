@@ -86,6 +86,8 @@ import {
   applyCcrsNotProcessedMailAction,
   applyCcrsSuccessMailAction,
   dismissCcrsMailAction,
+  reopenCcrsMailAction,
+  adoptHandmadeFileAction,
   pollCcrsMailNowAction,
 } from "./mail-actions";
 import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
@@ -891,6 +893,8 @@ export default async function CcrsCommandCenterPage({
             applyNotProcessed: applyCcrsNotProcessedMailAction,
             applyAll: applyAllCcrsMailAction,
             dismiss: dismissCcrsMailAction,
+            reopen: reopenCcrsMailAction,
+            adopt: adoptHandmadeFileAction,
           }}
         />
       </Section>

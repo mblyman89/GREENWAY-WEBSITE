@@ -295,6 +295,20 @@ const HINTS: Readonly<Record<string, string>> = {
   CCRS_PREPROD_START_BY: "Who started the PREprod ledger must be recorded.",
   CCRS_SETTLE_BY: "Who settled the PREprod duplicates must be recorded.",
   CCRS_SETTLE_BAD_ENV: "Only PREprod or production can be settled. Refresh the page.",
+  CCRS_MAIL_REOPEN_REASON: "Say why the email is reopened (10 or more characters).",
+  CCRS_MAIL_REOPEN_STATE: "Only a set-aside email can be reopened. An applied email stays final: its answer is already in the ledger.",
+  CCRS_MAIL_NOT_FOUND: "That email is not stored. Refresh the page.",
+  CCRS_MAIL_HANDLED: "This email was already handled. A set-aside email can be reopened from the Handled list (migration 0357).",
+  CCRS_ADOPT_REASON: "Say why this hand-made file is adopted (10 or more characters).",
+  CCRS_ADOPT_BAD_ENV: "Only PREprod or production. Refresh the page.",
+  CCRS_ADOPT_NAME: "The name must be exactly the one CCRS printed, without its receipt token (like Sale_413541_20261110150000.csv).",
+  CCRS_ADOPT_TIME: "The upload time must be the CCRS Date Submitted, within the last 30 days and not in the future.",
+  CCRS_ADOPT_ALREADY_STORED: "That file (or the same bytes) is already in the outbox. Press Apply confirmation instead.",
+  CCRS_HASH_MISMATCH: "The file bytes changed on the way in. Attach the file again (do not open and save it in Excel).",
+  CCRS_NOT_CRLF_TERMINATED: "The file must end every line with CRLF, as CCRS files do. Attach the file itself rather than a copy.",
+  CCRS_SHORT_HEADER: "The file needs the 3 header lines and the column line.",
+  CCRS_RECORD_COUNT_MISMATCH: "NumberRecords in the file does not match its data rows.",
+  CCRS_ROW_WIDTH: "A data row has the wrong number of cells.",
 };
 export function lifecycleErrorText(raw: string): string {
   const m = /\b(CCRS_[A-Z_]+)\b:?\s*([\s\S]*)$/.exec(raw);

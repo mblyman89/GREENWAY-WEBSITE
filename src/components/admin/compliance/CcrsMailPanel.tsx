@@ -88,6 +88,10 @@ export function CcrsMailPanel({
     /** R74 S48: answer every waiting email, oldest first. */
     applyAll?: (fd: FormData) => Promise<void>;
     dismiss: (fd: FormData) => Promise<void>;
+    /** D228 (0357): a set-aside email back to waiting, with a reason. Optional so older callers still compile. */
+    reopen?: (fd: FormData) => Promise<void>;
+    /** D228 (0357): store a hand-made file CCRS accepted, then apply this confirmation. Optional so older callers still compile. */
+    adopt?: (fd: FormData) => Promise<void>;
   };
 }) {
   const stale = heartbeatStale(heartbeat, Date.parse(nowISO));
@@ -239,6 +243,51 @@ export function CcrsMailPanel({
                     <SaveButton label="Apply confirmation" busyLabel="Applying…" />
                   </form>
                 ) : null}
+                {r.kind === "success" && actions.adopt ? (
+                  <details className="w-full text-white/60" data-testid="ccrs-mail-adopt">
+                    <summary className="cursor-pointer">CCRS accepted a file this system did not make (a hand-made fix)?</summary>
+                    <form action={actions.adopt} encType="multipart/form-data" className="mt-2 space-y-2 rounded border border-white/10 p-2">
+                      <input type="hidden" name="week_key" value={weekKey} />
+                      {env ? <input type="hidden" name="page_env" value={env} /> : null}
+                      <input type="hidden" name="mail_id" value={r.id} />
+                      {r.env ? null : (
+                        <select name="env" required className="rounded bg-white/10 px-2 py-1" defaultValue="">
+                          <option value="">PREprod or production?</option>
+                          <option value="preprod">PREprod</option>
+                          <option value="prod">Production</option>
+                        </select>
+                      )}
+                      {!r.env || !r.env_verified ? (
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" name="confirm_checked" required /> I checked this file in the CCRS portal
+                        </label>
+                      ) : null}
+                      {(a.successes ?? []).length > 1 ? (
+                        <select name="file_name" required className="rounded bg-white/10 px-2 py-1" defaultValue="">
+                          <option value="">Which file?</option>
+                          {(a.successes ?? []).map((s) => (
+                            <option key={s.fileName} value={s.fileName}>
+                              {s.fileName}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      <p>
+                        Attach the EXACT file you uploaded to CCRS (the one this email names). The hub keeps those bytes under that name, marks it
+                        uploaded at the CCRS Date Submitted, then applies this confirmation. Renaming a file never works: CCRS keeps the name it saw.
+                      </p>
+                      <input type="file" name="csv_file" accept=".csv,text/csv" className="block" />
+                      <textarea name="csv_text" rows={3} placeholder="…or paste the file text (open it in a text editor, not Excel)" className="w-full rounded bg-white/10 px-2 py-1 font-mono" />
+                      {(a.successes ?? []).some((s) => !s.submittedAt) ? (
+                        <label className="flex items-center gap-1">
+                          Uploaded at (Pacific): <input type="datetime-local" name="uploaded_at" className="rounded bg-white/10 px-2 py-1" />
+                        </label>
+                      ) : null}
+                      <input name="reason" required minLength={10} placeholder="Why (10+ characters, saved on the file)" className="w-full rounded bg-white/10 px-2 py-1" />
+                      <SaveButton label="Adopt the file and apply" busyLabel="Adopting…" />
+                    </form>
+                  </details>
+                ) : null}
                 {r.kind === "error" ? (
                   <form action={actions.applyError} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="week_key" value={weekKey} />
@@ -289,6 +338,15 @@ export function CcrsMailPanel({
               <li key={r.id}>
                 {pacific(r.received_at)} {r.subject}: {r.state}
                 {r.handled_note ? ` (${r.handled_note})` : ""}
+                {canEdit && actions.reopen && r.state === "dismissed" ? (
+                  <form action={actions.reopen} className="mt-1 flex flex-wrap items-end gap-2 text-white/60" data-testid="ccrs-mail-reopen">
+                    <input type="hidden" name="week_key" value={weekKey} />
+                    {env ? <input type="hidden" name="page_env" value={env} /> : null}
+                    <input type="hidden" name="mail_id" value={r.id} />
+                    <input name="reason" required minLength={10} placeholder="Why reopen (10+ characters)" className="w-56 rounded bg-white/10 px-2 py-1" />
+                    <SaveButton label="Reopen" busyLabel="Reopening…" variant="neutral" />
+                  </form>
+                ) : null}
               </li>
             ))}
           </ul>

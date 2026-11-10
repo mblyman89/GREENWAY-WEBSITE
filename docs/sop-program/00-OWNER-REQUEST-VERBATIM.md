@@ -2582,3 +2582,41 @@ Fix:
   2. Press **Re-send refused rows** on `Sale_413541_20261110101609.csv`.
   3. Download the new file, upload it, mark it uploaded, then apply the answer.
 - No migration is needed.
+
+## D228 — CCRS: the hand-made fixed Sale file was accepted, but the hub cannot apply its confirmation (2026-11-10)
+
+### Owner request (verbatim)
+
+> thank you. I uploaded the fixed file you supplied, but because it has a different file name, the back office rejected the success message and would not apply it to pass the final test. can you help me apply the success message so the system recognizes it. I tried renaming the file to match the original, but ccrs rejected it as its a duplicate. follow the standing rules. thank you.
+
+### Findings (read-only, PREprod)
+
+- `Sale_413541_20261110150000.csv` (2 rows, the D227 hand-made fix) was accepted by CCRS: confirmation email `d3f56f1b`, "Date Submitted: 11/10/2026 11:51:35 AM". The hub has no outbox file of that name (it was made by hand, not by the export), so Apply said "not a preprod outbox file". The owner then set the email aside.
+- The renamed re-upload as `Sale_413541_20261110101609.csv` was refused by CCRS, "Duplicate Sale for Licensee", for both rows (email `8c963903`). That proves CCRS holds both fixed rows. CCRS never takes the same file name or the same data twice [BRIAN A29], so renaming can never work.
+- The original file `Sale_413541_20261110101609.csv` is still `uploaded` (never answered). Its error email `2345db48` (2 rows refused) was set aside, not applied, so the hub still treats all 1,332 rows as unanswered.
+- A set-aside email can never be reopened today: the 0282 guard allows `new -> applied | dismissed` once and nothing else.
+
+### Decisions
+
+- Never rename or re-send. CCRS already holds both fixed rows, so the hub has to learn about the file CCRS really took, under its real name.
+- **Reopen with a reason.** A set-aside email can go back to `new` only with a written reason (10 or more characters). The old handled time, person and note are kept in an append-only `reopen_note`, so nothing is lost. An applied email stays final.
+- **Adopt a hand-made file.** The owner attaches the exact bytes that went to CCRS. The hub checks the name (`Type_License_YYYYMMDDHHMMSS.csv`, the stamp equal to the Pacific time), the license, the verifier, the hash, CRLF, the header, the record count and the row width. It stores the file under that exact name, marks it uploaded at CCRS's own "Date Submitted", and only then applies the confirmation through the normal Apply path.
+  - A name or bytes already stored is refused.
+  - The monotonic stamp rule is skipped on purpose: the file already exists at CCRS.
+  - The reason is logged as the pacing override.
+- Both functions run as security invoker and are granted to service_role only. Both actions need settings.manage and are audited (`ccrs.mail.reopened`, `ccrs.file.adopted_handmade`).
+
+### As built (branch `ccrs/d228-adopt-handmade-file`)
+
+- Migration `0357_ccrs_adopt_and_reopen.sql` adds the reopen columns and the guard change, `ccrs_reopen_mail` and `ccrs_adopt_handmade_file`. Rollback is in `supabase/rollbacks/`. The PG check `scripts/recon/ccrs-adopt-reopen-0357-pg-check.sql` is registered first in POST_APPLY_CHECKS. The migration ran on a scratch PG15 with all 357 migrations and every post-apply check passing.
+- Code:
+  - pure `ccrs-adopt-core.ts`
+  - store `adoptHandmadeFile` / `reopenCcrsMail`
+  - actions `reopenCcrsMailAction` / `adoptHandmadeFileAction`
+  - mail panel: **Reopen** in the Handled list, plus "CCRS accepted a file this system did not make" with **Adopt the file and apply**
+  - error hints in `ccrs-lifecycle-core.ts`
+- Test `d228-ccrs-adopt-reopen` plans the real evidence file `fixed/Sale_413541_20261110150000.csv`: 2 rows, clean, stamp 15:00 PT.
+- **To do in PREprod (after the owner applies 0357):**
+  1. In the CCRS email panel, Handled list, **Reopen** the error email for `Sale_413541_20261110101609.csv` (2 rows refused) with a reason, then press **Apply error file**. The original file closes with rows 80 and 185 refused.
+  2. **Reopen** the success email for `Sale_413541_20261110150000_….csv` with a reason. Open "CCRS accepted a file this system did not make", attach `docs/ccrs-bible/evidence/2026-11-10-preprod/fixed/Sale_413541_20261110150000.csv` exactly as downloaded, give a reason, and press **Adopt the file and apply**. The file is stored, marked uploaded 11:51:35 AM, and closes as succeeded.
+  3. Leave the "Duplicate Sale" email set aside. It is the expected answer to the renamed copy.
