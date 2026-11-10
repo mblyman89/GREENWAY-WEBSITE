@@ -2620,3 +2620,54 @@ Fix:
   1. In the CCRS email panel, Handled list, **Reopen** the error email for `Sale_413541_20261110101609.csv` (2 rows refused) with a reason, then press **Apply error file**. The original file closes with rows 80 and 185 refused.
   2. **Reopen** the success email for `Sale_413541_20261110150000_….csv` with a reason. Open "CCRS accepted a file this system did not make", attach `docs/ccrs-bible/evidence/2026-11-10-preprod/fixed/Sale_413541_20261110150000.csv` exactly as downloaded, give a reason, and press **Adopt the file and apply**. The file is stored, marked uploaded 11:51:35 AM, and closes as succeeded.
   3. Leave the "Duplicate Sale" email set aside. It is the expected answer to the renamed copy.
+
+## D229 — Vendor intake: the Evergreen Herbal email (Manifest #M07825652483) did not make a manifest (2026-11-10)
+
+### Owner request (verbatim)
+
+> thank you. please now log into supabase and look for an evergreen herbal manifest we just now received. the system does not like the format they sent the info in. please look at the email as sent to us and forwarded to the vendor_intake@ address. I cant remember the error message it gave me. please harden the system so we can intake goofey invoices and manifests sent to us in some weird way/ format. follow the standing rules. thank you.
+
+### Findings (read-only)
+
+- `inbound_email_log` row `7e47e391-81ce-4293-b84c-a51a4beefc15` (resend, from Stephen, received 2026-11-10 21:07 UTC). It has 0 attachments and disposition `no_manifest`. The error the owner saw is this note: "no manifest attachment found — … manifest link found but PDF fetch failed (The link didn't return a PDF (it may be dead or an HTML page).); invoice link found but PDF fetch failed (…); coa link found but PDF fetch failed (…); … still missing after full harvest: transfer JSON, manifest PDF, invoice PDF, COA".
+- The email (owner PDF, evidence in `docs/intake-evidence/2026-11-10-evergreen/`) attaches nothing. It gives four links: "Proforma Invoice", "CCRS Manifest" and "Lab Results" as Google Drive share links (`drive.google.com/file/d/<id>/view?usp=drivesdk`), plus "JSON link:" `https://evergreen-links.conflabs.com/?id=…`. 18 DOH COAs are also Drive links.
+- Each link was checked by hand:
+  - A Drive `/view` link returns Google's HTML viewer page. That is why every fetch said "didn't return a PDF". The direct download form (`drive.usercontent.google.com/download?id=…&export=download`) returns the real file, named in Content-Disposition.
+  - Invoice: `Shipment Proforma Invoice M07825652483.pdf`, a real PDF.
+  - Lab Results: `LabInfo.PDF`, a real PDF of about 17 MB.
+  - **CCRS Manifest: `manifest_078256_20261109222938.csv`, not a PDF.** It is the official CCRS manifest CSV (19 items, driver Cory Barkley, plate D33571K, VIN 3C6MRVWG3RE154805). The system could never stage it from a link, because link fetches only accepted PDFs.
+  - JSON link: `application/json`, "WCIA Transfer Schema" 2.1.0, transfer M07825652483, 19 items with names, prices and lab data. It passes the strict WCIA gate and parses to 19 lines. It was never fetched, because the link has no `.json`, no transfer-shaped path and no "Transfer Data Link" label (only "JSON link:", on its own line, with the URL lines below).
+- A second bug: the log says "manifest link: <the invoice's Drive URL>". The labeled-link picker looks 60 raw characters on either side of an anchor. So the invoice anchor took the word "Manifest" from the next line ("CCRS Manifest:").
+- A staging risk once both files arrive: the CCRS CSV stages with no vendor name, while the WCIA JSON has "EVERGREEN HERBAL". The duplicate guard (same number + same vendor) would therefore stage the same delivery twice.
+
+### Decisions
+
+- **Fetch documents, not just PDFs.** A link may give a PDF, a CCRS manifest CSV, any other CSV, or a JSON file. Each one is identified by its bytes, not its name or content-type. An HTML page (a viewer, a sign-in page, a dead link) is still refused, with a plain reason.
+- **Share links become download links.** A Google Drive / Docs share link is rewritten to the direct download address (`drive.usercontent.google.com/download?id=<id>&export=download&confirm=t`). A Dropbox link gets `dl=1`. Folder links are never rewritten, because a folder is not one document. The file keeps the name the server gives it (Content-Disposition).
+- **A bare "JSON link:" label counts as a transfer link**, even when the URL sits a few lines below it. The search stops at the next "Something:" label. Drive/Dropbox links and `.pdf`/`.csv` links are not taken as transfers. Safety is unchanged: the link must fetch, parse as JSON and pass the strict WCIA gate before anything stages.
+- **Labels are read per line first.** The labeled-link picker now looks only at the anchor's own line first ("Proforma Invoice: <link>"). It falls back to the old 60-character window only when nothing is on the line. So the next line's "CCRS Manifest:" can no longer claim the invoice link.
+- **One delivery, one draft.** When one email gives the same manifest number in more than one file, it is read once, from the richest file: WCIA JSON first, then a manifest PDF, then a generic file, then the CCRS CSV. The other files donate transport (fill-only-empty; conflicts become review warnings) and the vendor license. A warning names any lot one file lists and the other does not.
+- **The checklist counts a CCRS CSV as the manifest.**
+- Drafts only, as always: nothing activates stock. No migration, no new table or RPC.
+
+### As built
+
+- NEW `src/lib/inbound-email/odd-format-core.ts` (pure) contains:
+  - `directDocumentUrl`, `filenameFromContentDisposition`, `looksLikeCcrsManifestCsv`, `sniffDocument`, `unusableReason`, `labelThenLinkUrls`, `JSON_LINK_LABEL` and `collapseSameDelivery`;
+  - the self-tests `__runOddFormatTests`, registered in `scripts/compliance/run-pure-selftests.ts`.
+- `src/lib/inventory/transfer-fetch.ts`:
+  - `fetchTransferJsonOnce` and `fetchPdfBytes` apply the share→download rewrite.
+  - NEW `fetchDocument` returns kind / base64 / text / the file's own name.
+- `src/lib/inbound-email/resend-receiving-core.ts`: NEW `jsonLabeledLinks`, wired into both link extractors. `findLabeledLink` now runs same-line first, then the 60-character window.
+- `src/lib/inbound-email/resend-receiving-fetch.ts`:
+  - The first-pass and second-pass link fetches use `fetchDocument`, so a linked CSV/JSON becomes a text attachment that the normal strict parsers read.
+  - Log notes now say e.g. "fetched manifest CSV from link (…)" or "manifest link found but fetch failed (…)".
+- `src/lib/inbound-email/email-harvest-core.ts`: the CCRS CSV satisfies "manifest".
+- `src/lib/inbound-email/inbound-store.ts`: `stageManifestsFromEmail` collapses same-number manifests before staging.
+- Test: `tests/compliance/d229-odd-format-intake.test.ts` runs on the REAL Evergreen files in `docs/intake-evidence/2026-11-10-evergreen/`. It checks:
+  - the "JSON link:" URL is found;
+  - the invoice link is not taken as the manifest;
+  - CSV + JSON → ONE manifest of 19 lines with plate D33571K;
+  - a Drive CSV is fetched under its own name;
+  - an HTML page is refused.
+- Owner step after deploy: Receiving → Incoming (email) → Needs attention → **Try again** on the Evergreen Herbal row (M07825652483).

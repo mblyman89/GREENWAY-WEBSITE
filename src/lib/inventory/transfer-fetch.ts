@@ -2,6 +2,13 @@ import "server-only";
 
 import { cleanUrl } from "./intake-parser";
 import { readTransferBody } from "@/lib/inbound-email/intake-harden-core";
+import {
+  directDocumentUrl,
+  filenameFromContentDisposition,
+  sniffDocument,
+  unusableReason,
+  type SniffedKind,
+} from "@/lib/inbound-email/odd-format-core";
 
 /**
  * R74 S51: some vendor servers (GrowFlow behind a CDN) refuse bare server
@@ -44,7 +51,9 @@ export async function fetchTransferJson(rawUrl: string): Promise<TransferFetchRe
 }
 
 async function fetchTransferJsonOnce(rawUrl: string): Promise<TransferFetchResult> {
-  const cleaned = cleanUrl(rawUrl);
+  // D229: a file-share link (Google Drive "view") is read as its direct download.
+  const first = cleanUrl(rawUrl);
+  const cleaned = first ? (directDocumentUrl(first) ?? first) : first;
   if (!cleaned) {
     return { ok: false, error: "That doesn't look like a URL." };
   }
@@ -135,7 +144,10 @@ const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB guard — COA PDFs can be large
  * return an HTML error page. Never throws.
  */
 export async function fetchPdfBytes(rawUrl: string): Promise<PdfFetchResult> {
-  const cleaned = cleanUrl(rawUrl);
+  // D229: a Google Drive share link answers with Drive's HTML viewer, never
+  // the file (the Evergreen Herbal email). Read it as its direct download.
+  const first = cleanUrl(rawUrl);
+  const cleaned = first ? (directDocumentUrl(first) ?? first) : first;
   if (!cleaned) return { ok: false, error: "That doesn't look like a URL." };
 
   let url: URL;
@@ -196,6 +208,100 @@ export async function fetchPdfBytes(rawUrl: string): Promise<PdfFetchResult> {
     ok: true,
     base64: Buffer.from(bytes).toString("base64"),
     contentType: contentType || "application/pdf",
+    finalUrl: url.toString(),
+    bytes: bytes.byteLength,
+  };
+}
+
+/** D229: a fetched document of ANY usable kind (PDF, CCRS manifest CSV, JSON). */
+export type DocumentFetchResult =
+  | {
+      ok: true;
+      kind: Exclude<SniffedKind, "html" | "other">;
+      base64: string;
+      /** The decoded text for CSV / JSON (null for a PDF). */
+      text: string | null;
+      contentType: string;
+      /** The file's own name (Content-Disposition), when the server gave one. */
+      filename: string | null;
+      finalUrl: string;
+      bytes: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * D229 ("harden the system so we can intake goofy invoices and manifests sent
+ * in some weird way / format"): fetch a linked document and decide what it IS
+ * from its bytes, not from the label in the email. The real case: the
+ * "CCRS Manifest" link was a CSV, so the PDF-only fetch threw it away.
+ * File-share links are rewritten to their direct download first. A web page
+ * (a dead link, a sign-in page, Drive's viewer) is refused with a plain
+ * reason. Never throws.
+ */
+export async function fetchDocument(rawUrl: string): Promise<DocumentFetchResult> {
+  const first = cleanUrl(rawUrl);
+  if (!first) return { ok: false, error: "That doesn't look like a URL." };
+  const cleaned = directDocumentUrl(first) ?? first;
+  let url: URL;
+  try {
+    url = new URL(cleaned);
+  } catch {
+    return { ok: false, error: "That doesn't look like a valid URL." };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { ok: false, error: "Only http(s) links are supported." };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS * 2);
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { ...BROWSER_HEADERS, Accept: "application/pdf, text/csv, application/json, application/octet-stream, */*" },
+      cache: "no-store",
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    return {
+      ok: false,
+      error: err instanceof Error && err.name === "AbortError" ? "The link took too long to respond (timed out)." : "Couldn't reach that link from the server.",
+    };
+  }
+  if (!res.ok) {
+    clearTimeout(timer);
+    return { ok: false, error: `The link returned an error (HTTP ${res.status}).` };
+  }
+  const len = Number(res.headers.get("content-length") ?? "0");
+  if (len > MAX_PDF_BYTES) {
+    clearTimeout(timer);
+    return { ok: false, error: "That file is too large to import automatically." };
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await res.arrayBuffer());
+  } catch {
+    clearTimeout(timer);
+    return { ok: false, error: "Couldn't read the response from that link." };
+  }
+  clearTimeout(timer);
+  if (bytes.byteLength > MAX_PDF_BYTES) return { ok: false, error: "That file is too large to import automatically." };
+  if (bytes.byteLength === 0) return { ok: false, error: "The link returned an empty file." };
+  const serverType = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+  const kind = sniffDocument(bytes, serverType);
+  if (kind === "html" || kind === "other") {
+    return { ok: false, error: `${unusableReason(kind, url.hostname.toLowerCase())}.` };
+  }
+  const text = kind === "pdf" ? null : Buffer.from(bytes).toString("utf8").replace(/^\ufeff/, "");
+  const contentType = kind === "pdf" ? "application/pdf" : kind === "json" ? "application/json" : "text/csv";
+  return {
+    ok: true,
+    kind,
+    base64: Buffer.from(bytes).toString("base64"),
+    text,
+    contentType,
+    filename: filenameFromContentDisposition(res.headers.get("content-disposition")),
     finalUrl: url.toString(),
     bytes: bytes.byteLength,
   };
