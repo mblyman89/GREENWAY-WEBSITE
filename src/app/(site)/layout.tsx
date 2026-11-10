@@ -13,6 +13,8 @@ import { PreviewEditOverlay } from "@/components/site/PreviewEditOverlay";
 import { AgeGate } from "@/components/age-gate/AgeGate";
 import { ageGateBootstrapScript } from "@/lib/age-gate/age-gate-core";
 import { CartProvider } from "@/components/cart/CartProvider";
+import { MenuCardRotationProvider } from "@/components/menu/fallback-rotation/MenuCardRotationProvider";
+import { menuCardRotationLists } from "@/lib/menu/menu-card-fallback-server";
 import { PublishedRulesProvider } from "@/components/promotions/PublishedRulesProvider";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
@@ -91,6 +93,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Site-wide typography: staff pick heading + body fonts from the curated
   // library in Admin → Site Content. Resolve them (draft-aware) to CSS font
   // stacks and bind them to --font-heading / --font-body for globals.css.
+  // D225: the owner's menu card fallback picture lists (only categories with
+  // 2+ pictures), read from the one cached snapshot, started now so it
+  // overlaps the reads below. Never throws; {} = nothing rotates.
+  const rotationListsPromise = menuCardRotationLists().catch(() => ({}));
   const fonts = await getContentValues([
     "site.font.heading",
     "site.font.body",
@@ -111,6 +117,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     DEFAULT_HEADING_FONT_ID,
   );
   const bodyStack = fontStack(fonts["site.font.body"], DEFAULT_BODY_FONT_ID);
+  const rotationLists = await rotationListsPromise;
   const siteFontFaces = customFontFaceCss([fonts["site.font.heading"] ?? "", fonts["site.font.body"] ?? ""]);
 
   return (
@@ -145,7 +152,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema(storeHours, storeToday)]} id="site" />
         <PublishedRulesProvider snapshots={publishedRules}>
-          <CartProvider>{children}</CartProvider>
+          <MenuCardRotationProvider lists={rotationLists}>
+            <CartProvider>{children}</CartProvider>
+          </MenuCardRotationProvider>
         </PublishedRulesProvider>
         <ScrollToTopButton />
         <AgeGate />

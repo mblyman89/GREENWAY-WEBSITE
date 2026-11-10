@@ -31,9 +31,11 @@
  *     card id, so the same product shows the same first picture on every
  *     surface), bumped by one when it would repeat the previous fallback card
  *     of the same category, so neighbouring cards differ;
- *   - the card records that slot (imageFallbackSlot) and the browser rotates
- *     through the same list from there (fallbackRotationOrder). The URL list
- *     itself travels ONCE per page (the layout provider), never per card.
+ *   - the browser rotates each fallback card through the same list, starting
+ *     from the picture the server chose (fallbackRotationOrder). The URL list
+ *     itself travels ONCE per page (the site layout provider, only categories
+ *     with two or more pictures), never per card, so the grid payload does
+ *     not grow.
  */
 import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
 
@@ -85,8 +87,6 @@ export type FallbackableItem = {
   category?: string | null;
   imageUrl?: string;
   imageIsFallback?: boolean;
-  /** D225: the owner-list slot this card shows first (set only here). */
-  imageFallbackSlot?: number;
 };
 
 /** Trimmed, de-duplicated, non-empty URLs, capped. Accepts one URL or a list. */
@@ -125,14 +125,16 @@ export function fallbackUrlForKey(key: string | null | undefined, list: readonly
 }
 
 /**
- * D225: the order a rotating card shows pictures in: its own slot first, then
- * the rest of the list in owner order, wrapping. Empty when it should not
- * rotate (fewer than two pictures).
+ * D225: the order a rotating card shows pictures in: the picture it shows now
+ * first, then the rest of the list in owner order, wrapping. Empty when it
+ * should not rotate: fewer than two pictures, or the card picture is not in
+ * the list (a stale page, or not a category fallback at all).
  */
-export function fallbackRotationOrder(list: readonly string[], slot: number | null | undefined): string[] {
-  const clean = normalizeFallbackList(list);
+export function fallbackRotationOrder(list: readonly string[] | null | undefined, currentUrl: string | null | undefined): string[] {
+  const clean = normalizeFallbackList(list ?? []);
   if (clean.length < 2) return [];
-  const start = Number.isInteger(slot) && (slot as number) >= 0 ? (slot as number) % clean.length : 0;
+  const start = clean.indexOf((currentUrl ?? "").trim());
+  if (start < 0) return [];
   return clean.slice(start).concat(clean.slice(0, start));
 }
 
@@ -175,8 +177,7 @@ export function hasOwnPhoto(item: FallbackableItem): boolean {
  *
  * D225: each fallback card starts on stableSlot(card id); when that equals the
  * previous fallback card of the same category in this list, it moves one on,
- * so two neighbours never show the same picture. The slot is recorded as
- * imageFallbackSlot for the browser rotation.
+ * so two neighbours never show the same picture.
  */
 export function applyMenuCardFallbacks<T extends FallbackableItem>(
   items: readonly T[],
@@ -199,8 +200,8 @@ export function applyMenuCardFallbacks<T extends FallbackableItem>(
     if (list.length > 1 && lastSlot.get(cat) === slot) slot = (slot + 1) % list.length;
     lastSlot.set(cat, slot);
     const url = list[slot]!;
-    if (item.imageUrl === url && item.imageIsFallback === true && item.imageFallbackSlot === slot) return item;
-    return { ...item, imageUrl: url, imageIsFallback: true, imageFallbackSlot: slot };
+    if (item.imageUrl === url && item.imageIsFallback === true) return item;
+    return { ...item, imageUrl: url, imageIsFallback: true };
   });
 }
 
@@ -508,13 +509,13 @@ export function __runMenuCardFallbackTests(): { passed: number; failed: number }
   );
   ok(new Set(grid.map((g) => g.imageUrl)).size === 3, "a grid of 30 cards shows variety");
   ok(grid.every((g, i) => i === 0 || g.imageUrl !== grid[i - 1]!.imageUrl), "neighbouring fallback cards never repeat");
-  ok(grid.every((g) => g.imageUrl === list[g.imageFallbackSlot!]), "slot recorded matches the picture");
+  ok(grid.every((g) => list.includes(g.imageUrl!)), "every variety pick comes from the owner list");
   ok(grid.every((g) => g.imageIsFallback === true), "every variety pick is still badged");
   const mixed = applyMenuCardFallbacks<FallbackableItem>([own, { id: "q1", category: "flower" }], many);
   ok(mixed[0] === own, "own photo still wins with many pictures");
-  ok(fallbackRotationOrder(list, 1).join() === "u1,u2,u0", "rotation starts on the card slot and wraps");
-  ok(fallbackRotationOrder(list, 7).join() === "u1,u2,u0", "rotation slot wraps past the end");
-  ok(fallbackRotationOrder(["u0"], 0).length === 0, "one picture never rotates");
+  ok(fallbackRotationOrder(list, "u1").join() === "u1,u2,u0", "rotation starts on the card picture and wraps");
+  ok(fallbackRotationOrder(list, "elsewhere").length === 0, "a picture not in the list never rotates");
+  ok(fallbackRotationOrder(["u0"], "u0").length === 0, "one picture never rotates");
   ok(rotationStaggerMs("p1") >= 0 && rotationStaggerMs("p1") < ROTATION_STAGGER_MS, "stagger inside its window");
   const env = { pictures: 3, reducedMotion: false, paused: false, inView: true, hidden: false };
   ok(shouldRotate(env), "rotates when allowed");
