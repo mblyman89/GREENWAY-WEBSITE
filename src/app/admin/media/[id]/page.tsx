@@ -23,6 +23,11 @@ import {
 import { ProductLinkPanel } from "@/components/admin/media/ProductLinkPanel";
 import { describeAssetNowAction, reviewMediaAction } from "../ai-actions";
 import { pickListParams, withListParams } from "@/lib/media/return-state-core";
+import { MediaDetailV2 } from "@/components/admin/media/MediaDetailV2";
+import { setAutoPublishAction, toggleCollectionItemAction } from "../library-actions";
+import { loadCollections, loadCollectionsForMedia, loadDuplicates, loadMediaByIds, loadSimilar } from "@/lib/media/library-v2-server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +77,30 @@ export default async function MediaDetailPage({
     reasons: p.reasons,
   }));
   const hasLogoReviewTag = (asset.tags ?? []).includes("needs-logo-review");
+
+  // D221 M7: similar pictures, duplicate copies, collections, vendor + publisher names.
+  const [similar, duplicates, colls, memberOf, names] = await Promise.all([
+    loadSimilar(asset.id, 24),
+    loadDuplicates(asset.id, asset.canonical_id ?? null),
+    loadCollections(),
+    loadCollectionsForMedia(asset.id),
+    (async () => {
+      if (!isSupabaseServiceConfigured) return { vendor: null as string | null, publisher: null as string | null, error: null as string | null };
+      const admin = createSupabaseAdminClient();
+      const [v, p] = await Promise.all([
+        asset.vendor_id ? admin.from("vendors").select("display_name").eq("id", asset.vendor_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+        asset.published_by ? admin.from("staff_profiles").select("full_name,email").eq("id", asset.published_by).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      ]);
+      const pd = p.data as { full_name: string | null; email: string } | null;
+      return {
+        vendor: (v.data as { display_name: string } | null)?.display_name ?? null,
+        publisher: pd ? pd.full_name || pd.email : null,
+        error: v.error?.message ?? p.error?.message ?? null,
+      };
+    })(),
+  ]);
+  const similarRows = await loadMediaByIds(similar.hits.map((h) => h.media_id));
+  const v2Error = similar.error || duplicates.error || colls.error || memberOf.error || names.error || similarRows.error;
 
   return (
     <div>
@@ -203,6 +232,22 @@ export default async function MediaDetailPage({
                 </form>
               )}
             </div>
+
+            {/* D221 M5 + M7: SEO/AI fields with badges, provenance + undo, duplicates, similar, collections */}
+            <MediaDetailV2
+              asset={asset}
+              selfHref={selfHref}
+              vendorName={names.vendor}
+              publishedByName={names.publisher}
+              similar={similar.hits}
+              similarRows={similarRows.rows}
+              duplicates={duplicates}
+              collections={colls.collections}
+              memberOf={memberOf.ids}
+              readError={v2Error}
+              autoPublishAction={setAutoPublishAction}
+              collectionAction={toggleCollectionItemAction}
+            />
 
             {/* H10d: product-link drafts + logo-validation routing */}
             <ProductLinkPanel

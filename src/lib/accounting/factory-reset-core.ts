@@ -894,6 +894,13 @@ export const TABLE_RULES: readonly TableRule[] = [
   // media library - model, cost, progress. KEEP with the media it describes;
   // it holds no money, stock or customer data.
   { table: "media_ai_runs", disposition: "KEEP", because: "The AI passes that described and tagged your photo library, with their cost." },
+  // media_collections / media_collection_items (0354, D221 M7): named groups of
+  // library photos a person built (e.g. "Holiday 2025"). KEEP with the media.
+  { table: "media_collections", disposition: "KEEP", because: "Named groups of library photos you built." },
+  { table: "media_collection_items", disposition: "KEEP", because: "Which photos are in each of your photo collections." },
+  // media_search_log (0354, D221 M7): what staff typed into the library search
+  // boxes and how many pictures came back - tunes search. No customer data.
+  { table: "media_search_log", disposition: "KEEP", because: "What staff searched for in the photo library, used to improve search." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

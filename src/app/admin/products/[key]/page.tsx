@@ -40,7 +40,10 @@ import { EnrichmentAiLookupPanel } from "./EnrichmentAiLookupPanel";
 // Round 21 (C): library-first photo picker (upload becomes the secondary path).
 import { MediaLibraryPicker } from "./MediaLibraryPicker";
 import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/media/library-picker-core";
-import { readLibraryPickerAssets } from "@/lib/media/library-picker-server";
+import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
+import { parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
+import { logMediaSearch } from "@/lib/media/library-v2-server";
+import type { PickerImageSearch } from "./MediaLibraryPicker";
 import {
   updateProductEnrichment,
   setEnrichmentStatus,
@@ -75,12 +78,12 @@ export default async function ProductEditorPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string; lq?: string; lscope?: string; note?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string; lq?: string; lscope?: string; lv?: string; lsim?: string; note?: string }>;
 }) {
   const session = await requirePermission("products.enrich");
   const { key: rawKey } = await params;
   const key = decodeURIComponent(rawKey);
-  const { saved, error, ai, back, research, lq, lscope, note } = await searchParams;
+  const { saved, error, ai, back, research, lq, lscope, lv, lsim, note } = await searchParams;
   // R23: the one-line receipt a KB "Use these facts" click redirects with
   // (React escapes it; clamped so a crafted link cannot flood the page).
   const savedNote = typeof note === "string" ? note.trim().slice(0, 400) : "";
@@ -104,7 +107,24 @@ export default async function ProductEditorPage({
       query: parseLibraryQuery(lq),
     }),
   );
-  for (const p of [enrichmentP, brandsP, productLotsP, suggestionsP, libraryP]) p.catch(() => undefined);
+  // D221 M6: "Search in" chips (lv) and "Find similar" (lsim) run the
+  // recommender-v2 search. Nothing runs unless one of them is in the URL.
+  const searchSimilar = typeof lsim === "string" && /^[0-9a-f-]{8,64}$/i.test(lsim.trim()) ? lsim.trim() : null;
+  const searchActive = Boolean(searchSimilar) || typeof lv === "string";
+  const searchScope = parseImageSearchScope(lv);
+  const imageSearchReadP = searchActive
+    ? enrichmentP.then((e) =>
+        readImageSearch({
+          query: parseLibraryQuery(lq),
+          scope: searchScope,
+          vendorId: e?.vendor_id ?? null,
+          brandId: e?.brand_id ?? null,
+          similarTo: searchSimilar,
+          usage: libraryScope,
+        }),
+      )
+    : Promise.resolve(null);
+  for (const p of [enrichmentP, brandsP, productLotsP, suggestionsP, libraryP, imageSearchReadP]) p.catch(() => undefined);
 
   const published = await getPublishedVersion();
   if (!published) notFound();
@@ -156,6 +176,34 @@ export default async function ProductEditorPage({
     galleryIds,
     productName: item.product_name?.trim() || item.name,
   });
+
+  const imageSearchRead = await imageSearchReadP.catch(() => null);
+  let pickerSearch: PickerImageSearch | null = null;
+  if (searchActive) {
+    const items = imageSearchRead
+      ? rankSearchResults(
+          imageSearchRead.assets,
+          {
+            name: item.product_name?.trim() || item.name,
+            brand: item.brand_name ?? null,
+            category: item.category ?? null,
+            vendorId: enrichment?.vendor_id ?? null,
+            brandId: enrichment?.brand_id ?? null,
+          },
+          { galleryIds, extraChips: imageSearchRead.chips },
+        )
+      : [];
+    const typed = parseLibraryQuery(lq);
+    if (typed && !searchSimilar) await logMediaSearch("picker", typed, { scope: searchScope }, items.length, session.userId ?? null);
+    pickerSearch = {
+      scope: searchScope,
+      similarTo: searchSimilar,
+      items,
+      note:
+        imageSearchRead?.note ??
+        (items.length === 0 ? (searchSimilar ? "Nothing close enough to that picture." : "No pictures found. Try fewer words, or search everything.") : null),
+    };
+  }
 
   const currentTags = new Set(enrichment?.tags ?? []);
   const vis = enrichment?.hidden_override === null || enrichment?.hidden_override === undefined
@@ -894,6 +942,9 @@ export default async function ProductEditorPage({
           back={back ?? null}
           view={libraryView}
           readOk={libraryRead.ok}
+          search={pickerSearch}
+          hasVendor={Boolean(enrichment?.vendor_id)}
+          hasBrand={Boolean(enrichment?.brand_id)}
           action={attachMatchedMedia}
         />
 

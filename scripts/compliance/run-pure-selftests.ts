@@ -898,6 +898,8 @@ import { __runManifestSiblingTests } from "../../src/lib/inventory/manifest-sibl
 import { __runSameEmailGuardTests } from "../../src/lib/inbound-email/same-email-guard-core";
 import { __runMediaDescribeTests } from "../../src/lib/media/media-describe-core";
 import { __runMediaReviewTests } from "../../src/lib/media/media-review-core";
+import { __runLibraryV2CoreTests } from "../../src/lib/media/library-v2-core";
+import { __runImageSeoCoreTests } from "../../src/lib/seo/image-seo-core";
 import { __runDuplicateDeliveryGuardTests } from "../../src/lib/inventory/duplicate-delivery-guard-core";
 import { __runNcPosCatalogTests } from "../../src/lib/noncannabis/pos-catalog-core";
 import { __runInvoiceAdjustmentsTests } from "../../src/lib/inventory/invoice-adjustments-core";
@@ -2577,7 +2579,7 @@ __runLiquidVolumeTests();
   assertRan("gap-vector-core", __runGapVectorCoreTests(), 92);
 
   // R21 (C): enrichment media-library picker. Floor = the exact count.
-  assertRan("library-picker-core", __runLibraryPickerCoreTests(), 34);
+  assertRan("library-picker-core", __runLibraryPickerCoreTests(), 37);
   assertRan("mastering-preview-core", __runMasteringPreviewCoreTests(), 17);
 
   // R22 (S37): lot-link-core. Floor = the exact count.
@@ -2749,7 +2751,7 @@ __runLiquidVolumeTests();
   assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 41); // R50 A4: cutover failure-alert planner
   assertRan("cutover-weekend-core", __runCutoverWeekendCoreTests(), 42); // R50 A5: the dated, timed cutover weekend on one page
   assertRan("cutover-drift-core", __runCutoverDriftCoreTests(), 48); // R50 A6: daily drift check 11/02-11/08 (on hand vs Cultivera + every recorded change)
-  assertRan("image-recommend-core", __runImageRecommendCoreTests(), 18); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
+  assertRan("image-recommend-core", __runImageRecommendCoreTests(), 35); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
   assertRan("gemini-request-core", __runGeminiRequestCoreTests(), 19); // R51 D1: Gemini Interactions body (system_instruction, url_context, service_tier, seed, response_format); R66: model-aware
   assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 45); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
@@ -2870,6 +2872,8 @@ __runLiquidVolumeTests();
   assertRan("duplicate-delivery-guard-core", __runDuplicateDeliveryGuardTests(), 8); // D215: a suspected duplicate delivery's lots are never made Active / finalized without the owner's "NOT a duplicate" tick
   assertRan("media-describe-core", __runMediaDescribeTests(), 42); // D221 M4 ("the closer look"): gpt-6-luna detail high describe + SEO; AI never overwrites a human value, doubtful -> needs_review, budget stop before the crossing call, lease verdict
   assertRan("media-review-core", __runMediaReviewTests(), 22); // D221 M3: the review queue decisions (accept / product photo / logo / reject); reject un-publishes only AUTO-published pictures, never deletes; reviewer stamped
+  assertRan("library-v2-core", __runLibraryV2CoreTests(), 60); // D221 M7: library facets, AI/human badges, bulk steps (never overwrite human values, attach stays human), health tiles, collections, search log
+  assertRan("image-seo-core", __runImageSeoCoreTests(), 15); // D221 M8: seo_alt alt text, ImageObject JSON-LD, image sitemap
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -25,6 +25,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { publicUrlForKey } from "@/lib/media/store";
+import { storageKeyFromPublicUrl, type ImageSeoFields } from "@/lib/seo/image-seo-core";
 import {
   resolveSubstituteFor,
   resolveBrandVendorSubstitute,
@@ -437,4 +438,34 @@ function resolveFromIndex(index: SubstituteIndex, q: ProductImageQuery): Resolve
     if (url) return { url, source: t.source, isFallback: t.source !== "exact" };
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// D221 M8: the SEO fields of the exact picture a page shows.
+// ---------------------------------------------------------------------------
+
+/**
+ * seo_alt / alt_text / seo_title / title / seo_description / credit_text of
+ * the media_assets row behind a public media-bucket URL. Null when the URL is
+ * not a media-bucket file, the row is missing, or any read fails (the page
+ * then falls back to the product name). One indexed lookup by storage_key.
+ */
+export async function imageSeoForUrl(url: string | null | undefined): Promise<ImageSeoFields | null> {
+  const key = storageKeyFromPublicUrl(url);
+  if (!key || !isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("media_assets")
+      .select("seo_alt, alt_text, seo_title, title, seo_description, credit_text, status")
+      .eq("storage_key", key)
+      .neq("status", "archived")
+      .order("created_at", { ascending: true })
+      .range(0, 0);
+    if (error) return null;
+    const row = ((data as (ImageSeoFields & { status: string })[] | null) ?? [])[0];
+    return row ?? null;
+  } catch {
+    return null;
+  }
 }

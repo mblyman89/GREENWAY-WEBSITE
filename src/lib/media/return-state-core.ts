@@ -16,10 +16,27 @@
  */
 
 /** The library's filter params — the ONLY state worth carrying around. */
-export type MediaListParams = { q?: string; status?: string; usage?: string; folder?: string; sort?: string; page?: string };
+export type MediaListParams = {
+  q?: string;
+  status?: string;
+  usage?: string;
+  folder?: string;
+  sort?: string;
+  page?: string;
+  // D221 M7: the facet filters (library-v2-core LIBRARY_FILTER_KEYS) travel too.
+  vendor?: string;
+  platform?: string;
+  role?: string;
+  category?: string;
+  review?: string;
+  seo?: string;
+  ai?: string;
+  coll?: string;
+};
 
 // R65: + folder (smart folder), sort and page so the owner returns to the exact folder/page.
-const LIST_KEYS = ["q", "status", "usage", "folder", "sort", "page"] as const;
+// D221 M7: + the facet filters, so a faceted view survives a round-trip to a picture.
+const LIST_KEYS = ["q", "status", "usage", "folder", "sort", "page", "vendor", "platform", "role", "category", "review", "seo", "ai", "coll"] as const;
 
 /** Keep only non-empty filter params from a searchParams-shaped object. */
 export function pickListParams(

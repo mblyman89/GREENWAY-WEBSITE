@@ -14,6 +14,11 @@
  *     button.
  * Every decision (what is pickable, the search, the order, the copy) comes
  * from src/lib/media/library-picker-core.ts.
+ *
+ * D221 M6: "Search in" chips (This vendor / This brand / Everything, GET
+ * param lv) and a "Find similar" link on every tile (GET param lsim) run the
+ * recommender-v2 search; the hits render above the grid with short "why"
+ * chips. Attaching is still one human click per picture.
  */
 import Link from "next/link";
 import {
@@ -23,6 +28,15 @@ import {
   LIBRARY_READ_ERROR_COPY,
   type LibraryPickerView,
 } from "@/lib/media/library-picker-core";
+import type { ImageRecommendation, ImageSearchScope } from "@/lib/catalog/image-recommend-core";
+
+/** D221 M6: the recommender-v2 search block (null = not searching). */
+export type PickerImageSearch = {
+  scope: ImageSearchScope;
+  similarTo: string | null;
+  items: ImageRecommendation[];
+  note: string | null;
+};
 
 export const LIBRARY_ATTACH_SOURCE = "library";
 
@@ -32,13 +46,49 @@ export function MediaLibraryPicker({
   view,
   readOk,
   action,
+  search = null,
+  hasVendor = false,
+  hasBrand = false,
 }: {
   productKey: string;
   back: string | null;
   view: LibraryPickerView;
   readOk: boolean;
   action: (formData: FormData) => void | Promise<void>;
+  search?: PickerImageSearch | null;
+  hasVendor?: boolean;
+  hasBrand?: boolean;
 }) {
+  const searchChip = (lv: ImageSearchScope, text: string, enabled: boolean) => {
+    const active = Boolean(search && !search.similarTo && search.scope === lv);
+    if (!enabled) {
+      return (
+        <span
+          data-testid={`library-search-in-${lv}`}
+          aria-disabled="true"
+          title="This product has no card for that yet"
+          className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/25"
+        >
+          {text}
+        </span>
+      );
+    }
+    return (
+      <Link
+        href={libraryPickerHref(productKey, { query: view.query, scope: view.scope, back, searchIn: lv })}
+        aria-current={active ? "true" : undefined}
+        data-testid={`library-search-in-${lv}`}
+        className={`rounded-full border px-3 py-1 text-xs ${
+          active
+            ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]"
+            : "border-white/15 text-white/60 hover:text-white"
+        }`}
+      >
+        {text}
+      </Link>
+    );
+  };
+  const similarHref = (id: string) => libraryPickerHref(productKey, { scope: view.scope, back, similarTo: id });
   const scopeLink = (scope: "product" | "all", text: string) => (
     <Link
       href={libraryPickerHref(productKey, { query: view.query, scope, back })}
@@ -78,6 +128,12 @@ export function MediaLibraryPicker({
         Every photo you have uploaded or imported lives here. Pick one to add it to this product; the first photo
         becomes the cover. Nothing is removed from the library.
       </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="Search in" data-testid="library-search-in">
+        <span className="text-[11px] text-white/45">Search in:</span>
+        {searchChip("vendor", "This vendor", hasVendor)}
+        {searchChip("brand", "This brand", hasBrand)}
+        {searchChip("all", "Everything", true)}
+      </div>
 
       <form
         method="get"
@@ -88,6 +144,7 @@ export function MediaLibraryPicker({
       >
         {back ? <input type="hidden" name="back" value={back} /> : null}
         {view.scope === "all" ? <input type="hidden" name="lscope" value="all" /> : null}
+        {search && !search.similarTo ? <input type="hidden" name="lv" value={search.scope} /> : null}
         <label htmlFor="library-q" className="sr-only">
           Search the media library
         </label>
@@ -117,6 +174,74 @@ export function MediaLibraryPicker({
           </span>
         ) : null}
       </form>
+
+      {search ? (
+        <div data-testid="library-search-results" className="mt-3 rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold text-white">
+              {search.similarTo ? "Pictures like that one" : "Search results"}
+            </p>
+            <Link href={libraryPickerHref(productKey, { query: view.query, scope: view.scope, back })} className="ml-auto text-[11px] text-white/50 hover:text-white">
+              Close
+            </Link>
+          </div>
+          {search.note ? (
+            <p data-testid="library-search-note" className="mt-1 text-[11px] text-white/55">
+              {search.note}
+            </p>
+          ) : null}
+          {search.items.length > 0 ? (
+            <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {search.items.map((r) => (
+                <li key={r.id} data-testid="library-search-tile" data-media-id={r.id} className="overflow-hidden rounded-lg border border-white/10 bg-black">
+                  <div className="relative aspect-square bg-[#050505]">
+                    {r.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={r.url} alt={r.alt} loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-white/35">No preview</div>
+                    )}
+                  </div>
+                  <div className="space-y-1 border-t border-white/10 p-2">
+                    <p className="truncate text-xs text-white/80" title={r.label}>
+                      {r.label}
+                    </p>
+                    {r.chips.length > 0 ? (
+                      <div className="flex flex-wrap gap-1" data-testid="library-search-chips">
+                        {r.chips.slice(0, 4).map((c) => (
+                          <span key={c} className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/70">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {r.attached ? (
+                      <p className="text-[11px] font-semibold text-[var(--admin-accent)]">✓ Already added</p>
+                    ) : (
+                      <form action={action}>
+                        <input type="hidden" name="key" value={productKey} />
+                        <input type="hidden" name="mediaId" value={r.id} />
+                        <input type="hidden" name="source" value={LIBRARY_ATTACH_SOURCE} />
+                        <button
+                          type="submit"
+                          data-testid="library-search-add"
+                          aria-label={`Add ${r.label} to this product`}
+                          className="w-full rounded bg-[var(--admin-accent)] px-2 py-1 text-[11px] font-semibold text-black hover:brightness-110"
+                        >
+                          Add to product
+                        </button>
+                      </form>
+                    )}
+                    <Link href={similarHref(r.id)} data-testid="library-find-similar" className="block text-center text-[10px] text-white/50 hover:text-white">
+                      Find similar
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {!readOk ? (
         <p role="alert" data-testid="library-read-error" className="mt-3 text-xs text-[var(--admin-orange)]">
@@ -181,6 +306,9 @@ export function MediaLibraryPicker({
                     </button>
                   </form>
                 )}
+                <Link href={similarHref(t.id)} data-testid="library-find-similar" className="block text-center text-[10px] text-white/50 hover:text-white">
+                  Find similar
+                </Link>
               </div>
             </li>
           ))}

@@ -20,10 +20,14 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { identityForDraft } from "@/lib/catalog/product-identity-core";
-import { readLibraryPickerAssets } from "@/lib/media/library-picker-server";
+import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
+import { logMediaSearch } from "@/lib/media/library-v2-server";
 import {
   isImageMemoryTableMissing,
+  rankSearchResults,
   recommendImages,
+  type ImageRecommendation,
+  type ImageSearchScope,
   type ImageMemoryRow,
   type ImageMemorySource,
   type ImageRecommendView,
@@ -227,4 +231,43 @@ export async function rememberImageAttach(input: {
     return { ok: false, missing: false, error: insErr.message };
   }
   return { ok: true, missing: false };
+}
+
+// ---------------------------------------------------------------------------
+// D221 M6: "Search for a better picture" / "Find similar" on ONE draft row.
+// ---------------------------------------------------------------------------
+
+export type OnboardingImageSearch = {
+  draftId: string;
+  query: string;
+  scope: ImageSearchScope;
+  similarTo: string | null;
+  items: ImageRecommendation[];
+  note: string | null;
+};
+
+/** Reads + ranks the search for one draft (URL params imgd / imgq / imgs / imgsim). Never throws. */
+export async function loadOnboardingImageSearch(
+  draft: ImageDraftRow,
+  targetKey: string | null,
+  req: { query: string; scope: ImageSearchScope; similarTo: string | null },
+): Promise<OnboardingImageSearch> {
+  const [read, galleries] = await Promise.all([
+    readImageSearch({ query: req.query, scope: req.scope, vendorId: draft.vendor_id ?? null, brandId: draft.brand_id ?? null, similarTo: req.similarTo, usage: "all" }),
+    loadGalleryIds([targetKey]),
+  ]);
+  const items = rankSearchResults(
+    read.assets,
+    { name: draft.name, brand: draft.brand_name, vendor: draft.vendor_name, category: draft.chosen_website_category ?? draft.category, vendorId: draft.vendor_id ?? null, brandId: draft.brand_id ?? null },
+    { galleryIds: targetKey ? galleries.get(targetKey) ?? [] : [], extraChips: read.chips },
+  );
+  if (req.query && !req.similarTo) await logMediaSearch("onboarding", req.query, { scope: req.scope }, items.length, null);
+  return {
+    draftId: draft.id,
+    query: req.query,
+    scope: req.scope,
+    similarTo: req.similarTo,
+    items,
+    note: read.note ?? (items.length === 0 ? (req.similarTo ? "Nothing close enough to that picture." : "No pictures found. Try fewer words, or search the whole library.") : null),
+  };
 }

@@ -24,7 +24,8 @@ import { cardDisplay } from "@/lib/menu/card-brand-core";
 // SLICE 95: vendor-pure "More from" selection + honest heading scope.
 import { selectRelatedItems, type RelatedScope } from "@/lib/menu/related-products-core";
 import { getLiveMenuItemByIdCached, loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
-import { withResolvedImages } from "@/lib/enrichment/image-resolver";
+import { withResolvedImages, imageSeoForUrl } from "@/lib/enrichment/image-resolver";
+import { imageObjectFor, pickImageAlt, type ImageSeoFields } from "@/lib/seo/image-seo-core";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 import { withProductTags } from "@/lib/menu/product-tags-server";
@@ -182,7 +183,7 @@ function imageShellStyle(tone: ProductTone): CSSProperties {
   };
 }
 
-function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductTone }) {
+function ProductHeroArt({ item, tone, imageAlt }: { item: GreenwayMenuItem; tone: ProductTone; imageAlt?: string }) {
   const nonCannabis = isNonCannabisItem(item);
   const initials = brandInitials(item.brand);
   const label = categoryLabel(item).toUpperCase();
@@ -194,7 +195,7 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
     return (
       <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+        <img src={item.imageUrl} alt={imageAlt || item.name} className="h-full w-full object-cover" />
         {item.imageIsFallback ? (
           <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/55 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm">
             Representative image
@@ -381,6 +382,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const knowledge = isMerchItem(item) ? null : await resolveDisplayKnowledge(item);
 
   const tone = toneForItem(item);
+  // D221 M8: the exact photo's library SEO fields - seo_alt for the alt text,
+  // and (own photo only, never a representative one) an ImageObject in the
+  // Product JSON-LD. Null on any miss; the page then uses the product name.
+  const imageSeo: ImageSeoFields | null = item.imageUrl ? await imageSeoForUrl(item.imageUrl) : null;
+  const heroAlt = pickImageAlt(imageSeo, item.name);
+  const heroImageObject = item.imageUrl && !item.imageIsFallback ? imageObjectFor(item.imageUrl, imageSeo, item.name) : null;
   // SLICE 18C: the compliance pills for the detail page's chip row. Both
   // helpers return null / an empty array when the item has earned nothing, so
   // an ordinary product's page is unchanged. Merch is non-cannabis and never
@@ -444,6 +451,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             category: formatWebsiteCategory(item.category),
             priceMinorUnits: item.priceMinorUnits,
             weight: isNonCannabisItem(item) ? null : productSchemaWeight(item),
+            imageObject: heroImageObject,
             inStock:
               item.inventoryStatus !== "unavailable" &&
               (item.variants?.reduce((sum, variant) => sum + (variant.inventoryLevel ?? 0), 0) ?? 1) > 0,
@@ -476,7 +484,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               + h-full) so the picture is flush with the bottom of the description and stays
               completely fixed in place — it does NOT scroll/float with the user. */}
           <div className="overflow-hidden border bg-white md:h-full" style={imageShellStyle(tone)}>
-            <ProductHeroArt item={item} tone={tone} />
+            <ProductHeroArt item={item} tone={tone} imageAlt={heroAlt} />
           </div>
 
           <article className="md:pt-1">

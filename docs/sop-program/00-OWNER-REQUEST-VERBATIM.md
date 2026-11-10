@@ -2277,3 +2277,67 @@ Read-only on the live database, 2026-11-10, after 0352 was applied:
 - **Provenance fixes:** both logo importers now pass provenance (role logo, vendor, credit). `applyProvenance` and the vendor resolver log their errors instead of hiding them, and the resolver no longer caches an error.
 - **Tests:** `tests/compliance/d221-m3-m4-media-ai.test.ts`. Migration pins are shifted to 0353.
 - **Verified:** tsc 0, eslint 0, pure self-tests all passed, the touched vitest suites pass, and `verify-migrations-execute` applies all 353 migrations, passes the 0353 check and re-applies 0353 cleanly.
+
+## D221 (M5–M8) — Media library: undo auto-publish, find similar, library UI v2, collections, search log, storefront image SEO (2026-11-10)
+
+### Owner request (verbatim)
+
+> Thank you! I haven't had a chance to be at my computer to check on anything yet, or apply the migrations. Please make sure there is a button from the media library page to the review page and back please. Please finish the last slices of work to be done now. Follow the standing rules. Thank you!
+
+### Findings
+
+- **Prod state (read-only).** Migrations 0352 and 0353 are already applied on production. `media_set_auto_publish` and `media_similar` do not exist yet, so **only 0354 is needed**.
+- **No link between the pages.** The /admin/media page had no button to the review queue. /admin/media/review had no way back except the sidebar.
+- **Library numbers:**
+  - 10,298 media rows: 4,105 live and 6,193 archived copies.
+  - 3,811 published, of which 3,678 were auto-published (`vendor-source-auto`).
+  - 203 pictures are waiting in the review queue.
+  - The AI describe pass has not started (0 runs).
+- **No undo for auto-publish.** Auto-publish had no one-click undo, and `media_auto_publish` would re-publish any draft that met the rules, including one a person had set back to draft.
+- **The recommender did not explain itself.** It gave no "why" for a suggestion, and it ranked logos and banners like product photos when the names matched. Onboarding and enrichment had no "search for a better picture" or "find similar".
+- **The library had little structure.** /admin/media had one search box and status tabs, with no facets, collections, search log, or SEO / AI provenance on a picture's page.
+- **Storefront image SEO.** The product page used the product name as the alt text and put only a bare `image` URL in the Product JSON-LD. The sitemap listed no images.
+
+### Decisions
+
+- **Navigation.** A "🔎 Review queue (N)" button sits in the /admin/media header, next to a "🗂️ Collections" button. A "← Back to media library" button sits on /admin/media/review and on /admin/media/collections.
+- **Undo is reversible and never deletes.** "Undo auto-publish" sets the pictures back to draft with `publish_reason = 'auto-reverted'`, and "Redo" restores them. This works for all pictures or for one, on its page. Auto-publish never re-publishes an undone picture, or a picture a person un-published.
+- **No embeddings and no pgvector for M6.** "Find similar" uses trigram name similarity, full text over the AI package text, and the same vendor, brand, strain and category. This costs nothing per query and uses the text the M4 pass writes. A vector model can be added later behind the same `media_similar` call if it is ever needed.
+- **People stay in charge (AGENTS.md rule 3, D221 exception):**
+  - bulk actions never overwrite a person's values;
+  - "Re-describe" only refreshes AI-written fields;
+  - attaching a picture to a product stays one human click in every search result.
+- **Search log is best effort.** It never blocks a search and stores no customer data.
+- **ImageObject only for the product's own photo.** A representative (fallback) picture gets neither the ImageObject nor a place in the image sitemap.
+
+### As built
+
+- **Migration `0354_media_library_m5_m8.sql`:**
+  - `media_set_auto_publish(mode, ids)`.
+  - `media_auto_publish` now requires `publish_reason` and `published_at` to be empty.
+  - `media_similar(id, limit)` returns its reasons.
+  - New tables `media_collections`, `media_collection_items` and `media_search_log` (service role only, RLS on, archive never delete).
+  - `media_search_summary(days)`.
+  - `media_library_health` adds auto_reverted, collections, searches_30d and zero_result_30d.
+  - Comes with an editor-safe copy (hazards 0), a rollback, and the pg-check `scripts/recon/media-library-m5-0354-pg-check.sql`, added to POST_APPLY_CHECKS.
+- **Pure cores (self-tests registered in run-pure-selftests):**
+  - `src/lib/media/library-v2-core.ts`: facets, filters, AI/person badges, bulk steps, health tiles, collections, search log entries.
+  - `src/lib/catalog/image-recommend-core.ts` v2: role penalty, why-chips, pack sizes, similar-reason labels, `rankSearchResults`, search scopes.
+  - `src/lib/seo/image-seo-core.ts`: alt text, ImageObject, image sitemap.
+  - `library-picker-core` hrefs now carry `lv` / `lsim`.
+- **Server:**
+  - `src/lib/media/library-v2-server.ts`: all reads paged with `.range()`, and they degrade when 0354 is missing.
+  - `readImageSearch` in library-picker-server.
+  - `loadOnboardingImageSearch` in image-memory-server.
+  - `imageSeoForUrl` in image-resolver.
+- **Actions** (`src/app/admin/media/library-actions.ts`): undo/redo, bulk v2, create/archive/restore a collection, add/remove a picture in a collection. Every action requires media.manage and writes an audit row.
+- **Admin UI:**
+  - /admin/media gets a facets sidebar with chips, the health dashboard (Undo / Redo, top searches) and the bulk v2 bar.
+  - New /admin/media/collections page.
+  - Each picture's page gets the SEO/AI fields with badges, provenance with per-picture undo, duplicates, similar pictures and collections.
+  - The onboarding Images panel and the enrichment library picker get "Search in: This vendor / This brand / Everything", "Find similar" and why-chips.
+- **Storefront:**
+  - The product page alt text is `seo_alt`, then the library alt, then the name.
+  - The Product JSON-LD carries an `ImageObject`.
+  - `sitemap.ts` lists each product page's own photo.
+- **Tests:** `tests/compliance/d221-m5-m8-media-finish.test.ts`. Migration pins are shifted to 0354. Factory-reset KEEP entries are added for the three new tables.

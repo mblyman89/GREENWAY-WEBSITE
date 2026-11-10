@@ -203,6 +203,13 @@ most of the "wrong vendor" complaint before any AI runs.
 - **M4** shipped as a **Vercel cron** (`/api/cron/media-describe`, every 10 minutes at :08, leased by compare-and-set), not on Railway as section 4.3 planned. It uses `gpt-6-luna` at detail high and has a dollar budget per run. "Keep describing new pictures" covers the inline-at-harvest part.
 - **Embeddings** (section 4.3 step 5) are deferred to M6, where the recommender first needs them.
 
+### 5.2 As built (M5 to M8, 2026-11-10)
+
+- **M5** shipped as migration 0354. `media_set_auto_publish('undo' | 'redo', ids)` is the one-click revert (all auto-published pictures, or one). `media_auto_publish` now skips any draft that was ever published or carries a publish reason, so an undone picture stays a draft. The buttons are on the /admin/media health dashboard and on each picture's page. /admin/media and /admin/media/review link to each other.
+- **M6** has no embeddings and no pgvector. `media_similar` combines trigram name similarity, full text on the AI package text, the same vendor, brand, strain and category, and the same file. That costs nothing per query and uses the text the M4 describe pass writes. The recommender down-ranks logos, banners and menus for product cards, and shows "why" chips such as "Same vendor", the pack size or "Label matches". It also adds "Search in: This vendor / This brand / Everything" and "Find similar" in onboarding (Images panel) and enrichment (library picker). Attaching stays one human click.
+- **M7** adds facets on /admin/media (vendor, platform, role, category, review, SEO, AI, collection) with removable chips. Bulk actions are publish, archive, re-describe, undo auto-publish, set vendor and add to a collection, and they never overwrite a person's values. Each picture's page now shows the SEO and AI fields with "AI" / "Person" badges, provenance, duplicates, similar pictures and collections. There is also a health dashboard with the top searches and the ones that found nothing, and a new /admin/media/collections page. Search logging is best effort.
+- **M8** gives the product page alt text from `seo_alt`, then the library alt text, then the product name. The Product JSON-LD carries an `ImageObject` (name, description, creditText), for the product's own photo only. The sitemap lists each product page's own published photo (`images`), with representative pictures left out.
+
 ## 6. Decisions needed from the owner
 
 1. Approve the publish-policy amendment in §4.2: auto-publish vendor-sourced images to the library, while attaching to a live

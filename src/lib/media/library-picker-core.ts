@@ -45,6 +45,8 @@ export type LibraryPickerAsset = {
   visible_text?: string | null;
   ai_caption?: string | null;
   role?: string | null;
+  /** D221 M6: pack size read off the package (0352). */
+  pack_size?: string | null;
 };
 
 export type LibraryScope = "product" | "all";
@@ -268,13 +270,24 @@ export function libraryCountText(v: Pick<LibraryPickerView, "tiles" | "matched" 
  */
 export function libraryPickerHref(
   key: string,
-  opts: { query?: string | null; scope?: LibraryScope; back?: string | null },
+  opts: {
+    query?: string | null;
+    scope?: LibraryScope;
+    back?: string | null;
+    /** D221 M6: search scope chip (This vendor / This brand / Everything). */
+    searchIn?: "vendor" | "brand" | "all" | null;
+    /** D221 M6: "Find similar" anchor media id. */
+    similarTo?: string | null;
+  },
 ): string {
   const p = new URLSearchParams();
   if (opts.back) p.set("back", opts.back);
   const q = parseLibraryQuery(opts.query ?? "");
   if (q) p.set("lq", q);
   if (opts.scope === "all") p.set("lscope", "all");
+  if (opts.searchIn === "vendor" || opts.searchIn === "brand" || opts.searchIn === "all") p.set("lv", opts.searchIn);
+  const sim = String(opts.similarTo ?? "").trim();
+  if (/^[0-9a-f-]{8,64}$/i.test(sim)) p.set("lsim", sim);
   const qs = p.toString();
   return `/admin/products/${encodeURIComponent(key)}${qs ? `?${qs}` : ""}#library`;
 }
@@ -371,6 +384,9 @@ export function __runLibraryPickerCoreTests(): { passed: number; failed: number 
   // href
   ok(libraryPickerHref("SKU 9", { query: " gas ", scope: "all", back: "/admin/products?q=x" }) === "/admin/products/SKU%209?back=%2Fadmin%2Fproducts%3Fq%3Dx&lq=gas&lscope=all#library", "href keeps back, query, scope, fragment");
   ok(libraryPickerHref("k", {}) === "/admin/products/k#library", "bare href");
+  ok(libraryPickerHref("k", { searchIn: "brand", query: "og" }) === "/admin/products/k?lq=og&lv=brand#library", "href keeps the search scope chip");
+  ok(libraryPickerHref("k", { similarTo: "0b7c3c1e-1111-2222-3333-444455556666" }) === "/admin/products/k?lsim=0b7c3c1e-1111-2222-3333-444455556666#library", "href keeps find-similar id");
+  ok(libraryPickerHref("k", { similarTo: "x;drop" }) === "/admin/products/k#library", "href drops a junk similar id");
 
   // purity
   const frozen = Object.freeze([Object.freeze(A({ id: "z" }))]) as readonly LibraryPickerAsset[];
