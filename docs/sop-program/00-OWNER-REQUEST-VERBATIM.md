@@ -2403,3 +2403,11 @@ Merge status: **do not merge** until the owner says it is safe (another agent is
 - Redeploy the crawler worker with `LEAFLINK_EMAIL` and `LEAFLINK_PASSWORD` set.
 - Then run **Fetch all missing logos** again.
 - Vendors outside the owner's 37-brand LeafLink network can only get logos from GrowFlow or Cultivera.
+
+## D223 — Onboarding: after a batch lookup, expanding a product's AI box shows only the search bar, not everything the batch found (2026-11-10)
+
+### Owner request (verbatim)
+
+> Thank you. The other agent is finished. Will you review their work and make sure there is no collisions when merging the new code. Then I need you to help me enhance the onboarding page. After doing a batch lookup on a manifests products, the facts appear in the green ai box in the middle section above the recommended images. Bellow the images is another ai lookup button that lets me lookup that one product. If I do that, a big drop down appears to show all the data it found. The ai batch lookup shows multiple facts, but when I expand it, it only shows me the lookup bar again, and not all the facts it found. After a batch lookup, I want to be able to expand that box and see everything it found for that product. Everything about the way it works now is great, I just want to see the additional details the lookup found, shown to me like how the single lookup shows facts. I can pick and choose which to use and such. Please enhance the ai section on onboarding so I can see more detail like how the single lookup works. Follow the standing rules. Thank you.
+
+Merge status: stacked on D222 (`d222-leaflink-and-logo-fetch`); **do not merge** until the owner says so.
