@@ -57,6 +57,7 @@ import {
   abandonFileAction,
   startPreprodLedgerAction,
   settlePreprodDuplicatesAction,
+  resendRefusedRowsAction,
   assignPreprodProductIdsAction,
   setObligationStartAction,
   setHandoverFactsAction,
@@ -925,6 +926,7 @@ export default async function CcrsCommandCenterPage({
                 startPreprod: startPreprodLedgerAction,
                 assignPreprodIds: assignPreprodProductIdsAction,
                 settlePreprodDuplicates: settlePreprodDuplicatesAction,
+                resendRefused: resendRefusedRowsAction,
               }}
             />
           ) : null}

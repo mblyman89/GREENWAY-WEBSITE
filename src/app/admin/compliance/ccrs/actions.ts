@@ -22,7 +22,9 @@ import {
   abandonFile,
   assignProductIds,
   ccrsFilesByName,
+  emitOutboxFiles,
   fileRowsForEcho,
+  fileRowsWithState,
   getCcrsFile,
   markUploaded,
   preprodSettleDuplicates,
@@ -31,6 +33,9 @@ import {
   startPreprodLedger,
 } from "@/lib/compliance/ccrs-ledger-store";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+import { planResendRefused, resendScope, resendSummaryText } from "@/lib/compliance/ccrs-resend-refused-core";
+import { emitPayload, planOutboxFiles, verifyOutboxAgainstLedger } from "@/lib/compliance/ccrs-outbox-core";
+import { verifyCcrsBatch } from "@/lib/compliance/ccrs-batch-core";
 import { flashParams, hubEnv, hubHref } from "@/lib/compliance/ccrs-hub-flow-core";
 import { PREPROD_RUN_RE, type LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError, classifyEcho, noEmailAllowedAt } from "@/lib/compliance/ccrs-outcome-core";
@@ -750,4 +755,78 @@ export async function transferCorrectionAction(formData: FormData): Promise<void
         : `Approval of the correction of transfer ${parsed.id} withdrawn. Nothing is sent for it.`,
     )}`,
   );
+}
+
+/**
+ * D227 S4: "Re-send refused rows" on an errored Sale file. Rebuilds the dates
+ * of the refused rows with today's exporter, keeps ONLY the rows CCRS refused
+ * (state `rejected`; never `uncertain`), checks each one against the excise
+ * identity CCRS applies [G L1374, L1377] [FAQ L0153-L0160], and stores the
+ * new file in the outbox (one transaction, ccrs_emit_files). The owner then
+ * downloads it from the files list and uploads it like any other file.
+ * A second press finds the rows in flight (routeSaleInserts W-3) and sends
+ * nothing again.
+ */
+export async function resendRefusedRowsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const { weekKey, env, fileId } = readCommon(formData);
+  const { admin, file } = await loadFileFor(env, fileId, weekKey);
+  if (file.fileType !== "Sale") backTo(weekKey, env, errQ(`${file.fileName} is a ${file.fileType} file; re-send of refused rows is for Sale files.`));
+  if (file.state !== "errored") backTo(weekKey, env, errQ(`${file.fileName} is ${file.state}; apply its error file first (only an errored file has refused rows).`));
+  let rows: Awaited<ReturnType<typeof fileRowsWithState>>;
+  try {
+    rows = await fileRowsWithState(admin, file.id, file.numberRecords);
+  } catch (e) {
+    backTo(weekKey, env, errQ(asText(e)));
+  }
+  const scope = resendScope(rows);
+  if (scope.ids.length === 0 || !scope.from || !scope.to) {
+    backTo(weekKey, env, errQ(`${file.fileName} has no refused rows with a sale date to re-send.`));
+  }
+  const range = resolveRange({ from: scope.from, to: scope.to });
+  const batch = await buildCcrsBatch(range.fromISO, range.toISO, { env });
+  if (!batch.ledger.view) backTo(weekKey, env, errQ(`The ${env} ledger is not loaded, so nothing can be recorded in the outbox.`));
+  const sale = batch.files.find((f) => f.type === "Sale");
+  const plan = planResendRefused(sale?.csv ?? "", scope.ids);
+  plan.notInBuild.push(...scope.undated.filter((id) => !plan.notInBuild.includes(id)));
+  if (!plan.csv) backTo(weekKey, env, errQ(resendSummaryText(plan, null)));
+
+  const planned = planOutboxFiles([{ type: "Sale", csv: plan.csv }], {
+    licenseNumber: batch.licenseNumber,
+    now: new Date(),
+    lastStamp: batch.ledger.lastStamp ? new Date(batch.ledger.lastStamp) : null,
+  });
+  const offline = verifyCcrsBatch(planned.map((f) => ({ type: f.type, csv: f.csv }))).problems.filter((pr) => pr.severity === "error");
+  const ledgerProblems = verifyOutboxAgainstLedger(batch.ledger.view, planned);
+  if (offline.length > 0 || ledgerProblems.length > 0) {
+    const first = [...offline.map((pr) => pr.message), ...ledgerProblems.map((pr) => `[${pr.code}] ${pr.message}`)].slice(0, 3).join(" | ");
+    backTo(weekKey, env, errQ(`The re-send file failed the last check, so it was not made: ${first}`));
+  }
+  const note = `D227 re-send of ${plan.sent.length} refused row(s) of ${file.fileName}: ${plan.sent.join(", ")}`;
+  const payload = emitPayload(planned, () => [{ severity: "info", code: "I_RESEND_REFUSED", message: note }]);
+  let result: Awaited<ReturnType<typeof emitOutboxFiles>>;
+  try {
+    result = await emitOutboxFiles(admin, env, payload, []);
+  } catch (e) {
+    backTo(weekKey, env, errQ(asText(e)));
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.file.resend_refused",
+    entityType: "ccrs_files",
+    entityId: file.id,
+    after: {
+      env,
+      from_file: file.fileName,
+      files: result.map((r) => ({ id: r.id, name: r.file_name, status: r.status })),
+      sent: plan.sent,
+      not_in_build: plan.notInBuild,
+      failing: plan.failing,
+      not_insert: plan.notInsert,
+      rule: "[G L1374, L1377] [FAQ L0153-L0160]",
+    },
+  });
+  revalidatePath(BASE);
+  backTo(weekKey, env, okQ(resendSummaryText(plan, result.map((r) => r.file_name).join(", "))));
 }

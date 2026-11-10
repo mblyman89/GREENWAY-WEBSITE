@@ -497,3 +497,29 @@ export async function readInflightMasterRows(admin: Admin, env: LedgerEnv): Prom
   }
   return out;
 }
+
+/**
+ * D227 S4: every row of one file with its state and SaleDate, COMPLETE or it
+ * throws (a short read would re-send too few refused rows and say nothing).
+ */
+export async function fileRowsWithState(
+  admin: Admin,
+  fileId: string,
+  expected: number | null,
+): Promise<{ rowNo: number; externalId: string; state: string; saleDate: string | null }[]> {
+  type Db = { row_no: number; external_id: string; state: string; sale_date: string | null };
+  const { rows, verdict } = await pagedAllChecked<Db>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("ccrs_file_rows")
+        .select("row_no, external_id, state, sale_date:payload->>SaleDate")
+        .eq("file_id", fileId)
+        .order("row_no", { ascending: true })
+        .range(from, to);
+      return { rows: (data as Db[] | null) ?? [], ok: !error };
+    },
+    { expectedTotal: expected },
+  );
+  if (!verdict.complete) throw new Error(`ccrs_file_rows ${fileId}: ${verdict.message}`);
+  return rows.map((r) => ({ rowNo: r.row_no, externalId: r.external_id, state: r.state, saleDate: r.sale_date }));
+}

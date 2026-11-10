@@ -1,0 +1,6 @@
+SubmittedBy,Michael Lyman
+SubmittedDate,11/10/2026
+NumberRecords,2
+LicenseNumber,SoldToLicenseNumber,InventoryExternalIdentifier,PlantExternalIdentifier,SaleType,SaleDate,Quantity,UnitPrice,Discount,RetailSalesTax,CannabisExciseTax,SaleExternalIdentifier,SaleDetailExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation
+413541,,GF41583505719517,,RecreationalRetail,11/06/2026,3,12.31,0.02,3.43,13.66,GWY-AZ3ALV,GWY-AZ3ALV-5a216511,Michael Lyman,11/06/2026,,,Insert
+413541,,GF41583505719517,,RecreationalRetail,11/06/2026,2,12.31,0.01,2.29,9.11,GWY-7DPS89,GWY-7DPS89-c54049ac,Michael Lyman,11/06/2026,,,Insert
