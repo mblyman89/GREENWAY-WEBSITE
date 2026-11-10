@@ -30,6 +30,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { PROVENANCE_TABLE, isMissingAttachedFactsError } from "@/lib/catalog/attach-facts-core";
 import { LOOKUP_JOB_ITEMS_TABLE, isMissingLookupJobsTable } from "@/lib/catalog/lookup-job-core";
+import { routeSnapshots, type LookupSnapshot, type SnapshotWhere } from "@/lib/catalog/lookup-snapshot-core";
 import {
   assembleLookupHistory,
   type AuditRow,
@@ -52,7 +53,18 @@ export const HISTORY_MAX_ROWS = 20_000;
 export const ROW_LOOKUP_AUDIT_ACTION = "catalog_draft.ai_lookup";
 
 export type DeliveryLookupHistory =
-  | { ok: true; complete: boolean; byDraft: Map<string, { searches: PastSearch[]; found: FoundFact[] }> }
+  | {
+      ok: true;
+      complete: boolean;
+      byDraft: Map<string, { searches: PastSearch[]; found: FoundFact[] }>;
+      /**
+       * D223: draft id (lower case) -> the newest findings ANY batch job stored
+       * for that row, or else for the same product on another row/delivery
+       * (not only the delivery's newest job), so the row's AI Lookup opens on
+       * everything the batch found.
+       */
+      snapshots: Map<string, { snap: LookupSnapshot; where: SnapshotWhere }>;
+    }
   | { ok: false };
 
 function isMissingColumn(e: DbError): boolean {
@@ -160,7 +172,7 @@ async function readProvenance(admin: Admin, keys: string[]) {
 export async function loadDeliveryLookupHistory(manifestId: string | null, targets: readonly HistoryTarget[]): Promise<DeliveryLookupHistory> {
   if (!isSupabaseServiceConfigured) return { ok: false };
   const usable = targets.filter((t) => typeof t.draftId === "string" && t.draftId.trim() !== "");
-  if (usable.length === 0) return { ok: true, complete: true, byDraft: new Map() };
+  if (usable.length === 0) return { ok: true, complete: true, byDraft: new Map(), snapshots: new Map() };
   try {
     const admin = createSupabaseAdminClient();
     const keys = [...new Set(usable.flatMap((t) => t.keys).filter((k): k is string => typeof k === "string" && k.trim() !== "").map((k) => k.trim()))];
@@ -177,7 +189,9 @@ export async function loadDeliveryLookupHistory(manifestId: string | null, targe
       audits: audits.rows,
       provenance: provenance.rows,
     });
-    return { ok: true, complete, byDraft };
+    // D223: each row's newest findings (its own, else the same product's).
+    const snapshots = routeSnapshots({ targets: usable, siblings: siblings.rows, items: items.rows, nowMs: Date.now() });
+    return { ok: true, complete, byDraft, snapshots };
   } catch (err) {
     console.error("[lookup-history] read failed (the bar shows no history):", err);
     return { ok: false };

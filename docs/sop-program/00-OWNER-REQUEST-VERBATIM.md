@@ -2403,3 +2403,26 @@ Merge status: **do not merge** until the owner says it is safe (another agent is
 - Redeploy the crawler worker with `LEAFLINK_EMAIL` and `LEAFLINK_PASSWORD` set.
 - Then run **Fetch all missing logos** again.
 - Vendors outside the owner's 37-brand LeafLink network can only get logos from GrowFlow or Cultivera.
+
+## D223 — Onboarding: after a batch lookup, expanding a product's AI box shows only the search bar, not everything the batch found (2026-11-10)
+
+### Owner request (verbatim)
+
+> Thank you. The other agent is finished. Will you review their work and make sure there is no collisions when merging the new code. Then I need you to help me enhance the onboarding page. After doing a batch lookup on a manifests products, the facts appear in the green ai box in the middle section above the recommended images. Bellow the images is another ai lookup button that lets me lookup that one product. If I do that, a big drop down appears to show all the data it found. The ai batch lookup shows multiple facts, but when I expand it, it only shows me the lookup bar again, and not all the facts it found. After a batch lookup, I want to be able to expand that box and see everything it found for that product. Everything about the way it works now is great, I just want to see the additional details the lookup found, shown to me like how the single lookup shows facts. I can pick and choose which to use and such. Please enhance the ai section on onboarding so I can see more detail like how the single lookup works. Follow the standing rules. Thank you.
+
+Merge status: stacked on D222 (`d222-leaflink-and-logo-fetch`); **do not merge** until the owner says so.
+
+### D223 — findings and as-built (merge status: stacked on D222, DO NOT MERGE until the owner says so)
+
+Root causes (verified in code, not guessed):
+1. The row's AI box got its batch findings only from the delivery's NEWEST lookup job. Rows that job skipped (already looked up in an earlier run, or a sibling lot/delivery of the same product) had no findings, so expanding showed only the search bar.
+2. `AiLookupPanel` read `initialResult` once (`useState`), so findings that arrived while the batch auto-refreshed the page never reached the panel.
+3. The green "Facts waiting for you" box had no way to open the full worksheet.
+
+Fix:
+- Pure `lookup-snapshot-core.ts` (`routeSnapshots`, `newestSnapshotsByDraft`, `newerSnapshot`, `snapshotKey`, `adoptBatchFindings`, `aiLookupAnchorId`, `seeFindingsLabel`), self-tests 74/0 (runner floor 74).
+- `lookup-history-server.ts` routes the newest unexpired findings per row (its own first, else the same product's) from rows it already reads: no new query, named columns.
+- The page picks the newer of the current-job and past findings. The AI Lookup box opens on the full worksheet (pick / edit / Save selected, same as a single lookup) and says when findings came from the same product.
+- The panel swaps in newer batch findings as they arrive, unless the person ran their own search or edited the worksheet.
+- The green box gets a "See all N facts the lookup found" link that opens and scrolls to the AI Lookup worksheet.
+- Tests: `tests/compliance/d223-onboarding-batch-details.test.tsx`; r66 floor updated.

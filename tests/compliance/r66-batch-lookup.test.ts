@@ -481,8 +481,8 @@ describe("R66 snapshot: runOneItem keeps every finding and the page hands it to 
   it("lookup-snapshot-core self-tests: exact count, and the runner pins the same floor", () => {
     const r = __runLookupSnapshotCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(48);
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupSnapshotCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 48\)/);
+    expect(r.passed).toBe(74); // D223: +26 (newest findings across jobs + same product, swap-in rule, link)
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupSnapshotCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 74\)/);
   });
 
   it("Grounding terms: a snapshot older than two years is never handed to the panel again", async () => {

@@ -29,7 +29,7 @@
  *
  * Soft-disables when no AI key is configured.
  */
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button, Input, Textarea } from "@/components/admin/ui";
 import {
   productLookupAction,
@@ -42,6 +42,7 @@ import { keptFieldConfidence, LOOKUP_FIELD_LABELS, type LookupFieldKey } from "@
 import type { LookupPolicyView } from "./ai-lookup-actions";
 import { keptFactConfidence, type AttachReceipt } from "@/lib/catalog/attach-plan-core";
 import { AttachReceiptView } from "@/components/admin/AttachReceiptView";
+import { adoptBatchFindings, aiLookupAnchorId } from "@/lib/catalog/lookup-snapshot-core";
 
 type Props = {
   draftId: string;
@@ -82,6 +83,14 @@ type Props = {
   initialNote?: string;
   /** R66: the closed button's text when the batch found something. */
   closedLabel?: string;
+  /**
+   * D223: snapshotKey of initialResult. The page auto-refreshes while a batch
+   * runs; useState only reads its first value, so before D223 the button said
+   * "batch found N facts" while the panel still held the empty first render
+   * (only the search bar). A new key swaps the batch's findings in (never over
+   * a search of the person's own, never over typed edits).
+   */
+  initialKey?: string;
 };
 
 type Ok = Extract<ProductLookupActionResult, { ok: true }>;
@@ -188,6 +197,7 @@ export function AiLookupPanel({
   initialResult = null,
   initialNote = "",
   closedLabel = "AI Lookup",
+  initialKey = "",
 }: Props) {
   const initialQuery = [productName, vendorOrBrand].filter(Boolean).join(" ").trim();
   const [query, setQuery] = useState(initialQuery);
@@ -196,6 +206,23 @@ export function AiLookupPanel({
   const [draft, setDraft] = useState<Draft | null>(() => (initialResult ? draftFromResult(initialResult) : null));
   // R66: the batch note shows until the operator runs a search of their own.
   const [fromBatch, setFromBatch] = useState<boolean>(Boolean(initialResult));
+  // D223: which batch findings this panel last took from the page, whether the
+  // person ran a search of their own, and whether they typed into the worksheet.
+  const [seenKey, setSeenKey] = useState<string>(initialKey);
+  const [shownKey, setShownKey] = useState<string>(initialResult ? initialKey : "");
+  const [ranOwnSearch, setRanOwnSearch] = useState(false);
+  const [edited, setEdited] = useState(false);
+  if (initialKey !== seenKey) {
+    // React's "adjust state when a prop changes" pattern (no effect, no flash).
+    setSeenKey(initialKey);
+    if (initialResult && adoptBatchFindings({ prevKey: shownKey, nextKey: initialKey, ranOwnSearch, editedWorksheet: edited })) {
+      setShownKey(initialKey);
+      setData(initialResult);
+      setDraft(draftFromResult(initialResult));
+      setFromBatch(true);
+      setEdited(false);
+    }
+  }
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<null | "saved" | "saving-error">(null);
   const [saveMsg, setSaveMsg] = useState<string>("");
@@ -206,8 +233,30 @@ export function AiLookupPanel({
   const [importPending, startImportTransition] = useTransition();
 
   function up<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setEdited(true);
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   }
+
+  // D223: the green "Facts waiting for you" box links here ("See everything
+  // the lookup found"); opening that link opens this panel on the findings.
+  const anchorId = aiLookupAnchorId(draftId);
+  useEffect(() => {
+    const openIfTargeted = () => {
+      if (window.location.hash === `#${anchorId}`) setOpen(true);
+    };
+    // A second press of the same link fires no hashchange, so clicks count too.
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a");
+      if (a && a.getAttribute("href") === `#${anchorId}`) setOpen(true);
+    };
+    openIfTargeted();
+    window.addEventListener("hashchange", openIfTargeted);
+    document.addEventListener("click", onClick);
+    return () => {
+      window.removeEventListener("hashchange", openIfTargeted);
+      document.removeEventListener("click", onClick);
+    };
+  }, [anchorId]);
 
   /**
    * S09: `refresh` = "Refresh from web" - the server ignores what is on file
@@ -220,6 +269,7 @@ export function AiLookupPanel({
     setData(null);
     setDraft(null);
     setFromBatch(false);
+    setRanOwnSearch(true);
     setSaved(null);
     setSaveMsg("");
     setSaveReceipt(null);
@@ -357,6 +407,7 @@ export function AiLookupPanel({
     return (
       <button
         type="button"
+        id={anchorId}
         onClick={() => setOpen(true)}
         className="mt-1 inline-flex items-center gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/15"
         aria-label="Open AI lookup"
@@ -367,7 +418,7 @@ export function AiLookupPanel({
   }
 
   return (
-    <div className={`mt-1 ${wide ? "w-full" : "w-80"} rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2`}>
+    <div id={anchorId} className={`mt-1 ${wide ? "w-full" : "w-80"} scroll-mt-24 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2`}>
       <div className="mb-1 flex items-center justify-between">
         <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--admin-accent)]">
           <span aria-hidden>🤖</span> AI Lookup

@@ -414,9 +414,22 @@ export function snapshotButtonLabel(s: LookupSnapshot | null): string {
 }
 
 /** The note above the batch's findings in the open panel. */
-export function snapshotNote(s: LookupSnapshot, when: string): string {
+export function snapshotNote(s: LookupSnapshot, when: string, where: SnapshotWhere = "this row"): string {
   const at = when ? ` on ${when}` : "";
-  return `From the batch lookup${at}. Keep, edit and Save selected exactly as with a row search, or press Search to look again.`;
+  const of = where === "same product" ? " of the same product (another lot or delivery)" : "";
+  return `From the batch lookup${of}${at}. Keep, edit and Save selected exactly as with a row search, or press Search to look again.`;
+}
+
+/** D223: the DOM id of a row's AI Lookup panel (the green box links to it). */
+export function aiLookupAnchorId(draftId: string): string {
+  return `ai-lookup-${String(draftId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64)}`;
+}
+
+/** D223: the green box's link that opens the row's AI Lookup on the findings. */
+export function seeFindingsLabel(s: LookupSnapshot | null | undefined): string | null {
+  if (!s || !s.hasAnyFindings) return null;
+  const n = snapshotFoundCount(s);
+  return n > 0 ? `See all ${n === 1 ? "1 fact" : `${n} facts`} the lookup found` : "See everything the lookup found";
 }
 
 /** "Oct 3, 2026, 2:15 PM" style, or "" for a junk date (never invents one). */
@@ -442,6 +455,135 @@ export function snapshotWhen(at: string, timeZone = "America/Los_Angeles"): stri
   } catch {
     return "";
   }
+}
+
+// ─── D223: the newest snapshot per product, across EVERY batch job ───────────
+//
+// Owner (D223): after a batch lookup the green box listed facts, but opening
+// the row's AI Lookup showed only the search bar. The page read snapshots from
+// the delivery's NEWEST job only; a later job that did not include a product
+// ("Search again" on a few rows, a vendor-wide run) left that product with no
+// snapshot. These helpers pick the newest stored snapshot for each product from
+// all of its finished items, so the panel always opens on what was found.
+
+/** One finished lookup_job_items row as the page reads it (named columns). */
+export interface SnapshotItemRow {
+  draft_id: unknown;
+  finished_at: unknown;
+  snapshot: unknown;
+}
+
+function timeOf(s: LookupSnapshot, finishedAt: unknown): number {
+  const a = Date.parse(s.at);
+  if (Number.isFinite(a)) return a;
+  const f = Date.parse(String(finishedAt ?? ""));
+  return Number.isFinite(f) ? f : Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * draft id (lower case) -> the newest valid, unexpired snapshot. Junk rows,
+ * old shapes and anything past the two-year limit are skipped (never shown).
+ */
+export function newestSnapshotsByDraft(rows: readonly SnapshotItemRow[], nowMs: number): Map<string, LookupSnapshot> {
+  const best = new Map<string, { snap: LookupSnapshot; t: number }>();
+  for (const r of rows) {
+    if (typeof r.draft_id !== "string" || !r.draft_id.trim()) continue;
+    const snap = parseLookupSnapshot(r.snapshot);
+    if (!snap || snapshotExpired(snap.at || String(r.finished_at ?? ""), nowMs)) continue;
+    const id = r.draft_id.trim().toLowerCase();
+    const t = timeOf(snap, r.finished_at);
+    const cur = best.get(id);
+    if (!cur || t > cur.t) best.set(id, { snap, t });
+  }
+  return new Map([...best].map(([k, v]) => [k, v.snap]));
+}
+
+/** Where a row's batch findings came from (shown in the panel's note). */
+export type SnapshotWhere = "this row" | "same product";
+
+/**
+ * D223: the newest batch findings for each product on the page, from the rows
+ * the delivery's search-history read already holds (lookup_job_items for this
+ * page's rows AND for same-identity rows - another lot of the same product on
+ * this or an earlier delivery). The green "Facts waiting for you" box shows
+ * facts filed under the PRODUCT, so a row whose own lookup was skipped (the
+ * product was already looked up on a sibling) must still open on what was
+ * found. The row's own findings win; otherwise the newest same-product one.
+ */
+export function routeSnapshots(input: {
+  targets: readonly { draftId: string; keys: readonly string[] }[];
+  siblings: readonly { id: unknown; identity_key: unknown }[];
+  items: readonly { draft_id: unknown; status: unknown; result_json: unknown; finished_at: unknown }[];
+  nowMs: number;
+}): Map<string, { snap: LookupSnapshot; where: SnapshotWhere }> {
+  const lc = (x: string) => x.trim().toLowerCase();
+  const targetIds = new Set<string>();
+  const byKey = new Map<string, string[]>();
+  for (const t of input.targets) {
+    if (typeof t.draftId !== "string" || !t.draftId.trim()) continue;
+    const id = lc(t.draftId);
+    targetIds.add(id);
+    for (const k of t.keys) {
+      if (typeof k !== "string" || !k.trim()) continue;
+      const list = byKey.get(k.trim()) ?? [];
+      if (!list.includes(id)) list.push(id);
+      byKey.set(k.trim(), list);
+    }
+  }
+  // sibling draft id -> the page rows it is the same product as
+  const sib = new Map<string, string[]>();
+  for (const s of input.siblings) {
+    if (typeof s.id !== "string" || !s.id.trim() || targetIds.has(lc(s.id))) continue;
+    const key = typeof s.identity_key === "string" ? s.identity_key.trim() : "";
+    const to = key ? byKey.get(key) ?? [] : [];
+    if (to.length === 0) continue;
+    const list = sib.get(lc(s.id)) ?? [];
+    for (const t of to) if (!list.includes(t)) list.push(t);
+    sib.set(lc(s.id), list);
+  }
+  const own: SnapshotItemRow[] = [];
+  const same: SnapshotItemRow[] = [];
+  for (const r of input.items) {
+    if (r.status !== "done" || typeof r.draft_id !== "string" || !r.draft_id.trim()) continue;
+    const snapshot = isObj(r.result_json) ? r.result_json.snapshot : null;
+    if (snapshot == null) continue;
+    const id = lc(r.draft_id);
+    if (targetIds.has(id)) own.push({ draft_id: id, finished_at: r.finished_at, snapshot });
+    for (const t of sib.get(id) ?? []) same.push({ draft_id: t, finished_at: r.finished_at, snapshot });
+  }
+  const out = new Map<string, { snap: LookupSnapshot; where: SnapshotWhere }>();
+  for (const [id, snap] of newestSnapshotsByDraft(same, input.nowMs)) out.set(id, { snap, where: "same product" });
+  for (const [id, snap] of newestSnapshotsByDraft(own, input.nowMs)) out.set(id, { snap, where: "this row" });
+  return out;
+}
+
+/** The newer of two snapshots (either may be absent); ties keep the first. */
+export function newerSnapshot(a: LookupSnapshot | null | undefined, b: LookupSnapshot | null | undefined): LookupSnapshot | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return timeOf(b, null) > timeOf(a, null) ? b : a;
+}
+
+/**
+ * A stable key for "which findings is the panel showing". The page re-renders
+ * on every auto-refresh with a fresh object, so the client compares this key,
+ * not object identity, to know when NEW batch findings arrived.
+ */
+export function snapshotKey(s: LookupSnapshot | null | undefined): string {
+  if (!s) return "";
+  return `${s.at}|${s.model}|${snapshotFoundCount(s)}|${s.hasAnyFindings ? 1 : 0}`;
+}
+
+/**
+ * Should the open panel switch to newly arrived batch findings? Yes, unless
+ * the person ran their own search (their result is never replaced) or typed
+ * edits into the batch worksheet that is already showing.
+ */
+export function adoptBatchFindings(input: { prevKey: string; nextKey: string; ranOwnSearch: boolean; editedWorksheet: boolean }): boolean {
+  if (!input.nextKey || input.nextKey === input.prevKey) return false;
+  if (input.ranOwnSearch) return false;
+  if (input.editedWorksheet && input.prevKey) return false;
+  return true;
 }
 
 // ─── Self-tests ─────────────────────────────────────────────────────────────
@@ -567,6 +709,74 @@ export function __runLookupSnapshotCoreTests(): { passed: number; failed: number
   ok(snapshotExpired("2026-10-03T21:15:00.000Z", at0 + LOOKUP_SNAPSHOT_MAX_AGE_MS + 1), "past two years: expired");
   ok(snapshotExpired("junk", at0) && snapshotExpired(null, at0) && snapshotExpired("2026-10-03T21:15:00.000Z", Number.NaN), "junk time: expired");
   ok(LOOKUP_SNAPSHOT_MAX_AGE_MS === 63_072_000_000, "730 days");
+  ok(snapshotNote(minimal!, "Oct 3", "same product").startsWith("From the batch lookup of the same product (another lot or delivery) on Oct 3."), "D223 note says same product");
+  ok(aiLookupAnchorId("1b2c-3D") === "ai-lookup-1b2c-3D" && aiLookupAnchorId('x"><script') === "ai-lookup-xscript", "D223 anchor id is safe");
+  ok(seeFindingsLabel(null) === null && seeFindingsLabel(minimal) === null, "D223 no link without findings");
+  ok(seeFindingsLabel({ ...minimal!, hasAnyFindings: true, size: "1g" }) === "See all 1 fact the lookup found", "D223 link singular");
+  ok(seeFindingsLabel({ ...minimal!, hasAnyFindings: true }) === "See everything the lookup found", "D223 link without a count");
+
+  // D223: newest snapshot per product across every job
+  {
+    const mk = (at: string, size = "") => buildLookupSnapshot({ ...input, at, result: { ...input.result, size } });
+    const now = Date.parse("2026-11-10T12:00:00Z");
+    const rows: SnapshotItemRow[] = [
+      { draft_id: "AAA", finished_at: "2026-11-01T00:00:00Z", snapshot: mk("2026-11-01T00:00:00Z", "1g") },
+      { draft_id: "aaa", finished_at: "2026-11-05T00:00:00Z", snapshot: mk("2026-11-05T00:00:00Z", "3.5g") },
+      { draft_id: "aaa", finished_at: "2026-11-03T00:00:00Z", snapshot: mk("2026-11-03T00:00:00Z", "7g") },
+      { draft_id: "bbb", finished_at: "2026-11-02T00:00:00Z", snapshot: { v: 99 } },
+      { draft_id: "ccc", finished_at: "2020-01-01T00:00:00Z", snapshot: mk("2020-01-01T00:00:00Z", "1g") },
+      { draft_id: null, finished_at: null, snapshot: mk("2026-11-06T00:00:00Z") },
+      { draft_id: "ddd", finished_at: "2026-11-04T00:00:00Z", snapshot: null },
+    ];
+    const m = newestSnapshotsByDraft(rows, now);
+    ok(m.get("aaa")?.size === "3.5g", "D223 newest snapshot wins (case-insensitive id)");
+    ok(!m.has("bbb") && !m.has("ddd"), "D223 junk / missing snapshot skipped");
+    ok(!m.has("ccc"), "D223 expired snapshot never shown");
+    ok(m.size === 1, "D223 only usable products kept");
+    ok(newestSnapshotsByDraft([], now).size === 0, "D223 empty in, empty out");
+    const a = parseLookupSnapshot(mk("2026-11-01T00:00:00Z", "1g"))!;
+    const b = parseLookupSnapshot(mk("2026-11-05T00:00:00Z", "3.5g"))!;
+    ok(newerSnapshot(a, b) === b && newerSnapshot(b, a) === b, "D223 newerSnapshot picks the newer");
+    ok(newerSnapshot(null, b) === b && newerSnapshot(a, undefined) === a && newerSnapshot(null, null) === null, "D223 newerSnapshot with gaps");
+    ok(newerSnapshot(a, { ...a }) === a, "D223 tie keeps the first");
+    // key + adoption rule
+    ok(snapshotKey(null) === "" && snapshotKey(a) !== snapshotKey(b), "D223 key differs per finding set");
+    ok(snapshotKey(a) === snapshotKey({ ...a }), "D223 key is stable across re-renders");
+    ok(adoptBatchFindings({ prevKey: "", nextKey: snapshotKey(a), ranOwnSearch: false, editedWorksheet: false }), "D223 first findings adopted");
+    ok(adoptBatchFindings({ prevKey: snapshotKey(a), nextKey: snapshotKey(b), ranOwnSearch: false, editedWorksheet: false }), "D223 newer findings adopted");
+    ok(!adoptBatchFindings({ prevKey: snapshotKey(a), nextKey: snapshotKey(a), ranOwnSearch: false, editedWorksheet: false }), "D223 same findings: no change");
+    ok(!adoptBatchFindings({ prevKey: "", nextKey: snapshotKey(b), ranOwnSearch: true, editedWorksheet: false }), "D223 own search never replaced");
+    ok(!adoptBatchFindings({ prevKey: snapshotKey(a), nextKey: snapshotKey(b), ranOwnSearch: false, editedWorksheet: true }), "D223 typed edits never replaced");
+    ok(adoptBatchFindings({ prevKey: "", nextKey: snapshotKey(b), ranOwnSearch: false, editedWorksheet: true }), "D223 edits with no batch shown do not block");
+    ok(!adoptBatchFindings({ prevKey: snapshotKey(a), nextKey: "", ranOwnSearch: false, editedWorksheet: false }), "D223 findings never cleared by a refresh");
+    const done = (id: unknown, at: string, extra: Record<string, unknown> = {}) => ({ draft_id: id, status: "done", result_json: { outcome: "found", snapshot: mk(at, String(extra.size ?? "")) }, finished_at: at });
+    const routed = routeSnapshots({
+      targets: [{ draftId: "ROW1", keys: ["k|gelato", ""] }, { draftId: "row2", keys: ["k|runtz"] }, { draftId: "row3", keys: ["k|none"] }],
+      siblings: [
+        { id: "sibA", identity_key: "k|runtz" },
+        { id: "sibB", identity_key: "k|runtz" },
+        { id: "sibC", identity_key: "k|gelato" },
+        { id: "row1", identity_key: "k|runtz" },
+        { id: "stranger", identity_key: "k|other" },
+        { id: 5, identity_key: "k|runtz" },
+      ],
+      items: [
+        done("row1", "2026-11-01T00:00:00Z", { size: "own" }),
+        done("sibC", "2026-11-09T00:00:00Z", { size: "newer sibling" }),
+        done("sibA", "2026-11-02T00:00:00Z", { size: "a" }),
+        done("sibB", "2026-11-04T00:00:00Z", { size: "b" }),
+        { draft_id: "sibB", status: "failed", result_json: { snapshot: mk("2026-11-08T00:00:00Z", "failed") }, finished_at: "2026-11-08T00:00:00Z" },
+        { draft_id: "sibA", status: "done", result_json: { outcome: "found" }, finished_at: "2026-11-09T00:00:00Z" },
+        { draft_id: "sibA", status: "done", result_json: "junk", finished_at: "2026-11-09T00:00:00Z" },
+        done("stranger", "2026-11-09T00:00:00Z", { size: "stranger" }),
+      ],
+      nowMs: now,
+    });
+    ok(routed.get("row1")?.where === "this row" && routed.get("row1")?.snap.size === "own", "D223 own row's findings win over a newer sibling");
+    ok(routed.get("row2")?.where === "same product" && routed.get("row2")?.snap.size === "b", "D223 newest same-product findings fill a row with none");
+    ok(!routed.has("row3") && !routed.has("stranger") && routed.size === 2, "D223 another product's findings never shown");
+    ok(routeSnapshots({ targets: [], siblings: [], items: [done("x", "2026-11-01T00:00:00Z")], nowMs: now }).size === 0, "D223 no targets, nothing routed");
+  }
 
   return { passed, failed };
 }
