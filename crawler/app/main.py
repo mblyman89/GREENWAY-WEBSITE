@@ -792,12 +792,13 @@ async def growflow_menu(
 
 # ---------------------------------------------------------------------------
 # Slice LL-2 LeafLink vendor menus (authenticated, polite, cookie REST).
-# Mirrors the GrowFlow pair: (1) discover sellers/brands by searching the shop
-# catalog (grouped by brand — pinned: retailers have no brand-search endpoint)
-# and (2) fetch ONE brand's full menu (header + product-line rows). Same
-# X-Crawler-Secret auth. LeafLink's internal API is COOKIE-authenticated (no
-# Bearer token — pinned); the client captures the Auth0 cookie session via
-# Playwright and re-logs in on 401/403. We return the RAW payload (never a
+# Mirrors the GrowFlow pair: (1) discover sellers/brands and (2) fetch ONE
+# brand's full menu (header + product-line rows). Same X-Crawler-Secret auth.
+# D222 re-pin (2026-11-09): brand discovery uses the content API
+# `api.leaflink.com/content/brands/listing` (Bearer = the SPA's Auth0 JWT,
+# captured at login, + `leaflink-version`) — one call, real brand logos. The
+# internal app API stays COOKIE-authenticated; the old product-search grouping
+# is kept only as a single-page fallback. Re-logs in on 401/403. We return the RAW payload (never a
 # guessed shape) so the Next app normalizes/persists in ONE place.
 # ---------------------------------------------------------------------------
 

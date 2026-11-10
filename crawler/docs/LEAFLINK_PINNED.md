@@ -120,3 +120,37 @@ real Playwright login, exactly like the GrowFlow marketplace integration.
 Human-paced delays before every request, aggressive session reuse (login as
 rarely as possible), modest page sizes. The site advertises 300/min for the
 official API; we stay far below that.
+
+## D222 re-pin — 2026-11-09 (live, owner account)
+
+Re-probed with a real browser session, using the same account and company
+(greenway-marijuana / 3053). The probe scripts and the captured brand
+universe are in `scripts/recon/d222/`. They contain no secrets.
+
+- **A Bearer token exists for the content API.** The SPA calls
+  `https://api.leaflink.com/...` with `Authorization: Bearer <Auth0 JWT>`
+  and the header `leaflink-version: 2022-10-31`. The JWT lasts about 3 h
+  (`exp − iat ≈ 10 800 s`).
+  - The worker captures it at login by listening to the page's requests
+    after it opens `/c/<slug>/shop/brands`.
+  - The internal `app.leaflink.com/api/internal/...` API is still cookie-only,
+    as pinned above.
+- **Brand discovery:**
+  `GET https://api.leaflink.com/content/brands/listing?company_id=3053&page=1[&search=<q>]`
+  - It returns `{count, next, previous, content: {collection: [...]}}`.
+  - Each row has `resource_id` (the brand id), `name`, `image` (the brand
+    **logo**), `owner {resource_id, name, slug}` (the seller company),
+    `tagline` and `product_categories`.
+  - The listing covers the brands in the retailer's network: **37 brands**,
+    all on page 1. Page 2 returns 404.
+- **Why the old search failed:**
+  - On `shop/products/` with `search=`, `count` was always the full catalog
+    total (4959). `next` was set even past the end.
+  - Walking 10 pages took about 75 s, which went over the app's 45 s and
+    90 s timeouts.
+  - The client's `_get(next_url, params=...)` silently replaced the query
+    in the `next` URL.
+  - All three are fixed: the listing comes first, then a single-page
+    fallback (limit 100). `merge_query()` keeps the `next` query.
+- **Live timings after the fix:** the first search, with login, took about
+  23 s. Later searches take about 4 s.
