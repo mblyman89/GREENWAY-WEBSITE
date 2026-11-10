@@ -13,6 +13,10 @@
 \set ON_ERROR_STOP on
 begin;
 
+-- D225: 0356 later turned the table into a list (many pictures per
+-- category). This check proves the 0355 shape, so it first steps back to it
+-- with the 0356 rollback (inside this rolled-back transaction).
+\ir ../../supabase/rollbacks/0356_menu_card_fallback_many.rollback.sql
 \ir ../../supabase/migrations/0355_menu_card_fallback_images.sql
 
 insert into public.media_assets (id, storage_key, filename, mime_type, status, usage_type, title) values

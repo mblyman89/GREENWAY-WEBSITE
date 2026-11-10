@@ -4112,3 +4112,21 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0355_menu_card_fallback_images.rollback.sql` (drops the table;
   the pictures stay in the media library, only the per-category choice is lost).
 
+- [ ] **`supabase/migrations/0356_menu_card_fallback_many.sql`** — D225 many fallback pictures per website category
+  (owner: "I want to be able to add many fallback images to the categories, so that the menu has a variety of images
+  used"). Run it AFTER 0355. No new table: `menu_card_fallback_images` gets an `id` primary key and a `sort_order`, so
+  a category can hold a list of pictures (the same picture only once per category). Every picture you already set
+  stays, as the first in its list. Until it is applied, the page says so and keeps working one picture per category.
+
+  Safe to re-run. Paste the file as is (its comments have no apostrophes or semicolons, so no editor-safe copy is
+  needed). If the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select website_category, sort_order, media_id from public.menu_card_fallback_images order by website_category, sort_order;
+  -- one row per picture; several rows per category once you add more on /admin/menu-card-fallbacks
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0356_menu_card_fallback_many.rollback.sql` (keeps the FIRST
+  picture of each category, removes the extra ones from the list; the pictures stay in the media library).
