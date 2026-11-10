@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789` by `build_atlas_part.py`.
+Generated 2026-11-10 20:03Z at commit `0917405e1490fd189aa27aa67b5dfacb880b7921` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 2d3e8d9 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 0917405 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -71,12 +71,12 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L1205: `export function verifyCcrsBatch(`
 - L1222: `export function __runCcrsBatchCoreTests(): void {`
 
-### `src/lib/compliance/ccrs-sales.ts` (543 L)
+### `src/lib/compliance/ccrs-sales.ts` (546 L)
 
 - L51: `export type CcrsLicenseSettings = {`
 - L56: `export type CcrsBuildResult = {`
 - L95: `export async function getCcrsLicenseSettings(): Promise<CcrsLicenseSettings> {`
-- L188: `export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<CcrsBuildResult> {`
+- L190: `export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<CcrsBuildResult> {`
 
 ### `src/lib/compliance/ccrs-identifiers.ts` (456 L)
 
@@ -130,16 +130,16 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L128: `export async function unresolveWeek(weekKey: string): Promise<{ ok: boolean; error?: string }> {`
 - L142: `export async function setWeekErrorStatus(opts: {`
 
-### `src/lib/compliance/ccrs-error-triage-core.ts` (366 L)
+### `src/lib/compliance/ccrs-error-triage-core.ts` (383 L)
 
 - L15: `export type TriageSeverity = "benign" | "fixable" | "escalate";`
 - L17: `export type TriageFinding = {`
 - L29: `export type TriageResult = {`
-- L164: `export function triageCcrsErrorEmail(pasted: string): TriageResult {`
-- L226: `export const LCB_CONTACTS = {`
-- L234: `export type ExaminerDraft = {`
-- L245: `export function buildExaminerDraft(opts: {`
-- L280: `export function __runCcrsErrorTriageTests(): { passed: number; failed: number } {`
+- L175: `export function triageCcrsErrorEmail(pasted: string): TriageResult {`
+- L237: `export const LCB_CONTACTS = {`
+- L245: `export type ExaminerDraft = {`
+- L256: `export function buildExaminerDraft(opts: {`
+- L291: `export function __runCcrsErrorTriageTests(): { passed: number; failed: number } {`
 
 ### `src/lib/compliance/ccrs-submit-gate-core.ts` (379 L)
 
@@ -182,16 +182,40 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L46: `export type CcrsAdjustmentBuildResult = {`
 - L59: `export async function buildCcrsInventoryAdjustmentCsv(`
 
-### `src/lib/compliance/ccrs-sale-correction-core.ts` (244 L)
+### `src/lib/compliance/ccrs-sale-correction-core.ts` (305 L)
 
 - L30: `export type SaleCorrectionSource = {`
 - L52: `export type SaleCorrectionRowResult = { row: string[] | null; skipReason?: string };`
 - L65: `export function ccrsDateLoose(v: string): string {`
-- L78: `export function prorateLineMinor(lineMinor: number, remainingQty: number, originalQty: number): number {`
-- L85: `export function mapSaleCorrectionRow(`
-- L139: `export function buildSaleCorrectionFile(`
-- L146: `export function makeSaleCorrectionFileName(licenseNumber: string): string {`
-- L154: `export function __runSaleCorrectionTests(): { passed: number; failed: number } {`
+- L78: `export const CCRS_EXCISE_RATE_BPS = 3700;`
+- L81: `export function prorateLineMinor(lineMinor: number, remainingQty: number, originalQty: number): number {`
+- L88: `export function mapSaleCorrectionRow(`
+- L155: `export function buildSaleCorrectionFile(`
+- L162: `export function makeSaleCorrectionFileName(licenseNumber: string): string {`
+- L170: `export function __runSaleCorrectionTests(): { passed: number; failed: number } {`
+
+### `src/lib/compliance/ccrs-resend-refused-core.ts` (201 L)
+
+- L26: `export type RefusedRow = { rowNo: number; externalId: string; state: string; saleDate: string | null };`
+- L31: `export function saleDateIso(mdy: string | null | undefined): string | null {`
+- L37: `export function moneyMinor(s: string | undefined): number | null {`
+- L45: `export function resendScope(rows: readonly RefusedRow[]): {`
+- L59: `export function saleRowIdentityProblem(cells: readonly string[]): string | null {`
+- L71: `export type ResendPlan = {`
+- L87: `export function planResendRefused(freshSaleCsv: string, refusedIds: readonly string[]): ResendPlan {`
+- L124: `export function resendSummaryText(plan: ResendPlan, fileName: string | null): string {`
+- L138: `export function __runCcrsResendRefusedCoreTests(): { passed: number; failed: number } {`
+
+### `src/lib/reports/tax-base-core.ts` (285 L)
+
+- L42: `export function stillDueRateBps(opts: {`
+- L60: `export function backOutInclusiveMinor(inclusiveMinor: number, rateBps: number): number {`
+- L71: `export function preTaxLineBaseMinor(opts: {`
+- L93: `export function preTaxUnitMinor(opts: {`
+- L133: `export type CcrsSaleLineMoney = {`
+- L146: `export function ccrsSaleLineMoney(opts: {`
+- L188: `export function ccrsPrintedExciseMinor(quantity: number, unitPriceMinor: number, discountMinor: number, exciseRateBps = 3700): number {`
+- L200: `export function __runTaxBaseCoreTests(): void {`
 
 ### `src/lib/compliance/ccrs-filing-status.ts` (121 L)
 
@@ -225,112 +249,114 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L275: `export function planMonthlyReminders(`
 - L323: `export function __runCcrsDeadlineTests(): { passed: number; failed: number } {`
 
-### `src/lib/inventory/disposition.ts` (2052 L)
+### `src/lib/inventory/disposition.ts` (1854 L)
 
-- L87: `export const DESTRUCTION_QUARANTINE_HOURS = HOLD_HOURS_DEFAULT;`
-- L94: `export {`
-- L99: `export type VendorReturn = {`
-- L145: `export type CustomerReturn = {`
-- L177: `export type DestructionEvent = {`
-- L223: `export type VendorReturnWithLot = VendorReturn & WithLot;`
-- L224: `export type DestructionEventWithLot = DestructionEvent & WithLot & { hold_elapsed: boolean };`
-- L230: `export type DispositionSettings = { holdHours: number };`
-- L231: `export const DEFAULT_DISPOSITION_SETTINGS: DispositionSettings = { holdHours: HOLD_HOURS_DEFAULT };`
-- L233: `export async function getDispositionSettings(): Promise<DispositionSettings> {`
-- L249: `export async function updateDispositionSettings(`
-- L418: `export type ReturnableOrderLine = {`
-- L459: `export type ReturnSearchResult = {`
-- L477: `export async function searchReturnableOrderLines(search: string, limit = 8): Promise<ReturnSearchResult> {`
-- L660: `export async function findReturnableOrderLines(search: string, limit = 8): Promise<ReturnableOrderLine[]> {`
-- L664: `export async function listCustomerReturns(limit = 50): Promise<CustomerReturn[]> {`
-- L696: `export async function createCustomerReturn(`
-- L1076: `export async function markCorrectionsExported(ids: string[]): Promise<void> {`
-- L1093: `export async function listVendorReturns(limit = 100): Promise<VendorReturnWithLot[]> {`
-- L1105: `export const RESERVE_VENDOR_RETURN_RPC = "reserve_vendor_return";`
-- L1106: `export const DEPART_VENDOR_RETURN_RPC = "depart_vendor_return";`
-- L1107: `export const RELEASE_VENDOR_RETURN_RPC = "release_vendor_return";`
-- L1110: `export const VENDOR_RETURN_PENDING_MIGRATION =`
-- L1119: `export async function getVendorReturnPacket(id: string): Promise<{`
-- L1171: `export async function getVendorReturn(id: string): Promise<VendorReturn | null> {`
-- L1187: `export async function createVendorReturn(`
-- L1277: `export async function updateVendorReturnTransport(`
-- L1339: `export async function updateVendorReturnManifest(`
-- L1441: `export async function cancelVendorReturn(`
-- L1464: `export async function listDestructionEvents(limit = 100): Promise<DestructionEventWithLot[]> {`
-- L1484: `export async function listCompletedDestructionsForMonth(`
-- L1520: `export async function getDestructionRecordForPrint(id: string): Promise<`
-- L1551: `export async function getDestructionEvent(id: string): Promise<DestructionEvent | null> {`
-- L1627: `export async function scheduleDestruction(`
-- L1742: `export async function completeDestruction(`
-- L1900: `export async function cancelDestruction(`
-- L1974: `export type DispositionSummary = {`
-- L1982: `export async function dispositionSummary(): Promise<DispositionSummary> {`
+- L89: `export const DESTRUCTION_QUARANTINE_HOURS = HOLD_HOURS_DEFAULT;`
+- L96: `export {`
+- L101: `export type VendorReturn = {`
+- L147: `export type CustomerReturn = {`
+- L179: `export type DestructionEvent = {`
+- L225: `export type VendorReturnWithLot = VendorReturn & WithLot;`
+- L226: `export type DestructionEventWithLot = DestructionEvent & WithLot & { hold_elapsed: boolean };`
+- L232: `export type DispositionSettings = { holdHours: number };`
+- L233: `export const DEFAULT_DISPOSITION_SETTINGS: DispositionSettings = { holdHours: HOLD_HOURS_DEFAULT };`
+- L235: `export async function getDispositionSettings(): Promise<DispositionSettings> {`
+- L251: `export async function updateDispositionSettings(`
+- L426: `export async function listCustomerReturns(limit = 50): Promise<CustomerReturn[]> {`
+- L458: `export async function createCustomerReturn(`
+- L849: `export async function markCorrectionsExported(ids: string[]): Promise<void> {`
+- L869: `export async function readCorrectionRoute(): Promise<CorrectionRoute> {`
+- L895: `export async function listVendorReturns(limit = 100): Promise<VendorReturnWithLot[]> {`
+- L907: `export const RESERVE_VENDOR_RETURN_RPC = "reserve_vendor_return";`
+- L908: `export const DEPART_VENDOR_RETURN_RPC = "depart_vendor_return";`
+- L909: `export const RELEASE_VENDOR_RETURN_RPC = "release_vendor_return";`
+- L912: `export const VENDOR_RETURN_PENDING_MIGRATION =`
+- L921: `export async function getVendorReturnPacket(id: string): Promise<{`
+- L973: `export async function getVendorReturn(id: string): Promise<VendorReturn | null> {`
+- L989: `export async function createVendorReturn(`
+- L1079: `export async function updateVendorReturnTransport(`
+- L1141: `export async function updateVendorReturnManifest(`
+- L1243: `export async function cancelVendorReturn(`
+- L1266: `export async function listDestructionEvents(limit = 100): Promise<DestructionEventWithLot[]> {`
+- L1286: `export async function listCompletedDestructionsForMonth(`
+- L1322: `export async function getDestructionRecordForPrint(id: string): Promise<`
+- L1353: `export async function getDestructionEvent(id: string): Promise<DestructionEvent | null> {`
+- L1429: `export async function scheduleDestruction(`
+- L1544: `export async function completeDestruction(`
+- L1702: `export async function cancelDestruction(`
+- L1776: `export type DispositionSummary = {`
+- L1784: `export async function dispositionSummary(): Promise<DispositionSummary> {`
 
-### `src/lib/inventory/disposition-core.ts` (526 L)
+### `src/lib/inventory/disposition-core.ts` (635 L)
 
-- L34: `export const HOLD_HOURS_DEFAULT = 72;`
-- L35: `export const HOLD_HOURS_MIN = 0;`
-- L36: `export const HOLD_HOURS_MAX = 336; // 14 days`
-- L39: `export function clampHoldHours(v: unknown): number {`
-- L46: `export function computeEarliestDestroyAt(startISO: string, holdHours: number): string {`
-- L52: `export function holdElapsed(earliestDestroyAtISO: string | null, nowMs: number): boolean {`
-- L61: `export const CUSTOMER_RETURN_REASONS = [`
-- L69: `export type CustomerReturnReason = (typeof CUSTOMER_RETURN_REASONS)[number];`
-- L71: `export type CustomerReturnDisposition = "restock" | "destroy";`
-- L73: `export type CustomerReturnDraft = {`
-- L96: `export type CustomerReturnValidation =`
-- L104: `export function validateCustomerReturn(d: CustomerReturnDraft): CustomerReturnValidation {`
-- L159: `export function buildCustomerReturnAdjustmentNote(opts: {`
-- L182: `export const RENDERING_METHODS = [`
-- L187: `export type RenderingMethod = (typeof RENDERING_METHODS)[number];`
-- L189: `export const RENDERING_METHOD_LABELS: Record<RenderingMethod, string> = {`
-- L196: `export const MIX_MATERIAL_EXAMPLES: Record<Exclude<RenderingMethod, "lcb_approved_other">, string[]> = {`
-- L201: `export type DestructionCompletionDraft = {`
-- L221: `export type DestructionValidation = { ok: true } | { ok: false; error: string };`
-- L228: `export function validateDestructionCompletion(d: DestructionCompletionDraft): DestructionValidation {`
-- L276: `export function buildDestructionAdjustmentNote(opts: {`
-- L306: `export const MANIFEST_STATUSES = [`
-- L313: `export type ManifestStatus = (typeof MANIFEST_STATUSES)[number];`
-- L315: `export const MANIFEST_STATUS_LABELS: Record<ManifestStatus, string> = {`
-- L328: `export function nextManifestStatuses(current: string): ManifestStatus[] {`
-- L352: `export function __runDispositionCoreTests(): { passed: number; failed: number } {`
+- L35: `export const HOLD_HOURS_DEFAULT = 0; // D67: legal minimum (no waiting period in WAC 314-55-097)`
+- L36: `export const HOLD_HOURS_MIN = 0;`
+- L37: `export const HOLD_HOURS_MAX = 336; // 14 days`
+- L40: `export function clampHoldHours(v: unknown): number {`
+- L47: `export function computeEarliestDestroyAt(startISO: string, holdHours: number): string {`
+- L53: `export function holdElapsed(earliestDestroyAtISO: string | null, nowMs: number): boolean {`
+- L62: `export const CUSTOMER_RETURN_REASONS = [`
+- L70: `export type CustomerReturnReason = (typeof CUSTOMER_RETURN_REASONS)[number];`
+- L72: `export type CustomerReturnDisposition = "restock" | "destroy";`
+- L74: `export type CustomerReturnDraft = {`
+- L97: `export type CustomerReturnValidation =`
+- L105: `export function validateCustomerReturn(d: CustomerReturnDraft): CustomerReturnValidation {`
+- L159: `export function dollars(minor: number): string {`
+- L164: `export function refundTooHighMessage(refundMinor: number, maxRefundMinor: number): string {`
+- L192: `export function refundCeilingMinor(input: {`
+- L212: `export function buildCustomerReturnAdjustmentNote(opts: {`
+- L235: `export const RENDERING_METHODS = [`
+- L240: `export type RenderingMethod = (typeof RENDERING_METHODS)[number];`
+- L242: `export const RENDERING_METHOD_LABELS: Record<RenderingMethod, string> = {`
+- L249: `export const MIX_MATERIAL_EXAMPLES: Record<Exclude<RenderingMethod, "lcb_approved_other">, string[]> = {`
+- L254: `export type DestructionCompletionDraft = {`
+- L274: `export type DestructionValidation = { ok: true } | { ok: false; error: string };`
+- L281: `export function validateDestructionCompletion(d: DestructionCompletionDraft): DestructionValidation {`
+- L329: `export function buildDestructionAdjustmentNote(opts: {`
+- L359: `export const MANIFEST_STATUSES = [`
+- L366: `export type ManifestStatus = (typeof MANIFEST_STATUSES)[number];`
+- L368: `export const MANIFEST_STATUS_LABELS: Record<ManifestStatus, string> = {`
+- L381: `export function nextManifestStatuses(current: string): ManifestStatus[] {`
+- L405: `export function __runDispositionCoreTests(): { passed: number; failed: number } {`
 
-### `src/lib/inventory/intake-store.ts` (3275 L)
+### `src/lib/inventory/intake-store.ts` (3414 L)
 
-- L206: `export async function listManifests(opts?: {`
-- L280: `export async function countManifestsByStatus(): Promise<StageCounts> {`
-- L335: `export async function resolveOrCreateVendor(`
-- L571: `export async function resolveBrandId(`
-- L583: `export async function resolveBrandIdDetailed(`
-- L768: `export async function stageManifest(`
-- L1222: `export async function rejectManifest(`
-- L1306: `export async function setLotDisposition(`
-- L1384: `export async function setLotDockCount(`
-- L1538: `export async function listLotShortCounts(`
-- L1590: `export async function preflightManifestSampleCap(`
-- L1728: `export async function gatherSampleCapNotice(manifestId: string): Promise<`
-- L1791: `export async function finalizeManifestDispositions(`
-- L2390: `export async function seedIncomingSampleEvents(`
-- L2491: `export async function rememberVendorUsualTransport(`
-- L2539: `export async function listManifestLots(manifestId: string) {`
-- L2598: `export async function listLabFactsByIds(`
-- L2666: `export type ManifestLotExportRow = {`
-- L2694: `export async function listAllManifestLotsForExport(`
-- L2752: `export type ManifestLifecycleStatus =`
-- L2767: `export async function logManifestEvent(`
-- L2792: `export async function setManifestLifecycle(`
-- L2818: `export async function updateManifestTransport(`
-- L2879: `export async function setManifestInvoiceOverride(`
-- L2915: `export async function recordInvoiceNumberDetected(`
-- L2971: `export async function seedTransportFromParsed(`
-- L3016: `export async function backfillManifestTransport(`
-- L3066: `export async function listManifestEvents(manifestId: string) {`
-- L3091: `export async function dismissDuplicateManifest(`
-- L3173: `export async function findDuplicateTwinsFor(`
-- L3218: `export async function listLotVendorIds(`
-- L3243: `export async function setLotVendorInventoryId(`
+- L207: `export async function listManifests(opts?: {`
+- L281: `export async function countManifestsByStatus(): Promise<StageCounts> {`
+- L336: `export async function resolveOrCreateVendor(`
+- L354: `export async function followVendorMerge(`
+- L629: `export async function resolveBrandId(`
+- L641: `export async function resolveBrandIdDetailed(`
+- L839: `export async function stageManifest(`
+- L1297: `export async function rejectManifest(`
+- L1381: `export async function setLotDisposition(`
+- L1459: `export async function setLotDockCount(`
+- L1613: `export async function listLotShortCounts(`
+- L1665: `export async function preflightManifestSampleCap(`
+- L1803: `export async function gatherSampleCapNotice(manifestId: string): Promise<`
+- L1866: `export async function finalizeManifestDispositions(`
+- L2465: `export async function seedIncomingSampleEvents(`
+- L2566: `export async function rememberVendorUsualTransport(`
+- L2614: `export async function listManifestLots(manifestId: string) {`
+- L2673: `export async function listLabFactsByIds(`
+- L2741: `export type ManifestLotExportRow = {`
+- L2769: `export async function listAllManifestLotsForExport(`
+- L2827: `export type ManifestLifecycleStatus =`
+- L2842: `export async function logManifestEvent(`
+- L2867: `export async function setManifestLifecycle(`
+- L2893: `export async function updateManifestTransport(`
+- L2954: `export async function setManifestInvoiceOverride(`
+- L2990: `export async function recordInvoiceNumberDetected(`
+- L3046: `export async function seedTransportFromParsed(`
+- L3091: `export async function backfillManifestTransport(`
+- L3141: `export async function listManifestEvents(manifestId: string) {`
+- L3166: `export async function dismissDuplicateManifest(`
+- L3276: `export async function suspectedDuplicateOf(`
+- L3312: `export async function findDuplicateTwinsFor(`
+- L3357: `export async function listLotVendorIds(`
+- L3382: `export async function setLotVendorInventoryId(`
 
-### `src/lib/inventory/intake-parser.ts` (821 L)
+### `src/lib/inventory/intake-parser.ts` (831 L)
 
 - L22: `export type ParsedLab = {`
 - L51: `export type ParsedLine = {`
@@ -343,10 +369,11 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L248: `export function cleanUrl(v: unknown): string | null {`
 - L280: `export function looksLikeWciaTransferStrict(root: unknown): boolean {`
 - L298: `export function wciaJsonUrl(item: Obj): string | null {`
-- L715: `export function parseVendorJson(jsonText: string): ParseResult {`
-- L749: `export type CoaLink = {`
-- L764: `export function extractCoaLinks(m: ParsedManifest): CoaLink[] {`
-- L784: `export function summarizeManifest(m: ParsedManifest): {`
+- L389: `export const NO_SKU_LINE_WARNING =`
+- L725: `export function parseVendorJson(jsonText: string): ParseResult {`
+- L759: `export type CoaLink = {`
+- L774: `export function extractCoaLinks(m: ParsedManifest): CoaLink[] {`
+- L794: `export function summarizeManifest(m: ParsedManifest): {`
 
 ### `src/lib/inventory/ccrs-manifest-csv-core.ts` (743 L)
 
@@ -397,21 +424,21 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L1108: `export function __runImportLotFactFillTests(): { passed: number } {`
 - L1130: `export function __runImportLotSizeLinkTests(): { passed: number; failed: number } {`
 
-### `src/lib/pos/import-service.ts` (1150 L)
+### `src/lib/pos/import-service.ts` (1154 L)
 
-- L72: `export function sha256(buffer: Buffer | Uint8Array): string {`
-- L76: `export type CreateImportInput = {`
-- L86: `export type CreateImportResult = {`
-- L93: `export async function findDuplicateImport(`
-- L113: `export async function runImport(input: CreateImportInput): Promise<CreateImportResult> {`
-- L369: `export type PublishMenuVersionOptions = {`
-- L381: `export type PublishMenuVersionResult = {`
-- L386: `export async function publishMenuVersion(`
-- L798: `export async function fillImportLotFacts(`
-- L901: `export async function fillImportLotSizeLinks(`
-- L1018: `export async function countTestData(): Promise<{ imports: number; versions: number }> {`
-- L1032: `export async function cleanSlateTestData(): Promise<{`
-- L1080: `export async function backfillImportLots(`
+- L73: `export function sha256(buffer: Buffer | Uint8Array): string {`
+- L77: `export type CreateImportInput = {`
+- L87: `export type CreateImportResult = {`
+- L94: `export async function findDuplicateImport(`
+- L114: `export async function runImport(input: CreateImportInput): Promise<CreateImportResult> {`
+- L370: `export type PublishMenuVersionOptions = {`
+- L382: `export type PublishMenuVersionResult = {`
+- L387: `export async function publishMenuVersion(`
+- L802: `export async function fillImportLotFacts(`
+- L905: `export async function fillImportLotSizeLinks(`
+- L1022: `export async function countTestData(): Promise<{ imports: number; versions: number }> {`
+- L1036: `export async function cleanSlateTestData(): Promise<{`
+- L1084: `export async function backfillImportLots(`
 
 ### `src/lib/pos/returns-core.ts` (428 L)
 
@@ -434,16 +461,20 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L302: `export function pointsClawback(input: PointsClawbackInput): number {`
 - L319: `export function __runPosReturnsCoreTests(): void {`
 
-### `src/lib/pos/returns-store.ts` (433 L)
+### `src/lib/pos/returns-store.ts` (645 L)
 
-- L70: `export type CounterReturnLine = {`
-- L89: `export type CounterReturnSale = {`
-- L106: `export type CounterReturnLookup =`
-- L121: `export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterReturnLookup> {`
-- L261: `export type ProcessCounterReturnInput = {`
-- L272: `export type ProcessCounterReturnResult =`
-- L297: `export async function processCounterReturn(`
-- L432: `export { receiptNumber };`
+- L80: `export type CounterReturnLine = {`
+- L102: `export type CounterReturnSale = {`
+- L121: `export type CounterReturnLookup =`
+- L136: `export async function lookupSaleByReceipt(rawReceipt: string, asOfIso?: string, exactSaleClientUuid?: string): Promise<CounterReturnLookup> {`
+- L320: `export type MemberSalesResult = { ok: true; sales: MemberSaleRow[]; windowDays: number } | { ok: false; error: string };`
+- L328: `export async function listMemberSalesForReturn(customerId: string, asOfIso?: string): Promise<MemberSalesResult> {`
+- L393: `export async function lookupSaleForMember(customerId: string, orderId: string, asOfIso?: string): Promise<CounterReturnLookup> {`
+- L422: `export async function verifyReturnScan(`
+- L451: `export type ProcessCounterReturnInput = {`
+- L468: `export type ProcessCounterReturnResult =`
+- L495: `export async function processCounterReturn(`
+- L644: `export { receiptNumber };`
 
 ### `src/lib/pos/variant-lot-core.ts` (145 L)
 
@@ -453,32 +484,33 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L68: `export function lotKeysForLines(`
 - L86: `export function __runVariantLotCoreTests(): void {`
 
-### `src/app/admin/compliance/ccrs/page.tsx` (1336 L)
+### `src/app/admin/compliance/ccrs/page.tsx` (1338 L)
 
-- L103: `export const dynamic = "force-dynamic";`
-- L108: `export const maxDuration = 300;`
-- L286: `export default async function CcrsCommandCenterPage({`
+- L104: `export const dynamic = "force-dynamic";`
+- L109: `export const maxDuration = 300;`
+- L287: `export default async function CcrsCommandCenterPage({`
 
-### `src/app/admin/compliance/ccrs/actions.ts` (754 L)
+### `src/app/admin/compliance/ccrs/actions.ts` (833 L)
 
-- L72: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
-- L129: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
-- L152: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
-- L194: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
-- L275: `export async function markUploadedAction(formData: FormData): Promise<void> {`
-- L305: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
-- L371: `export async function recordErrorAction(formData: FormData): Promise<void> {`
-- L429: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
-- L455: `export async function abandonFileAction(formData: FormData): Promise<void> {`
-- L480: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
-- L524: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
-- L551: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
-- L599: `export async function setObligationStartAction(formData: FormData): Promise<void> {`
-- L623: `export async function setHandoverFactsAction(formData: FormData): Promise<void> {`
-- L646: `export async function dismissPeriodAction(formData: FormData): Promise<void> {`
-- L669: `export async function undoDismissalAction(formData: FormData): Promise<void> {`
-- L694: `export async function ccrsCleanupAction(formData: FormData): Promise<void> {`
-- L728: `export async function transferCorrectionAction(formData: FormData): Promise<void> {`
+- L77: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
+- L134: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
+- L157: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
+- L199: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
+- L280: `export async function markUploadedAction(formData: FormData): Promise<void> {`
+- L310: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
+- L376: `export async function recordErrorAction(formData: FormData): Promise<void> {`
+- L434: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
+- L460: `export async function abandonFileAction(formData: FormData): Promise<void> {`
+- L485: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
+- L529: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
+- L556: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
+- L604: `export async function setObligationStartAction(formData: FormData): Promise<void> {`
+- L628: `export async function setHandoverFactsAction(formData: FormData): Promise<void> {`
+- L651: `export async function dismissPeriodAction(formData: FormData): Promise<void> {`
+- L674: `export async function undoDismissalAction(formData: FormData): Promise<void> {`
+- L699: `export async function ccrsCleanupAction(formData: FormData): Promise<void> {`
+- L733: `export async function transferCorrectionAction(formData: FormData): Promise<void> {`
+- L770: `export async function resendRefusedRowsAction(formData: FormData): Promise<void> {`
 
 ### `src/app/admin/reports/compliance/page.tsx` (500 L)
 
@@ -503,11 +535,11 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L14: `export type CcrsAdvisorResult = { ok: true; advice: CcrsAdvice } | { ok: false; error: string };`
 - L16: `export async function generateCcrsAdviceAction(sp: {`
 
-### `src/app/admin/inventory/disposition/sale-correction-export/route.ts` (117 L)
+### `src/app/admin/inventory/disposition/sale-correction-export/route.ts` (135 L)
 
-- L39: `export const dynamic = "force-dynamic";`
-- L40: `export const runtime = "nodejs";`
-- L45: `export async function GET() {`
+- L44: `export const dynamic = "force-dynamic";`
+- L45: `export const runtime = "nodejs";`
+- L50: `export async function GET() {`
 
 ### `src/components/admin/compliance/UploadWalkthrough.tsx` (345 L)
 
@@ -529,19 +561,20 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 
 - L7: `export function LicenseSettingsForm({`
 
-### `src/components/admin/reports/ReportTabs.tsx` (80 L)
+### `src/components/admin/reports/ReportTabs.tsx` (88 L)
 
 - L13: `export type ReportTab = { href: string; label: string; icon: string };`
 - L15: `export const REPORT_TABS: ReportTab[] = [`
 - L47: `export const ACH_REPORT_TAB: ReportTab = { href: "/admin/reports/ach-payments", label: "ACH Payments", icon: "🏦" };`
-- L49: `export function reportTabsFor(showAchTab: boolean): ReportTab[] {`
-- L53: `export function ReportTabs({ showAchTab = false }: { showAchTab?: boolean }) {`
+- L55: `export const CULTIVERA_BENCHMARK_TAB: ReportTab = { href: "/admin/reports/cultivera-benchmark", label: "Cultivera Benchmark", icon: "\ud83c\udfc1" };`
+- L57: `export function reportTabsFor(showAchTab: boolean, showCultiveraTab = false): ReportTab[] {`
+- L61: `export function ReportTabs({ showAchTab = false, showCultiveraTab = false }: { showAchTab?: boolean; showCultiveraTab?: boolean }) {`
 
-### `src/components/admin/admin-nav-data.ts` (262 L)
+### `src/components/admin/admin-nav-data.ts` (271 L)
 
 - L4: `export type AdminNavItem = {`
 - L47: `export const adminNav: AdminNavItem[] = [`
-- L225: `export const navGroups: AdminNavItem["group"][] = [`
+- L234: `export const navGroups: AdminNavItem["group"][] = [`
 
 ## A. Batch builders — `src/lib/compliance/ccrs-batch.ts`
 
@@ -1754,104 +1787,104 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
  125|     ],
  126|   },
  127|   {
- 128|     id: "excise_zero_nonmedical",
- 129|     needles: ["only medical sales can be 0", "only medical sales can be $0"],
+ 128|     id: "excise_not_37pct",
+ 129|     needles: ["excise tax does not equal 37%", "excisetax does not equal 37%"],
  130|     severity: "fixable",
  131|     meaning:
- 132|       "A non-medical sale row reported $0 cannabis excise tax. Excise must equal 37% of unit price for every retail sale; ONLY SaleType=RecreationalMedical rows (DOH-veri
+ 132|       "CCRS recomputed 37% of the printed row (Quantity x UnitPrice - Discount, rounded to the cent) and it did not equal CannabisExciseTax. Seen 2026-11-10 in PREprod: 1
  133|     fixSteps: [
- 134|       "If the sale was NOT a verified medical exemption: correct the excise to 37% of the unit price and re-upload.",
- 135|       "If it WAS a valid medical sale: set SaleType=RecreationalMedical (both tax columns $0.00) and confirm the inventory row was reported IsMedical=TRUE.",
+ 134|       "Apply the error file so the refused rows are marked refused.",
+ 135|       "Re-send only the refused rows (CCRS files panel: Re-send refused rows). The exporter now prints UnitPrice and Discount so the row total is exactly the taxed amount
  136|     ],
  137|   },
  138|   {
- 139|     id: "number_records_mismatch",
- 140|     needles: ["numberrecords", "number of records"],
+ 139|     id: "excise_zero_nonmedical",
+ 140|     needles: ["only medical sales can be 0", "only medical sales can be $0"],
  141|     severity: "fixable",
  142|     meaning:
- 143|       "The NumberRecords value in the file's header doesn't equal the actual data-row count, so CCRS rejected the whole file.",
+ 143|       "A non-medical sale row reported $0 cannabis excise tax. Excise must equal 37% of unit price for every retail sale; ONLY SaleType=RecreationalMedical rows (DOH-veri
  144|     fixSteps: [
- 145|       "Regenerate the file from the Command Center — the generator always writes a matching NumberRecords — rather than hand-editing.",
- 146|       "If you hand-edited the CSV, recount the data rows (exclude the 3 header rows) and fix the header, then re-upload.",
+ 145|       "If the sale was NOT a verified medical exemption: correct the excise to 37% of the unit price and re-upload.",
+ 146|       "If it WAS a valid medical sale: set SaleType=RecreationalMedical (both tax columns $0.00) and confirm the inventory row was reported IsMedical=TRUE.",
  147|     ],
  148|   },
  149|   {
- 150|     id: "quarantine",
- 151|     needles: ["quarantine"],
+ 150|     id: "number_records_mismatch",
+ 151|     needles: ["numberrecords", "number of records"],
  152|     severity: "fixable",
  153|     meaning:
- 154|       "A sale references inventory sitting in a quarantine area. Cannabis products should never be in quarantine areas (IsQuarantine=TRUE is only for imported CBD awaitin
+ 154|       "The NumberRecords value in the file's header doesn't equal the actual data-row count, so CCRS rejected the whole file.",
  155|     fixSteps: [
- 156|       "Move the lot to a non-quarantine Area (Area.csv IsQuarantine=FALSE) and re-upload Inventory, wait 10+ minutes, then re-upload the Sale rows.",
- 157|     ],
- 158|   },
- 159| ];
- 160| 
- 161| const ERROR_HINT = /error|invalid|required|duplicate|reject|fail|mismatch|cannot|not linked|can be 0/i;
- 162| 
- 163| /** Triage a pasted CCRS error email. PURE + deterministic. */
- 164| export function triageCcrsErrorEmail(pasted: string): TriageResult {
- 165|   const findings: TriageFinding[] = [];
+ 156|       "Regenerate the file from the Command Center — the generator always writes a matching NumberRecords — rather than hand-editing.",
+ 157|       "If you hand-edited the CSV, recount the data rows (exclude the 3 header rows) and fix the header, then re-upload.",
+ 158|     ],
+ 159|   },
+ 160|   {
+ 161|     id: "quarantine",
+ 162|     needles: ["quarantine"],
+ 163|     severity: "fixable",
+ 164|     meaning:
+ 165|       "A sale references inventory sitting in a quarantine area. Cannabis products should never be in quarantine areas (IsQuarantine=TRUE is only for imported CBD awaitin
 ```
 
 `src/lib/compliance/ccrs-error-triage-core.ts` L226-L280 — LCB_CONTACTS + buildExaminerDraft
 
 ```ts
- 226| export const LCB_CONTACTS = {
- 227|   examiner: "examiner@lcb.wa.gov",
- 228|   serviceDesk: "servicedesk@lcb.wa.gov",
- 229|   taxes: "cannabistaxes@lcb.wa.gov",
- 230|   enforcement: "cannabisenf@lcb.wa.gov",
- 231|   endorsement: "cannabisendorsement@lcb.wa.gov",
- 232| } as const;
- 233| 
- 234| export type ExaminerDraft = {
- 235|   to: string;
- 236|   subject: string;
- 237|   body: string;
- 238| };
- 239| 
- 240| /**
- 241|  * Build the examiner escalation email as a DRAFT (never sent automatically —
- 242|  * standing drafts-only rule). The owner attaches the CSV and forwards the
- 243|  * original CCRS error email per the LCB workflow.
- 244|  */
- 245| export function buildExaminerDraft(opts: {
- 246|   licenseNumber: string;
- 247|   licenseeName: string;
- 248|   weekStart: string; // ISO
- 249|   weekEnd: string; // ISO
- 250|   fileTypes: string[];
- 251|   errorExcerpt: string;
- 252|   contactEmail?: string;
- 253| }): ExaminerDraft {
- 254|   const files = opts.fileTypes.length > 0 ? opts.fileTypes.join(", ") : "(files not specified)";
- 255|   const excerpt = opts.errorExcerpt.trim().slice(0, 1500);
- 256|   const subject = `CCRS upload error assistance — license ${opts.licenseNumber} — week ${opts.weekStart} to ${opts.weekEnd}`;
- 257|   const body = [
- 258|     "Hello,",
- 259|     "",
- 260|     `We are ${opts.licenseeName} (license ${opts.licenseNumber}). We received an error notification after our weekly CCRS upload covering ${opts.weekStart} through ${opts
- 261|     "",
- 262|     "Error message received:",
- 263|     "----------------------------------------",
- 264|     excerpt || "(paste the CCRS error text here)",
- 265|     "----------------------------------------",
- 266|     "",
- 267|     "The original CSV file(s) are attached, and the CCRS error email is forwarded with this message. Could you please advise how to correct and resubmit?",
- 268|     "",
- 269|     "Thank you,",
- 270|     opts.licenseeName,
- 271|     opts.contactEmail ? opts.contactEmail : "",
- 272|   ]
- 273|     .join("\n")
- 274|     .trimEnd();
- 275|   return { to: LCB_CONTACTS.examiner, subject, body };
- 276| }
- 277| 
- 278| // ── Self-tests (tsx / vitest) ─────────────────────────────────────────────────
- 279| 
- 280| export function __runCcrsErrorTriageTests(): { passed: number; failed: number } {
+ 226|         `${unrecognized.length} line(s) look like errors but match no known pattern — if you can't resolve them, send the escalation draft to examiner@lcb.wa.gov with the
+ 227|       );
+ 228|     }
+ 229|     summary = parts.join(" ");
+ 230|   }
+ 231| 
+ 232|   return { findings, unrecognized, needsAction, suggestEscalation, summary };
+ 233| }
+ 234| 
+ 235| // ── Examiner escalation draft (DRAFTS-ONLY) ──────────────────────────────────
+ 236| 
+ 237| export const LCB_CONTACTS = {
+ 238|   examiner: "examiner@lcb.wa.gov",
+ 239|   serviceDesk: "servicedesk@lcb.wa.gov",
+ 240|   taxes: "cannabistaxes@lcb.wa.gov",
+ 241|   enforcement: "cannabisenf@lcb.wa.gov",
+ 242|   endorsement: "cannabisendorsement@lcb.wa.gov",
+ 243| } as const;
+ 244| 
+ 245| export type ExaminerDraft = {
+ 246|   to: string;
+ 247|   subject: string;
+ 248|   body: string;
+ 249| };
+ 250| 
+ 251| /**
+ 252|  * Build the examiner escalation email as a DRAFT (never sent automatically —
+ 253|  * standing drafts-only rule). The owner attaches the CSV and forwards the
+ 254|  * original CCRS error email per the LCB workflow.
+ 255|  */
+ 256| export function buildExaminerDraft(opts: {
+ 257|   licenseNumber: string;
+ 258|   licenseeName: string;
+ 259|   weekStart: string; // ISO
+ 260|   weekEnd: string; // ISO
+ 261|   fileTypes: string[];
+ 262|   errorExcerpt: string;
+ 263|   contactEmail?: string;
+ 264| }): ExaminerDraft {
+ 265|   const files = opts.fileTypes.length > 0 ? opts.fileTypes.join(", ") : "(files not specified)";
+ 266|   const excerpt = opts.errorExcerpt.trim().slice(0, 1500);
+ 267|   const subject = `CCRS upload error assistance — license ${opts.licenseNumber} — week ${opts.weekStart} to ${opts.weekEnd}`;
+ 268|   const body = [
+ 269|     "Hello,",
+ 270|     "",
+ 271|     `We are ${opts.licenseeName} (license ${opts.licenseNumber}). We received an error notification after our weekly CCRS upload covering ${opts.weekStart} through ${opts
+ 272|     "",
+ 273|     "Error message received:",
+ 274|     "----------------------------------------",
+ 275|     excerpt || "(paste the CCRS error text here)",
+ 276|     "----------------------------------------",
+ 277|     "",
+ 278|     "The original CSV file(s) are attached, and the CCRS error email is forwarded with this message. Could you please advise how to correct and resubmit?",
+ 279|     "",
+ 280|     "Thank you,",
 ```
 
 `src/lib/compliance/ccrs-submit-gate-core.ts` L60-L148 — defaultClassifyWarning + assertCcrsBatchSubmittable + verdictSummary
@@ -2244,87 +2277,87 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 `src/lib/compliance/ccrs-sale-correction-core.ts` L80-L160 — mapSaleCorrectionRow (Delete full / Update partial), buildSaleCorrectionFile, makeSaleCorrectionFileName
 
 ```ts
-  80|   const r = Math.max(0, Math.min(remainingQty, originalQty));
-  81|   return Math.round((lineMinor * r) / originalQty);
-  82| }
-  83| 
-  84| /** Map one customer-return correction to a CCRS Sale.csv row. PURE. */
-  85| export function mapSaleCorrectionRow(
-  86|   src: SaleCorrectionSource,
-  87|   license: { licenseNumber: string; submittedBy: string },
-  88| ): SaleCorrectionRowResult {
-  89|   if (!src.saleExternalId || !src.saleDetailExternalId) {
-  90|     return { row: null, skipReason: "missing original sale identifiers (required on Update/Delete)" };
-  91|   }
-  92|   if (!src.inventoryExternalId) {
-  93|     return { row: null, skipReason: "missing InventoryExternalIdentifier (required on Update/Delete)" };
+  80| /** Pro-rate a whole-line money amount to a remaining quantity. */
+  81| export function prorateLineMinor(lineMinor: number, remainingQty: number, originalQty: number): number {
+  82|   if (!(originalQty > 0)) return 0;
+  83|   const r = Math.max(0, Math.min(remainingQty, originalQty));
+  84|   return Math.round((lineMinor * r) / originalQty);
+  85| }
+  86| 
+  87| /** Map one customer-return correction to a CCRS Sale.csv row. PURE. */
+  88| export function mapSaleCorrectionRow(
+  89|   src: SaleCorrectionSource,
+  90|   license: { licenseNumber: string; submittedBy: string },
+  91| ): SaleCorrectionRowResult {
+  92|   if (!src.saleExternalId || !src.saleDetailExternalId) {
+  93|     return { row: null, skipReason: "missing original sale identifiers (required on Update/Delete)" };
   94|   }
-  95|   if (!(src.originalQuantity > 0) || !(src.returnQuantity > 0)) {
-  96|     return { row: null, skipReason: "quantities must be positive" };
+  95|   if (!src.inventoryExternalId) {
+  96|     return { row: null, skipReason: "missing InventoryExternalIdentifier (required on Update/Delete)" };
   97|   }
-  98|   if (src.returnQuantity > src.originalQuantity) {
-  99|     return { row: null, skipReason: "return quantity exceeds original quantity" };
+  98|   if (!(src.originalQuantity > 0) || !(src.returnQuantity > 0)) {
+  99|     return { row: null, skipReason: "quantities must be positive" };
  100|   }
- 101| 
- 102|   const remaining = src.originalQuantity - src.returnQuantity;
- 103|   const isDelete = src.correctionOperation === "Delete" || remaining <= 0;
- 104|   const qty = isDelete ? src.originalQuantity : remaining;
- 105|   const discount = isDelete ? src.discountMinor : prorateLineMinor(src.discountMinor, remaining, src.originalQuantity);
- 106|   const salesTax = isDelete ? src.salesTaxMinor : prorateLineMinor(src.salesTaxMinor, remaining, src.originalQuantity);
- 107|   const excise = isDelete ? src.exciseMinor : prorateLineMinor(src.exciseMinor, remaining, src.originalQuantity);
- 108| 
- 109|   const saleDate = ccrsDateLoose(src.saleDateISO);
- 110|   // "Updated Date cannot be prior to Created Date" — clamp forward if needed
- 111|   // (compared as Pacific calendar days, the granularity CCRS validates).
- 112|   const returnedDate = ccrsDateLoose(src.returnedAtISO);
- 113|   const updatedDate = dayNumber(returnedDate) < dayNumber(saleDate) ? saleDate : returnedDate;
- 114| 
- 115|   const row = [
- 116|     license.licenseNumber, // LicenseNumber
- 117|     "", // SoldToLicenseNumber (retail = blank)
- 118|     src.inventoryExternalId, // InventoryExternalIdentifier
- 119|     "", // PlantExternalIdentifier
- 120|     src.saleType, // SaleType (must match the original Insert)
- 121|     saleDate, // SaleDate (must match the original Insert)
- 122|     String(qty), // Quantity (Delete: original; Update: REMAINING)
- 123|     dollars(src.unitPriceMinor), // UnitPrice (unchanged per-unit)
- 124|     dollars(discount), // Discount
- 125|     dollars(salesTax), // RetailSalesTax
- 126|     dollars(excise), // CannabisExciseTax
- 127|     src.saleExternalId, // SaleExternalIdentifier (ORIGINAL)
- 128|     src.saleDetailExternalId, // SaleDetailExternalIdentifier (ORIGINAL)
- 129|     license.submittedBy, // CreatedBy
- 130|     saleDate, // CreatedDate (original)
- 131|     license.submittedBy, // UpdatedBy (required on corrections)
- 132|     updatedDate, // UpdatedDate (>= CreatedDate)
- 133|     isDelete ? "Delete" : "Update", // Operation
- 134|   ];
- 135|   return { row };
- 136| }
- 137| 
- 138| /** Assemble the correction file (3-row header + Sale columns + rows). */
- 139| export function buildSaleCorrectionFile(
- 140|   rows: string[][],
- 141|   license: { licenseNumber: string; submittedBy: string },
- 142| ): string {
- 143|   return assembleCcrsFile({ type: "Sale", submittedBy: license.submittedBy, rows });
- 144| }
- 145| 
- 146| export function makeSaleCorrectionFileName(licenseNumber: string): string {
- 147|   return ccrsFileName("Sale", licenseNumber);
- 148| }
- 149| 
- 150| // ---------------------------------------------------------------------------
- 151| // Self-tests (tsx/vitest-runnable — PURE module)
- 152| // ---------------------------------------------------------------------------
+ 101|   if (src.returnQuantity > src.originalQuantity) {
+ 102|     return { row: null, skipReason: "return quantity exceeds original quantity" };
+ 103|   }
+ 104| 
+ 105|   const remaining = src.originalQuantity - src.returnQuantity;
+ 106|   const isDelete = src.correctionOperation === "Delete" || remaining <= 0;
+ 107|   const qty = isDelete ? src.originalQuantity : remaining;
+ 108|   // D227: a partial Update must still satisfy CCRS's printed check,
+ 109|   // CannabisExciseTax == 37% of (Quantity x UnitPrice - Discount)
+ 110|   // [G L1374, L1377]. Pro-rating discount and excise SEPARATELY can break it
+ 111|   // by a cent (e.g. 3 x 12.30, excise 13.66, one returned: 2 x 12.30 - 0.00
+ 112|   // gives 9.10, pro-rated excise 9.11). So the remaining BASE is pro-rated
+ 113|   // once, Discount is what makes the row print that base, and excise is 37%
+ 114|   // of it. A line with no excise (medical, [G L1378]) keeps 0.
+ 115|   const originalBase = Math.max(0, src.unitPriceMinor * src.originalQuantity - src.discountMinor);
+ 116|   const remainingBase = prorateLineMinor(originalBase, remaining, src.originalQuantity);
+ 117|   const discount = isDelete ? src.discountMinor : Math.max(0, src.unitPriceMinor * qty - remainingBase);
+ 118|   const salesTax = isDelete ? src.salesTaxMinor : prorateLineMinor(src.salesTaxMinor, remaining, src.originalQuantity);
+ 119|   const excise = isDelete
+ 120|     ? src.exciseMinor
+ 121|     : src.exciseMinor > 0
+ 122|       ? Math.round((remainingBase * CCRS_EXCISE_RATE_BPS) / 10000)
+ 123|       : 0;
+ 124| 
+ 125|   const saleDate = ccrsDateLoose(src.saleDateISO);
+ 126|   // "Updated Date cannot be prior to Created Date" — clamp forward if needed
+ 127|   // (compared as Pacific calendar days, the granularity CCRS validates).
+ 128|   const returnedDate = ccrsDateLoose(src.returnedAtISO);
+ 129|   const updatedDate = dayNumber(returnedDate) < dayNumber(saleDate) ? saleDate : returnedDate;
+ 130| 
+ 131|   const row = [
+ 132|     license.licenseNumber, // LicenseNumber
+ 133|     "", // SoldToLicenseNumber (retail = blank)
+ 134|     src.inventoryExternalId, // InventoryExternalIdentifier
+ 135|     "", // PlantExternalIdentifier
+ 136|     src.saleType, // SaleType (must match the original Insert)
+ 137|     saleDate, // SaleDate (must match the original Insert)
+ 138|     String(qty), // Quantity (Delete: original; Update: REMAINING)
+ 139|     dollars(src.unitPriceMinor), // UnitPrice (unchanged per-unit)
+ 140|     dollars(discount), // Discount
+ 141|     dollars(salesTax), // RetailSalesTax
+ 142|     dollars(excise), // CannabisExciseTax
+ 143|     src.saleExternalId, // SaleExternalIdentifier (ORIGINAL)
+ 144|     src.saleDetailExternalId, // SaleDetailExternalIdentifier (ORIGINAL)
+ 145|     license.submittedBy, // CreatedBy
+ 146|     saleDate, // CreatedDate (original)
+ 147|     license.submittedBy, // UpdatedBy (required on corrections)
+ 148|     updatedDate, // UpdatedDate (>= CreatedDate)
+ 149|     isDelete ? "Delete" : "Update", // Operation
+ 150|   ];
+ 151|   return { row };
+ 152| }
  153| 
- 154| export function __runSaleCorrectionTests(): { passed: number; failed: number } {
- 155|   let passed = 0;
- 156|   let failed = 0;
- 157|   const ok = (cond: boolean, msg: string) => {
- 158|     if (cond) passed += 1;
- 159|     else {
- 160|       failed += 1;
+ 154| /** Assemble the correction file (3-row header + Sale columns + rows). */
+ 155| export function buildSaleCorrectionFile(
+ 156|   rows: string[][],
+ 157|   license: { licenseNumber: string; submittedBy: string },
+ 158| ): string {
+ 159|   return assembleCcrsFile({ type: "Sale", submittedBy: license.submittedBy, rows });
+ 160| }
 ```
 
 ## G. Returns / disposition — `src/lib/inventory/disposition.ts`
@@ -2332,158 +2365,158 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 `src/lib/inventory/disposition.ts` L455-L480 — createCustomerReturn contract (FAQ: 'sale identifier should be deleted … inventory identifier reported on an Inventory Adjustment as a return')
 
 ```ts
- 455|  * here, like lookupSaleByReceipt) stays small.
- 456|  */
- 457| const BACK_OFFICE_RECEIPT_LOOKBACK_DAYS = 60;
- 458| 
- 459| export type ReturnSearchResult = {
- 460|   lines: ReturnableOrderLine[];
- 461|   /** Plain message for staff when nothing matched (null when lines were found). */
- 462|   emptyMessage: string | null;
- 463| };
- 464| 
- 465| /**
- 466|  * Search COMPLETED orders (the only returnable kind) and flatten their lines,
- 467|  * annotated with quantities already returned so the UI can prevent
- 468|  * double-returns.
- 469|  *
- 470|  * R-RET (owner message 10): register sales are saved as "Walk-in" with an
- 471|  * unprinted GWY- number, so the old order#/name/phone search could never find
- 472|  * the sale on the paper in the customer's hand. The search now also finds a
- 473|  * sale by the 8-character receipt number, the fun receipt name
- 474|  * (orders.display_name), and the loyalty member's name or phone
- 475|  * (orders.customer_id -> customers). See return-search-core.ts.
- 476|  */
- 477| export async function searchReturnableOrderLines(search: string, limit = 8): Promise<ReturnSearchResult> {
- 478|   const plan = planReturnSearch(search);
- 479|   if (!isSupabaseServiceConfigured || !plan.text) return { lines: [], emptyMessage: noMatchMessage(plan) };
- 480|   const admin = createSupabaseAdminClient();
+ 455|  * and in CCRS, never sellable (sale-lot-read, POS menu, sellability report).
+ 456|  * Before 0308 the old writes run and any failure undoes the add-back.
+ 457|  */
+ 458| export async function createCustomerReturn(
+ 459|   input: {
+ 460|     orderId: string;
+ 461|     orderLineId: string;
+ 462|     lotId?: string | null;
+ 463|     quantity: number;
+ 464|     disposition: CustomerReturnDisposition;
+ 465|     reason: string;
+ 466|     detail?: string | null;
+ 467|     refundMinor: number;
+ 468|     originalPackaging: boolean;
+ 469|     lotIdLegible: boolean;
+ 470|   },
+ 471|   actorId: string | null,
+ 472| ): Promise<{ ok: true; id: string; held: boolean; notice?: string } | { ok: false; error: string }> {
+ 473|   if (!isSupabaseServiceConfigured) {
+ 474|     return { ok: false, error: "Supabase service role not configured." };
+ 475|   }
+ 476|   const admin = createSupabaseAdminClient();
+ 477| 
+ 478|   // ── Load the original order + line ─────────────────────────────────────────
+ 479|   const [{ data: order }, { data: line }] = await Promise.all([
+ 480|     admin
 ```
 
 `src/lib/inventory/disposition.ts` L595-L630 — CCRS Sale-row snapshot + medical mirror
 
 ```ts
- 595| 
- 596|   const orderIds = orderRows.map((o) => o.id);
- 597|   const [{ data: lines }, returnedByLine] = await Promise.all([
- 598|     admin
- 599|       .from("order_lines")
- 600|       .select("id, order_id, product_id, product_name, quantity, price_minor_units, regular_price_minor_units")
- 601|       .in("order_id", orderIds)
- 602|       .order("created_at", { ascending: true }),
- 603|     (async () => {
- 604|       const map = new Map<string, number>();
- 605|       try {
- 606|         const { data } = await admin
- 607|           .from("customer_returns")
- 608|           .select("order_line_id, quantity")
- 609|           .in("order_id", orderIds);
- 610|         for (const r of (data as { order_line_id: string | null; quantity: number }[] | null) ?? []) {
- 611|           if (!r.order_line_id) continue;
- 612|           map.set(r.order_line_id, (map.get(r.order_line_id) ?? 0) + Number(r.quantity || 0));
- 613|         }
- 614|       } catch {
- 615|         // customer_returns table missing (pre-0115) — no prior returns to count.
- 616|       }
- 617|       return map;
- 618|     })(),
- 619|   ]);
+ 595|           }[]
+ 596|         | null) ?? [];
+ 597|     lotRow = candidates.find((c) => c.status !== "quarantine") ?? candidates[0] ?? null;
+ 598|     lotId = lotRow?.id ?? null;
+ 599|   }
+ 600|   if (!lotRow || !lotId) {
+ 601|     return {
+ 602|       ok: false,
+ 603|       error:
+ 604|         "The system couldn't tell which inventory lot this product came from. Pick the lot by hand (the lot number is printed on the package) so the returned item goes ba
+ 605|     };
+ 606|   }
+ 607| 
+ 608|   // ── Snapshot the CCRS Sale-row data for the correction file ───────────────
+ 609|   const inventoryExternalId = resolveSaleInventoryExternalId({
+ 610|     lineExplicit: l.ccrs_inventory_external_id,
+ 611|     // S-10: the correction must reference the id the lot was FILED under.
+ 612|     lotCanonical: deriveInventoryExternalId({
+ 613|       ccrs_inventory_external_id: lotRow.ccrs_inventory_external_id ?? null,
+ 614|       lot_code: lotRow.lot_code,
+ 615|       pos_product_key: lotRow.pos_product_key,
+ 616|       id: lotRow.id,
+ 617|     }),
+ 618|     posProductKey: lineLotKey,
+ 619|   }).value;
  620| 
- 621|   const byOrder = new Map(orderRows.map((o) => [o.id, o]));
- 622|   const out: ReturnableOrderLine[] = [];
- 623|   for (const l of (lines as
- 624|     | {
- 625|         id: string;
- 626|         order_id: string;
- 627|         product_id: string | null;
- 628|         product_name: string;
- 629|         quantity: number;
- 630|         price_minor_units: number;
+ 621|   const qty = Number(l.quantity) || 0;
+ 622|   const soldUnit = l.price_minor_units ?? 0; // tax-INCLUSIVE out-the-door unit
+ 623|   const regularUnit = l.regular_price_minor_units ?? soldUnit; // tax-INCLUSIVE
+ 624| 
+ 625|   // Medical + tax status mirror the Sale.csv builder (see ccrs-sales.ts).
+ 626|   let isMedical = false;
+ 627|   let salesExempt = false;
+ 628|   let exciseExempt = false;
+ 629|   try {
+ 630|     const { data: exemptRows } = await admin
 ```
 
 `src/lib/inventory/disposition.ts` L675-L705 — postAddition 'return' + destroy branch
 
 ```ts
- 675|   } catch {
- 676|     return [];
- 677|   }
- 678| }
- 679| 
- 680| /**
- 681|  * Accept a customer return end-to-end:
- 682|  *  1. validates the WAC 314-55-079(12) attestations + quantities (pure core),
- 683|  *  2. snapshots the CCRS Sale-row data (ids, taxes) needed for the correction
- 684|  *     file (Delete for full-line return, Update for partial),
- 685|  *  3. posts the POSITIVE add-back adjustment (internal 'return' → CCRS Other
- 686|  *     with a mandatory detail stating the ADD direction),
- 687|  *  4. if disposition = destroy, opens a destruction event for the returned
- 688|  *     quantity (LCB coordination/waste record enforced at completion).
- 689|  *
- 690|  * Fix Phase 1.4 (G-44; F-15-6, F-15-7): steps 3-4 and the return row are ONE
- 691|  * database transaction (record_customer_return, migration 0308). A Destroy
- 692|  * return's units are HELD on the lot (inventory_lots.held_qty): still on hand
- 693|  * and in CCRS, never sellable (sale-lot-read, POS menu, sellability report).
- 694|  * Before 0308 the old writes run and any failure undoes the add-back.
- 695|  */
- 696| export async function createCustomerReturn(
- 697|   input: {
- 698|     orderId: string;
- 699|     orderLineId: string;
- 700|     lotId?: string | null;
- 701|     quantity: number;
- 702|     disposition: CustomerReturnDisposition;
- 703|     reason: string;
- 704|     detail?: string | null;
- 705|     refundMinor: number;
+ 675|     soldUnitMinorUnits: soldUnit,
+ 676|     regularUnitMinorUnits: regularUnit,
+ 677|     quantity: qty,
+ 678|     isCannabis,
+ 679|     salesExempt,
+ 680|     exciseExempt,
+ 681|     combinedSalesRateBps: combinedBps,
+ 682|     exciseRateBps: taxSettings.exciseRateBps,
+ 683|   });
+ 684|   const preTaxRegularUnit = money.unitPriceMinor;
+ 685|   const discountCents = money.discountMinor;
+ 686|   const salesTaxCents = money.salesTaxMinor;
+ 687|   const exciseCents = money.exciseMinor;
+ 688| 
+ 689|   const saleExternalId = o.order_number || o.id;
+ 690|   const saleDetailExternalId = `${saleExternalId}-${l.id.slice(0, 8)}`;
+ 691|   const saleDate = pacificDayKey(o.completed_at ?? o.placed_at); // YYYY-MM-DD
+ 692| 
+ 693|   // ── Post the POSITIVE add-back adjustment (internal 'return' → CCRS Other) ─
+ 694|   const note = buildCustomerReturnAdjustmentNote({
+ 695|     quantity: input.quantity,
+ 696|     unit: null,
+ 697|     reason: input.reason,
+ 698|     disposition: input.disposition,
+ 699|     saleExternalId,
+ 700|     detail: input.detail,
+ 701|   });
+ 702|   const returnRow = {
+ 703|     order_id: o.id,
+ 704|     order_line_id: l.id,
+ 705|     sale_external_id: saleExternalId,
 ```
 
 `src/lib/inventory/disposition.ts` L780-L800 — createVendorReturn (reducing 'other' adjustment)
 
 ```ts
- 780|     quantity: input.quantity,
- 781|     originalQuantity: remainingReturnable,
- 782|     originalPackaging: input.originalPackaging,
- 783|     lotIdLegible: input.lotIdLegible,
- 784|     disposition: input.disposition,
- 785|     reason: input.reason,
- 786|     refundMinor: input.refundMinor,
- 787|     maxRefundMinor,
- 788|   });
- 789|   if (!verdict.ok) return verdict;
- 790|   // Correction operation is decided against the FULL original line: only a
- 791|   // return of the whole original quantity deletes the sale row.
- 792|   const totalAfter = alreadyReturned + input.quantity;
- 793|   const correctionOperation: "Delete" | "Update" =
- 794|     totalAfter >= (Number(l.quantity) || 0) ? "Delete" : "Update";
- 795| 
- 796|   // ── Resolve the inventory lot (explicit pick wins; else by product key) ───
- 797|   let lotId = (input.lotId ?? "").trim() || null;
- 798|   let lotRow: {
- 799|     id: string;
- 800|     lot_code: string | null;
+ 780|     );
+ 781|     if (!scheduled.ok) {
+ 782|       await undoAddition(admin, lotId, input.quantity, posted.adjustmentId, actorId, false);
+ 783|       return { ok: false, error: `The destruction event could not be opened, so the return was not saved and the add-back was undone: ${scheduled.error}` };
+ 784|     }
+ 785|     destructionEventId = scheduled.id;
+ 786|   }
+ 787| 
+ 788|   const { data: created, error: insErr } = await admin
+ 789|     .from("customer_returns")
+ 790|     .insert({
+ 791|       ...returnRow,
+ 792|       lot_id: lotId,
+ 793|       quantity: input.quantity,
+ 794|       adjustment_id: posted.adjustmentId,
+ 795|       destruction_event_id: destructionEventId,
+ 796|       created_by: actorId,
+ 797|     })
+ 798|     .select("id")
+ 799|     .single();
+ 800|   if (insErr || !created) {
 ```
 
 `src/lib/inventory/disposition.ts` L968-L985 — completeDestruction head ('destruction')
 
 ```ts
- 968|   const { data: rpcData, error: rpcErr } = await admin.rpc(RECORD_CUSTOMER_RETURN_RPC, {
- 969|     p_lot_id: lotId,
- 970|     p_qty: input.quantity,
- 971|     p_note: note,
- 972|     p_actor: actorId,
- 973|     p_hold: isDestroy,
- 974|     p_destruction: destruction,
- 975|     p_return: returnRow,
- 976|   });
- 977|   if (!rpcErr) {
- 978|     const r = (rpcData ?? {}) as { return_id?: string | null };
- 979|     if (!r.return_id) return { ok: false, error: "The return could not be saved (no id came back). Nothing was changed." };
- 980|     // A Restock unit goes back on the menu; a held Destroy unit never does.
- 981|     if (!isDestroy) await syncLotMenuStock(admin, lotId, Math.abs(input.quantity));
- 982|     return { ok: true, id: r.return_id, held: isDestroy };
- 983|   }
- 984|   if (!isMissingDbFunctionError(rpcErr)) {
- 985|     // The transaction rolled back: no add-back, no event, no return row.
+ 968|       cancelled_by: nameOf(who.cancelled_by),
+ 969|     },
+ 970|   };
+ 971| }
+ 972| 
+ 973| export async function getVendorReturn(id: string): Promise<VendorReturn | null> {
+ 974|   if (!isSupabaseServiceConfigured) return null;
+ 975|   const admin = createSupabaseAdminClient();
+ 976|   const { data } = await admin.from("vendor_returns").select("*").eq("id", id).maybeSingle();
+ 977|   return (data as VendorReturn | null) ?? null;
+ 978| }
+ 979| 
+ 980| /**
+ 981|  * Fix Phase 1.5 (G-42 req 1, 2, 6; F-15-1, F-15-2; D63 (4), D65): log a vendor
+ 982|  * return. The units are RESERVED (inventory_lots.held_qty): out of sale but
+ 983|  * still on hand and in CCRS. Nothing posts to CCRS now; the reduction and the
+ 984|  * CCRS Other adjustment post at departure (departVendorReturn). RMA, vendor,
+ 985|  * numeric processor license and detail are required; a Recalled lot may be
 ```
 
 ## H. Intake & Cultivera identity lineage
@@ -2551,51 +2584,51 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 `src/lib/pos/import-service.ts` L440-L460 — Dedupe by ccrs_inventory_external_id; why imported lots are 'active' (already reported by Cultivera as integrator)
 
 ```ts
- 440|     // SLICE 4A: the reconciliation arithmetic is computed FROM these buckets,
- 441|     // so it cannot detect that its own inputs came back short. Corroborate the
- 442|     // read against independent witnesses BEFORE trusting the equation.
- 443|     // `getVersionItems` returns [] on a read error, which previously
- 444|     // reconciled as a "trivially balanced" empty import and OPENED the gate --
- 445|     // the evidence check turns that fail-open into a refusal.
- 446|     const gate = evaluateCommitGate(buckets, {
- 447|       observedItems: items.length,
- 448|       recordedItemCount: (version as MenuVersion).item_count,
- 449|       serverItemCount,
- 450|       observedReviews: reviewsResult.reviews.length,
- 451|       reviewsReadFailed: !reviewsResult.ok,
- 452|     }, { acknowledgedPendingCount: options.acknowledgedPendingCount ?? null });
- 453|     if (!gate.ready) throw new Error(gate.message);
- 454|     openReviewsAcknowledged = gate.openReviewsAcknowledged;
- 455|     // Persist the balanced equation so the audit trail shows exactly what
- 456|     // this publish committed (idempotent by code+import via the review UI).
- 457|     await persistDiagnostics(importId, [
- 458|       {
- 459|         severity: "info",
- 460|         code: "import_commit_reconciled",
+ 440|     );
+ 441|     // SLICE 4A: the reconciliation arithmetic is computed FROM these buckets,
+ 442|     // so it cannot detect that its own inputs came back short. Corroborate the
+ 443|     // read against independent witnesses BEFORE trusting the equation.
+ 444|     // `getVersionItems` returns [] on a read error, which previously
+ 445|     // reconciled as a "trivially balanced" empty import and OPENED the gate --
+ 446|     // the evidence check turns that fail-open into a refusal.
+ 447|     const gate = evaluateCommitGate(buckets, {
+ 448|       observedItems: items.length,
+ 449|       recordedItemCount: (version as MenuVersion).item_count,
+ 450|       serverItemCount,
+ 451|       observedReviews: reviewsResult.reviews.length,
+ 452|       reviewsReadFailed: !reviewsResult.ok,
+ 453|     }, { acknowledgedPendingCount: options.acknowledgedPendingCount ?? null });
+ 454|     if (!gate.ready) throw new Error(gate.message);
+ 455|     openReviewsAcknowledged = gate.openReviewsAcknowledged;
+ 456|     // Persist the balanced equation so the audit trail shows exactly what
+ 457|     // this publish committed (idempotent by code+import via the review UI).
+ 458|     await persistDiagnostics(importId, [
+ 459|       {
+ 460|         severity: "info",
 ```
 
 `src/lib/inventory/intake-store.ts` L650-L668 — Intake writes ccrs_inventory_external_id via deriveInventoryExternalId({pos_product_key, lot_code})
 
 ```ts
- 650|   return { brandId, outcome };
- 651| }
- 652| 
- 653| /** One live delivery of a vendor, with its lots, for the sibling rules. */
- 654| async function readSiblingCandidates(
- 655|   admin: ReturnType<typeof createSupabaseAdminClient>,
- 656|   filter: { vendorIds?: string[]; lotCodes?: string[]; ids?: string[] },
- 657| ): Promise<SiblingCandidate[] | null> {
- 658|   // Lots first (the evidence), then their deliveries.
- 659|   let manifestIds: string[] = [];
- 660|   if (filter.lotCodes && filter.lotCodes.length > 0) {
- 661|     const rows = await chunkedIn<string, { manifest_id: string | null }>(filter.lotCodes, async (chunk, from, to) => {
- 662|       const { data, error } = await admin
- 663|         .from("inventory_lots")
- 664|         .select("manifest_id")
- 665|         .in("lot_code", chunk)
- 666|         .not("manifest_id", "is", null)
- 667|         .order("id", { ascending: true })
- 668|         .range(from, to);
+ 650|   //    behaviour. Most manifests spell the brand exactly, so this is the
+ 651|   //    common case and costs exactly what it always cost.
+ 652|   {
+ 653|     let q = admin.from("brands").select("id, display_name, vendor_id").ilike("display_name", clean).limit(1);
+ 654|     if (vendorId) q = q.eq("vendor_id", vendorId);
+ 655|     const { data } = await q;
+ 656|     const row = (data as BrandCandidate[] | null)?.[0];
+ 657|     if (row?.id) {
+ 658|       return {
+ 659|         brandId: row.id,
+ 660|         outcome: { kind: "exact", brandId: row.id, matched: row.display_name ?? clean },
+ 661|       };
+ 662|     }
+ 663|   }
+ 664| 
+ 665|   // 2) SQUEEZED PATH — only reached on a miss. Scan COMPLETELY (PostgREST caps
+ 666|   //    a response at 1,000 rows and `.limit(n)` cannot raise that cap; the
+ 667|   //    vendor resolver above was already burned by exactly that), then let the
+ 668|   //    PURE core decide using the shared brandKey().
 ```
 
 `src/lib/inventory/intake-parser.ts` L368-L416 — WCIA JSON: lot_code ← item.inventory_id (the VENDOR's CCRS InventoryExternalIdentifier); pos_product_key ← sku ?? lot_code
@@ -2621,49 +2654,49 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
  385|   };
  386| }
  387| 
- 388| function parseWciaLine(item: unknown): ParsedLine {
- 389|   const warnings: string[] = [];
- 390|   if (!isObj(item)) {
- 391|     return blankLine(item, ["Line was not an object."]);
- 392|   }
- 393| 
- 394|   const product_name = asString(pick(item, ["product_name"]));
- 395|   const lot_code = asString(pick(item, ["inventory_id"]));
- 396|   const sku = asString(pick(item, ["product_sku"]));
- 397|   const qty = asNumber(pick(item, ["qty"])) ?? 0;
- 398|   const linePrice = asNumber(pick(item, ["line_price"]));
- 399|   const unit = asString(pick(item, ["uom"])) ?? "ea";
- 400|   // Rule 1.4 (docs/data-governance.md): split strain TYPE out of the strain
- 401|   // NAME at the door — vendor lines like "Chocolate Turtle Sativa" pollute
- 402|   // the name box otherwise (real Grow Op Farms / Cultivera behavior).
- 403|   const strainSplit = splitStrainField(
- 404|     asString(pick(item, ["strain_name"])),
- 405|     asString(pick(item, ["strain_type", "strain_class", "phenotype"])),
- 406|   );
- 407|   const strain = strainSplit.strainName;
- 408|   const category = asString(pick(item, ["inventory_category"]));
- 409|   const inventory_type = asString(pick(item, ["inventory_type"]));
- 410|   const is_sample = asBool(pick(item, ["is_sample"])) === true;
- 411|   const is_medical = asBool(pick(item, ["is_medical"])) === true;
- 412|   const unit_weight = asNumber(pick(item, ["unit_weight"]));
- 413|   const unit_weight_uom = asString(pick(item, ["unit_weight_uom"]));
- 414| 
- 415|   // Per-unit cost = line_price / qty, in minor units.
- 416|   let unit_cost_minor_units: number | null = null;
+ 388| /** D195: the receiving warning for a WCIA line keyed by its barcode (no product SKU). */
+ 389| export const NO_SKU_LINE_WARNING =
+ 390|   "No product SKU on this line, so the lot is keyed by its barcode. Finish it in Product Onboarding so it joins its menu card; otherwise link it on Inventory > Stock on n
+ 391| 
+ 392| function parseWciaLine(item: unknown): ParsedLine {
+ 393|   const warnings: string[] = [];
+ 394|   if (!isObj(item)) {
+ 395|     return blankLine(item, ["Line was not an object."]);
+ 396|   }
+ 397| 
+ 398|   const product_name = asString(pick(item, ["product_name"]));
+ 399|   const lot_code = asString(pick(item, ["inventory_id"]));
+ 400|   const sku = asString(pick(item, ["product_sku"]));
+ 401|   const qty = asNumber(pick(item, ["qty"])) ?? 0;
+ 402|   const linePrice = asNumber(pick(item, ["line_price"]));
+ 403|   const unit = asString(pick(item, ["uom"])) ?? "ea";
+ 404|   // Rule 1.4 (docs/data-governance.md): split strain TYPE out of the strain
+ 405|   // NAME at the door — vendor lines like "Chocolate Turtle Sativa" pollute
+ 406|   // the name box otherwise (real Grow Op Farms / Cultivera behavior).
+ 407|   const strainSplit = splitStrainField(
+ 408|     asString(pick(item, ["strain_name"])),
+ 409|     asString(pick(item, ["strain_type", "strain_class", "phenotype"])),
+ 410|   );
+ 411|   const strain = strainSplit.strainName;
+ 412|   const category = asString(pick(item, ["inventory_category"]));
+ 413|   const inventory_type = asString(pick(item, ["inventory_type"]));
+ 414|   const is_sample = asBool(pick(item, ["is_sample"])) === true;
+ 415|   const is_medical = asBool(pick(item, ["is_medical"])) === true;
+ 416|   const unit_weight = asNumber(pick(item, ["unit_weight"]));
 ```
 
 `src/lib/inventory/intake-parser.ts` L438-L446 — WCIA JSON: manifest_number ← transfer_id/external_id; vendor_label ← from_license_name
 
 ```ts
- 438|     pos_product_key: sku ?? lot_code, // fall back to inventory_id for catalog linking
- 439|     brand_name: null, // WCIA carries vendor at the document level, not per line
- 440|     category,
- 441|     strain_name: strain,
- 442|     strain_type: strainSplit.strainType,
- 443|     received_qty: qty,
- 444|     unit,
- 445|     unit_cost_minor_units,
- 446|     unit_weight,
+ 438|   // D195 step 2 (root cause): with no product SKU the lot is keyed by its
+ 439|   // barcode below. Product Onboarding joins it to its menu card; if the
+ 440|   // manifest is rejected or the draft is skipped, the lot stays on no card
+ 441|   // (cost, FIFO and Promotions cannot see it) until linked on
+ 442|   // /admin/inventory/unlinked.
+ 443|   if (!sku && lot_code) warnings.push(NO_SKU_LINE_WARNING);
+ 444| 
+ 445|   return {
+ 446|     product_name,
 ```
 
 `src/lib/inventory/intake-parser.ts` L278-L284 — WCIA detection requires from_license_number (→ vendors.license_number, migration 0064)
@@ -2847,125 +2880,125 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 `src/app/admin/inventory/disposition/sale-correction-export/route.ts` L28-L40 — GET sale corrections
 
 ```ts
-  28| import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
-  29| import { buildSaleCorrectionFile, makeSaleCorrectionFileName } from "@/lib/compliance/ccrs-sale-correction-core";
-  30| import { markCorrectionsExported } from "@/lib/inventory/disposition";
-  31| import { CCRS_COLUMNS, withholdUnencodableRows } from "@/lib/compliance/ccrs-batch-core";
-  32| import {
-  33|   planReturnCorrections,
-  34|   returnRecordFromRow,
-  35|   type CustomerReturnRowLike,
-  36|   type ReturnRecord,
-  37| } from "@/lib/compliance/ccrs-return-corrections-core";
-  38| 
-  39| export const dynamic = "force-dynamic";
-  40| export const runtime = "nodejs";
+  28| import { requirePermission } from "@/lib/auth/session";
+  29| import { recordAudit } from "@/lib/auth/audit";
+  30| import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+  31| import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+  32| import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
+  33| import { buildSaleCorrectionFile, makeSaleCorrectionFileName } from "@/lib/compliance/ccrs-sale-correction-core";
+  34| import { markCorrectionsExported, readCorrectionRoute } from "@/lib/inventory/disposition";
+  35| import { correctionDownloadRefusal } from "@/lib/inventory/disposition-messages-core";
+  36| import { CCRS_COLUMNS, withholdUnencodableRows } from "@/lib/compliance/ccrs-batch-core";
+  37| import {
+  38|   planReturnCorrections,
+  39|   returnRecordFromRow,
+  40|   type CustomerReturnRowLike,
 ```
 
 `src/app/admin/inventory/disposition/sale-correction-export/route.ts` L74-L82 — markCorrectionsExported after download
 
 ```ts
-  74|         license,
-  75|         ledger: "legacy",
-  76|         insertedDetailIds: new Set(),
-  77|       });
-  78|       rows = plan.rows;
-  79|       rowReturnIds = plan.groups.map((g) => g.returnIds);
-  80|       for (const n of plan.invalid) skipped.push(`${n.detailId || "(no sale line id)"} [${n.returnIds.join(", ")}]: ${n.reason}`);
-  81|     } catch {
-  82|       // customer_returns missing (pre-0115) — empty file below.
+  74|         .limit(500);
+  75|       const pendingRows = (pending as CustomerReturnRowLike[] | null) ?? [];
+  76|       // Every other return of the same sale lines: the correction states the
+  77|       // line after ALL its returns, not just the pending ones.
+  78|       const lineIds = [...new Set(pendingRows.map((r) => (r.sale_detail_external_id ?? "").trim()).filter(Boolean))];
+  79|       const { data: siblings } = lineIds.length
+  80|         ? await admin.from("customer_returns").select(RETURN_COLUMNS).in("sale_detail_external_id", lineIds)
+  81|         : { data: [] };
+  82|       const byId = new Map<string, ReturnRecord>();
 ```
 
 `src/app/admin/compliance/ccrs/page.tsx` L81-L110 — CcrsCommandCenterPage head
 
 ```ts
-  81| import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
-  82| import {
-  83|   applyAllCcrsMailAction,
-  84|   applyCcrsErrorMailAction,
-  85|   applyCcrsNotProcessedMailAction,
-  86|   applyCcrsSuccessMailAction,
-  87|   dismissCcrsMailAction,
-  88|   pollCcrsMailNowAction,
-  89| } from "./mail-actions";
-  90| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
-  91| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
-  92| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
-  93| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
-  94| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
-  95| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
-  96| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
-  97| import { readOwed } from "@/lib/compliance/ccrs-held-store";
-  98| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
-  99| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
- 100| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
- 101| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
- 102| 
- 103| export const dynamic = "force-dynamic";
- 104| // W-1 (2026-10-30): the page builds the week's batch, and its server actions
- 105| // (email Apply, week sign-off) re-read files and rows. A page-level
- 106| // maxDuration also covers every server action posted from this page
- 107| // (Next docs: route-segment-config/maxDuration). Same ceiling as /records.
- 108| export const maxDuration = 300;
- 109| 
- 110| function Section({
+  81| import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
+  82| import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
+  83| import {
+  84|   applyAllCcrsMailAction,
+  85|   applyCcrsErrorMailAction,
+  86|   applyCcrsNotProcessedMailAction,
+  87|   applyCcrsSuccessMailAction,
+  88|   dismissCcrsMailAction,
+  89|   pollCcrsMailNowAction,
+  90| } from "./mail-actions";
+  91| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+  92| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
+  93| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
+  94| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
+  95| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
+  96| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
+  97| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
+  98| import { readOwed } from "@/lib/compliance/ccrs-held-store";
+  99| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
+ 100| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+ 101| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
+ 102| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
+ 103| 
+ 104| export const dynamic = "force-dynamic";
+ 105| // W-1 (2026-10-30): the page builds the week's batch, and its server actions
+ 106| // (email Apply, week sign-off) re-read files and rows. A page-level
+ 107| // maxDuration also covers every server action posted from this page
+ 108| // (Next docs: route-segment-config/maxDuration). Same ceiling as /records.
+ 109| export const maxDuration = 300;
+ 110| 
 ```
 
 `src/app/admin/compliance/ccrs/page.tsx` — hub page section anchors
 
-- L620: `title="Step 1 — Pick the reporting week"`
-- L651: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
-- L824: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
-- L851: `<UploadWalkthrough`
-- L951: `title="Step 3 — Record this week"`
-- L1125: `<ErrorTriagePanel`
-- L1138: `title="DOH / Medical sales"`
-- L1204: `title="Monthly LIQ-1295 (tax report)"`
-- L1277: `<PushRemindersPanel />`
-- L1287: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
+- L621: `title="Step 1 — Pick the reporting week"`
+- L652: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
+- L825: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
+- L852: `<UploadWalkthrough`
+- L953: `title="Step 3 — Record this week"`
+- L1127: `<ErrorTriagePanel`
+- L1140: `title="DOH / Medical sales"`
+- L1206: `title="Monthly LIQ-1295 (tax report)"`
+- L1279: `<PushRemindersPanel />`
+- L1289: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
 
 `src/app/admin/compliance/ccrs/actions.ts` — server actions
 
 - L12: `import { revalidatePath } from "next/cache";`
 - L14: `import { requirePermission } from "@/lib/auth/session";`
-- L72: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
-- L73: `const session = await requirePermission("settings.manage");`
-- L124: `revalidatePath(BASE);`
-- L129: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
-- L130: `const session = await requirePermission("settings.manage");`
-- L147: `revalidatePath(BASE);`
-- L152: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
-- L153: `const session = await requirePermission("settings.manage");`
-- L182: `revalidatePath(BASE);`
-- L194: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
-- L195: `const session = await requirePermission("settings.manage");`
-- L231: `revalidatePath(BASE);`
-- L275: `export async function markUploadedAction(formData: FormData): Promise<void> {`
-- L276: `const session = await requirePermission("settings.manage");`
-- L296: `revalidatePath(BASE);`
-- L305: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
-- L306: `const session = await requirePermission("settings.manage");`
-- L355: `revalidatePath(BASE);`
-- L371: `export async function recordErrorAction(formData: FormData): Promise<void> {`
-- L372: `const session = await requirePermission("settings.manage");`
-- L397: `revalidatePath(BASE);`
-- L424: `revalidatePath(BASE);`
-- L429: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
-- L430: `const session = await requirePermission("settings.manage");`
-- L450: `revalidatePath(BASE);`
-- L455: `export async function abandonFileAction(formData: FormData): Promise<void> {`
-- L456: `const session = await requirePermission("settings.manage");`
-- L475: `revalidatePath(BASE);`
-- L480: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
-- L481: `const session = await requirePermission("settings.manage");`
-- L497: `revalidatePath(BASE);`
-- L503: `session: Awaited<ReturnType<typeof requirePermission>>,`
-- L524: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
-- L525: `const session = await requirePermission("settings.manage");`
-- L542: `revalidatePath(BASE);`
-- L551: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
-- L552: `const session = await requirePermission("settings.manage");`
-- L577: `revalidatePath(BASE);`
+- L77: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
+- L78: `const session = await requirePermission("settings.manage");`
+- L129: `revalidatePath(BASE);`
+- L134: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
+- L135: `const session = await requirePermission("settings.manage");`
+- L152: `revalidatePath(BASE);`
+- L157: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
+- L158: `const session = await requirePermission("settings.manage");`
+- L187: `revalidatePath(BASE);`
+- L199: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
+- L200: `const session = await requirePermission("settings.manage");`
+- L236: `revalidatePath(BASE);`
+- L280: `export async function markUploadedAction(formData: FormData): Promise<void> {`
+- L281: `const session = await requirePermission("settings.manage");`
+- L301: `revalidatePath(BASE);`
+- L310: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
+- L311: `const session = await requirePermission("settings.manage");`
+- L360: `revalidatePath(BASE);`
+- L376: `export async function recordErrorAction(formData: FormData): Promise<void> {`
+- L377: `const session = await requirePermission("settings.manage");`
+- L402: `revalidatePath(BASE);`
+- L429: `revalidatePath(BASE);`
+- L434: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
+- L435: `const session = await requirePermission("settings.manage");`
+- L455: `revalidatePath(BASE);`
+- L460: `export async function abandonFileAction(formData: FormData): Promise<void> {`
+- L461: `const session = await requirePermission("settings.manage");`
+- L480: `revalidatePath(BASE);`
+- L485: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
+- L486: `const session = await requirePermission("settings.manage");`
+- L502: `revalidatePath(BASE);`
+- L508: `session: Awaited<ReturnType<typeof requirePermission>>,`
+- L529: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
+- L530: `const session = await requirePermission("settings.manage");`
+- L547: `revalidatePath(BASE);`
+- L556: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
+- L557: `const session = await requirePermission("settings.manage");`
+- L582: `revalidatePath(BASE);`
 
 `src/components/admin/compliance/UploadWalkthrough.tsx` L26-L35 — PORTAL_URL + WAIT_MINUTES constants
 
@@ -3170,14 +3203,16 @@ Generated 2026-11-01 03:20Z at commit `2d3e8d9c876b4d7cb48d3f22d7ff48ee84ab6789`
 - L81: `{ label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊`
 - L113: `{ label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade s`
 - L114: `{ label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 s`
-- L123: `// CCRS: standalone top-header button → the Compliance Command Center (Task W;`
-- L126: `{ label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ complia`
-- L127: `{ label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check`
-- L128: `{ label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change`
-- L129: `{ label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-`
-- L213: `{ label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal li`
-- L218: `{ label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "A`
-- L235: `"CCRS",`
+- L126: `// CCRS: standalone top-header button → the Compliance Command Center (Task W;`
+- L129: `{ label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ complia`
+- L130: `{ label: "CCRS Sales Check", href: "/admin/compliance/sales-check", permission: "reports.view", icon: "\u2705", group: "CCRS" }, // D183: every sale f`
+- L131: `{ label: "Taxes Owed", href: "/admin/compliance/taxes-owed", permission: "reports.view", icon: "\ud83e\uddfe", group: "CCRS" }, // D183: excise + sale`
+- L132: `{ label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check`
+- L133: `{ label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change`
+- L134: `{ label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-`
+- L221: `{ label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal li`
+- L226: `{ label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "A`
+- L244: `"CCRS",`
 
 ## J. Schema anchors (Supabase migrations)
 
