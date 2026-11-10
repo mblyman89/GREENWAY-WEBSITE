@@ -200,7 +200,7 @@ most of the "wrong vendor" complaint before any AI runs.
 ### 5.1 As built (M3 + M4, 2026-11-10)
 
 - **M3** shipped as migration 0353. It adds `media_backfill_vendor_links` (seller folder code, seller tag, harvested title; merged cards follow the survivor; the placeholder vendor never counts) and the review queue at `/admin/media/review` (Looks right / Product photo / Logo / Reject, never delete).
-- **M4** shipped as a **Vercel cron** (`/api/cron/media-describe`, every 5 minutes at :02, leased by compare-and-set), not on Railway as section 4.3 planned. It uses `gpt-6-luna` at detail high and has a dollar budget per run. "Keep describing new pictures" covers the inline-at-harvest part.
+- **M4** shipped as a **Vercel cron** (`/api/cron/media-describe`, every 10 minutes at :08, leased by compare-and-set), not on Railway as section 4.3 planned. It uses `gpt-6-luna` at detail high and has a dollar budget per run. "Keep describing new pictures" covers the inline-at-harvest part.
 - **Embeddings** (section 4.3 step 5) are deferred to M6, where the recommender first needs them.
 
 ## 6. Decisions needed from the owner

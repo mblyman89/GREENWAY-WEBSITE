@@ -45,7 +45,7 @@
 --           "INDEPENDENT / UNLISTED VENDOR" never counts).
 --      Then credit_text from the vendor card, as 0352 step i does.
 --   3. media_ai_runs gets lease_token / lease_until (compare-and-set lease for
---      the every-5-minutes describe worker), follow_new (keep describing new
+--      the every-10-minutes describe worker), follow_new (keep describing new
 --      pictures as they are saved), input/output token totals, and the
 --      reviewed_* columns on media_assets record who decided a review.
 --   4. media_library_health() also reports rejected / ai_failed / ai_skipped
