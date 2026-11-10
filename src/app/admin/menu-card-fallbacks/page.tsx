@@ -13,6 +13,15 @@
  * travels as GET params (pick, lq, lscope) and each picture tile is its own
  * small form, the same pattern as the product editor's library picker.
  *
+ * D225 (owner): "I want to be able to add many fallback images to the
+ * categories, so that the menu has a variety of images used ... the cards
+ * with fallback images, should rotate images." Each row now holds a strip of
+ * pictures (up to MAX_FALLBACKS_PER_CATEGORY) with move up / move down /
+ * remove on each, a multi-file upload, and the library picker adds to the
+ * list. Neighbouring cards start on different pictures and every fallback
+ * card cross-fades through the list (reduced motion and the shopper pause
+ * control are honoured, WCAG 2.2.2).
+ *
  * Where it shows: shop grid, category pages, home rails, specials, product
  * pages (and their related rail), the register info card, and the admin
  * product page preview. Always with the "Representative image" badge, never
@@ -33,6 +42,8 @@ import {
   fallbackPageRows,
   parseFallbackCategory,
   FALLBACK_UPLOAD_MIME,
+  MAX_FALLBACKS_PER_CATEGORY,
+  ROTATION_DWELL_MS,
   type CategoryCoverage,
 } from "@/lib/menu/menu-card-fallback-core";
 import { readLibraryPickerAssets } from "@/lib/media/library-picker-server";
@@ -46,7 +57,13 @@ import {
 } from "@/lib/media/library-picker-core";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
-import { uploadFallbackAction, pickFallbackAction, clearFallbackAction } from "./actions";
+import {
+  uploadFallbackAction,
+  pickFallbackAction,
+  clearFallbackAction,
+  removeFallbackPictureAction,
+  moveFallbackAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +103,12 @@ export default async function MenuCardFallbacksPage({
   ]);
 
   const rows = fallbackPageRows(read.rows, read.media, coverage);
-  const setCount = rows.filter((r) => r.mediaId).length;
+  const migrated = read.schema !== "none";
+  const multi = read.schema === "multi";
+  const setCount = rows.filter((r) => r.pictures.length > 0).length;
+  const pictureCount = rows.reduce((n, r) => n + r.pictures.length, 0);
   const uncovered = coverage
-    ? rows.reduce((n, r) => n + (r.mediaId ? 0 : r.coverage?.withoutOwnPhoto ?? 0), 0)
+    ? rows.reduce((n, r) => n + (r.pictures.length > 0 ? 0 : r.coverage?.withoutOwnPhoto ?? 0), 0)
     : null;
   const pickingRow = picking ? rows.find((r) => r.category === picking) ?? null : null;
   const view = library
@@ -96,7 +116,7 @@ export default async function MenuCardFallbacksPage({
         assets: library.assets,
         query,
         scope,
-        galleryIds: pickingRow?.mediaId ? [pickingRow.mediaId] : [],
+        galleryIds: pickingRow ? pickingRow.pictures.map((p) => p.mediaId) : [],
         productName: picking ? formatWebsiteCategory(picking) : "",
       })
     : null;
@@ -106,17 +126,24 @@ export default async function MenuCardFallbacksPage({
     <div>
       <AdminPageHeader
         title="Menu Card Fallbacks"
-        subtitle="One picture per website category, shown on every menu card in that category that has no photo of its own"
+        subtitle="Pictures for each website category, shown (and rotated) on every menu card in that category that has no photo of its own"
         breadcrumbs={<Breadcrumbs items={[{ label: "Admin" }, { label: "Menu Card Fallbacks" }]} />}
       />
       <div className="space-y-6 px-5 py-6 sm:px-8" data-testid="menu-card-fallbacks">
         <KbFlash msg={sp.msg} error={sp.error} />
 
-        {!read.migrated ? (
+        {!migrated ? (
           <div role="alert" data-testid="fallback-migration-missing" className="rounded-xl border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 p-4 text-sm text-white/85">
             Migration <strong>0355_menu_card_fallback_images</strong> has not been applied yet. Apply it in Supabase (see
             docs/MIGRATIONS_TO_RUN.md), then reload this page. Until then nothing can be saved here and cards keep their
             current pictures.
+          </div>
+        ) : null}
+        {read.schema === "single" ? (
+          <div role="alert" data-testid="fallback-0356-missing" className="rounded-xl border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 p-4 text-sm text-white/85">
+            Migration <strong>0356_menu_card_fallback_many</strong> has not been applied yet, so each category can hold only
+            one picture (adding one replaces it). Apply it in Supabase (see docs/MIGRATIONS_TO_RUN.md) to add many pictures
+            per category. The picture you already set stays.
           </div>
         ) : null}
         {!read.ok ? (
@@ -127,9 +154,15 @@ export default async function MenuCardFallbacksPage({
 
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5 text-sm text-white/70">
           <p>
-            When a product has no photo of its own, its menu card shows the picture you set here for its website category.
+            When a product has no photo of its own, its menu card shows a picture you set here for its website category.
             The moment a product gets its own photo, that photo wins. These cards always carry the small{" "}
             <em>Representative image</em> badge, and they are never sent to Google as the product photo.
+          </p>
+          <p className="mt-2">
+            Add up to {MAX_FALLBACKS_PER_CATEGORY} pictures per category. Cards next to each other start on different
+            pictures, so the menu looks varied, and each card gently cross-fades to the next picture about every{" "}
+            {Math.round(ROTATION_DWELL_MS / 1000)} seconds. Shoppers can stop the rotation with the pause button on the
+            menu, and it never runs for anyone who has asked their device to reduce motion.
           </p>
           <p className="mt-2 text-xs text-white/50">
             Order used for a card: its own photo, then this page, then the older generic fallbacks on{" "}
@@ -139,7 +172,7 @@ export default async function MenuCardFallbacksPage({
             , then the built-in mockup.
           </p>
           <p className="mt-3 text-xs text-white/60" data-testid="fallback-summary">
-            {setCount} of {rows.length} categories set.
+            {setCount} of {rows.length} categories set, {pictureCount} picture{pictureCount === 1 ? "" : "s"} in total.
             {uncovered !== null ? ` ${uncovered} live card${uncovered === 1 ? "" : "s"} without a photo sit in categories with no fallback yet.` : ""}
           </p>
         </section>
@@ -148,7 +181,7 @@ export default async function MenuCardFallbacksPage({
           <section id="library" aria-labelledby="library-title" data-testid="fallback-library" className="scroll-mt-24 rounded-xl border border-[var(--admin-accent)]/40 bg-[#0a0a0a] p-5">
             <div className="flex flex-wrap items-center gap-3">
               <h2 id="library-title" className="text-sm font-semibold text-white">
-                Choose a picture for {formatWebsiteCategory(picking)}
+                Add a picture to {formatWebsiteCategory(picking)}
               </h2>
               <div className="flex gap-2" role="group" aria-label="Which images">
                 {(["product", "all"] as const).map((s) => (
@@ -224,10 +257,11 @@ export default async function MenuCardFallbacksPage({
                           <button
                             type="submit"
                             data-testid="fallback-library-use"
-                            aria-label={`Use ${t.label} for ${formatWebsiteCategory(picking)}`}
-                            className="w-full rounded bg-[var(--admin-accent)] px-2 py-1 text-[11px] font-semibold text-black hover:brightness-110"
+                            disabled={multi && !(pickingRow?.canAdd ?? true)}
+                            aria-label={`Add ${t.label} to ${formatWebsiteCategory(picking)}`}
+                            className="w-full rounded bg-[var(--admin-accent)] px-2 py-1 text-[11px] font-semibold text-black hover:brightness-110 disabled:opacity-40"
                           >
-                            Use this picture
+                            {multi ? "Add this picture" : "Use this picture"}
                           </button>
                         </form>
                       )}
@@ -248,51 +282,121 @@ export default async function MenuCardFallbacksPage({
               data-category={r.category}
               className={`scroll-mt-24 rounded-xl border bg-[#0a0a0a] p-4 ${picking === r.category ? "border-[var(--admin-accent)]/60" : "border-white/10"}`}
             >
-              <div className="flex gap-4">
-                <div className="h-28 w-28 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[#050505]">
-                  {r.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.url} alt={`${r.label} fallback`} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center p-2 text-center text-[11px] text-white/35">No fallback set</div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="text-sm font-semibold text-white">{r.label}</h2>
-                  <p className="mt-0.5 line-clamp-2 text-[11px] text-white/40" title={r.helper}>
-                    {r.helper}
-                  </p>
-                  <p className="mt-2 text-xs text-white/70" data-testid="fallback-effect">
-                    {r.effect}
-                  </p>
-                  {r.title ? <p className="mt-1 truncate text-[11px] text-white/45">Picture: {r.title}</p> : null}
-                  {r.statusNote ? <p className="mt-1 text-[11px] text-[var(--admin-gold)]">{r.statusNote}</p> : null}
-                  {r.mediaId ? (
-                    <Link href={`/admin/media/${r.mediaId}`} className="mt-1 inline-block text-[11px] text-white/45 underline-offset-2 hover:text-white hover:underline">
-                      Open in the media library
-                    </Link>
-                  ) : null}
+                  <span className="text-[11px] text-white/45" data-testid="fallback-count">
+                    {r.pictures.length} of {multi ? MAX_FALLBACKS_PER_CATEGORY : 1} picture{(multi ? MAX_FALLBACKS_PER_CATEGORY : 1) === 1 ? "" : "s"}
+                  </span>
                 </div>
+                <p className="mt-0.5 line-clamp-2 text-[11px] text-white/40" title={r.helper}>
+                  {r.helper}
+                </p>
+                <p className="mt-2 text-xs text-white/70" data-testid="fallback-effect">
+                  {r.effect}
+                </p>
               </div>
+
+              {r.pictures.length > 0 ? (
+                <ol className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4" data-testid="fallback-pictures" aria-label={`${r.label} pictures, in rotation order`}>
+                  {r.pictures.map((p, i) => (
+                    <li key={p.mediaId} data-testid="fallback-picture" data-media-id={p.mediaId} className="overflow-hidden rounded-lg border border-white/10 bg-[#050505]">
+                      <div className="relative aspect-square">
+                        {p.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.url} alt={`${r.label} fallback ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center p-1 text-center text-[10px] text-white/35">No preview</div>
+                        )}
+                        <span className="absolute left-1 top-1 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white/80">{i + 1}</span>
+                      </div>
+                      <div className="space-y-1 border-t border-white/10 p-1.5">
+                        {p.title ? (
+                          <p className="truncate text-[10px] text-white/50" title={p.title}>
+                            {p.title}
+                          </p>
+                        ) : null}
+                        {p.statusNote ? <p className="text-[10px] leading-tight text-[var(--admin-gold)]">{p.statusNote}</p> : null}
+                        <div className="flex items-center gap-1">
+                          {multi ? (
+                            <>
+                              <form action={moveFallbackAction}>
+                                <input type="hidden" name="category" value={r.category} />
+                                <input type="hidden" name="mediaId" value={p.mediaId} />
+                                <input type="hidden" name="direction" value="up" />
+                                <button
+                                  type="submit"
+                                  disabled={i === 0}
+                                  data-testid="fallback-move-up"
+                                  aria-label={`Move ${r.label} picture ${i + 1} earlier`}
+                                  className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] text-white/70 hover:text-white disabled:opacity-30"
+                                >
+                                  &larr;
+                                </button>
+                              </form>
+                              <form action={moveFallbackAction}>
+                                <input type="hidden" name="category" value={r.category} />
+                                <input type="hidden" name="mediaId" value={p.mediaId} />
+                                <input type="hidden" name="direction" value="down" />
+                                <button
+                                  type="submit"
+                                  disabled={i === r.pictures.length - 1}
+                                  data-testid="fallback-move-down"
+                                  aria-label={`Move ${r.label} picture ${i + 1} later`}
+                                  className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] text-white/70 hover:text-white disabled:opacity-30"
+                                >
+                                  &rarr;
+                                </button>
+                              </form>
+                            </>
+                          ) : null}
+                          <Link
+                            href={`/admin/media/${p.mediaId}`}
+                            aria-label={`Open ${r.label} picture ${i + 1} in the media library`}
+                            className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] text-white/60 hover:text-white"
+                          >
+                            Open
+                          </Link>
+                          <form action={removeFallbackPictureAction} className="ml-auto">
+                            <input type="hidden" name="category" value={r.category} />
+                            <input type="hidden" name="mediaId" value={p.mediaId} />
+                            <button
+                              type="submit"
+                              data-testid="fallback-remove-one"
+                              aria-label={`Remove ${r.label} picture ${i + 1}`}
+                              className="rounded border border-[var(--admin-orange)]/40 px-1.5 py-0.5 text-[10px] text-[var(--admin-orange)] hover:bg-[var(--admin-orange)]/10"
+                            >
+                              Remove
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="mt-3 rounded-lg border border-dashed border-white/10 p-4 text-center text-[11px] text-white/35">No fallback set</div>
+              )}
 
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
                 <form action={uploadFallbackAction} className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="category" value={r.category} />
                   <label className="sr-only" htmlFor={`file-${r.category}`}>
-                    Upload a picture for {r.label}
+                    Upload pictures for {r.label}
                   </label>
                   <input
                     id={`file-${r.category}`}
                     type="file"
                     name="file"
                     required
+                    multiple={multi}
                     accept={FALLBACK_UPLOAD_MIME.join(",")}
-                    disabled={!read.migrated}
+                    disabled={!migrated || (multi && !r.canAdd)}
                     className="max-w-[13rem] text-[11px] text-white/60 file:mr-2 file:rounded file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-[11px] file:text-white"
                   />
                   <button
                     type="submit"
-                    disabled={!read.migrated}
+                    disabled={!migrated || (multi && !r.canAdd)}
                     data-testid="fallback-upload"
                     className="rounded bg-[var(--admin-accent)] px-3 py-1 text-[11px] font-semibold text-black hover:brightness-110 disabled:opacity-40"
                   >
@@ -301,13 +405,13 @@ export default async function MenuCardFallbacksPage({
                 </form>
                 <Link
                   href={pickHref(r.category)}
-                  aria-disabled={!read.migrated ? "true" : undefined}
+                  aria-disabled={!migrated || (multi && !r.canAdd) ? "true" : undefined}
                   data-testid="fallback-choose"
                   className="rounded border border-white/15 px-3 py-1 text-[11px] text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
                 >
-                  Choose from library
+                  {multi ? "Add from library" : "Choose from library"}
                 </Link>
-                {r.mediaId ? (
+                {r.pictures.length > 1 ? (
                   <form action={clearFallbackAction} className="ml-auto">
                     <input type="hidden" name="category" value={r.category} />
                     <button
@@ -315,7 +419,7 @@ export default async function MenuCardFallbacksPage({
                       data-testid="fallback-remove"
                       className="rounded border border-[var(--admin-orange)]/40 px-3 py-1 text-[11px] text-[var(--admin-orange)] hover:bg-[var(--admin-orange)]/10"
                     >
-                      Remove
+                      Remove all
                     </button>
                   </form>
                 ) : null}
@@ -324,7 +428,8 @@ export default async function MenuCardFallbacksPage({
           ))}
         </ul>
         <p className="text-[11px] text-white/40">
-          PNG, JPG, WEBP or GIF, up to {maxMb} MB. A square picture works best. Uploads are saved to the media library too.
+          PNG, JPG, WEBP or GIF, up to {maxMb} MB each. You can choose several files at once. A square picture works best.
+          Uploads are saved to the media library too. The order above is the order the cards rotate in.
         </p>
       </div>
     </div>

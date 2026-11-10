@@ -23,6 +23,8 @@ import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 import { MAX_TAGS_ON_CARD, tagTextColor } from "@/lib/menu/product-tags-core";
 import { glowCardStyle } from "@/lib/ui/glow-card-core";
+// D225: fallback cards cross-fade through their category's pictures.
+import { RotatingFallbackImage, FallbackRotationToggle } from "./fallback-rotation/RotatingFallbackImage";
 
 type CardTone = {
   border: string;
@@ -371,17 +373,26 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
           {cardTypeLabel(item)}
         </p>
 
+        {/* D225: the wrapper is relative so the picture-rotation pause button can
+            sit over the picture WITHOUT being inside the product link. */}
+        <div className="relative">
         <Link href={`/menu/products/${item.id}`} className="block" aria-label={`View ${item.name}`}>
           <div className="relative h-[14.15rem] overflow-hidden bg-white p-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] md:h-[14.65rem]">
             {item.imageUrl ? (
               <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
+                {item.imageIsFallback ? (
+                  // D225: same first paint as the plain <img>; rotates only when
+                  // the owner set 2+ pictures for this category.
+                  <RotatingFallbackImage itemId={item.id} category={item.category} imageUrl={item.imageUrl} alt={item.name} />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                )}
                 {item.imageIsFallback ? (
                   <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm">
                     Representative image
@@ -410,6 +421,10 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
             ) : null}
           </div>
         </Link>
+        {item.imageUrl && item.imageIsFallback ? (
+          <FallbackRotationToggle category={item.category} imageUrl={item.imageUrl} productName={item.name} />
+        ) : null}
+        </div>
 
         <Link
           href={`/menu/products/${item.id}`}
