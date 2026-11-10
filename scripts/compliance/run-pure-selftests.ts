@@ -732,6 +732,7 @@ import { __runBatchConsoleCoreTests } from "../../src/lib/ai/batch-console-core"
 import { __runOnboardingBatchSendCoreTests } from "../../src/lib/ai/onboarding-batch-send-core";
 import { __runCultiveraConfidenceCoreTests } from "../../src/lib/catalog/cultivera-confidence-core";
 import { __runCcrsHeldBackTests } from "../../src/lib/compliance/ccrs-held-back-core";
+import { __runCcrsResendRefusedCoreTests } from "../../src/lib/compliance/ccrs-resend-refused-core";
 import { __runCcrsRecordsCompareTests } from "../../src/lib/compliance/ccrs-records-compare-core";
 import { __runGeminiBatchExplainTests } from "../../src/lib/ai/gemini-batch-explain-core";
 import { __runCcrsNeverBlockTests } from "../../src/lib/compliance/ccrs-never-block-core";
@@ -2876,6 +2877,7 @@ __runLiquidVolumeTests();
   assertRan("library-v2-core", __runLibraryV2CoreTests(), 60); // D221 M7: library facets, AI/human badges, bulk steps (never overwrite human values, attach stays human), health tiles, collections, search log
   assertRan("image-seo-core", __runImageSeoCoreTests(), 15); // D221 M8: seo_alt alt text, ImageObject JSON-LD, image sitemap
   assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 70); // D225: many pictures per category, variety per card, rotation rules (WCAG 2.2.2 pause, reduced motion). D224: one owner-chosen fallback picture per website category; own photo wins, owner fallback beats generic substitutes, always badged as representative
+  assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

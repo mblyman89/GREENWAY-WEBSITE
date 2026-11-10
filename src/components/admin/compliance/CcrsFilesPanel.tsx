@@ -47,6 +47,8 @@ export type CcrsFilesPanelActions = {
   assignPreprodIds: Action;
   /** R6-1 (0284): PREprod only. Optional so older callers still compile. */
   settlePreprodDuplicates?: Action;
+  /** D227 S4: re-send only the refused rows of an errored Sale file. Optional so older callers still compile. */
+  resendRefused?: Action;
 };
 
 type Props = {
@@ -285,6 +287,17 @@ export function CcrsFilesPanel(p: Props) {
                           ))}
                         </ul>
                       </details>
+                    ) : null}
+                    {edit && a!.resendRefused && f.fileType === "Sale" && f.state === "errored" && iss.some((i) => i.code === "CCRS_ROW_REJECTED") ? (
+                      <form action={a!.resendRefused} className="mt-2 flex flex-wrap items-center gap-2" data-testid="resend-refused">
+                        <Hidden env={p.env} weekKey={p.weekKey} fileId={f.id} />
+                        <PendingSubmit className={`${BTN} bg-orange-500/30 text-orange-50 hover:bg-orange-500/40`} busy="Building the re-send file...">
+                          Re-send refused rows ({iss.filter((i) => i.code === "CCRS_ROW_REJECTED").length})
+                        </PendingSubmit>
+                        <span className="text-[10px] text-white/45">
+                          Makes a new Sale file with ONLY the refused rows, rebuilt by today&apos;s exporter. Accepted rows never go again.
+                        </span>
+                      </form>
                     ) : null}
                     {f.state === "errored" ? (
                       <p className="mt-1 text-[11px] text-white/50">
