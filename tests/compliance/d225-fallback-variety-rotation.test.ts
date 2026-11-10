@@ -49,8 +49,8 @@ describe("D225 core: variety and rotation", () => {
   });
 
   it("the same product gets the same first picture on every render", () => {
-    const a = applyMenuCardFallbacks([{ id: "lot-9", category: "flower" }], lists)[0]!.imageUrl;
-    const b = applyMenuCardFallbacks([{ id: "lot-9", category: "flower" }], lists)[0]!.imageUrl;
+    const a = applyMenuCardFallbacks<FallbackableItem>([{ id: "lot-9", category: "flower" }], lists)[0]!.imageUrl;
+    const b = applyMenuCardFallbacks<FallbackableItem>([{ id: "lot-9", category: "flower" }], lists)[0]!.imageUrl;
     expect(a).toBe(b);
     expect(fallbackUrlForKey("lot-9", list)).toBe(list[stableSlot("lot-9", list.length)]);
   });
