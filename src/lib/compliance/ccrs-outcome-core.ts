@@ -71,6 +71,7 @@ export const CCRS_KNOWN_MESSAGES: readonly { text: string; cls: CcrsMessageClass
   { text: "UpdatedDate must be a date for Update and Delete operations", cls: "row", source: "2026-10-31 PREprod Product_413541_20261031141036.csv (same 8 rows, same line)" },
   { text: "Strain is required", cls: "row", source: "2026-10-31 PREprod Inventory_413541_20261031142647.csv (6 of 6 Update rows sent with a blank Strain)" },
   { text: "Invalid InventoryExternalIdentifier", cls: "row", source: "2026-10-25 PREprod week 10/25-11/01 (4 of 4 Sale rows: their lots were in an Inventory file whose Product file CCRS refused whole)" },
+  { text: "Cannabis Excise Tax does not equal 37% of Unit Price", cls: "row", source: "2026-11-10 PREprod Sale_413541_20261110101609.csv (2 of 1,332 rows; exporter 1c rounding, fixed D227)" },
 ];
 
 /** The column that carries a row's identity, per file type (same as 0248's v_idcol). */
