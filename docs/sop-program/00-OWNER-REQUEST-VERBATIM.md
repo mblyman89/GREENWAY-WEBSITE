@@ -2488,3 +2488,62 @@ Fix:
 
 > thank you. now lets enhance the fallback page some more. I want to be able to add many fallback images to the categories, so that the menu has a variety of images used. it should make it look better. and to really make it cooler, the cards with fallback images, should rotate images. that would be fun I think. please add these features for me. follow the standing rules. thank you.
 
+### Findings
+
+- D224 (migration 0355) made the website category the table's primary key, so each category could hold only ONE picture. Adding a second one replaced the first.
+- Every public card surface already runs the same `withMenuCardFallbacks` overlay: the shop and category pages, the home rails, /specials, the product page and its related rail. So variety only had to be decided in that one place.
+- All the card surfaces render through `ProductCardVisual`, which runs inside client components (`ProductCard`, `RelatedProductCard`). So a small client piece inside the card's picture box reaches every surface.
+- The shop grid sends every product to the browser. Adding a list of URLs to every fallback card would grow that payload for each card, so the lists need to travel once per page instead.
+- WCAG 2.2 SC 2.2.2 (Pause, Stop, Hide): content that moves or updates on its own, starts by itself, and sits next to other content needs a way to pause, stop or hide it. Pausing on hover or focus alone is not enough. Shoppers who ask their device to reduce motion should see no motion at all.
+
+### Decisions
+
+- **Migration 0356 (no new table):** `menu_card_fallback_images` gets an `id` primary key and a `sort_order`.
+  - The same picture can appear only once per category (unique on category + picture).
+  - Every row already saved stays, as the first picture in its category.
+  - The cap is 12 pictures per category. It lives in the app (`MAX_FALLBACKS_PER_CATEGORY`), not in the database.
+- **Variety:** each fallback card starts on a stable picture, chosen by a hash of the card's id, so a product keeps the same first picture from visit to visit. If that would match the fallback card just before it in the same category, it moves on by one. So two neighbouring cards never show the same picture. A single product (product page, register card, admin preview) uses the unadjusted pick.
+- **Rotation:** only cards showing a category fallback rotate, and only when that category has two or more pictures. A product's own photo never rotates.
+  - Each card cross-fades (0.7 s) to the next picture about every 6 seconds. A random-looking per-card delay of up to 3 seconds keeps the grid from changing all at once.
+  - The next picture is downloaded before it is shown.
+  - Timers run only while the card is on screen and the tab is visible.
+  - It never runs when the shopper's device is set to reduce motion.
+  - Every rotating card has a real pause / play button. It sits outside the product link, is reachable by keyboard and says whether it is pressed. One press pauses every card on the site, and the browser remembers it.
+- **Payload:** the URL lists (only for categories with 2+ pictures) come from the same cached snapshot. The site layout sends them once per page through a small provider. The card item gains no new field, so the grid payload does not grow.
+- **Before 0356 is applied:** the page and the website keep working with one picture per category, the same as D224. The page shows a banner asking for 0356.
+
+### As built
+
+- **Migration 0356** (`supabase/migrations/0356_menu_card_fallback_many.sql`):
+  - It adds the `id` primary key, `sort_order` with a check (`>= 0`), a unique index on (category, picture) and an index on (category, sort_order).
+  - It re-asserts RLS, the revoke from public / anon / authenticated, and the `service_role` grants.
+  - Its comments have no apostrophes or semicolons, so no editor-safe copy is needed.
+  - Rollback: `supabase/rollbacks/0356_menu_card_fallback_many.rollback.sql`. It keeps the first picture of each category and restores the 0355 shape.
+  - PG check: `scripts/recon/menu-card-fallback-0356-pg-check.sql`, registered first in `POST_APPLY_CHECKS`. It proves:
+    - an existing row survives the upgrade;
+    - a category accepts many pictures and keeps their order;
+    - a duplicate picture, an unknown category and a negative order are refused;
+    - the cascade from the media library works;
+    - the grants and RLS are in place;
+    - the migration can be re-run, rolled back and re-applied.
+  - The 0355 check now steps back through the 0356 rollback first. Both checks pass on PostgreSQL 15.
+  - Also done: the MIGRATIONS_TO_RUN entry, the migration pins moved to 0356, and the schema-tables snapshot and db-contract regenerated. The factory-reset list is unchanged (no new table; `menu_card_fallback_images` is already KEEP).
+- **Pure core** (`menu-card-fallback-core.ts`): `normalizeFallbackList`, `stableSlot`, `fallbackUrlForKey`, `fallbackRotationOrder`, `rotationStaggerMs`, `shouldRotate`, `parsePausedFlag`, `groupFallbackRows`, `movedOrder`, `roomFor` and `fallbackUsageField`. Page rows now carry a `pictures` list. Self-tests: 70 (registered at 70).
+- **Server** (`menu-card-fallback-server.ts`):
+  - The snapshot is now `v2` (a URL list per category).
+  - `menuCardRotationLists` gives the layout its lists.
+  - Writes: `addMenuCardFallbacks` (skips duplicates, stops at the cap), `removeMenuCardFallback`, `reorderMenuCardFallbacks` and `clearMenuCardFallback`.
+  - Reads fall back to the 0355 columns when 0356 is missing (42703).
+- **Page** `/admin/menu-card-fallbacks`:
+  - Each category shows a numbered strip of its pictures, in rotation order. Each picture has move earlier / later, Open and Remove.
+  - Upload takes several files at once. Every file is checked before any is uploaded.
+  - "Add from library" adds to the list, and "Remove all" clears the category.
+  - The page shows the count against the cap and a banner when 0356 is missing.
+  - Every change is audited (`menu_card_fallback.set` / `.removed` / `.reordered` / `.cleared`, with the before and after lists). The media "Where used" ledger keeps one slot per picture (`image:<media id>`).
+- **Card:** `src/components/menu/fallback-rotation/` holds `MenuCardRotationProvider`, `useRotationEnv` and `RotatingFallbackImage` / `FallbackRotationToggle`.
+  - `ProductCardVisual` uses them only when `imageIsFallback` is set.
+  - The first paint is the same `<img>` as before.
+  - The fade is `.gw-fallback-fade-in` in `globals.css`, and it is turned off under reduced motion.
+  - The provider is mounted in the site layout.
+- **Tests:** a new `tests/compliance/d225-fallback-variety-rotation.test.ts`, and the d224 test pins now follow the new actions.
+- **To go live:** apply migration 0356 in Supabase (after 0355).
