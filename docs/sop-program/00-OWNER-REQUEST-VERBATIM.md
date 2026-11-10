@@ -2342,6 +2342,91 @@ Read-only on the live database, 2026-11-10, after 0352 was applied:
   - `sitemap.ts` lists each product page's own photo.
 - **Tests:** `tests/compliance/d221-m5-m8-media-finish.test.ts`. Migration pins are shifted to 0354. Factory-reset KEEP entries are added for the three new tables.
 
+## D222 — Vendor menus: LeafLink connection is broken, and the logo fetch misses vendors whose logo is on their profile (2026-11-09)
+
+### Owner request (verbatim; the LeafLink password is withheld from the repo on purpose)
+
+> I need your help fixing a couple of things related to the vendor menu feature. Leaflink is not working, and the vendor logo fetch needs improving. The logo fetch works sometimes, but fails to fetch several. I go to their profile to see if it's there, and it is, in the same place as all the others that were fetched, so there is something funky happening in the code causing some to fail. Please log in to leaflink as me, get the data you need, the api, end points, whatever, and then fix the code so we can connect to them properly. Then work on fixing the logo fetcher so it can fetch the remaining logos I am missing. Clone the repo, read agents.md, the standing rules, recon the code, research the internet if needed, visit leaflink, report, then fix all issues. I have another agent working, so push all code to the repo, but do not merge it until I tell you it is safe to do so. Get work out of the sandbox, it is unstable. Follow the standing rules. Thank you. Leaflink username: stephen@greenwaymarijuana.com Password: [withheld]
+
+Merge status: **do not merge** until the owner says it is safe (another agent is working on `main`).
+
+### Findings (live LeafLink visit + code recon)
+
+**LeafLink.**
+- The worker searched brands through the internal `shop/products/` search, then grouped the results by brand. On that endpoint, `count` is always the full catalog total (4959) and `next` is set even past the end. The client therefore walked 10 pages, which took about 75 s. That went over the app's 45 s and 90 s timeouts, so LeafLink always looked broken.
+- `_get(next_url, params=…)` also threw away the `next` URL's own query (httpx replaces it).
+- The SPA actually lists brands through the content API: `api.leaflink.com/content/brands/listing`, with a Bearer Auth0 JWT plus `leaflink-version: 2022-10-31`. One call returns every brand in the network (37 brands), each with its **logo**.
+
+**Logo fetch.** This is why some logos were missed even though they were "in the same place" on the profile:
+1. The logo matcher was built without merged survivors and without `carried`, unlike the Vendor Menus page. Duplicate or merged vendor cards came out "ambiguous" or "other vendor", and the fetch refused a correct profile.
+2. The vendor's already-known platform profile (snapshot or map ref) was never used. Each vendor was re-searched by name only.
+3. GrowFlow's search is a "contains" filter. Long legal names and DBA variants found nothing.
+4. Too few search terms were tried (only the display name and legal name).
+5. One failed image download stopped the whole vendor, even when other good candidates remained.
+6. LeafLink searches timed out and had no logo field.
+7. The matcher was rebuilt for every vendor, and the bulk run had no survivor resolver.
+
+### As built (branch `d222-leaflink-and-logo-fetch`, **not merged**)
+
+**Crawler worker.**
+- `leaflink_auth` captures the Bearer JWT at login, then re-logs in when the token is missing or expired.
+- `leaflink_api.search_brands` reads the brands listing first: one call, with logos, about 4 s.
+- The old product search is kept as a single-page fallback (limit 100).
+- `merge_query()` fixes the dropped next-page query.
+- The client re-logs in once on 401/403.
+- Tests: 80 LeafLink tests pass. Pinned facts were refreshed in `crawler/docs/LEAFLINK_PINNED.md`.
+
+**App: `vendor-logo-core.ts` (pure, 114 self-tests).**
+- Same-business judging.
+- Known-profile matching (refs and slugs).
+- `logoSearchTerms`: known names, ours, aliases, brands and loose names.
+- `candidateMentions` prefilter.
+- `logoSnapshotsFromRows`.
+- The LeafLink logo comes from the listing's `image`, never a product picture.
+
+**App: `vendor-logo-store.ts`.**
+- One match context per click, built exactly like the Vendor Menus page (survivors + carried).
+- Snapshot and map reads use named columns, paged, and every `{error}` is read.
+- Platform order comes from known profiles.
+- GrowFlow and LeafLink are fetched once as full lists and judged locally.
+- Searches are cached per click.
+- It moves on to the next candidate when a download fails.
+- An ambiguous result points the owner at **Link to vendor**.
+
+**Locks.**
+- The vitest floor was raised to 110, and D222 structural locks were added to `tests/compliance/d212-vendor-logo.test.ts`.
+- The DB contract was regenerated; it is unchanged, since every selected column already exists in migrations 0124, 0125 and 0145.
+- The narrow tsc and eslint report 0 errors.
+- A full `next build` could not run in the 3 GB sandbox; run it in CI or locally before merging.
+
+**To go live after merge.**
+- Redeploy the crawler worker with `LEAFLINK_EMAIL` and `LEAFLINK_PASSWORD` set.
+- Then run **Fetch all missing logos** again.
+- Vendors outside the owner's 37-brand LeafLink network can only get logos from GrowFlow or Cultivera.
+
+## D223 — Onboarding: after a batch lookup, expanding a product's AI box shows only the search bar, not everything the batch found (2026-11-10)
+
+### Owner request (verbatim)
+
+> Thank you. The other agent is finished. Will you review their work and make sure there is no collisions when merging the new code. Then I need you to help me enhance the onboarding page. After doing a batch lookup on a manifests products, the facts appear in the green ai box in the middle section above the recommended images. Bellow the images is another ai lookup button that lets me lookup that one product. If I do that, a big drop down appears to show all the data it found. The ai batch lookup shows multiple facts, but when I expand it, it only shows me the lookup bar again, and not all the facts it found. After a batch lookup, I want to be able to expand that box and see everything it found for that product. Everything about the way it works now is great, I just want to see the additional details the lookup found, shown to me like how the single lookup shows facts. I can pick and choose which to use and such. Please enhance the ai section on onboarding so I can see more detail like how the single lookup works. Follow the standing rules. Thank you.
+
+Merge status: stacked on D222 (`d222-leaflink-and-logo-fetch`); **do not merge** until the owner says so.
+
+### D223 — findings and as-built (merge status: stacked on D222, DO NOT MERGE until the owner says so)
+
+Root causes (verified in code, not guessed):
+1. The row's AI box got its batch findings only from the delivery's NEWEST lookup job. Rows that job skipped (already looked up in an earlier run, or a sibling lot/delivery of the same product) had no findings, so expanding showed only the search bar.
+2. `AiLookupPanel` read `initialResult` once (`useState`), so findings that arrived while the batch auto-refreshed the page never reached the panel.
+3. The green "Facts waiting for you" box had no way to open the full worksheet.
+
+Fix:
+- Pure `lookup-snapshot-core.ts` (`routeSnapshots`, `newestSnapshotsByDraft`, `newerSnapshot`, `snapshotKey`, `adoptBatchFindings`, `aiLookupAnchorId`, `seeFindingsLabel`), self-tests 74/0 (runner floor 74).
+- `lookup-history-server.ts` routes the newest unexpired findings per row (its own first, else the same product's) from rows it already reads: no new query, named columns.
+- The page picks the newer of the current-job and past findings. The AI Lookup box opens on the full worksheet (pick / edit / Save selected, same as a single lookup) and says when findings came from the same product.
+- The panel swaps in newer batch findings as they arrive, unless the person ran their own search or edited the worksheet.
+- The green box gets a "See all N facts the lookup found" link that opens and scrolls to the AI Lookup worksheet.
+- Tests: `tests/compliance/d223-onboarding-batch-details.test.tsx`; r66 floor updated.
+
 ## D224 — Menu card fallback images: one picture per website category for cards with no photo (2026-11-10)
 
 ### Owner request (verbatim)
@@ -2396,3 +2481,4 @@ Read-only on the live database, 2026-11-10, after 0352 was applied:
   - a link on Knowledge Base → Fallback images.
 - **Tests:** `tests/compliance/d224-menu-card-fallback.test.ts`. The migration pins are shifted to 0355.
 - **To go live:** apply migration 0355 in Supabase.
+

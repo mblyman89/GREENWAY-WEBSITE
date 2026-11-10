@@ -1911,7 +1911,7 @@ __runLiquidVolumeTests();
   __runUnifiedSearchCoreTests();
   __runUnifiedMenusUiCoreTests();
   assertRan("vendor-menu-coverage-core", __runVendorMenuCoverageCoreTests(), 140);
-  assertRan("vendor-logo-core", __runVendorLogoCoreTests(), 75);
+  assertRan("vendor-logo-core", __runVendorLogoCoreTests(), 110);
   __runEmailMenuCoreTests();
   __runCultiveraMenusUiCoreTests();
   __runCultiveraMediaCoreTests();
@@ -2572,7 +2572,7 @@ __runLiquidVolumeTests();
   assertRan("count-audit-stats-core", __runCountAuditStatsTests(), 12); // R74 S50: audit stats
   assertRan("intake-harden-core", __runIntakeHardenTests(), 24); // R74 S51: intake auto-fetch hardening
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
-  { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
+  { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 74) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }
 
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.

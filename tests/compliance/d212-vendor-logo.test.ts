@@ -24,7 +24,7 @@ describe("vendor-logo-core (D212)", () => {
   it("passes its own pure self-tests", () => {
     const r = __runVendorLogoCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(75);
+    expect(r.passed).toBeGreaterThanOrEqual(110);
   });
 
   it("refuses relative / data / placeholder logo URLs instead of guessing", () => {
@@ -113,5 +113,30 @@ describe("D212 structural locks", () => {
     expect(page).toContain("<FetchLogoButton");
     expect(page).toContain("<FetchAllLogosButton");
     expect(page).toMatch(/export const maxDuration = \d+/);
+  });
+});
+
+describe("D222 structural locks (logo fetch parity with the Vendor Menus page)", () => {
+  const store = read("src/lib/purchasing/vendor-logo-store.ts");
+  const core = read("src/lib/purchasing/vendor-logo-core.ts");
+
+  it("matcher is built once with merged survivors and carried vendors", () => {
+    expect(store).toContain("internal_notes");
+    expect(store).toContain("mergedIntoFromNotes(");
+    expect(store).toContain("buildSurvivorResolver(vendors)");
+    expect(store).toMatch(/buildLogoMatcher\(vendors, aliases, brands, \{ carried \}\)/);
+  });
+
+  it("uses known platform profiles and the local prefilter, not the old memories lookup", () => {
+    expect(store).toContain("knownProfilesFor(");
+    expect(store).toContain("candidateMentions(");
+    expect(store).not.toContain("getMemoriesForVendor");
+  });
+
+  it("LeafLink logo comes from the brands listing logo, never a product sample image", () => {
+    const fn = core.slice(core.indexOf("export function leaflinkSearchCandidate"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body).toContain("rec.logo_url");
+    expect(body).not.toContain("sample_image");
   });
 });
