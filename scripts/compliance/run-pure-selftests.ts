@@ -2875,7 +2875,7 @@ __runLiquidVolumeTests();
   assertRan("media-review-core", __runMediaReviewTests(), 22); // D221 M3: the review queue decisions (accept / product photo / logo / reject); reject un-publishes only AUTO-published pictures, never deletes; reviewer stamped
   assertRan("library-v2-core", __runLibraryV2CoreTests(), 60); // D221 M7: library facets, AI/human badges, bulk steps (never overwrite human values, attach stays human), health tiles, collections, search log
   assertRan("image-seo-core", __runImageSeoCoreTests(), 15); // D221 M8: seo_alt alt text, ImageObject JSON-LD, image sitemap
-  assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 38); // D224: one owner-chosen fallback picture per website category; own photo wins, owner fallback beats generic substitutes, always badged as representative
+  assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 70); // D225: many pictures per category, variety per card, rotation rules (WCAG 2.2.2 pause, reduced motion). D224: one owner-chosen fallback picture per website category; own photo wins, owner fallback beats generic substitutes, always badged as representative
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
