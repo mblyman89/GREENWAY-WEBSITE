@@ -2229,3 +2229,57 @@ Docs only: this section and the strategy doc. No code or schema changed.
 > I need your help fixing a couple of things related to the vendor menu feature. Leaflink is not working, and the vendor logo fetch needs improving. The logo fetch works sometimes, but fails to fetch several. I go to their profile to see if it's there, and it is, in the same place as all the others that were fetched, so there is something funky happening in the code causing some to fail. Please log in to leaflink as me, get the data you need, the api, end points, whatever, and then fix the code so we can connect to them properly. Then work on fixing the logo fetcher so it can fetch the remaining logos I am missing. Clone the repo, read agents.md, the standing rules, recon the code, research the internet if needed, visit leaflink, report, then fix all issues. I have another agent working, so push all code to the repo, but do not merge it until I tell you it is safe to do so. Get work out of the sandbox, it is unstable. Follow the standing rules. Thank you. Leaflink username: stephen@greenwaymarijuana.com Password: [withheld]
 
 Merge status: **do not merge** until the owner says it is safe (another agent is working on `main`).
+
+### Findings (live LeafLink visit + code recon)
+
+**LeafLink.**
+- The worker searched brands through the internal `shop/products/` search, then grouped the results by brand. On that endpoint, `count` is always the full catalog total (4959) and `next` is set even past the end. The client therefore walked 10 pages, which took about 75 s. That went over the app's 45 s and 90 s timeouts, so LeafLink always looked broken.
+- `_get(next_url, params=…)` also threw away the `next` URL's own query (httpx replaces it).
+- The SPA actually lists brands through the content API: `api.leaflink.com/content/brands/listing`, with a Bearer Auth0 JWT plus `leaflink-version: 2022-10-31`. One call returns every brand in the network (37 brands), each with its **logo**.
+
+**Logo fetch.** This is why some logos were missed even though they were "in the same place" on the profile:
+1. The logo matcher was built without merged survivors and without `carried`, unlike the Vendor Menus page. Duplicate or merged vendor cards came out "ambiguous" or "other vendor", and the fetch refused a correct profile.
+2. The vendor's already-known platform profile (snapshot or map ref) was never used. Each vendor was re-searched by name only.
+3. GrowFlow's search is a "contains" filter. Long legal names and DBA variants found nothing.
+4. Too few search terms were tried (only the display name and legal name).
+5. One failed image download stopped the whole vendor, even when other good candidates remained.
+6. LeafLink searches timed out and had no logo field.
+7. The matcher was rebuilt for every vendor, and the bulk run had no survivor resolver.
+
+### As built (branch `d222-leaflink-and-logo-fetch`, **not merged**)
+
+**Crawler worker.**
+- `leaflink_auth` captures the Bearer JWT at login, then re-logs in when the token is missing or expired.
+- `leaflink_api.search_brands` reads the brands listing first: one call, with logos, about 4 s.
+- The old product search is kept as a single-page fallback (limit 100).
+- `merge_query()` fixes the dropped next-page query.
+- The client re-logs in once on 401/403.
+- Tests: 80 LeafLink tests pass. Pinned facts were refreshed in `crawler/docs/LEAFLINK_PINNED.md`.
+
+**App: `vendor-logo-core.ts` (pure, 114 self-tests).**
+- Same-business judging.
+- Known-profile matching (refs and slugs).
+- `logoSearchTerms`: known names, ours, aliases, brands and loose names.
+- `candidateMentions` prefilter.
+- `logoSnapshotsFromRows`.
+- The LeafLink logo comes from the listing's `image`, never a product picture.
+
+**App: `vendor-logo-store.ts`.**
+- One match context per click, built exactly like the Vendor Menus page (survivors + carried).
+- Snapshot and map reads use named columns, paged, and every `{error}` is read.
+- Platform order comes from known profiles.
+- GrowFlow and LeafLink are fetched once as full lists and judged locally.
+- Searches are cached per click.
+- It moves on to the next candidate when a download fails.
+- An ambiguous result points the owner at **Link to vendor**.
+
+**Locks.**
+- The vitest floor was raised to 110, and D222 structural locks were added to `tests/compliance/d212-vendor-logo.test.ts`.
+- The DB contract was regenerated; it is unchanged, since every selected column already exists in migrations 0124, 0125 and 0145.
+- The narrow tsc and eslint report 0 errors.
+- A full `next build` could not run in the 3 GB sandbox; run it in CI or locally before merging.
+
+**To go live after merge.**
+- Redeploy the crawler worker with `LEAFLINK_EMAIL` and `LEAFLINK_PASSWORD` set.
+- Then run **Fetch all missing logos** again.
+- Vendors outside the owner's 37-brand LeafLink network can only get logos from GrowFlow or Cultivera.
