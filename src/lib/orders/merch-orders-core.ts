@@ -455,6 +455,7 @@ export function __runMerchOrdersPanelTests(): { passed: number; failed: number }
     minRaw: "",
     maxRaw: "",
     page: 1,
+    source: "online",
     ...over,
   });
   const ids = (v: MerchPanelView) => v.rows.map((r) => r.id).join(",");

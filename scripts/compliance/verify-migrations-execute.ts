@@ -122,6 +122,7 @@ export function explainRelationError(message: string): string | null {
  * allowed to edit .github/workflows.
  */
 export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] = [
+  { file: "scripts/recon/orders-source-0358-0359-pg-check.sql", mustPrint: "ORDERS SOURCE 0358 0359 CHECK PASSED" },
   { file: "scripts/recon/ccrs-adopt-reopen-0357-pg-check.sql", mustPrint: "CCRS 0357 CHECK PASSED" },
   { file: "scripts/recon/menu-card-fallback-0356-pg-check.sql", mustPrint: "MENU CARD FALLBACK 0356 CHECK PASSED" },
   { file: "scripts/recon/menu-card-fallback-0355-pg-check.sql", mustPrint: "MENU CARD FALLBACK 0355 CHECK PASSED" },

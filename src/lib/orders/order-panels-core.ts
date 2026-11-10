@@ -65,6 +65,7 @@ import {
 } from "@/lib/leafly/bridge-core";
 import { buildBoardView, isLiveBucket, parseBoardSearch } from "@/lib/leafly/board-view-core";
 import { leaflySearchTerms } from "./order-board-split-core";
+import { DEFAULT_ORDER_SOURCE, parseOrderSource, type OrderSource } from "./order-source-core";
 
 // ============================================================================
 // 1. THE TABS
@@ -134,6 +135,11 @@ export type PanelParamNames = {
   max: string;
   sort: string;
   page: string;
+  /**
+   * D226: the "Show" filter (Online orders / Register sales / both). Only our
+   * panel has one: Leafly and merch orders are never register sales.
+   */
+  source?: string;
 };
 
 /**
@@ -144,7 +150,17 @@ export type PanelParamNames = {
  * with `l` so one form can never drive the other panel.
  */
 export const ORDERS_PANEL_PARAMS: Record<OrdersPanelKey, PanelParamNames> = {
-  greenway: { status: "status", q: "q", from: "from", to: "to", min: "min", max: "max", sort: "sort", page: "page" },
+  greenway: {
+    status: "status",
+    q: "q",
+    from: "from",
+    to: "to",
+    min: "min",
+    max: "max",
+    sort: "sort",
+    page: "page",
+    source: "source",
+  },
   leafly: {
     status: "lstatus",
     q: "lq",
@@ -198,6 +214,11 @@ export type OrdersPanelQuery = {
   maxRaw: string;
   /** Requested page (1-based, unclamped). */
   page: number;
+  /**
+   * D226: which rows the panel lists. Always "online" for a panel with no
+   * source param (Leafly, merch), where it changes nothing.
+   */
+  source: OrderSource;
 };
 
 function first(v: string | string[] | undefined): string | undefined {
@@ -213,7 +234,7 @@ export function parseOrdersPanelQuery(
   panel: OrdersPanelKey,
 ): OrdersPanelQuery {
   const names = ORDERS_PANEL_PARAMS[panel];
-  const get = (k: keyof PanelParamNames) => first(sp?.[names[k]]);
+  const get = (k: Exclude<keyof PanelParamNames, "source">) => first(sp?.[names[k]]);
   const sort = resolveSort(get("sort"), ORDER_SORTS);
   const placedToDate = parseIsoDate(get("to"));
   const minRaw = (get("min") ?? "").trim();
@@ -233,6 +254,7 @@ export function parseOrdersPanelQuery(
     minRaw: totalMin != null ? minRaw : "",
     maxRaw: totalMax != null ? maxRaw : "",
     page: parsePageParam(get("page")),
+    source: names.source ? parseOrderSource(first(sp?.[names.source])) : DEFAULT_ORDER_SOURCE,
   };
 }
 
@@ -244,7 +266,8 @@ export function panelHasExtraFilters(q: OrdersPanelQuery): boolean {
       q.placedToDate ||
       q.totalMin != null ||
       q.totalMax != null ||
-      q.sortKey !== ORDER_SORTS[0].key,
+      q.sortKey !== ORDER_SORTS[0].key ||
+      q.source !== DEFAULT_ORDER_SOURCE,
   );
 }
 
@@ -260,6 +283,7 @@ export function panelQueryEntries(q: OrdersPanelQuery, panel: OrdersPanelKey): [
   if (q.totalMin != null && q.minRaw) out.push([n.min, q.minRaw]);
   if (q.totalMax != null && q.maxRaw) out.push([n.max, q.maxRaw]);
   if (q.page > 1) out.push([n.page, String(q.page)]);
+  if (n.source && q.source !== DEFAULT_ORDER_SOURCE) out.push([n.source, q.source]);
   return out;
 }
 
@@ -672,7 +696,8 @@ export function __runOrdersPanelTests(): { passed: number; failed: number } {
     ok("R73: merch params are m-prefixed", Object.values(mf).every((n) => n.startsWith("m")));
     ok(
       "R73: no two panels share a param name",
-      new Set(ORDERS_PANELS.flatMap((p) => Object.values(ORDERS_PANEL_PARAMS[p]))).size === ORDERS_PANELS.length * 8,
+      new Set(ORDERS_PANELS.flatMap((p) => Object.values(ORDERS_PANEL_PARAMS[p]))).size ===
+        ORDERS_PANELS.flatMap((p) => Object.values(ORDERS_PANEL_PARAMS[p])).length,
     );
     ok("R73: merch is the last panel", ORDERS_PANELS[ORDERS_PANELS.length - 1] === "merch");
     const msp = { status: "ready", lq: "x", mstatus: "completed", mq: "jane" };
@@ -681,6 +706,22 @@ export function __runOrdersPanelTests(): { passed: number; failed: number } {
     const lkeep = preservedFields(msp, "leafly");
     ok("R73: leafly form carries greenway AND merch views", lkeep.some(([k]) => k === "status") && lkeep.some(([k, v]) => k === "mq" && v === "jane"));
     ok("R73: greenway link keeps the merch view", panelHref(msp, "greenway", { kind: "status", status: "new" }).includes("mstatus=completed"));
+  }
+  {
+    // D226: the "Show" filter (online orders / register sales / both) is ours only.
+    ok("D226: greenway has a source param", ORDERS_PANEL_PARAMS.greenway.source === "source");
+    ok("D226: leafly and merch have no source param", !ORDERS_PANEL_PARAMS.leafly.source && !ORDERS_PANEL_PARAMS.merch.source);
+    ok("D226: default source is online", parseOrdersPanelQuery({}, "greenway").source === "online");
+    ok("D226: register source read", parseOrdersPanelQuery({ source: "register" }, "greenway").source === "register");
+    ok("D226: garbage source -> online", parseOrdersPanelQuery({ source: "x" }, "greenway").source === "online");
+    ok("D226: leafly ignores ?source", parseOrdersPanelQuery({ source: "register" }, "leafly").source === "online");
+    const reg = parseOrdersPanelQuery({ source: "register" }, "greenway");
+    ok("D226: non-default source is in the URL", panelQueryEntries(reg, "greenway").some(([k, v]) => k === "source" && v === "register"));
+    ok("D226: default source is not in the URL", !panelQueryEntries(parseOrdersPanelQuery({}, "greenway"), "greenway").some(([k]) => k === "source"));
+    ok("D226: a non-default source shows Clear", panelHasExtraFilters(reg) && !panelHasExtraFilters(parseOrdersPanelQuery({}, "greenway")));
+    ok("D226: Clear goes back to online orders", !panelHref({ source: "register", status: "all" }, "greenway", { kind: "clear" }).includes("source="));
+    ok("D226: paging keeps the source", panelHref({ source: "all" }, "greenway", { kind: "page", page: 2 }).includes("source=all"));
+    ok("D226: the leafly form carries our source", preservedFields({ source: "register" }, "leafly").some(([k, v]) => k === "source" && v === "register"));
   }
   const q0 = parseOrdersPanelQuery({}, "leafly");
   ok("empty URL = default view", q0.status === "active" && q0.search === "" && q0.sortKey === "newest" && q0.page === 1);

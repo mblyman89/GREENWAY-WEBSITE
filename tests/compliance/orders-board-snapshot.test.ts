@@ -87,7 +87,7 @@ describe("getOrdersBoardSnapshot wiring (orders-store)", () => {
     expect(body).toContain("parseOrdersBoardSnapshot(data)");
     // The legacy closure is the same three readers the route used before.
     expect(body).toContain("getOrderStatusCounts(");
-    expect(body).toContain("getRecentOrderArrivals(limit)");
+    expect(body).toContain("getRecentOrderArrivals(limit, source)");
     expect(body).toContain("getLatestOrderChange()");
     // Every failure path returns legacy(), never a half-built object.
     const legacyReturns = body.match(/return legacy\(\);/g) ?? [];
@@ -106,7 +106,7 @@ describe("getOrdersBoardSnapshot wiring (orders-store)", () => {
 describe("callers no longer fan out seven count(*) queries", () => {
   it("the 15 s dashboard poll makes ONE store call and keeps its JSON shape", () => {
     const route = stripComments(read("src/app/api/admin/orders/count/route.ts"));
-    expect(route).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 20 })");
+    expect(route).toContain('getOrdersBoardSnapshot({ arrivalsLimit: 20, source: "online" })');
     expect(route).not.toContain("getOrderStatusCounts(");
     expect(route).not.toContain("getRecentOrderArrivals(");
     expect(route).not.toContain("getLatestOrderChange(");
@@ -117,10 +117,10 @@ describe("callers no longer fan out seven count(*) queries", () => {
 
   it("the board page and the cockpit use the grouped snapshot for their counts", () => {
     const page = stripComments(read("src/app/admin/orders/page.tsx"));
-    expect(page).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS })");
+    expect(page).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source })");
     expect(page).not.toContain("getOrderStatusCounts(");
     const cockpit = stripComments(read("src/lib/admin/cockpit-data.ts"));
-    expect(cockpit).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 0 })");
+    expect(cockpit).toContain('getOrdersBoardSnapshot({ arrivalsLimit: 0, source: "online" })');
     expect(cockpit).not.toContain("getOrderStatusCounts(");
   });
 

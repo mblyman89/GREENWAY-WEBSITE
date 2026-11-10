@@ -2548,6 +2548,38 @@ Fix:
 - **Tests:** a new `tests/compliance/d225-fallback-variety-rotation.test.ts`, and the d224 test pins now follow the new actions.
 - **To go live:** apply migration 0356 in Supabase (after 0355).
 
+## D226 — Online Orders board: register sales are not online orders; blind count review (2026-11-10)
+
+### Owner request (verbatim)
+
+> In the back office online orders page, it shows thousands of orders in history. Are all orders getting added to this table or is there a bug? I'm sure we have not had that many online orders.
+
+> Thank you. Yes please build all of the features mentioned above including the filter and sort. Another thing I would like for you to do is log into supabase and look at last nights first blind count and then this morning second blind count. Are my employees doing something wrong or is there a bug in the logic? Follow the standing rules. Thank you!
+
+### Findings (production, read only)
+
+- 1,376 of the 1,388 `orders` rows since Nov 1 are register walk-in sales. Every register sale is written into `orders` on purpose: it is the sale of record for reprints, returns, CCRS and the books. But the POS sync never set `origin`, so each row took the default `greenway`, and the board treated it as a website order. That affected the list, the cards, the nav badge, the new-order feed and the cockpit.
+- Real online activity since Nov 1 is 11 website orders and 1 Leafly copy.
+- Invariant checked live: every register sale has `pos_client_uuid` (1,383 rows), and 0 rows have the POS note but no uuid.
+- Nothing in money, CCRS or the books reads `orders.origin`. Customer insights already filters register sales out.
+- Blind counts, business day 2026-11-09:
+  - **Register 1 night (Larry Dee):** expected $305.95; blind close $1,367.10; second count $307.20 (Zachary Smith). The only real difference is the $20s: 57 entered at close, 4 at the second count. That is 53 twenties, or $1,060, which is exactly Register 2's witnessed ATM drop that night (53 x $20). The ATM load ($1,840) contains both drops, so no money is missing. This is a data-entry error at close, not a logic bug.
+  - **Register 2 night (Angela Britton):** close $418.05; second count $418.30 (Stephen Benoit); expected $418.30. A one-quarter disagreement. Fine.
+  - **Gap in the safety net (not changed, needs owner approval):** the close prompts a recount only when the count is far BELOW expected (D204a). A count far ABOVE expected is accepted without a prompt.
+
+### As built
+
+- **Rule:** `src/lib/orders/order-source-core.ts` decides what a register sale is: origin `register`, a POS uuid, or the POS note. It also holds the board's source filter (online / register / all). Self-tests are registered.
+- **Store:** `listOrdersPaged`, `getOrderStatusCounts`, `getRecentOrderArrivals` and `getOrdersBoardSnapshot` take a `source`.
+- **Board:** the Greenway panel gets a **Show** filter (Online orders, the default / Register sales / Online + register) next to **Sort by**. It is carried in the URL (`?source=`), kept when paging, and reset by Clear. Leafly and merch are untouched. The subtitle follows the filter.
+- **Nav badge, new-order chime and cockpit:** these count online orders only.
+- **POS sync:** writes `origin: "register"` on every new sale, retry included.
+- **Migration 0358:** `orders_board_snapshot(p_limit, p_exclude, p_source)`. Read only, service role only. The app falls back to its own readers until it is applied.
+- **Migration 0359:** lists, then relabels, the existing register sales from `greenway` to `register`. It is one column; nothing is deleted. It keeps an exact undo list (`orders_origin_backfill_0359`, no FK, factory reset KEEP).
+- **Rollbacks, checks and docs:** both rollbacks; the PG check `scripts/recon/orders-source-0358-0359-pg-check.sql` (registered first); the MIGRATIONS_TO_RUN entries; migration pins moved to 0359; schema-tables regenerated.
+- **Tests:** `tests/compliance/d226-orders-source.test.ts`.
+- **To go live:** apply 0358, then 0359.
+
 ## D227 — CCRS weekly Sale upload: 2 rows refused "Cannabis Excise Tax does not equal 37% of Unit Price" (2026-11-10)
 
 ### Owner request (verbatim)

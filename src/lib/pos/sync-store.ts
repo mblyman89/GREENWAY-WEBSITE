@@ -1004,6 +1004,13 @@ async function processSale(
   // databases retry without the column (same behavior as before this fix).
   const orderInsertRow = (withClientUuid: boolean, withOptional: boolean) => ({
     status: "ready", // in-store sale: picked, bagged, paid — gate decides "completed"
+    // D226: a register sale says so. Without this every walk-in sale took the
+    // column default 'greenway' and the Online Orders board listed it as a
+    // website order (1,376 of 1,388 rows in Nov 2026). 'register' has been an
+    // allowed origin since 0226 (orders_origin_check) and order-origin-core
+    // already treats it as "not announced, not a pickup, not a marketplace".
+    // Sent on the retry too: it is not one of the optional columns.
+    origin: "register",
     customer_first_name: "Walk-in",
     customer_last_name: null,
     subtotal_minor_units: sale.subtotalMinor,

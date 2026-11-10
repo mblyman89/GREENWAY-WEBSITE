@@ -26,6 +26,8 @@
  * getOrdersBoardSnapshot() → orders_board_snapshot() (migration 0233), with
  * the ten-query path kept as the fallback until the migration is applied.
  * The JSON shape returned here is unchanged.
+ *
+ * D226 - counts and arrivals cover ONLINE orders only (not register sales).
  */
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/session";
@@ -41,7 +43,13 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { counts, arrivals, latest } = await getOrdersBoardSnapshot({ arrivalsLimit: 20 });
+  // D226: online orders only. Register walk-in sales are written into
+  // `orders` too (the sale of record), and before D226 every one of them
+  // counted toward the nav badge and arrived in the new-order feed, so a
+  // walk-in sale could chime like a website order. The fingerprint still
+  // moves on ANY order change (latest is not filtered), so register activity
+  // keeps refreshing an open board exactly as L-37 asked.
+  const { counts, arrivals, latest } = await getOrdersBoardSnapshot({ arrivalsLimit: 20, source: "online" });
   const active = counts.new + counts.acknowledged + counts.preparing + counts.ready;
   // SLICE L-37 — moves whenever any order changes anywhere (register, Leafly,
   // back office), so the dashboard can refresh itself instead of going stale.

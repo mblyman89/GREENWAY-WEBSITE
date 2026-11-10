@@ -144,6 +144,8 @@ export default async function OrdersAdminPage({
     to?: string;
     min?: string;
     max?: string;
+    // D226 - our panel's "Show" filter: online (default), register, all.
+    source?: string;
     poolMsg?: string;
     poolErr?: string;
     printTest?: string;
@@ -231,6 +233,10 @@ export default async function OrdersAdminPage({
     // and searched. Carried in queryFilter so both reads (first page and the
     // clamped refetch) exclude it — one place, no drift.
     excludeOrigins: BOARD_EXCLUDED_ORIGINS,
+    // D226 - register walk-in sales are written into orders as the sale of
+    // record, but they are not online orders. The panel lists online orders
+    // unless the "Show" filter asks for register sales (or both).
+    source: gq.source,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, gq.page, DEFAULT_PAGE_SIZE);
   const [
@@ -248,7 +254,9 @@ export default async function OrdersAdminPage({
     // rows under them agree. Leafly keeps its own badge on its own panel.
     // USAGE-3 — one grouped RPC (0233) instead of seven exact counts; falls
     // back to the seven until the migration is applied.
-    getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS }).then((s) => s.counts),
+    getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source }).then(
+      (s) => s.counts,
+    ),
     // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
     // pool / null settings when 0147 isn't applied or the printer isn't set up).
     //
@@ -599,7 +607,13 @@ export default async function OrdersAdminPage({
     <OrdersPanel
       panel="greenway"
       title="Greenway orders"
-      subtitle="Orders placed on our website. Open one to move it through the steps."
+      subtitle={
+        gq.source === "register"
+          ? "Sales rung up at the register (walk-ins). Shown here only to look one up."
+          : gq.source === "all"
+            ? "Website orders and register sales together."
+            : "Orders placed on our website. Open one to move it through the steps."
+      }
       icon="🧾"
       counts={counts}
       query={gq}

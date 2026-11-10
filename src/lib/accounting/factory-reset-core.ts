@@ -904,6 +904,12 @@ export const TABLE_RULES: readonly TableRule[] = [
   // menu_card_fallback_images (0355, D224): the one picture per website
   // category a person chose for cards with no photo. KEEP with the media.
   { table: "menu_card_fallback_images", disposition: "KEEP", because: "The fallback picture you chose for each website category's menu cards." },
+  // orders_origin_backfill_0359 (0359, D226): the one-time undo list for the
+  // register-sale relabel (order id + the old label, no money, no customer
+  // data, no foreign key). KEEP: after a reset its ids match nothing, so the
+  // rollback changes nothing - and keeping it means the record of what 0359
+  // did is never lost by a reset.
+  { table: "orders_origin_backfill_0359", disposition: "KEEP", because: "A record of which sales were relabelled from website to register by migration 0359, so that change can be undone." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

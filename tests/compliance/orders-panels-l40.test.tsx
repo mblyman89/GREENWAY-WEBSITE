@@ -40,6 +40,7 @@ import {
 } from "../../src/lib/orders/order-panels-core";
 import { listWindow } from "../../src/lib/admin/list-window-core";
 import { ORDER_SORTS } from "../../src/lib/admin/list-filter-core";
+import { ORDER_SOURCES, ORDER_SOURCE_LABELS } from "../../src/lib/orders/order-source-core";
 import type { LeaflyBoardOrder, LeaflyBoardState } from "../../src/lib/leafly/order-board-server";
 import type { OrderRow } from "../../src/lib/orders/types";
 
@@ -180,8 +181,27 @@ function controls(html: string) {
 
 // ===========================================================================
 describe("L-40 · both panels render the SAME controls", () => {
-  const g = controls(renderGreenway());
+  // D226: the ONE allowed difference. Our panel has a "Show" filter (Online
+  // orders / Register sales / Online + register) because register walk-in
+  // sales live in the same table as website orders. Leafly orders are never
+  // register sales, so their panel has no such control. Everything else must
+  // still match exactly, so the comparison strips that one control by name.
+  const gFull = controls(renderGreenway());
+  const sourceLabels = ORDER_SOURCES.map((s) => ORDER_SOURCE_LABELS[s]);
+  const g = {
+    ...gFull,
+    labels: gFull.labels.filter((x) => x !== "Show"),
+    options: gFull.options.filter((x) => !sourceLabels.includes(x)),
+    inputNames: gFull.inputNames.filter((n) => n !== "source"),
+  };
   const l = controls(renderLeafly());
+
+  it("D226: our panel adds exactly one control, Show, just before Sort by", () => {
+    expect(gFull.labels).toEqual(["Search", "Placed from", "Placed to", "Total min $", "Total max $", "Show", "Sort by"]);
+    expect(gFull.inputNames).toEqual(["q", "from", "to", "min", "max", "source", "sort"]);
+    expect(gFull.options.slice(0, 3)).toEqual(["Online orders", "Register sales", "Online + register"]);
+    expect(l.labels).not.toContain("Show");
+  });
 
   it("the same field labels, in the same order", () => {
     expect(g.labels).toEqual([

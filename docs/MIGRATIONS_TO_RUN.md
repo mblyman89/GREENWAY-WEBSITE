@@ -4156,3 +4156,48 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0357_ccrs_adopt_and_reopen.rollback.sql` (drops the two
   functions and puts the 0282 guard back, so a set-aside email is final again; the history columns and any adopted
   file stay, as records).
+
+- [ ] **`supabase/migrations/0358_orders_board_snapshot_source.sql`** — D226 online orders vs register sales (owner:
+  "In the back office online orders page, it shows thousands of orders in history ... I'm sure we have not had that
+  many online orders"). Run it AFTER 0357. Read only, no data changes: `orders_board_snapshot()` gets one optional
+  argument, `p_source` (`online` / `register` / null for every row), so the Greenway orders cards, the nav badge and
+  the new-order chime count online orders only. Until it is applied the app falls back to its own readers with the
+  same filter, so the board is already right; this only makes it one database call again.
+
+  Safe to re-run. Paste the file as is (its comments have no apostrophes or semicolons). If the editor shows
+  "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select public.orders_board_snapshot(0, null, 'online')->'counts'   as online_counts,
+         public.orders_board_snapshot(0, null, 'register')->'counts' as register_counts;
+  -- online_counts: a handful (website orders + the Leafly copy), register_counts: the register sales
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0358_orders_board_snapshot_source.rollback.sql` (puts back the
+  0233 two-argument function; the app keeps working through its fallback readers).
+
+- [ ] **`supabase/migrations/0359_orders_register_origin_backfill.sql`** — D226 label existing register sales as
+  register sales. Run it AFTER 0358. Changes ONE column on the rows the POS sync wrote (they have `pos_client_uuid`
+  or the "POS sale —" note): `origin` goes from `greenway` to `register`. Nothing is deleted; no money, status, date,
+  customer, CCRS or books field changes. The rows changed are listed first in a new service-role-only table,
+  `orders_origin_backfill_0359`, so the rollback is exact. On 2026-11-10 that was 1,383 rows. The board already hides
+  register sales without this (it also recognises them by `pos_client_uuid`); this makes the label in the data
+  match, so reports and future screens agree. New register sales are written as `register` by the app from D226 on.
+
+  Safe to re-run (a second run finds nothing to change). Paste the file as is. If the editor shows "Potential issue
+  detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select origin, (pos_client_uuid is not null) as from_register, count(*)
+    from public.orders group by 1, 2 order by 1, 2;
+  -- greenway / false = website orders only, leafly / false = Leafly copies, register / true = register sales
+  -- no greenway / true row
+  select count(*) from public.orders_origin_backfill_0359;  -- the rows relabelled
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0359_orders_register_origin_backfill.rollback.sql` (puts
+  `greenway` back on exactly the listed rows, then drops the list table).
