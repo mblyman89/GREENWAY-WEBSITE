@@ -7,7 +7,7 @@
  * menu-card-fallback-core.ts; this file only does I/O.
  *
  * READS (public pages)
- *   One small snapshot (21 rows at most + their media URLs) held in the
+ *   One small snapshot (at most 21 x 12 rows + their media URLs) held in the
  *   Next.js data cache for PUBLIC_SNAPSHOT_TTL_SECONDS, tagged MENU_CACHE_TAG,
  *   so every render answers from memory and a save (which calls
  *   revalidatePublicMenuSurfaces) shows on the next visit. A failed read
@@ -16,9 +16,15 @@
  *   Before 0355 is applied (42P01 / PGRST205) the map is empty: identity.
  *
  * WRITES (the admin page only, via its server actions)
- *   setMenuCardFallback / clearMenuCardFallback. Every {error} is read and
+ *   addMenuCardFallbacks / removeMenuCardFallback / reorderMenuCardFallbacks /
+ *   clearMenuCardFallback (D225). Every {error} is read and
  *   classified (missing table vs permission vs other) so the page can say
  *   which one happened.
+ *
+ * D225 (0356): a category holds a LIST of pictures (sort_order). The snapshot
+ * is now category -> URLs in owner order (cache key v2). Before 0356 is
+ * applied the reads fall back to the 0355 columns (42703 = no such column)
+ * and the page keeps working one picture per category.
  *
  * NEVER MONEY: display data only. Nothing here feeds a price, a cart, stock,
  * a sale or CCRS.
@@ -33,7 +39,10 @@ import { PUBLIC_SNAPSHOT_TTL_SECONDS } from "@/lib/site/public-snapshot-core";
 import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import {
   applyMenuCardFallbacks,
+  fallbackUrlForKey,
+  groupFallbackRows,
   parseFallbackCategory,
+  roomFor,
   type FallbackableItem,
   type FallbackMedia,
   type FallbackRow,
@@ -53,12 +62,20 @@ export function isMissingFallbackTable(err: PgError): boolean {
   );
 }
 
+/** 0356 not applied yet: the id / sort_order columns are missing. */
+export function isMissingListColumns(err: PgError): boolean {
+  if (!err) return false;
+  return err.code === "42703" || /column .*(sort_order|\bid\b).* does not exist|could not find the .*column/i.test(err.message ?? "");
+}
+
 /** The service role lost its grant (should never happen after 0355). */
 export function isFallbackPermissionError(err: PgError): boolean {
   return Boolean(err && (err.code === "42501" || /permission denied/i.test(err.message ?? "")));
 }
 
-export type FallbackWriteResult = { ok: true } | { ok: false; reason: "missing_table" | "permission" | "error"; message: string };
+export type FallbackWriteResult =
+  | { ok: true; added?: number; skipped?: number }
+  | { ok: false; reason: "missing_table" | "missing_0356" | "permission" | "full" | "error"; message: string };
 
 function classify(err: NonNullable<PgError>): FallbackWriteResult {
   if (isMissingFallbackTable(err)) {
@@ -87,19 +104,27 @@ function urlOf(m: MediaRow): string | null {
   return publicUrlForKey(m.storage_key) ?? m.public_url ?? null;
 }
 
-type RowsRead = { migrated: boolean; rows: FallbackRow[] };
+/** none = before 0355, single = 0355 only (one per category), multi = 0356. */
+export type FallbackSchema = "none" | "single" | "multi";
+type RowsRead = { schema: FallbackSchema; rows: FallbackRow[] };
 
-async function readRows(): Promise<RowsRead> {
+async function readRows(category?: string): Promise<RowsRead> {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from(TABLE)
-    .select("website_category, media_id, updated_at")
-    .order("website_category", { ascending: true });
-  if (error) {
-    if (isMissingFallbackTable(error)) return { migrated: false, rows: [] };
-    throw new Error(`${TABLE} read failed (${error.code ?? "?"}): ${error.message}`);
+  let q = admin.from(TABLE).select("id, website_category, media_id, sort_order, updated_at");
+  if (category) q = q.eq("website_category", category);
+  const { data, error } = await q.order("website_category", { ascending: true }).order("sort_order", { ascending: true });
+  if (!error) return { schema: "multi", rows: (data as FallbackRow[] | null) ?? [] };
+  if (isMissingFallbackTable(error)) return { schema: "none", rows: [] };
+  if (!isMissingListColumns(error)) throw new Error(`${TABLE} read failed (${error.code ?? "?"}): ${error.message}`);
+  // 0355 only: one row per category, no id / sort_order yet.
+  let q1 = admin.from(TABLE).select("website_category, media_id, updated_at");
+  if (category) q1 = q1.eq("website_category", category);
+  const old = await q1.order("website_category", { ascending: true });
+  if (old.error) {
+    if (isMissingFallbackTable(old.error)) return { schema: "none", rows: [] };
+    throw new Error(`${TABLE} read failed (${old.error.code ?? "?"}): ${old.error.message}`);
   }
-  return { migrated: true, rows: (data as FallbackRow[] | null) ?? [] };
+  return { schema: "single", rows: (old.data as FallbackRow[] | null) ?? [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +132,7 @@ async function readRows(): Promise<RowsRead> {
 // ---------------------------------------------------------------------------
 
 const fallbackSnapshotCached = unstable_cache(
-  async (): Promise<Array<[string, string]>> => {
+  async (): Promise<Array<[string, string[]]>> => {
     const { rows } = await readRows();
     if (rows.length === 0) return [];
     const media = await readMedia(rows.map((r) => r.media_id));
@@ -116,20 +141,20 @@ const fallbackSnapshotCached = unstable_cache(
       const u = urlOf(m);
       if (u) urlById.set(m.id, u);
     }
-    const out: Array<[string, string]> = [];
-    for (const r of rows) {
-      const cat = parseFallbackCategory(r.website_category);
-      const url = urlById.get(r.media_id);
-      if (cat && url) out.push([cat, url]);
+    const out: Array<[string, string[]]> = [];
+    for (const [cat, ids] of groupFallbackRows(rows)) {
+      const urls = ids.map((id) => urlById.get(id)).filter((u): u is string => Boolean(u));
+      if (urls.length > 0) out.push([cat, urls]);
     }
     return out;
   },
-  ["public-snapshot", "menu-card-fallbacks", "v1"],
+  // D225: v2 - the value is now a URL LIST per category.
+  ["public-snapshot", "menu-card-fallbacks", "v2"],
   { revalidate: PUBLIC_SNAPSHOT_TTL_SECONDS, tags: [MENU_CACHE_TAG] },
 );
 
-/** website category -> public URL. Empty on any failure, unconfigured, or pre-0355. */
-export async function menuCardFallbackUrls(): Promise<Map<string, string>> {
+/** website category -> public URLs in owner order. Empty on any failure, unconfigured, or pre-0355. */
+export async function menuCardFallbackLists(): Promise<Map<string, string[]>> {
   if (!isSupabaseServiceConfigured) return new Map();
   try {
     return new Map(await fallbackSnapshotCached());
@@ -139,17 +164,35 @@ export async function menuCardFallbackUrls(): Promise<Map<string, string>> {
   }
 }
 
-/** The fallback URL for one website category, or null. */
-export async function menuCardFallbackUrlFor(category: string | null | undefined): Promise<string | null> {
+/**
+ * D225: the lists the browser needs to rotate cards, ONLY for categories with
+ * two or more pictures (the rest never rotate). Sent once per page by the
+ * site layout, never per card. Never throws.
+ */
+export async function menuCardRotationLists(): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  for (const [cat, urls] of await menuCardFallbackLists()) {
+    if (urls.length >= 2) out[cat] = urls;
+  }
+  return out;
+}
+
+/** The fallback URL for one product in one website category (stable pick), or null. */
+export async function menuCardFallbackUrlFor(
+  category: string | null | undefined,
+  productKey?: string | null,
+): Promise<string | null> {
   const cat = parseFallbackCategory(category);
   if (!cat) return null;
-  return (await menuCardFallbackUrls()).get(cat) ?? null;
+  return fallbackUrlForKey(productKey ?? "", (await menuCardFallbackLists()).get(cat) ?? []);
 }
 
 /**
  * One product (the register info card, the admin product page): the card's
  * FINAL website category is the owner's re-file when there is one, else its
- * own category, so the picture matches the one the shop shows. Never throws.
+ * own category, so the picture matches the one the shop shows. D225: with
+ * many pictures it is the product's stable pick (the same first picture its
+ * product page shows). Never throws.
  */
 export async function menuCardFallbackUrlForProduct(
   posKey: string | null | undefined,
@@ -162,7 +205,7 @@ export async function menuCardFallbackUrlForProduct(
       const ov = (await getOverridesForKeys([key])).get(key);
       if (ov?.website_category) finalCategory = ov.website_category;
     }
-    return await menuCardFallbackUrlFor(finalCategory);
+    return await menuCardFallbackUrlFor(finalCategory, key);
   } catch {
     return null;
   }
@@ -177,9 +220,9 @@ export async function menuCardFallbackUrlForProduct(
 export async function withMenuCardFallbacks<T extends FallbackableItem>(items: T[]): Promise<T[]> {
   if (items.length === 0) return items;
   try {
-    const urls = await menuCardFallbackUrls();
-    if (urls.size === 0) return items;
-    return applyMenuCardFallbacks(items, urls);
+    const lists = await menuCardFallbackLists();
+    if (lists.size === 0) return items;
+    return applyMenuCardFallbacks(items, lists);
   } catch (err) {
     console.error("[menu-card-fallback] withMenuCardFallbacks failed:", err);
     return items;
@@ -191,32 +234,32 @@ export async function withMenuCardFallbacks<T extends FallbackableItem>(items: T
 // ---------------------------------------------------------------------------
 
 export type FallbackAdminRead =
-  | { ok: true; migrated: boolean; rows: FallbackRow[]; media: FallbackMedia[] }
-  | { ok: false; migrated: boolean; rows: []; media: []; message: string };
+  | { ok: true; schema: FallbackSchema; rows: FallbackRow[]; media: FallbackMedia[] }
+  | { ok: false; schema: FallbackSchema; rows: []; media: []; message: string };
 
 /** Live (uncached) read for the admin page: rows + their pictures. */
 export async function readMenuCardFallbacksForAdmin(): Promise<FallbackAdminRead> {
-  if (!isSupabaseServiceConfigured) return { ok: true, migrated: false, rows: [], media: [] };
+  if (!isSupabaseServiceConfigured) return { ok: true, schema: "none", rows: [], media: [] };
   try {
-    const { migrated, rows } = await readRows();
+    const { schema, rows } = await readRows();
     const media = await readMedia(rows.map((r) => r.media_id));
     return {
       ok: true,
-      migrated,
+      schema,
       rows,
       media: media.map((m) => ({ id: m.id, url: urlOf(m), title: m.title || m.filename || null, status: m.status })),
     };
   } catch (err) {
-    return { ok: false, migrated: true, rows: [], media: [], message: err instanceof Error ? err.message : String(err) };
+    return { ok: false, schema: "multi", rows: [], media: [], message: err instanceof Error ? err.message : String(err) };
   }
 }
 
-/** The current picture for a category (for the audit "before"), or null. */
-export async function currentFallbackMediaId(category: string): Promise<string | null> {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.from(TABLE).select("media_id").eq("website_category", category).maybeSingle();
-  if (error) return null;
-  return (data as { media_id: string } | null)?.media_id ?? null;
+/** The category list right now (owner order) and which schema is live. */
+export async function currentFallbackList(category: string): Promise<{ schema: FallbackSchema; mediaIds: string[] }> {
+  const cat = parseFallbackCategory(category);
+  if (!cat) return { schema: "multi", mediaIds: [] };
+  const { schema, rows } = await readRows(cat);
+  return { schema, mediaIds: groupFallbackRows(rows).get(cat) ?? [] };
 }
 
 /** Is this an image row in the media library (not archived)? */
@@ -232,19 +275,78 @@ export async function fallbackMediaExists(mediaId: string): Promise<boolean> {
   return (row.mime_type ?? "").startsWith("image/") && row.status !== "archived";
 }
 
-/** One picture per category: an upsert on the category key. */
-export async function setMenuCardFallback(category: string, mediaId: string, staffProfileId: string | null): Promise<FallbackWriteResult> {
+/**
+ * D225: add pictures to the END of a category list (owner order), skipping
+ * any already in it and stopping at MAX_FALLBACKS_PER_CATEGORY. Before 0356
+ * (one picture per category) the first picture replaces the current one,
+ * exactly as D224 did.
+ */
+export async function addMenuCardFallbacks(
+  category: string,
+  mediaIds: readonly string[],
+  staffProfileId: string | null,
+): Promise<FallbackWriteResult> {
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from(TABLE)
-    .upsert(
-      { website_category: category, media_id: mediaId, updated_by: staffProfileId, updated_at: new Date().toISOString() },
-      { onConflict: "website_category" },
-    );
+  let current: { schema: FallbackSchema; mediaIds: string[] };
+  try {
+    current = await currentFallbackList(category);
+  } catch (err) {
+    return { ok: false, reason: "error", message: err instanceof Error ? err.message : String(err) };
+  }
+  if (current.schema === "none") return classify({ code: "42P01", message: "missing" });
+  const now = new Date().toISOString();
+  const fresh = Array.from(new Set(mediaIds)).filter((id) => !current.mediaIds.includes(id));
+  if (fresh.length === 0) return { ok: true, added: 0, skipped: mediaIds.length };
+
+  if (current.schema === "single") {
+    const { error } = await admin
+      .from(TABLE)
+      .upsert({ website_category: category, media_id: fresh[0], updated_by: staffProfileId, updated_at: now }, { onConflict: "website_category" });
+    if (error) return classify(error);
+    return { ok: true, added: 1, skipped: mediaIds.length - 1 };
+  }
+
+  const room = roomFor(current.mediaIds.length, fresh.length);
+  if (room === 0) return { ok: false, reason: "full", message: "This category already has the most pictures it can hold." };
+  const take = fresh.slice(0, room);
+  const start = current.mediaIds.length;
+  const { error } = await admin.from(TABLE).upsert(
+    take.map((id, i) => ({ website_category: category, media_id: id, sort_order: start + i, updated_by: staffProfileId, updated_at: now })),
+    { onConflict: "website_category,media_id", ignoreDuplicates: true },
+  );
+  if (error) return classify(error);
+  return { ok: true, added: take.length, skipped: mediaIds.length - take.length };
+}
+
+/** D225: take ONE picture out of a category list (the rest keep their order). */
+export async function removeMenuCardFallback(category: string, mediaId: string): Promise<FallbackWriteResult> {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from(TABLE).delete().eq("website_category", category).eq("media_id", mediaId);
   if (error) return classify(error);
   return { ok: true };
 }
 
+/** D225: save a new owner order (0356 only). At most 12 small updates. */
+export async function reorderMenuCardFallbacks(category: string, order: readonly string[]): Promise<FallbackWriteResult> {
+  const admin = createSupabaseAdminClient();
+  const now = new Date().toISOString();
+  for (let i = 0; i < order.length; i += 1) {
+    const { error } = await admin
+      .from(TABLE)
+      .update({ sort_order: i, updated_at: now })
+      .eq("website_category", category)
+      .eq("media_id", order[i]!);
+    if (error) {
+      if (isMissingListColumns(error)) {
+        return { ok: false, reason: "missing_0356", message: "Migration 0356 (many pictures per category) is not applied yet." };
+      }
+      return classify(error);
+    }
+  }
+  return { ok: true };
+}
+
+/** Remove EVERY picture from a category. */
 export async function clearMenuCardFallback(category: string): Promise<FallbackWriteResult> {
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from(TABLE).delete().eq("website_category", category);
