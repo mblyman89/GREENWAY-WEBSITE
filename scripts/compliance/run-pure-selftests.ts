@@ -1906,7 +1906,7 @@ __runLiquidVolumeTests();
   __runUnifiedSearchCoreTests();
   __runUnifiedMenusUiCoreTests();
   assertRan("vendor-menu-coverage-core", __runVendorMenuCoverageCoreTests(), 140);
-  assertRan("vendor-logo-core", __runVendorLogoCoreTests(), 75);
+  assertRan("vendor-logo-core", __runVendorLogoCoreTests(), 110);
   __runEmailMenuCoreTests();
   __runCultiveraMenusUiCoreTests();
   __runCultiveraMediaCoreTests();

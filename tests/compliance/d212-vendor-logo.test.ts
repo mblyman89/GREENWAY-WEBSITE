@@ -24,7 +24,7 @@ describe("vendor-logo-core (D212)", () => {
   it("passes its own pure self-tests", () => {
     const r = __runVendorLogoCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(75);
+    expect(r.passed).toBeGreaterThanOrEqual(110);
   });
 
   it("refuses relative / data / placeholder logo URLs instead of guessing", () => {

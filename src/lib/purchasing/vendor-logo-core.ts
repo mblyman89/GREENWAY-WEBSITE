@@ -774,6 +774,18 @@ export function __runVendorLogoCoreTests(): { passed: number; failed: number } {
     ok(c.platform === "leaflink" && c.ref === "11765" && c.name === "Blazy Susan" && c.altName === "Blazy Co", "leaflink search candidate");
     ok(c.logoUrl === null && c.logoProblem === null, "leaflink search rows carry no logo");
   }
+  {
+    // D222: the brands-listing hit carries the logo (pinned live 2026-11-09, Smokiez).
+    const c = leaflinkSearchCandidate({
+      brand_id: 73, brand_name: "Smokiez Edibles", company_name: "Pacific Northwest Consulting, llc",
+      logo_url: "https://d3nec6hp1jgjd8.cloudfront.net/media/images/brands/2018/01/24/Asset_2.jpg",
+      sample_image: "https://d3nec6hp1jgjd8.cloudfront.net/media/images/brands/2018/01/24/Asset_2.jpg",
+    });
+    ok(c.ref === "73" && c.logoUrl?.endsWith("/Asset_2.jpg") === true, "D222 leaflink listing hit carries the logo");
+    const old = leaflinkSearchCandidate({ brand_id: 1, brand_name: "X", sample_image: "https://c/product.jpg" });
+    ok(old.logoUrl === null, "D222 a product sample image is never used as a logo");
+    ok(leaflinkSearchCandidate({ brand_id: 1, brand_name: "X", logo_url: "" }).logoUrl === null, "D222 blank listing image = no logo");
+  }
   ok(leaflinkHeaderLogo({ brand: { id: 1, image: "https://d3nec6hp1jgjd8.cloudfront.net/media/b.png" } }).url?.includes("cloudfront") === true, "leaflink header image");
   ok(leaflinkHeaderLogo({ brand: { id: 1 } }).url === null, "leaflink header without image");
   ok(leaflinkHeaderLogo({ image: "https://c/x.png" }).url === "https://c/x.png", "leaflink bare header tolerated");
@@ -834,6 +846,93 @@ export function __runVendorLogoCoreTests(): { passed: number; failed: number } {
     ok(pick.ambiguous === 1, "ambiguous candidates counted");
   }
   ok(pickLogoCandidate([], "v2", match).pick === null, "empty list → no pick");
+
+  // --- D222: page-identical matching, known profiles, terms, prefilter --------
+  {
+    // Two live cards of one business; only one is carried. Before D222 the
+    // logo matcher had no `carried`, so the menu name was ambiguous here.
+    const dup = [
+      V("a1", "Blue Roots Cannabis", { license_number: "412000", status: "published" }),
+      V("a2", "Blue Roots Cannabis", { status: "published" }),
+      V("m1", "Old Card", { status: "archived", merged_into_id: "a1" }),
+    ];
+    const plain = buildLogoMatcher(dup, [], []);
+    const paged = buildLogoMatcher(dup, [], [], { carried: new Set(["a1"]) });
+    ok(judgeCandidate(G("Blue Roots Cannabis"), "a1", plain) === "ambiguous", "D222 without carried a duplicate-card name is ambiguous (the old bug)");
+    ok(judgeCandidate(G("Blue Roots Cannabis"), "a1", paged) === "match", "D222 with carried (as the page does) it matches the carried card");
+    const same = buildSameBusiness(dup);
+    ok(same("a1", "a2") && same("a2", "a1"), "D222 same exact name = same business");
+    ok(!same("a1", "m1"), "D222 an archived card is never 'same business'");
+    ok(!buildSameBusiness([V("x", "Alpha"), V("y", "Beta")])("x", "y"), "D222 different names are different businesses");
+    ok(buildSameBusiness([V("x", "Alpha", { license_number: "412345" }), V("y", "Beta", { license_number: "412345" })])("x", "y"), "D222 same license = same business");
+    // A name that resolves to the carried twin still counts for the other card of the same business.
+    ok(judgeCandidate(G("Blue Roots Cannabis"), "a2", paged, { sameBusiness: same }) === "match", "D222 duplicate card of the same business gets the logo");
+    ok(judgeCandidate(G("Fairwinds Manufacturing", { license: "412345" }), "v2", match, { sameBusiness: buildSameBusiness(vendors) }) === "other_vendor", "D222 a really different vendor is still refused");
+    // Known profile: the saved menu's exact id wins even with an odd spelling.
+    const known = new Set([profileKey("growflow", "1211")]);
+    ok(judgeCandidate(G("____BLUE~ROOTS____", { ref: "1211" }), "a1", plain, { knownRefs: known }) === "match", "D222 known profile id matches whatever its name");
+    ok(judgeCandidate(G("____BLUE~ROOTS____", { ref: "9" }), "a1", plain, { knownRefs: known }) !== "match", "D222 another id is judged by name (here: ambiguous, not accepted)");
+    const pk = pickLogoCandidate([G("Ceres", { ref: "x" }), G("Odd Name", { ref: "k" })], "v2", match, { knownRefs: new Set(["growflow:k"]) });
+    ok(pk.pick?.ref === "k", "D222 the known profile is picked first");
+    ok(profileKey("growflow", "") === "" && profileKey("cultivera", " Abc ") === "cultivera:abc", "D222 profile keys");
+  }
+  {
+    const vs = [V("v1", "Blue Roots"), V("v2", "Other")];
+    const m = buildLogoMatcher(vs, [], []);
+    const snaps = logoSnapshotsFromRows({
+      growflow: [
+        { vendor_id: null, store_name: "Blue Roots", license_number: null, growflow_store_id: "1211" },
+        { vendor_id: null, store_name: "Blue Roots", license_number: null, growflow_store_id: "1211" },
+        { vendor_id: null, store_name: "Other", license_number: null, growflow_store_id: "5" },
+      ],
+      cultivera: [{ vendor_id: null, seller_name: "Blue Roots", cultivera_market_id: "77", cultivera_market_slug: "blue-roots-wa" }],
+      leaflink: [{ vendor_id: null, brand_name: "", company_name: "", leaflink_brand_id: null }],
+      memories: [
+        { vendor_name: "Blue Roots", license_number: null, platform: "leaflink", platform_ref: "73", platform_slug: null },
+        { vendor_name: "Blue Roots", license_number: null, platform: "email", platform_ref: null, platform_slug: null },
+      ],
+    });
+    ok(snaps.length === 5, "D222 snapshot rows mapped (blank leaflink row and email memory dropped)");
+    const cv = snaps.find((x) => x.platform === "cultivera");
+    ok(cv?.ref === "77" && cv?.slug === "blue-roots-wa" && cv?.altLabel === "blue roots wa", "D222 cultivera snapshot keeps id + slug");
+    const kp = knownProfilesFor("v1", snaps, m);
+    ok(kp.length === 3 && kp.every((k) => k.name === "Blue Roots"), "D222 known profiles: deduped, only this vendor's");
+    const keys = knownRefKeys(kp);
+    ok(keys.has("growflow:1211") && keys.has("cultivera:77") && keys.has("cultivera:blue-roots-wa") && keys.has("leaflink:73"), "D222 known ref keys include slugs");
+    ok(logoPlatformOrderFor(kp, null).join() === "growflow,cultivera,leaflink", "D222 order follows known profiles");
+    ok(logoPlatformOrderFor([{ platform: "leaflink", ref: "1", slug: null, name: "x" }], "cultivera").join() === "leaflink,cultivera,growflow", "D222 known first, then remembered, then default");
+    ok(knownProfilesFor("v2", snaps, m).length === 1, "D222 other vendor gets its own profile only");
+  }
+  {
+    const t = logoSearchTerms(
+      { id: "v1", display_name: "Blue Roots Cannabis Co. - 412000", dba: "BLUE ROOTS CANNABIS CO", legal_name: "Blue Roots LLC" },
+      {
+        knownNames: ["BlueRoots WA"],
+        aliases: [
+          { vendor_id: "v1", source_name: "license:412000" },
+          { vendor_id: "v1", source_name: "Blue Roots Wholesale" },
+          { vendor_id: "v9", source_name: "Someone Else" },
+        ],
+        brands: [{ vendor_id: "v1", display_name: "Root Down\u2122" }, { vendor_id: "v2", display_name: "Nope" }],
+      },
+    );
+    ok(t[0] === "BlueRoots WA", "D222 known marketplace name searched first");
+    ok(t.includes("Blue Roots Cannabis Co.") && !t.includes("BLUE ROOTS CANNABIS CO"), "D222 same-letters duplicates removed, license stripped");
+    ok(t.includes("Blue Roots Wholesale") && !t.some((x) => /license/i.test(x)) && !t.includes("Someone Else"), "D222 own aliases only, license aliases skipped");
+    ok(t.includes("Root Down") && !t.includes("Nope"), "D222 own brand names, trademark sign dropped");
+    ok(t.includes("blue roots cannabis") || t.includes("blue roots"), "D222 the name without LLC / Co is searched");
+    ok(logoSearchTerms({ id: "x", display_name: "A", dba: null, legal_name: null }).length === 0, "D222 too-short names not searched");
+    ok(logoSearchTerms({ id: "x", display_name: "Alpha", dba: null, legal_name: null }, { brands: Array.from({ length: 20 }, (_, i) => ({ vendor_id: "x", display_name: `Brand ${i}` })) }).length === 8, "D222 terms capped at 8");
+  }
+  {
+    const c = (name: string, extra: Partial<LogoCandidate> = {}): LogoCandidate => G(name, extra);
+    ok(candidateMentions(c("____ThunderChief____"), ["Thunder Chief Farms"], null), "D222 prefilter: store name contained in our name");
+    ok(candidateMentions(c("Thunder Chief Farms WA"), ["thunder chief"], null), "D222 prefilter: our name contained in store name");
+    ok(candidateMentions(c("Zzz", { license: "412345" }), ["nope"], "412345"), "D222 prefilter: same license");
+    ok(candidateMentions(c("Zzz", { ref: "9" }), [], null, new Set(["growflow:9"])), "D222 prefilter: known ref");
+    ok(!candidateMentions(c("Fairwinds"), ["Ceres"], null), "D222 prefilter: unrelated row dropped");
+    ok(!candidateMentions(c("Co"), ["Co"], null), "D222 prefilter: too-short names never match");
+  }
 
   // --- write plan -----------------------------------------------------------
   const B = (id: string, extra: Partial<LogoBrand> = {}): LogoBrand => ({
