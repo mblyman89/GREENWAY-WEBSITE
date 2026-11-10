@@ -4093,3 +4093,22 @@ in Vercel.
   and tables, restores the 0353 auto-publish and health). Pictures already undone stay drafts; press "Redo" first if
   you want them published again before rolling back.
 
+- [ ] **`supabase/migrations/0355_menu_card_fallback_images.sql`** — D224 menu card fallback images (owner: "There
+  should be one image per website category, when set, automatically shows on all cards in that category without a
+  product image set"). Run it AFTER 0354. New table: `menu_card_fallback_images` (one row per website category,
+  service role only, RLS on). Until it is applied, the new **Admin → Menu Card Fallbacks** page says the migration is
+  missing and the website behaves exactly as before.
+
+  Safe to re-run. Paste the file as is (its comments have no apostrophes or semicolons, so no editor-safe copy is
+  needed). If the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select website_category, media_id, updated_at from public.menu_card_fallback_images order by website_category;
+  -- empty at first; one row per category you set on /admin/menu-card-fallbacks
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0355_menu_card_fallback_images.rollback.sql` (drops the table;
+  the pictures stay in the media library, only the per-category choice is lost).
+

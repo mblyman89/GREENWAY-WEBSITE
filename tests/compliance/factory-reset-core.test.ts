@@ -1361,7 +1361,8 @@ describe("D-65 — the connections survive the reset", () => {
     // and vendor_website_candidates (0351; crawler reference catalog about vendors, no FK into a wiped table).
     // + media_ai_runs (0352, D221; AI passes over the media library, KEEP with the media).
     // D221 M7: +3 KEEP media_collections, media_collection_items, media_search_log (0354; photo groups + search log).
-    expect(plan.keep.length).toBe(208);
+    // D224: +1 KEEP menu_card_fallback_images (0355; the owner's fallback picture per website category).
+    expect(plan.keep.length).toBe(209);
     expect(plan.wipe.length).toBe(139);
   });
 
