@@ -80,6 +80,8 @@ const ERROR_FILES = [
   // P-F: the first "UpdatedBy/UpdatedDate is required" and "Strain is required" (2026-10-31).
   `${EV}/2026-10-31-preprod/errors/Product__20261031T185120035.csv`,
   `${EV}/2026-10-31-preprod/errors/Inventory__20261031T182905659.csv`,
+  // D227: the first "Cannabis Excise Tax does not equal 37% of Unit Price" (2026-11-10 PREprod Sale, 2 of 1,332 rows).
+  `${EV}/2026-11-10-preprod/errors/Sale__20261110T104153061.csv`,
 ];
 const real = (p: string): ErrorAttachment => readErrorAttachment(path.basename(p), read(p))!;
 
@@ -128,6 +130,10 @@ describe("grounding: the quoted sources are verbatim", () => {
     expect(SOURCE_QUOTES.G[1378]).toBe("Only Medical Sales can be 0");
     expect(SOURCE_QUOTES.G[1377]).toContain("37%");
     expect(STRATEGY_PLAYBOOK["Only Medical Sales Excise tax can be 0"].fix[0]).toContain("37%");
+    // D227: the guide's rule [G L1374] and the FAQ worked example [FAQ L0153-L0160] back the new entry.
+    expect(SOURCE_QUOTES.G[1374]).toContain("must equal 37% of unit price");
+    expect(SOURCE_QUOTES.FAQ[160]).toBe("Other Tax (37%) = $4.44");
+    expect(STRATEGY_PLAYBOOK["Cannabis Excise Tax does not equal 37% of Unit Price"].cite).toEqual(["[G L1374-L1378]", "[FAQ L0153-L0160]"]);
   });
 });
 
@@ -200,9 +206,9 @@ describe("every real error CSV gets a report with no examiner escalation", () =>
     expect(f[0].ids).toHaveLength(1);
     expect(f[0].ids[0]).toBe(read(`${RUN}/errors/Inventory__20260917T131424499.csv`).split(/\r?\n/)[1].split(",")[4]);
   });
-  it("all 19 files at once: one report, dependency order, no draft", () => {
+  it("all 20 files at once: one report, dependency order, no draft", () => {
     const s = buildCcrsStrategy(ERROR_FILES.map(real), CTX);
-    expect(s.files).toHaveLength(19);
+    expect(s.files).toHaveLength(20);
     expect(s.examinerDraft).toBeNull();
     // Strain only ever had duplicate (none) and invalid-name (fix) -> it is re-sent; Area only 'confirm' -> not.
     expect(s.resendOrder).toEqual(["Strain", "Product", "Inventory", "InventoryAdjustment", "Sale"]);

@@ -125,6 +125,17 @@ const RULES: Rule[] = [
     ],
   },
   {
+    id: "excise_not_37pct",
+    needles: ["excise tax does not equal 37%", "excisetax does not equal 37%"],
+    severity: "fixable",
+    meaning:
+      "CCRS recomputed 37% of the printed row (Quantity x UnitPrice - Discount, rounded to the cent) and it did not equal CannabisExciseTax. Seen 2026-11-10 in PREprod: 1 cent off from separate rounding in the exporter (fixed D227).",
+    fixSteps: [
+      "Apply the error file so the refused rows are marked refused.",
+      "Re-send only the refused rows (CCRS files panel: Re-send refused rows). The exporter now prints UnitPrice and Discount so the row total is exactly the taxed amount.",
+    ],
+  },
+  {
     id: "excise_zero_nonmedical",
     needles: ["only medical sales can be 0", "only medical sales can be $0"],
     severity: "fixable",
@@ -315,6 +326,12 @@ export function __runCcrsErrorTriageTests(): { passed: number; failed: number } 
       "excise-zero rule recognized",
     );
     ok(r.needsAction && !r.suggestEscalation, "actionable but no escalation when all recognized");
+  }
+
+  // D227: the 2026-11-10 PREprod message is recognized (not escalated).
+  {
+    const r = triageCcrsErrorEmail("Cannabis Excise Tax does not equal 37% of Unit Price");
+    ok(r.findings.length === 1 && r.findings[0].ruleId === "excise_not_37pct" && !r.suggestEscalation, "excise-not-37% rule recognized");
   }
 
   // One finding per rule even when repeated.

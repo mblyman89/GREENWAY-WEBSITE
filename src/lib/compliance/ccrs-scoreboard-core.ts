@@ -250,6 +250,7 @@ export const SCOREBOARD_NEXT_STEP: Readonly<Record<string, string>> = {
   "Strain is required": "the lot's product has no strain. Set the strain on the product (or test with a lot whose product has one), export PREprod again and upload Inventory",
   "Invalid Product": "the Product file naming this product must be accepted first. Upload Inventory at least 10 minutes after an accepted Product file",
   "Invalid InventoryExternalIdentifier": "the lot must be accepted in an Inventory file first. Upload Sale / Adjustment after that Inventory file is accepted",
+  "Cannabis Excise Tax does not equal 37% of Unit Price": "the exporter rounded the unit price and the line total separately (1 cent off, fixed in D227). Apply the error file, then press Re-send refused rows on the file (or export PREprod again) and upload the new file",
   "Duplicate Sale for Licensee": "CCRS already holds this sale (the file was uploaded twice). Nothing to fix; ring up a new sale to test again",
 };
 
