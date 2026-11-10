@@ -6,13 +6,15 @@
  * library, resumable, with a budget cap, recorded in media_ai_runs.
  *
  * The Start button on /admin/media only writes a media_ai_runs row (status
- * running). Every 5 minutes at :02, :07 ... :57 ("2-59/5 * * * *", UTC; the
- * minute is the same in Pacific because Pacific is a whole-hour offset) this
+ * running). Every 10 minutes at :08, :18 ... :58 ("8-59/10 * * * *", UTC; the
+ * minute is the same in Pacific because Pacific is a whole-hour offset; every
+ * 5-minute offset is already used by another cron, and :08 is shared only with
+ * exception-retry's one-read tick) this
  * route takes the run's lease by compare-and-set (lease_token / lease_until)
  * and describes the next images for about 270 seconds
  * (media-describe-store.tickDescribe). The run stops itself when the budget
  * is spent or when nothing is left; a "follow new" run stays open so every
- * image harvested later is described within one tick (inline at harvest).
+ * image harvested later is described within one tick, about 10 minutes (inline at harvest).
  * An idle tick (no run going) is ONE media_ai_runs read and writes nothing.
  *
  * AUTH. The same fail-closed preamble as /api/cron/coa-trust-all.

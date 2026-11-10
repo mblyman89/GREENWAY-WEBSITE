@@ -16,7 +16,7 @@
  *     replace an earlier AI value (field_provenance says "ai:<model>"),
  *   - when the result is doubtful enough to go to the review queue instead,
  *   - the cost of a call from its real token usage, the budget stop, and the
- *     compare-and-set lease verdict for the every-5-minutes worker.
+ *     compare-and-set lease verdict for the every-10-minutes worker.
  *
  * AGENTS.md rule 3 (D221 exception): AI descriptions / SEO on library assets
  * may be written without a person, reversible, never over a human value,

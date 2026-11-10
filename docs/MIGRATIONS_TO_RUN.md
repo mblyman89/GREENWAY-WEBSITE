@@ -4047,7 +4047,7 @@ in Vercel.
     "INDEPENDENT / UNLISTED VENDOR" never counts. Measured read-only on 2026-11-10: the rules resolve most of them.
   - **Review queue columns**: `media_assets.reviewed_by / reviewed_at` (who decided, when).
   - **AI run lease**: `media_ai_runs.lease_token / lease_until / follow_new / input_tokens / output_tokens /
-    last_tick_at` for the every-5-minutes describe worker (`/api/cron/media-describe`).
+    last_tick_at` for the every-10-minutes describe worker (`/api/cron/media-describe`).
   - `media_library_health()` also reports ai_failed, ai_skipped, rejected and ai_spend_usd.
   - Re-runs the 0352 provenance backfill, then the new links, then auto-publish (0352 rules, unchanged).
 

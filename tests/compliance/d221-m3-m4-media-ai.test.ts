@@ -90,10 +90,10 @@ describe("D221 M3 - review queue core", () => {
 });
 
 describe("D221 M3/M4 - wiring", () => {
-  it("the cron is scheduled every 5 minutes at :02 and the route uses the fail-closed preamble", () => {
+  it("the cron is scheduled every 10 minutes at :08 and the route uses the fail-closed preamble", () => {
     const v = JSON.parse(read("vercel.json")) as { crons: { path: string; schedule: string }[] };
     const c = v.crons.find((x) => x.path === "/api/cron/media-describe");
-    expect(c?.schedule).toBe("2-59/5 * * * *");
+    expect(c?.schedule).toBe("8-59/10 * * * *");
     const route = read("src/app/api/cron/media-describe/route.ts");
     expect(route).toContain("shouldRefuseWhenSecretMissing");
     expect(route).toContain("tickDescribe");

@@ -5,7 +5,7 @@
  * (progress, spend vs budget) and the Start / Pause / Resume / Stop / Retry
  * buttons. Server component; every button is a plain form posting to
  * ../ai-actions (media.manage + audit). The work itself is the
- * /api/cron/media-describe worker (every 5 minutes, leased).
+ * /api/cron/media-describe worker (every 10 minutes, leased).
  */
 import Link from "next/link";
 import { Button } from "@/components/admin/ui/Button";
@@ -78,7 +78,7 @@ export function MediaAiPanel({
             Run <span className="font-semibold text-[var(--admin-text)]">{run.status}</span>: {run.done} described, {run.failed} failed, {run.skipped} skipped
             {run.total ? ` of about ${run.total}` : ""} · spent {usd(run.cost_usd)} of {usd(run.budget_usd)}
             {run.follow_new ? " · keeps describing new pictures" : ""}
-            {run.last_tick_at ? ` · last worked ${new Date(run.last_tick_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}` : " · starts within 5 minutes"}
+            {run.last_tick_at ? ` · last worked ${new Date(run.last_tick_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}` : " · starts within 10 minutes"}
           </p>
           {run.last_error && <p className="text-[var(--admin-orange)]">Last problem: {run.last_error}</p>}
           <div className="flex flex-wrap items-center gap-2">
@@ -127,7 +127,7 @@ export function MediaAiPanel({
         </form>
       )}
       <p className="mt-2 text-[11px] leading-snug text-[var(--admin-text-faint)]">
-        Runs on the server every 5 minutes, so you can close this tab. It stops by itself at the budget. AI text never replaces
+        Runs on the server every 10 minutes, so you can close this tab. It stops by itself at the budget. AI text never replaces
         anything a person typed, and anything doubtful goes to the review queue instead of being changed.
       </p>
     </section>

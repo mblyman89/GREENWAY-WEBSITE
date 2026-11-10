@@ -4,7 +4,7 @@
  * The server side of the "closer look" describe + SEO pass. The owner presses
  * Start on /admin/media (with a dollar budget); that only writes a row in
  * media_ai_runs (0352 + 0353 lease columns). The cron route
- * /api/cron/media-describe does the work every 5 minutes, on the server, so it
+ * /api/cron/media-describe does the work every 10 minutes, on the server, so it
  * keeps going after the tab is closed.
  *
  * A tick is a request to consider working, never a lock:
@@ -459,7 +459,7 @@ export async function tickDescribe(nowMs: number = Date.now()): Promise<TickResu
       }
       if (transientInARow >= 6) {
         // The AI service is struggling; leave the rest pending and try next tick.
-        await casRun(admin, run.id, token, { last_error: "The AI service is busy or down - trying again in 5 minutes." });
+        await casRun(admin, run.id, token, { last_error: "The AI service is busy or down - trying again in 10 minutes." });
         break outer;
       }
     }

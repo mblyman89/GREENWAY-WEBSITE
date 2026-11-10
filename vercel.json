@@ -96,7 +96,7 @@
     },
     {
       "path": "/api/cron/media-describe",
-      "schedule": "2-59/5 * * * *"
+      "schedule": "8-59/10 * * * *"
     }
   ]
 }
