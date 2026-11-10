@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { weekFromKey } from "@/lib/compliance/ccrs-week-core";
-import { ccrsFilesByName, fileRowsForEcho, listCcrsFilesLite, markUploaded, proveAfterOutcome, recordOutcome, type CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
+import { adoptHandmadeFile, ccrsFilesByName, fileRowsForEcho, listCcrsFilesLite, markUploaded, proveAfterOutcome, recordOutcome, type CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
 import { lifecycleErrorText, matchSuccessNames, parseSuccessEmails } from "@/lib/compliance/ccrs-lifecycle-core";
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError } from "@/lib/compliance/ccrs-outcome-core";
@@ -30,7 +30,9 @@ import {
   type EchoPick,
   type MailAnalysis,
 } from "@/lib/compliance/ccrs-mail-core";
-import { getCcrsMail, listOpenCcrsMail, markCcrsMailHandled, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { getCcrsMail, listOpenCcrsMail, markCcrsMailHandled, reopenCcrsMail, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { ADOPT_REASON_MIN, adoptUploadTime, planAdoptFile } from "@/lib/compliance/ccrs-adopt-core";
+import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { AUTO_UPLOAD_REASON, UNANSWERED_STATES, autoUploadTimeISO, couldAnswer, isUnansweredState } from "@/lib/compliance/ccrs-answer-core";
 import { ANSWERED_STATES, isAnsweredState, planReuploadSetAside, type AnsweredFile } from "@/lib/compliance/ccrs-reupload-core";
 import { NOT_PROCESSED_MESSAGE, parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
@@ -484,4 +486,108 @@ export async function dismissCcrsMailAction(formData: FormData): Promise<void> {
   });
   revalidatePath(BASE);
   backMail(weekKey, changed ? okQ("Email set aside.") : errQ("This email was already handled."), page);
+}
+
+/**
+ * D228 (0357): put a SET-ASIDE email back in the waiting list, with a reason.
+ * The earlier set-aside note is kept (reopen_note, append only). An applied
+ * email can never be reopened: its answer is already in the ledger.
+ */
+export async function reopenCcrsMailAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const weekKey = String(formData.get("week_key") ?? "");
+  const page = pageEnv(formData);
+  const mailId = String(formData.get("mail_id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!ID_RE.test(mailId)) backMail(weekKey, errQ("Invalid email."), page);
+  if (reason.length < ADOPT_REASON_MIN) backMail(weekKey, errQ(`Say why this email is reopened (${ADOPT_REASON_MIN} or more characters).`), page);
+  const admin = createSupabaseAdminClient();
+  let mail: StoredCcrsMail;
+  try {
+    mail = await getCcrsMail(admin, mailId);
+  } catch (e) {
+    backMail(weekKey, errQ(asText(e)), page);
+  }
+  if (mail.state !== "dismissed") backMail(weekKey, errQ(mail.state === "applied" ? "This email was applied. Its answer is in the ledger and it stays final." : "This email is already waiting."), page);
+  try {
+    await reopenCcrsMail(admin, mail.id, session.profile.id, reason);
+  } catch (e) {
+    backMail(weekKey, errQ(asText(e)), page);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.mail.reopened",
+    entityType: "ccrs_mail_messages",
+    entityId: mail.id,
+    before: { state: mail.state, handledAt: mail.handled_at, handledNote: mail.handled_note },
+    after: { state: "new", gmailId: mail.gmail_id, subject: mail.subject, kind: mail.kind, reason },
+  });
+  revalidatePath(BASE);
+  backMail(weekKey, okQ(`Email reopened: "${mail.subject}". It is back in the waiting list. Press Apply on it.`), page);
+}
+
+/**
+ * D228 (0357): CCRS ACCEPTED a file this system did not make (a hand fix).
+ * The owner gives the exact file that was uploaded; the hub stores those
+ * bytes under the name the CCRS email gives, marked uploaded at CCRS's own
+ * "Date Submitted", and then applies THIS confirmation through the normal
+ * path (same matching, same time rule). Nothing is adopted that the email
+ * does not name, and nothing already in the outbox is adopted again.
+ */
+export async function adoptHandmadeFileAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const { weekKey, env: page, admin, mail } = await loadMail(formData);
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < ADOPT_REASON_MIN) backMail(weekKey, errQ(`Say why this hand-made file is adopted (${ADOPT_REASON_MIN} or more characters).`), page);
+  const plan = planSuccessEnv({ kind: mail.kind, env: mail.env, envVerified: mail.env_verified }, String(formData.get("env") ?? "") || null, formData.get("confirm_checked") === "on");
+  if (!plan.ok) backMail(weekKey, errQ(plan.error), page);
+  const env: LedgerEnv = plan.env;
+  // The name comes from the stored email body, never from the form.
+  const notices = parseSuccessEmails(mail.body_text);
+  const wanted = String(formData.get("file_name") ?? "").trim();
+  const notice = notices.length === 1 && !wanted ? notices[0] : notices.find((n) => n.fileName === wanted);
+  if (!notice) backMail(weekKey, errQ(notices.length === 0 ? "This email names no CCRS file." : `Choose which file to adopt: ${notices.map((n) => n.fileName).join(", ")}.`), page);
+  // The exact bytes: an uploaded file (preferred, byte for byte) or a paste.
+  const upload = formData.get("csv_file");
+  let csv = String(formData.get("csv_text") ?? "");
+  if (upload && typeof upload === "object" && "text" in upload && (upload as File).size > 0) {
+    if ((upload as File).size > 5_000_000) backMail(weekKey, errQ("That file is larger than 5 MB. It is not a hand-made fix."), page);
+    csv = await (upload as File).text();
+  }
+  if (!csv.trim()) backMail(weekKey, errQ("Attach the exact file you uploaded to CCRS (or paste its text)."), page);
+  let known: Awaited<ReturnType<typeof ccrsFilesByName>>;
+  try {
+    known = await ccrsFilesByName(admin, env, [notice.fileName]);
+  } catch (e) {
+    backMail(weekKey, errQ(asText(e)), page);
+  }
+  if (known.length > 0) backMail(weekKey, errQ(`${notice.fileName} is already in the ${env} outbox (${known[0].state}). Press Apply confirmation instead.`), page);
+  const license = await getCcrsLicenseSettings();
+  const adopt = planAdoptFile({ fileName: notice.fileName, csv, licenseNumber: license.licenseNumber });
+  if (!adopt.ok) backMail(weekKey, errQ(`Not adopted: ${adopt.errors.join(" | ")}`), page);
+  const at = adoptUploadTime(notice.submittedAt, String(formData.get("uploaded_at") ?? ""));
+  if (!at) backMail(weekKey, errQ("This email has no CCRS Date Submitted. Enter the time you uploaded the file (Pacific)."), page);
+  let res: Awaited<ReturnType<typeof adoptHandmadeFile>>;
+  try {
+    res = await adoptHandmadeFile(admin, env, adopt.payload, at, session.profile.id, reason);
+  } catch (e) {
+    backMail(weekKey, errQ(asText(e)), page);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.file.adopted_handmade",
+    entityType: "ccrs_files",
+    entityId: res.id,
+    after: {
+      env, fileName: res.fileName, sha256: adopt.payload.sha256, rows: adopt.payload.number_records, uploadedAt: res.uploadedAt,
+      ccrsDateSubmitted: notice.submittedAt, overridden: res.overridden, waitingOn: res.waitingOn, reason, fromEmail: mail.gmail_id,
+    },
+  });
+  // Now the confirmation names a file of the outbox: apply it the normal way.
+  const applied = await applySuccessMail(admin, session, mail, env, true);
+  revalidatePath(BASE);
+  const head = `${res.fileName} adopted (${adopt.payload.number_records} row(s), uploaded ${res.uploadedAt}).`;
+  backMail(weekKey, applied.ok ? okQ(`${head} ${applied.text}`) : errQ(`${head} The confirmation was NOT applied: ${applied.text}`), page);
 }

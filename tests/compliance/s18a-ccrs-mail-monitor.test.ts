@@ -691,6 +691,9 @@ describe("drafts-only (standing rule 3): only the owner's Apply writes the ledge
       // R74 S48: one click answers every waiting CCRS email, oldest first.
       "applyAllCcrsMailAction",
       "dismissCcrsMailAction",
+      // D228: reopen a set-aside email (reason, audited) and adopt a hand-made file.
+      "reopenCcrsMailAction",
+      "adoptHandmadeFileAction",
     ]);
     for (const f of fns) expect(f).toMatch(/requirePermission\("settings\.manage"\)/);
     expect((ACT.match(/recordOutcome\(/g) ?? []).length).toBe(3);
@@ -698,6 +701,8 @@ describe("drafts-only (standing rule 3): only the owner's Apply writes the ledge
     expect((ACT.match(/action: "ccrs\.file\.success"/g) ?? []).length).toBe(1);
     expect(ACT).toMatch(/action: `ccrs\.file\.\$\{pick\.verdict\.outcome\}`/);
     expect(ACT).toMatch(/action: "ccrs\.mail\.dismissed"/);
+    expect(ACT).toMatch(/action: "ccrs\.mail\.reopened"/);
+    expect(ACT).toMatch(/action: "ccrs\.file\.adopted_handmade"/);
   });
   it("names are re-read from the stored body; error files are re-proven, all-or-nothing", () => {
     expect(ACT).toMatch(/parseSuccessEmails\(mail\.body_text\)/);
