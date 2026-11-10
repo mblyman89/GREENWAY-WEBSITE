@@ -108,6 +108,7 @@ import { archiveManifestDocuments, listManifestDocMeta } from "@/lib/inventory/m
 import { classifyMinerKind, type MinerSource } from "@/lib/inventory/vendor-goldminer-core";
 import { enrichVendorFromIntakeDocs } from "@/lib/inventory/vendor-goldminer-store";
 import { healVendorLabel, recordInvoiceAdjustments } from "@/lib/inventory/invoice-adjustments-store";
+import { collapseSameDelivery } from "@/lib/inbound-email/odd-format-core";
 
 export type InboundDisposition =
   | "received"
@@ -682,6 +683,13 @@ export async function stageManifestsFromEmail(
   //    verifiable manifests stage; junk (tracking exports, receipts, random
   //    JSON) is skipped WITHOUT counting as a failure — it's logged on the
   //    email row and never creates a manifest, so there's nothing to delete.
+  // D229: read every textual file first, then collapse files that describe
+  // the SAME delivery (same manifest number) into one: the Evergreen Herbal
+  // email carried both the CCRS manifest CSV (no vendor name) and the WCIA
+  // JSON ("EVERGREEN HERBAL"), and the duplicate guard (number + vendor)
+  // would have staged that one delivery twice. The richest file is kept and
+  // the others donate their transport.
+  const textReads: { att: (typeof textCandidates)[number]; manifest: ParsedManifest }[] = [];
   for (const att of textCandidates) {
     const outcome = parseAttachmentStrict(att);
     if (outcome.kind === "junk") continue;
@@ -689,7 +697,12 @@ export async function stageManifestsFromEmail(
       result.parseFailures += 1;
       continue;
     }
-    let manifest = outcome.manifest;
+    textReads.push({ att, manifest: outcome.manifest });
+  }
+  const collapsed = collapseSameDelivery(textReads.map((r) => r.manifest));
+  for (let ci = 0; ci < collapsed.manifests.length; ci += 1) {
+    const att = textReads[collapsed.keep[ci]].att;
+    let manifest = collapsed.manifests[ci];
     // H17: enrich with the bundled shipping PDF's transport (fill-only-empty).
     // R26: EVERY exact-number donor folds in order (manifest PDF, then the
     // invoice), fill-only-empty — no longer just the first match.

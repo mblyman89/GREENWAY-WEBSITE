@@ -764,6 +764,7 @@ import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-reso
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
 import { __runEmailHarvestTests } from "../../src/lib/inbound-email/email-harvest-core";
+import { __runOddFormatTests } from "../../src/lib/inbound-email/odd-format-core";
 import { __runLlamaparseCoreTests } from "../../src/lib/inbound-email/llamaparse-core";
 import { __runLlamaParseStatusCoreTests } from "../../src/lib/inbound-email/llamaparse-status-core";
 import { __runTransportFieldsCoreTests } from "../../src/lib/inventory/transport-fields-core";
@@ -1904,6 +1905,7 @@ __runLiquidVolumeTests();
   __runCultiveraInvoiceTests();
   assertNoFailures("generic-pdf-transport", __runGenericPdfTransportTests());
   assertNoFailures("email-harvest", __runEmailHarvestTests());
+  assertNoFailures("odd-format", __runOddFormatTests()); // D229
   __runIntakeChecklistCoreTests();
   __runIdCaptureCoreTests();
   __runCultiveraMenuCoreTests();

@@ -33,6 +33,7 @@ import {
   type NormalizedAttachment,
 } from "@/lib/inbound-email/inbound-normalize-core";
 import { pathLooksTransferData } from "@/lib/inbound-email/resend-receiving-core";
+import { looksLikeCcrsManifestCsv } from "@/lib/inbound-email/odd-format-core";
 
 /** What a document in a vendor intake email can BE. */
 export type DocRole = "manifest" | "invoice" | "coa" | "transfer-json" | "other";
@@ -216,7 +217,9 @@ export function assessEmailDocs(
     attachments.some(
       (a) => isPdfAttachment(a) && !!a.base64 && classifyAttachmentRole(a) === role,
     );
-  const manifestPdf = havePdfRole("manifest");
+  // D229: the official CCRS manifest CSV IS the manifest (Evergreen Herbal
+  // linked it as "CCRS Manifest"), so it satisfies this line of the checklist.
+  const manifestPdf = havePdfRole("manifest") || attachments.some((a) => looksLikeCcrsManifestCsv(a.text));
   const invoicePdf = havePdfRole("invoice");
   const coa = havePdfRole("coa");
   const body = typeof bodyText === "string" && bodyText.trim().length > 0;

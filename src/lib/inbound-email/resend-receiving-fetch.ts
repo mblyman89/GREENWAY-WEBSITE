@@ -44,7 +44,7 @@ import {
   planLinkPdfFetches,
   type ReceivingAttachmentMeta,
 } from "@/lib/inbound-email/resend-receiving-core";
-import { fetchTransferJson, fetchPdfBytes } from "@/lib/inventory/transfer-fetch";
+import { fetchTransferJson, fetchPdfBytes, fetchDocument, type DocumentFetchResult } from "@/lib/inventory/transfer-fetch";
 import { cleanUrl } from "@/lib/inventory/intake-parser";
 import { explodeEml, looksLikeJsonText } from "@/lib/inbound-email/intake-harden-core";
 import {
@@ -212,8 +212,8 @@ export async function enrichResendInbound(
   const from = full && typeof full.from === "string" ? full.from : baseFrom;
   const to = full ? parseRecipients(full.to) : baseTo;
   const subject = full && typeof full.subject === "string" ? full.subject : baseSubject;
-  let html = full ? decodeDataUriHtml((full.html as string) ?? null) : "";
-  let text = full && typeof full.text === "string" ? full.text : "";
+  const html = full ? decodeDataUriHtml((full.html as string) ?? null) : "";
+  const text = full && typeof full.text === "string" ? full.text : "";
 
   const attachments: NormalizedAttachment[] = [];
 
@@ -380,28 +380,17 @@ export async function completeInboundEmail(draft: InboundDraft): Promise<EnrichR
   //    stored under a role-classifying filename so staging can parse the
   //    manifest PDF as a transport donor / the invoice PDF as a price+transport
   //    donor. Healthy direct sends (real MIME PDFs) plan nothing — no dup work.
+  // D229: fetchDocument reads what the link REALLY returns (PDF, a CCRS
+  // manifest CSV, JSON) - the Evergreen Herbal "CCRS Manifest" link was a CSV
+  // on Google Drive, which the PDF-only fetch threw away.
   for (const planned of planLinkPdfFetches(attachments, links)) {
     const cleanedLink = cleanUrl(planned.url) ?? planned.url;
-    const pdf = await fetchPdfBytes(cleanedLink);
-    if (pdf.ok) {
-      // Prefer the URL's own filename when it already classifies as the
-      // planned role; otherwise force the role-classifying name.
-      const urlName = filenameFromUrl(cleanedLink);
-      const filename =
-        urlName &&
-        classifyAttachmentRole({ filename: urlName, contentType: null, text: null, base64: null }) ===
-          planned.label
-          ? urlName
-          : planned.filename;
-      attachments.push({
-        filename,
-        contentType: pdf.contentType || "application/pdf",
-        text: null,
-        base64: pdf.base64,
-      });
-      notes.push(`fetched ${planned.label} PDF from link (${pdf.bytes} bytes)`);
+    const doc = await fetchDocument(cleanedLink);
+    if (doc.ok) {
+      attachments.push(linkedDocAttachment(doc, cleanedLink, planned.label, planned.filename));
+      notes.push(`fetched ${planned.label} ${docKindLabel(doc)} from link (${doc.bytes} bytes${doc.filename ? `, "${doc.filename}"` : ""})`);
     } else {
-      notes.push(`${planned.label} link found but PDF fetch failed (${pdf.error})`);
+      notes.push(`${planned.label} link found but fetch failed (${doc.error})`);
     }
   }
 
@@ -465,19 +454,14 @@ export async function completeInboundEmail(draft: InboundDraft): Promise<EnrichR
         if (p.role === "invoice" && assess.invoicePdf) continue;
         if (p.role === "coa" && assess.coa) continue;
         const cleaned = cleanUrl(p.url) ?? p.url;
-        const pdf = await fetchPdfBytes(cleaned);
-        if (!pdf.ok) {
-          notes.push(`second-pass ${p.role} fetch failed (${pdf.error})`);
+        const doc = await fetchDocument(cleaned); // D229: any usable kind
+        if (!doc.ok) {
+          notes.push(`second-pass ${p.role} fetch failed (${doc.error})`);
           continue;
         }
-        const filename = p.filename ?? filenameFromUrl(cleaned) ?? "document.pdf";
-        attachments.push({
-          filename,
-          contentType: pdf.contentType || "application/pdf",
-          text: null,
-          base64: pdf.base64,
-        });
-        notes.push(`second-pass fetched ${p.role} PDF from link (${pdf.bytes} bytes)`);
+        const role = p.role === "manifest" || p.role === "invoice" || p.role === "coa" ? p.role : null;
+        attachments.push(linkedDocAttachment(doc, cleaned, role, p.filename ?? "document.pdf", p.filename == null));
+        notes.push(`second-pass fetched ${p.role} ${docKindLabel(doc)} from link (${doc.bytes} bytes)`);
         assess = assessEmailDocs(attachments, text);
       }
     }
@@ -511,6 +495,37 @@ export async function completeInboundEmail(draft: InboundDraft): Promise<EnrichR
     email,
     fetchNote: notes.length > 0 ? notes.join("; ") : "no attachments or transfer link found",
   };
+}
+
+/** D229: "PDF" / "CCRS manifest CSV" / "JSON" for the fetch note. */
+function docKindLabel(doc: Extract<DocumentFetchResult, { ok: true }>): string {
+  return doc.kind === "pdf" ? "PDF" : doc.kind === "ccrs-csv" ? "CCRS manifest CSV" : doc.kind === "json" ? "JSON" : "CSV";
+}
+
+/**
+ * D229: a fetched linked document -> an attachment. A PDF keeps a name that
+ * classifies as its role (the file's own name when it already does, else the
+ * role name). A CSV / JSON keeps its text, under the file's own name when the
+ * server gave one, so the strict CSV / WCIA gates read it like a real
+ * attachment.
+ */
+function linkedDocAttachment(
+  doc: Extract<DocumentFetchResult, { ok: true }>,
+  url: string,
+  role: "manifest" | "invoice" | "coa" | null,
+  roleFilename: string,
+  keepOwnName = false,
+): NormalizedAttachment {
+  if (doc.kind === "pdf") {
+    const own = doc.filename ?? filenameFromUrl(url);
+    const ownRole = own ? classifyAttachmentRole({ filename: own, contentType: null, text: null, base64: null }) : null;
+    const filename = own && (keepOwnName || (role && ownRole === role)) ? own : roleFilename;
+    return { filename, contentType: "application/pdf", text: null, base64: doc.base64 };
+  }
+  const ext = doc.kind === "json" ? ".json" : ".csv";
+  const own = doc.filename && doc.filename.toLowerCase().endsWith(ext) ? doc.filename : null;
+  const filename = own ?? `${role ?? "document"}${ext}`;
+  return { filename, contentType: doc.contentType, text: doc.text, base64: doc.base64 };
 }
 
 /** A downloaded file -> NormalizedAttachment (text kept when it is JSON / CSV / text). Shared with the Gmail read. */

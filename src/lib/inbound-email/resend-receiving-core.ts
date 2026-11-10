@@ -38,6 +38,7 @@
  * assembles a NormalizedInboundEmail from these pieces.
  */
 import { normalizeForLinks, wrappedUrlVariants } from "@/lib/inbound-email/intake-harden-core";
+import { JSON_LINK_LABEL, labelThenLinkUrls } from "@/lib/inbound-email/odd-format-core";
 import {
   classifyAttachmentRole,
   isPdfAttachment,
@@ -267,8 +268,12 @@ export function extractAllTransferLinksFromBody(
   const allUrls = (combined.match(ANY_URL_RE) ?? []).map(stripTrailingPunct);
   const shapeLinks = allUrls.filter(pathLooksTransferData);
   const labelLinks = labeledTransferLinks(htmlStr, textStr);
+  // D229: a transfer behind a plain "JSON link:" label, with the URL on a
+  // later line (Evergreen Herbal: evergreen-links.conflabs.com/?id=...). Same
+  // safety: it must fetch as JSON and pass the strict WCIA gate to stage.
+  const jsonLabelLinks = jsonLabeledLinks(htmlStr, textStr);
 
-  const found = Array.from(new Set([...vendorLinks, ...shapeLinks, ...labelLinks]));
+  const found = Array.from(new Set([...vendorLinks, ...shapeLinks, ...labelLinks, ...jsonLabelLinks]));
 
   // R74 S51: a link wrapped across lines by the mail client (the owner's
   // GrowFlow email: `token=EAAA%` + newline + `2Fk0Hq...`) is rebuilt and
@@ -308,6 +313,7 @@ export function extractTransferLinksFromBody(
   const allUrls = (combined.match(ANY_URL_RE) ?? []).map(stripTrailingPunct);
   const shapeMatches = allUrls.filter(pathLooksTransferData);
   const labelMatches = labeledTransferLinks(htmlStr, textStr);
+  const jsonLabelMatches = jsonLabeledLinks(htmlStr, textStr); // D229
   transferJsonUrl =
     // Priority (most trustworthy first):
     //   1) a vendor-recognized `.json` (Cultivera / OpenTHC — the direct file),
@@ -323,6 +329,7 @@ export function extractTransferLinksFromBody(
     endpointMatches[0] ??
     shapeMatches[0] ??
     labelMatches[0] ??
+    jsonLabelMatches[0] ??
     jsonMatches[0] ??
     allCandidates[0] ??
     null;
@@ -402,21 +409,32 @@ function findLabeledLink(
   // Note: [\s\S] instead of the `s` (dotAll) flag — the project's TS target
   // predates es2018, so the `s` flag isn't available.
   const anchorRe = /<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = anchorRe.exec(html)) !== null) {
-    const href = m[1];
-    const inner = stripTags(m[2]).toLowerCase();
-    const start = m.index;
-    const end = m.index + m[0].length;
-    // "Click here to download the invoice." puts the keyword AFTER the anchor,
-    // so scan a window on both sides of the <a>...</a> (plus the anchor text).
-    const before = html.slice(Math.max(0, start - 60), start).toLowerCase();
-    const after = html.slice(end, Math.min(html.length, end + 60)).toLowerCase();
-    if (
-      (inner.includes(kw) || before.includes(kw) || after.includes(kw)) &&
-      isUsable(href)
-    ) {
-      return stripTrailingPunct(href);
+  // D229: two passes. (1) STRICT - the keyword is in the anchor text or on the
+  // anchor's own line (the window stops at a block boundary). The Evergreen
+  // Herbal email put "Proforma Invoice: <a>" on one line and "CCRS Manifest:"
+  // on the next, so the old 60-character window gave the INVOICE link to the
+  // manifest. (2) the old wide window, only when no anchor qualified strictly
+  // ("download the manifest:<br><a>here</a>").
+  for (const strict of [true, false]) {
+    anchorRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = anchorRe.exec(html)) !== null) {
+      const href = m[1];
+      const inner = stripTags(m[2]).toLowerCase();
+      const start = m.index;
+      const end = m.index + m[0].length;
+      // "Click here to download the invoice." puts the keyword AFTER the anchor,
+      // so scan a window on both sides of the <a>...</a> (plus the anchor text).
+      const rawBefore = html.slice(Math.max(0, start - 60), start);
+      const rawAfter = html.slice(end, Math.min(html.length, end + 60));
+      const before = (strict ? sameLineBefore(rawBefore) : rawBefore).toLowerCase();
+      const after = (strict ? sameLineAfter(rawAfter) : rawAfter).toLowerCase();
+      if (
+        (inner.includes(kw) || before.includes(kw) || after.includes(kw)) &&
+        isUsable(href)
+      ) {
+        return stripTrailingPunct(href);
+      }
     }
   }
 
@@ -429,6 +447,36 @@ function findLabeledLink(
     }
   }
   return null;
+}
+
+/**
+ * D229: URLs presented under a plain "JSON link:" / "JSON:" label. A URL that
+ * is plainly a document (a .pdf / .csv, or a file-share link) is not a
+ * transfer and is left out. PURE.
+ */
+export function jsonLabeledLinks(html: string, text: string): string[] {
+  return labelThenLinkUrls(html, text, JSON_LINK_LABEL).filter(
+    (u) => !/\.(?:pdf|csv)(?:\?|$)/i.test(u) && !/(?:drive|docs)\.google\.com|dropbox\.com/i.test(u),
+  );
+}
+
+/** D229: block boundaries that end an anchor's own line. */
+const LINE_BOUNDARY_RE = /<\/?(?:p|br|li|div|td|tr|table|ul|ol|h[1-6])\b[^>]*>|\r?\n/gi;
+
+/** The part of a before-window on the anchor's own line. PURE. */
+function sameLineBefore(raw: string): string {
+  let lastEnd = 0;
+  LINE_BOUNDARY_RE.lastIndex = 0;
+  let b: RegExpExecArray | null;
+  while ((b = LINE_BOUNDARY_RE.exec(raw)) !== null) lastEnd = b.index + b[0].length;
+  return raw.slice(lastEnd);
+}
+
+/** The part of an after-window on the anchor's own line. PURE. */
+function sameLineAfter(raw: string): string {
+  LINE_BOUNDARY_RE.lastIndex = 0;
+  const b = LINE_BOUNDARY_RE.exec(raw);
+  return b ? raw.slice(0, b.index) : raw;
 }
 
 /**

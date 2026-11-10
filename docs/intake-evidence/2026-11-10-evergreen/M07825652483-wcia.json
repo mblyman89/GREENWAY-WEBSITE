@@ -1,0 +1,2089 @@
+{
+  "document_name": "WCIA Transfer Schema",
+  "document_schema_version": "2.1.0",
+  "document_origin": "https://treholdco.acumatica.com/(W(20))/Main?CompanyID=Tre+Hold+Co&ScreenId=SO302000&ShipmentNbr=M07825652483",
+  "from_license_number": "078256",
+  "from_license_name": "EVERGREEN HERBAL",
+  "to_license_number": "413541",
+  "to_license_name": "Greenway Marijuana",
+  "transporter_name": "Cory Barkley",
+  "transporter_license": "078256",
+  "manifest_type": "transporter",
+  "created_at": "2026-11-09T07:30:05.4800Z",
+  "updated_at": "2026-11-09T14:29:57.4800Z",
+  "transferred_at": "2026-11-10T00:00:00.0000Z",
+  "transfer_id": "M07825652483",
+  "est_departed_at": "2026-11-10T00:00:00.0000Z",
+  "est_arrival_at": "2026-11-10T00:00:00.0000Z",
+  "external_id": "M07825652483",
+  "inventory_transfer_items": [
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Zero Sugar - Green Apple 100mg THC",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "1",
+      "line_price": "105.00",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683015",
+      "sample_source_id": "07825683015",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-n02yf7XouuqJ-WA-261003-151",
+      "lab_result_data": {
+        "lab_result_id": "WA-261003-151",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1jCXa-zoFVb3K-pM27fasHQXMzxAUE6hs/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1cEam1a6J5UZ3dsUpXrUy4BX-rm8NFAN9/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1cEam1a6J5UZ3dsUpXrUy4BX-rm8NFAN9/view?usp=drivesdk",
+            "lab_result_id": "WA-261003-151",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-n02yf7XouuqJ-WA-261003-151",
+            "coa_release_date": "2026-10-04T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-04T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-04T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.230000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.230000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 11.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Organic Dark Chocolate - Sea Salt 100mg THC",
+      "qty": 12.0,
+      "unit_weight": "45.00",
+      "serving_weight": "10",
+      "line_price": "99.96",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683034",
+      "sample_source_id": "07825683034",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-TAlPOEB2Jo6c-WA-261007-002",
+      "lab_result_data": {
+        "lab_result_id": "WA-261007-002",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1eLN4Ap3TLEeQnxytn6ZMjUsevQ1pgMbh/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1JgiCrf_r4ecwWoVkwy2g4f-46Ft5fpfq/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1JgiCrf_r4ecwWoVkwy2g4f-46Ft5fpfq/view?usp=drivesdk",
+            "lab_result_id": "WA-261007-002",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-TAlPOEB2Jo6c-WA-261007-002",
+            "coa_release_date": "2026-10-07T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-07T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-07T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 9.900000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 9.900000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 9.900000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Organic Milk Chocolate - 100mg THC",
+      "qty": 12.0,
+      "unit_weight": "45.00",
+      "serving_weight": "10",
+      "line_price": "99.96",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683046",
+      "sample_source_id": "07825683046",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-XO0mlcUE4Rdf-WA-261009-057",
+      "lab_result_data": {
+        "lab_result_id": "WA-261009-057",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1WBxrktNMG-Wy59FrpxQ6WUyerVQlJat9/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1lEqYWhODJa9uCp23um7lRhFjPjgO-gUs/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1lEqYWhODJa9uCp23um7lRhFjPjgO-gUs/view?usp=drivesdk",
+            "lab_result_id": "WA-261009-057",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-XO0mlcUE4Rdf-WA-261009-057",
+            "coa_release_date": "2026-10-11T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-11T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-11T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 9.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 9.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 9.800000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Organic Dark Chocolate - Sea Salt 1:1:1:1 CBC:CBG:CBD:THC 400mg",
+      "qty": 12.0,
+      "unit_weight": "45.00",
+      "serving_weight": "10",
+      "line_price": "119.40",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683072",
+      "sample_source_id": "07825683072",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-7vJpcuyJP6KY-WA-261023-010",
+      "lab_result_data": {
+        "lab_result_id": "WA-261023-010",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1IJ0XiroNCV_9I51JEFx-Nmppincf8JpM/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1UAhkKbGtGLkAJE7nn8s2-FvBJ39e0pFm/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1UAhkKbGtGLkAJE7nn8s2-FvBJ39e0pFm/view?usp=drivesdk",
+            "lab_result_id": "WA-261023-010",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-7vJpcuyJP6KY-WA-261023-010",
+            "coa_release_date": "2026-10-24T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-24T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-24T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 9.600000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 41.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Organic Milk Chocolate - 1:1:1:1 CBC:CBG:CBD:THC 400mg",
+      "qty": 12.0,
+      "unit_weight": "45.00",
+      "serving_weight": "10",
+      "line_price": "119.40",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683054",
+      "sample_source_id": "07825683054",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-YxYAX43KZJqa-WA-261013-008",
+      "lab_result_data": {
+        "lab_result_id": "WA-261013-008",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/17MdhWmVxfvZU1jJF38JDoUEDYKG4L7QK/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1sCtwz87kvzxVhT8mEe1Cs6Da5rWdVi3s/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1sCtwz87kvzxVhT8mEe1Cs6Da5rWdVi3s/view?usp=drivesdk",
+            "lab_result_id": "WA-261013-008",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-YxYAX43KZJqa-WA-261013-008",
+            "coa_release_date": "2026-10-14T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-14T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-14T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 8.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 9.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 9.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 9.700000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 38.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Organic Milk Chocolate - 2:2:1 CBN:CBD:THC 500mg",
+      "qty": 12.0,
+      "unit_weight": "45.00",
+      "serving_weight": "10",
+      "line_price": "119.40",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683044",
+      "sample_source_id": "07825683044",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-xmEG5dKje3nx-WA-261009-052",
+      "lab_result_data": {
+        "lab_result_id": "WA-261009-052",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1ZRvTOKVIRWsUBWj_WX5l_g5EvFkkVufr/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1qjM-9xRUuIQQ5fCCxeljHvV-kGaS37Dq/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1qjM-9xRUuIQQ5fCCxeljHvV-kGaS37Dq/view?usp=drivesdk",
+            "lab_result_id": "WA-261009-052",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-xmEG5dKje3nx-WA-261009-052",
+            "coa_release_date": "2026-10-11T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-11T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-11T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 21.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 9.500000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 9.500000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 50.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Social Tonic 12oz Can - THC/CBG/CBD - Cucumber Kick - 6 Pack",
+      "qty": 4.000000,
+      "unit_weight": "355.00",
+      "serving_weight": "1",
+      "line_price": "40.32",
+      "uom": "EACH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683059",
+      "sample_source_id": "07825683059",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-Bogtjf1QMGkB-WA-261016-000",
+      "lab_result_data": {
+        "lab_result_id": "WA-261016-000",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1kN1XsfNCiN_wzWMaNRf5f3e2Ic4KEWji/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1WuJMQrzdxofiLAVm_wUXqc1sKb1N3MBU/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1WuJMQrzdxofiLAVm_wUXqc1sKb1N3MBU/view?usp=drivesdk",
+            "lab_result_id": "WA-261016-000",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-Bogtjf1QMGkB-WA-261016-000",
+            "coa_release_date": "2026-10-16T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-16T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-16T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 2.500000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 2.500000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 2.600000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 2.300000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 2.300000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 7.500000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Liquid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Social Tonic 12oz Can - THC/CBG/CBD - Limonata - 6 Pack",
+      "qty": 4.000000,
+      "unit_weight": "355.00",
+      "serving_weight": "1",
+      "line_price": "40.32",
+      "uom": "EACH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683060",
+      "sample_source_id": "07825683060",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-3v0BBgjo5EtN-WA-261016-001",
+      "lab_result_data": {
+        "lab_result_id": "WA-261016-001",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1YlNzrUi2TJzoPNKyIW7d2ochLsJyHUIZ/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1N45QKvXPQJIWZvEh_FFpVfhP6AlSub8E/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1N45QKvXPQJIWZvEh_FFpVfhP6AlSub8E/view?usp=drivesdk",
+            "lab_result_id": "WA-261016-001",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-3v0BBgjo5EtN-WA-261016-001",
+            "coa_release_date": "2026-10-16T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-16T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-16T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 3.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 3.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 2.900000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 2.500000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 2.500000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 8.500000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Liquid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "420 Brand - Social Tonic 12oz Can - THC/CBG/CBD - Peach - 6 Pack",
+      "qty": 4.000000,
+      "unit_weight": "355.00",
+      "serving_weight": "1",
+      "line_price": "40.32",
+      "uom": "EACH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683053",
+      "sample_source_id": "07825683053",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-vzWBKsMZyPG4-WA-261013-000",
+      "lab_result_data": {
+        "lab_result_id": " WA-261013-000",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1hLtQ9TuaLSrVrGa0na6sx08cNSohLj4a/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1hURSLR14xjL_uar8LARohO_NsIL57jaK/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1hURSLR14xjL_uar8LARohO_NsIL57jaK/view?usp=drivesdk",
+            "lab_result_id": " WA-261013-000",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-vzWBKsMZyPG4-WA-261013-000",
+            "coa_release_date": "2026-10-14T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-14T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-14T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 3.300000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 3.300000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 4.100000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 2.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 2.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 10.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Liquid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Blue Raspberriezzz 2:2:1 CBN:CBD:THC 500mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "10",
+      "line_price": "83.76",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683058",
+      "sample_source_id": "07825683058",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-SyQir0wmpqo1-WA-261016-105",
+      "lab_result_data": {
+        "lab_result_id": "WA-261016-105",
+        "lab_result_status": "pass",
+        "coa": "https://drive.google.com/file/d/1Zp9CadMGX_amTWURDfMUBEj8lly8PKrz/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1Zp9CadMGX_amTWURDfMUBEj8lly8PKrz/view?usp=drivesdk",
+            "lab_result_id": "WA-261016-105",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-SyQir0wmpqo1-WA-261016-105",
+            "coa_release_date": "2026-10-18T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-18T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-18T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.280000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 22.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 52.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Kiwi Strawberry 1:1:1:1 CBG:CBC:CBD:THC 400mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "line_price": "83.76",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683001",
+      "sample_source_id": "07825683001",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-RJPlacs8H5Qu-WA-260925-076",
+      "lab_result_data": {
+        "lab_result_id": "WA-260925-076",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1D7P0MuoA1ZR4kI0wzlGAwStm079Mbz8w/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1DlHzY4b7wq1JKwdfRr340PLjqTKhJcLx/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1DlHzY4b7wq1JKwdfRr340PLjqTKhJcLx/view?usp=drivesdk",
+            "lab_result_id": "WA-260925-076",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-RJPlacs8H5Qu-WA-260925-076",
+            "coa_release_date": "2026-09-26T00:00:00.0000Z",
+            "coa_amended_date": "2026-09-26T00:00:00.0000Z",
+            "coa_expire_date": "2026-09-26T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.290000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 42.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Pomegranate Acai 2:2:1 CBN:CBD:THC 500mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "10",
+      "line_price": "83.76",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683033",
+      "sample_source_id": "07825683033",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-rqI36dZ9y5Uq-WA-261008-146",
+      "lab_result_data": {
+        "lab_result_id": "WA-261008-146",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1xWaQKOyzXktjz1Ro4Vt_2DG_d-z61WZA/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/13POUWGksJBUkiJV1LMHCzzKCipntpM5O/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/13POUWGksJBUkiJV1LMHCzzKCipntpM5O/view?usp=drivesdk",
+            "lab_result_id": "WA-261008-146",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-rqI36dZ9y5Uq-WA-261008-146",
+            "coa_release_date": "2026-10-09T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-09T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-09T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.350000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 21.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 52.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Zero Sugar - Good Night Grape 2:2:1 CBN:CBD:THC 500mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "1",
+      "line_price": "105.00",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683081",
+      "sample_source_id": "07825683081",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-47WXUILqhE2F-WA-261028-000",
+      "lab_result_data": {
+        "lab_result_id": " WA-261028-000",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1MwMtoWbHTPSywn0BKRXgTrH2j5UIR6nx/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/17ji24q4Umd2e3CQQHO6eeJ9Zzcm1vMq3/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/17ji24q4Umd2e3CQQHO6eeJ9Zzcm1vMq3/view?usp=drivesdk",
+            "lab_result_id": " WA-261028-000",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-47WXUILqhE2F-WA-261028-000",
+            "coa_release_date": "2026-10-28T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-28T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-28T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 22.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 22.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 23.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 56.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "Sunberry"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Zero Sugar - Raspberry Lime 1:1:1:1 CBG:CBC:CBD:THC 400mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "1",
+      "line_price": "105.00",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683027",
+      "sample_source_id": "07825683027",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-sz8Sw0HOLlPY-WA-261013-106",
+      "lab_result_data": {
+        "lab_result_id": "WA-261013-106",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1xZE_EBwjpxsJXxA87EnRV_-5JpMqWckM/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1miJsmn_qeZfkI7etxO-TKlucRBANWlA8/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1miJsmn_qeZfkI7etxO-TKlucRBANWlA8/view?usp=drivesdk",
+            "lab_result_id": "WA-261013-106",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-sz8Sw0HOLlPY-WA-261013-106",
+            "coa_release_date": "2026-10-14T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-14T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-14T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 9.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 41.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Wild Cherry 2:2:1 CBG:CBD:THC 500mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "10",
+      "line_price": "83.76",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683048",
+      "sample_source_id": "07825683048",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-F8VGC4r3pDXG-WA-261013-004",
+      "lab_result_data": {
+        "lab_result_id": "WA-261013-004",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/10m_1rHbPA8vMbi-GpGfDNmdvAVs9rq23/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1DpPA02UQliR403ifOvIrxIQgeHCP1HX0/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1DpPA02UQliR403ifOvIrxIQgeHCP1HX0/view?usp=drivesdk",
+            "lab_result_id": "WA-261013-004",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-F8VGC4r3pDXG-WA-261013-004",
+            "coa_release_date": "2026-10-14T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-14T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-14T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 21.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 21.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 20.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 52.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Rosin - Baja Blaze 1:1:1:1 CBC:CBG:CBD:THC 400mg",
+      "qty": 12.0,
+      "unit_weight": "27.00",
+      "line_price": "94.56",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683066",
+      "sample_source_id": "07825683066",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-pjTyg74hNvsu-WA-261021-000",
+      "lab_result_data": {
+        "lab_result_id": "WA-261021-000",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1Nle4N2ZtAeSdS6fcD0KM3xojAdeuXrQ7/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1L_hjmtOtfvt68uAqe2_EiQJJSyBMSHE_/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1L_hjmtOtfvt68uAqe2_EiQJJSyBMSHE_/view?usp=drivesdk",
+            "lab_result_id": "WA-261021-000",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-pjTyg74hNvsu-WA-261021-000",
+            "coa_release_date": "2026-10-21T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-21T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-21T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 9.600000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 9.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 40.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "BLAZE Gummy - Rosin - POG 1:1:1:1 CBC:CBG:CBD:THC 400mg",
+      "qty": 12.0,
+      "unit_weight": "50.00",
+      "serving_weight": "10",
+      "line_price": "94.56",
+      "uom": "POUCH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683071",
+      "sample_source_id": "07825683071",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-u1AeSRFG9Lsd-WA-261023-014",
+      "lab_result_data": {
+        "lab_result_id": "WA-261023-014",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/100qoJozjk4vdMb-5xwBGB7FDTlyVurAE/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1D7hWV9PzcvJu7TAlejw33LJeivXB0YGA/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1D7hWV9PzcvJu7TAlejw33LJeivXB0YGA/view?usp=drivesdk",
+            "lab_result_id": "WA-261023-014",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-u1AeSRFG9Lsd-WA-261023-014",
+            "coa_release_date": "2026-10-24T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-24T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-24T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 9.600000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 11.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 10.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 41.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "MAJOR Shot - 2oz - Blueberry 100mg THC",
+      "qty": 24.000000,
+      "unit_weight": "56.00",
+      "serving_weight": "10",
+      "line_price": "84.00",
+      "uom": "EACH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683057",
+      "sample_source_id": "07825683057",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-LXflywUmKXr6-WA-261015-030",
+      "lab_result_data": {
+        "lab_result_id": "WA-261015-030",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1ibo854INfeZFGr4gYN-Ler4KSgk8ltXJ/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/1I7FY7O7E9q9CB_i4LClJ136pupW1-YRU/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/1I7FY7O7E9q9CB_i4LClJ136pupW1-YRU/view?usp=drivesdk",
+            "lab_result_id": "WA-261015-030",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-LXflywUmKXr6-WA-261015-030",
+            "coa_release_date": "2026-10-16T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-16T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-16T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.730000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.730000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 3.800000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 1.900000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 110.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.310000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 110.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 110.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Liquid Edible",
+      "strain_name": "#1 Mixed"
+    },
+    {
+      "is_sample": 0,
+      "sample_type": "null",
+      "product_name": "MAJOR Shot - 2oz - Fruit Punch 100mg THC",
+      "qty": 24.000000,
+      "unit_weight": "56.00",
+      "serving_weight": "10",
+      "line_price": "84.00",
+      "uom": "EACH",
+      "unit_weight_uom": "g",
+      "inventory_id": "07825683056",
+      "sample_source_id": "07825683056",
+      "is_medical": 1,
+      "is_for_extraction": 0,
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-wDAXrKrcP5PN-WA-261015-026",
+      "lab_result_data": {
+        "lab_result_id": "WA-261015-026",
+        "lab_result_status": "pass",
+        "lab_result_detail": "https://drive.google.com/file/d/1ey9MFXtFq8YOaYeGF0TGbVnyXO34Zcam/view?usp=drivesdk",
+        "coa": "https://drive.google.com/file/d/15HjFpAE6d6GOQY0Us9__Y6AvB7eWkV3n/view?usp=drivesdk",
+        "lab_result_list": [
+          {
+            "coa": "https://drive.google.com/file/d/15HjFpAE6d6GOQY0Us9__Y6AvB7eWkV3n/view?usp=drivesdk",
+            "lab_result_id": "WA-261015-026",
+            "lab_result_status": "pass",
+            "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-wDAXrKrcP5PN-WA-261015-026",
+            "coa_release_date": "2026-10-16T00:00:00.0000Z",
+            "coa_amended_date": "2026-10-16T00:00:00.0000Z",
+            "coa_expire_date": "2026-10-16T00:00:00.0000Z"
+          }
+        ],
+        "potency": [
+          {
+            "type": "cbc",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.700000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbdv",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.700000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbg",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbga",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbn",
+            "value": 1.900000,
+            "unit": "pct"
+          },
+          {
+            "type": "delta9THC",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 110.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "thcv",
+            "value": 0.340000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 110.000000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 110.000000,
+            "unit": "pct"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Liquid Edible",
+      "strain_name": "#1 Mixed"
+    }
+  ]
+}
