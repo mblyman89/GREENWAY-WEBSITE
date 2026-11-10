@@ -237,11 +237,11 @@ export function __runMenuCardFallbackTests(): { passed: number; failed: number }
   ok(parseMediaId("x; drop table") === null, "non-uuid refused");
 
   const urls = new Map([["flower", "https://cdn.test/flower.webp"], ["preroll", "https://cdn.test/pr.webp"]]);
-  const own = { category: "flower", imageUrl: "https://cdn.test/own.webp", imageIsFallback: false };
-  const borrowed = { category: "flower", imageUrl: "https://cdn.test/borrowed.webp" }; // S20: isFallback absent
-  const generic = { category: "flower", imageUrl: "https://cdn.test/kb-sub.webp", imageIsFallback: true };
-  const blank = { category: "flower" };
-  const other = { category: "topical" };
+  const own: FallbackableItem = { category: "flower", imageUrl: "https://cdn.test/own.webp", imageIsFallback: false };
+  const borrowed: FallbackableItem = { category: "flower", imageUrl: "https://cdn.test/borrowed.webp" }; // S20: isFallback absent
+  const generic: FallbackableItem = { category: "flower", imageUrl: "https://cdn.test/kb-sub.webp", imageIsFallback: true };
+  const blank: FallbackableItem = { category: "flower" };
+  const other: FallbackableItem = { category: "topical" };
   const [a, b, c, d, e] = applyMenuCardFallbacks([own, borrowed, generic, blank, other], urls);
   ok(a === own, "own photo untouched (same object)");
   ok(b === borrowed, "borrowed product photo untouched");
@@ -250,9 +250,9 @@ export function __runMenuCardFallbackTests(): { passed: number; failed: number }
   ok(e === other, "category without a fallback untouched");
   ok(blank.imageUrl === undefined, "input never mutated");
   ok(applyMenuCardFallbacks([blank], new Map()).length === 1, "no fallbacks -> same length");
-  ok(applyMenuCardFallbacks([{ category: "flower" }], new Map([["flower", "  "]]))[0]!.imageUrl === undefined, "empty URL ignored");
-  ok(applyMenuCardFallbacks([{ category: "Flower" }], urls)[0]!.imageUrl === "https://cdn.test/flower.webp", "category case-insensitive");
-  ok(applyMenuCardFallbacks([{ category: null }], urls)[0]!.imageUrl === undefined, "no category -> unchanged");
+  ok(applyMenuCardFallbacks<FallbackableItem>([{ category: "flower" }], new Map([["flower", "  "]]))[0]!.imageUrl === undefined, "empty URL ignored");
+  ok(applyMenuCardFallbacks<FallbackableItem>([{ category: "Flower" }], urls)[0]!.imageUrl === "https://cdn.test/flower.webp", "category case-insensitive");
+  ok(applyMenuCardFallbacks<FallbackableItem>([{ category: null }], urls)[0]!.imageUrl === undefined, "no category -> unchanged");
 
   // single-product form
   const exact = { url: "u-own", source: "exact", isFallback: false };
