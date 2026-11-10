@@ -2221,3 +2221,11 @@ Docs only: this section and the strategy doc. No code or schema changed.
   - The media page search matches every word across the new fields.
 - Docs: MIGRATIONS_TO_RUN 0350/0351 notes corrected ("Run without RLS") and a 0352 entry with checks.
 - Next slices: M3 (review queue + folders on the new columns), M4 (luna high-detail describe / SEO / embeddings using `media_ai_runs`), M5–M8 as in the D221 strategy doc.
+
+## D222 — Vendor menus: LeafLink connection is broken, and the logo fetch misses vendors whose logo is on their profile (2026-11-09)
+
+### Owner request (verbatim; the LeafLink password is withheld from the repo on purpose)
+
+> I need your help fixing a couple of things related to the vendor menu feature. Leaflink is not working, and the vendor logo fetch needs improving. The logo fetch works sometimes, but fails to fetch several. I go to their profile to see if it's there, and it is, in the same place as all the others that were fetched, so there is something funky happening in the code causing some to fail. Please log in to leaflink as me, get the data you need, the api, end points, whatever, and then fix the code so we can connect to them properly. Then work on fixing the logo fetcher so it can fetch the remaining logos I am missing. Clone the repo, read agents.md, the standing rules, recon the code, research the internet if needed, visit leaflink, report, then fix all issues. I have another agent working, so push all code to the repo, but do not merge it until I tell you it is safe to do so. Get work out of the sandbox, it is unstable. Follow the standing rules. Thank you. Leaflink username: stephen@greenwaymarijuana.com Password: [withheld]
+
+Merge status: **do not merge** until the owner says it is safe (another agent is working on `main`).
