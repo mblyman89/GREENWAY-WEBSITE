@@ -2341,3 +2341,11 @@ Read-only on the live database, 2026-11-10, after 0352 was applied:
   - The Product JSON-LD carries an `ImageObject`.
   - `sitemap.ts` lists each product page's own photo.
 - **Tests:** `tests/compliance/d221-m5-m8-media-finish.test.ts`. Migration pins are shifted to 0354. Factory-reset KEEP entries are added for the three new tables.
+
+## D224 — Menu card fallback images: one picture per website category for cards with no photo (2026-11-10)
+
+### Owner request (verbatim)
+
+> I need your help to add a new page and feature to the back office in the admin dropdown menu. It is a menu card fall back image uploaded/ selector. I want to be able to set a fallback image to be used for products when one isn't specifically set to that products menu card yet. There should be one image per website category, when set, automatically shows on all cards in that category without a product image set. Clone the repo, read agents.md, the standing rules, and then recon the code so you know what and how to build it. Make sure it is connected everywhere it should be and that it works for all places needed. I have another agent working, so complete and push all work out of the sandbox, it is very unstable, but do not merge until I say it is safe to do so. The sandbox does not have enough memory, so scoped tsc only on changed and new files. Follow the standing rules. Thank you.
+
+(Numbered D224 because the other agent's open branch already uses D223.)
