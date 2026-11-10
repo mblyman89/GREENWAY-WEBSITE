@@ -962,6 +962,15 @@ export async function importHarvestImageAction(formData: FormData): Promise<void
       altText: caption || `${displayName} logo`,
       uploadedBy: session.userId,
       tags: [entityType === "vendor" ? "vendor-logo" : "brand-logo"],
+      // D221 M3: the vendor is known here, so the library row carries it
+      // (and the brand when the logo is for a brand). Role stays "logo".
+      provenance: {
+        platform: "website",
+        vendorId: vendorId || null,
+        brandId: entityType === "brand" ? entityId : null,
+        role: "logo",
+        creditText: displayName,
+      },
     });
 
     let note: string;

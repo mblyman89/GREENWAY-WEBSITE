@@ -10,6 +10,9 @@ import { CANONICAL_ORIGIN } from "@/lib/site/site-domain-core";
 // R46-S2: honour the SEO Editor's "No-index" and "Include in sitemap" switches.
 import { getSitemapExclusions } from "@/lib/seo/seo-entries-server";
 import { pathOfUrl } from "@/lib/seo/seo-override-core";
+// D221 M8: image sitemap - each product page lists its OWN published photo.
+import { withResolvedImages } from "@/lib/enrichment/image-resolver";
+import { sitemapImages } from "@/lib/seo/image-seo-core";
 
 const baseUrl = CANONICAL_ORIGIN; // R40: one source of truth
 
@@ -64,18 +67,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // de-duplicated by id.
   const seen = new Set<string>();
   const liveMenuItems = await loadLiveMenuItemsCached();
-  const productEntries = [...liveMenuItems]
-    .filter((item) => {
-      if (seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
-    })
-    .map((item) => ({
+  const uniqueItems = [...liveMenuItems].filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+  // D221 M8: the same batch resolver the shop grid uses (published images
+  // only; it never throws and returns the items unchanged on any failure).
+  // Representative / fallback pictures are left out of the image sitemap.
+  const withImages = await withResolvedImages(uniqueItems).catch(() => uniqueItems);
+  const productEntries = withImages.map((item) => {
+    const images = sitemapImages([{ url: item.imageUrl ?? null, isFallback: item.imageIsFallback ?? null }]);
+    return {
       url: `${baseUrl}/menu/products/${item.id}`,
       lastModified: now,
       changeFrequency: "weekly" as const,
       priority: 0.55,
-    })) satisfies MetadataRoute.Sitemap;
+      ...(images.length > 0 ? { images } : {}),
+    };
+  }) satisfies MetadataRoute.Sitemap;
 
   // SLICE 115: individual published blog/newsletter articles. getPublishedSlugs
   // is DB-backed with a built-in fallback to the starter posts, so this never

@@ -122,7 +122,9 @@ export function explainRelationError(message: string): string | null {
  * allowed to edit .github/workflows.
  */
 export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] = [
+  { file: "scripts/recon/media-library-m5-0354-pg-check.sql", mustPrint: "MEDIA LIBRARY M5 0354 CHECK PASSED" },
   { file: "scripts/recon/media-library-v2-0352-pg-check.sql", mustPrint: "MEDIA LIBRARY V2 0352 CHECK PASSED" },
+  { file: "scripts/recon/media-library-m3-0353-pg-check.sql", mustPrint: "MEDIA LIBRARY M3 0353 CHECK PASSED" },
   { file: "scripts/recon/ach-authorizations-pg-check.sql", mustPrint: "ACH 0258 CHECK PASSED" },
   { file: "scripts/recon/vendor-vault-0259-pg-check.sql", mustPrint: "VAULT 0259 CHECK PASSED" },
   { file: "scripts/recon/ach-intake-0260-pg-check.sql", mustPrint: "ACH 0260 CHECK PASSED" },

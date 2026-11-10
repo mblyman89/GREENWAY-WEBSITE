@@ -100,9 +100,9 @@ beforeEach(() => {
 // === 1. Core ==================================================================
 describe("R21 (C) library-picker-core", () => {
   it("self-tests pass at the exact registered count", () => {
-    expect(__runLibraryPickerCoreTests()).toEqual({ passed: 34, failed: 0 });
+    expect(__runLibraryPickerCoreTests()).toEqual({ passed: 37, failed: 0 }); // D221 M6: +3 (lv / lsim hrefs)
     expect(read("scripts/compliance/run-pure-selftests.ts")).toContain(
-      'assertRan("library-picker-core", __runLibraryPickerCoreTests(), 34);',
+      'assertRan("library-picker-core", __runLibraryPickerCoreTests(), 37);',
     );
   });
 

@@ -2222,6 +2222,126 @@ Docs only: this section and the strategy doc. No code or schema changed.
 - Docs: MIGRATIONS_TO_RUN 0350/0351 notes corrected ("Run without RLS") and a 0352 entry with checks.
 - Next slices: M3 (review queue + folders on the new columns), M4 (luna high-detail describe / SEO / embeddings using `media_ai_runs`), M5–M8 as in the D221 strategy doc.
 
+## D221 (M3 + M4) — Media library: finish the vendor links, a review queue, and the gpt-6-luna "closer look" describe + SEO pass (2026-11-10)
+
+### Owner request (verbatim)
+
+> thank you! please work on the next two slices. follow the standing rules. thank you.
+
+(The next two slices of docs/sop-program/D221-media-library-strategy.md section 5: **M3** provenance backfill + misfiled-logo rule, **M4** vision + SEO backfill worker, resumable, budget-capped, recorded in `media_ai_runs`, and new pictures going forward. Model and detail as decided in D221 M1+M2: `gpt-6-luna`, `detail: "high"`.)
+
+### Findings
+
+Read-only on the live database, 2026-11-10, after 0352 was applied:
+- **988 live pictures had no vendor.** Most were Cultivera menu photos saved from the product card, so they were never linked to a menu item row and the 0352 menu-item step could not see them.
+- **Seller folder code.** Cultivera keeps each seller's pictures under a folder named with a seller code (`.../435553542D.../ProductImages/...`). Every code seen on the saved menus belongs to exactly one seller. This resolves **297** of the 988.
+- **Seller tag.** The menu save tags every picture with the seller name in kebab case (40 characters). 0352 only tried the tag as a vendor *name*, which a long seller name never matches. Matched against the saved menu snapshots instead, it resolves **569** (cultivera 500, growflow 45, no platform 24).
+- **Harvested title.** Website logos are saved as "<Vendor> (harvested)", and the host is a CDN (squarespace, wix), so the 0352 host rule could not match. The title resolves **76 of 76** logos and **51 of 59** product shots.
+- **Placeholder vendor.** The "Sub X" brand sits under the placeholder vendor "INDEPENDENT / UNLISTED VENDOR", while a real SUBX vendor exists. The placeholder must never win a match.
+- **Merged cards.** Some seller names belong to a merged vendor card (BOTANICAL ARTS - 431389 -> Buddies). The 0352 resolver skipped merged cards instead of following them to the survivor.
+- **Pictures with no platform (saved 23:23-23:49 UTC on 2026-11-09).** The edge logs show the *pre-0352* query shape (`storage_key like %/hash-% limit 1`, no `content_hash` read, no `media_resolve_vendor` call ever). So these were saved by an old deployment instance or an admin tab left open from before the deploy (version skew), not by the new code. Re-running the backfill in 0353 fixes those rows. **A hard refresh of open admin tabs after each deploy avoids this.**
+- **Review flags.** 203 pictures were flagged by 0352 step h ("Filed as a logo, but the file name looks like a product photo"), and there was no screen for deciding them.
+- **Two importers saved without provenance.** The vendor-editor "import harvested image" action and the vendor-logo finder saved logos with no provenance. `applyProvenance` also swallowed its error silently.
+- **No gpt-6-luna use yet** in `ai_usage`. There is no OpenAI key in the build sandbox, so the live vision call is first exercised on production.
+
+### Decisions
+
+- **The worker runs as a Vercel cron**, not on Railway as the strategy doc said. `/api/cron/media-describe` runs every 10 minutes at :08 (`8-59/10 * * * *`; every 5-minute offset is already used by another cron). The run is leased by compare-and-set (rule 12), an idle tick is one read, and the run row carries a dollar budget. This keeps it in the same, already-monitored platform, and Pro allows it.
+- **Model `gpt-6-luna`, image detail `high`** (env `MEDIA_AI_MODEL` / `MEDIA_AI_DETAIL` may override). Estimate for about 4,100 pictures: about $1-5, and roughly 10 hours overnight at 4 pictures at a time. The run stops *before* the call that could cross its budget, and pauses when the monthly AI budget is reached.
+- **"Inline at harvest"** = a run started with "keep describing new pictures" stays open after the backlog. New pictures are saved with `ai_status = pending`, so each one is described within one tick (about 10 minutes) of its save. This avoids putting a 10-30 second AI call inside the menu save.
+- **AI writes follow the AGENTS.md rule 3 D221 exception.** The AI only fills its own fields (description, caption, package text, tags, SEO, alt text when empty or AI-written, role when empty). It never touches a person's title, description or alt text. Anything doubtful goes to the review queue instead of being changed: logo vs product, a different brand on the package, wording blocked by the compliance lint, or low confidence. Attaching a picture to a product stays a human click.
+- **Review decisions:** Looks right / It's a product photo (refused while a vendor or brand still uses it as its logo) / It's a logo / Reject. Reject un-publishes only an *auto*-published picture and never deletes anything. A rejected picture can be un-rejected, and the AI never reopens it.
+- **Embeddings are deferred** to the slice that needs them (M6 recommender). M4 builds describe + SEO only.
+
+### As built
+
+- **Migration `0353_media_library_m3_m4.sql`** (no new table):
+  - `media_resolve_vendor` follows merges to `vendor_survivor_id`.
+  - New `media_vendor_tag()`.
+  - New `media_backfill_vendor_links()` with rules j (seller code), k (seller tag) and l (harvested title). Each rule needs a single agreeing vendor and the placeholder is excluded; credit text is then filled.
+  - `media_ai_runs` gets lease_token, lease_until, follow_new, input/output tokens and last_tick_at.
+  - `media_assets` gets reviewed_by and reviewed_at.
+  - `media_library_health` adds ai_failed, ai_skipped, rejected and ai_spend_usd.
+  - Re-runs the 0352 backfill, then the links, then auto-publish.
+  - Comes with an editor-safe copy (hazards 0), a rollback, and the pg-check `scripts/recon/media-library-m3-0353-pg-check.sql`, which is added to POST_APPLY_CHECKS.
+- **Vision provider:** `generateVisionJson()` in `src/lib/ai/provider.ts` requests JSON output, uses image detail high, and handles reasoning-model parameters, retrying with a reduced request on a 400. Usage is recorded as `media.describe`.
+- **Pure core `src/lib/media/media-describe-core.ts`** (42 self-tests): eligibility, prompt, parse, patch rules, cost, budget and lease verdicts.
+- **Pure core `src/lib/media/media-review-core.ts`** (22 self-tests): the review decisions. Both are registered in run-pure-selftests.
+- **Store `src/lib/media/media-describe-store.ts`:** start / pause / resume / stop / retry failed / describe one now / tick / panel.
+- **Cron `src/app/api/cron/media-describe/route.ts`** in vercel.json (22 crons). The cron-count pins, cadence map and AGENTS.md rule 12 schedule are updated.
+- **Admin:**
+  - "AI closer look" panel on /admin/media: counts, estimate, budget, Start with "keep describing new pictures", Pause / Resume (may raise the budget) / Stop, Retry failed, and a link to the queue.
+  - New /admin/media/review queue with Needs review and Rejected tabs, range-paged.
+  - "Describe now" plus the review buttons on each picture's page.
+  - Every action requires media.manage, writes an audit row, and the review write is compare-and-set on review_state.
+- **Provenance fixes:** both logo importers now pass provenance (role logo, vendor, credit). `applyProvenance` and the vendor resolver log their errors instead of hiding them, and the resolver no longer caches an error.
+- **Tests:** `tests/compliance/d221-m3-m4-media-ai.test.ts`. Migration pins are shifted to 0353.
+- **Verified:** tsc 0, eslint 0, pure self-tests all passed, the touched vitest suites pass, and `verify-migrations-execute` applies all 353 migrations, passes the 0353 check and re-applies 0353 cleanly.
+
+## D221 (M5–M8) — Media library: undo auto-publish, find similar, library UI v2, collections, search log, storefront image SEO (2026-11-10)
+
+### Owner request (verbatim)
+
+> Thank you! I haven't had a chance to be at my computer to check on anything yet, or apply the migrations. Please make sure there is a button from the media library page to the review page and back please. Please finish the last slices of work to be done now. Follow the standing rules. Thank you!
+
+### Findings
+
+- **Prod state (read-only).** Migrations 0352 and 0353 are already applied on production. `media_set_auto_publish` and `media_similar` do not exist yet, so **only 0354 is needed**.
+- **No link between the pages.** The /admin/media page had no button to the review queue. /admin/media/review had no way back except the sidebar.
+- **Library numbers:**
+  - 10,298 media rows: 4,105 live and 6,193 archived copies.
+  - 3,811 published, of which 3,678 were auto-published (`vendor-source-auto`).
+  - 203 pictures are waiting in the review queue.
+  - The AI describe pass has not started (0 runs).
+- **No undo for auto-publish.** Auto-publish had no one-click undo, and `media_auto_publish` would re-publish any draft that met the rules, including one a person had set back to draft.
+- **The recommender did not explain itself.** It gave no "why" for a suggestion, and it ranked logos and banners like product photos when the names matched. Onboarding and enrichment had no "search for a better picture" or "find similar".
+- **The library had little structure.** /admin/media had one search box and status tabs, with no facets, collections, search log, or SEO / AI provenance on a picture's page.
+- **Storefront image SEO.** The product page used the product name as the alt text and put only a bare `image` URL in the Product JSON-LD. The sitemap listed no images.
+
+### Decisions
+
+- **Navigation.** A "🔎 Review queue (N)" button sits in the /admin/media header, next to a "🗂️ Collections" button. A "← Back to media library" button sits on /admin/media/review and on /admin/media/collections.
+- **Undo is reversible and never deletes.** "Undo auto-publish" sets the pictures back to draft with `publish_reason = 'auto-reverted'`, and "Redo" restores them. This works for all pictures or for one, on its page. Auto-publish never re-publishes an undone picture, or a picture a person un-published.
+- **No embeddings and no pgvector for M6.** "Find similar" uses trigram name similarity, full text over the AI package text, and the same vendor, brand, strain and category. This costs nothing per query and uses the text the M4 pass writes. A vector model can be added later behind the same `media_similar` call if it is ever needed.
+- **People stay in charge (AGENTS.md rule 3, D221 exception):**
+  - bulk actions never overwrite a person's values;
+  - "Re-describe" only refreshes AI-written fields;
+  - attaching a picture to a product stays one human click in every search result.
+- **Search log is best effort.** It never blocks a search and stores no customer data.
+- **ImageObject only for the product's own photo.** A representative (fallback) picture gets neither the ImageObject nor a place in the image sitemap.
+
+### As built
+
+- **Migration `0354_media_library_m5_m8.sql`:**
+  - `media_set_auto_publish(mode, ids)`.
+  - `media_auto_publish` now requires `publish_reason` and `published_at` to be empty.
+  - `media_similar(id, limit)` returns its reasons.
+  - New tables `media_collections`, `media_collection_items` and `media_search_log` (service role only, RLS on, archive never delete).
+  - `media_search_summary(days)`.
+  - `media_library_health` adds auto_reverted, collections, searches_30d and zero_result_30d.
+  - Comes with an editor-safe copy (hazards 0), a rollback, and the pg-check `scripts/recon/media-library-m5-0354-pg-check.sql`, added to POST_APPLY_CHECKS.
+- **Pure cores (self-tests registered in run-pure-selftests):**
+  - `src/lib/media/library-v2-core.ts`: facets, filters, AI/person badges, bulk steps, health tiles, collections, search log entries.
+  - `src/lib/catalog/image-recommend-core.ts` v2: role penalty, why-chips, pack sizes, similar-reason labels, `rankSearchResults`, search scopes.
+  - `src/lib/seo/image-seo-core.ts`: alt text, ImageObject, image sitemap.
+  - `library-picker-core` hrefs now carry `lv` / `lsim`.
+- **Server:**
+  - `src/lib/media/library-v2-server.ts`: all reads paged with `.range()`, and they degrade when 0354 is missing.
+  - `readImageSearch` in library-picker-server.
+  - `loadOnboardingImageSearch` in image-memory-server.
+  - `imageSeoForUrl` in image-resolver.
+- **Actions** (`src/app/admin/media/library-actions.ts`): undo/redo, bulk v2, create/archive/restore a collection, add/remove a picture in a collection. Every action requires media.manage and writes an audit row.
+- **Admin UI:**
+  - /admin/media gets a facets sidebar with chips, the health dashboard (Undo / Redo, top searches) and the bulk v2 bar.
+  - New /admin/media/collections page.
+  - Each picture's page gets the SEO/AI fields with badges, provenance with per-picture undo, duplicates, similar pictures and collections.
+  - The onboarding Images panel and the enrichment library picker get "Search in: This vendor / This brand / Everything", "Find similar" and why-chips.
+- **Storefront:**
+  - The product page alt text is `seo_alt`, then the library alt, then the name.
+  - The Product JSON-LD carries an `ImageObject`.
+  - `sitemap.ts` lists each product page's own photo.
+- **Tests:** `tests/compliance/d221-m5-m8-media-finish.test.ts`. Migration pins are shifted to 0354. Factory-reset KEEP entries are added for the three new tables.
+
 ## D222 — Vendor menus: LeafLink connection is broken, and the logo fetch misses vendors whose logo is on their profile (2026-11-09)
 
 ### Owner request (verbatim; the LeafLink password is withheld from the repo on purpose)

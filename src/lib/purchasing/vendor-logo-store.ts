@@ -398,6 +398,8 @@ export async function fetchVendorLogo(input: {
           altText: `${vendor.display_name} logo`,
           uploadedBy: input.actor.id,
           tags: ["vendor-logo", c.platform],
+          // D221 M3: the vendor is known; record it on the library row.
+          provenance: { platform: c.platform, vendorId: vendor.id, role: "logo", creditText: vendor.display_name },
         });
         assetId = asset.id;
         return { ok: true };

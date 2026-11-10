@@ -21,7 +21,13 @@ import {
   pendingProductLinks,
 } from "../actions";
 import { ProductLinkPanel } from "@/components/admin/media/ProductLinkPanel";
+import { describeAssetNowAction, reviewMediaAction } from "../ai-actions";
 import { pickListParams, withListParams } from "@/lib/media/return-state-core";
+import { MediaDetailV2 } from "@/components/admin/media/MediaDetailV2";
+import { setAutoPublishAction, toggleCollectionItemAction } from "../library-actions";
+import { loadCollections, loadCollectionsForMedia, loadDuplicates, loadMediaByIds, loadSimilar } from "@/lib/media/library-v2-server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +77,30 @@ export default async function MediaDetailPage({
     reasons: p.reasons,
   }));
   const hasLogoReviewTag = (asset.tags ?? []).includes("needs-logo-review");
+
+  // D221 M7: similar pictures, duplicate copies, collections, vendor + publisher names.
+  const [similar, duplicates, colls, memberOf, names] = await Promise.all([
+    loadSimilar(asset.id, 24),
+    loadDuplicates(asset.id, asset.canonical_id ?? null),
+    loadCollections(),
+    loadCollectionsForMedia(asset.id),
+    (async () => {
+      if (!isSupabaseServiceConfigured) return { vendor: null as string | null, publisher: null as string | null, error: null as string | null };
+      const admin = createSupabaseAdminClient();
+      const [v, p] = await Promise.all([
+        asset.vendor_id ? admin.from("vendors").select("display_name").eq("id", asset.vendor_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+        asset.published_by ? admin.from("staff_profiles").select("full_name,email").eq("id", asset.published_by).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      ]);
+      const pd = p.data as { full_name: string | null; email: string } | null;
+      return {
+        vendor: (v.data as { display_name: string } | null)?.display_name ?? null,
+        publisher: pd ? pd.full_name || pd.email : null,
+        error: v.error?.message ?? p.error?.message ?? null,
+      };
+    })(),
+  ]);
+  const similarRows = await loadMediaByIds(similar.hits.map((h) => h.media_id));
+  const v2Error = similar.error || duplicates.error || colls.error || memberOf.error || names.error || similarRows.error;
 
   return (
     <div>
@@ -165,6 +195,58 @@ export default async function MediaDetailPage({
               suggestAlt={suggestMediaAltAction}
               suggestMeta={suggestMediaMetaAction}
               suggestAll={suggestMediaAllAction}
+            />
+
+            {/* D221 M3/M4: the AI closer look + the review decision for this picture */}
+            <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5 text-sm">
+              <p className="font-semibold text-white">AI closer look</p>
+              <p className="mt-1 text-xs text-white/50">
+                Status: <span className="text-white/80">{asset.ai_status ?? "pending"}</span>
+                {asset.seo_title ? <> · SEO title: <span className="text-white/80">{asset.seo_title}</span></> : null}
+              </p>
+              {asset.ai_caption ? <p className="mt-2 text-white/70">{asset.ai_caption}</p> : null}
+              {asset.ai_description ? <p className="mt-1 text-xs text-white/50">{asset.ai_description}</p> : null}
+              {isImage(asset.mime_type) && isAiConfigured && (
+                <form action={describeAssetNowAction} className="mt-3">
+                  <input type="hidden" name="id" value={asset.id} />
+                  <input type="hidden" name="return_to" value={selfHref} />
+                  <Button type="submit" variant="neutral" size="sm">Describe now</Button>
+                  <span className="ml-2 text-[11px] text-white/40">Fills alt text and SEO; never overwrites what a person typed.</span>
+                </form>
+              )}
+              {(asset.review_state === "needs_review" || asset.review_state === "rejected") && (
+                <form action={reviewMediaAction} className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-3">
+                  <input type="hidden" name="id" value={asset.id} />
+                  <input type="hidden" name="return_to" value={selfHref} />
+                  <span className="w-full text-xs text-[var(--admin-gold)]">
+                    {asset.review_state === "rejected" ? "Rejected (kept, never deleted)." : asset.review_note ?? "Waiting for review."}
+                  </span>
+                  <Button type="submit" name="decision" value="accept" variant="confirm" size="sm">{asset.review_state === "rejected" ? "Un-reject" : "Looks right"}</Button>
+                  {asset.review_state === "needs_review" && (
+                    <>
+                      <Button type="submit" name="decision" value="product" variant="neutral" size="sm">It&apos;s a product photo</Button>
+                      <Button type="submit" name="decision" value="logo" variant="neutral" size="sm">It&apos;s a logo</Button>
+                      <Button type="submit" name="decision" value="reject" variant="danger" size="sm">Reject</Button>
+                    </>
+                  )}
+                </form>
+              )}
+            </div>
+
+            {/* D221 M5 + M7: SEO/AI fields with badges, provenance + undo, duplicates, similar, collections */}
+            <MediaDetailV2
+              asset={asset}
+              selfHref={selfHref}
+              vendorName={names.vendor}
+              publishedByName={names.publisher}
+              similar={similar.hits}
+              similarRows={similarRows.rows}
+              duplicates={duplicates}
+              collections={colls.collections}
+              memberOf={memberOf.ids}
+              readError={v2Error}
+              autoPublishAction={setAutoPublishAction}
+              collectionAction={toggleCollectionItemAction}
             />
 
             {/* H10d: product-link drafts + logo-validation routing */}

@@ -117,6 +117,8 @@ export type ImageRecommendation = {
   band: ImageConfidenceBand;
   /** Plain-English why, for the tooltip/caption. */
   reasons: string[];
+  /** D221 M6: short "why" chips under the tile ("Same vendor", "Label reads 'blue dream'", "3.5g"). */
+  chips: string[];
   remembered: boolean;
   onRecord: boolean;
   /** Already in this product's gallery (shown, but no Attach button). */
@@ -232,6 +234,74 @@ export function nameMatchScore(
   return { confidence, reasons };
 }
 
+/**
+ * D221 M6 (recommender v2). A logo or banner is not a product photo: when
+ * the picture is classified as one (0352 role) a name match drops by
+ * ROLE_PENALTY, so a real product photo of the same product wins. A person's
+ * past pick (remembered / on record) is never penalised.
+ */
+export const ROLE_PENALTY = 25;
+export const NOT_PRODUCT_ROLES = new Set(["logo", "banner", "menu", "coa", "marketing"]);
+
+const SIZE_RE = /(\d+(?:\.\d+)?)\s*(mg|g|ml|oz|pk|ct|pack)\b/gi;
+
+/** Pack sizes named in a text ("3.5g", "1 g", "100mg", "10pk"), normalised ("3.5g"). */
+export function packSizes(text: string | null | undefined): string[] {
+  const out = new Set<string>();
+  for (const m of String(text ?? "").matchAll(SIZE_RE)) {
+    const unit = m[2]!.toLowerCase() === "pack" ? "pk" : m[2]!.toLowerCase();
+    out.add(`${Number(m[1])}${unit}`);
+  }
+  return [...out];
+}
+
+/** The short why-chips for one recommendation. PURE. */
+export function recommendChips(
+  a: LibraryPickerAsset,
+  product: ImageRecommendInput["product"],
+  flags: { remembered: boolean; onRecord: boolean },
+): string[] {
+  const chips: string[] = [];
+  if (flags.remembered) chips.push("You picked this before");
+  else if (flags.onRecord) chips.push("On this product's card");
+  const vm = vendorMatch(a, product);
+  if (vm === "same") chips.push("Same vendor");
+  else if (vm === "other") chips.push("Other vendor");
+  const label = idTokens(a.visible_text ?? "");
+  if (label.length) {
+    const brandSet = new Set(idTokens(`${product.brand ?? ""} ${product.vendor ?? ""}`));
+    const own = [...new Set(idTokens(product.name))].filter((t) => !brandSet.has(t));
+    const hits = own.filter((t) => label.includes(t)).slice(0, 3);
+    if (hits.length) chips.push(`Label reads '${hits.join(" ")}'`);
+  }
+  const want = packSizes(product.name);
+  if (want.length) {
+    const have = new Set([...packSizes(a.pack_size ?? ""), ...packSizes(a.visible_text ?? ""), ...packSizes(a.title ?? "")]);
+    const same = want.filter((w) => have.has(w));
+    if (same.length) chips.push(`Pack ${same[0]}`);
+    else if (have.size) chips.push(`Pack ${[...have][0]} (product ${want[0]})`);
+  }
+  const role = (a.role ?? "").toLowerCase();
+  if (role && NOT_PRODUCT_ROLES.has(role)) chips.push(role === "logo" ? "Logo, not a product photo" : `A ${role}, not a product photo`);
+  else if (role === "product" || role === "packaging" || role === "flower") chips.push("Product photo");
+  if (a.status === "draft") chips.push("Draft");
+  return chips;
+}
+
+/** Plain words for the 0354 media_similar reasons ("same-vendor" → "Same vendor"). */
+export const SIMILAR_REASON_LABEL: Record<string, string> = {
+  "same-file": "Same file",
+  "same-vendor": "Same vendor",
+  "same-brand": "Same brand",
+  "similar-name": "Similar name",
+  "same-strain": "Same strain",
+  "similar-label": "Similar label text",
+  "same-category": "Same category",
+};
+export function similarReasonLabel(reason: string): string {
+  return SIMILAR_REASON_LABEL[reason] ?? reason;
+}
+
 export function recommendImages(input: ImageRecommendInput): ImageRecommendView {
   const limit = typeof input.limit === "number" && Number.isInteger(input.limit) && input.limit > 0 ? input.limit : MAX_RECOMMENDATIONS;
   const gallery = new Set((input.galleryIds ?? []).map((g) => String(g).trim()));
@@ -259,6 +329,12 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
         name.confidence = Math.min(NAME_MATCH_MAX, name.confidence + prov.boost);
         name.reasons.push(prov.reason!);
       }
+    }
+    // D221 M6: a logo / banner is not a product photo.
+    const role = (a.role ?? "").toLowerCase();
+    if (name.confidence > 0 && NOT_PRODUCT_ROLES.has(role)) {
+      name.confidence = Math.max(0, name.confidence - ROLE_PENALTY);
+      name.reasons.push(`Classified as a ${role}, not a product photo, so it ranks lower.`);
     }
     const reasons: string[] = [];
     let confidence = name.confidence;
@@ -288,6 +364,7 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
       confidence,
       band: confidenceBand(confidence),
       reasons: reasons.filter((r, i) => r && reasons.indexOf(r) === i),
+      chips: recommendChips(a, input.product, { remembered, onRecord: isOnRecord }),
       remembered,
       onRecord: isOnRecord,
       attached,
@@ -312,6 +389,60 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
     matched: out.length,
     emptyText: items.length > 0 ? null : considered === 0 ? NO_LIBRARY_COPY : NO_MATCH_COPY,
   };
+}
+
+/**
+ * D221 M6: "Search for a better picture" / "Find similar". The pool is
+ * already what the person asked for (a media_search hit list or the
+ * media_similar list), so nothing is dropped below the floor: every pickable
+ * image is shown, in the pool's own order, with the same confidence, badges
+ * and why-chips as a recommendation. PURE.
+ */
+export const SEARCH_RESULTS_MAX = 24;
+export function rankSearchResults(
+  assets: readonly LibraryPickerAsset[],
+  product: ImageRecommendInput["product"],
+  opts: { galleryIds?: readonly string[]; limit?: number; extraChips?: ReadonlyMap<string, string[]> } = {},
+): ImageRecommendation[] {
+  const gallery = new Set((opts.galleryIds ?? []).map((g) => String(g).trim()));
+  const limit = opts.limit && opts.limit > 0 ? opts.limit : SEARCH_RESULTS_MAX;
+  const seen = new Set<string>();
+  const out: ImageRecommendation[] = [];
+  for (const a of assets) {
+    if (!isPickableImage(a)) continue;
+    const id = a.id.trim();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const name = nameMatchScore(a, product);
+    const role = (a.role ?? "").toLowerCase();
+    let confidence = name.confidence;
+    if (confidence > 0 && NOT_PRODUCT_ROLES.has(role)) confidence = Math.max(0, confidence - ROLE_PENALTY);
+    const label = (a.title ?? "").trim() || (a.filename ?? "").trim() || "(untitled image)";
+    const chips = [...(opts.extraChips?.get(id) ?? []), ...recommendChips(a, product, { remembered: false, onRecord: false })];
+    out.push({
+      id,
+      url: a.url ?? null,
+      label,
+      alt: (a.alt_text ?? "").trim() || label,
+      confidence,
+      band: confidenceBand(confidence),
+      reasons: name.reasons,
+      chips: chips.filter((c, i) => chips.indexOf(c) === i),
+      remembered: false,
+      onRecord: false,
+      attached: gallery.has(id),
+      draft: a.status === "draft",
+      rightsPending: a.license_status === "pending-review",
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** The "search for a better picture" scope chips. */
+export type ImageSearchScope = "vendor" | "brand" | "all";
+export function parseImageSearchScope(raw: unknown): ImageSearchScope {
+  return raw === "brand" || raw === "all" ? raw : "vendor";
 }
 
 /** "97% · High" */
@@ -413,5 +544,33 @@ export function __runImageRecommendCoreTests(): { passed: number; failed: number
   ok(provenanceBoost(["growflow", "product-image", "acme"]).boost === VENDOR_SOURCE_BOOST, "menu photo gets provenance boost");
   ok(provenanceBoost(["harvested", "product"]).reason === "Came from the vendor's own website.", "vendor-site reason");
   ok(provenanceBoost(["web-research", "harvested"]).boost === 0 && provenanceBoost(null).boost === 0, "no boost for web finds / untagged");
+  // D221 M6: recommender v2 (role penalty, pack size, why-chips).
+  const pv = { ...product, vendorId: "v1" };
+  const r2 = recommendImages({
+    assets: [
+      A("photo", { title: "Phat Panda Blue Dream", role: "product", vendor_id: "v1", visible_text: "BLUE DREAM 3.5g", pack_size: "3.5 g" }),
+      A("logo", { title: "Phat Panda Blue Dream", role: "logo", vendor_id: "v1" }),
+    ],
+    product: pv,
+  });
+  ok(r2.items[0]?.id === "photo", "product photo outranks the same-named logo");
+  const lg = r2.items.find((i) => i.id === "logo");
+  ok(!lg || lg.confidence <= r2.items[0]!.confidence - ROLE_PENALTY, "logo loses ROLE_PENALTY");
+  const ch = r2.items[0]!.chips;
+  ok(ch.includes("Same vendor"), "same-vendor chip");
+  ok(ch.some((c) => c.startsWith("Label reads 'blue dream")), "label-read chip");
+  ok(ch.includes("Pack 3.5g"), "pack-size chip");
+  ok(ch.includes("Product photo"), "product-photo chip");
+  ok(!lg || lg.chips.includes("Logo, not a product photo"), "logo chip");
+  ok(packSizes("Blue Dream 3.5g + 1 G pre-roll 10 pack").join(",") === "3.5g,1g,10pk", "pack sizes parsed");
+  const memLogo = recommendImages({ assets: [A("m", { title: "x", role: "logo" })], product, memory: [{ media_asset_id: "m", times_confirmed: 1, last_confirmed_at: null, source: "library" }] });
+  ok(memLogo.items[0]?.confidence === 97 && memLogo.items[0]!.chips[0] === "You picked this before", "a person's pick is never penalised");
+  const other = recommendChips(A("o", { vendor_id: "v2", pack_size: "1g" }), pv, { remembered: false, onRecord: false });
+  ok(other.includes("Other vendor") && other.includes("Pack 1g (product 3.5g)"), "other-vendor + pack-mismatch chips");
+  ok(similarReasonLabel("same-strain") === "Same strain" && similarReasonLabel("x") === "x", "similar reason labels");
+  const sr = rankSearchResults([A("s1", { title: "Gelato" }), A("s2", { title: "Phat Panda Blue Dream" }), A("s1"), A("sv", { mime_type: "video/mp4" })], product, { galleryIds: ["s2"], extraChips: new Map([["s1", ["Same strain"]]]) });
+  ok(sr.length === 2 && sr[0]!.id === "s1" && sr[0]!.confidence === 0, "search results keep the pool order, no floor, de-duplicated, pickable only");
+  ok(sr[0]!.chips[0] === "Same strain" && sr[1]!.attached, "search results carry extra chips + attached flag");
+  ok(parseImageSearchScope("brand") === "brand" && parseImageSearchScope("x") === "vendor", "search scope parse");
   return { passed, failed };
 }

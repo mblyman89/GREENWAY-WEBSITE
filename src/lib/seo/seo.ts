@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { greenwayBusiness } from "@/content/business";
 import { DEFAULT_STORE_HOURS, openingHoursSpecification, type StoreHours } from "@/lib/seo/store-hours-core";
+import { imageObjectSchema, type ImageObjectInput } from "@/lib/seo/image-seo-core";
 
 /**
  * Centralized, expert-grade SEO configuration + helpers.
@@ -174,6 +175,12 @@ type ProductSchemaInput = {
   priceMinorUnits?: number;
   inStock?: boolean;
   image?: string;
+  /**
+   * D221 M8: the product's OWN photo as a schema.org ImageObject (name,
+   * description, creditText from the media library SEO fields). When given
+   * it replaces the plain `image` URL; a representative photo never sets it.
+   */
+  imageObject?: ImageObjectInput | null;
   /** R33: schema.org QuantitativeValue (unitCode GRM) for a single-size product. */
   weight?: { "@type": "QuantitativeValue"; value: number; unitCode: "GRM" } | null;
 };
@@ -188,7 +195,11 @@ export function productSchema(item: ProductSchemaInput) {
     sku: item.id,
     category: item.category,
     ...(item.brand ? { brand: { "@type": "Brand", name: item.brand } } : {}),
-    ...(item.image ? { image: absoluteUrl(item.image) } : {}),
+    ...(item.imageObject
+      ? { image: imageObjectSchema(item.imageObject, absoluteUrl) }
+      : item.image
+        ? { image: absoluteUrl(item.image) }
+        : {}),
     ...(item.weight ? { weight: item.weight } : {}),
     offers: {
       "@type": "Offer",

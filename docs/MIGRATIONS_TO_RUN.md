@@ -4038,3 +4038,58 @@ in Vercel.
   functions, index and `media_ai_runs`). It does not un-archive the copies: every slot still shows the same picture
   (same file), so nothing on the site changes. To bring a copy back, set its status to draft on Content → Media.
 
+- [ ] **`supabase/migrations/0353_media_library_m3_m4.sql`** — D221 M3 + M4 (owner: "please work on the next two
+  slices"). Run it AFTER 0352. No new table. What it does:
+  - **Finishes the vendor links** (gap-fill, never overwrites): about 988 live pictures still had no vendor. New
+    `media_backfill_vendor_links()` fills them from (j) the Cultivera seller folder code in the picture URL, (k) the
+    seller tag the menu save wrote, (l) the "<Name> (harvested)" title of a website logo. Each rule only acts when
+    every source agrees on ONE vendor; merged vendor cards are followed to the survivor; the placeholder
+    "INDEPENDENT / UNLISTED VENDOR" never counts. Measured read-only on 2026-11-10: the rules resolve most of them.
+  - **Review queue columns**: `media_assets.reviewed_by / reviewed_at` (who decided, when).
+  - **AI run lease**: `media_ai_runs.lease_token / lease_until / follow_new / input_tokens / output_tokens /
+    last_tick_at` for the every-10-minutes describe worker (`/api/cron/media-describe`).
+  - `media_library_health()` also reports ai_failed, ai_skipped, rejected and ai_spend_usd.
+  - Re-runs the 0352 provenance backfill, then the new links, then auto-publish (0352 rules, unchanged).
+
+  Safe to re-run. Paste the file (or `supabase/migrations/editor-safe/0353_media_library_m3_m4.EDITOR_SAFE.sql`).
+  If the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select public.media_library_health();         -- with_vendor up by several hundred; keys ai_failed, rejected, ai_spend_usd present
+  select public.media_backfill_vendor_links();  -- second run: {"seller_code": 0, "seller_tag": 0, "title": 0, ...}
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0353_media_library_m3_m4.rollback.sql` (drops the new
+  functions, indexes and columns, restores the 0352 resolver and health). Vendor links already filled stay (they are
+  correct data); clear them by hand only if you want to.
+
+- [ ] **`supabase/migrations/0354_media_library_m5_m8.sql`** — D221 M5 to M8 (owner: "Please finish the last slices
+  of work to be done now"). Run it AFTER 0353 (0352 and 0353 are already live). New tables: `media_collections`,
+  `media_collection_items`, `media_search_log` (service role only, RLS on). What it does:
+  - **Undo auto-publish** (M5): `media_set_auto_publish('undo' | 'redo', ids)` sets auto-published pictures back to
+    draft (`publish_reason = 'auto-reverted'`) or back to published. `ids = null` means all of them. Nothing is
+    deleted. The admin "Undo auto-publish" button on /admin/media (and per picture on its detail page) calls it.
+  - `media_auto_publish()` now only publishes a draft that was NEVER published and has no publish reason, so an
+    undone picture, or one a person set back to draft, stays a draft.
+  - **Find similar** (M6): `media_similar(id, limit)` returns pictures like this one, each with its reasons (same
+    file, same vendor / brand, similar name, same strain, similar label text, same category).
+  - **Collections** (M7): named groups of library photos. Archive, never delete.
+  - **Search log** (M7): what staff search for and which searches found nothing; `media_search_summary(days)`.
+  - `media_library_health()` also reports auto_reverted, collections, searches_30d and zero_result_30d.
+
+  Safe to re-run. Paste the file (or `supabase/migrations/editor-safe/0354_media_library_m5_m8.EDITOR_SAFE.sql`).
+  If the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select public.media_library_health();   -- keys auto_reverted, collections, searches_30d, zero_result_30d present
+  select * from public.media_search_summary(30);   -- empty at first, fills as staff search
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0354_media_library_m5_m8.rollback.sql` (drops the new functions
+  and tables, restores the 0353 auto-publish and health). Pictures already undone stay drafts; press "Redo" first if
+  you want them published again before rolling back.
+
