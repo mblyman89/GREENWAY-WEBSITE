@@ -31,14 +31,17 @@
 import { normalizeStore, type VendorPlatform } from "@/lib/purchasing/growflow-menu-core";
 import { marketId, marketName, marketSlug } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { normalizeBrandHit } from "@/lib/purchasing/leaflink-menu-core";
-import { stripLicenseSuffix } from "@/lib/inventory/vendor-resolve-core";
+import { normalizeLicense, stripLicenseSuffix } from "@/lib/inventory/vendor-resolve-core";
 import {
   buildVendorMatcher,
+  looseVendorKey,
   type CoverageAlias,
   type CoverageBrand,
   type CoverageVendor,
   type VendorMatcher,
+  type VendorMatcherOptions,
 } from "@/lib/purchasing/vendor-menu-coverage-core";
+import { normalizeVendorKey } from "@/lib/purchasing/unified-search-core";
 
 export type LogoPlatform = VendorPlatform; // "cultivera" | "growflow" | "leaflink"
 
@@ -156,20 +159,24 @@ export function cultiveraLogoCandidate(rec: Record<string, unknown>): LogoCandid
 }
 
 /**
- * LeafLink SEARCH rows (brand groups) never carry the logo — it lives on the
- * brand header — so a search candidate has logoUrl null with no problem, and
- * the caller reads the header for the one hit that matched.
+ * LeafLink brand hits. D222: the worker now finds brands through LeafLink's
+ * own brands listing, whose rows carry the brand LOGO as `logo_url` (pinned
+ * live 2026-11-09: the listing row's `image`). An older worker's product-search
+ * hits carry no logo (their `sample_image` is a PRODUCT photo, never used as a
+ * logo) — then logoUrl is null with no problem and the caller reads the brand
+ * header for the one hit that matched.
  */
 export function leaflinkSearchCandidate(rec: Record<string, unknown>): LogoCandidate {
   const h = normalizeBrandHit(rec);
+  const c = cleanLogoUrl(rec.logo_url);
   return {
     platform: "leaflink",
     ref: h.brandId ?? "",
     name: (h.brandName ?? "").trim(),
     altName: (h.companyName ?? "").trim() || null,
     license: null,
-    logoUrl: null,
-    logoProblem: null,
+    logoUrl: c.url,
+    logoProblem: c.problem,
   };
 }
 
@@ -204,6 +211,191 @@ export function vendorSearchTerms(v: Pick<CoverageVendor, "display_name" | "dba"
   return out;
 }
 
+/** One saved menu pull, reduced to what the logo fetch needs (D222). */
+export type LogoSnapshot = {
+  platform: LogoPlatform;
+  /** Snapshot row's own vendor_id (normally null for marketplace pulls). */
+  vendorId: string | null;
+  /** The marketplace's name for the seller (store / seller / brand). */
+  label: string;
+  /** LeafLink selling company / Cultivera slug words. */
+  altLabel: string | null;
+  license: string | null;
+  /** GrowFlow store id / Cultivera market id / LeafLink brand id. */
+  ref: string | null;
+  /** Cultivera market slug (a second ref). */
+  slug: string | null;
+};
+
+export type KnownProfile = { platform: LogoPlatform; ref: string | null; slug: string | null; name: string };
+
+/**
+ * D222 — the marketplace profiles whose saved menus the Vendor Menus page
+ * already places on this vendor's row (same matcher, same decision). They are
+ * the most direct route to the logo: the exact profile id and the exact
+ * marketplace name. De-duplicated, newest first as given.
+ */
+export function knownProfilesFor(
+  vendorId: string,
+  snapshots: readonly LogoSnapshot[],
+  match: VendorMatcher,
+): KnownProfile[] {
+  const out: KnownProfile[] = [];
+  const seen = new Set<string>();
+  for (const s of snapshots) {
+    if (!s.label && !s.ref) continue;
+    const m = match({ vendorId: s.vendorId, label: s.label, altLabel: s.altLabel, license: s.license });
+    if (m.vendorId !== vendorId) continue;
+    const k = `${s.platform}|${(s.ref ?? "").toLowerCase()}|${(s.slug ?? "").toLowerCase()}|${s.label.toLowerCase()}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ platform: s.platform, ref: s.ref, slug: s.slug, name: s.label });
+  }
+  return out;
+}
+
+/** `platform:ref` keys (ids AND Cultivera slugs) of the known profiles. */
+export function knownRefKeys(profiles: readonly KnownProfile[]): Set<string> {
+  const out = new Set<string>();
+  for (const p of profiles) {
+    for (const r of [p.ref, p.slug]) {
+      const k = profileKey(p.platform, r);
+      if (k) out.add(k);
+    }
+  }
+  return out;
+}
+
+/**
+ * D222 — every name worth searching a marketplace with, best first:
+ * the exact marketplace names of known profiles, then our names (display,
+ * DBA, legal), then aliases and brand names, then each name with LLC / Inc /
+ * Co dropped. The marketplaces search by "contains", so a long legal name
+ * ("Blue Roots Cannabis Co") never finds the short store name ("Blue Roots")
+ * — that was a main reason logos sat on profiles but were not fetched.
+ * Same-letters duplicates are removed; capped so a click stays fast.
+ */
+export function logoSearchTerms(
+  v: Pick<CoverageVendor, "id" | "display_name" | "dba" | "legal_name">,
+  extra: {
+    knownNames?: readonly string[];
+    aliases?: readonly CoverageAlias[];
+    brands?: readonly CoverageBrand[];
+    cap?: number;
+  } = {},
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string | null | undefined) => {
+    const t = stripLicenseSuffix(raw ?? "").replace(/[\u2122\u00ae\u00a9]/g, "").replace(/\s+/g, " ").trim();
+    const k = t.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (k.length >= 3 && !seen.has(k)) {
+      seen.add(k);
+      out.push(t);
+    }
+  };
+  for (const n of extra.knownNames ?? []) push(n);
+  const ours = [v.display_name, v.dba, v.legal_name];
+  for (const n of ours) push(n);
+  for (const a of extra.aliases ?? []) {
+    if (a.vendor_id !== v.id) continue;
+    if (/^license:/i.test(a.source_name ?? "")) continue;
+    push(a.source_name);
+  }
+  for (const b of extra.brands ?? []) if (b.vendor_id === v.id) push(b.display_name);
+  for (const n of ours) {
+    const loose = looseVendorKey(stripLicenseSuffix(n ?? ""));
+    if (loose) push(loose);
+  }
+  return out.slice(0, Math.max(1, extra.cap ?? 8));
+}
+
+/**
+ * D222 — platform order: platforms where this vendor already has a saved
+ * menu first (in the order given), then the remembered platform, then the
+ * default GrowFlow → Cultivera → LeafLink.
+ */
+export function logoPlatformOrderFor(known: readonly KnownProfile[], remembered: string | null | undefined): LogoPlatform[] {
+  const out: LogoPlatform[] = [];
+  for (const p of known) if (!out.includes(p.platform)) out.push(p.platform);
+  for (const p of logoPlatformOrder(remembered)) if (!out.includes(p)) out.push(p);
+  return out;
+}
+
+const alnum = (x: string | null | undefined) => (x ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * D222 — GrowFlow and LeafLink hand back their WHOLE storefront / brand list
+ * in one call, so the logo fetch reads each list once per click and judges it
+ * locally. This prefilter keeps only rows that plausibly concern this vendor
+ * (a known profile id, the same license, or a name that contains / is
+ * contained in one of the search terms, ignoring spaces and punctuation)
+ * before the strict matcher decides. It never accepts anything by itself.
+ */
+export function candidateMentions(
+  c: LogoCandidate,
+  terms: readonly string[],
+  license: string | null | undefined,
+  knownRefs?: ReadonlySet<string>,
+): boolean {
+  const key = profileKey(c.platform, c.ref);
+  if (key && knownRefs?.has(key)) return true;
+  const lic = normalizeLicense(license);
+  if (lic && normalizeLicense(c.license) === lic) return true;
+  const names = [c.name, c.altName].map(alnum).filter((n) => n.length >= 3);
+  for (const t of terms) {
+    const k = alnum(stripLicenseSuffix(t));
+    if (k.length < 3) continue;
+    for (const n of names) {
+      if (n.includes(k)) return true;
+      if (n.length >= 4 && k.includes(n)) return true;
+    }
+  }
+  return false;
+}
+
+/** Saved menu rows + platform memory rows, as read by the store (D222). */
+export type LogoSnapshotRows = {
+  growflow: readonly { vendor_id: string | null; store_name: string | null; license_number: string | null; growflow_store_id: string | null }[];
+  cultivera: readonly { vendor_id: string | null; seller_name: string | null; cultivera_market_id: string | null; cultivera_market_slug: string | null }[];
+  leaflink: readonly { vendor_id: string | null; brand_name: string | null; company_name: string | null; leaflink_brand_id: string | null }[];
+  memories: readonly { vendor_name: string | null; license_number: string | null; platform: string; platform_ref: string | null; platform_slug: string | null }[];
+};
+
+/** Map the stored rows to LogoSnapshot (same label rules as the coverage page). */
+export function logoSnapshotsFromRows(rows: LogoSnapshotRows): LogoSnapshot[] {
+  const t = (x: string | null | undefined) => (x ?? "").trim();
+  const out: LogoSnapshot[] = [];
+  for (const r of rows.growflow) {
+    out.push({ platform: "growflow", vendorId: r.vendor_id, label: t(r.store_name), altLabel: null, license: t(r.license_number) || null, ref: t(r.growflow_store_id) || null, slug: null });
+  }
+  for (const r of rows.cultivera) {
+    const name = t(r.seller_name);
+    const slug = t(r.cultivera_market_slug);
+    out.push({
+      platform: "cultivera", vendorId: r.vendor_id,
+      label: name || slug, altLabel: name && slug ? slug.replace(/-/g, " ") : null,
+      license: null, ref: t(r.cultivera_market_id) || null, slug: slug || null,
+    });
+  }
+  for (const r of rows.leaflink) {
+    out.push({
+      platform: "leaflink", vendorId: r.vendor_id,
+      label: t(r.brand_name) || t(r.company_name), altLabel: t(r.company_name) || null,
+      license: null, ref: t(r.leaflink_brand_id) || null, slug: null,
+    });
+  }
+  for (const m of rows.memories) {
+    const p = (m.platform ?? "").toLowerCase();
+    if (!(LOGO_PLATFORMS as readonly string[]).includes(p)) continue;
+    out.push({
+      platform: p as LogoPlatform, vendorId: null, label: t(m.vendor_name), altLabel: null,
+      license: t(m.license_number) || null, ref: t(m.platform_ref) || null, slug: t(m.platform_slug) || null,
+    });
+  }
+  return out.filter((s) => s.label || s.ref);
+}
+
 /** Remembered platform first, then GrowFlow → Cultivera → LeafLink. */
 export function logoPlatformOrder(remembered: string | null | undefined): LogoPlatform[] {
   const r = (remembered ?? "").toLowerCase();
@@ -215,22 +407,87 @@ export function logoPlatformOrder(remembered: string | null | undefined): LogoPl
  * Is this marketplace profile THIS vendor?
  * ------------------------------------------------------------------ */
 
+/**
+ * D222: build the matcher EXACTLY like the Vendor Menus page does (merged
+ * cards resolve to their survivor via `merged_into_id`, and duplicate-card
+ * ties are broken by `carried`). Before D222 the logo fetch built it without
+ * either, so a vendor whose menu the page placed fine could come out
+ * "ambiguous" / "another vendor" here and its logo was skipped.
+ */
 export function buildLogoMatcher(
   vendors: readonly CoverageVendor[],
   aliases: readonly CoverageAlias[] = [],
   brands: readonly CoverageBrand[] = [],
+  opts: VendorMatcherOptions = {},
 ): VendorMatcher {
-  return buildVendorMatcher(vendors, aliases, brands);
+  return buildVendorMatcher(vendors, aliases, brands, opts);
 }
 
 export type CandidateVerdict = "match" | "other_vendor" | "ambiguous" | "no_match";
 
-export function judgeCandidate(c: LogoCandidate, vendorId: string, match: VendorMatcher): CandidateVerdict {
+/** Extra evidence for judging a candidate (D222). */
+export type JudgeOptions = {
+  /** `platform:ref` keys of profiles whose saved menu is already on THIS vendor's row. */
+  knownRefs?: ReadonlySet<string>;
+  /** True when two live cards are the same business (same license or same exact name). */
+  sameBusiness?: (a: string, b: string) => boolean;
+};
+
+export function profileKey(platform: LogoPlatform, ref: string | null | undefined): string {
+  const r = (ref ?? "").trim();
+  return r ? `${platform}:${r.toLowerCase()}` : "";
+}
+
+export function judgeCandidate(c: LogoCandidate, vendorId: string, match: VendorMatcher, opts: JudgeOptions = {}): CandidateVerdict {
+  // 1. The very profile whose menu the page already shows on this vendor's row.
+  const key = profileKey(c.platform, c.ref);
+  if (key && opts.knownRefs?.has(key)) return "match";
   const m = match({ vendorId: null, label: c.name, altLabel: c.altName, license: c.license });
   if (m.vendorId === vendorId) return "match";
-  if (m.vendorId) return "other_vendor";
+  // 2. A duplicate card of the SAME business (same license / exact same name):
+  //    the logo is that business's logo either way.
+  if (m.vendorId) return opts.sameBusiness?.(m.vendorId, vendorId) ? "match" : "other_vendor";
   if (m.how === "ambiguous") return "ambiguous";
   return "no_match";
+}
+
+/**
+ * D222: (a, b) → are these two of OUR cards the same business? Only strict
+ * evidence counts: the same license number, or the same exact name (display
+ * / DBA / legal, license suffix removed). Archived cards never count here
+ * (the survivor resolver already handles merged ones).
+ */
+export function buildSameBusiness(vendors: readonly CoverageVendor[]): (a: string, b: string) => boolean {
+  const byId = new Map(vendors.map((v) => [v.id, v]));
+  const keysOf = (v: CoverageVendor): Set<string> => {
+    const out = new Set<string>();
+    const lic = normalizeLicense(v.license_number);
+    if (lic) out.add(`lic:${lic}`);
+    for (const n of [v.display_name, v.dba, v.legal_name]) {
+      const k = normalizeVendorKey(stripLicenseSuffix(n ?? ""));
+      if (k.length >= 3) out.add(`name:${k}`);
+    }
+    return out;
+  };
+  const memo = new Map<string, Set<string>>();
+  const keys = (id: string): Set<string> | null => {
+    const v = byId.get(id);
+    if (!v || (v.status ?? "").toLowerCase() === "archived") return null;
+    let k = memo.get(id);
+    if (!k) {
+      k = keysOf(v);
+      memo.set(id, k);
+    }
+    return k;
+  };
+  return (a, b) => {
+    if (a === b) return true;
+    const ka = keys(a);
+    const kb = keys(b);
+    if (!ka || !kb) return false;
+    for (const k of ka) if (kb.has(k)) return true;
+    return false;
+  };
 }
 
 export type CandidatePick = {
@@ -249,10 +506,14 @@ export function pickLogoCandidate(
   candidates: readonly LogoCandidate[],
   vendorId: string,
   match: VendorMatcher,
+  opts: JudgeOptions = {},
 ): CandidatePick {
   const out: CandidatePick = { pick: null, needsHeader: [], refused: [], noLogo: [], ambiguous: 0 };
-  for (const c of candidates) {
-    const verdict = judgeCandidate(c, vendorId, match);
+  // D222: the profile already linked to this vendor (its saved menu) goes first.
+  const known = (c: LogoCandidate) => (opts.knownRefs?.has(profileKey(c.platform, c.ref)) ? 0 : 1);
+  const ordered = opts.knownRefs?.size ? [...candidates].sort((a, b) => known(a) - known(b)) : candidates;
+  for (const c of ordered) {
+    const verdict = judgeCandidate(c, vendorId, match, opts);
     if (verdict === "ambiguous") out.ambiguous += 1;
     if (verdict !== "match") continue;
     if (c.logoUrl) {
@@ -513,6 +774,18 @@ export function __runVendorLogoCoreTests(): { passed: number; failed: number } {
     ok(c.platform === "leaflink" && c.ref === "11765" && c.name === "Blazy Susan" && c.altName === "Blazy Co", "leaflink search candidate");
     ok(c.logoUrl === null && c.logoProblem === null, "leaflink search rows carry no logo");
   }
+  {
+    // D222: the brands-listing hit carries the logo (pinned live 2026-11-09, Smokiez).
+    const c = leaflinkSearchCandidate({
+      brand_id: 73, brand_name: "Smokiez Edibles", company_name: "Pacific Northwest Consulting, llc",
+      logo_url: "https://d3nec6hp1jgjd8.cloudfront.net/media/images/brands/2018/01/24/Asset_2.jpg",
+      sample_image: "https://d3nec6hp1jgjd8.cloudfront.net/media/images/brands/2018/01/24/Asset_2.jpg",
+    });
+    ok(c.ref === "73" && c.logoUrl?.endsWith("/Asset_2.jpg") === true, "D222 leaflink listing hit carries the logo");
+    const old = leaflinkSearchCandidate({ brand_id: 1, brand_name: "X", sample_image: "https://c/product.jpg" });
+    ok(old.logoUrl === null, "D222 a product sample image is never used as a logo");
+    ok(leaflinkSearchCandidate({ brand_id: 1, brand_name: "X", logo_url: "" }).logoUrl === null, "D222 blank listing image = no logo");
+  }
   ok(leaflinkHeaderLogo({ brand: { id: 1, image: "https://d3nec6hp1jgjd8.cloudfront.net/media/b.png" } }).url?.includes("cloudfront") === true, "leaflink header image");
   ok(leaflinkHeaderLogo({ brand: { id: 1 } }).url === null, "leaflink header without image");
   ok(leaflinkHeaderLogo({ image: "https://c/x.png" }).url === "https://c/x.png", "leaflink bare header tolerated");
@@ -573,6 +846,93 @@ export function __runVendorLogoCoreTests(): { passed: number; failed: number } {
     ok(pick.ambiguous === 1, "ambiguous candidates counted");
   }
   ok(pickLogoCandidate([], "v2", match).pick === null, "empty list → no pick");
+
+  // --- D222: page-identical matching, known profiles, terms, prefilter --------
+  {
+    // Two live cards of one business; only one is carried. Before D222 the
+    // logo matcher had no `carried`, so the menu name was ambiguous here.
+    const dup = [
+      V("a1", "Blue Roots Cannabis", { license_number: "412000", status: "published" }),
+      V("a2", "Blue Roots Cannabis", { status: "published" }),
+      V("m1", "Old Card", { status: "archived", merged_into_id: "a1" }),
+    ];
+    const plain = buildLogoMatcher(dup, [], []);
+    const paged = buildLogoMatcher(dup, [], [], { carried: new Set(["a1"]) });
+    ok(judgeCandidate(G("Blue Roots Cannabis"), "a1", plain) === "ambiguous", "D222 without carried a duplicate-card name is ambiguous (the old bug)");
+    ok(judgeCandidate(G("Blue Roots Cannabis"), "a1", paged) === "match", "D222 with carried (as the page does) it matches the carried card");
+    const same = buildSameBusiness(dup);
+    ok(same("a1", "a2") && same("a2", "a1"), "D222 same exact name = same business");
+    ok(!same("a1", "m1"), "D222 an archived card is never 'same business'");
+    ok(!buildSameBusiness([V("x", "Alpha"), V("y", "Beta")])("x", "y"), "D222 different names are different businesses");
+    ok(buildSameBusiness([V("x", "Alpha", { license_number: "412345" }), V("y", "Beta", { license_number: "412345" })])("x", "y"), "D222 same license = same business");
+    // A name that resolves to the carried twin still counts for the other card of the same business.
+    ok(judgeCandidate(G("Blue Roots Cannabis"), "a2", paged, { sameBusiness: same }) === "match", "D222 duplicate card of the same business gets the logo");
+    ok(judgeCandidate(G("Fairwinds Manufacturing", { license: "412345" }), "v2", match, { sameBusiness: buildSameBusiness(vendors) }) === "other_vendor", "D222 a really different vendor is still refused");
+    // Known profile: the saved menu's exact id wins even with an odd spelling.
+    const known = new Set([profileKey("growflow", "1211")]);
+    ok(judgeCandidate(G("____BLUE~ROOTS____", { ref: "1211" }), "a1", plain, { knownRefs: known }) === "match", "D222 known profile id matches whatever its name");
+    ok(judgeCandidate(G("____BLUE~ROOTS____", { ref: "9" }), "a1", plain, { knownRefs: known }) !== "match", "D222 another id is judged by name (here: ambiguous, not accepted)");
+    const pk = pickLogoCandidate([G("Ceres", { ref: "x" }), G("Odd Name", { ref: "k" })], "v2", match, { knownRefs: new Set(["growflow:k"]) });
+    ok(pk.pick?.ref === "k", "D222 the known profile is picked first");
+    ok(profileKey("growflow", "") === "" && profileKey("cultivera", " Abc ") === "cultivera:abc", "D222 profile keys");
+  }
+  {
+    const vs = [V("v1", "Blue Roots"), V("v2", "Other")];
+    const m = buildLogoMatcher(vs, [], []);
+    const snaps = logoSnapshotsFromRows({
+      growflow: [
+        { vendor_id: null, store_name: "Blue Roots", license_number: null, growflow_store_id: "1211" },
+        { vendor_id: null, store_name: "Blue Roots", license_number: null, growflow_store_id: "1211" },
+        { vendor_id: null, store_name: "Other", license_number: null, growflow_store_id: "5" },
+      ],
+      cultivera: [{ vendor_id: null, seller_name: "Blue Roots", cultivera_market_id: "77", cultivera_market_slug: "blue-roots-wa" }],
+      leaflink: [{ vendor_id: null, brand_name: "", company_name: "", leaflink_brand_id: null }],
+      memories: [
+        { vendor_name: "Blue Roots", license_number: null, platform: "leaflink", platform_ref: "73", platform_slug: null },
+        { vendor_name: "Blue Roots", license_number: null, platform: "email", platform_ref: null, platform_slug: null },
+      ],
+    });
+    ok(snaps.length === 5, "D222 snapshot rows mapped (blank leaflink row and email memory dropped)");
+    const cv = snaps.find((x) => x.platform === "cultivera");
+    ok(cv?.ref === "77" && cv?.slug === "blue-roots-wa" && cv?.altLabel === "blue roots wa", "D222 cultivera snapshot keeps id + slug");
+    const kp = knownProfilesFor("v1", snaps, m);
+    ok(kp.length === 3 && kp.every((k) => k.name === "Blue Roots"), "D222 known profiles: deduped, only this vendor's");
+    const keys = knownRefKeys(kp);
+    ok(keys.has("growflow:1211") && keys.has("cultivera:77") && keys.has("cultivera:blue-roots-wa") && keys.has("leaflink:73"), "D222 known ref keys include slugs");
+    ok(logoPlatformOrderFor(kp, null).join() === "growflow,cultivera,leaflink", "D222 order follows known profiles");
+    ok(logoPlatformOrderFor([{ platform: "leaflink", ref: "1", slug: null, name: "x" }], "cultivera").join() === "leaflink,cultivera,growflow", "D222 known first, then remembered, then default");
+    ok(knownProfilesFor("v2", snaps, m).length === 1, "D222 other vendor gets its own profile only");
+  }
+  {
+    const t = logoSearchTerms(
+      { id: "v1", display_name: "Blue Roots Cannabis Co. - 412000", dba: "BLUE ROOTS CANNABIS CO", legal_name: "Blue Roots LLC" },
+      {
+        knownNames: ["BlueRoots WA"],
+        aliases: [
+          { vendor_id: "v1", source_name: "license:412000" },
+          { vendor_id: "v1", source_name: "Blue Roots Wholesale" },
+          { vendor_id: "v9", source_name: "Someone Else" },
+        ],
+        brands: [{ vendor_id: "v1", display_name: "Root Down\u2122" }, { vendor_id: "v2", display_name: "Nope" }],
+      },
+    );
+    ok(t[0] === "BlueRoots WA", "D222 known marketplace name searched first");
+    ok(t.includes("Blue Roots Cannabis Co.") && !t.includes("BLUE ROOTS CANNABIS CO"), "D222 same-letters duplicates removed, license stripped");
+    ok(t.includes("Blue Roots Wholesale") && !t.some((x) => /license/i.test(x)) && !t.includes("Someone Else"), "D222 own aliases only, license aliases skipped");
+    ok(t.includes("Root Down") && !t.includes("Nope"), "D222 own brand names, trademark sign dropped");
+    ok(t.includes("blue roots cannabis") || t.includes("blue roots"), "D222 the name without LLC / Co is searched");
+    ok(logoSearchTerms({ id: "x", display_name: "A", dba: null, legal_name: null }).length === 0, "D222 too-short names not searched");
+    ok(logoSearchTerms({ id: "x", display_name: "Alpha", dba: null, legal_name: null }, { brands: Array.from({ length: 20 }, (_, i) => ({ vendor_id: "x", display_name: `Brand ${i}` })) }).length === 8, "D222 terms capped at 8");
+  }
+  {
+    const c = (name: string, extra: Partial<LogoCandidate> = {}): LogoCandidate => G(name, extra);
+    ok(candidateMentions(c("____ThunderChief____"), ["Thunder Chief Farms"], null), "D222 prefilter: store name contained in our name");
+    ok(candidateMentions(c("Thunder Chief Farms WA"), ["thunder chief"], null), "D222 prefilter: our name contained in store name");
+    ok(candidateMentions(c("Zzz", { license: "412345" }), ["nope"], "412345"), "D222 prefilter: same license");
+    ok(candidateMentions(c("Zzz", { ref: "9" }), [], null, new Set(["growflow:9"])), "D222 prefilter: known ref");
+    ok(!candidateMentions(c("Fairwinds"), ["Ceres"], null), "D222 prefilter: unrelated row dropped");
+    ok(!candidateMentions(c("Co"), ["Co"], null), "D222 prefilter: too-short names never match");
+  }
 
   // --- write plan -----------------------------------------------------------
   const B = (id: string, extra: Partial<LogoBrand> = {}): LogoBrand => ({

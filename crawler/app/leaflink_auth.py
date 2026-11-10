@@ -17,6 +17,14 @@ docs/LEAFLINK_PINNED.md):
     authenticated — the exact same request answers 200 with the session
     cookies and 403 without them. There is NO Bearer token for this API, so
     unlike GrowFlow we capture COOKIES, not an Authorization header.
+  * D222 (re-pinned live 2026-11-09): the Shop > Brands tab talks to a SECOND
+    API, https://api.leaflink.com/content/brands/listing, authenticated with an
+    Auth0 Bearer JWT (aud https://api.leaflink.com, ~3 h lifetime) that the SPA
+    obtains after login. CORS only blocks it inside a foreign browser page; a
+    server call with `Authorization: Bearer <jwt>` answers 200. So the login
+    now ALSO opens /c/<slug>/shop/brands once and captures that Bearer token
+    plus the buyer `company_id` from the SPA's own request. Cookies remain the
+    auth for the internal API (brand menus).
   * Everything that does NOT need a browser (cookie (de)serialization,
     staleness math, cookie-header building, URL building) is a PURE function
     so it can be unit-tested with no network — see tests/test_leaflink_auth.py.
@@ -27,7 +35,9 @@ rarely as possible.
 """
 from __future__ import annotations
 
+import base64
 import json
+import re
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -48,10 +58,23 @@ class LeaflinkSessionData:
     company_slug: str = ""
     # Unix seconds when we captured this session.
     captured_at: float = 0.0
+    # D222: the Auth0 Bearer JWT for api.leaflink.com ('' when not captured),
+    # its `exp` (Unix seconds, 0 when unknown) and the buyer company id the SPA
+    # sent with it (pinned live: 3053 for greenway-marijuana).
+    bearer_token: str = ""
+    bearer_exp: float = 0.0
+    company_id: str = ""
+    # True when this session came from a login that LOOKED for the token (new
+    # code). A tried-but-tokenless session is not re-logged-in on every call.
+    bearer_tried: bool = False
 
     @property
     def has_cookies(self) -> bool:
         return bool(self.cookies)
+
+    @property
+    def has_bearer(self) -> bool:
+        return bool(self.bearer_token)
 
 
 # ---------------------------------------------------------------------------
@@ -69,8 +92,109 @@ def _coerce_session_dict(raw: Any) -> dict[str, Any]:
     return {
         "cookies": cookies,
         "company_slug": str(d.get("company_slug") or ""),
-        "captured_at": float(d.get("captured_at") or 0.0),
+        "captured_at": _as_float(d.get("captured_at")),
+        "bearer_token": str(d.get("bearer_token") or ""),
+        "bearer_exp": _as_float(d.get("bearer_exp")),
+        "company_id": str(d.get("company_id") or ""),
+        "bearer_tried": d.get("bearer_tried") is True,
     }
+
+
+def _as_float(value: Any) -> float:
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def jwt_exp(token: str) -> float:
+    """Read the `exp` claim of a JWT WITHOUT verifying it (0 when unreadable).
+
+    We never trust the token for anything but "when should we refresh" — the
+    server verifies it. Pinned live: LeafLink's API JWT has exp - iat = 10800.
+    """
+    parts = (token or "").split(".")
+    if len(parts) != 3 or not parts[1]:
+        return 0.0
+    seg = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(seg.encode("ascii")))
+    except (ValueError, UnicodeError, json.JSONDecodeError):
+        return 0.0
+    if not isinstance(claims, dict):
+        return 0.0
+    return _as_float(claims.get("exp"))
+
+
+_COMPANY_ID_RE = re.compile(r"[?&]company_id=(\d+)")
+
+
+def bearer_from_request(url: str, headers: Any, *, api_origin: str) -> tuple[str, str]:
+    """From ONE observed browser request, pull (bearer_token, company_id).
+
+    Only requests to `api_origin` carrying `Authorization: Bearer ...` count;
+    anything else yields ('', ''). company_id is read from the query string
+    when present (the brands listing sends `company_id=3053`, pinned live).
+    """
+    origin = (api_origin or "").strip().rstrip("/")
+    if not origin or not isinstance(url, str) or not url.startswith(origin + "/"):
+        return "", ""
+    h = headers if isinstance(headers, dict) else {}
+    auth = ""
+    for k, v in h.items():
+        if isinstance(k, str) and k.lower() == "authorization" and isinstance(v, str):
+            auth = v.strip()
+            break
+    if not auth.lower().startswith("bearer "):
+        return "", ""
+    token = auth[7:].strip()
+    m = _COMPANY_ID_RE.search(url)
+    return token, (m.group(1) if m else "")
+
+
+def bearer_usable(
+    session: LeaflinkSessionData,
+    *,
+    now: float | None = None,
+    margin_seconds: int = 300,
+) -> bool:
+    """True when the session holds a Bearer token that is not about to expire.
+
+    Unknown exp (0) counts as usable — a 401 will force a refresh anyway.
+    """
+    if not session or not session.has_bearer:
+        return False
+    if session.bearer_exp <= 0:
+        return True
+    ts = time.time() if now is None else now
+    return (session.bearer_exp - ts) > margin_seconds
+
+
+def needs_token_login(session: LeaflinkSessionData, *, now: float | None = None) -> bool:
+    """Should the client force a fresh login to (re)capture the API token?
+
+    Yes when the token is missing/expiring, EXCEPT for a session whose login
+    already looked for a token and found none (then the caller falls back to
+    the cookie API instead of logging in again and again).
+    """
+    if bearer_usable(session, now=now):
+        return False
+    if session and session.bearer_tried and not session.has_bearer:
+        return False
+    return True
+
+
+def bearer_headers(session: LeaflinkSessionData, *, api_version: str) -> dict[str, str]:
+    """Headers for an api.leaflink.com call (pinned: the SPA sends
+    `leaflink-version: 2022-10-31` with the Bearer token)."""
+    headers = {"Accept": "application/json"}
+    if session and session.has_bearer:
+        headers["Authorization"] = f"Bearer {session.bearer_token}"
+    if api_version:
+        headers["leaflink-version"] = api_version
+    return headers
 
 
 def cookies_from_capture(raw_cookies: Any) -> dict[str, str]:
@@ -96,14 +220,21 @@ def session_from_capture(
     *,
     raw_cookies: Any,
     company_slug: str = "",
+    bearer_token: str = "",
+    company_id: str = "",
     now: float | None = None,
 ) -> LeaflinkSessionData:
-    """Build a session value object from captured browser cookies."""
+    """Build a session value object from captured browser cookies (+ JWT)."""
     ts = time.time() if now is None else now
+    token = str(bearer_token or "").strip()
     return LeaflinkSessionData(
         cookies=cookies_from_capture(raw_cookies),
         company_slug=str(company_slug or "").strip().strip("/"),
         captured_at=ts,
+        bearer_token=token,
+        bearer_exp=jwt_exp(token),
+        company_id=str(company_id or "").strip(),
+        bearer_tried=True,
     )
 
 
@@ -224,6 +355,23 @@ async def login_live(settings: Settings | None = None) -> LeaflinkSessionData:  
             context = await browser.new_context()
             page = await context.new_page()
 
+            # D222: listen for the SPA's own api.leaflink.com calls and keep
+            # the first Bearer token (+ company_id) we see.
+            captured: dict[str, str] = {}
+            api_origin = settings.leaflink_api
+
+            def _on_request(req: Any) -> None:
+                try:
+                    tok, cid = bearer_from_request(req.url, req.headers, api_origin=api_origin)
+                except Exception:
+                    return
+                if tok and not captured.get("token"):
+                    captured["token"] = tok
+                if cid and not captured.get("company_id"):
+                    captured["company_id"] = cid
+
+            page.on("request", _on_request)
+
             # 1. Navigate: leaflink.com login redirects to the Auth0 form.
             await page.goto(login_url, wait_until="domcontentloaded")
             await page.wait_for_timeout(2500)
@@ -242,6 +390,20 @@ async def login_live(settings: Settings | None = None) -> LeaflinkSessionData:  
                 except Exception:
                     pass
 
+            # 4. D222: open Shop > Brands once so the SPA fetches its API token
+            #    (pinned live: token seen ~2-7 s after this navigation).
+            try:
+                await page.goto(
+                    f"{site}/c/{settings.leaflink_slug}/shop/brands",
+                    wait_until="domcontentloaded",
+                )
+                for _ in range(30):
+                    if captured.get("token") and captured.get("company_id"):
+                        break
+                    await page.wait_for_timeout(500)
+            except Exception:
+                pass  # cookies alone still allow the internal-API fallback
+
             raw_cookies = await context.cookies(site)
             await browser.close()
     except LeaflinkAuthError:
@@ -252,6 +414,8 @@ async def login_live(settings: Settings | None = None) -> LeaflinkSessionData:  
     session = session_from_capture(
         raw_cookies=raw_cookies,
         company_slug=settings.leaflink_slug,
+        bearer_token=captured.get("token", ""),
+        company_id=captured.get("company_id", ""),
     )
     if not session.has_cookies:
         raise LeaflinkAuthError("Logged in but no cookies were captured for the app origin.")
@@ -325,7 +489,10 @@ async def get_session(settings: Settings | None = None) -> LeaflinkSessionData: 
     """Return a usable session: cached when fresh, else a fresh live login."""
     settings = settings or get_settings()
     cached = load_session(settings)
-    if not is_session_stale(cached, ttl_seconds=settings.leaflink_session_ttl_seconds):
+    fresh = not is_session_stale(cached, ttl_seconds=settings.leaflink_session_ttl_seconds)
+    # D222: a session whose Bearer token is about to expire is refreshed too
+    # (a session that never got a token is still used; the client falls back).
+    if fresh and not needs_token_login(cached):
         return cached
     session = await login_live(settings)
     save_session(session, settings)
