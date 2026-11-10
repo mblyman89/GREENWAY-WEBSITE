@@ -12,11 +12,14 @@ NEVER GUESS:
     account (see docs/LEAFLINK_PINNED.md). Unlike GrowFlow (Bearer token +
     GraphQL) LeafLink's internal API is COOKIE-authenticated plain REST with
     classic DRF `{count, next, previous, results[]}` pagination envelopes.
-  * Pinned gotcha: `search=<q>` on `shop/products/` is a real filter only when
-    it matches something — a NON-matching term silently FALLS BACK to the full
-    catalog (same `count` as no search). We therefore probe the unfiltered
-    total first and, when the searched count equals it, name-filter the grouped
-    brand hits against the query (see `resolve_brand_hits`).
+  * D222 (re-pinned live 2026-11-09): brand discovery now uses the SPA's own
+    Shop > Brands endpoint, `GET https://api.leaflink.com/content/brands/listing
+    ?company_id=<id>&page=1[&search=<q>]` with the Auth0 Bearer JWT captured at
+    login. ONE call, server-side search over brand + company names, and every
+    row carries the brand LOGO (`image`). The old product-search grouping is
+    kept only as a fallback: its `count` is now always the whole catalog, so
+    the old count-equality heuristic (`resolve_brand_hits`) misfired, and the
+    10-page walk at 3-4.5 s per page took ~75 s, past every caller's timeout.
   * A brand's menu is `GET brands/<id>/products?product_lines=1` which returns
     a top-level ARRAY `[{brand, product_lines:[{product_line, products:[...]}]}]`
     whose product rows carry the SAME rich shape as the product-detail endpoint
@@ -35,6 +38,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qsl, urlsplit, urlunsplit, urlencode
 
 import httpx
 
@@ -44,9 +48,11 @@ from .leaflink_auth import (
     LeaflinkAuthError,
     LeaflinkSessionData,
     auth_headers,
+    bearer_headers,
     clear_session,
     get_session,
     internal_api_url,
+    needs_token_login,
 )
 
 # HTTP timeout (seconds) for a single REST call. Generous but bounded — a menu
@@ -58,9 +64,16 @@ _REQUEST_TIMEOUT_SECONDS = 30.0
 # the same size (never a guessed larger one) and follow the DRF `next` URL.
 _SEARCH_PAGE_SIZE = 24
 
-# Politeness cap: at most this many search pages per query (24 * 10 = 240
-# products is plenty for grouping brand hits out of a search).
-_MAX_SEARCH_PAGES = 10
+# D222: the product-search FALLBACK (used only when no Bearer token could be
+# captured) reads ONE page. Pinned live 2026-11-09: limit up to 500 is honoured,
+# non-matching terms now return 0 rows (but `count` still reports the whole
+# catalog, so count is never trusted), and `next` stays set past the end.
+_FALLBACK_PAGE_SIZE = 100
+
+# D222: the brands listing (api.leaflink.com/content/brands/listing) returned
+# all 37 network brands on page 1 (page 2 -> 404 "Invalid page."). We follow
+# `next` defensively, capped.
+_MAX_LISTING_PAGES = 5
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +115,90 @@ def next_page_url(payload: Any) -> str:
         if isinstance(nxt, str) and nxt.strip().startswith("http"):
             return nxt.strip()
     return ""
+
+
+def merge_query(url: str, params: dict[str, Any] | None) -> tuple[str, dict[str, Any]]:
+    """Split `url`'s own query into params and overlay `params` on top.
+
+    D222 root cause: httpx REPLACES a URL's query string when `params=` is
+    passed, so following a DRF `next` URL through `_get(next_url)` (which always
+    adds error_format) silently dropped limit/offset/search and fetched the
+    unfiltered catalog. Returns (url without query, merged params).
+    """
+    parts = urlsplit(url or "")
+    merged: dict[str, Any] = dict(parse_qsl(parts.query, keep_blank_values=True))
+    merged.update(params or {})
+    bare = urlunsplit((parts.scheme, parts.netloc, parts.path, "", parts.fragment))
+    return bare, merged
+
+
+def _text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def listing_rows(payload: Any) -> list[dict[str, Any]]:
+    """Rows of the pinned brands-listing envelope
+    `{count, next, previous, content:{collection:[...], sponsorships}}`."""
+    if not isinstance(payload, dict):
+        return []
+    content = payload.get("content")
+    rows = content.get("collection") if isinstance(content, dict) else None
+    if not isinstance(rows, list):
+        return []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def listing_hits(payload: Any) -> list[dict[str, Any]]:
+    """Map brands-listing rows to the SAME brand-hit shape search_brands has
+    always returned (brand_id, brand_name, company_id, company_name,
+    product_count, sample_image) plus the brand's LOGO.
+
+    Pinned live 2026-11-09: each row is {resource_id (= brand id, the same id
+    brands/<id>/products takes), name, image (the brand logo URL), description,
+    tagline, product_categories, owner:{resource_id, name, slug}}. The listing
+    has no product count, so product_count is None (unknown, not zero).
+    Rows without a brand id are dropped; duplicates keep the first.
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in listing_rows(payload):
+        rid = row.get("resource_id")
+        if rid is None or isinstance(rid, bool) or str(rid).strip() == "":
+            continue
+        key = str(rid).strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        owner = row.get("owner") if isinstance(row.get("owner"), dict) else {}
+        image = _text(row.get("image"))
+        cats = row.get("product_categories")
+        out.append({
+            "brand_id": rid,
+            "brand_name": _text(row.get("name")),
+            "company_id": owner.get("resource_id"),
+            "company_name": _text(owner.get("name")),
+            "company_slug": _text(owner.get("slug")),
+            "product_count": None,
+            "sample_image": image,
+            "logo_url": image,
+            "tagline": _text(row.get("tagline")),
+            "product_categories": [c for c in cats if isinstance(c, str)] if isinstance(cats, list) else [],
+            "source": "brands_listing",
+        })
+    return out
+
+
+def rank_brand_hits(hits: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Name matches first (brand or company name), others after; stable.
+
+    Pinned live: the server-side search also matches on things other than the
+    brand/company name, so non-name hits are kept but ranked last.
+    """
+    if not (query or "").strip():
+        return list(hits)
+    named = [h for h in hits if brand_hit_matches(h, query)]
+    rest = [h for h in hits if not brand_hit_matches(h, query)]
+    return named + rest
 
 
 def _brand_of(row: dict[str, Any]) -> dict[str, Any]:
@@ -309,7 +406,7 @@ class LeaflinkClient:
         we treat 401 and 403 identically: clear session, re-login, retry once.
         """
         session = await self._ensure_session()
-        query = {"error_format": "jsonapi", **(params or {})}
+        url, query = merge_query(url, {"error_format": "jsonapi", **(params or {})})
 
         for attempt in range(2):  # attempt 0 normal; attempt 1 after re-login
             await self._sleep_polite()
@@ -356,67 +453,137 @@ class LeaflinkClient:
 
         return LeaflinkApiResult(ok=False, url=url, error="exhausted retries")
 
+    async def _get_api(self, url: str, params: dict[str, Any] | None = None) -> LeaflinkApiResult:
+        """GET one api.leaflink.com URL with the Bearer JWT (D222).
+
+        A missing/expiring token or a 401/403 forces ONE fresh login (which
+        re-captures the token) and a single retry. Never raises for HTTP.
+        """
+        session = await self._ensure_session()
+        if needs_token_login(session):
+            try:
+                session = await self._ensure_session(force=True)
+            except LeaflinkAuthError as exc:
+                return LeaflinkApiResult(ok=False, url=url, error=f"re-auth failed: {exc}")
+        url, query = merge_query(url, params)
+
+        for attempt in range(2):
+            if not session.has_bearer:
+                return LeaflinkApiResult(ok=False, url=url, error="no API token captured at login")
+            await self._sleep_polite()
+            try:
+                async with httpx.AsyncClient(
+                    timeout=_REQUEST_TIMEOUT_SECONDS,
+                    follow_redirects=True,
+                    headers=bearer_headers(session, api_version=self._settings.leaflink_api_version),
+                    **({"proxy": self._settings.proxy_url} if self._settings.proxy_url else {}),
+                ) as client:
+                    resp = await client.get(url, params=query)
+            except httpx.HTTPError as exc:
+                return LeaflinkApiResult(ok=False, url=url, error=f"request failed: {exc}")
+
+            if resp.status_code in (401, 403) and attempt == 0:
+                try:
+                    session = await self._ensure_session(force=True)
+                except LeaflinkAuthError as exc:
+                    return LeaflinkApiResult(
+                        ok=False, url=url, status=resp.status_code, error=f"re-auth failed: {exc}",
+                    )
+                continue
+            if resp.status_code >= 400:
+                return LeaflinkApiResult(
+                    ok=False, url=url, status=resp.status_code, error=f"HTTP {resp.status_code}",
+                )
+            try:
+                payload = resp.json()
+            except (ValueError, TypeError) as exc:
+                return LeaflinkApiResult(
+                    ok=False, url=url, status=resp.status_code, error=f"non-JSON response: {exc}",
+                )
+            return LeaflinkApiResult(ok=True, url=url, status=resp.status_code, raw=payload)
+        return LeaflinkApiResult(ok=False, url=url, error="exhausted retries")
+
+    def _company_id(self) -> str:
+        sess = self._session
+        cid = (sess.company_id if sess else "") or self._settings.leaflink_company_id
+        return str(cid or "").strip()
+
+    async def list_brands(self, query: str = "") -> LeaflinkApiResult:
+        """Search the buyer's brand network via the brands listing (D222).
+
+        ONE call (pinned live: all 37 network brands fit on page 1; a search
+        returns e.g. 7 for "Medusa", 0 for "fairwinds"). `records` = brand hits
+        including each brand's logo. `raw` = the first page payload.
+        """
+        q = (query or "").strip()
+        await self._ensure_session()
+        cid = self._company_id()
+        if not cid:
+            return LeaflinkApiResult(ok=False, error="no LeafLink company_id")
+        url = f"{self._settings.leaflink_api}/content/brands/listing"
+        hits: list[dict[str, Any]] = []
+        first: LeaflinkApiResult | None = None
+        page = 1
+        while page <= _MAX_LISTING_PAGES:
+            params: dict[str, Any] = {"company_id": cid, "page": page}
+            if q:
+                params["search"] = q
+            res = await self._get_api(url, params)
+            if not res.ok:
+                if first is None:
+                    return res
+                break  # pinned: a page past the end answers 404 "Invalid page."
+            if first is None:
+                first = res
+            rows = listing_hits(res.raw)
+            hits.extend(rows)
+            if not rows or not (isinstance(res.raw, dict) and res.raw.get("next")):
+                break
+            page += 1
+        assert first is not None
+        # de-dupe across pages, keep order, then rank name matches first
+        seen: set[str] = set()
+        uniq = []
+        for h in hits:
+            k = str(h.get("brand_id"))
+            if k not in seen:
+                seen.add(k)
+                uniq.append(h)
+        return LeaflinkApiResult(
+            ok=True, url=first.url, status=first.status, raw=first.raw,
+            records=rank_brand_hits(uniq, q),
+        )
+
     async def _search_products(self, query: str) -> LeaflinkApiResult:
-        """Walk the paged product search (up to _MAX_SEARCH_PAGES), pooling rows."""
-        url = self._url("shop/products/")
+        """FALLBACK discovery: ONE product-search page grouped by brand.
+
+        Pinned live 2026-11-09: non-matching terms return 0 rows, matching
+        terms return only matching rows, but `count` always reports the whole
+        catalog and `next` stays set past the end, so we read one big page and
+        never trust count.
+        """
         params: dict[str, Any] = {
-            "limit": _SEARCH_PAGE_SIZE,
+            "limit": _FALLBACK_PAGE_SIZE,
             "offset": 0,
             "search": query.strip(),
             "sort_by": "",
         }
-        pooled: list[dict[str, Any]] = []
-        first: LeaflinkApiResult | None = None
-        next_url = ""
-        for page in range(_MAX_SEARCH_PAGES):
-            result = (
-                await self._get(url, params) if page == 0 else await self._get(next_url)
-            )
-            if not result.ok:
-                return result if first is None else LeaflinkApiResult(
-                    ok=True, url=first.url, status=first.status,
-                    raw=first.raw, records=pooled,
-                )
-            if first is None:
-                first = result
-            pooled.extend(result.records or [])
-            next_url = next_page_url(result.raw)
-            if not next_url:
-                break
-        assert first is not None  # loop ran at least once
-        return LeaflinkApiResult(
-            ok=True, url=first.url, status=first.status, raw=first.raw, records=pooled
-        )
+        return await self._get(self._url("shop/products/"), params)
 
     async def search_brands(self, query: str = "") -> LeaflinkApiResult:
-        """Discover sellers/brands by searching the shop catalog and grouping.
-
-        Pinned fallback handling: probe the unfiltered total (limit=1) first,
-        then run the real search; when the searched count equals the
-        unfiltered total the term matched nothing (LeafLink silently returned
-        the whole catalog), so the grouped hits are name-filtered against the
-        query (see resolve_brand_hits). `records` = brand hits.
+        """Discover sellers/brands. D222: the brands listing first (fast, has
+        logos); the product-search grouping only when the listing is
+        unavailable (no token captured / API error). `records` = brand hits.
         """
         q = (query or "").strip()
-        unfiltered_count = 0
-        if q:
-            probe = await self._get(
-                self._url("shop/products/"), {"limit": 1, "offset": 0, "search": "", "sort_by": ""}
-            )
-            if not probe.ok:
-                return probe
-            unfiltered_count = drf_count(probe.raw)
-
+        listed = await self.list_brands(q)
+        if listed.ok:
+            return listed
         searched = await self._search_products(q)
         if not searched.ok:
+            searched.error = f"{searched.error} (brands listing: {listed.error})"
             return searched
-        hits = group_products_by_brand(searched.records or [])
-        hits = resolve_brand_hits(
-            hits,
-            query=q,
-            searched_count=drf_count(searched.raw),
-            unfiltered_count=unfiltered_count,
-        )
+        hits = rank_brand_hits(group_products_by_brand(searched.records or []), q)
         return LeaflinkApiResult(
             ok=True, url=searched.url, status=searched.status,
             raw=searched.raw, records=hits,

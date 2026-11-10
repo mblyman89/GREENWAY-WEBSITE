@@ -327,8 +327,17 @@ class Settings(BaseSettings):
     leaflink_company_slug: str = Field(
         default="greenway-marijuana", alias="LEAFLINK_COMPANY_SLUG"
     )
+    # D222 (pinned live 2026-11-09): the Shop > Brands tab uses a SECOND API at
+    # this origin, Bearer-JWT authenticated, with this version header. The JWT
+    # and the buyer company id are captured from the SPA at login.
+    leaflink_api_url: str = Field(default="https://api.leaflink.com", alias="LEAFLINK_API_URL")
+    leaflink_api_version: str = Field(default="2022-10-31", alias="LEAFLINK_API_VERSION")
+    # Optional override of the buyer company id (pinned live: 3053). Only used
+    # when the login did not capture it from the SPA's request.
+    leaflink_company_id: str = Field(default="3053", alias="LEAFLINK_COMPANY_ID")
     # Politeness for the authenticated REST calls: a human-paced pause
     # (seconds) BEFORE each request, jittered up to +50%. Polite, not stealth.
+    # D222: a brand search is now ONE call, so the pause no longer multiplies.
     leaflink_min_delay_seconds: float = Field(default=3.0, alias="LEAFLINK_MIN_DELAY_SECONDS")
     # How long a cached cookie session is trusted before a proactive re-login
     # (seconds). A 401/403 always forces a re-login; this is the fallback.
@@ -432,6 +441,11 @@ class Settings(BaseSettings):
     def leaflink_site(self) -> str:
         """The LeafLink app origin, normalized (no trailing slash)."""
         return self.leaflink_site_url.strip().rstrip("/")
+
+    @property
+    def leaflink_api(self) -> str:
+        """The api.leaflink.com origin, normalized (no trailing slash)."""
+        return self.leaflink_api_url.strip().rstrip("/")
 
     @property
     def leaflink_slug(self) -> str:
