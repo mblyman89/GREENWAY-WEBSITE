@@ -177,6 +177,13 @@ DISPLAY_CORE = "src/lib/compliance/ccrs-issue-display-core.ts"
 GATE_CORE = "src/lib/compliance/ccrs-submit-gate-core.ts"
 LEDGER_STORE = "src/lib/compliance/ccrs-ledger-store.ts"
 BATCH_TS = "src/lib/compliance/ccrs-batch.ts"
+D227_TAX_CORE = "src/lib/reports/tax-base-core.ts"
+D227_CORR_CORE = "src/lib/compliance/ccrs-sale-correction-core.ts"
+D227_RESEND_CORE = "src/lib/compliance/ccrs-resend-refused-core.ts"
+D227_STRATEGY = "src/lib/compliance/ccrs-strategy-core.ts"
+D227_ID_TESTS = "tests/compliance/d227-ccrs-sale-excise-identity.test.ts"
+D227_RESEND_TESTS = "tests/compliance/d227-ccrs-resend-refused.test.ts"
+D227_S18B_TESTS = "tests/compliance/s18b-ccrs-error-strategy.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4277,6 +4284,63 @@ MUTATIONS = [
         '  { text: "Strain is required (never)", cls: "row",',
         PF_TESTS,
         '"Strain is required" is a known CCRS row error (no more "unclear").',
+    ),
+    # D227 (2026-11-10 PREprod: "Cannabis Excise Tax does not equal 37% of Unit Price").
+    (
+        'M526-d227-no-unit-lift',
+        D227_TAX_CORE,
+        '  if (chargesExcise && qty > 0 && shelfUnit * qty < baseMinor) {',
+        '  if (false) {',
+        D227_ID_TESTS,
+        'The printed row Qty x UnitPrice - Discount equals the taxed base, so excise is 37% of it [G L1374, L1377].',
+    ),
+    (
+        'M527-d227-excise-on-shelf-row',
+        D227_TAX_CORE,
+        '  const exciseMinor = chargesExcise ? Math.round((baseMinor * opts.exciseRateBps) / 10000) : 0;',
+        '  const exciseMinor = chargesExcise ? Math.round((baseMinor * opts.exciseRateBps) / 10000) + 1 : 0;',
+        D227_ID_TESTS,
+        'Excise is exactly round(37% x base) [G L1374].',
+    ),
+    (
+        'M528-d227-partial-excise-prorated',
+        D227_CORR_CORE,
+        '      ? Math.round((remainingBase * CCRS_EXCISE_RATE_BPS) / 10000)',
+        '      ? prorateLineMinor(src.exciseMinor, remaining, src.originalQuantity)',
+        "tests/compliance/disposition-core.test.ts",
+        'A partial-return Update prints excise as 37% of the printed remaining base, not a pro-rated excise.',
+    ),
+    (
+        'M529-d227-resend-uncertain-too',
+        D227_RESEND_CORE,
+        '  const refused = rows.filter((r) => r.state === "rejected");',
+        '  const refused = rows.filter((r) => r.state === "rejected" || r.state === "uncertain");',
+        D227_RESEND_TESTS,
+        'Only refused rows are re-sent; an uncertain row (CCRS may hold it) never is.',
+    ),
+    (
+        'M530-d227-resend-skips-identity',
+        D227_RESEND_CORE,
+        '    const why = saleRowIdentityProblem(cells);',
+        '    const why = null as string | null;',
+        D227_RESEND_TESTS,
+        'A re-send row that still fails the excise identity is never sent.',
+    ),
+    (
+        'M531-d227-resend-update',
+        D227_RESEND_CORE,
+        '    if (cells[OP] !== "Insert") {',
+        '    if (false) {',
+        D227_RESEND_TESTS,
+        'A refused line is re-sent only as Insert (CCRS never filed it).',
+    ),
+    (
+        'M532-d227-known-excise-message',
+        OUTCOME_CORE_PF,
+        '  { text: "Cannabis Excise Tax does not equal 37% of Unit Price", cls: "row",',
+        '  { text: "Cannabis Excise Tax does not equal 37% of Unit Price (never)", cls: "row",',
+        D227_S18B_TESTS,
+        'The 2026-11-10 message is known, so its error file applies instead of waiting as unknown.',
     ),
 ]
 

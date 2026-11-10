@@ -339,6 +339,18 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - Area passes when CCRS holds it.
 - See Part 09 P-F.
 
+### A.22 D227 Sale excise identity; hub knows the message; re-send refused rows — DONE in code (2026-11-10)
+
+- **Before:**
+  - PREprod `Sale_413541_20261110101609.csv`: CCRS refused 2 of 1,332 rows with `Cannabis Excise Tax does not equal 37% of Unit Price`.
+  - The exporter rounded the unit price (`round(shelf/1.463)`) and the line base (`round(qty x shelf/1.463)`) separately. For 3 x $18.00 it printed 3 x 12.30 - 0.00 = 36.90 but sent excise 13.66 (37% of 36.91). CCRS checks `round(37% x (Quantity x UnitPrice - Discount)) == CannabisExciseTax` exactly [G L1374, L1377] [FAQ L0153-L0160]. All 1,330 accepted rows satisfy that identity.
+  - The message was unknown to the hub, so its error email waited unapplied.
+- **Now:**
+  - `ccrsSaleLineMoney` (tax-base-core) decides UnitPrice, Discount and both taxes together. The printed row always equals the taxed base. UnitPrice is lifted by at most 1 cent when needed, and Discount absorbs the rest. It is used by the weekly Sale exporter and the return snapshot. Partial-return Updates print excise as 37% of the printed remaining base.
+  - The message is known (row class, fix-resend), with a triage rule (`excise_not_37pct`) and a scoreboard next step.
+  - An errored Sale file with refused rows has **Re-send refused rows**. It rebuilds those dates with today's exporter, keeps only the `rejected` rows (never `uncertain`), checks each one against the identity, runs the ledger self-check and stores the new file in the outbox.
+- See Part 09 D227.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.
@@ -442,6 +454,7 @@ fixtures rather than inferred.
 | 14 | `UpdatedDate is required for Update or Delete Operations` | Product | verify | observed 2026-10-31 PREprod `[G L0237-L0242]` |
 | 15 | `UpdatedDate must be a date for Update and Delete operations` | Product | verify | observed 2026-10-31 PREprod `[G L0237-L0239]` |
 | 16 | `Strain is required` | Inventory | **E64** | observed 2026-10-31 PREprod `[G L0551-L0554]`; filled from CCRS's last accepted strain or held |
+| 17 | `Cannabis Excise Tax does not equal 37% of Unit Price` | Sale | identity | observed 2026-11-10 PREprod (2 of 1,332 rows) `[G L1374, L1377]`; the guide words it `CannabisExciseTax does not equal 37% of UnitPrice`; fixed D227 (`ccrsSaleLineMoney`) |
 
 ### Coverage against the 14 real rejections
 

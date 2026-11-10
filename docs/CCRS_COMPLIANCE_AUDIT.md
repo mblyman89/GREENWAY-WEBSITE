@@ -351,6 +351,11 @@ we never invent a CCRS value.
   withholds the unprovable (`E41`, `[G L0246-L0248]`). See
   `docs/ccrs-bible/04-current-state-and-gap-matrix.md` §A.5.
 
+#### C2e — HIGH — FIXED 2026-11-10 (D227) — Sale excise did not equal 37% of the PRINTED row
+- PREprod `Sale_413541_20261110101609.csv`: 2 of 1,332 rows were refused with `Cannabis Excise Tax does not equal 37% of Unit Price` [G L1374, L1377].
+- CCRS recomputes `round(37% x (Quantity x UnitPrice - Discount))` [FAQ L0153-L0160]. The exporter rounded the unit price and the line base separately, so for some multi-quantity lines the printed row was 1 cent under the taxed base.
+- Fixed: `ccrsSaleLineMoney` (tax-base-core) makes the printed row equal the taxed base, in the exporter, the return snapshot and partial-return Updates. The message is now known to the hub, and an errored Sale file can re-send only its refused rows. See `docs/ccrs-bible/09-slice-plan.md` D227.
+
 #### C3 — OK (verified) — Boolean columns
 - `IsQuarantine` (Area) and `IsMedical` (Inventory) emit `TRUE`/`FALSE`. Manual:
   Boolean, valid values TRUE/FALSE. ✓
