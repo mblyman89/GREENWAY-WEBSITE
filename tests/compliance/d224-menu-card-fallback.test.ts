@@ -39,11 +39,11 @@ describe("D224 core", () => {
   it("self-tests pass", () => {
     const r = __runMenuCardFallbackTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(38);
+    expect(r.passed).toBeGreaterThanOrEqual(70); // D225 grew the suite
   });
   it("is registered in the pure self-test runner with its exact count", () => {
     expect(read("scripts/compliance/run-pure-selftests.ts")).toContain(
-      'assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 38);',
+      'assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 70);',
     );
   });
   it("one slot per website category, never a POS category", () => {
@@ -77,6 +77,7 @@ describe("D224 core", () => {
     const rows = fallbackPageRows([], [], cov);
     expect(rows).toHaveLength(websiteCategoryDefinitions.length);
     expect(rows.find((r) => r.category === "flower")?.coverage).toEqual({ cards: 2, withoutOwnPhoto: 1 });
+    expect(rows.find((r) => r.category === "flower")?.pictures).toEqual([]); // D225: a list per category
   });
 });
 
@@ -122,16 +123,17 @@ describe("D224 the admin page", () => {
     expect(page).toContain('data-testid="fallback-migration-missing"');
   });
   it("every action is guarded, byte-checked, audited, ledgered and clears the menu caches", () => {
+    // D225 reshaped these: five actions share one afterChange (audit + ledger + caches).
     expect(actions.startsWith('"use server";')).toBe(true);
-    expect(actions.match(/await requirePermission\(PERMISSION\)/g)?.length).toBe(3);
+    expect(actions.match(/await requirePermission\(PERMISSION\)/g)?.length).toBe(5);
     expect(actions).toContain("checkFileSignature(file.type");
     expect(actions).toContain("fallbackUploadProblem(file, MEDIA_UPLOAD_MAX_BYTES)");
     expect(actions).toContain("await fallbackMediaExists(mediaId)");
-    expect(actions).toContain('action: "menu_card_fallback.set"');
-    expect(actions).toContain('action: "menu_card_fallback.cleared"');
-    expect(actions).toContain("recordUsage(mediaId, MENU_CARD_FALLBACK_ENTITY, category, MENU_CARD_FALLBACK_FIELD)");
+    expect(actions).toContain('"menu_card_fallback.set"');
+    expect(actions).toContain('"menu_card_fallback.cleared"');
+    expect(actions).toContain("recordUsage(id, MENU_CARD_FALLBACK_ENTITY, category, fallbackUsageField(id))");
     expect(actions).toContain("clearUsage(MENU_CARD_FALLBACK_ENTITY, category, MENU_CARD_FALLBACK_FIELD)");
-    expect(actions.match(/revalidatePublicMenuSurfaces\(\);/g)?.length).toBe(2);
+    expect(actions.match(/revalidatePublicMenuSurfaces\(\);/g)?.length).toBe(1);
   });
 });
 
