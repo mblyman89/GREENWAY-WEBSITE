@@ -75,8 +75,17 @@ describe("R73 S1 · merch panel is identical to the other two", () => {
     expect(__runMerchOrdersPanelTests().failed).toBe(0);
   });
   it("same labels and tabs as Greenway; m-prefixed names", () => {
-    const g = controls(renderGreenway());
+    const gFull = controls(renderGreenway());
+    // D226: our panel's "Show" filter (online orders / register sales) is the
+    // one allowed difference; merch orders are never register sales.
+    const g = {
+      ...gFull,
+      labels: gFull.labels.filter((x) => x !== "Show"),
+      inputNames: gFull.inputNames.filter((n) => n !== "source"),
+    };
     const m = controls(renderMerch());
+    expect(gFull.labels).toContain("Show");
+    expect(m.labels).not.toContain("Show");
     expect(m.labels).toEqual(g.labels);
     expect(m.tabs).toEqual(g.tabs);
     expect(m.inputNames).toEqual(g.inputNames.map((n) => `m${n}`));

@@ -33,6 +33,7 @@ import type {
 } from "./types";
 import { evaluateOrderTransition } from "./order-lifecycle-core";
 import { excludedOriginsFilter } from "./order-board-split-core";
+import { orderSourceFilter, snapshotSourceArg, type OrderSource } from "./order-source-core";
 import {
   EXPIRABLE_STATUS,
   RESERVATION_SWEEP_ACTOR,
@@ -77,6 +78,29 @@ function orderSearchClause(like: string, withDisplayName: boolean): string {
   ];
   if (withDisplayName) parts.push(`display_name.ilike.${like}`);
   return parts.join(",");
+}
+
+/**
+ * D226 - narrow an `orders` query to one source (online orders / register
+ * sales / both). The rule lives in order-source-core; this only applies it.
+ * `undefined` = no narrowing (every caller that predates D226).
+ */
+// Typed structurally on purpose: the PostgREST builder's own generics are
+// too deep for a generic constraint (TS2589), and every caller passes an
+// `orders` filter builder, whose neq / is / or return the same builder.
+type SourceFilterable = {
+  neq(column: string, value: string): unknown;
+  is(column: string, value: null): unknown;
+  or(filters: string): unknown;
+};
+function applySource<Q>(q: Q, source: OrderSource | undefined): Q {
+  if (!source) return q;
+  const f = orderSourceFilter(source);
+  let out = q as unknown as SourceFilterable;
+  for (const [col, val] of f.neq) out = out.neq(col, val) as SourceFilterable;
+  for (const col of f.isNull) out = out.is(col, null) as SourceFilterable;
+  if (f.orFilter) out = out.or(f.orFilter) as SourceFilterable;
+  return out as unknown as Q;
 }
 
 export async function createOrder(input: PersistOrderInput): Promise<PlacedOrderResult | null> {
@@ -374,6 +398,11 @@ export async function listOrdersPaged(
      * back in through the search box. Omit for "every origin".
      */
     excludeOrigins?: readonly string[];
+    /**
+     * D226: online orders, register sales, or both (order-source-core).
+     * Omit for every row.
+     */
+    source?: OrderSource;
   },
 ): Promise<{ rows: OrderRow[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
@@ -388,6 +417,7 @@ export async function listOrdersPaged(
     let q = admin.from("orders").select("*", { count: "exact" });
     const notOrigins = filter.excludeOrigins ? excludedOriginsFilter(filter.excludeOrigins) : null;
     if (notOrigins) q = q.not("origin", "in", notOrigins);
+    q = applySource(q, filter.source);
     if (filter.status && filter.status !== "all") {
       if (filter.status === "active") {
         q = q.in("status", ["new", "acknowledged", "preparing", "ready"]);
@@ -558,7 +588,7 @@ export type OrderArrivalRow = {
   label: string;
 };
 
-export async function getRecentOrderArrivals(limit = 20): Promise<OrderArrivalRow[]> {
+export async function getRecentOrderArrivals(limit = 20, source?: OrderSource): Promise<OrderArrivalRow[]> {
   if (!isSupabaseServiceConfigured) return [];
   const capped = Math.max(1, Math.min(100, Math.floor(limit)));
   const admin = createSupabaseAdminClient();
@@ -573,16 +603,12 @@ export async function getRecentOrderArrivals(limit = 20): Promise<OrderArrivalRo
   // Same degrade-don't-fail ladder the insert path uses: prefer display_name,
   // fall back when migration 0147 has not been applied.
   let rows: ArrivalPick[] | null = null;
-  const withDisplay = await admin
-    .from("orders")
-    .select("id, placed_at, order_number, display_name")
+  const withDisplay = await applySource(admin.from("orders").select("id, placed_at, order_number, display_name"), source)
     .order("placed_at", { ascending: false })
     .limit(capped);
 
   if (withDisplay.error && isMissingColumnError(withDisplay.error)) {
-    const legacy = await admin
-      .from("orders")
-      .select("id, placed_at, order_number")
+    const legacy = await applySource(admin.from("orders").select("id, placed_at, order_number"), source)
       .order("placed_at", { ascending: false })
       .limit(capped);
     if (legacy.error) return [];
@@ -673,7 +699,7 @@ export async function registerPickedUpOrderIds(orderIds: string[]): Promise<Set<
  * API, the cockpit) pass nothing and keep counting every origin.
  */
 export async function getOrderStatusCounts(
-  opts: { excludeOrigins?: readonly string[] } = {},
+  opts: { excludeOrigins?: readonly string[]; source?: OrderSource } = {},
 ): Promise<Record<OrderStatus, number>> {
   const empty: Record<OrderStatus, number> = {
     new: 0,
@@ -695,6 +721,7 @@ export async function getOrderStatusCounts(
         .eq("status", status);
       const notOrigins = opts.excludeOrigins ? excludedOriginsFilter(opts.excludeOrigins) : null;
       if (notOrigins) q = q.not("origin", "in", notOrigins);
+      q = applySource(q, opts.source);
       const { count } = await q;
       return count ?? 0;
     }),
@@ -729,13 +756,24 @@ export type OrdersBoardSnapshot = {
 };
 
 export async function getOrdersBoardSnapshot(
-  opts: { arrivalsLimit?: number; excludeOrigins?: readonly string[] } = {},
+  opts: {
+    arrivalsLimit?: number;
+    excludeOrigins?: readonly string[];
+    /**
+     * D226: count (and list arrivals for) online orders, register sales, or
+     * both. Omit / "all" for every row. Needs migration 0358; until it is
+     * applied the RPC is "not found" and the legacy readers below apply the
+     * same filter, so the numbers are right either way.
+     */
+    source?: OrderSource;
+  } = {},
 ): Promise<OrdersBoardSnapshot> {
   const limit = clampArrivalsLimit(opts.arrivalsLimit);
+  const source = snapshotSourceArg(opts.source) ?? undefined;
   const legacy = async (): Promise<OrdersBoardSnapshot> => {
     const [counts, arrivals, latest] = await Promise.all([
-      getOrderStatusCounts(opts.excludeOrigins ? { excludeOrigins: opts.excludeOrigins } : {}),
-      limit > 0 ? getRecentOrderArrivals(limit) : Promise.resolve([] as OrderArrivalRow[]),
+      getOrderStatusCounts({ ...(opts.excludeOrigins ? { excludeOrigins: opts.excludeOrigins } : {}), ...(source ? { source } : {}) }),
+      limit > 0 ? getRecentOrderArrivals(limit, source) : Promise.resolve([] as OrderArrivalRow[]),
       getLatestOrderChange(),
     ]);
     return { counts, arrivals, latest, usedRpc: false };
@@ -745,9 +783,12 @@ export async function getOrdersBoardSnapshot(
   try {
     const admin = createSupabaseAdminClient();
     const exclude = (opts.excludeOrigins ?? []).filter((o) => /^[a-z_]+$/.test(o));
+    // D226: p_source is only sent when a source is asked for, so a caller
+    // that passes none keeps calling the exact 0233 signature.
     const { data, error } = await admin.rpc(ORDERS_BOARD_SNAPSHOT_RPC, {
       p_arrivals_limit: limit,
       p_exclude_origins: exclude.length > 0 ? exclude : null,
+      ...(source ? { p_source: source } : {}),
     });
     if (error) {
       if (!isMissingDbFunctionError(error)) {

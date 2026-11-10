@@ -237,7 +237,8 @@ export const cockpitOps = cache(async (): Promise<CockpitOps> => {
   const [statusCounts, registers, published, imports, loyaltyCounts] = await Promise.all([
     // USAGE-3: one grouped RPC (0233) instead of seven exact counts.
     safeData(
-      () => getOrdersBoardSnapshot({ arrivalsLimit: 0 }).then((s) => s.counts),
+      // D226: online orders only; register sales are not open orders to work.
+      () => getOrdersBoardSnapshot({ arrivalsLimit: 0, source: "online" }).then((s) => s.counts),
       {} as Record<OrderStatus, number>,
     ).then((r) => r.data),
     safeData(() => liveRegisters(), [] as RegisterLive[]).then((r) => r.data),

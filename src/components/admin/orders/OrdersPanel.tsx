@@ -41,6 +41,7 @@ import { Input, Select } from "@/components/admin/ui/Field";
 import { EmptyState } from "@/components/admin/ux/EmptyState";
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { ORDER_SORTS } from "@/lib/admin/list-filter-core";
+import { ORDER_SOURCES, ORDER_SOURCE_LABELS } from "@/lib/orders/order-source-core";
 import type { ListWindow } from "@/lib/admin/list-window-core";
 import {
   DEFAULT_PANEL_STATUS,
@@ -203,6 +204,29 @@ export function OrdersPanel({
                 className="w-24"
               />
             </div>
+            {/* D226: online orders, register sales, or both. Only our panel
+                has it (Leafly and merch orders are never register sales).
+                Default "Online orders": register sales are written into
+                orders as the sale of record, but they are not online orders. */}
+            {names.source ? (
+              <div>
+                <label className={LABEL} htmlFor={`${anchor}-source`}>
+                  Show
+                </label>
+                <Select
+                  id={`${anchor}-source`}
+                  name={names.source}
+                  defaultValue={query.source}
+                  aria-label={`Which ${title} to show`}
+                >
+                  {ORDER_SOURCES.map((s) => (
+                    <option key={s} value={s}>
+                      {ORDER_SOURCE_LABELS[s]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
             <div>
               <label className={LABEL} htmlFor={`${anchor}-sort`}>
                 Sort by

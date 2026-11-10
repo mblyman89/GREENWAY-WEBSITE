@@ -1362,7 +1362,8 @@ describe("D-65 — the connections survive the reset", () => {
     // + media_ai_runs (0352, D221; AI passes over the media library, KEEP with the media).
     // D221 M7: +3 KEEP media_collections, media_collection_items, media_search_log (0354; photo groups + search log).
     // D224: +1 KEEP menu_card_fallback_images (0355; the owner's fallback picture per website category).
-    expect(plan.keep.length).toBe(209);
+    // D226: +1 KEEP orders_origin_backfill_0359 (0359; undo list for the register relabel, no FK).
+    expect(plan.keep.length).toBe(210);
     expect(plan.wipe.length).toBe(139);
   });
 
