@@ -504,6 +504,118 @@ export async function generateVision(opts: VisionOptions): Promise<string> {
   return content;
 }
 
+export type VisionJsonOptions = VisionOptions & {
+  /** Model id; defaults to the configured vision model. */
+  model?: string;
+  /** OpenAI image detail. "high" = the "closer look" (more image tokens). */
+  detail?: "low" | "high" | "auto";
+  /** Reasoning effort for reasoning-class models (ignored by others). */
+  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
+  /** Abort after this many ms (default 90 s). */
+  timeoutMs?: number;
+};
+
+export type VisionJsonResult = {
+  content: string;
+  model: string;
+  usage: { promptTokens: number; cachedTokens: number; completionTokens: number; real: boolean };
+};
+
+/** Reasoning-class ids take max_completion_tokens and may refuse temperature. */
+function isReasoningModel(model: string): boolean {
+  return /^(o\d|gpt-5|gpt-6)/i.test(model);
+}
+
+/**
+ * D221 M4: image-aware completion that returns a JSON object plus the real
+ * token usage (for the run's cost ledger). Same endpoint as generateVision,
+ * with: a model override, image `detail`, `response_format: json_object`, and
+ * the reasoning-model parameter tolerance the crawler's ai_client.py uses (a
+ * 400 naming `temperature` drops it; one naming max_completion_tokens falls
+ * back to max_tokens). Logs one ai_usage row per call. Throws on failure.
+ */
+export async function generateVisionJson(opts: VisionJsonOptions): Promise<VisionJsonResult> {
+  if (!isAiConfigured) throw new AiNotConfiguredError();
+  const model = (opts.model ?? "").trim() || AI_VISION_MODEL;
+  const promptText = `${opts.system}\n${opts.user}`;
+  const reasoning = isReasoningModel(model);
+  const payload: Record<string, unknown> = {
+    model,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: opts.system },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: opts.user },
+          { type: "image_url", image_url: { url: opts.imageUrl, detail: opts.detail ?? "high" } },
+        ],
+      },
+    ],
+  };
+  if (reasoning) {
+    payload.max_completion_tokens = opts.maxTokens ?? 1600;
+    if (opts.reasoningEffort) payload.reasoning_effort = opts.reasoningEffort;
+  } else {
+    payload.max_tokens = opts.maxTokens ?? 900;
+    payload.temperature = opts.temperature ?? 0.2;
+  }
+  const feature = opts.context?.feature ?? "media.describe";
+
+  let lastErr = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetchWithTimeout(
+      `${AI_BASE_URL}/chat/completions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_API_KEY}` },
+        body: JSON.stringify(payload),
+      },
+      opts.timeoutMs ?? 90_000,
+    );
+    if (res.ok) {
+      const json = (await res.json()) as {
+        choices?: { message?: { content?: string } }[];
+        usage?: ChatUsage & { prompt_tokens_details?: { cached_tokens?: number } };
+      };
+      const content = (json.choices?.[0]?.message?.content ?? "").trim();
+      await record({ ...opts.context, feature }, model, promptText, content, json.usage, true);
+      const real = Boolean(json.usage && (json.usage.prompt_tokens || json.usage.completion_tokens));
+      return {
+        content,
+        model,
+        usage: {
+          promptTokens: json.usage?.prompt_tokens ?? estimateTokens(promptText),
+          cachedTokens: json.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+          completionTokens: json.usage?.completion_tokens ?? estimateTokens(content),
+          real,
+        },
+      };
+    }
+    const text = await res.text().catch(() => "");
+    lastErr = `HTTP ${res.status}: ${text.slice(0, 300)}`;
+    const low = text.toLowerCase();
+    if (res.status === 400 && attempt < 2) {
+      if (low.includes("temperature") && "temperature" in payload) {
+        delete payload.temperature;
+        continue;
+      }
+      if (low.includes("max_completion_tokens") && "max_completion_tokens" in payload) {
+        payload.max_tokens = payload.max_completion_tokens;
+        delete payload.max_completion_tokens;
+        continue;
+      }
+      if (low.includes("reasoning_effort") && "reasoning_effort" in payload) {
+        delete payload.reasoning_effort;
+        continue;
+      }
+    }
+    await record({ ...opts.context, feature }, model, promptText, "", undefined, false, `HTTP ${res.status}`);
+    break;
+  }
+  throw new Error(`AI vision request failed (${lastErr})`);
+}
+
 /**
  * STREAMING generation. Yields text chunks as they arrive (SSE). The usage
  * ledger is recorded once at the end with an estimated token count (streaming

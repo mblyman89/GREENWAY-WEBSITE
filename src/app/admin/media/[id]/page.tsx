@@ -21,6 +21,7 @@ import {
   pendingProductLinks,
 } from "../actions";
 import { ProductLinkPanel } from "@/components/admin/media/ProductLinkPanel";
+import { describeAssetNowAction, reviewMediaAction } from "../ai-actions";
 import { pickListParams, withListParams } from "@/lib/media/return-state-core";
 
 export const dynamic = "force-dynamic";
@@ -166,6 +167,42 @@ export default async function MediaDetailPage({
               suggestMeta={suggestMediaMetaAction}
               suggestAll={suggestMediaAllAction}
             />
+
+            {/* D221 M3/M4: the AI closer look + the review decision for this picture */}
+            <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5 text-sm">
+              <p className="font-semibold text-white">AI closer look</p>
+              <p className="mt-1 text-xs text-white/50">
+                Status: <span className="text-white/80">{asset.ai_status ?? "pending"}</span>
+                {asset.seo_title ? <> · SEO title: <span className="text-white/80">{asset.seo_title}</span></> : null}
+              </p>
+              {asset.ai_caption ? <p className="mt-2 text-white/70">{asset.ai_caption}</p> : null}
+              {asset.ai_description ? <p className="mt-1 text-xs text-white/50">{asset.ai_description}</p> : null}
+              {isImage(asset.mime_type) && isAiConfigured && (
+                <form action={describeAssetNowAction} className="mt-3">
+                  <input type="hidden" name="id" value={asset.id} />
+                  <input type="hidden" name="return_to" value={selfHref} />
+                  <Button type="submit" variant="neutral" size="sm">Describe now</Button>
+                  <span className="ml-2 text-[11px] text-white/40">Fills alt text and SEO; never overwrites what a person typed.</span>
+                </form>
+              )}
+              {(asset.review_state === "needs_review" || asset.review_state === "rejected") && (
+                <form action={reviewMediaAction} className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-3">
+                  <input type="hidden" name="id" value={asset.id} />
+                  <input type="hidden" name="return_to" value={selfHref} />
+                  <span className="w-full text-xs text-[var(--admin-gold)]">
+                    {asset.review_state === "rejected" ? "Rejected (kept, never deleted)." : asset.review_note ?? "Waiting for review."}
+                  </span>
+                  <Button type="submit" name="decision" value="accept" variant="confirm" size="sm">{asset.review_state === "rejected" ? "Un-reject" : "Looks right"}</Button>
+                  {asset.review_state === "needs_review" && (
+                    <>
+                      <Button type="submit" name="decision" value="product" variant="neutral" size="sm">It&apos;s a product photo</Button>
+                      <Button type="submit" name="decision" value="logo" variant="neutral" size="sm">It&apos;s a logo</Button>
+                      <Button type="submit" name="decision" value="reject" variant="danger" size="sm">Reject</Button>
+                    </>
+                  )}
+                </form>
+              )}
+            </div>
 
             {/* H10d: product-link drafts + logo-validation routing */}
             <ProductLinkPanel

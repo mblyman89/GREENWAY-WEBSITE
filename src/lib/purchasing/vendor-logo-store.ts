@@ -259,6 +259,8 @@ export async function fetchVendorLogo(input: {
         altText: `${vendor.display_name} logo`,
         uploadedBy: input.actor.id,
         tags: ["vendor-logo", found.platform],
+        // D221 M3: the vendor is known; record it on the library row.
+        provenance: { platform: found.platform, vendorId: vendor.id, role: "logo", creditText: vendor.display_name },
       });
       assetId = asset.id;
     } catch (e) {
