@@ -273,6 +273,11 @@ export default async function MediaDetailPage({
                       {u.entity_type === "vendor" && (
                         <Link href={`/admin/vendors/${u.entity_id}`} className="text-[var(--admin-accent)] hover:underline">view vendor →</Link>
                       )}
+                      {u.entity_type === "menu_card_fallback" && (
+                        <Link href={`/admin/menu-card-fallbacks#cat-${encodeURIComponent(u.entity_id)}`} className="text-[var(--admin-accent)] hover:underline">
+                          {u.entity_id} menu card fallback →
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>

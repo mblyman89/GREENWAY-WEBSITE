@@ -901,6 +901,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   // media_search_log (0354, D221 M7): what staff typed into the library search
   // boxes and how many pictures came back - tunes search. No customer data.
   { table: "media_search_log", disposition: "KEEP", because: "What staff searched for in the photo library, used to improve search." },
+  // menu_card_fallback_images (0355, D224): the one picture per website
+  // category a person chose for cards with no photo. KEEP with the media.
+  { table: "menu_card_fallback_images", disposition: "KEEP", because: "The fallback picture you chose for each website category's menu cards." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

@@ -47,6 +47,9 @@ import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import { cleanKbProductId } from "@/lib/catalog/menu-kb-link-core";
 import type { ProductEnrichment } from "@/lib/enrichment/types";
 import { resolveProductImage, type ResolvedImage } from "@/lib/enrichment/image-resolver";
+import { pickWithCategoryFallback, WEBSITE_CATEGORY_SOURCE } from "@/lib/menu/menu-card-fallback-core";
+import { menuCardFallbackUrlForProduct } from "@/lib/menu/menu-card-fallback-server";
+import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { lookupProductKnowledge, type ProductKnowledge } from "@/lib/ai/kb/product-lookup";
 import { listKbProducts } from "@/lib/ai/kb/store";
 import { resolveSubstituteFor } from "@/lib/ai/kb/image-substitutes";
@@ -111,6 +114,9 @@ export type VendorSuggestion = ScoredMatch<VendorItemCandidate> & {
   savedMediaUrl: string | null;
 };
 
+/** D224: the resolver ladder plus the owner's website-category fallback rung. */
+export type LiveImage = Omit<ResolvedImage, "source"> & { source: ResolvedImage["source"] | typeof WEBSITE_CATEGORY_SOURCE };
+
 export type EnrichmentCommandCenter = {
   /**
    * The row SERVED for this card (S20): its own row when it has content,
@@ -147,7 +153,7 @@ export type EnrichmentCommandCenter = {
   mediaSuggestions: MediaSuggestion[];
   vendorSuggestions: VendorSuggestion[];
   /** What the live menu resolves for this product RIGHT NOW (null = mockup). */
-  liveImage: ResolvedImage | null;
+  liveImage: LiveImage | null;
   /** Approved fallback for this category/type, offered when no exact image. */
   substitute: { url: string; scope: string; key: string } | null;
   /** Plain-English "how to get assets" checklist (empty = fully enriched). */
@@ -337,7 +343,7 @@ export async function getEnrichmentCommandCenter(
     source_item_id: posKey ?? "",
     variants: (item.variants ?? []).map((v) => ({ source_variant_id: v.source_variant_id })),
   });
-  const [served, knowledge, kbRows, mediaRows, vendorRows, liveImage, substitute, provenance] =
+  const [served, knowledge, kbRows, mediaRows, vendorRows, ladderImage, ladderSubstitute, provenance, categoryFallbackUrl] =
     await Promise.all([
       getEnrichmentForItem(item).catch(() => ({ row: null, via: "none" as EnrichmentVia, own: null })),
       lookupProductKnowledge({
@@ -383,7 +389,16 @@ export async function getEnrichmentCommandCenter(
       // S23: the onboarding fact history, by the card's identity AND its lot
       // keys (the S07 door stamps the draft's identity + lot key). null = not read.
       loadGapProvenance({ identityKeys: [identityKey], posKeys: lotKeys }).catch(() => null),
+      // D224: the owner's picture for this card's website category (Admin ->
+      // Menu Card Fallbacks); null when unset or before 0355.
+      menuCardFallbackUrlForProduct(posKey, item.category).catch(() => null),
     ]);
+  // D224: the same ladder the shop card uses - own photo, then the owner's
+  // category fallback, then the generic substitutes, then the mockup.
+  const liveImage: LiveImage | null = pickWithCategoryFallback(ladderImage, categoryFallbackUrl);
+  const substitute: { url: string; scope: string; key: string } | null = categoryFallbackUrl
+    ? { url: categoryFallbackUrl, scope: WEBSITE_CATEGORY_SOURCE, key: `${formatWebsiteCategory(item.category ?? "")} (Menu Card Fallbacks)` }
+    : ladderSubstitute;
 
   const enrichment = served.row;
   const gaps = computeGaps(item, enrichment);

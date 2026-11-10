@@ -358,7 +358,10 @@ describe("S23 wiring", () => {
   it("the history read runs CONCURRENTLY with the other command-center reads (no extra round trip)", () => {
     const all = cc.slice(cc.indexOf("await Promise.all(["), cc.indexOf("const enrichment = served.row;"));
     expect(all).toContain("loadGapProvenance(");
-    expect(cc).toMatch(/const \[served, knowledge, kbRows, mediaRows, vendorRows, liveImage, substitute, provenance\] =/);
+    // D224: the ladder image/substitute are renamed (the owner's category
+    // fallback is folded in after) and its read joins the same Promise.all.
+    expect(cc).toMatch(/const \[served, knowledge, kbRows, mediaRows, vendorRows, ladderImage, ladderSubstitute, provenance, categoryFallbackUrl\] =/);
+    expect(all).toContain("menuCardFallbackUrlForProduct(");
   });
   it("the detail page renders the header sentence, red missing chips, attached chips and the footnote", () => {
     expect(detail).toContain('import { gapHeadline, gapFootnote } from "@/lib/enrichment/gap-vector-core";');

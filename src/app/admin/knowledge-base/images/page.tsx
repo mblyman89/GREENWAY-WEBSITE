@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
@@ -51,6 +52,13 @@ export default async function KbImagesPage({
       />
       <div className="px-5 py-6 sm:px-8 space-y-6">
         <KbFlash msg={msg} error={error} />
+        <p className="rounded-[var(--admin-radius-lg)] border border-white/10 bg-[#0a0a0a] px-4 py-3 text-sm text-white/70" data-testid="menu-card-fallbacks-link">
+          Want one picture per website category (Flower, Vapes, Edibles...) on every card without its own photo? Use{" "}
+          <Link href="/admin/menu-card-fallbacks" className="text-[var(--admin-accent)] underline-offset-2 hover:underline">
+            Admin → Menu Card Fallbacks
+          </Link>
+          . It is checked before the substitutes on this page.
+        </p>
         <SubstituteManager
           substitutes={substitutes}
           media={mediaOptions}

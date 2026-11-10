@@ -20,6 +20,7 @@ import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 import { withProductTags } from "@/lib/menu/product-tags-server";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
+import { withMenuCardFallbacks } from "@/lib/menu/menu-card-fallback-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
 import { getSectionsForRender } from "@/lib/cms/page-sections-store";
@@ -108,7 +109,7 @@ export default async function Home() {
     // R23 item 9: resolve each card's image (its own enrichment photo first)
     // exactly like the shop menu (ShopPage) and the product page do.
     // R33: + withCategoryOverride so a re-filed product reads the same as on /menu.
-    loadLiveMenuItemsCached().then((items) => withMenuProfile(items)).then((items) => withCategoryOverride(items)).then((items) => withProductTags(items)).then((items) => withResolvedImages(items)),
+    loadLiveMenuItemsCached().then((items) => withMenuProfile(items)).then((items) => withCategoryOverride(items)).then((items) => withProductTags(items)).then((items) => withResolvedImages(items)).then((items) => withMenuCardFallbacks(items)), // D224: owner category fallback last
     // PR 2: back-office vendor profiles (logo + copy) for the "Shop by Brand"
     // section, which now shows VENDOR cards. Defensive (empty when off).
     listPublicVendorProfiles(),

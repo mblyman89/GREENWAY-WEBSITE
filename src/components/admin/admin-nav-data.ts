@@ -228,6 +228,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "\u2699\ufe0f", group: "Admin" }, // ⚙️ settings
   { label: "Help & FAQ", href: "/admin/help", permission: "dashboard.view", icon: "\ud83d\udca1", group: "Admin" }, // 💡 help
   { label: "Menu Imports", href: "/admin/menu-imports", permission: "menu.import", icon: "\ud83d\udce5", group: "Admin" }, // 📥 import
+  { label: "Menu Card Fallbacks", href: "/admin/menu-card-fallbacks", permission: "products.enrich", icon: "\ud83d\uddbc\ufe0f", group: "Admin" }, // D224: one fallback picture per website category
 ];
 
 export const navGroups: AdminNavItem["group"][] = [

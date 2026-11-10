@@ -29,6 +29,7 @@ import { imageObjectFor, pickImageAlt, type ImageSeoFields } from "@/lib/seo/ima
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 import { withProductTags } from "@/lib/menu/product-tags-server";
+import { withMenuCardFallbacks } from "@/lib/menu/menu-card-fallback-server";
 import { pdpSizeLine, productSchemaWeight } from "@/lib/menu/pdp-size-core";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 // SLICE 18C: the badge cores. dohPillForItem was previously only consumed by
@@ -280,7 +281,11 @@ async function relatedItemsFor(
   // R33: the owner's per-product category/type re-file applies here too.
   const allItems = await withProductTags(await withCategoryOverride(await withMenuProfile(await loadLiveMenuItemsCached())));
   const selection = selectRelatedItems(item, allItems, 8);
-  return { items: selection.items, scope: selection.scope };
+  // D224: the eight chosen cards get the same picture ladder as the shop
+  // grid (own photo, then the owner's category fallback), so a related card
+  // never shows the mockup where the shop shows a picture. Eight items only.
+  const pictured = await withMenuCardFallbacks(await withResolvedImages(selection.items));
+  return { items: pictured, scope: selection.scope };
 }
 
 // The menu is dynamic (published DB version), so product pages are NOT
@@ -370,9 +375,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // SLICE D (SHOP-4): thread the DOH-compliant flag onto the detail item too,
   // from the same durable registry, so the product page agrees with the menu
   // card. Merch is non-cannabis → skip. Degrades to "no DOH" pre-migration.
+  // D224: withMenuCardFallbacks last - a product with no photo of its own
+  // shows the owner's picture for its final website category (badged
+  // "Representative image"; imageIsFallback keeps it out of ImageObject).
   const [item] = isMerchItem(baseItem)
-    ? [baseItem]
-    : await withProductTags(await withCategoryOverride(await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem])))));
+    ? await withMenuCardFallbacks([baseItem])
+    : await withMenuCardFallbacks(await withProductTags(await withCategoryOverride(await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem]))))));
   // R33: withCategoryOverride - the owner's website Category/Type re-file
   // (lot page) used to reach ONLY the shop grid; the product page kept the
   // onboarding category + type label. Same overlay, same degrade-to-identity.

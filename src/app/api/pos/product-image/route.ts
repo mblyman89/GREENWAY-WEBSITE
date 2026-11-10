@@ -21,6 +21,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { getLiveMenuItemByIdDirect } from "@/lib/pos/live-menu";
 import { resolveProductImage } from "@/lib/enrichment/image-resolver";
+import { pickWithCategoryFallback } from "@/lib/menu/menu-card-fallback-core";
+import { menuCardFallbackUrlForProduct } from "@/lib/menu/menu-card-fallback-server";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
@@ -42,7 +44,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   try {
     const item = await getLiveMenuItemByIdDirect(productId); // USAGE-2: one row, not the whole menu
     if (!item) return NextResponse.json({ image: null });
-    const resolved = await resolveProductImage({
+    const ladder = await resolveProductImage({
       posKey: item.id,
       identityKey: item.identityKey ?? null, // S20: the product's photo serves a new lot
       brandSlug: item.brand ?? null,
@@ -50,6 +52,11 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       category: item.posInventoryCategory ?? item.category ?? null,
       inventoryType: item.posInventoryType ?? null,
     });
+    // D224: no photo of its own -> the owner's picture for the card's website
+    // category (Admin -> Menu Card Fallbacks), same as the shop card shows.
+    const resolved = ladder && !ladder.isFallback
+      ? ladder
+      : pickWithCategoryFallback(ladder, await menuCardFallbackUrlForProduct(item.id, item.category));
     return NextResponse.json({
       image: resolved ? { url: resolved.url, isFallback: resolved.isFallback } : null,
     });

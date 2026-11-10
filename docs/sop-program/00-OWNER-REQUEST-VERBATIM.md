@@ -2426,3 +2426,59 @@ Fix:
 - The panel swaps in newer batch findings as they arrive, unless the person ran their own search or edited the worksheet.
 - The green box gets a "See all N facts the lookup found" link that opens and scrolls to the AI Lookup worksheet.
 - Tests: `tests/compliance/d223-onboarding-batch-details.test.tsx`; r66 floor updated.
+
+## D224 — Menu card fallback images: one picture per website category for cards with no photo (2026-11-10)
+
+### Owner request (verbatim)
+
+> I need your help to add a new page and feature to the back office in the admin dropdown menu. It is a menu card fall back image uploaded/ selector. I want to be able to set a fallback image to be used for products when one isn't specifically set to that products menu card yet. There should be one image per website category, when set, automatically shows on all cards in that category without a product image set. Clone the repo, read agents.md, the standing rules, and then recon the code so you know what and how to build it. Make sure it is connected everywhere it should be and that it works for all places needed. I have another agent working, so complete and push all work out of the sandbox, it is very unstable, but do not merge until I say it is safe to do so. The sandbox does not have enough memory, so scoped tsc only on changed and new files. Follow the standing rules. Thank you.
+
+(Numbered D224 because the other agent's open branch already uses D223.)
+
+### Findings
+
+- Every menu card picture comes from `withResolvedImages` (image-resolver). Its ladder is: the product's own photo (exact, or S20 borrowed from the same product), then the older generic substitutes in `kb_image_substitutes` (brand, vendor, POS category, inventory type, global), then the built-in mockup.
+- Those substitutes are keyed by POS categories and inventory types, not by the 21 website categories the shop lists. So the owner had no way to say "every Vapes card without a photo shows this picture".
+- Card pictures show in these places:
+  - the shop grid and `/menu/[category]` (ShopPage);
+  - the home rails;
+  - /specials;
+  - the product page and its related rail. The related rail never ran the image resolver before, so its cards always showed the mockup;
+  - the register info card (`/api/pos/product-image`);
+  - the admin product page preview ("On the menu right now").
+- The image sitemap and the product-page `ImageObject` already skip anything with `imageIsFallback`. The syndication feed only sends exact photos.
+
+### Decisions
+
+- New table `menu_card_fallback_images` (migration 0355). It has one row per website category: the category is the primary key and a check constraint limits it to the 21 values. Each row points at a `media_assets` picture.
+- The ladder is now: own photo, then the owner's website-category fallback, then the older generic substitutes, then the mockup.
+- The fallback uses the card's FINAL category, after the owner's per-product re-file. The re-file is applied first on the shop, home, specials and product pages. The register card and admin product page look it up per product.
+- A fallback is always marked `imageIsFallback = true`. So it carries the "Representative image" badge, never becomes the product's `ImageObject`, and is never listed in the image sitemap. The syndication feed is unchanged (exact photos only).
+- Public reads use one snapshot per minute, tagged `live-menu`. A save clears it at once through `revalidatePublicMenuSurfaces`.
+- The page uses the `products.enrich` permission (the same as Knowledge Base → Fallback images) and sits in the Admin group of the nav.
+
+### As built
+
+- **Migration 0355** (`supabase/migrations/0355_menu_card_fallback_images.sql`):
+  - RLS is on. Access is revoked from public, anon and authenticated; `service_role` gets select/insert/update/delete.
+  - Deleting a picture from the library cascades and removes its fallback row.
+  - It ships with a rollback and the PG check `scripts/recon/menu-card-fallback-0355-pg-check.sql`, which is registered in `POST_APPLY_CHECKS`.
+  - It has an entry in MIGRATIONS_TO_RUN, the schema-tables snapshot is regenerated, the table is in the factory-reset KEEP list, and the db-contract is regenerated.
+- **Pure core** (`src/lib/menu/menu-card-fallback-core.ts`): 38 self-tests, registered in `run-pure-selftests`.
+- **Server file** (`src/lib/menu/menu-card-fallback-server.ts`): the snapshot, `withMenuCardFallbacks`, `menuCardFallbackUrlForProduct`, and the admin reads and writes. Database errors are classified (42P01 / PGRST205 / 42501).
+- **Page** `/admin/menu-card-fallbacks` (Admin → Menu Card Fallbacks):
+  - It has one row for each of the 21 website categories. Each row shows the current picture and how many live cards have no photo of their own.
+  - Each row has three actions: Upload (byte-checked, saved to the media library), Choose from library (search, Product photos / All images) and Remove.
+  - Every change writes an audit row (`menu_card_fallback.set` / `.cleared`) and keeps the media "Where used" ledger up to date.
+- **Wired into:**
+  - ShopPage (shop and category pages);
+  - the home rails;
+  - /specials;
+  - the product page and its related rail;
+  - the register info card;
+  - the admin product page (the "Fallback: website category (Menu Card Fallbacks)" chip and a link);
+  - the media "Where used" list;
+  - a link on Knowledge Base → Fallback images.
+- **Tests:** `tests/compliance/d224-menu-card-fallback.test.ts`. The migration pins are shifted to 0355.
+- **To go live:** apply migration 0355 in Supabase.
+
