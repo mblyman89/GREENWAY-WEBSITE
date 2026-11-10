@@ -122,3 +122,21 @@ describe("the button and the action", () => {
     expect(fn).toContain("if (!verdict.complete) throw");
   });
 });
+
+describe("the waiting 2026-11-10 error email now applies (S3 makes the message known)", () => {
+  it("classifyEcho reads the real error file against the real sent rows as error-rows: exactly rows 80 and the 7DPS89 row, refused (not uncertain)", async () => {
+    const { classifyEcho } = await import("@/lib/compliance/ccrs-outcome-core");
+    const err = readFileSync(path.join(EV, "errors/Sale__20261110T104153061.csv"), "utf8");
+    const ours = data(SENT).map((l, i) => {
+      const c = l.split(",");
+      return { rowNo: i + 1, externalId: c[D], operation: c[CCRS_COLUMNS.Sale.indexOf("Operation")] };
+    });
+    const v = classifyEcho("Sale", ours, err);
+    expect(v.outcome).toBe("error-rows");
+    expect(v.messages).toEqual(["Cannabis Excise Tax does not equal 37% of Unit Price"]);
+    expect(v.rejected).toHaveLength(2);
+    expect(v.rejected.every((r) => r.uncertain === false)).toBe(true);
+    const ids = v.rejected.map((r) => ours.find((o) => o.rowNo === r.row_no)!.externalId).sort();
+    expect(ids).toEqual([...REFUSED].sort());
+  });
+});

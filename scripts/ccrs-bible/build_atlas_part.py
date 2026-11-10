@@ -66,6 +66,8 @@ MODS = [
  "src/lib/compliance/ccrs-inventory-adjustment-core.ts",
  "src/lib/compliance/ccrs-inventory-adjustment.ts",
  "src/lib/compliance/ccrs-sale-correction-core.ts",
+ "src/lib/compliance/ccrs-resend-refused-core.ts",
+ "src/lib/reports/tax-base-core.ts",
  "src/lib/compliance/ccrs-filing-status.ts",
  "src/lib/compliance/ccrs-product-name-core.ts",
  "src/lib/compliance/ccrs-deadline-core.ts",

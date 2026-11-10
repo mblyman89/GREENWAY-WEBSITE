@@ -1300,6 +1300,41 @@ Branch `ccrs-preprod-final`. Owner request saved verbatim as `evidence/2026-10-3
 
 **Remaining (owner, after merge).** New PREprod export → upload Product → apply the email. Upload Inventory for a lot whose product has a strain → apply the email. Area shows green on reload. Old error files cannot be re-applied (they are already answered).
 
+## D227 — Sale excise identity, the message known, re-send refused rows (DONE in code, 2026-11-10)
+
+Branches `ccrs/d227-s1-sale-excise-identity`, `ccrs/d227-s3-known-excise-message`, `ccrs/d227-s4-resend-refused` and `ccrs/d227-s5-docs-pins`. The owner request is saved verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` (D227). Evidence is in `evidence/2026-11-10-preprod/`: `sent/` (the file we sent), `errors/` (CCRS's answer) and `fixed/` (the two rows recomputed).
+
+**What CCRS said and why.**
+- 2 of 1,332 Sale rows came back `Cannabis Excise Tax does not equal 37% of Unit Price`. The guide words it `CannabisExciseTax does not equal 37% of UnitPrice` [G L1377], under "CannabisExciseTax must equal 37% of unit price (except medical)" [G L1374].
+- Read from the 1,330 accepted rows, CCRS checks `round_half_up(37% x (Quantity x UnitPrice - Discount)) == CannabisExciseTax` to the cent, with Discount and taxes for the whole row [FAQ L0153-L0160].
+- Cause: `ccrs-sales.ts` backed the tax out of the shelf price twice, once for one unit and once for the line. For 3 x $18.00 that gave UnitPrice 12.30 and base 36.91, so Discount = max(0, 36.90 - 36.91) = 0. The printed row was 36.90 (37% = 13.65), but the excise sent was 13.66.
+
+**Fixes.**
+- S1: new `ccrsSaleLineMoney` and `ccrsPrintedExciseMinor` in `tax-base-core.ts`.
+  - The base and taxes stay the source of truth.
+  - When shelf unit x qty is under the base, UnitPrice becomes ceil(base/qty), at most 1 cent more, and Discount = UnitPrice x qty - base.
+  - Used by `ccrs-sales.ts` and the return snapshot in `disposition.ts`.
+  - `ccrs-sale-correction-core.ts`: a partial-return Update pro-rates the printed base once and prints excise as 37% of it. Medical stays 0 [G L1378].
+- S3: the message is in `CCRS_KNOWN_MESSAGES` (row) and `STRATEGY_PLAYBOOK` (fix-resend, cites [G L1374-L1378] [FAQ L0153-L0160]). It also has the triage rule `excise_not_37pct` and an entry in `SCOREBOARD_NEXT_STEP`. A stored error email is classified again when it is applied, so the waiting 2026-11-10 email now applies as error-rows.
+- S4: **Re-send refused rows** (CcrsFilesPanel → `resendRefusedRowsAction` → pure `ccrs-resend-refused-core.ts`).
+  - It shows only on an errored Sale file that has `CCRS_ROW_REJECTED` rows.
+  - It reads the file's rows (paged, complete or it stops) and keeps only `rejected` rows, never `uncertain`.
+  - It rebuilds their sale dates with today's exporter, so the fresh build applies its own ledger routing and in-flight hold. It keeps only those lines as Insert, checks each against the identity, then runs the offline verifier and the ledger self-check.
+  - The new file is stored through `ccrs_emit_files` and audited as `ccrs.file.resend_refused`.
+  - A second press finds the lines in flight (W-3) and sends nothing twice.
+
+**Tests.**
+- `d227-ccrs-sale-excise-identity` (the real sent/error files, a 360k-case sweep, FAQ example, medical, non-cannabis).
+- `d227-ccrs-resend-refused` (real evidence, panel render, action order pins).
+- s18b (20 error files) and s12c (corpus) were updated. disposition-core and r5-return-corrections now expect excise = 37% of the printed row.
+- Self-test `ccrs-resend-refused-core` (15).
+- Mutations **M526-M532**.
+
+**Remaining (owner, PREprod).**
+1. Apply the waiting 2026-11-10 error email (CCRS mail panel). The file becomes errored with 2 refused rows.
+2. Press **Re-send refused rows** on it.
+3. Download the new Sale file, upload it to PREprod, then mark it uploaded and apply the answer.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |
