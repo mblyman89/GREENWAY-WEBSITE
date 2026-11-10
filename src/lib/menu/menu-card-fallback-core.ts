@@ -28,9 +28,10 @@
  *   - a category now holds a LIST of pictures (owner order, capped at
  *     MAX_FALLBACKS_PER_CATEGORY);
  *   - each fallback card starts on a stable slot of that list (a hash of the
- *     card id, so the same product shows the same first picture on every
- *     surface), bumped by one when it would repeat the previous fallback card
- *     of the same category, so neighbouring cards differ;
+ *     card id, so a product shows the same first picture on every visit),
+ *     bumped by one when it would repeat the previous fallback card of the
+ *     same category in that grid, so neighbouring cards differ. A single
+ *     product (product page, register card) takes the un-bumped slot;
  *   - the browser rotates each fallback card through the same list, starting
  *     from the picture the server chose (fallbackRotationOrder). The URL list
  *     itself travels ONCE per page (the site layout provider, only categories
