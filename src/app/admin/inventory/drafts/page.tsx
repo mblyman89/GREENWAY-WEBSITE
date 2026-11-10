@@ -225,7 +225,7 @@ import {
   lookupDeliveryChoices,
   progressLine,
 } from "@/lib/catalog/lookup-job-core";
-import { snapshotButtonLabel, snapshotNote, snapshotToLookupResult, snapshotWhen } from "@/lib/catalog/lookup-snapshot-core";
+import { aiLookupAnchorId, newerSnapshot, seeFindingsLabel, snapshotButtonLabel, snapshotKey, snapshotNote, snapshotToLookupResult, snapshotWhen } from "@/lib/catalog/lookup-snapshot-core";
 import { LOOKUP_HONEST_MISS } from "@/lib/inventory/product-lookup-core";
 // R66: progress bar + measured time left + auto-refresh while the batch runs.
 import { batchProgress, etaLine } from "@/lib/catalog/lookup-progress-core";
@@ -1854,7 +1854,13 @@ export default async function CatalogDraftsPage({
                   const batchItem = batchLookupJob?.items.get(d.id.toLowerCase()) ?? null;
                   // R66: everything this row's batch lookup found (not only
                   // what attached), opened in the row's AI Lookup panel.
-                  const batchSnap = batchLookupJob?.snapshots.get(d.id.toLowerCase()) ?? null;
+                  // D223: or an EARLIER job's findings for this row (a later
+                  // job that skipped it must not hide what was found) - the
+                  // newest of the two.
+                  const jobSnap = batchLookupJob?.snapshots.get(d.id.toLowerCase()) ?? null;
+                  const pastSnap = lookupHistory && lookupHistory.ok ? lookupHistory.snapshots.get(d.id.toLowerCase()) ?? null : null;
+                  const batchSnap = newerSnapshot(jobSnap, pastSnap?.snap ?? null);
+                  const batchSnapWhere = batchSnap && pastSnap && batchSnap === pastSnap.snap ? pastSnap.where : "this row";
                   const batchFoundLine = batchItem ? itemFoundLine(batchItem, Boolean(batchSnap?.hasAnyFindings)) : null;
                   const batchRowLine = batchItem ? (
                     <div className={`${v2Row ? "text-left" : "max-w-[28rem] text-right"} text-xs`}>
@@ -1920,6 +1926,7 @@ export default async function CatalogDraftsPage({
                         returnManifest={focus.manifestId}
                         returnStatus={view}
                         readFailed={!waitingRead.ok}
+                        seeAll={seeFindingsLabel(batchSnap) ? { label: seeFindingsLabel(batchSnap)!, href: `#${aiLookupAnchorId(d.id)}` } : null}
                       />
                     )}
                     {/* R51: v2 layout only - there the lookup zone sits OUTSIDE the
@@ -1962,8 +1969,9 @@ export default async function CatalogDraftsPage({
                             })
                           : null
                       }
-                      initialNote={batchSnap ? snapshotNote(batchSnap, snapshotWhen(batchSnap.at)) : ""}
+                      initialNote={batchSnap ? snapshotNote(batchSnap, snapshotWhen(batchSnap.at), batchSnapWhere) : ""}
                       closedLabel={snapshotButtonLabel(batchSnap)}
+                      initialKey={snapshotKey(batchSnap)}
                     />
                     </>
                   );

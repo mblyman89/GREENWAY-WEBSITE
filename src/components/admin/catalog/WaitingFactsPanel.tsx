@@ -24,6 +24,7 @@ export function WaitingFactsPanel({
   returnManifest,
   returnStatus,
   readFailed = false,
+  seeAll = null,
 }: {
   draftId: string;
   view: WaitingFactsView;
@@ -32,6 +33,13 @@ export function WaitingFactsPanel({
   returnStatus: string;
   /** The page read of pending suggestions failed (never shown as "nothing waiting"). */
   readFailed?: boolean;
+  /**
+   * D223: this box lists only the facts waiting for an Attach. The batch
+   * lookup found more (category, size, lineage, terpenes, images, the
+   * evidence ...); this link opens the row's AI Lookup on ALL of it, the same
+   * pick-and-choose worksheet a single lookup shows. Null = nothing stored.
+   */
+  seeAll?: { label: string; href: string } | null;
 }) {
   return (
     <section
@@ -46,6 +54,15 @@ export function WaitingFactsPanel({
         </span>
       </p>
       <p className="text-[10px] leading-snug text-[var(--admin-text-faint)]">{WAITING_HELP}</p>
+      {seeAll ? (
+        <a
+          href={seeAll.href}
+          className="inline-flex items-center gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/50 bg-[var(--admin-accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/20"
+          data-testid="waiting-facts-see-all"
+        >
+          <span aria-hidden>{"\u{1F50D}"}</span> {seeAll.label}
+        </a>
+      ) : null}
       {readFailed ? (
         <p className="text-[var(--admin-gold)]" data-testid="waiting-facts-read-failed">
           Could not check for facts from the lookup just now. Reload the page to try again.
