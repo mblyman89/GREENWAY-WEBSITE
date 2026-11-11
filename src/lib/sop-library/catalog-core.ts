@@ -53,7 +53,7 @@ export const SOP_CATEGORIES: readonly SopCategory[] = [
   {
     id: "marketing",
     label: "Marketing & Merch",
-    description: "The Merch Studio, Merch Inventory and the separate greenwaymerch.com shop: setup, designing, publishing, orders and health.",
+    description: "The Creative Studio, Branding, the Banner Design Studio and scheduling; the Merch Studio, Merch Inventory and the separate greenwaymerch.com shop.",
     icon: "\u{1F455}",
   },
   {
@@ -168,6 +168,15 @@ export const SOP_CATALOG: readonly SopMeta[] = [
     summary:
       "Setting up Printful, Stripe, Resend and Vercel step by step, designing and publishing apparel to greenwaymerch.com, Merch Inventory, confirming, cancelling and refunding orders, and keeping it all healthy.",
     keywords: ["merch", "merch studio", "printful", "stripe", "resend", "greenwaymerch", "apparel", "t-shirt", "hoodie", "hat", "design", "mockup", "sample", "publish", "webhook", "token", "refund", "health"],
+  },
+  {
+    file: "SOP-11b-creative-studio-banner-studio-scheduling.md",
+    category: "marketing",
+    shortTitle: "Creative Studio, Banner Studio & Scheduling",
+    audience: ["Owner", "Admin", "Managers", "Content editors"],
+    summary:
+      "Making pictures and video in the Creative Studio, the Branding page, building banners that land on the website where you placed them, checking them on the real page, and scheduling banners and releases.",
+    keywords: ["creative studio", "flux", "midjourney", "branding", "banner", "banner studio", "overlay", "text box", "placement", "move mode", "website sync", "schedule", "release", "fallback", "font"],
   },
 ] as const;
 

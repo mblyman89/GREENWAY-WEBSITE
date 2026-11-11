@@ -107,6 +107,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.9 (D232, #1762):** slice **M-8** built. Pricing guard (no fixed $35; Printful STANDARD shipping vs the flat price, gap shown; 35% minimum margin warning; suggested price with Use it); helpers for Merch Inventory and Reports → Merch; Printful, Stripe and Resend guides; merch concierge topic; the 8 studio-default placements labelled as estimates with a Printful print-file compare.
 
+**v2.0 (D233, #PS11B):** the **second half**, written as `docs/sop/SOP-11b-creative-studio-banner-studio-scheduling.md` (recon, audit and roadmap only, verified at `c384a5e6`). Creative Studio, Branding, the Banner Design Studio and scheduling; why overlays move on the website (six causes with numbers) and the interim procedure; 14 findings F-11-19 … F-11-32 + F-11-C2; gaps G-94 … G-107; Phase C (C-1 … C-8) PROPOSED; Q-11-10 … Q-11-18.
+
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
 **Code (≈28.7k lines):** `/admin/media/**`, `src/lib/media/*` (upload policy, folders, optimize), `/admin/content/*`, `src/lib/cms/*`, the content-schedule cron.
@@ -175,7 +177,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-17** | Hardware | Self-contained | M |
 | **SOP-09** | Purchasing, Vendor Menus & Crawler PO Builder | Q4 answered (D4): crawler PO builder approved; own procedure + saved data | L |
 | **SOP-10** | Enrichment (product + vendor) | | L |
-| **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half, draft v1.0)**; Creative Studio = v2.0 |
+| **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half v1.0 … v1.9; Creative Studio, Banner Studio & Scheduling v2.0 as SOP-11b, D233)** |
 | **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
 | **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |

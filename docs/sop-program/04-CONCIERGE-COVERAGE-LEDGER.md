@@ -842,3 +842,16 @@ The concierge code is **unchanged** (record-only). Today `concierge-kb.ts` has t
 - F-11-1: *"Products will not show on the shop until `MERCH_CATALOG_URL` is set to the www address."*
 - F-11-7: *"Re-publishing makes a hidden product Live; hide it again."*
 - F-11-10: *"Cancel at Printful does not refund; refund in Stripe too."*
+
+### SOP-11b Creative Studio, Banner Design Studio & Scheduling (`docs/sop/SOP-11b-creative-studio-banner-studio-scheduling.md`, verified at `c384a5e6`, D233)
+
+The concierge code is **unchanged** (record-only). Today there is one topic, `image-generator` (`concierge-kb.ts` L284, 6 facts). There is nothing on the Banner Studio, Branding or scheduling.
+
+| Concierge topic | SOP-11b sections that ground it | Rating today -> after integration (target) |
+|---|---|---|
+| `image-generator` (check against the studio) | §4.2–§4.4, §7.1 | 6 -> 9 |
+| *new* `banner-studio` (tabs, keys, phone layout, why it moved, the §4.9 procedure, Move mode) | §4.7–§4.10, §6.1–§6.3, §9.3 | 0 -> 9 |
+| *new* `branding` (tabs, fonts and banners, saved banners, Save as picture) | §4.5–§4.6 | 0 -> 9 |
+| *new* `content-schedule` (what can be scheduled, Pacific 5-minute clock, releases, failed items, repeats and fallback) | §4.11–§4.14, §6.4 | 0 -> 9 |
+
+**Role filter:** all four are `content.edit`. Built in slice C-6 (G-106).

@@ -1177,6 +1177,79 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
   - the ad's price and product-detail guard (`merch-ad-core.ts` L211+), checked again on the server (`ad-actions.ts` L36–38).
 - **SOP impact:** SOP-11 §7.
 
+### F-11-19 · CONFIRMED · BUG · S2 — The studio shows "Site font" text in a different font from the website
+- **Pin:** `src/app/admin/layout.tsx` L24–29 sets no `--font-heading` / `--font-body`; `src/app/(site)/layout.tsx` L115–131 does. `globals.css` L136 (`var(--font-body, Arial, …)`), L159–160. A box on "Site font" sets no font (`banner-design-core.ts` L193–196, L1097–1098). Live 2026-11-11: heading font = system stack; no home box sets a font.
+- **Effect:** the studio wraps the text in Arial, the website in the visitor's device font; line breaks and box heights differ, so items look moved.
+- **SOP impact:** SOP-11b §4.9 step 1 (interim: name a web font). **G-94**.
+
+### F-11-20 · CONFIRMED · BUG · S2 — The studio draws plain boxes; the website draws h1/h2/p
+- **Pin:** `StudioCanvas.tsx` L456–475 (`<div role="button">`); `DesignedBanner.tsx` L105–109, L215 (`boxEl` → h1/h2/p by role); `globals.css` L159–160 (headings take `--font-heading`).
+- **Effect:** a headline on "Site font" uses the heading font live and the body font in the studio.
+- **SOP impact:** SOP-11b §4.9 step 1. **G-95**.
+
+### F-11-21 · CONFIRMED · WEAKNESS · S2 — Height and text size do not grow in step with the width; positions do
+- **Pin:** `banner-design-core.ts` L919–925 (`interpPx` clamp), L983–998 (frame height), L1076–1084 (x/y/w in %), L1153–1157 (button heights fixed px); `banner-elements-core.ts` L356–357 (line thickness px). Cards are proportional (L43, L954–957).
+- **Effect:** the shape and the text-to-width ratio change at every width except 1408 and 390: home 3.91 → 3.42 at 1024 (headline +15%), 2.96 at 768 (+34%); phone 360: +19% (SOP-11b B.3).
+- **SOP impact:** SOP-11b §4.9 steps 2–4. **G-96**.
+
+### F-11-22 · CONFIRMED · WEAKNESS · S2 — Only two preview widths
+- **Pin:** `BannerStudio.tsx` L63, L303–317 (Computer / Phone); `banner-design-core.ts` L39–40; `StudioCanvas.tsx` L141–144. Phone switch is the banner width < 768 (`globals.css` L708).
+- **Effect:** laptops and tablets (768–1407 px) and real phone widths (328–398 px banners) are never seen in the studio.
+- **SOP impact:** SOP-11b §4.10. **G-97**.
+
+### F-11-23 · CONFIRMED · WEAKNESS · S3 — Banners are mounted at other widths than the studio's
+- **Pin:** `Hero.tsx` L94–96 (1408); `SpecialsContent.tsx` L531 and `LoyaltySignupForm.tsx` L144 (1344); `ShopBannerCarousel.tsx` L331–332 + `globals.css` L54 (up to 1920, height capped 280 live).
+- **Effect:** Shop at 1856 px: shape 6.63 vs 5.03 in the studio, headline −24% vs in proportion.
+- **SOP impact:** SOP-11b §6.3, §9.3. **G-100** (Q-11-12).
+
+### F-11-24 · CONFIRMED · GAP · S3 — No "check on the real page" from inside the studio
+- **Pin:** no `website-sync` link in `src/components/admin/banner-studio/*`, `ShopBannerEditor.tsx`, `CarouselSlideCard.tsx`. Move mode exists (`PreviewDesignDrag.tsx` L3–24; `WebsiteSyncPreviewPanel.tsx` L29–33).
+- **SOP impact:** SOP-11b §4.10. **G-98**.
+
+### F-11-25 · CONFIRMED · WEAKNESS · S3 — Checks look at one width; no test guards studio = website
+- **Pin:** `banner-design-core.ts` L1367–1380 (overlap "desktop, approximate", estimated heights). No studio-vs-site test (Playwright is installed, `package.json` L20, L56).
+- **SOP impact:** SOP-11b §5. **G-99**.
+
+### F-11-26 · CONFIRMED · GAP · S3 — Scheduling differs in each place
+- **Pin:** repeats/fallback only on home slides (`home-slide-advanced-core.ts` L76–77; `banner-schedule-core.ts` L65–110); Shop slides and type cards are start/end only (`shop-carousel-core.ts` L372–378; `type-cards-core.ts` L197–203); the calendar is only on `pages/[slug]/page.tsx` L454; Schedule & Releases has 5 kinds (`content-schedule-core.ts` L32–38).
+- **SOP impact:** SOP-11b §4.11. **G-102** (Q-11-16).
+
+### F-11-27 · CONFIRMED · GAP · S3 — No "preview the site as of a date"
+- **Pin:** no as-of preview in `src/lib/cms` or `src/components/site`; Releases list/add/remove only (`content-release-server.ts` L56–135).
+- **SOP impact:** SOP-11b §4.13. **G-103**.
+
+### F-11-28 · CONFIRMED · GAP · S3 — Creative Studio results cannot be sent to a banner
+- **Pin:** `FluxResults.tsx` L85–110 (open in media, download, use as reference/source clip, enhance, seed only).
+- **SOP impact:** SOP-11b §4.2 step 6. **G-104**.
+
+### F-11-29 · CONFIRMED · GAP · S2 — No advertising-rule check on AI pictures or banners
+- **Pin:** `campaign-rules-core.ts` L53–61 (bans) is used only by `src/app/admin/marketing/page.tsx` and strategy files; not by the Creative Studio or `checkDesign` (L1334–1385). Website = advertising (L99–113).
+- **SOP impact:** SOP-11b §7.1 (check by hand). **G-105** (Q-11-14).
+
+### F-11-30 · CONFIRMED · WEAKNESS · S4 — Save to brand uses a browser prompt box
+- **Pin:** `BannerEditorShell.tsx` L60 (`window.prompt`).
+- **SOP impact:** SOP-11b §4.6 step 3. **G-107**.
+
+### F-11-31 · CONFIRMED · GAP · S3 — Help is thin for a tool this big
+- **Pin:** one long shortcut line (`BannerStudio.tsx` L395); 21 static `hint=` rows (`controls.tsx` L15–20) and 25 `title=` hovers; no tooltip component, no `aria-describedby`; no `banner-studio` helper (`page-helpers-core.ts`: branding L67, shop-banner-editor L134, content-schedule L168, midjourney-builder L305); one concierge topic `image-generator` (`concierge-kb.ts` L284).
+- **SOP impact:** SOP-11b itself. **G-106** (Q-11-15).
+
+### F-11-32 · CONFIRMED · WEAKNESS · S3 — The recommended picture shape does not match the banner
+- **Pin:** `image-spec-core.ts` L116–118 (1600×560 = 2.86, 1920×640 = 3.0) vs home 1408×360 (3.91) and Shop up to 6.63; crop `object-fit: cover` with a focus point (`banner-design-core.ts` L1000–1023).
+- **SOP impact:** SOP-11b §4.9 step 6. **G-101**.
+
+### F-11-C2 · CONFIRMED · STRENGTH — What already works well (Creative and Banner)
+- **Pin:**
+  - one set of style rules for the studio and the site (`StudioCanvas.tsx` L3–9);
+  - positions in % with separate phone overrides and keyboard moves (L18–22);
+  - undo grouping (`BannerStudio.tsx` L12, L39–40);
+  - Move mode on the real page with keyboard and own-origin messages (`PreviewDesignDrag.tsx` L11–23);
+  - proportional cards (`banner-design-core.ts` L954–957), the pattern for Scale mode;
+  - AI results saved as drafts (`flux-client.ts` L181);
+  - a 5-minute audited schedule that calls the same publish paths (`content-schedule-server.ts` L228–262);
+  - home-slide repeats, fallback and the clash calendar (`banner-schedule-core.ts` L110–170).
+- **SOP impact:** SOP-11b §7.
+
 ---
 
 ## Ledger index (updated each slice)
@@ -1194,6 +1267,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 | SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4. **R-RET:** +F-15-22 (S1, FIXED), +F-15-23 (S2, FIXED) → 24. **Fix Phase 7.1:** F-15-8, F-15-10, F-15-13, F-15-17, F-15-18 FIXED | 24 | 0 |
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
 | SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
+| SOP-11b Creative Studio, Banner Design Studio & Scheduling (v2.0, D233) | 15 new (F-11-19…F-11-32 + F-11-C2; 0×S1, 5×S2 (F-11-19, 20, 21, 22, 29), 8×S3, 1×S4) | 15 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 
