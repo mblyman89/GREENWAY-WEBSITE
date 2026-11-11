@@ -49,11 +49,13 @@ async function loadPublishData() {
 
 /** D232 M-3b: what the Product journey needs from the server (one catalog read + the last saved health run, no live calls). */
 async function loadJourney(): Promise<JourneyServer> {
-  const [{ readMerchCatalog }, { latestMerchHealthReport }] = await Promise.all([
+  const [{ readMerchCatalog }, { latestMerchHealthReport }, { listDesignRows }, { approvalsMap }] = await Promise.all([
     import("@/lib/merch/merch-inventory-store"),
     import("@/lib/merch/merch-health-server"),
+    import("@/lib/merch-studio/merch-design-store"),
+    import("@/lib/merch-studio/merch-design-sync-core"),
   ]);
-  const [cat, report] = await Promise.all([readMerchCatalog().catch(() => null), latestMerchHealthReport().catch(() => null)]);
+  const [cat, report, designs] = await Promise.all([readMerchCatalog().catch(() => null), latestMerchHealthReport().catch(() => null), listDesignRows().catch(() => null)]);
   const published = (cat?.catalog.items ?? []).map((i) => ({
     designId: i.pkg.designId,
     handle: i.handle,
@@ -63,7 +65,9 @@ async function loadJourney(): Promise<JourneyServer> {
     minRetailCents: i.pkg.variants.length ? Math.min(...i.pkg.variants.map((v) => v.retailCents)) : 0,
   }));
   const h7 = report?.report?.checks.find((c) => c.id === "H-7")?.level;
-  return { published, shopOk: h7 === "ok" ? true : h7 === "fail" || h7 === "warn" ? false : null };
+  // D232 M-4 (G-81): the server's sample approval wins over this browser's ticks (absent when 0360 isn't applied).
+  const approvals = designs && !designs.error ? approvalsMap(designs.rows) : undefined;
+  return { published, shopOk: h7 === "ok" ? true : h7 === "fail" || h7 === "warn" ? false : null, approvals };
 }
 
 export default async function MerchStudioPage({ searchParams }: { searchParams: Promise<{ tab?: string; saved?: string; published?: string; warning_error?: string }> }) {
@@ -74,7 +78,7 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
   const initialTab = studioTabFrom(sp.tab);
   // Tabs switch client-side without a reload, so the Publish data is always
   // loaded (one content-block read + the same media list other editors use).
-  const publish = { ...(await loadPublishData()), canPublish: can(session.profile.role, "merch.publish") };
+  const publish = { ...(await loadPublishData()), canPublish: can(session.profile.role, "merch.publish"), isOwner: session.profile.role === "owner" };
   // D232 M-3a: "Setup needs you: Step n" from the LAST SAVED Merch Health run
   // (no live calls here, so the Studio stays fast). Owner & admin only.
   const isOwnerAdmin = can(session.profile.role, "settings.manage");

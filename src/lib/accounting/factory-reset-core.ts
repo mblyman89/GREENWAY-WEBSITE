@@ -910,6 +910,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   // rollback changes nothing - and keeping it means the record of what 0359
   // did is never lost by a reset.
   { table: "orders_origin_backfill_0359", disposition: "KEEP", because: "A record of which sales were relabelled from website to register by migration 0359, so that change can be undone." },
+  // merch_designs (0360, D232 M-4): the Merch Studio designs a person made and
+  // the garment-sample approval for each. No money, no stock, no customer data,
+  // no foreign key. KEEP with the media - a reset must not erase artwork.
+  { table: "merch_designs", disposition: "KEEP", because: "The merch designs you made in Merch Studio and their sample approvals." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

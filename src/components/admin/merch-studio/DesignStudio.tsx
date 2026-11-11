@@ -10,7 +10,10 @@
  *  - Every placement of the blank is its own "side" with its own method.
  *  - Live print checks per side (rules engine from Slice 1), blockers outlined.
  *  - Colour-swap preview across every Printful colour of the blank.
- *  - Drafts saved on this device (localStorage + IndexedDB for art).
+ *  - Drafts saved on this device (localStorage + IndexedDB for art) AND, D232
+ *    M-4 (G-79), on the server (merch_designs + art in merch-files), so any
+ *    computer works. The browser copy is the offline cache. Import design
+ *    (.json or the Proof & Export .zip) on the Drafts sub-tab.
  */
 import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent } from "react";
 import { BLANKS, colorsFor, formatCents, getBlank, sizesFor, basePriceCents, METHOD_LABEL, METHOD_BLURB, type Method } from "@/lib/merch-studio/garment-catalog-core";
@@ -29,6 +32,9 @@ import { AddPanel } from "./AddPanel";
 import { ElementPanel } from "./ElementPanel";
 import { IssueList } from "./IssueList";
 import { getAsset, inspectImage, loadDesigns, measureLinesEm, putAsset, saveDesigns } from "./merch-assets";
+import { contentHash, parseImport } from "@/lib/merch-studio/merch-design-sync-core";
+import { archiveMerchDesignAction } from "@/app/admin/merch-studio/design-actions";
+import { downloadArt, loadMeta, pushDesign, saveMeta, syncDesigns } from "./design-sync";
 
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
@@ -36,6 +42,7 @@ const CURRENT_KEY = "gw-merch-current-design";
 type Sub = "add" | "selected" | "layers" | "checks" | "preview" | "drafts";
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
+const SRV_LABEL = { sync: "Checking the server...", dirty: "Not on the server yet", saving: "Saving to the server...", saved: "\u2714 Saved on the server", offline: "\u26a0 Not saved on the server", conflict: "\u26a0 Changed on another computer" } as const;
 
 function initial(blankId: string, colorHex: string): { list: MerchDesign[]; cur: MerchDesign } {
   if (typeof window === "undefined") return { list: [], cur: newDesign(getBlank(blankId) ?? BLANKS[0], colorHex) };
@@ -67,6 +74,11 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [saved, setSaved] = useState(true);
+  // D232 M-4: server copy. "sync" = first load, "dirty" = waiting to send.
+  const [srv, setSrv] = useState<"sync" | "dirty" | "saving" | "saved" | "offline" | "conflict">("sync");
+  const [srvMsg, setSrvMsg] = useState<string | null>(null);
+  const [artTick, setArtTick] = useState(0);
+  const pushTimer = useRef<number | null>(null);
   const { follow, saveFollow, dockSize, saveDock, dockTop, canvasMaxH } = useStudioDock();
 
   // History -----------------------------------------------------------------------
@@ -104,6 +116,14 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
   };
   const resetHistory = () => { past.current = []; future.current = []; lastPush.current = 0; sync(); };
 
+  // D232 M-4: send one design to the server (art first), compare-and-set on rev.
+  const sendToServer = async (d: MerchDesign) => {
+    setSrv("saving");
+    const r = await pushDesign(d, loadMeta());
+    if (r.ok) { setSrv("saved"); setSrvMsg(null); return; }
+    setSrv(r.conflict ? "conflict" : "offline");
+    setSrvMsg(r.error);
+  };
   // Autosave (debounced) -------------------------------------------------------------
   useEffect(() => {
     if (saved) return;
@@ -115,12 +135,67 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
       setList(next);
       setSaved(ok);
       setMsg(ok ? null : "This browser refused to save the draft (storage full or blocked). Export or delete old drafts.");
+      setSrv("dirty");
+      if (pushTimer.current) window.clearTimeout(pushTimer.current);
+      pushTimer.current = window.setTimeout(() => { void sendToServer(stamped); }, 1500);
     }, 700);
     return () => window.clearTimeout(t);
   }, [design, saved, list]);
 
+  // First load: merge the server list with this browser's, fetch missing art.
+  useEffect(() => {
+    let cancelled = false;
+    syncDesigns(loadDesigns()).then((out) => {
+      if (cancelled) return;
+      saveDesigns(out.list);
+      setList(out.list);
+      const cur = designRef.current;
+      const fresh = out.list.find((x) => x.id === cur.id);
+      if (fresh && contentHash(fresh) !== contentHash(cur)) { designRef.current = fresh; setDesign(fresh); }
+      setSrv(out.error ? "offline" : "saved");
+      const notes = [
+        out.error,
+        out.forked.length ? `${out.forked.length} design(s) were changed on another computer AND here - both are kept; yours is named "(this computer)".` : null,
+        out.artMissing ? `${out.artMissing} artwork file(s) aren't on the server or this browser - re-upload them in the design.` : null,
+      ].filter(Boolean);
+      setSrvMsg(notes.length ? notes.join(" ") : null);
+      setArtTick((n) => n + 1);
+    }).catch(() => { if (!cancelled) setSrv("offline"); });
+    return () => { cancelled = true; };
+  }, []);
+  /** Conflict: take the server's newest copy; this browser's version is kept as a "(this computer)" copy. */
+  const reloadFromServer = async () => {
+    setSrv("sync");
+    const out = await syncDesigns(loadDesigns());
+    saveDesigns(out.list);
+    setList(out.list);
+    const fresh = out.list.find((x) => x.id === designRef.current.id);
+    if (fresh) { designRef.current = fresh; setDesign(fresh); resetHistory(); }
+    setSrv(out.error ? "offline" : "saved");
+    setSrvMsg(out.error ?? (out.forked.length ? "Loaded the newest copy. Your version is in Drafts as \"(this computer)\"." : null));
+    setArtTick((n) => n + 1);
+  };
+  const importInput = useRef<HTMLInputElement>(null);
+  const onImport = async (f: File) => {
+    setMsg(null);
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const r = parseImport(f.name, bytes, list, () => newId("ds"), new Date().toISOString());
+      if (!r.ok) { setMsg(r.error); return; }
+      openDesign(r.design);
+      setSaved(false);
+      setSub("layers");
+      const missing = await downloadArt([r.design]).catch(() => -1);
+      setArtTick((n) => n + 1);
+      setSrvMsg(`Imported "${r.design.name}"${r.renamed ? " as a copy (a different design already has that id)" : ""}.${missing ? " Some artwork isn't in the file or on the server - re-upload those images (design.json holds the layout, not the pictures)." : ""}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Couldn't read that file.");
+    }
+  };
+
   // Load artwork object URLs for the current design (from IndexedDB).
   useEffect(() => {
+    void artTick; // re-run after art arrives from the server
     const missing = [...new Set(Object.values(design.sides).flatMap((s) => s.elements.map((e) => e.assetId).filter((x): x is string => !!x)))].filter((id) => !assetUrls[id]);
     if (!missing.length) return;
     let cancelled = false;
@@ -131,7 +206,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
       if (Object.keys(add).length) setAssetUrls((cur) => ({ ...cur, ...add }));
     });
     return () => { cancelled = true; };
-  }, [design.sides, assetUrls]);
+  }, [design.sides, assetUrls, artTick]);
 
   // Side helpers ---------------------------------------------------------------------
   const setEls = (els: MElement[], pid = placement.id) => {
@@ -359,11 +434,18 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
             {BLANKS.map((b) => <option key={b.id} value={b.id}>{b.brand} {b.model} - {b.title}</option>)}
           </select>
         </label>
-        <span className="pb-1.5 text-xs text-white/55">{saved ? "\u2714 Saved on this device" : "Saving..."}</span>
+        <span className="pb-1.5 text-xs text-white/55">{saved ? "\u2714 Saved on this device" : "Saving..."} \u00b7 {SRV_LABEL[srv]}</span>
       </div>
       {blankId !== design.blankId ? (
         <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-2 text-xs text-white/80">
           The Garments tab has a different blank selected. <button type="button" className="underline" onClick={newFromGarments}>Start a new design on it</button> or <button type="button" className="underline" onClick={() => changeBlank(blankId)}>move this design to it</button>.
+        </p>
+      ) : null}
+      {srvMsg ? (
+        <p role="status" className={`rounded-[var(--admin-radius-sm)] border p-2 text-xs text-white/85 ${srv === "conflict" || srv === "offline" ? "border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10" : "border-[var(--admin-border)]"}`}>
+          {srvMsg}{" "}
+          {srv === "conflict" ? <button type="button" className="underline" onClick={() => { void reloadFromServer(); }}>Load the newest copy</button> : null}
+          {srv === "offline" ? <button type="button" className="underline" onClick={() => { void sendToServer(designRef.current); }}>Try again</button> : null}
         </p>
       ) : null}
       {msg ? <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger)]/10 p-2 text-xs text-white/85">{msg}</p> : null}
@@ -559,8 +641,10 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
             <div className="flex flex-wrap gap-2">
               <button type="button" className="rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black" onClick={newFromGarments}>+ New design ({getBlank(blankId)?.model})</button>
               <button type="button" className="rounded-[var(--admin-radius-sm)] bg-white/10 px-3 py-1 text-xs text-white/85" onClick={() => { const c = { ...design, id: newId("ds"), name: `${design.name} (copy)` }; openDesign(c); setSaved(false); }}>Duplicate this design</button>
+              <button type="button" className="rounded-[var(--admin-radius-sm)] bg-white/10 px-3 py-1 text-xs text-white/85" onClick={() => importInput.current?.click()}>Import design (.json/.zip)</button>
+              <input ref={importInput} type="file" accept=".json,.zip,application/json,application/zip" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onImport(f); }} />
             </div>
-            <p className="text-xs text-white/55">Drafts and uploaded art are saved in THIS browser only (not on the server yet). Don&apos;t clear site data for this admin site, and keep the Proof & Export ZIP as your backup.</p>
+            <p className="text-xs text-white/55">Designs and their artwork are saved on the server, so any computer signed in to this admin site sees them. This browser keeps a copy so you can keep working if the internet drops - it sends your changes when it can. Import takes a design.json or the ZIP from Proof & Export.</p>
             <ul className="divide-y divide-[var(--admin-border)] rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)]">
               {list.length === 0 ? <li className="p-2 text-xs text-white/55">No saved drafts yet - they save automatically as you design.</li> : null}
               {list.map((d) => {
@@ -574,10 +658,16 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
                     <span className="ml-auto flex gap-1">
                       {d.id !== design.id ? <button type="button" className="rounded bg-white/10 px-2 py-0.5 text-white/85 hover:bg-white/20" onClick={() => openDesign(d)}>Open</button> : <span className="px-2 text-[var(--admin-accent)]">Open now</span>}
                       <button type="button" className="rounded bg-white/10 px-2 py-0.5 text-white/70 hover:bg-[var(--admin-danger)]/30" onClick={() => {
-                        if (!window.confirm(`Delete "${d.name}"? This can't be undone.`)) return;
+                        if (!window.confirm(`Delete "${d.name}" from every computer? (It is archived on the server, not erased.)`)) return;
                         const next = list.filter((x) => x.id !== d.id);
                         saveDesigns(next);
                         setList(next);
+                        const meta = loadMeta();
+                        if (meta[d.id]) {
+                          delete meta[d.id];
+                          saveMeta(meta);
+                          void archiveMerchDesignAction({ id: d.id }).then((r) => { if (!r.ok) setSrvMsg(`Removed here, but the server copy wasn't archived: ${r.error}`); });
+                        }
                         if (d.id === design.id) { if (next[0]) openDesign(next[0]); else newFromGarments(); }
                       }}>Delete</button>
                     </span>

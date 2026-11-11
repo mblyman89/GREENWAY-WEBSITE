@@ -2874,3 +2874,11 @@ What was done:
 - **Print-file cleanup** (G-93): after a re-publish is saved, the previous `merch-print/<handle>/<nonce>/` PNGs are deleted (best effort, audited as `oldPrintFilesDeleted`).
 - Test: `tests/compliance/d232-merch-m5-republish.test.ts`. SOP-11 v1.5.
 - **Owner steps:** none.
+
+### As built (slice M-4)
+
+- Owner, verbatim (D232): *"Q2: yes, owner only and reason."*
+- **Designs on the server** (G-79): table `merch_designs` (migration 0360, service role only, RLS on, no foreign keys, archive not delete); art copied to the private `merch-files` bucket (`art/<asset id>`); this browser's copy is the offline cache. Two computers can't overwrite each other (`rev` compare-and-set; the loser keeps a "(this computer)" copy). **Import design (.json/.zip)** on Design → Drafts.
+- **Sample gate** (G-81): owner/admin approves the sample on Proof & Export with every checklist item and a photo; Publish is blocked until the sample is approved for that exact print; a changed print needs a new sample. **Owner-only override** with a typed reason (5+ characters), audited as `merch.sample_overridden`.
+- Rules: `src/lib/merch-studio/merch-design-sync-core.ts` (43 self-tests). Test: `tests/compliance/d232-merch-m4-designs-sample.test.ts`. SOP-11 v1.6.
+- **Owner steps:** apply migration `0360_merch_designs.sql` in Supabase (SQL editor). Then open Merch Studio once on the computer where your designs are, so they upload. Approve each sample (Proof & Export) before publishing.

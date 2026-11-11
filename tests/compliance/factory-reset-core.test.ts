@@ -1363,7 +1363,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D221 M7: +3 KEEP media_collections, media_collection_items, media_search_log (0354; photo groups + search log).
     // D224: +1 KEEP menu_card_fallback_images (0355; the owner's fallback picture per website category).
     // D226: +1 KEEP orders_origin_backfill_0359 (0359; undo list for the register relabel, no FK).
-    expect(plan.keep.length).toBe(210);
+    // D232 M-4: +1 KEEP merch_designs (0360; Merch Studio designs + sample approvals, no FK).
+    expect(plan.keep.length).toBe(211);
     expect(plan.wipe.length).toBe(139);
   });
 
