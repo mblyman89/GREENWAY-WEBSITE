@@ -2909,3 +2909,27 @@ What was done:
 - **Studio-default placements** (G-92, Q-11-6): the 8 estimates are labelled "Studio estimate - awaiting sample measurement"; Garments has **Compare with Printful's print files** (`GET /mockup-generator/printfiles/{id}`). The numbers change only after the samples are measured.
 - Rules: `fulfillment-core.ts`, `listing-package-core.ts`, `printfile-check-core.ts`, `merch-health-core.ts`. Test: `tests/compliance/d232-merch-m8-pricing-help-placements.test.ts`. SOP-11 v1.9.
 - **Owner steps:** no migration, no new variable. Run Merch Health once so the studio can read the flat shipping. Measure the samples and send the sizes for the 8 placements.
+
+## D233 — SOP-11 v2.0 (second half): Creative Studio, the Banner Design Studio (Branding) and scheduling (2026-11-11)
+
+### Owner request (verbatim)
+
+> Thank you. While I work on setting everything up, please work on the next sop. This one is for the creative studio, and the editor in the branding page and the scheduler. Recon and audit the code. Deep research the internet. Help me optimize, enhance, harden, make more powerful and easier to use, etc. it too should have significant help. I think it already has hover help, if there is more or other helpful handholding techniques, please implement them. Something I've found is incredible difficult to deal with is the overlay objects, text, objects, effects, etc. I build the banner or image, place everything where it looks good in the editor. Then I go to the website and all the overlay objects are not where I placed them exactly, so I have to go back and forth over and over till I get it right. If there are other inefficiencies and bottle necks, please address them. This is no code edits round. Just build a roadmap strategy with everything you need to stay on track with no drift. Anchor and pin lines. Document everything, record everything. Let me know what you find and what we plan to do about it. Follow the standing rules. Thank you.
+
+### Findings (read-only)
+
+- Read-only recon at `main@c384a5e6` of the Creative Studio (3 tabs, FLUX results, placements, actions), Branding (6 tabs, Saved banners, Save as picture), the Banner Design Studio (canvas, shell, 9 tabs, checks, every editor that mounts it), the public `DesignedBanner` and every page that mounts it, Website Sync preview and Move mode, and all scheduling (Schedule & Releases, the 5-minute cron, home-slide repeats/fallback/calendar, Shop slide and type-card windows).
+- Live probes on 2026-11-11: the home banner frame is `clamp(200px … 360px)`, menu 200 … 280, specials 200 … 260 and 160 … 360, loyalty 200 … 360; the live `--font-heading` is the system stack; no home banner box sets its own font.
+- **Why overlays move (six causes, SOP-11b Appendix B.2):** the studio has no site font variables (`admin/layout.tsx` L24–29) so "Site font" is Arial in the studio and the device font live (F-11-19); the studio draws `<div>`s where the site draws h1/h2/p (F-11-20); height and text size are fluid (`interpPx`) while positions are % (F-11-21: shape 3.91 at 1408 → 3.42 at 1024, headline +15%); only 1408 and 390 are ever previewed (F-11-22); banners mount at 1344 and up to 1920 (F-11-23: Shop at 1856 headline −24%); the picture crop shifts with the shape (F-11-32).
+- 14 findings (F-11-19 … F-11-32 + F-11-C2) and 14 gaps (G-94 … G-107). Research: Figma constraints (Scale), MDN container units, NN/g contextual help, tooltips and instructional overlays, Contentful release preview, Sanity scheduled publishing, WAC 314-55-155.
+
+### Decisions
+
+- **No feature code changed.** Only `docs/sop/SOP-11b-creative-studio-banner-studio-scheduling.md` (SOP-11 v2.0), its SOP Library catalog entry (metadata only, `src/lib/sop-library/catalog-core.ts`) and the program docs changed.
+- **Owner action today (no code):** follow SOP-11b §4.9 (name a web font on every banner text box; leave room; finish the phone layout; check in Website Sync at three widths; finish with Move mode). Consider a library web font for site headings (Q-11-18).
+- Phase C (C-1 … C-8, 06 plan) is **PROPOSED**, waiting for the owner's go-ahead and answers Q-11-10 … Q-11-18.
+
+### As built
+
+- SOP-11b v2.0: map, Creative Studio (FLUX Image, FLUX Video, Midjourney), Branding, the Banner Design Studio (tabs, keys, undo), the interim placement procedure §4.9, the real-page check §4.10, scheduling §4.11–§4.14, messages, troubleshooting, advertising rules, a banner launch check form 8.1, the real banner widths §9.3, Appendix B (findings, six causes, the numbers, strategy, gaps, build order) and Appendix C (Q-11-10 … Q-11-18).
+- SOP Library: the entry sits on the **Marketing & Merch** shelf.
