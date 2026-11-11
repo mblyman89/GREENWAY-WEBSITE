@@ -60,11 +60,31 @@ export interface HeldCards {
   /** Older than 3 days (Stripe releases an uncaptured card hold after about 7). */
   over3Days: number;
   oldestDays: number;
+  /**
+   * D232 M-7 (G-84): each hold, oldest first (max HELD_LIST_MAX). `ref` is the
+   * gm- order ref from the PaymentIntent's metadata ("" if none); `id` is the
+   * pi_ id (not a secret) so the back office can deep-link to Stripe.
+   */
+  list: HeldCard[];
 }
+
+export interface HeldCard { ref: string; id: string; days: number; amountCents: number; livemode: boolean | null }
+export const HELD_LIST_MAX = 25;
 
 /** Stripe GET /v1/payment_intents `data` -> card holds still waiting for capture. */
 export function heldCards(data: unknown, nowSec: number): HeldCards {
   const list = Array.isArray(data) ? data : [];
+  const held = list
+    .filter((p): p is { id?: unknown; status?: unknown; created?: unknown; amount?: unknown; livemode?: unknown; metadata?: { order_ref?: unknown } | null } => !!p && typeof p === "object")
+    .filter((p) => p.status === "requires_capture" && typeof p.created === "number")
+    .map((p): HeldCard => ({
+      ref: typeof p.metadata?.order_ref === "string" && /^gm-[a-z0-9-]{3,30}$/.test(p.metadata.order_ref) ? p.metadata.order_ref : "",
+      id: typeof p.id === "string" && /^pi_[A-Za-z0-9]+$/.test(p.id) ? p.id : "",
+      days: Math.floor(Math.max(0, (nowSec - (p.created as number)) / 86400) * 10) / 10,
+      amountCents: typeof p.amount === "number" && Number.isFinite(p.amount) ? Math.max(0, Math.round(p.amount)) : 0,
+      livemode: typeof p.livemode === "boolean" ? p.livemode : null,
+    }))
+    .sort((a, b) => b.days - a.days);
   const ages = list
     .filter((p): p is { status?: unknown; created?: unknown } => !!p && typeof p === "object")
     .filter((p) => p.status === "requires_capture" && typeof p.created === "number")
@@ -73,6 +93,7 @@ export function heldCards(data: unknown, nowSec: number): HeldCards {
     count: ages.length,
     over3Days: ages.filter((d) => d > 3).length,
     oldestDays: ages.length ? Math.floor(Math.max(...ages) * 10) / 10 : 0,
+    list: held.slice(0, HELD_LIST_MAX),
   };
 }
 
@@ -104,6 +125,8 @@ export function __runHealthCoreTests(): { passed: number; failed: number } {
   const now = 1_800_000_000;
   const h = heldCards([{ status: "requires_capture", created: now - 4 * 86400 }, { status: "requires_capture", created: now - 3600 }, { status: "succeeded", created: now - 9 * 86400 }, null], now);
   ok(h.count === 2 && h.over3Days === 1 && h.oldestDays === 4, "held cards counted, only requires_capture");
+  const hl = heldCards([{ id: "pi_a", status: "requires_capture", created: now - 3600, amount: 2599, metadata: { order_ref: "gm-abc123-xy" } }, { id: "pi_b", status: "requires_capture", created: now - 5 * 86400, amount: 1000, metadata: { order_ref: "x' bad" }, livemode: true }], now);
+  ok(hl.list.length === 2 && hl.list[0].id === "pi_b" && hl.list[0].ref === "" && hl.list[0].days === 5 && hl.list[1].ref === "gm-abc123-xy" && hl.list[1].amountCents === 2599, "held list oldest first; bad ref blanked");
   ok(heldCards(undefined, now).count === 0, "no list -> none");
   ok(stripeCallProblem(401).includes("S-6") && stripeCallProblem(0).includes("network"), "call problems in words");
   return { passed, failed };

@@ -11,7 +11,9 @@
  *   4. POST /orders?update_existing=true  (external_id = gm- ref => retries are
  *      idempotent). DRAFT by default - the owner reviews + confirms in
  *      /admin/orders. MERCH_PRINTFUL_AUTO_CONFIRM=true sends it straight to
- *      production instead.
+ *      production instead. D232 M-7 (Q-11-7): so does the back-office
+ *      switch (Merch Health -> H-19, owner only after 20+ clean orders),
+ *      read from the fresh catalog feed; a feed that failed means drafts.
  * R73 S2 - WASHINGTON ONLY: sessions are created with capture_method=manual,
  * so the card is only AUTHORIZED. Here (lib/region-core.ts decidePayment):
  *   WA address      -> check the order plan, POST /v1/payment_intents/{id}/capture, then Printful
@@ -22,7 +24,7 @@
  * (so Stripe doesn't retry forever). Transient failures (Printful down) -> 500
  * so Stripe retries with backoff (up to 3 days).
  */
-import { freshProducts } from "@/lib/catalog";
+import { feedAutoConfirm, freshProducts } from "@/lib/catalog";
 import { STRIPE_API_VERSION } from "@/lib/checkout-core";
 import { getMerchContent } from "@/lib/site-content";
 import { alertOwner, printful, printfulConfigured, sendEmail } from "@/lib/fulfillment";
@@ -109,7 +111,8 @@ export async function POST(req: Request) {
     }
   }
 
-  const confirm = process.env.MERCH_PRINTFUL_AUTO_CONFIRM === "true";
+  // freshProducts() above just re-read the feed, so the switch is current.
+  const confirm = process.env.MERCH_PRINTFUL_AUTO_CONFIRM === "true" || feedAutoConfirm();
   const res = await printful<{ id?: number; status?: string }>(`/orders?update_existing=true${confirm ? "&confirm=true" : ""}`, { method: "POST", body: plan.body });
   if (!res.ok) {
     const transient = res.status === 0 || res.status === 429 || res.status >= 500;

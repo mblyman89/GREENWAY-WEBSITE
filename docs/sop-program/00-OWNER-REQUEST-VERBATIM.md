@@ -2890,3 +2890,13 @@ What was done:
 - **Automatic stock** (G-83): `/api/cron/merch-stock` every 6 hours, plus Printful's `stock_updated` relayed by the shop to `/api/merch-stock` (catalog token; the back office re-reads Printful, never trusts the body). Audited `merch.stock_synced` by `cron:merch-stock` / `printful:stock_updated`.
 - Rules: `src/lib/merch/merch-webhook-core.ts` (19 self-tests). Test: `tests/compliance/d232-merch-m6-webhook-stock.test.ts`. SOP-11 v1.7.
 - **Owner steps:** add `PRINTFUL_WEBHOOK_TOKEN` to the **main** project in Vercel with the same value as the merch project; redeploy both; open Merch Health and press **Register / repair the Printful webhook**. No migration.
+
+### As built (slice M-7)
+
+- Owner, verbatim (D232): *"Q4: guidance first, but build the button too please and all that goes with it."* and *"Q7: I agree with you. Build the auto confirm too and all that goes along with it so it's ready."*
+- **Held-card monitor** (G-84): the shop's `/api/health` lists each uncaptured card hold (order ref, age, amount); Merch Health H-15 names them; the morning run emails staff once at day 3 and once at day 5 per hold; the order page coaches Capture / Cancel with the exact Stripe link.
+- **Merch alerts inbox** (G-85): the shop posts every owner alert to `/api/merch-alerts` (catalog token); table `merch_alerts` (migration **0361**); shown on Orders, the order page and Merch Health with **Acknowledge** (audited `merch.alert_acknowledged`). Email still goes.
+- **Cancel and refund** (G-86): the order page's **Stripe half** card shows both halves and the Stripe link (guidance first). The button: **Refund in Stripe** / **Release the card hold**, owner/admin (`merch.refund`), typed order reference, through the shop's `/api/payments` (re-reads Stripe, fixed Idempotency-Key), audited `merch.payment_refund` / `merch.payment_release`.
+- **Auto-confirm switch** (Q-11-7): Merch Health → H-19. Built and **left off**. ON is owner-only with a reason after 20+ fulfilled orders (counted live); OFF is owner or admin any time; audited. The shop reads it from the catalog feed on each order (a failed feed means drafts).
+- Rules: `merch-payments-core.ts`, `merch-alerts-core.ts`, `merch-autoconfirm-core.ts`, shop `payments-core.ts`. Test: `tests/compliance/d232-merch-m7-holds-alerts-refund.test.ts`. SOP-11 v1.8.
+- **Owner steps:** apply migration **0361_merch_alerts.sql**. For the refund button: make a new random value of 32+ characters and add `MERCH_PAYMENTS_TOKEN` with the SAME value to **both** Vercel projects, then redeploy both (without it the page shows the Stripe link only). Redeploy the merch project so it posts alerts and lists holds.

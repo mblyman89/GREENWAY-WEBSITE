@@ -1113,16 +1113,19 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `merch-site/lib/fulfillment.ts` L41–43 (no key or from → no email), L55–58 (`[merch-alert]` log, then email if configured).
 - **Effect:** *"needs you"* and *"Printful rejected"* alerts can go unseen while a card hold expires.
 - **SOP impact:** SOP-11 S-11, §4.21. **G-85**.
+- **Resolved (D232, M-7):** the shop also posts every owner alert to the back office (`/api/merch-alerts`, catalog token, no redirect follow); stored in `merch_alerts` (0361, one row per distinct alert, a repeat re-opens it) and shown on Orders, the order page and Merch Health with **Acknowledge** (audited). Email stays a second channel.
 
 ### F-11-10 · CONFIRMED · GAP · S3 — Cancel does not refund
 - **Pin:** `src/app/admin/orders/merch/[ref]/page.tsx` L176–186 (*"This does not refund the customer: refund them in Stripe as well"*); `merch-actions.ts` L47 (Printful DELETE only).
 - **Effect:** the customer can stay charged for a cancelled order if the second step is forgotten.
 - **SOP impact:** SOP-11 §4.19, form 8.4. **G-86**.
+- **Resolved (D232, M-7):** the order page has a **Stripe half** card (status, both halves in one sentence, the exact Stripe link and what to press) and, for owner/admin (`merch.refund`) with `MERCH_PAYMENTS_TOKEN` set, **Refund in Stripe** / **Release the card hold**: typed order reference, the shop re-reads Stripe first, fixed Idempotency-Key, audited.
 
 ### F-11-11 · CONFIRMED · GAP · S2 — Held cards expire with no reminder
 - **Pin:** `merch-site/app/api/stripe/webhook/route.ts` L19–20, L90–95 (the authorization is left in place on a plan problem, *"Holds expire after about 7 days"*). Nothing tracks it.
 - **Effect:** after about 7 days the sale is lost and the customer is not served.
 - **SOP impact:** SOP-11 §4.20. **G-84**.
+- **Resolved (D232, M-7):** the shop's `/api/health` lists each held card (order ref, pi id, age, amount); H-15 names them; the daily run emails staff once at day 3 and once at day 5 per hold (`compliance_reminder_log` `merch-held:<pi>:<stage>`); the order page coaches Capture / Cancel.
 
 ### F-11-12 · CONFIRMED · WEAKNESS · S3 — Stale instructions in the screens and guides
 - **Pin:** `fulfillment-core.ts` L73–74, L84 (*"drop it in merch-site/catalog/"*); `FulfillmentPanel.tsx` L68 (*"(Slice 5). Enter an estimate for now"*); `DesignStudio.tsx` L563; `merch-assets.ts` L7; `merch-design-core.ts` L15; `merch-site/README.md` L45 (*"Adding a product (no code)"*); `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 (*"don't add"* `MERCH_CATALOG_URL`).

@@ -914,6 +914,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   // the garment-sample approval for each. No money, no stock, no customer data,
   // no foreign key. KEEP with the media - a reset must not erase artwork.
   { table: "merch_designs", disposition: "KEEP", because: "The merch designs you made in Merch Studio and their sample approvals." },
+  // merch_alerts (0361, D232 M-7): greenwaymerch.com owner alerts and who
+  // acknowledged them. An operations record of the separate merch LLC's shop,
+  // not test data; no FK.
+  { table: "merch_alerts", disposition: "KEEP", because: "The greenwaymerch.com owner alerts and who acknowledged them (the merch LLC's operations record)." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

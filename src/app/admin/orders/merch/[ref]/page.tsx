@@ -8,6 +8,13 @@
  * and starts production) and Cancel (drafts / pending only). Shipping and the
  * customer's tracking email are automatic (the Printful webhook on
  * greenwaymerch.com), so this page shows them rather than asking for them.
+ *
+ * D232 M-7 (G-84, G-86): the "Stripe half" card. It reads the order's Stripe
+ * payment through the shop (/api/payments) and shows both halves' status.
+ * Guidance first (owner, Q4): the Stripe link for this exact payment, with
+ * what to press. Then, for owner/admin (merch.refund) when
+ * MERCH_PAYMENTS_TOKEN is set: Refund in Stripe / Release the card hold,
+ * confirmed by typing the order reference.
  */
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -20,7 +27,12 @@ import { SaveButton } from "@/components/admin/orders/SaveButton";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { getMerchOrder } from "@/lib/orders/merch-orders-server";
 import { merchOrderHandle, merchStatusLabel, type MerchMoney } from "@/lib/orders/merch-orders-core";
-import { cancelMerchOrderAction, confirmMerchOrderAction } from "../../merch-actions";
+import { cancelMerchOrderAction, confirmMerchOrderAction, moveMerchPaymentAction } from "../../merch-actions";
+import { can } from "@/lib/auth/roles";
+import { Badge } from "@/components/admin/ui/Badge";
+import { MerchAlertsInbox } from "@/components/admin/merch/MerchAlertsInbox";
+import { bothHalves, shopPaymentView, stripeDashboardUrl, type PaymentRead } from "@/lib/merch/merch-payments-core";
+import { paymentButtonsConfigured, readOrderPayment } from "@/lib/merch/merch-payments-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -61,6 +73,66 @@ function MoneyTable({ paid, cost }: { paid: MerchMoney; cost: MerchMoney }) {
   );
 }
 
+const TONE = { ok: "green", warn: "gold", fail: "danger", muted: "neutral" } as const;
+
+function StripeHalf({ handle, backParam, printfulStatus, read, mayMove, nowSec }: { handle: string; backParam: string; printfulStatus: string; read: PaymentRead; mayMove: boolean; nowSec: number }) {
+  const p = read.ok ? read.payment : null;
+  const view = p ? shopPaymentView(p, nowSec) : null;
+  const halves = bothHalves(printfulStatus, p);
+  const link = stripeDashboardUrl(p?.id ?? "", p?.livemode ?? null);
+  const step = p?.canRefund ? "refund" : p?.canRelease ? "release" : null;
+  const buttonsOn = read.ok && read.buttons && paymentButtonsConfigured();
+  return (
+    <Card padding="sm" className="sm:p-5">
+      <CardHeader title="Stripe half (the customer's payment)" icon="💳" />
+      {!read.ok ? (
+        <p className="mt-3 text-sm text-[var(--admin-gold)]">{read.problem}</p>
+      ) : (
+        <div className="mt-3 space-y-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={TONE[view!.tone]}>{view!.label}</Badge>
+            {p!.found ? <span className="tabular-nums text-[var(--admin-text-muted)]">{money(p!.amountCents)} · charged {money(p!.capturedCents)} · refunded {money(p!.refundedCents)}{p!.livemode === false ? " · TEST mode" : ""}</span> : null}
+          </div>
+          <p className="text-[var(--admin-text-muted)]">{view!.say}</p>
+        </div>
+      )}
+      {halves.text ? (
+        <p role="status" className={`mt-3 text-sm font-semibold ${halves.tone === "warn" ? "text-[var(--admin-gold)]" : "text-[var(--admin-accent)]"}`}>{halves.text}</p>
+      ) : null}
+      <div className="mt-3 rounded-[var(--admin-radius-sm)] bg-[var(--admin-surface-2)] p-3 text-xs text-[var(--admin-text-muted)]">
+        <p className="font-semibold text-white">In Stripe by hand (always works):</p>
+        <p className="mt-1">
+          <a href={link} target="_blank" rel="noopener noreferrer" className="font-bold text-[var(--admin-accent)] underline underline-offset-2">Open this payment in Stripe ↗</a>
+          {p?.found ? null : <span className="ml-2">(search for {handle})</span>}
+        </p>
+        <p className="mt-1">Card on hold → <strong>Capture</strong> (you will fill it) or <strong>Cancel</strong> (free, releases the hold). Charged → <strong>Refund</strong> (full amount). Stripe drops a hold after about 7 days. SOP-11 §4.19, §4.20.</p>
+      </div>
+      {step && mayMove && buttonsOn ? (
+        <details className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/30 p-3">
+          <summary className="cursor-pointer text-xs font-bold text-[var(--admin-danger)]">{step === "refund" ? "Refund the customer in Stripe…" : "Release the card hold…"}</summary>
+          <form action={moveMerchPaymentAction} className="mt-3 space-y-2">
+            <input type="hidden" name="handle" value={handle} />
+            <input type="hidden" name="back" value={backParam} />
+            <input type="hidden" name="kind" value={step} />
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              {step === "refund"
+                ? `Refunds the full ${money((p?.capturedCents ?? 0) - (p?.refundedCents ?? 0))} to the customer's card. It cannot be undone. Cancel the Printful half too if it should not be made.`
+                : "Drops the authorization; the customer is never charged. It cannot be undone (they would have to order again)."}
+            </p>
+            <label className="block text-xs">
+              Type <span className="font-mono">{handle}</span> to confirm
+              <input name="confirmRef" required autoComplete="off" className="mt-1 block w-full rounded border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm" />
+            </label>
+            <SaveButton label={step === "refund" ? "Yes, refund in Stripe" : "Yes, release the hold"} busyLabel="Asking Stripe…" variant="danger" />
+          </form>
+        </details>
+      ) : step && mayMove && !buttonsOn && read.ok ? (
+        <p className="mt-3 text-xs text-[var(--admin-text-faint)]">The one-press button is off until MERCH_PAYMENTS_TOKEN (32+ characters, the same value) is set in both Vercel projects. Use the Stripe link above.</p>
+      ) : null}
+    </Card>
+  );
+}
+
 export default async function MerchOrderDetailsPage({
   params,
   searchParams,
@@ -68,7 +140,7 @@ export default async function MerchOrderDetailsPage({
   params: Promise<{ ref: string }>;
   searchParams?: Promise<SearchParams>;
 }) {
-  await requirePermission("orders.view");
+  const session = await requirePermission("orders.view");
   const { ref: raw } = await params;
   const sp: SearchParams = searchParams ? await searchParams : {};
   let handle = raw;
@@ -112,6 +184,8 @@ export default async function MerchOrderDetailsPage({
 
   const o = read.order;
   const h = merchOrderHandle(o);
+  const payment: PaymentRead | null = o.ours ? await readOrderPayment(o.ref) : null;
+  const nowSec = Math.floor(new Date().getTime() / 1000);
   const placed = o.placedAt ? new Date(o.placedAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles", dateStyle: "medium", timeStyle: "short" }) : "—";
 
   return (
@@ -181,13 +255,16 @@ export default async function MerchOrderDetailsPage({
                 <input type="hidden" name="back" value={sp.back ?? ""} />
                 <p className="text-xs text-[var(--admin-text-muted)]">
                   Cancels it at Printful (any Printful charge is returned to the LLC&apos;s card). This does <strong>not</strong>{" "}
-                  refund the customer: refund them in Stripe as well.
+                  refund the customer: then do the Stripe half (the card below), refund or release the hold.
                 </p>
                 <SaveButton label="Yes, cancel at Printful" busyLabel="Cancelling…" variant="danger" />
               </form>
             </details>
           ) : null}
         </div>
+
+        {o.ours ? <MerchAlertsInbox returnTo={`/admin/orders/merch/${encodeURIComponent(h)}`} orderRef={o.ref} canAck={can(session.profile.role, "orders.manage")} hideWhenEmpty /> : null}
+        {payment ? <StripeHalf handle={h} backParam={sp.back ?? ""} printfulStatus={o.printfulStatus} read={payment} mayMove={can(session.profile.role, "merch.refund")} nowSec={nowSec} /> : null}
 
         <div className="grid gap-5 lg:grid-cols-2">
           <Card padding="sm" className="sm:p-5">

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.7 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built; v1.6 records slice **M-4**, designs saved on the server with Import and the sample gate, as built; v1.7 records slice **M-6**, the Printful webhook button and automatic stock, as built) |
+| **Version** | 1.8 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built; v1.6 records slice **M-4**, designs saved on the server with Import and the sample gate, as built; v1.7 records slice **M-6**, the Printful webhook button and automatic stock, as built; v1.8 records slice **M-7**, the held-card monitor, the merch alerts inbox, the Refund / Release button and the auto-confirm switch, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -287,6 +287,8 @@ Redeploy.
 
 **Token D, `MERCH_HEALTH_TOKEN` (D232 M-2; owner decision *"Q3: yes."*, its own token).** Put it in **both** projects with the same value (32+ characters, `openssl rand -hex 32`), then redeploy both. It lets the back office's Merch Health page ask `greenwaymerch.com/api/health` how the shop is doing (`merch-site/app/api/health/route.ts`). With no token, a short one, or a wrong one, the shop answers **404**, and Merch Health shows the shop checks (H-7 … H-15, H-19) as **Unknown** with this fix. The shop reports only whether each setting is **present** and what the shipping amounts parse to. It never returns a key.
 
+**Token E, `MERCH_PAYMENTS_TOKEN` (D232 M-7; owner decision *"Q4: guidance first, but build the button too please and all that goes with it."*).** Put it in **both** projects with the same value (32+ characters, `openssl rand -hex 32`, never the same as Token D), then redeploy both. It is the only key that lets the back office **move money**: the order page's **Refund in Stripe** and **Release the card hold** buttons call `POST greenwaymerch.com/api/payments` with it (`merch-site/app/api/payments/route.ts`). Reading a payment uses Token D; moving one needs Token E, so a leak of the read token can never refund anything. With no Token E the buttons are hidden and the page shows the Stripe link instead (guidance first). With a wrong one the shop answers **404**.
+
 ### 4.4 Every Vercel variable, both projects (checked against the code)
 
 #### 4.4.1 Merch project (greenwaymerch.com)
@@ -316,6 +318,7 @@ Redeploy.
 | `MERCH_CONTENT_URL` | recommended | `https://www.greenwaymarijuana.com/api/merch-content` | `lib/site-content.ts` L21 | still works (the feed is public), but every read takes an extra redirect hop |
 | `MERCH_PRINTFUL_AUTO_CONFIRM` | **leave unset** | `true` only after many good orders | webhook `route.ts` L112–113 | orders stay **drafts** for a human Confirm (safe default) |
 | `MERCH_HEALTH_TOKEN` | yes (D232 M-2) | Token D (the same as main) | `app/api/health/route.ts` | `/api/health` answers 404, so Merch Health shows the shop checks as Unknown |
+| `MERCH_PAYMENTS_TOKEN` | for the Refund / Release buttons (D232 M-7) | Token E (the same as main) | `app/api/payments/route.ts` | `POST /api/payments` answers 404; the back office shows the Stripe link only |
 
 > **Correction to the finishing guide.** `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 says `MERCH_CATALOG_URL` / `MERCH_CONTENT_URL` are *"don't add"*. That was right when greenwaymarijuana.com did not redirect to www. **It is wrong today** (F-11-1). Add `MERCH_CATALOG_URL` until the code fix in G-76 ships, then the variable can be removed. **D232: G-76 is built (slice M-1)** and the guide row is corrected.
 
@@ -330,6 +333,7 @@ Redeploy.
 | `MERCH_VERCEL_PROJECT` | for Reports → Merch | merch project id `prj_…` | same | the same |
 | `VERCEL_TEAM_ID` | if the token is Full Account | `team_…` | same | the same |
 | `MERCH_HEALTH_TOKEN` | yes (D232 M-2) | Token D (the same as merch) | `src/lib/merch/merch-health-server.ts` | Merch Health does not ask the shop; its checks show Unknown with the setup steps |
+| `MERCH_PAYMENTS_TOKEN` | for the Refund / Release buttons (D232 M-7) | Token E (the same as merch) | `src/lib/merch/merch-payments-server.ts` | the order page hides the buttons and shows the Stripe link |
 | `MERCH_SHOP_URL` | optional | `https://greenwaymerch.com` (the default) | `merch-health-server.ts` `merchShopOrigin()` | the default is used |
 
 ### 4.5 The first test order, end to end (test mode, then live)
@@ -565,10 +569,12 @@ Press the button by hand only right after a re-publish, or if Merch Health **H-1
 
 ### 4.19 Cancelling an order and refunding the customer
 
-> **Cancel is two systems, and the app only does one of them** (F-11-10). The order page says so: *"Cancels it at Printful (any Printful charge is returned to the LLC's card). This does **not** refund the customer: refund them in Stripe as well."* (`orders/merch/[ref]/page.tsx` L176–186).
+> **Since D232 M-7 (G-86) the order page shows both halves.** The **Stripe half** card reads the payment from the shop (`GET /api/payments`, Token D) and shows its state, the amount, and a link to it in the Stripe dashboard. Owner and admin (`merch.refund`) get **Release the card hold** (an uncaptured payment, free) or **Refund in Stripe** (a captured one, full amount). You must type the order ref to confirm. The shop re-reads Stripe first and sends a fixed idempotency key (`gm-cancel-<pi>`, `gm-refund-<pi>`), so a double press can never refund twice. Audited as `merch.payment_release` / `merch.payment_refund`. Without Token E (§4.3) the page shows the Stripe link and the steps below (guidance first, Q-11-4).
+>
+> **Before M-7: cancel was two systems, and the app only did one of them** (F-11-10). The order page said so: *"Cancels it at Printful (any Printful charge is returned to the LLC's card). This does **not** refund the customer: refund them in Stripe as well."* (`orders/merch/[ref]/page.tsx` L176–186).
 
 1. **Back office:** the order page → **Cancel this order…** → **Yes, cancel at Printful**. You can cancel orders that are Draft, Pending or Failed (`merch-orders-core.ts` L81). It is audited as `merch.order_cancel`.
-2. **Then, the same minute: Stripe** → **Payments** (link on the page, L170) → find the payment (search the customer email or the order ref) → **Refund** → full amount → reason. If the payment is still **Uncaptured**, press **Cancel** instead; that is free.
+2. **Then, the same minute: the Stripe half** on the same page → **Refund in Stripe** (or **Release the card hold**) → type the order ref → confirm. If the button is not shown: **Stripe** → **Payments** (link on the page, L170) → find the payment (search the customer email or the order ref) → **Refund** → full amount → reason. If the payment is still **Uncaptured**, press **Cancel** instead; that is free.
 3. Write it on form 8.4: order ref, Printful cancelled (time), Stripe refunded (time), by whom.
 
 **After production has started** (In process / Shipped), Printful will not cancel. Contact Printful support. For a customer return, see the shop's policy pages.
@@ -577,7 +583,7 @@ Press the button by hand only right after a re-publish, or if Merch Health **H-1
 
 The webhook leaves the authorization in place when something needs you (§4.17). Card networks keep a card-not-present hold for about **7 days** (Visa customer-initiated 7 days; Mastercard, Amex and Discover 7 days). **Then it expires and the sale is lost** (Stripe documents, Appendix A.3).
 
-**Today nothing reminds you** (F-11-11, G-84).
+**Since D232 M-7 (G-84) the daily check reminds you.** The shop's `/api/health` lists every hold older than 3 days (up to 25, oldest first). Merch Health H-15 names the orders, and the daily run emails `ORDER_STAFF_EMAILS` once at **day 3** and once at **day 5** for each hold (deduped in `compliance_reminder_log` as `merch-held:<pi>:day3|day5`). Each order page's Stripe half shows the hold age and **Release the card hold**.
 
 **Rule:** every *"needs you"* alert is handled the same day. Stripe → Payments → filter **Uncaptured** → fix the cause → **Capture**. Then create the Printful order by hand, or resend the event from Stripe → Webhooks. Otherwise **Cancel** the hold.
 
@@ -588,8 +594,9 @@ The webhook leaves the authorization in place when something needs you (§4.17).
 - **Where alerts go:**
   - by email to `MERCH_ORDER_ALERT_EMAIL` through Resend;
   - **always** as well into the merch project's Vercel logs as `[merch-alert] …` (`fulfillment.ts` L55–58).
-- **If Resend is not set up, alerts exist only in the logs and nobody is told** (F-11-9).
-- **Weekly check** (form 8.3): Vercel → merch project → **Logs** → search `[merch-alert]`.
+  - **since D232 M-7 (G-85)**, into the back office: the shop POSTs each alert to `/api/merch-alerts` (Token A). It is stored in `merch_alerts` (migration 0361), and the same alert repeating bumps a counter instead of making a new row. You see open alerts on **Orders** (above the merch panel), on **Merch Health**, and on each order's page. Press **Acknowledge** when handled (`orders.manage`, audited as `merch.alert_acknowledged`). A repeat after acknowledge re-opens it.
+- **Before M-7, if Resend was not set up, alerts existed only in the logs and nobody was told** (F-11-9). The inbox closes that hole; email stays as a second channel.
+- **Weekly check** (form 8.3): the alerts inbox on **Orders** is empty or every row is acknowledged. If the back office was down, also search Vercel → merch project → **Logs** for `[merch-alert]`.
 
 ---
 
@@ -900,9 +907,9 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** **Resolved (D232 M-4):** server-saved approval with a photo; Publish blocked; owner-only override with a reason. |
 | **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** **Resolved (D232 M-5).** |
 | **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** **Resolved (D232 M-6).** |
-| **F-11-9** | WEAKNESS · S2 | Owner alerts go only to the logs if Resend is not set up, and there is no place in the app to see them | `merch-site/lib/fulfillment.ts` L41–43, L55–58 | **G-85** (+ G-77 check) |
-| **F-11-10** | GAP · S3 | Cancel at Printful does not refund in Stripe; it is a manual two-system step | `orders/merch/[ref]/page.tsx` L176–186; `merch-actions.ts` L47 | **G-86** |
-| **F-11-11** | GAP · S2 | Held cards (*"needs you"*) expire in about 7 days with no reminder | webhook `route.ts` L19–20, L90–95 | **G-84** |
+| **F-11-9** | WEAKNESS · S2 | Owner alerts go only to the logs if Resend is not set up, and there is no place in the app to see them | `merch-site/lib/fulfillment.ts` L41–43, L55–58 | **G-85** (+ G-77 check) **Resolved (D232 M-7).** |
+| **F-11-10** | GAP · S3 | Cancel at Printful does not refund in Stripe; it is a manual two-system step | `orders/merch/[ref]/page.tsx` L176–186; `merch-actions.ts` L47 | **G-86** **Resolved (D232 M-7).** |
+| **F-11-11** | GAP · S2 | Held cards (*"needs you"*) expire in about 7 days with no reminder | webhook `route.ts` L19–20, L90–95 | **G-84** **Resolved (D232 M-7).** |
 | **F-11-12** | WEAKNESS · S3 | Stale copy: *"drop it in merch-site/catalog/"*, *"Slice 5"* shipping rates, *"Slice 5"* server designs, README *"Adding a product (no code)"*, finishing guide *"don't add"* `MERCH_CATALOG_URL` | `fulfillment-core.ts` L73–74, L84; `FulfillmentPanel.tsx` L39, L68; `DesignStudio.tsx` L563; `merch-assets.ts` L7; `merch-design-core.ts` L15; `merch-site/README.md` L45; guide §3.1 | **G-91** |
 | **F-11-13** | WEAKNESS · S3 | Retail starts at a hard-coded $35; suggested retail ignores shipping; flat shipping is never compared with Printful's real rate | `PublishPanel.tsx` L250; `FulfillmentPanel.tsx` L68; `checkout-core.ts` L40 | **G-87** |
 | **F-11-14** | WEAKNESS · S4 | 7 placements are studio estimates, not Printful's measurements | `garment-catalog-core.ts` L151, L195, L214, L225–226 (+2) | **G-92** |
@@ -924,9 +931,9 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 **DONE (D232 M-4)** |
 | **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 **DONE (D232 M-5)** |
 | **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 **DONE (D232 M-6)** |
-| **G-84** | **Held-card monitor.** The daily check lists uncaptured authorizations older than 3 days through the G-80 endpoint. It emails at day 3 and day 5, and the order page gets *"Capture / Cancel in Stripe"* coaching | S2 |
-| **G-85** | **Merch alerts inbox.** The shop POSTs each alert to a token-secured back-office endpoint, stored and shown on Merch Health and Orders with acknowledge. Email stays as a second channel | S2 |
-| **G-86** | **Cancel and refund in one guided step.** *Cancel at Printful* → the page then shows **Refund in Stripe**. This goes through a G-80-style shop endpoint (idempotent, audited) or, if the owner prefers, a deep link plus a confirm-done box. The order page shows both halves' status | S3 |
+| **G-84** | **Held-card monitor.** The daily check lists uncaptured authorizations older than 3 days through the G-80 endpoint. It emails at day 3 and day 5, and the order page gets *"Capture / Cancel in Stripe"* coaching | S2 **DONE (D232 M-7)** |
+| **G-85** | **Merch alerts inbox.** The shop POSTs each alert to a token-secured back-office endpoint, stored and shown on Merch Health and Orders with acknowledge. Email stays as a second channel | S2 **DONE (D232 M-7)** |
+| **G-86** | **Cancel and refund in one guided step.** *Cancel at Printful* → the page then shows **Refund in Stripe**. This goes through a G-80-style shop endpoint (idempotent, audited) or, if the owner prefers, a deep link plus a confirm-done box. The order page shows both halves' status | S3 **DONE (D232 M-7)** |
 | **G-87** | **Pricing guard.** No hard-coded $35 (last price or the calculator's suggestion). Suggested retail includes the real shipping gap. Publish warns when margin < the owner's minimum or flat shipping < Printful's US rate | S3 |
 | **G-88** | **Catalog version check.** Compare-and-set on `site_settings.updated_at` (the pattern used by D230 reopen). The loser gets *"Someone else changed the catalog - reload and try again"* | S3 **DONE (D232 M-5)** |
 | **G-89** | **Register the Printful webhook from the app.** A button on Merch Health reads `GET /webhooks` first, shows what is there, then sets the URL with **all** needed types (the 4 order types plus `stock_updated` once G-83 ships). Audited, and re-checked daily by G-77 | S3 **DONE (D232 M-6)** |
@@ -957,11 +964,11 @@ Fix the one thing that blocks every sale first. That is the www redirect (**M-1*
 | H-12 | Stripe Tax | `MERCH_STRIPE_AUTOMATIC_TAX` = true | on | amber *"No sales tax is charged"* |
 | H-13 | Email | shop `/api/health`: `RESEND_API_KEY` and `MERCH_EMAIL_FROM` present (domain check needs a full-access key, so it is optional) | both | *"Alerts only go to logs"* |
 | H-14 | Stripe and Resend service | `status.stripe.com`, `resend-status.com` JSON | operational | incident text |
-| H-15 | Held cards | shop `/api/health`: PaymentIntents `requires_capture` older than 3 days (G-84) | 0 | list with Capture/Cancel links |
+| H-15 | Held cards | shop `/api/health`: PaymentIntents `requires_capture` older than 3 days (G-84) | 0 | names each held order (ref, days); day-3 and day-5 emails; Release on the order page: **built (M-7)** |
 | H-16 | Drafts waiting | main: Printful `GET /orders?status=draft` older than 1 business day | 0 | *"n orders waiting for Confirm"* |
 | H-17 | Stock fresh | catalog `stockSyncedAt` | < 24 h | *"Copy Printful stock"* |
 | H-18 | Storage | the `merch-files` bucket exists (0281) | yes | *"Apply migration 0281"* |
-| H-19 | Auto-confirm | `MERCH_PRINTFUL_AUTO_CONFIRM` | unset | amber *"Orders go to production with no review"* |
+| H-19 | Auto-confirm | `MERCH_PRINTFUL_AUTO_CONFIRM` | off | amber *"Orders go to production with no review"*; says whether it is on from the env or from the switch. **Auto-confirm switch built (M-7)**: owner only, a written reason, and at least 20 clean orders (paid here and delivered) to turn on; owner or admin can turn it off; audited `merch.auto_confirm_on/_off/_refused`; reaches the shop through the catalog feed and fails safe to drafts |
 
 **Schedule and alerts:** the daily cron in the main project runs beside platform-health. It emails only on a **change** (green → red, or red → green) plus a weekly digest. The result history is kept like platform-health's run history. **Run check now** is for owner/admin.
 
@@ -1020,7 +1027,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 | **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration 0360 **BUILT (D232)** |
 | **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — **BUILT (D232)** |
 | **M-6** | Webhook button; automatic stock (cron, then `stock_updated`) | G-89, G-83 | M-2 **BUILT (D232)** |
-| **M-7** | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | G-84, G-85, G-86 | M-2 (+ owner answer Q-11-4) |
+| **M-7** | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | G-84, G-85, G-86 | M-2 (+ owner answer Q-11-4) **BUILT (D232)** |
 | **M-8** | Pricing guard; helpers, integration guides, concierge; placements | G-87, G-90, G-92 | — |
 
 ---
@@ -1034,10 +1041,10 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 | **Q-11-1** | Who may press **Publish to greenwaymerch.com**? Today anyone with `content.edit`. | Owner/admin only, or a new `merch.publish` permission the owner grants **Decision (D232):** owner/admin, built in M-1 as `merch.publish`. |
 | **Q-11-2** | Should the **sample gate** (G-81) be a hard block, or a warning the owner can override with a reason? | Hard block, with an owner-only override and a reason **Decision (D232):** hard block, owner-only override with a reason (M-4). |
 | **Q-11-3** | May the shop's health endpoint reuse **Token A**, or should it have its own `MERCH_HEALTH_TOKEN`? | Its own token (one leak, one blast radius) **Decision (D232):** its own `MERCH_HEALTH_TOKEN` (M-2). |
-| **Q-11-4** | Refunds: should the back office be able to **refund in Stripe** (through the shop endpoint), or only guide you to the Stripe dashboard? | Guided first (no money moves from the back office); a button later if wanted **Decision (D232):** guidance first, **and** build the refund button with everything it needs (M-7). |
+| **Q-11-4** | Refunds: should the back office be able to **refund in Stripe** (through the shop endpoint), or only guide you to the Stripe dashboard? | Guided first (no money moves from the back office); a button later if wanted **Decision (D232):** guidance first, **and** build the refund button with everything it needs (M-7). **Built (M-7):** Stripe half on the order page, `merch.refund` (owner, admin), Token E. |
 | **Q-11-5** | What flat shipping, extra-item and free-shipping amounts do you want (`MERCH_SHIP_*`, cents)? | Set from Printful's US rates for a tee; e.g. 599 / 200 / 7500, to be decided **Decision (D232):** the owner thinks they are set but is not sure. Merch Health (M-2) shows whether `MERCH_SHIP_FLAT_CENTS` is set and what it parses to. |
 | **Q-11-6** | May we order one sample per **studio-default** garment to measure the 7 estimated placements? | Yes, the zip hoodie, windbreaker and hoodie fronts first **Decision (D232):** yes, order the samples (M-8). |
-| **Q-11-7** | Will you ever want `MERCH_PRINTFUL_AUTO_CONFIRM`? | Not until 20+ clean orders; Merch Health shows it amber **Decision (D232):** agreed (leave it off until 20+ clean orders), **and** build the auto-confirm controls so they are ready (M-7). |
+| **Q-11-7** | Will you ever want `MERCH_PRINTFUL_AUTO_CONFIRM`? | Not until 20+ clean orders; Merch Health shows it amber **Decision (D232):** agreed (leave it off until 20+ clean orders), **and** build the auto-confirm controls so they are ready (M-7). **Built (M-7):** the switch on Merch Health under H-19, locked until 20 clean orders. |
 | **Q-11-8** | Minimum margin for the pricing warning (G-87)? | e.g. 35% after Printful, shipping gap and card fee **Decision (D232):** 35% (M-8). |
 | **Q-11-9** | Is the Creative Studio (banners and ads for the cannabis site) next, as SOP-11 v2.0? | Yes, after M-1–M-3 **Decision (D232):** yes, the Creative Studio is next as SOP-11 v2.0, after the merch roadmap. |
 
@@ -1045,6 +1052,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.8 | 2026-11-11 | **M-7 built:** held cards older than 3 days are named on Merch Health H-15 and emailed at day 3 and day 5 (G-84). Shop alerts are also stored in the back office (`merch_alerts`, migration 0361) and shown on Orders, Merch Health and the order page with Acknowledge (G-85). The order page shows the **Stripe half** with **Refund in Stripe** / **Release the card hold** (owner/admin, `merch.refund`, typed ref, idempotent, audited) through the shop's `/api/payments` and a new Token E `MERCH_PAYMENTS_TOKEN` (G-86). The auto-confirm switch (owner, reason, 20+ clean orders) sits under H-19 (Q-11-7). §4.3, §4.4, §4.19, §4.20, §4.21 updated; F-11-9, F-11-10, F-11-11 resolved. **Owner steps:** apply migration 0361; add `MERCH_PAYMENTS_TOKEN` (32+ characters, same value) to both projects; redeploy both | Greenway Dev |
 | 1.7 | 2026-11-11 | **M-6 built:** Merch Health → H-5 has **Check what is registered** and **Register / repair the Printful webhook**: it reads Printful first, hides Token C, checks the shop accepts Token C before changing anything, then registers all 5 events (the 4 order events + `stock_updated`) with every catalog garment watched, keeping other types; audited (G-89). Stock is copied automatically every 6 hours (`/api/cron/merch-stock`) and within about a minute of Printful's `stock_updated` notice (shop → `/api/merch-stock`), audited as a system actor (G-83). H-5 now needs all 5 events and every garment watched. S-10, §4.15, §6.4, §6.5, form 8.4 updated; F-11-8, F-11-18 resolved. **Owner step:** add `PRINTFUL_WEBHOOK_TOKEN` (same value as the merch project) to the main project, redeploy both, press Register | Greenway Dev |
 | 1.6 | 2026-11-11 | **M-4 built:** designs and their art are saved on the server (`merch_designs`, migration 0360; art in `merch-files`), any computer sees them, two computers can't overwrite each other (the loser keeps a copy), **Import design (.json/.zip)** (G-79); the sample approval is saved on the server with who, when, the checklist and a photo, **Publish is blocked** until the sample is approved for that exact print, and the owner-only override needs a typed reason and is audited (G-81, owner *"Q2: yes, owner only and reason."*). §3 step 4, §4.6, §4.9 item 5, §6.6 updated; F-11-2, F-11-6 resolved | Greenway Dev |
 | 1.5 | 2026-11-11 | **M-5 built:** re-publish keeps Hidden and the stock copy, and says so (G-82); catalog writes are compare-and-set on `updated_at`, the loser is told *"Someone else changed the catalog - reload and try again."* (G-88); the previous print PNGs are deleted after a re-publish is saved (G-93). §4.12, §4.14, §6.7 updated; F-11-7, F-11-15, F-11-16 resolved | Greenway Dev |

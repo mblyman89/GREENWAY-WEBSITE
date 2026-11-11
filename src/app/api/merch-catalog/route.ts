@@ -9,10 +9,16 @@
  * configured -> 404, wrong token -> 404 (nothing to discover). Never cached
  * by a CDN, never indexed. Only live items, via merchFeed (no Printful
  * sync-product body, no notes, no drafts, no hidden items).
+ *
+ * D232 M-7 (Q-11-7): also `autoConfirm`, the back-office auto-confirm switch
+ * (site_settings merch_auto_confirm, owner-only to turn on after 20+ clean
+ * orders). The shop's Stripe webhook reads it from a fresh feed; a feed it
+ * cannot read means OFF (drafts), never on.
  */
 import { timingSafeEqualStr } from "@/lib/security/constant-time";
 import { merchFeed } from "@/lib/merch/merch-inventory-core";
 import { readMerchCatalog } from "@/lib/merch/merch-inventory-store";
+import { readAutoConfirm } from "@/lib/merch/merch-autoconfirm-server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,5 +35,6 @@ export async function GET(req: Request): Promise<Response> {
   // A read failure must not look like "everything was unpublished": 503 lets
   // the merch site keep its last good copy.
   if (readError) return Response.json({ error: "catalog unavailable" }, { status: 503, headers: HEADERS });
-  return Response.json({ v: 1, products: merchFeed(catalog) }, { headers: HEADERS });
+  const auto = await readAutoConfirm();
+  return Response.json({ v: 1, products: merchFeed(catalog), autoConfirm: auto.error === null && auto.setting.on }, { headers: HEADERS });
 }
