@@ -95,7 +95,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.3 (D232, #1756):** slice **M-3a** built. Setup & Launch coach `/admin/merch-studio/launch` (13 cards, proven by Merch Health), "Setup needs you" in the Studio header, printable form 8.1.
 
-**v1.4 (D232, #PM3B):** slice **M-3b** built. Product journey stepper (nine pills + Next step) and per-tab coaching strips in Merch Studio.
+**v1.4 (D232, #1757):** slice **M-3b** built. Product journey stepper (nine pills + Next step) and per-tab coaching strips in Merch Studio.
 
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
