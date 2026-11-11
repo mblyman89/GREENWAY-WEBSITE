@@ -58,6 +58,8 @@ import {
   RECONCILE_HEARTBEAT_KEY,
   RECONCILE_HEARTBEAT_LABEL,
   RECONCILE_LOOKBACK_DAYS,
+  reopenEligibility,
+  resolvedMatchNote,
   resendToSource,
   retryEligibility,
   RUN_BUDGET_MS,
@@ -143,7 +145,7 @@ async function readLogRefs(admin: Admin, sinceIso: string): Promise<LogRef[]> {
   const cols: string = "id, provider, delivery_key, from_address, subject, received_at, disposition";
   let r: { data: unknown; error: { message: string; code?: string } | null } = await admin
     .from("inbound_email_log")
-    .select(`${cols}, message_id, source_ref`)
+    .select(`${cols}, message_id, source_ref, resolved_at`)
     .gte("received_at", sinceIso)
     .order("received_at", { ascending: false })
     .limit(LOG_MATCH_LIMIT);
@@ -443,6 +445,69 @@ export async function resolveInboundEmail(logId: string, reason: unknown, note: 
  *  The mailbox check
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ *  D230: Reopen and try again (undo Resolved, then fetch again)
+ * ------------------------------------------------------------------ */
+
+export type ResolvedRow = AttentionRow & { resolved_reason: string | null; resolved_note: string | null };
+
+/** How many recently Resolved failures the panel lists, and how far back. */
+const RESOLVED_LOOKBACK_DAYS = 30;
+const RESOLVED_LIMIT = 25;
+
+/** Failures a person closed with Resolved (newest first) - the panel's "Marked Resolved" list. */
+async function readResolvedRows(admin: Admin, nowMs: number): Promise<ResolvedRow[]> {
+  const since = new Date(nowMs - RESOLVED_LOOKBACK_DAYS * 86_400_000).toISOString();
+  const { data, error } = await admin
+    .from("inbound_email_log")
+    .select(`${ATTENTION_SELECT}, resolved_reason, resolved_note`)
+    .not("resolved_at", "is", null)
+    .is("manifest_id", null)
+    .in("disposition", ["received", "parse_failed", "no_manifest"])
+    .gte("received_at", since)
+    .order("resolved_at", { ascending: false })
+    .limit(RESOLVED_LIMIT);
+  if (error || !Array.isArray(data)) return [];
+  return data as ResolvedRow[];
+}
+
+export type ReopenResult =
+  | { ok: true; before: Record<string, unknown>; retry: RetryResult }
+  | { ok: false; error: string };
+
+/**
+ * Undo "Resolved" on one failed email and fetch it again at once. The undo is
+ * a compare-and-set on the exact resolved_at that was read, so two presses
+ * cannot both run it; the fetch is the ordinary Try again (its own CAS, the
+ * delivery claim and the manifest dedupe key keep it from staging twice).
+ * Drafts only, as always.
+ */
+export async function reopenInboundEmail(logId: string, actorId: string | null, nowMs: number = Date.now()): Promise<ReopenResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "The database is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inbound_email_log")
+    .select(`${ATTENTION_SELECT}, resolved_reason, resolved_note`)
+    .eq("id", logId)
+    .maybeSingle();
+  if (error && isMissingColumnError(error)) return { ok: false, error: "Apply database update 0320 first (supabase/migrations/0320_inbound_email_reconcile.sql)." };
+  if (error || !data) return { ok: false, error: "That email row was not found." };
+  const row = data as ResolvedRow;
+  const can = reopenEligibility(row);
+  if (!can.ok) return { ok: false, error: can.reason };
+  const before = { resolved_at: row.resolved_at, resolved_reason: row.resolved_reason, resolved_note: row.resolved_note, disposition: row.disposition };
+  const upd = await admin
+    .from("inbound_email_log")
+    .update({ resolved_at: null, resolved_by: null, resolved_reason: null, resolved_note: null })
+    .eq("id", logId)
+    .eq("resolved_at", row.resolved_at as string)
+    .is("manifest_id", null)
+    .select("id");
+  if (upd.error || !Array.isArray(upd.data) || upd.data.length !== 1) return { ok: false, error: "Someone else changed this email just now. Reload the page." };
+  const retry = await retryInboundEmail(logId, actorId, "retry", nowMs);
+  return { ok: true, before, retry };
+}
+
 export type ReconcileRun = ReconcileRunSummary & {
   heartbeat: ReconcileHeartbeat | null;
   alertsSent: number;
@@ -675,7 +740,15 @@ export async function findAndIngest(text: unknown, daysIn: unknown, actorId: str
   const failedIds = new Set<string>();
   for (const s of sources) {
     const hit = matchSourceToLog(s, logs);
-    if (hit && ["parse_failed", "no_manifest", "received"].includes((hit.row.disposition ?? "").toLowerCase())) failedIds.add(hit.row.id);
+    if (!hit || !["parse_failed", "no_manifest", "received"].includes((hit.row.disposition ?? "").toLowerCase())) continue;
+    // D230: a match a person marked Resolved is closed; say so (and how to
+    // reopen it) instead of quietly counting it as "already on the table".
+    if (hit.row.resolved_at) {
+      const n = resolvedMatchNote(hit.row.subject);
+      if (!notes.includes(n)) notes.push(n);
+      continue;
+    }
+    failedIds.add(hit.row.id);
   }
   for (const id of [...failedIds].slice(0, 3)) {
     const r = await retryInboundEmail(id, actorId, "retry", Date.now());
@@ -697,10 +770,12 @@ export type AttentionView = {
   items: AttentionItem[];
   summary: ReturnType<typeof attentionSummary>;
   gmailConfigured: boolean;
+  /** D230: failures closed with Resolved in the last 30 days (Reopen and try again). */
+  resolved: ResolvedRow[];
 };
 
 export async function loadAttention(nowMs: number = Date.now()): Promise<AttentionView> {
-  const empty: AttentionView = { migrationApplied: false, heartbeat: null, items: [], summary: attentionSummary([], nowMs), gmailConfigured: gmailIntakeConfig().configured };
+  const empty: AttentionView = { migrationApplied: false, heartbeat: null, items: [], summary: attentionSummary([], nowMs), gmailConfigured: gmailIntakeConfig().configured, resolved: [] };
   if (!isSupabaseServiceConfigured) return empty;
   try {
     const admin = createSupabaseAdminClient();
@@ -708,7 +783,8 @@ export async function loadAttention(nowMs: number = Date.now()): Promise<Attenti
     const heartbeat = await readReconcileHeartbeat(admin);
     if (!migrationApplied) return { ...empty, heartbeat };
     const items = buildAttentionList(await readAttentionRows(admin, nowMs), nowMs);
-    return { migrationApplied, heartbeat, items, summary: attentionSummary(items, nowMs), gmailConfigured: empty.gmailConfigured };
+    const resolved = await readResolvedRows(admin, nowMs);
+    return { migrationApplied, heartbeat, items, summary: attentionSummary(items, nowMs), gmailConfigured: empty.gmailConfigured, resolved };
   } catch {
     return empty;
   }

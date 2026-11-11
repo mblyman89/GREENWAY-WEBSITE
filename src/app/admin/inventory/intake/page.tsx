@@ -35,6 +35,7 @@ import {
   findInboundEmailAction,
   retryInboundEmailAction,
   resolveInboundEmailAction,
+  reopenInboundEmailAction,
 } from "./actions";
 import { InboundAttentionPanel } from "@/components/admin/inventory/InboundAttentionPanel";
 import { loadAttention } from "@/lib/inbound-email/inbound-reconcile-store";
@@ -537,6 +538,7 @@ export default async function IntakePage({
           findAction={findInboundEmailAction}
           retryAction={retryInboundEmailAction}
           resolveAction={resolveInboundEmailAction}
+          reopenAction={reopenInboundEmailAction}
         />
         {/* R50 S10a: one filter bar for all three views (GET form, so a
             filtered list can be bookmarked and Back works). */}

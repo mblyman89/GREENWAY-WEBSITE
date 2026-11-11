@@ -226,7 +226,7 @@ beforeEach(() => {
 
 describe("1. pure core", () => {
   it("self-tests pass at the exact floor", () => {
-    expect(core.__runInboundReconcileCoreTests()).toEqual({ passed: 126, failed: 0 });
+    expect(core.__runInboundReconcileCoreTests()).toEqual({ passed: 131, failed: 0 }) // D230: +5 reopen;
   });
 });
 
@@ -473,6 +473,90 @@ describe("6. Resolved", () => {
   });
 });
 
+describe("6b. D230: Reopen and try again (an email Resolved by mistake)", () => {
+  // The real case: the Evergreen Herbal email was closed with Resolved
+  // (other, "new format") instead of Try again, so Try again / Find / the
+  // 15-minute check all skipped it and no manifest was made.
+  const resolvedRow = (over: Row = {}) =>
+    failedRow({ disposition: "no_manifest", note: "no manifest attachment found", resolved_at: minsAgo(10), resolved_by: ACTOR, resolved_reason: "other", resolved_note: "new format", ...over });
+
+  it("the Resolved failure is listed under Marked Resolved (not under Needs attention)", async () => {
+    resolvedRow();
+    const view = await store.loadAttention();
+    expect(view.items).toHaveLength(0);
+    expect(view.resolved).toHaveLength(1);
+    expect(view.resolved[0].resolved_note).toBe("new format");
+  });
+  it("Reopen undoes Resolved (CAS on the exact resolved_at), fetches again and completes the SAME row", async () => {
+    const row = resolvedRow();
+    const at = String(row.resolved_at);
+    st.resendList = [resendItem("old1", "Manifest 0425")];
+    const r = await store.reopenInboundEmail(String(row.id), ACTOR);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.before.resolved_note).toBe("new format");
+    expect(r.retry.ok && r.retry.staged).toBe(1);
+    expect(st.fetches).toEqual(["resend:old1"]);
+    expect(log()).toHaveLength(1);
+    expect(row.resolved_at).toBeNull();
+    expect(row.resolved_reason).toBeNull();
+    expect(row.disposition).toBe("staged");
+    const undo = st.db.log.find((q) => q.method === "PATCH" && q.table === "inbound_email_log")!;
+    expect(undo.url.searchParams.get("resolved_at")).toBe(`eq.${at}`);
+    expect(undo.url.searchParams.get("manifest_id")).toBe("is.null");
+  });
+  it("a reopened email that still does not read goes back under Needs attention", async () => {
+    const row = resolvedRow();
+    st.resendList = [resendItem("old1", "Manifest 0425")];
+    st.stageBy.set("Manifest 0425", "none");
+    const r = await store.reopenInboundEmail(String(row.id), ACTOR);
+    expect(r.ok && r.retry.ok && r.retry.staged).toBe(0);
+    const view = await store.loadAttention();
+    expect(view.items.map((i) => i.row.id)).toEqual([row.id]);
+    expect(view.resolved).toHaveLength(0);
+  });
+  it("refuses an open row, a row that made its manifest, and a racing reopen", async () => {
+    const open = failedRow({ delivery_key: "resend:email:o1" });
+    const made = resolvedRow({ delivery_key: "resend:email:o2", manifest_id: "m-1" });
+    for (const [row, re] of [
+      [open, /not marked Resolved/],
+      [made, /already made its manifest/],
+    ] as const) {
+      const r = await store.reopenInboundEmail(String(row.id), ACTOR);
+      expect(r.ok ? "" : r.error).toMatch(re);
+    }
+    const race = resolvedRow({ delivery_key: "resend:email:o3" });
+    st.db.before = (req) => {
+      if (req.method === "PATCH" && req.table === "inbound_email_log") {
+        race.resolved_at = new Date().toISOString(); // someone resolved it again just now
+        st.db.before = null;
+      }
+    };
+    const r = await store.reopenInboundEmail(String(race.id), ACTOR);
+    expect(r.ok ? "" : r.error).toMatch(/Someone else changed this email/);
+    expect(st.fetches).toEqual([]);
+  });
+  it("Find no longer says 'all on the table' for a Resolved match: it names it and the button", async () => {
+    resolvedRow({ provider: "gmail", delivery_key: "gmail:msg:g30", source_ref: "g30", subject: "Fwd: Evergreen Herbal Manifest #M07825652483" });
+    st.gmailList = [gmailItem("g30", "Fwd: Evergreen Herbal Manifest #M07825652483")];
+    st.resendList = [];
+    const r = await store.findAndIngest("evergreen herbal", 30, ACTOR);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.retried).toBe(0);
+    expect(r.notes.join(" ")).toMatch(/was marked Resolved, so it was not fetched again[\s\S]*Reopen and try again/);
+    expect(st.fetches).toEqual([]);
+  });
+  it("wiring: the panel has the Marked Resolved list and the button; the page passes the action", () => {
+    const panel = read("src/components/admin/inventory/InboundAttentionPanel.tsx");
+    expect(panel).toMatch(/data-testid="resolved-list"/);
+    expect(panel).toMatch(/label="Reopen and try again"/);
+    expect(read("src/app/admin/inventory/intake/page.tsx")).toMatch(/reopenAction=\{reopenInboundEmailAction\}/);
+    expect(read("src/app/admin/inventory/intake/actions.ts")).toMatch(/action: "inbound_email\.reopen"/);
+    expect(read("docs/sop/SOP-04-receiving-intake.md")).toContain("**Resolved by mistake? Reopen and try again** (D230)");
+  });
+});
+
 describe("7. automatic retries + alerts", () => {
   it("a temporary failure past its backoff is retried by the check; one not yet due is left", async () => {
     st.gmailConfigured = false;
@@ -582,7 +666,7 @@ describe("11. wiring", () => {
   });
   it("every mailbox action needs inventory.manage and writes an audit row", () => {
     const a = read("src/app/admin/inventory/intake/actions.ts");
-    for (const name of ["checkMailboxNowAction", "retryInboundEmailAction", "resolveInboundEmailAction", "findInboundEmailAction"]) {
+    for (const name of ["checkMailboxNowAction", "retryInboundEmailAction", "resolveInboundEmailAction", "findInboundEmailAction", "reopenInboundEmailAction"]) {
       const start = a.indexOf(`export async function ${name}`);
       expect(start).toBeGreaterThan(0);
       const body = a.slice(start, a.indexOf("\n}\n", start));
