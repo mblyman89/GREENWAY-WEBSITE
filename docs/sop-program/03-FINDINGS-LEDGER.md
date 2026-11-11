@@ -1080,11 +1080,13 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `printfulConfigured()` only tests that the variable exists (`src/lib/merch-studio/printful-client.ts` L24–25). No merch check exists in `/admin/compliance/health` or `/admin/settings/platform-health`. `merch-site/vercel.json` has no crons. The Printful private token has an expiry date (Printful docs) that is recorded nowhere.
 - **Effect:** an expired token, a disabled Stripe webhook, a closed checkout or a broken feed (F-11-1) is found only when a sale fails, if at all.
 - **SOP impact:** SOP-11 §9.4, form 8.3, Appendix B.4. **G-77**, **G-80**.
+- **Resolved (D232, M-2):** Merch Health `/admin/merch-studio/health` runs H-1 … H-19 live and every morning (on the platform-health cron), with the fix for each check. Rules: `src/lib/merch/merch-health-core.ts`. Calls: `merch-health-server.ts`.
 
 ### F-11-5 · CONFIRMED · GAP · S2 — The back office cannot see Stripe
 - **Pin:** `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are read only in `merch-site/` (checkout `route.ts` L22, webhook L39–41). The main project has no Stripe variable.
 - **Effect:** held cards, webhook status and refunds can only be seen in the Stripe dashboard.
 - **SOP impact:** SOP-11 §4.19–§4.20. **G-80** (shop health endpoint), G-84, G-86.
+- **Resolved (D232, M-2):** `greenwaymerch.com/api/health` (`merch-site/app/api/health/route.ts`, its own `MERCH_HEALTH_TOKEN`) reports the Stripe key mode, the webhook endpoint, held cards and checkout state to the back office. No secret leaves the shop. Refunds stay in M-7.
 
 ### F-11-6 · CONFIRMED · GAP · S2 — The sample step is not enforced
 - **Pin:** `fulfillment-core.ts` L83 (sample, who: Owner); `ProofPanel.tsx` L34, L90 (ticks in localStorage `gw-merch-sample-<id>`); `publishMerchListingAction` (`catalog-actions.ts` L59–97) has no sample check.

@@ -25,6 +25,12 @@
  * by email / text only if the owner has switched those on at
  * /admin/registers/night-watch (both OFF by default). Claimed once per
  * Pacific day (night-watch:daily:<day>). Still no extra cron.
+ *
+ * D232 M-2: the same run also checks Merch Health (H-1..H-19, greenwaymerch
+ * .com: Printful, Stripe, feed, email, stock, storage), in parallel with the
+ * database check so the 60 s budget holds. It records a run and emails staff
+ * only when the set of red checks changed (plus a Monday digest), claimed
+ * once per Pacific day (merch-health:daily:<day>). Still no extra cron.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
@@ -32,6 +38,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { runPlatformHealthCheck } from "@/lib/platform/platform-health-store";
 import { runPlatformReview } from "@/lib/platform/platform-review-store";
 import { runNightWatch } from "@/lib/registers/night-watch-store";
+import { runMerchHealth } from "@/lib/merch/merch-health-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -63,6 +70,9 @@ export async function GET(req: NextRequest) {
   const denied = await authorize(req);
   if (denied) return denied;
 
+  const merchRun = runMerchHealth({ source: "cron" })
+    .then((m) => ({ status: m.report.status, summary: m.report.summary, saved: m.saved, alert: m.alert, notes: m.notes }))
+    .catch((e: unknown) => ({ status: "failed" as const, notes: [e instanceof Error ? e.message : String(e)] }));
   const out = await runPlatformHealthCheck({ source: "cron" });
   const review = await runPlatformReview().catch((e: unknown) => ({
     review: "failed" as const,
@@ -72,9 +82,11 @@ export async function GET(req: NextRequest) {
   const nightWatch = await runNightWatch()
     .then((w) => ({ status: w.report.status, items: w.report.items.length, sent: w.sent, why: w.why, notes: w.notes }))
     .catch((e: unknown) => ({ status: "failed" as const, notes: [e instanceof Error ? e.message : String(e)] }));
+  const merchHealth = await merchRun;
   return NextResponse.json({
     ok: true,
     nightWatch,
+    merchHealth,
     status: out.report.status,
     summary: out.report.summary,
     problems: out.report.problems.length,

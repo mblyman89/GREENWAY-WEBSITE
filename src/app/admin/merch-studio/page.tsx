@@ -49,6 +49,14 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
         subtitle="Design premium apparel, check it like a pro printer would, and see exactly how each sale gets made and shipped - one at a time, no inventory."
         breadcrumbs={<Breadcrumbs items={[{ label: "MKTG & ADV" }, { label: "Merch Studio" }]} />}
         helpId="merch-studio"
+        action={
+          can(session.profile.role, "settings.manage") ? (
+            // D232 M-2: Merch Health (owner & admin), H-1..H-19 with the fix for each.
+            <Link href="/admin/merch-studio/health" className="rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:bg-white/5">
+              Merch Health
+            </Link>
+          ) : undefined
+        }
       />
       <p className="mx-5 mt-3 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 px-3 py-1.5 text-xs text-white/85 sm:mx-8">
         <b className="text-white">Sold by Greenway Glass & Goods</b> (Greenway Merchandising LLC) on its own website and Stripe checkout - never on the cannabis POS or delivery.{" "}
