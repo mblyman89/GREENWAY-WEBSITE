@@ -15,7 +15,7 @@
  *     -> greenwaymerch.com + Inventory > Merch Inventory. Never shown on the
  *     cannabis site. The JSON download remains as a backup.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { colorsFor, formatCents, getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
 import { buildListingPackage, listingFilename, LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
@@ -29,6 +29,9 @@ import { ContentImageField, type MediaChoice } from "@/components/admin/ContentI
 import { Row, Toggle, studioInput, studioLabel } from "@/components/admin/banner-studio/controls";
 import { IssueList } from "./IssueList";
 import { loadDesigns } from "./merch-assets";
+import { pullDesigns } from "./design-sync";
+import { SampleGate, type SampleRights } from "./SampleGate";
+import { printHash, sampleGate, type DesignRow } from "@/lib/merch-studio/merch-design-sync-core";
 import { assetDataUrls, downloadBytes, putSignedMerchFile, renderPlanPng } from "./print-export";
 import { planPrintFiles } from "@/lib/merch-studio/print-export-core";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
@@ -40,11 +43,11 @@ const btn = "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs font-bold disa
 
 export interface MerchAdBlockVM { draft: string | null; published: string | null; status: string; available: boolean }
 
-export function PublishPanel({ adBlock, mediaChoices, canPublish = false }: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean }) {
+export function PublishPanel({ adBlock, mediaChoices, canPublish = false, isOwner = false }: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean; isOwner?: boolean }) {
   return (
     <div className="space-y-8">
       <AdEditor adBlock={adBlock} mediaChoices={mediaChoices} />
-      <ListingBuilder mediaChoices={mediaChoices} canPublish={canPublish} />
+      <ListingBuilder mediaChoices={mediaChoices} canPublish={canPublish} rights={{ canApprove: canPublish, isOwner }} />
     </div>
   );
 }
@@ -230,9 +233,12 @@ function AdIssues({ issues }: { issues: ReturnType<typeof merchAdIssues> }) {
 // ---------------------------------------------------------------------------
 const toCents = (s: string) => { const n = Number.parseFloat(s.replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
 
-function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoice[]; canPublish: boolean }) {
+function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: MediaChoice[]; canPublish: boolean; rights: SampleRights }) {
   // This panel only mounts client-side after MerchStudio's restore, so reading localStorage in the initializer is hydration-safe (same as ProofPanel).
-  const [designs] = useState<MerchDesign[]>(() => loadDesigns());
+  const [designs, setDesigns] = useState<MerchDesign[]>(() => loadDesigns());
+  // D232 M-4 (G-81): the server's sample approval for the picked design.
+  const [gateRow, setGateRow] = useState<{ id: string; row: DesignRow | null } | null>(null);
+  const onGateRow = useCallback((row: DesignRow | null) => setGateRow({ id: row?.id ?? "", row }), []);
   const [designId, setDesignId] = useState(designs[0]?.id ?? "");
   const design = designs.find((d) => d.id === designId) ?? null;
   const blank = design ? getBlank(design.blankId) : undefined;
@@ -254,6 +260,20 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
   const [newPhoto, setNewPhoto] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [pubMsg, setPubMsg] = useState<{ tone: "ok" | "bad"; text: string; handle?: string } | null>(null);
+  // D232 M-4: designs saved on the server (any computer) and their art.
+  const [pulled, setPulled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    pullDesigns(loadDesigns()).then((r) => {
+      if (cancelled) return;
+      setDesigns(r.list);
+      setPulled(true);
+      // Nothing was in this browser: pick the newest server design.
+      setDesignId((cur) => (cur || !r.list[0] ? cur : r.list[0].id));
+      setTitle((cur) => (cur || !r.list[0] ? cur : r.list[0].name));
+    }).catch(() => { if (!cancelled) setPulled(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   // R73 S7: render the print PNGs, upload them to stable public URLs (Printful
   // fetches them per order), then save the package to the merch catalog ->
@@ -280,7 +300,7 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
         files.push({ fileKey: u.fileKey, key: u.key });
       }
       setBusy("Publishing...");
-      const res = await publishMerchListingAction({ pkg: fresh, files, images: photos });
+      const res = await publishMerchListingAction({ pkg: fresh, files, images: photos, designHash: printHash(design) });
       if (!res.ok) throw new Error(res.error);
       // D232 M-5 (G-82): a Hidden product stays Hidden on re-publish, and the message says so.
       const where = res.status === "hidden"
@@ -311,7 +331,7 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
     return (
       <section className="space-y-2">
         <h3 className="text-base font-bold text-white">B. Listing package for the Greenway Goods website</h3>
-        <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-3 text-sm text-white/70">No saved designs in this browser yet. Make one on the Design tab, then come back.</p>
+        <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-3 text-sm text-white/70">{pulled ? "No saved designs yet (on the server or in this browser). Make one on the Design tab, then come back." : "Loading your designs from the server..."}</p>
       </section>
     );
   }
@@ -320,6 +340,8 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
   const issues: Issue[] = built?.issues ?? [];
   const blocked = issues.some((i) => i.level === "blocker");
   const pkg = built?.pkg ?? null;
+  // G-81: Publish waits for the server's sample approval of THIS print.
+  const sampleOk = !!design && !!gateRow && gateRow.id === design.id && sampleGate(gateRow.row, printHash(design)).ok;
   const v = pkg?.variants ?? [];
   const minProfit = v.length ? Math.min(...v.map((x) => x.profitCents)) : 0;
   const maxProfit = v.length ? Math.max(...v.map((x) => x.profitCents)) : 0;
@@ -384,8 +406,14 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
               </div>
             ) : null}
           </div>
+          {design ? (
+            <div>
+              <p className="mb-1 text-xs font-semibold text-white/80">Sample approval (required to publish)</p>
+              <SampleGate key={design.id} design={design} rights={rights} mode="publish" onRow={onGateRow} />
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!canPublish || !pkg || blocked || !!busy} onClick={publishToSite} title={canPublish ? undefined : "Only the owner or an admin can publish to greenwaymerch.com"}>
+            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!canPublish || !pkg || blocked || !sampleOk || !!busy} onClick={publishToSite} title={canPublish ? undefined : "Only the owner or an admin can publish to greenwaymerch.com"}>
               Publish to greenwaymerch.com
             </button>
             {!canPublish ? <span className="text-xs text-white/70">Only the owner or an admin can publish (it puts the product on sale). Download the listing package below and send it to them.</span> : null}

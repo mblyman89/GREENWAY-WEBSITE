@@ -23,6 +23,8 @@ import {
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
 import { IssueList } from "./IssueList";
 import { loadDesigns } from "./merch-assets";
+import { pullDesigns } from "./design-sync";
+import { SampleGate, type SampleRights } from "./SampleGate";
 import { assetDataUrls, downloadBytes, PrintFileSvg, putSignedMerchFile, renderPlanPng, standaloneSvg, type RenderedFile } from "./print-export";
 import { createMockupTaskAction, getMockupTaskAction, startPrintFileUploadsAction } from "@/app/admin/merch-studio/proof-actions";
 import type { Issue } from "@/lib/merch-studio/print-rules-core";
@@ -45,10 +47,20 @@ function loadTicks(id: string): Record<string, boolean> {
 
 type Mock = { placement: string; variantIds: number[]; url: string; extra: { title: string; url: string }[] };
 
-export function ProofPanel() {
+export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: { rights?: SampleRights }) {
   const [init] = useState(boot);
-  const [list] = useState(init.list);
+  const [list, setList] = useState(init.list);
   const [designId, setDesignId] = useState(init.id);
+  // D232 M-4: also show designs saved on the server (another computer), with their art.
+  useEffect(() => {
+    let cancelled = false;
+    pullDesigns(init.list).then((r) => {
+      if (cancelled) return;
+      setList(r.list);
+      if (!init.id && r.list[0]) setDesignId(r.list[0].id);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [init]);
   const design = list.find((d) => d.id === designId) ?? null;
   const blank = design ? getBlank(design.blankId) : undefined;
 
@@ -102,7 +114,7 @@ export function ProofPanel() {
   };
   const guard = (): boolean => {
     if (!design || !planned.plans.length) { setMsg({ tone: "bad", text: "This design has no artwork to export yet." }); return false; }
-    if (missingArt.length) { setMsg({ tone: "bad", text: `${missingArt.length} uploaded image(s) aren't in this browser (they were added on another device or site data was cleared). Re-upload them in Design first.` }); return false; }
+    if (missingArt.length) { setMsg({ tone: "bad", text: `${missingArt.length} uploaded image(s) aren't in this browser or on the server. Open the design on the computer it was made on (it uploads them), or re-upload them in Design.` }); return false; }
     if (blockers.length && !window.confirm(`This design still has ${blockers.length} blocker(s). Printful may reject or misprint it. Export anyway (for review only)?`)) return false;
     return true;
   };
@@ -279,7 +291,7 @@ export function ProofPanel() {
 
       <section className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-3">
         <h3 className="text-sm font-bold text-white">Sample checklist <span className="font-normal text-white/55">({done}/{checklist.length})</span></h3>
-        <p className="mb-2 text-xs text-white/60">Order one sample before you list it (Printful gives 20% off samples). Tick each item as you inspect the real garment - ticks are saved for this design on this device.</p>
+        <p className="mb-2 text-xs text-white/60">Order one sample before you list it (Printful gives 20% off samples). Tick each item as you inspect the real garment (ticks stay on this device), then approve it below with a photo of the sample - the approval is saved on the server, and <b>Publish stays blocked until it is approved</b>. A changed print needs a new sample.</p>
         <ul className="space-y-1.5">
           {checklist.map((c) => (
             <li key={c.id}>
@@ -290,6 +302,7 @@ export function ProofPanel() {
             </li>
           ))}
         </ul>
+        {design ? <div className="mt-3"><SampleGate design={design} rights={rights} mode="proof" ticks={ticks} /></div> : null}
       </section>
 
       <section>

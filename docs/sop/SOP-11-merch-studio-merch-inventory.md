@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.5 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built) |
+| **Version** | 1.6 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built; v1.6 records slice **M-4**, designs saved on the server with Import and the sample gate, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -157,7 +157,7 @@
 | 1 | Pick a premium blank | Designer | Studio → Garments | Printful-backed catalog of garments, colours and placements |
 | 2 | Design on a true-to-inch canvas | Designer | Studio → Design | live print checks (DPI, text size, seams, zippers) |
 | 3 | Export print files and a proof | Studio | Studio → Proof & Export | 300-DPI transparent PNGs, ZIP, proof sheet, Printful mockups |
-| 4 | **Order one sample** | **Owner** | Printful dashboard | **not enforced**: a checklist ticked on this device only (F-11-6) |
+| 4 | **Order one sample** | **Owner** | Printful dashboard, then Studio → Proof & Export | **enforced (D232 M-4)**: owner/admin approves it with every checklist item and a photo; Publish is blocked until then; owner-only override with a typed reason |
 | 5 | Package and publish the listing | Owner | Studio → Publish & Ads | uploads print PNGs, writes the catalog, **live at once** |
 | 6 | Customer pays | Customer | greenwaymerch.com | Stripe Checkout, card **authorized only**, Washington addresses only |
 | 7 | Draft Printful order | Shop (automatic) | Stripe webhook | captures the card for a WA address, creates a Printful **draft** |
@@ -352,19 +352,16 @@ Redeploy.
 
 **Where it is:** **MKTG & ADV → Merch Studio** (`/admin/merch-studio`). The header **?** opens the helper *How the Merch Studio works* (`src/lib/admin/page-helpers-core.ts` L323–341). The gold strip under the header reminds you that the seller is the LLC (`page.tsx` L53–56). There are six tabs, and the address remembers the open one as `?tab=garments|design|proof|check|fulfillment|publish` (`src/lib/merch-studio/studio-tabs-core.ts` L12–18).
 
-> **⚠ Where your work lives today (F-11-2).**
-> - **Drafts** are saved in **this browser's** local storage (`gw-merch-designs-v1`).
-> - **Uploaded art** is saved in **this browser's** IndexedDB (`gw-merch-assets`) (`src/components/admin/merch-studio/merch-assets.ts` L6–9, L15–17).
+> **Where your work is saved (D232 M-4, G-79 built).**
+> - **Designs** are saved **on the server** (table `merch_designs`, migration 0360) a moment after you stop editing. The Design tab shows *"✔ Saved on this device · ✔ Saved on the server"* (`DesignStudio.tsx` L45). Any computer signed in to the back office sees the same designs.
+> - **Uploaded art** is copied to the private `merch-files` bucket (`art/<asset id>`) when the design is saved, and fetched into a new computer's browser when it opens the Studio (`design-sync.ts`, `design-actions.ts` L110, L132).
+> - **This browser** keeps a copy (local storage `gw-merch-designs-v1` and IndexedDB `gw-merch-assets`), so you can keep working if the internet drops; it sends the changes when it can (*"⚠ Not saved on the server … Try again"*).
+> - **Two computers editing one design:** the second save is refused (version number `rev`), and you see *"This design was changed on another computer. Load the newest copy - your version is kept as a copy."* Press **Load the newest copy**; your version stays in Drafts named *"(this computer)"* (`merch-design-sync-core.ts` L161). Nothing is overwritten.
+> - **Delete** in Drafts archives the design on the server (it is not erased) and removes it from every computer.
+> - **Import design (.json/.zip)** on the Drafts sub-tab (`DesignStudio.tsx` L644) reads a `design.json`, or the ZIP from Proof & Export (it takes the `design.json` inside, `merch-design-sync-core.ts` L121). If a different design already has that id it comes in as a copy, *"(imported)"*. `design.json` holds the layout, not the pictures: art that is on neither the server nor this browser must be uploaded again.
+> - Still press **Proof & Export → Download print files (.zip)** after every finished design. It is your off-site backup and it can be imported.
 >
-> Nothing is on the server until you publish. The Drafts panel still promises *"server-side designs arrive with the Greenway Goods website (Slice 5)"* (`DesignStudio.tsx` L563). That promise was never built, and the shop now exists.
->
-> **What this means for you:**
-> - Design and publish on **the same computer and the same browser**.
-> - Never use a private window.
-> - Never "clear site data" for greenwaymarijuana.com.
-> - After every finished design, press **Proof & Export → Download print files (.zip)**. The ZIP holds the PNGs plus `design.json`.
-> - **Today the app has no way to load `design.json` back in.** No file picker in the Studio accepts JSON (the only file inputs take images, `AddPanel.tsx` L65, `ArtCheckPanel.tsx` L69). So the ZIP is a backup of the **print files**, not a restorable design (F-11-2, G-79).
-> - Publishing from another computer fails with *"Some artwork isn't on this device… Open the design on the computer it was made on."* (`PublishPanel.tsx` L270).
+> **Owner step:** apply migration **0360** in Supabase (SQL editor). Until then the Studio works on this browser only and says *"The merch designs table doesn't exist yet - apply migration 0360_merch_designs.sql"*, and Publish is blocked (the sample gate cannot be checked).
 
 **The order of work (the "happy path"):** Garments → Design → Proof & Export (ZIP + mockups) → **order a sample at Printful and approve it** → Publish & Ads → Merch Inventory → wait for orders. The Studio does not guide you through this order or stop you skipping a step today. Appendix B, G-78 adds a step-by-step coach.
 
@@ -416,7 +413,11 @@ Redeploy.
       - check the neck label and the packing slip say Greenway Glass & Goods;
       - wash cold inside-out and re-inspect;
       - feel the print.
-   3. **⚠ The ticks are saved only on this device** (`gw-merch-sample-<id>`, `ProofPanel.tsx` L34, L90). **Publish does not check them** (F-11-6). Interim rule: fill in **form 8.2** and sign it before anyone presses Publish.
+   3. Tick every item (the ticks stay on this computer, `gw-merch-sample-<id>`). Then the **owner or an admin** presses **Approve the sample - add its photo** under the checklist and picks a photo of the real sample (JPEG, PNG or WebP). The approval is saved on the server with who and when, the ticked items and the photo (`design-actions.ts` L180; `SampleGate.tsx`). Staff without `merch.publish` see *"Only the owner or an admin can approve the sample."*
+   4. **Publish is blocked until the sample is approved** (D232 M-4, G-81; `catalog-actions.ts` L89). The approval belongs to **the print as it was approved**: move, resize or change any printed element, or the method, and Publish is blocked again with *"The design changed after its sample was approved."* Renaming the design or changing the garment colour does not need a new sample.
+   5. **Owner override** (owner D232: *"Q2: yes, owner only and reason."*): only the owner sees **Owner: publish without an approved sample** (Proof & Export and Publish). Type the reason (5 characters or more) and press **Override with this reason**. It is saved with the owner's name and time and written to the audit log as `merch.sample_overridden`; the publish audit row carries the reason too (`design-actions.ts` L196–199).
+   6. **Take back this approval** (owner/admin) blocks Publish again (`merch.sample_cleared`).
+   7. Still sign **form 8.2** for the paper trail.
 
 ✅ **Done when** the ZIP is saved, the proof sheet is printed, the mockups look right and form 8.2 is signed.
 
@@ -674,7 +675,7 @@ Stripe disables an endpoint that keeps failing for days, so check that it still 
 Every Printful feature stops at once in **both** sites: mockups, stock, orders, and the webhook's order creation (paid orders alert and Stripe retries for up to 3 days). Make a new token (S-4), paste it in **both** projects, redeploy both, and re-run S-10 (the webhook registration belongs to the store and normally survives, but check it). Record the new expiry on form 8.1.
 
 ### 6.6 I changed computers and my designs are gone
-They are in the old browser (§4.6). Go back to that computer. If it is lost, the print PNGs in the ZIP can be uploaded as **art** in a new design on the same placement. The design cannot be restored from `design.json` today (G-79).
+Since D232 M-4 they are on the server (§4.6). Open the Studio on the new computer and wait a moment: the designs and their art come down by themselves. If a design is still missing (it was made before migration 0360 was applied and never opened since), go to the old computer and open the Studio once so it uploads, or use **Design → Drafts → Import design (.json/.zip)** with the Proof & Export ZIP. Art that was on neither computer must be uploaded again.
 
 ### 6.7 A hidden product came back
 Since D232 M-5 a re-publish keeps Hidden (F-11-7 fixed). If one came back, someone pressed **Show** in Merch Inventory; check the audit log (`merch.product_shown`) and hide it again.
@@ -763,7 +764,7 @@ Paid orders are safe. Stripe keeps retrying the webhook for up to 3 days, and al
 ## 9. Quick reference
 
 ### 9.1 Card: publish a product (designer)
-Garments → Design (0 ⛔) → Proof & Export (ZIP, proof sheet, mockups) → **sample approved (form 8.2)** → Publish & Ads B → title, colours, sizes, **price**, photos → **Publish to greenwaymerch.com** → Merch Inventory → **Copy Printful stock**.
+Garments → Design (0 ⛔) → Proof & Export (ZIP, proof sheet, mockups) → **sample approved in Proof & Export (form 8.2)** → Publish & Ads B → title, colours, sizes, **price**, photos → **Publish to greenwaymerch.com** → Merch Inventory → **Copy Printful stock**.
 
 ### 9.2 Card: an order came in (owner/staff)
 Alert or desk → **Confirm** the draft the same day. To cancel: **Printful cancel + Stripe refund, both** (form 8.4). If an alert says *"needs you"*, deal with the held card within 7 days (§4.20).
@@ -884,11 +885,11 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | ID | Type · Sev | Finding | Pin | Gap |
 |---|---|---|---|---|
 | **F-11-1** | BUG · **S1** | The shop's catalog address redirects to www, the token is dropped, and **no Studio product can appear** | `merch-site/lib/site.ts` L30; `catalog.ts` L23, L34–44; `api/merch-catalog/route.ts` L20–27; live probe 308 | **G-76** |
-| **F-11-2** | GAP · S2 | Designs and art live in one browser only; no restore from `design.json`; the stale *"Slice 5"* promise | `merch-assets.ts` L6–9; `DesignStudio.tsx` L563; `PublishPanel.tsx` L235, L270; no JSON input | **G-79** |
+| **F-11-2** | GAP · S2 | Designs and art live in one browser only; no restore from `design.json`; the stale *"Slice 5"* promise | `merch-assets.ts` L6–9; `DesignStudio.tsx` L563; `PublishPanel.tsx` L235, L270; no JSON input | **G-79** **Resolved (D232 M-4):** designs and art on the server; Import design (.json/.zip). |
 | **F-11-3** | GAP · S2 | No in-app setup guide or step coach; setup lives in a 384-line Markdown file | `docs/MERCH-SITE-FINISHING-GUIDE.md`; helper L323–341 has no setup steps | **G-78** |
 | **F-11-4** | GAP · S2 | No health monitoring for Printful (token, scopes, expiry, webhook, status), Stripe (key, endpoint), Resend, the catalog round-trip or checkout open | no check in `/admin/compliance/health` or platform-health; `merch-site/vercel.json` no crons; `printfulConfigured()` only tests presence (`printful-client.ts` L24–25) | **G-77** **Resolved (D232 M-2):** Merch Health H-1 … H-19, daily. |
 | **F-11-5** | GAP · S2 | The back office cannot see Stripe at all; its key lives only in the shop project | `STRIPE_*` read only in `merch-site/` | **G-80** **Resolved (D232 M-2):** the shop reports Stripe to the back office through `/api/health`. |
-| **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** |
+| **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** **Resolved (D232 M-4):** server-saved approval with a photo; Publish blocked; owner-only override with a reason. |
 | **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** **Resolved (D232 M-5).** |
 | **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** |
 | **F-11-9** | WEAKNESS · S2 | Owner alerts go only to the logs if Resend is not set up, and there is no place in the app to see them | `merch-site/lib/fulfillment.ts` L41–43, L55–58 | **G-85** (+ G-77 check) |
@@ -910,9 +911,9 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **G-76** | **Catalog feed reaches the back office again.** **Owner, now:** set `MERCH_CATALOG_URL` (and `MERCH_CONTENT_URL`) to www in the merch project. **Code:** change `MAIN_SITE_URL` to `https://www.greenwaymarijuana.com`, **and** have the shop fetch with `redirect: "manual"` so a redirect is reported (*"the feed moved to …"*) and never followed without the token. Add a self-test, and a Merch Health check (G-77) that detects a redirect | S1 |
 | **G-77** | **Merch Health panel and daily check** (the owner's *"printful store and stripe health"*). A new card set on `/admin/merch-studio/health` (and a line on platform-health), with a **Run check now** button, a daily cron and an email when anything turns red. The checks are in B.4  **DONE (D232 M-2)** | S2 |
 | **G-78** | **Setup & Launch coach** (the owner's *"first step, do this, done great, step two…"*). A guided wizard for §4.2, plus a per-product **Product journey** stepper and **Next step** banners on every tab (B.5) | S2 |
-| **G-79** | **Designs saved on the server.** Drafts in a table and art in the private `merch-files` bucket, so any computer works, with **Import design (.json/.zip)**. The browser copy becomes an offline cache | S2 |
+| **G-79** | **Designs saved on the server.** Drafts in a table and art in the private `merch-files` bucket, so any computer works, with **Import design (.json/.zip)**. The browser copy becomes an offline cache | S2 **DONE (D232 M-4)** |
 | **G-80** | **Shop health endpoint** `greenwaymerch.com/api/health`, Bearer token, read-only. It reports the Stripe key mode, the webhook endpoint (url, status, events), checkout open/closed with the reason, Resend configured, the catalog fetch result (status, product count, last good age, redirect seen) and the Printful token present. The back office reads it for G-77. Stripe secrets never leave the shop project  **DONE (D232 M-2)** | S2 |
-| **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 |
+| **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 **DONE (D232 M-4)** |
 | **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 **DONE (D232 M-5)** |
 | **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 |
 | **G-84** | **Held-card monitor.** The daily check lists uncaptured authorizations older than 3 days through the G-80 endpoint. It emails at day 3 and day 5, and the order page gets *"Capture / Cancel in Stripe"* coaching | S2 |
@@ -998,7 +999,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 **As built (D232 M-3b), items 2 and 3.**
 - **Product journey** (`src/components/admin/merch-studio/JourneyBar.tsx`) sits above the tabs for everyone who can open the Studio. It shows the nine pills for the open design (the one last opened on Design, in this browser): Garment → Design (n ⛔) → Print files → Mockups (optional) → Sample approved → Price → Publish → On the shop → Stock synced, each ✓ done, ⬜ to do, ⛔ blocked or ○ optional. A tab pill opens its tab; On the shop opens Merch Health and Stock synced opens Merch Inventory. The **Next step** line names the first blocked or unfinished pill, e.g. *"Next step: Order a sample at Printful; when it arrives, tick the checklist on Proof & Export (2 of 6)."* After Publish it reads *"Live on greenwaymerch.com. Next: Copy Printful stock in Inventory → Merch Inventory."*
-- **Where the facts come from:** the design, blockers, print files and sample ticks from this browser (until M-4 saves them on the server); Publish, Hidden, photos, price and stock date from the merch catalog; On the shop from the **last saved** Merch Health run's H-7 (no live calls). Rules: `src/lib/merch-studio/merch-journey-core.ts` (pure, 14 self-tests).
+- **Where the facts come from:** the design, blockers, print files and sample ticks from this browser (the design is also on the server since M-4), and the **sample approval from the server** (`merch_designs`, it wins over the ticks); Publish, Hidden, photos, price and stock date from the merch catalog; On the shop from the **last saved** Merch Health run's H-7 (no live calls). Rules: `src/lib/merch-studio/merch-journey-core.ts` (pure, 14 self-tests).
 - **Tab strips:** under the stepper, one line per tab: *"You are here: … Do this: … Then: … →"*, with the Then link opening the next tab. The first-visit "Show me around" tour is not built yet (it stays in G-78).
 
 ### B.6 Proposed build order (also in `06-FIX-PHASE-PLAN.md`, all PROPOSED)
@@ -1008,7 +1009,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 | **M-1** | Feed address fix in code + redirect self-test; stale copy; README and guide corrections | G-76, G-91 | — (owner sets `MERCH_CATALOG_URL` today) |
 | **M-2** | Shop `/api/health` + Merch Health panel + daily cron + change emails | G-80, G-77 | M-1 **BUILT (D232)** |
 | **M-3** | Setup & Launch coach, Product journey stepper, tab strips, Print form 8.1 | G-78 | M-2 |
-| **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration (designs table) |
+| **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration 0360 **BUILT (D232)** |
 | **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — **BUILT (D232)** |
 | **M-6** | Webhook button; automatic stock (cron, then `stock_updated`) | G-89, G-83 | M-2 |
 | **M-7** | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | G-84, G-85, G-86 | M-2 (+ owner answer Q-11-4) |
@@ -1036,6 +1037,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.6 | 2026-11-11 | **M-4 built:** designs and their art are saved on the server (`merch_designs`, migration 0360; art in `merch-files`), any computer sees them, two computers can't overwrite each other (the loser keeps a copy), **Import design (.json/.zip)** (G-79); the sample approval is saved on the server with who, when, the checklist and a photo, **Publish is blocked** until the sample is approved for that exact print, and the owner-only override needs a typed reason and is audited (G-81, owner *"Q2: yes, owner only and reason."*). §3 step 4, §4.6, §4.9 item 5, §6.6 updated; F-11-2, F-11-6 resolved | Greenway Dev |
 | 1.5 | 2026-11-11 | **M-5 built:** re-publish keeps Hidden and the stock copy, and says so (G-82); catalog writes are compare-and-set on `updated_at`, the loser is told *"Someone else changed the catalog - reload and try again."* (G-88); the previous print PNGs are deleted after a re-publish is saved (G-93). §4.12, §4.14, §6.7 updated; F-11-7, F-11-15, F-11-16 resolved | Greenway Dev |
 | 1.4 | 2026-11-11 | **M-3b built:** Product journey stepper (nine pills, Next step line, links to tabs, Merch Health and Merch Inventory) and the per-tab "You are here / Do this / Then" strips (G-78 items 2 and 3; the "Show me around" tour remains) | Greenway Dev |
 | 1.3 | 2026-11-11 | **M-3a built:** Setup & Launch coach `/admin/merch-studio/launch` (13 cards S-1 … S-12 + T, proven by Merch Health where it can, owner ticks for the rest, notes, progress, Next line), "Setup needs you" in the Studio header, printable form 8.1 at `/launch/record` (G-78 part; §4.2 points to it) | Greenway Dev |

@@ -26,6 +26,9 @@ import { readObjectHead } from "@/lib/media/read-object-head";
 import { HANDLE_RE, PRINT_KEY_RE, isListingPackage, printKey, stalePrintKeys, upsertItem, type MerchCatalogItem, type MerchItemStatus } from "@/lib/merch/merch-inventory-core";
 import { updateMerchCatalog } from "@/lib/merch/merch-inventory-store";
 import { PRINTFUL_MAX_SYNC_VARIANTS, type ListingPackage } from "@/lib/merch-studio/listing-package-core";
+import { planPrintFiles } from "@/lib/merch-studio/print-export-core";
+import { printHash, sampleGate, stableJson } from "@/lib/merch-studio/merch-design-sync-core";
+import { readDesignRow } from "@/lib/merch-studio/merch-design-store";
 
 const BUCKET = "media";
 const MAX_FILES = 12;
@@ -56,15 +59,35 @@ export async function startMerchPublishAction(input: { handle: string; fileKeys:
 }
 
 /** D232 M-5: status = what the product is NOW (a Hidden product stays Hidden on re-publish, G-82); cleaned = old print PNGs deleted (G-93). */
-export type PublishMerchResult = { ok: true; handle: string; created: boolean; status: MerchItemStatus; stockKept: boolean; cleaned: number } | { ok: false; error: string };
+export type PublishMerchResult = { ok: true; handle: string; created: boolean; status: MerchItemStatus; stockKept: boolean; cleaned: number } | { ok: false; error: string; sampleGate?: boolean };
 
-export async function publishMerchListingAction(input: { pkg: unknown; files: { fileKey: string; key: string }[]; images: string[] }): Promise<PublishMerchResult> {
+/** Same print as the saved design? Compares what each print file IS (not its URL). */
+const filesShape = (files: readonly { key: string; method: string; pxW: number; pxH: number; position: unknown }[]) =>
+  stableJson([...files].map((f) => ({ key: f.key, method: f.method, pxW: f.pxW, pxH: f.pxH, position: f.position })).sort((a, b) => (a.key < b.key ? -1 : 1)));
+
+async function sampleGateFor(pkg: ListingPackage, screenHash: string): Promise<{ ok: true; how: string; by: string | null; reason: string | null } | { ok: false; reason: string }> {
+  const r = await readDesignRow(String(pkg.designId ?? ""));
+  if (r.error) return { ok: false, reason: `Couldn't check the sample approval, so nothing was published: ${r.error}` };
+  if (!r.row) return sampleGate(null, "");
+  if (screenHash !== r.row.designHash || filesShape(planPrintFiles(r.row.design).plans) !== filesShape(pkg.printFiles)) {
+    return { ok: false, reason: "The design on this screen is different from the saved one. Wait for \"Saved on the server\" in Design, then reload Publish." };
+  }
+  const g = sampleGate(r.row, printHash(r.row.design));
+  return g.ok ? { ok: true, how: g.how, by: g.by, reason: g.reason } : g;
+}
+
+export async function publishMerchListingAction(input: { pkg: unknown; files: { fileKey: string; key: string }[]; images: string[]; designHash?: string }): Promise<PublishMerchResult> {
   const session = await requirePermission("merch.publish");
   if (!isSupabaseServiceConfigured || !supabaseUrl) return { ok: false, error: "Storage isn't configured on this deployment." };
   if (!isListingPackage(input?.pkg)) return { ok: false, error: "That listing isn't complete. Fix the blockers and try again." };
   const src = input.pkg as ListingPackage;
   if (src.variants.length > PRINTFUL_MAX_SYNC_VARIANTS) return { ok: false, error: `Too many colour/size combinations (max ${PRINTFUL_MAX_SYNC_VARIANTS}).` };
   const handle = src.product.handle;
+  // D232 M-4 (G-81): the sample gate. The design must be saved on the server,
+  // the print files must be the ones THAT saved design makes, and its sample
+  // must be approved (or owner-overridden with a reason) for that exact print.
+  const gate = await sampleGateFor(src, String(input?.designHash ?? ""));
+  if (!gate.ok) return { ok: false, error: gate.reason, sampleGate: true };
   const publicBase = `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${BUCKET}`;
 
   // Every print file must be one of OUR uploads for THIS product, and really a PNG.
@@ -111,6 +134,6 @@ export async function publishMerchListingAction(input: { pkg: unknown; files: { 
   }
   const status: MerchItemStatus = saved?.status ?? "live";
   const stockKept = !!saved?.stockSyncedAt;
-  await recordAudit({ actorId: session.userId, actorEmail: session.email, action: created ? "merch.product_published" : "merch.product_republished", entityType: "merch_product", entityId: handle, after: { title: pkg.product.title, variants: pkg.variants.length, designId: pkg.designId, status, stockKept, oldPrintFilesDeleted: cleaned } });
+  await recordAudit({ actorId: session.userId, actorEmail: session.email, action: created ? "merch.product_published" : "merch.product_republished", entityType: "merch_product", entityId: handle, after: { title: pkg.product.title, variants: pkg.variants.length, designId: pkg.designId, status, stockKept, oldPrintFilesDeleted: cleaned, sample: gate.how, sampleBy: gate.by, sampleOverrideReason: gate.reason } });
   return { ok: true, handle, created, status, stockKept, cleaned };
 }

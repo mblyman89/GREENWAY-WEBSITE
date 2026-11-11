@@ -26,7 +26,7 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
   /** From ?tab= (server-validated). Wins over the tab remembered on this device. */
   initialTab?: StudioTab;
   /** R71 S4: the merch.ad block + media picker choices for Publish & Ads. */
-  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean };
+  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean; isOwner?: boolean };
   /** D232 M-3b: catalog + last Merch Health facts for the Product journey stepper. */
   journey?: JourneyServer;
 }) {
@@ -90,12 +90,12 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
         {/* Design only mounts client-side after the selection restore (tab starts on Garments for SSR), so its localStorage boot is hydration-safe. */}
         {tab === "design" && restored ? <DesignStudio blankId={blankId} colorHex={colorHex} setBlank={setBlank} setColor={setColorHex} /> : null}
         {/* Proof reads the saved drafts from this browser, so it also mounts only after the restore. It remounts on every visit, so it always reads the latest autosaved drafts. */}
-        {tab === "proof" && restored ? <ProofPanel /> : null}
+        {tab === "proof" && restored ? <ProofPanel rights={{ canApprove: publish?.canPublish ?? false, isOwner: publish?.isOwner ?? false }} /> : null}
         {tab === "check" ? <ArtCheckPanel key={blankId} blankId={blankId} colorHex={colorHex} /> : null}
         {tab === "fulfillment" ? <FulfillmentPanel key={blankId} blankId={blankId} /> : null}
         {/* Publish reads saved drafts from this browser (listing package), so it mounts only after the restore. */}
         {tab === "publish" && restored ? (
-          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} canPublish={publish.canPublish ?? false} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
+          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} canPublish={publish.canPublish ?? false} isOwner={publish.isOwner ?? false} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
         ) : null}
         {extraTabs.map((t) => (tab === t.id ? <div key={t.id}>{t.render({ blankId, colorHex, setBlank, setColor: setColorHex })}</div> : null))}
       </div>

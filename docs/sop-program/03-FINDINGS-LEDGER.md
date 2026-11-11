@@ -1070,6 +1070,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `src/components/admin/merch-studio/merch-assets.ts` L6–9, L15–17 (IndexedDB `gw-merch-assets`, localStorage `gw-merch-designs-v1`); `DesignStudio.tsx` L563 (stale *"server-side designs arrive with the Greenway Goods website (Slice 5)"*); `PublishPanel.tsx` L235 (`loadDesigns()`), L270 (*"Some artwork isn't on this device"*). No JSON file input exists (`AddPanel.tsx` L65 and `ArtCheckPanel.tsx` L69 accept images only).
 - **Effect:** clearing the browser or changing computers loses every unpublished design. Publishing works only on the original computer.
 - **SOP impact:** SOP-11 §3, §4.6, §6.6. **G-79**.
+- **Resolved (D232, M-4):** designs in `merch_designs` (0360), art in `merch-files` `art/`, browser copy is the cache, `rev` compare-and-set, Import design (.json/.zip).
 
 ### F-11-3 · CONFIRMED · GAP · S2 — There is no in-app setup guide or step coach
 - **Pin:** the setup lives only in `docs/MERCH-SITE-FINISHING-GUIDE.md` (384 lines) and `merch-site/README.md`. The Studio helper (`page-helpers-core.ts` L323–341) describes the tabs and not the setup.
@@ -1094,6 +1095,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `fulfillment-core.ts` L83 (sample, who: Owner); `ProofPanel.tsx` L34, L90 (ticks in localStorage `gw-merch-sample-<id>`); `publishMerchListingAction` (`catalog-actions.ts` L59–97) has no sample check.
 - **Effect:** a design can go on sale before anyone has seen a printed garment.
 - **SOP impact:** SOP-11 §4.9 step 5, form 8.2. **G-81**.
+- **Resolved (D232, M-4):** approval on the server (who, when, checklist, photo) for one print hash; `publishMerchListingAction` refuses without it; owner-only override with a reason, audited.
 
 ### F-11-7 · CONFIRMED · BUG · S2 — Re-publishing a hidden product makes it Live again
 - **Pin:** `src/lib/merch/merch-inventory-core.ts` L90–110: `upsertItem` sets `status: "live"` (L102) and `stockSyncedAt: ""` (L107) even when the previous item was hidden. The comment at L90 says so (*"puts it live again"*).
