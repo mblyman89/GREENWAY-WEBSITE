@@ -414,7 +414,7 @@ describe("R74 S13 wiring", () => {
     expect(s).toContain("if (result.ok && result.skipped) {");
     expect(s).toContain('runCultiveraAutoStart({ budgetMs: AUTO_START_CRON_BUDGET_MS, trigger: "worker" })');
     const v = JSON.parse(read("vercel.json")) as { crons: unknown[] };
-    expect(v.crons).toHaveLength(22); // 22 since D221 M4 added /api/cron/media-describe; 21 since D206 added /api/cron/coa-trust-all; 20 since D193 added /api/cron/db-vitals; 19 since D178 S1 added /api/cron/exception-retry (18 since G-71a added /api/cron/platform-health ; 17 since Fix Phase 3.2a added /api/cron/inbound-reconcile); this worker still added none
+    expect(v.crons).toHaveLength(23); // 23 since D232 M-6 added /api/cron/merch-stock; 22 since D221 M4 added /api/cron/media-describe; 21 since D206 added /api/cron/coa-trust-all; 20 since D193 added /api/cron/db-vitals; 19 since D178 S1 added /api/cron/exception-retry (18 since G-71a added /api/cron/platform-health ; 17 since Fix Phase 3.2a added /api/cron/inbound-reconcile); this worker still added none
   });
   it("the rebuild and coverage pages show the panel once each; the store is server-only and never touches stock", () => {
     expect(read("src/app/admin/menu-imports/[id]/manifests/page.tsx").match(/<CultiveraAutoStartPanel /g)).toHaveLength(1);

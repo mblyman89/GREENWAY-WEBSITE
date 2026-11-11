@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { Badge, Card } from "@/components/admin/ui";
-import { RunMerchHealthButton, TokenExpiryForm } from "@/components/admin/merch-studio/MerchHealthControls";
+import { RunMerchHealthButton, TokenExpiryForm, WebhookPanel } from "@/components/admin/merch-studio/MerchHealthControls";
 import { gatherMerchHealth, listMerchHealthRuns, merchShopOrigin, readHealthSettings } from "@/lib/merch/merch-health-server";
 import type { MerchCheck, MerchCheckLevel } from "@/lib/merch/merch-health-core";
 
@@ -96,6 +96,7 @@ export default async function MerchHealthPage() {
                         <strong>Fix:</strong> {c.fix} <span className="text-[var(--admin-text-muted)]">(SOP-11 {c.sop})</span>
                       </p>
                     ) : null}
+                    {c.id === "H-5" ? <WebhookPanel /> : null}
                     {c.id === "H-3" ? (
                       <div className="mt-2">
                         <TokenExpiryForm current={settings.printfulTokenExpires} />

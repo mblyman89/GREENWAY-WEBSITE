@@ -1107,6 +1107,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `src/app/admin/inventory/merch/actions.ts` L51–63 (button only); no cron; the Printful webhook types are the 4 order types only (`merch-site/app/api/printful/webhook/[token]/route.ts` L7–8).
 - **Effect:** the shop keeps selling a colour Printful has run out of until someone presses the button.
 - **SOP impact:** SOP-11 §4.15, form 8.3. **G-83**.
+- **Resolved (D232, M-6):** `/api/cron/merch-stock` every 6 hours plus the `stock_updated` relay (`/api/merch-stock`); same compare-and-set copy, audited as a system actor.
 
 ### F-11-9 · CONFIRMED · WEAKNESS · S2 — Without Resend, owner alerts go only to the logs
 - **Pin:** `merch-site/lib/fulfillment.ts` L41–43 (no key or from → no email), L55–58 (`[merch-alert]` log, then email if configured).
@@ -1154,6 +1155,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-18 · CONFIRMED · WEAKNESS · S3 — The Printful webhook is registered by hand and nothing checks it
 - **Pin:** `docs/MERCH-SITE-FINISHING-GUIDE.md` §6.3 (curl). Printful docs: registering *"disables all existing webhook configuration."* The route lists the types at L7–8.
 - **SOP impact:** SOP-11 S-10. **G-89**.
+- **Resolved (D232, M-6):** Merch Health H-5 Check / Register button: reads `GET /webhooks` first, probes the shop with Token C before writing, all 5 events, keeps other types, audited; H-5 checked daily.
 
 ### F-11-C · CONFIRMED · STRENGTH — What already works well
 - **Pin:**

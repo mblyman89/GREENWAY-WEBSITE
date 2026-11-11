@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.6 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built; v1.6 records slice **M-4**, designs saved on the server with Import and the sample gate, as built) |
+| **Version** | 1.7 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built; v1.6 records slice **M-4**, designs saved on the server with Import and the sample gate, as built; v1.7 records slice **M-6**, the Printful webhook button and automatic stock, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -237,22 +237,26 @@ Merch project → **Settings → Environment Variables** → add every **require
 - `https://greenwaymerch.com/api/checkout` no longer answers *"Checkout isn't open yet"* when you try to buy in test mode (§4.5);
 - a **POST** to `/api/stripe/webhook` without a signature answers **400**, not **503** (503 means `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` is missing, `route.ts` L41).
 
-**Step S-10. Printful: register the "shipped" webhook.** (5 minutes, after S-9 is deployed)
-Printful has no button for this. It is one command, run once from Terminal. Replace the two placeholders:
+**Step S-10. Printful: register the webhook (shipped emails, problems, stock).** (5 minutes, after S-9 is deployed)
+Since D232 M-6 (G-89) this is a button; no Terminal needed.
+
+1. **Token C in both projects.** In Vercel, the merch project already has `PRINTFUL_WEBHOOK_TOKEN` (Token C). Add `PRINTFUL_WEBHOOK_TOKEN` to the **main Greenway project** too, with the **same value**, and redeploy it. (If a correct shop webhook is already registered, the button can reuse it without this, but set it anyway so a repair always works.)
+2. Open **Merch Studio → Merch Health** (owner/admin). Under **H-5 Printful webhook**, press **Check what is registered**. It reads Printful's `GET /webhooks` and shows the address (Token C hidden as `…`), the events and the garments the stock watch covers, then what pressing Register would change. Nothing is changed yet.
+3. Press **Register / repair the Printful webhook** and confirm. The server first sends the shop a harmless test notice on that address; the shop answers **200 only if Token C matches**. If it does not, **nothing is changed at Printful** and the message says why. Then it registers **all 5 events**: `package_shipped`, `order_failed`, `order_canceled`, `order_put_hold`, `stock_updated`, with every garment in the catalog under the stock watch, and keeps any other event type that was already there. Audited as `merch.webhook_registered` (or `merch.webhook_register_failed`).
+- **Warning from Printful's documents:** *"only one webhook URL can be active for a store, so calling this method disables all existing webhook configuration."* That is why the button reads first, keeps extra types and probes before it writes.
+- **Press it again** after Token C changes, and after you publish a **new garment** (H-5 turns amber and names the garment the stock watch does not cover yet).
+- The daily Merch Health run (G-77) re-checks H-5 every morning.
+
+The old way still works if you ever need it (Terminal; add `-H "X-PF-Store-Id: YOUR_STORE_ID"` for an Account token):
 
 ```bash
 curl -X POST https://api.printful.com/webhooks \
   -H "Authorization: Bearer PASTE_PRINTFUL_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://greenwaymerch.com/api/printful/webhook/PASTE_TOKEN_C","types":["package_shipped","order_failed","order_canceled","order_put_hold"]}'
+  -d '{"url":"https://greenwaymerch.com/api/printful/webhook/PASTE_TOKEN_C","types":["package_shipped","order_failed","order_canceled","order_put_hold","stock_updated"],"params":{"stock_updated":{"product_ids":[PASTE_GARMENT_IDS]}}}'
 ```
 
-- For an **Account** token, add `-H "X-PF-Store-Id: YOUR_STORE_ID" \` before `-d`.
-- A good answer starts with `{"code":200`; `401` means the token is wrong.
-- **Warning from Printful's documents:** *"only one webhook URL can be active for a store, so calling this method disables all existing webhook configuration."* Run it **only for this store**, and run it again if anyone ever changes Token C.
-- To check it later: `curl https://api.printful.com/webhooks -H "Authorization: Bearer PASTE_PRINTFUL_TOKEN"` shows the current URL and types.
-
-✅ **You know it worked when** the check command shows the greenwaymerch.com URL and the 4 types.
+✅ **You know it worked when** Merch Health shows **H-5 green**: *"Registered to the shop with all 5 events (4 order events + stock_updated)."*
 
 **Step S-11. Resend (emails).** (15 minutes)
 1. **resend.com → Domains**: `greenwaymerch.com` must say **Verified**. If it does not, add the DNS records it lists and **do not** delete the Google Workspace MX records.
@@ -277,9 +281,9 @@ Redeploy.
 |---|---|---|---|---|
 | **A** | `MERCH_CATALOG_TOKEN` | **both** projects, the same value | the private product feed `GET /api/merch-catalog` | the back office answers 404 to anything other than the exact token; a token shorter than 32 characters is treated as **off** (`src/app/api/merch-catalog/route.ts` L23–27). The shop also ignores a token shorter than 32 characters (`merch-site/lib/catalog.ts` L32) and shows only its built-in list |
 | **B** | `MERCH_ADMIN_KEY` | merch project | the shop's order desk `greenwaymerch.com/admin/orders` | the desk keeps asking for the key |
-| **C** | `PRINTFUL_WEBHOOK_TOKEN` | merch project **and** in the S-10 URL | Printful's shipped and problem notices (Printful does not sign them) | Printful's notices get 404; no shipped emails and no problem alerts |
+| **C** | `PRINTFUL_WEBHOOK_TOKEN` | merch project **and** main project (same value, M-6) **and** in the S-10 URL | Printful's shipped and problem notices (Printful does not sign them) | Printful's notices get 404; no shipped emails and no problem alerts |
 
-**How to make one** (Mac Terminal): `openssl rand -hex 32` prints 64 random characters. Run it three times. Never reuse the same value for two tokens. If one leaks, make a new one, update Vercel, redeploy, and for Token C run S-10 again.
+**How to make one** (Mac Terminal): `openssl rand -hex 32` prints 64 random characters. Run it three times. Never reuse the same value for two tokens. If one leaks, make a new one, update Vercel, redeploy, and for Token C update it in **both** projects and press Register on Merch Health H-5 (S-10).
 
 **Token D, `MERCH_HEALTH_TOKEN` (D232 M-2; owner decision *"Q3: yes."*, its own token).** Put it in **both** projects with the same value (32+ characters, `openssl rand -hex 32`), then redeploy both. It lets the back office's Merch Health page ask `greenwaymerch.com/api/health` how the shop is doing (`merch-site/app/api/health/route.ts`). With no token, a short one, or a wrong one, the shop answers **404**, and Merch Health shows the shop checks (H-7 … H-15, H-19) as **Unknown** with this fix. The shop reports only whether each setting is **present** and what the shipping amounts parse to. It never returns a key.
 
@@ -522,7 +526,11 @@ A **website mismatch** means Printful's answer and what the website shows differ
 2. The server asks Printful once per **garment** (at most 40 garments, `merch-inventory-server.ts` L15–16). It sets every variant to sellable or not, saves, and audits `merch.stock_synced` (`actions.ts` L51–63).
 3. The message reads *"Checked n variants at Printful; m changed on greenwaymerch.com."* plus a note if Printful did not answer for some garments.
 
-**How often:** **daily**, and right after any re-publish (form 8.3). **Nothing does this automatically today.** There is no cron and no Printful `stock_updated` webhook (F-11-8, G-83). If Printful runs out of a colour, the shop keeps selling it until someone presses this button. The webhook then alerts you when Printful puts the order on hold.
+**How often:** **automatic since D232 M-6 (G-83).** Two things now do it without anyone pressing the button:
+- **Every 6 hours** (00:40, 06:40, 12:40, 18:40 UTC) the main project's cron `/api/cron/merch-stock` (`vercel.json`) runs the same copy (`src/lib/merch/merch-stock-server.ts`), audited as `merch.stock_synced` by `cron:merch-stock`.
+- **Within about a minute of Printful's notice:** once the webhook is registered with `stock_updated` (S-10), Printful tells the shop when a watched garment's stock changes; the shop passes the garment number to the back office (`/api/merch-stock`, the catalog token), which re-reads that garment from Printful and saves it, audited by `printful:stock_updated`.
+
+Press the button by hand only right after a re-publish, or if Merch Health **H-17** says the copy is over a day old (then check Vercel → main project → Cron Jobs). If Printful runs out between copies, the webhook still alerts you when Printful puts an order on hold.
 
 > **A safety net.** At checkout and in the webhook the shop re-reads the catalog fresh and drops variants marked out of stock (`merch-site/lib/catalog-core.ts` L267). So a sync stops further sales at once.
 
@@ -667,12 +675,12 @@ Stripe → Webhooks → endpoint → **Event deliveries**:
 Stripe disables an endpoint that keeps failing for days, so check that it still says **Enabled**.
 
 ### 6.4 No "shipped" emails
-1. Run the S-10 check command; the URL and Token C must match.
+1. Merch Health → H-5 → **Check what is registered**; it must be the shop address with all 5 events. If not, press **Register / repair** (S-10).
 2. Check the Resend domain is Verified and `MERCH_EMAIL_FROM` is set.
 3. Search Vercel logs for `[merch-alert] Shipped email NOT sent`.
 
 ### 6.5 Printful token expired
-Every Printful feature stops at once in **both** sites: mockups, stock, orders, and the webhook's order creation (paid orders alert and Stripe retries for up to 3 days). Make a new token (S-4), paste it in **both** projects, redeploy both, and re-run S-10 (the webhook registration belongs to the store and normally survives, but check it). Record the new expiry on form 8.1.
+Every Printful feature stops at once in **both** sites: mockups, stock, orders, and the webhook's order creation (paid orders alert and Stripe retries for up to 3 days). Make a new token (S-4), paste it in **both** projects, redeploy both, and press **Check what is registered** on Merch Health H-5 (S-10; the webhook registration belongs to the store and normally survives, but check it). Record the new expiry on form 8.1.
 
 ### 6.6 I changed computers and my designs are gone
 Since D232 M-4 they are on the server (§4.6). Open the Studio on the new computer and wait a moment: the designs and their art come down by themselves. If a design is still missing (it was made before migration 0360 was applied and never opened since), go to the old computer and open the Studio once so it uploads, or use **Design → Drafts → Import design (.json/.zip)** with the Proof & Export ZIP. Art that was on neither computer must be uploaded again.
@@ -719,7 +727,7 @@ Paid orders are safe. Stripe keeps retrying the webhook for up to 3 days, and al
 | S-7 | Stripe webhook (2 events, apex URL), test **and** live | ☐ | | |
 | S-8 | Stripe Tax Washington registration; `MERCH_STRIPE_AUTOMATIC_TAX=true` | ☐ | | |
 | S-9 | Merch project variables **incl. `MERCH_CATALOG_URL` (www)**; redeployed | ☐ | | |
-| S-10 | Printful webhook registered (4 types); check command OK | ☐ | | |
+| S-10 | Printful webhook registered (5 events, M-6 button); Merch Health H-5 green | ☐ | | |
 | S-11 | Resend domain Verified; `RESEND_API_KEY`, `MERCH_EMAIL_FROM`, alert email | ☐ | | |
 | S-12 | Main project variables; redeployed | ☐ | | |
 | 4.5 | Test order passed (all 9 steps); live order passed | ☐ | | |
@@ -751,7 +759,7 @@ Paid orders are safe. Stripe keeps retrying the webhook for up to 3 days, and al
 | When | Task |
 |---|---|
 | **Every business day** | Shop desk or Orders: **Confirm** every Draft ☐ · handle every alert email ☐ · Stripe → Payments → **Uncaptured** = 0 ☐ |
-| **Daily** (until G-83) | Merch Inventory → **Copy Printful stock to the website** ☐ · Needs attention = 0 ☐ |
+| **Daily** | Merch Health H-17 green (stock copied in the last day; automatic since M-6) ☐ · Merch Inventory Needs attention = 0 ☐ |
 | **Weekly** | Vercel merch logs → search `[merch-alert]` ☐ · Stripe → Webhooks endpoint **Enabled**, no failed deliveries ☐ · Resend → Emails delivered ☐ |
 | **Monthly** | CSV export to the books ☐ · Reports → Merch WA sales tax to the accountant ☐ · Printful token expiry > 30 days away ☐ · Printful status, Stripe status ☐ |
 | **Each token change** | update both projects, redeploy both, re-run S-10 if Token C or Printful token changed, update form 8.1 ☐ |
@@ -891,7 +899,7 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **F-11-5** | GAP · S2 | The back office cannot see Stripe at all; its key lives only in the shop project | `STRIPE_*` read only in `merch-site/` | **G-80** **Resolved (D232 M-2):** the shop reports Stripe to the back office through `/api/health`. |
 | **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** **Resolved (D232 M-4):** server-saved approval with a photo; Publish blocked; owner-only override with a reason. |
 | **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** **Resolved (D232 M-5).** |
-| **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** |
+| **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** **Resolved (D232 M-6).** |
 | **F-11-9** | WEAKNESS · S2 | Owner alerts go only to the logs if Resend is not set up, and there is no place in the app to see them | `merch-site/lib/fulfillment.ts` L41–43, L55–58 | **G-85** (+ G-77 check) |
 | **F-11-10** | GAP · S3 | Cancel at Printful does not refund in Stripe; it is a manual two-system step | `orders/merch/[ref]/page.tsx` L176–186; `merch-actions.ts` L47 | **G-86** |
 | **F-11-11** | GAP · S2 | Held cards (*"needs you"*) expire in about 7 days with no reminder | webhook `route.ts` L19–20, L90–95 | **G-84** |
@@ -901,7 +909,7 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **F-11-15** | WEAKNESS · S4 | Every re-publish leaves the previous print PNGs in the public bucket | `catalog-actions.ts` L6–7, L50; Remove cleans only the current set (`actions.ts` L42–45) | **G-93** **Resolved (D232 M-5).** |
 | **F-11-16** | WEAKNESS · S3 | Catalog writes have no version check; two quick edits can lose one | `merch-inventory-store.ts` (read → modify → write) | **G-88** **Resolved (D232 M-5).** |
 | **F-11-17** | GAP · S3 | Merch Inventory and Reports → Merch have no helper; the concierge has 2 merch facts; there are no Printful or Stripe integration guides | `inventory/merch/page.tsx` L56; `concierge-kb.ts` L194, L200; `integration-guides.ts` L30–97 | **G-90** |
-| **F-11-18** | WEAKNESS · S3 | The Printful webhook is registered by hand with `curl`; a later registration silently replaces it; nothing checks it is still right | guide §6.3; Printful docs (A.3); webhook route L7–8 | **G-89** |
+| **F-11-18** | WEAKNESS · S3 | The Printful webhook is registered by hand with `curl`; a later registration silently replaces it; nothing checks it is still right | guide §6.3; Printful docs (A.3); webhook route L7–8 | **G-89** **Resolved (D232 M-6).** |
 | **F-11-C** | STRENGTH | Fail-closed, WA-only free cancel, fresh re-pricing, idempotent, hidden constant-time feed, last-good fallback, human Confirm, audits, owner/admin Remove, verified PNGs, ad price guard | §7 | — |
 
 ### B.2 Gaps (also in `05-GAP-REGISTER.md`)
@@ -915,13 +923,13 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **G-80** | **Shop health endpoint** `greenwaymerch.com/api/health`, Bearer token, read-only. It reports the Stripe key mode, the webhook endpoint (url, status, events), checkout open/closed with the reason, Resend configured, the catalog fetch result (status, product count, last good age, redirect seen) and the Printful token present. The back office reads it for G-77. Stripe secrets never leave the shop project  **DONE (D232 M-2)** | S2 |
 | **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 **DONE (D232 M-4)** |
 | **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 **DONE (D232 M-5)** |
-| **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 |
+| **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 **DONE (D232 M-6)** |
 | **G-84** | **Held-card monitor.** The daily check lists uncaptured authorizations older than 3 days through the G-80 endpoint. It emails at day 3 and day 5, and the order page gets *"Capture / Cancel in Stripe"* coaching | S2 |
 | **G-85** | **Merch alerts inbox.** The shop POSTs each alert to a token-secured back-office endpoint, stored and shown on Merch Health and Orders with acknowledge. Email stays as a second channel | S2 |
 | **G-86** | **Cancel and refund in one guided step.** *Cancel at Printful* → the page then shows **Refund in Stripe**. This goes through a G-80-style shop endpoint (idempotent, audited) or, if the owner prefers, a deep link plus a confirm-done box. The order page shows both halves' status | S3 |
 | **G-87** | **Pricing guard.** No hard-coded $35 (last price or the calculator's suggestion). Suggested retail includes the real shipping gap. Publish warns when margin < the owner's minimum or flat shipping < Printful's US rate | S3 |
 | **G-88** | **Catalog version check.** Compare-and-set on `site_settings.updated_at` (the pattern used by D230 reopen). The loser gets *"Someone else changed the catalog - reload and try again"* | S3 **DONE (D232 M-5)** |
-| **G-89** | **Register the Printful webhook from the app.** A button on Merch Health reads `GET /webhooks` first, shows what is there, then sets the URL with **all** needed types (the 4 order types plus `stock_updated` once G-83 ships). Audited, and re-checked daily by G-77 | S3 |
+| **G-89** | **Register the Printful webhook from the app.** A button on Merch Health reads `GET /webhooks` first, shows what is there, then sets the URL with **all** needed types (the 4 order types plus `stock_updated` once G-83 ships). Audited, and re-checked daily by G-77 | S3 **DONE (D232 M-6)** |
 | **G-90** | **Help everywhere.** `helpId` and helpers for Merch Inventory and Reports → Merch; **Printful**, **Stripe (merch)** and **Resend (merch)** integration guides on `/admin/integrations`; concierge facts for every §4 section and §5 message | S3 |
 | **G-91** | **Stale copy cleanup** (F-11-12 list), README *"Adding a product"* rewritten to *"Publish in Merch Studio"*, finishing guide §3.1 corrected | S3 |
 | **G-92** | **Confirm the 7 studio-default placements** against Printful's file templates (or the `GET /mockup-generator/printfiles/{id}` sizes), then mark the source | S4 |
@@ -939,7 +947,7 @@ Fix the one thing that blocks every sale first. That is the www redirect (**M-1*
 | H-2 | Printful permissions | same answer: has `orders`, `webhooks`, `file_library` | all present | names the missing scope |
 | H-3 | Printful token expiry | the date the owner typed in the coach (the API may not return it) | > 30 days | amber ≤ 30, red ≤ 7 days, with a countdown email |
 | H-4 | Printful store | `GET /stores` (needs `stores_list`) or a store-scoped call | 1 store, the name matches | *"Account token without PRINTFUL_STORE_ID"* |
-| H-5 | Printful webhook | `GET /webhooks` | URL = `https://greenwaymerch.com/api/printful/webhook/…` and the 4 types | *"Shipped emails are off: register it (button, G-89)"* |
+| H-5 | Printful webhook | `GET /webhooks` | URL = `https://greenwaymerch.com/api/printful/webhook/…` and the 5 events (4 order + `stock_updated`), every catalog garment watched (M-6) | *"Shipped emails are off: register it (button, G-89)"*: **built (M-6)** |
 | H-6 | Printful service | `printfulstatus.com/api/v2/status.json` | `none` | Printful's own incident text |
 | H-7 | Catalog round-trip | shop `/api/health` reports its last feed fetch | 200, n products, no redirect | **F-11-1 message** if a 3xx was seen |
 | H-8 | Main site address | main: `HEAD` of the shop's configured feed URL with `redirect: manual` | 200/404 with no redirect | *"The feed address redirects; set MERCH_CATALOG_URL"* |
@@ -1011,7 +1019,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 | **M-3** | Setup & Launch coach, Product journey stepper, tab strips, Print form 8.1 | G-78 | M-2 |
 | **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration 0360 **BUILT (D232)** |
 | **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — **BUILT (D232)** |
-| **M-6** | Webhook button; automatic stock (cron, then `stock_updated`) | G-89, G-83 | M-2 |
+| **M-6** | Webhook button; automatic stock (cron, then `stock_updated`) | G-89, G-83 | M-2 **BUILT (D232)** |
 | **M-7** | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | G-84, G-85, G-86 | M-2 (+ owner answer Q-11-4) |
 | **M-8** | Pricing guard; helpers, integration guides, concierge; placements | G-87, G-90, G-92 | — |
 
@@ -1037,6 +1045,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.7 | 2026-11-11 | **M-6 built:** Merch Health → H-5 has **Check what is registered** and **Register / repair the Printful webhook**: it reads Printful first, hides Token C, checks the shop accepts Token C before changing anything, then registers all 5 events (the 4 order events + `stock_updated`) with every catalog garment watched, keeping other types; audited (G-89). Stock is copied automatically every 6 hours (`/api/cron/merch-stock`) and within about a minute of Printful's `stock_updated` notice (shop → `/api/merch-stock`), audited as a system actor (G-83). H-5 now needs all 5 events and every garment watched. S-10, §4.15, §6.4, §6.5, form 8.4 updated; F-11-8, F-11-18 resolved. **Owner step:** add `PRINTFUL_WEBHOOK_TOKEN` (same value as the merch project) to the main project, redeploy both, press Register | Greenway Dev |
 | 1.6 | 2026-11-11 | **M-4 built:** designs and their art are saved on the server (`merch_designs`, migration 0360; art in `merch-files`), any computer sees them, two computers can't overwrite each other (the loser keeps a copy), **Import design (.json/.zip)** (G-79); the sample approval is saved on the server with who, when, the checklist and a photo, **Publish is blocked** until the sample is approved for that exact print, and the owner-only override needs a typed reason and is audited (G-81, owner *"Q2: yes, owner only and reason."*). §3 step 4, §4.6, §4.9 item 5, §6.6 updated; F-11-2, F-11-6 resolved | Greenway Dev |
 | 1.5 | 2026-11-11 | **M-5 built:** re-publish keeps Hidden and the stock copy, and says so (G-82); catalog writes are compare-and-set on `updated_at`, the loser is told *"Someone else changed the catalog - reload and try again."* (G-88); the previous print PNGs are deleted after a re-publish is saved (G-93). §4.12, §4.14, §6.7 updated; F-11-7, F-11-15, F-11-16 resolved | Greenway Dev |
 | 1.4 | 2026-11-11 | **M-3b built:** Product journey stepper (nine pills, Next step line, links to tabs, Merch Health and Merch Inventory) and the per-tab "You are here / Do this / Then" strips (G-78 items 2 and 3; the "Show me around" tour remains) | Greenway Dev |

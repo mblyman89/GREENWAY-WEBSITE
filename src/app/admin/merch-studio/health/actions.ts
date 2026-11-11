@@ -8,13 +8,18 @@
  *     "manual"). It never sends the email; that stays with the morning cron.
  *   - saveTokenExpiryAction: saves the Printful token's expiry date (Printful
  *     has no API that tells us, so the owner types it from the token list).
- * Both are audited.
+ *   - previewPrintfulWebhookAction / registerPrintfulWebhookAction (D232
+ *     M-6, G-89): read Printful's webhook, then set it with all 5 events
+ *     after the shop confirms Token C. The register step is audited
+ *     (merch.webhook_registered) with the masked before/after.
+ * All writes are audited.
  */
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { MERCH_HEALTH_PAGE } from "@/lib/merch/merch-health-core";
 import { runMerchHealth, saveHealthSettings } from "@/lib/merch/merch-health-server";
+import { applyWebhook, previewWebhook, type WebhookPreview } from "@/lib/merch/merch-webhook-server";
 
 export type MerchHealthActionResult = { ok: true; status: "ok" | "warn" | "fail"; summary: string } | { ok: false; error: string };
 
@@ -49,4 +54,26 @@ export async function saveTokenExpiryAction(formData: FormData): Promise<{ ok: t
   });
   revalidatePath(MERCH_HEALTH_PAGE);
   return { ok: true };
+}
+
+export async function previewPrintfulWebhookAction(): Promise<WebhookPreview> {
+  await requirePermission("settings.manage");
+  return previewWebhook();
+}
+
+export async function registerPrintfulWebhookAction(): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const session = await requirePermission("settings.manage");
+  const r = await applyWebhook();
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: r.ok ? "merch.webhook_registered" : "merch.webhook_register_failed",
+    entityType: "printful_webhook",
+    entityId: "printful_webhook",
+    before: r.before,
+    after: r.ok ? { ...r.after, changes: r.changes } : { error: r.error },
+  });
+  revalidatePath(MERCH_HEALTH_PAGE);
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, message: r.changes.length ? `Registered: ${r.changes.join(" ")}` : "Registered again; nothing needed changing." };
 }

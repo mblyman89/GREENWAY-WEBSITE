@@ -154,7 +154,7 @@ export async function gatherMerchHealth(): Promise<MerchHealthReport> {
         ? { status: 0, body: null, problem: "MERCH_HEALTH_TOKEN in this project is shorter than 32 characters." }
         : null,
     statusPages: { printful: pfPage, stripe: stPage, resend: rsPage },
-    catalog: { readError: cat.readError, live: live.length, oldestStockSyncIso: synced[0] ?? null, neverSynced: live.length - synced.length },
+    catalog: { readError: cat.readError, live: live.length, oldestStockSyncIso: synced[0] ?? null, neverSynced: live.length - synced.length, productIds: [...new Set(cat.catalog.items.map((x) => x.pkg.product.blank.printfulProductId))] },
     buckets: { media, merchFiles },
   });
 }

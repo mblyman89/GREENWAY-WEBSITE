@@ -169,12 +169,12 @@ export const LAUNCH_STEPS: readonly LaunchStep[] = [
   {
     id: "S-10", title: "Printful: register the shipped webhook", minutes: 5, manual: false, sop: "§4.2 S-10",
     todo: [
-      "After step 9 is deployed, run the command in SOP-11 S-10 once from Terminal (a button comes in M-6).",
-      "It points Printful at https://greenwaymerch.com/api/printful/webhook/<Token C> with the 4 order events.",
-      "Run it again if Token C ever changes.",
+      "Add PRINTFUL_WEBHOOK_TOKEN (Token C) to the MAIN Greenway project too, with the SAME value as the merch project, and redeploy.",
+      "After step 9 is deployed, open Merch Health and press Register / repair the Printful webhook. It shows what is registered now, checks the shop accepts Token C, then sets all 5 events.",
+      "Press it again after Token C changes or after you publish a new garment (H-5 tells you).",
     ],
-    doneWhen: "Merch Health shows the webhook registered to the shop with all 4 events.",
-    links: [], copy: [{ label: "Event types", value: "package_shipped, order_failed, order_canceled, order_put_hold" }],
+    doneWhen: "Merch Health shows the webhook registered to the shop with all 5 events.",
+    links: [{ label: "Merch Health", href: "/admin/merch-studio/health" }], copy: [{ label: "Event types", value: "package_shipped, order_failed, order_canceled, order_put_hold, stock_updated" }],
     proofs: [{ id: "H-5", accept: OK }],
   },
   {

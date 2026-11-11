@@ -64,12 +64,15 @@ export interface MerchHealthInput {
   /** null = the shop was not asked (no MERCH_HEALTH_TOKEN here). */
   shop: { status: number; body: ShopHealthLike | null; problem?: string } | null;
   statusPages: { printful: CallResult | null; stripe: CallResult | null; resend: CallResult | null };
-  catalog: { readError: string | null; live: number; oldestStockSyncIso: string | null; neverSynced: number };
+  /** productIds (M-6): every garment in the catalog, for H-5's stock watch. */
+  catalog: { readError: string | null; live: number; oldestStockSyncIso: string | null; neverSynced: number; productIds?: number[] };
   buckets: { media: boolean | null; merchFiles: boolean | null };
 }
 
-/** The four Printful webhook events the shop handles (merch-site/app/api/printful/webhook/[token]/route.ts L8). */
+/** The four Printful order events the shop handles (merch-site/app/api/printful/webhook/[token]/route.ts). */
 export const PRINTFUL_WEBHOOK_TYPES = ["package_shipped", "order_failed", "order_canceled", "order_put_hold"] as const;
+/** D232 M-6 (G-83): plus stock_updated, relayed to /api/merch-stock. */
+export const PRINTFUL_STOCK_TYPE = "stock_updated";
 /** Required: orders (create, confirm, cancel). Recommended: webhooks (register + check), stores_list (H-4). */
 export const PRINTFUL_SCOPES_REQUIRED = ["orders"] as const;
 export const PRINTFUL_SCOPES_RECOMMENDED = ["webhooks", "stores_list"] as const;
@@ -166,13 +169,16 @@ export function buildMerchHealth(i: MerchHealthInput): MerchHealthReport {
     const url = typeof w.url === "string" ? w.url.trim() : "";
     const types = Array.isArray(w.types) ? w.types.map(String) : [];
     const want = `${i.shopOrigin.replace(/\/+$/, "")}/api/printful/webhook/`;
-    const missing = PRINTFUL_WEBHOOK_TYPES.filter((t) => !types.includes(t));
+    const missing = [...PRINTFUL_WEBHOOK_TYPES, PRINTFUL_STOCK_TYPE].filter((t) => !types.includes(t));
     const urlOk = url.toLowerCase().startsWith(want.toLowerCase()) && url.length > want.length + 15;
+    const pw = (w as { params?: { stock_updated?: { product_ids?: unknown } } }).params?.stock_updated?.product_ids;
+    const watched = Array.isArray(pw) ? pw.map(Number) : [];
+    const unwatched = types.includes(PRINTFUL_STOCK_TYPE) ? [...new Set(i.catalog.productIds ?? [])].filter((n) => !watched.includes(n)) : [];
     add({
-      id: "H-5", group: "Printful", title: "Printful webhook (shipped emails)",
-      level: !url ? "fail" : !urlOk ? "fail" : missing.length ? "warn" : "ok",
-      detail: !url ? "No webhook is registered, so customers get no shipped email and you get no failure alerts." : !urlOk ? `The webhook points somewhere else: ${url.replace(/\/webhook\/.+$/, "/webhook/…")}.` : missing.length ? `Registered, but missing: ${missing.join(", ")}.` : "Registered to the shop with all 4 events.",
-      fix: !url || !urlOk || missing.length ? "Register it again (SOP-11 S-10). A new registration replaces the old one." : "",
+      id: "H-5", group: "Printful", title: "Printful webhook (shipped emails, stock)",
+      level: !url ? "fail" : !urlOk ? "fail" : missing.length || unwatched.length ? "warn" : "ok",
+      detail: !url ? "No webhook is registered, so customers get no shipped email and you get no failure alerts." : !urlOk ? `The webhook points somewhere else: ${url.replace(/\/webhook\/.+$/, "/webhook/…")}.` : missing.length ? `Registered, but missing: ${missing.join(", ")}.` : unwatched.length ? `Registered with all 5 events, but the stock watch does not cover garment${unwatched.length === 1 ? "" : "s"} ${unwatched.map((n) => `#${n}`).join(", ")} (published since the last registration).` : "Registered to the shop with all 5 events (4 order events + stock_updated).",
+      fix: !url || !urlOk || missing.length || unwatched.length ? "Press Register / repair the Printful webhook on this page. It reads what is there first and keeps any other event type." : "",
       sop: "§4.2 S-10",
     });
   } else {
@@ -241,7 +247,7 @@ export function buildMerchHealth(i: MerchHealthInput): MerchHealthReport {
     add({ id: "H-16", group: "Printful", title: "Drafts waiting for Confirm", level: "unknown", detail: i.drafts ? pfProblem(i.drafts) : "Needs a working token (H-1).", fix: "", sop: "§4.17" });
   }
   const syncAge = i.catalog.oldestStockSyncIso ? (Date.parse(i.nowIso) - Date.parse(i.catalog.oldestStockSyncIso)) / DAY_MS : null;
-  add({ id: "H-17", group: "Catalog", title: "Stock copied from Printful", level: i.catalog.live === 0 ? "ok" : i.catalog.neverSynced > 0 || syncAge === null || syncAge > 1 ? "warn" : "ok", detail: i.catalog.live === 0 ? "No live products." : i.catalog.neverSynced > 0 ? `${i.catalog.neverSynced} live product(s) never had stock copied.` : syncAge === null ? "Unknown." : `Oldest stock copy ${Math.floor(syncAge * 24)} hour(s) ago.`, fix: i.catalog.live > 0 && (i.catalog.neverSynced > 0 || syncAge === null || syncAge > 1) ? "Merch Inventory → Copy Printful stock." : "", sop: "§4.15" });
+  add({ id: "H-17", group: "Catalog", title: "Stock copied from Printful", level: i.catalog.live === 0 ? "ok" : i.catalog.neverSynced > 0 || syncAge === null || syncAge > 1 ? "warn" : "ok", detail: i.catalog.live === 0 ? "No live products." : i.catalog.neverSynced > 0 ? `${i.catalog.neverSynced} live product(s) never had stock copied.` : syncAge === null ? "Unknown." : `Oldest stock copy ${Math.floor(syncAge * 24)} hour(s) ago.`, fix: i.catalog.live > 0 && (i.catalog.neverSynced > 0 || syncAge === null || syncAge > 1) ? "Merch Inventory → Copy Printful stock. The automatic copy runs every 6 hours (M-6); if it is over a day old, check Vercel → the main project → Cron Jobs → /api/cron/merch-stock." : "", sop: "§4.15" });
   const bucketsOk = i.buckets.media !== false && i.buckets.merchFiles !== false;
   add({ id: "H-18", group: "Catalog", title: "File storage", level: i.buckets.media === null || i.buckets.merchFiles === null ? "unknown" : bucketsOk ? "ok" : "fail", detail: `media bucket (published print files): ${i.buckets.media === null ? "?" : i.buckets.media ? "yes" : "MISSING"} · merch-files bucket (proofs, mockups): ${i.buckets.merchFiles === null ? "?" : i.buckets.merchFiles ? "yes" : "MISSING"}.`, fix: bucketsOk ? "" : "Apply the missing migration in Supabase (media: 0012, merch-files: 0281).", sop: "§4.9" });
 
@@ -285,12 +291,12 @@ export function __runMerchHealthCoreTests(): { passed: number; failed: number } 
     nowIso: now, shopOrigin: "https://greenwaymerch.com", printfulConfigured: true,
     scopes: { status: 200, body: { scopes: [{ scope: "orders" }, { scope: "webhooks" }, { scope: "stores_list" }] } },
     stores: { status: 200, body: [{ id: 1, name: "greenway-websites" }] },
-    webhooks: { status: 200, body: { url: "https://greenwaymerch.com/api/printful/webhook/abcdefghijklmnopqrstuvwxyz123456", types: [...PRINTFUL_WEBHOOK_TYPES] } },
+    webhooks: { status: 200, body: { url: "https://greenwaymerch.com/api/printful/webhook/abcdefghijklmnopqrstuvwxyz123456", types: [...PRINTFUL_WEBHOOK_TYPES, PRINTFUL_STOCK_TYPE], params: { stock_updated: { product_ids: [71] } } } },
     drafts: { status: 200, body: [] },
     tokenExpires: "2027-06-01",
     shop: { status: 200, body: { feed: { ok: true, status: 200, products: 2 }, products: 2, checkout: { open: true }, shipping: { set: true, flatCents: 599, extraItemCents: 200, freeOverCents: 7500 }, stripe: { keyMode: "live", webhookSecretSet: true, automaticTax: true, endpoint: { found: true, enabled: true, missingEvents: [], wrongHost: [] }, held: { count: 0, over3Days: 0, oldestDays: 0 } }, email: { resendKeySet: true, fromSet: true, alertToSet: true }, autoConfirm: false } },
     statusPages: { printful: { status: 200, body: { status: { indicator: "none", description: "All Systems Operational" } } }, stripe: { status: 200, body: { status: { indicator: "none", description: "ok" } } }, resend: { status: 200, body: { status: { indicator: "none", description: "ok" } } } },
-    catalog: { readError: null, live: 2, oldestStockSyncIso: "2026-11-11T06:00:00Z", neverSynced: 0 },
+    catalog: { readError: null, live: 2, oldestStockSyncIso: "2026-11-11T06:00:00Z", neverSynced: 0, productIds: [71] },
     buckets: { media: true, merchFiles: true },
   };
   const g = buildMerchHealth(base);
@@ -304,6 +310,7 @@ export function __runMerchHealthCoreTests(): { passed: number; failed: number } 
   ok("missing orders scope red; missing webhooks amber", buildMerchHealth({ ...base, scopes: { status: 200, body: { scopes: [{ scope: "webhooks" }, { scope: "stores_list/read" }] } } }).checks[1].level === "fail" && buildMerchHealth({ ...base, scopes: { status: 200, body: { scopes: [{ scope: "orders" }, { scope: "stores_list" }] } } }).checks[1].level === "warn");
   ok("expiry: none amber, 20 days amber, 5 days red, expired red", [["", "warn"], ["2026-12-01", "warn"], ["2026-11-16", "fail"], ["2026-11-01", "fail"], ["2027-01-01", "ok"]].every(([d, l]) => buildMerchHealth({ ...base, tokenExpires: d }).checks[2].level === l));
   ok("webhook missing / elsewhere red, missing type amber", buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: "", types: [] } } }).checks[4].level === "fail" && buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: "https://old.example.com/hook", types: [...PRINTFUL_WEBHOOK_TYPES] } } }).checks[4].level === "fail" && buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: (base.webhooks!.body as { url: string }).url, types: ["package_shipped"] } } }).checks[4].level === "warn");
+  ok("M-6: no stock_updated -> amber; an unwatched garment -> amber naming it", buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: (base.webhooks!.body as { url: string }).url, types: [...PRINTFUL_WEBHOOK_TYPES] } } }).checks[4].level === "warn" && (() => { const c = buildMerchHealth({ ...base, catalog: { ...base.catalog, productIds: [71, 12] } }).checks[4]; return c.level === "warn" && c.detail.includes("#12") && !c.detail.includes("#71"); })());
   ok("webhook detail never prints the token", !buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: "https://old.example.com/api/printful/webhook/SECRETSECRETSECRET", types: [] } } }).checks[4].detail.includes("SECRET"));
   ok("test key amber, missing red", buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, stripe: { ...base.shop!.body!.stripe!, keyMode: "test" } } } }).checks[8].level === "warn" && buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, stripe: { ...base.shop!.body!.stripe!, keyMode: "missing" } } } }).checks[8].level === "fail");
   ok("disabled endpoint red; www endpoint explained", (() => { const sb = base.shop!.body!; const a = buildMerchHealth({ ...base, shop: { status: 200, body: { ...sb, stripe: { ...sb.stripe!, endpoint: { found: true, enabled: false, missingEvents: [] } } } } }); const b = buildMerchHealth({ ...base, shop: { status: 200, body: { ...sb, stripe: { ...sb.stripe!, endpoint: { found: false, enabled: false, missingEvents: ["x"], wrongHost: ["https://www.greenwaymerch.com/api/stripe/webhook"] } } } } }); return a.checks[9].level === "fail" && b.checks[9].detail.includes("www"); })());

@@ -171,6 +171,18 @@ export function readPrintfulEvent(raw: unknown): PrintfulEventAction {
   return { ...base, kind: "ignore" };
 }
 
+/**
+ * D232 M-6 (G-83): Printful's stock_updated event (docs: data.product_id +
+ * data.variant_stock {out[], discontinued[]}). We only take the garment id;
+ * the back office re-reads that garment's stock from Printful itself.
+ */
+export function readStockEvent(raw: unknown): number | null {
+  const ev = (raw && typeof raw === "object" ? raw : {}) as { type?: unknown; data?: { product_id?: unknown } };
+  if (ev.type !== "stock_updated") return null;
+  const id = Number(ev.data?.product_id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** R73 S3: owner-edited wording (Website -> Merchandise -> Order emails). {order} / {site} placeholders. */
@@ -298,6 +310,7 @@ export function __runOrdersCoreTests(): { passed: number; failed: number } {
   ok(readPrintfulEvent({ type: "package_shipped", data: { shipment: { tracking_url: "javascript:alert(1)" } } }).trackingUrl === "", "non-https tracking url dropped");
   ok(readPrintfulEvent({ type: "order_failed", data: { reason: "Bad address", order: {} } }).kind === "problem", "order_failed -> owner alert");
   ok(readPrintfulEvent({ type: "stock_updated" }).kind === "ignore" && readPrintfulEvent(null).kind === "ignore", "other events ignored");
+  ok(readStockEvent({ type: "stock_updated", data: { product_id: 71, variant_stock: { out: [4012], discontinued: [] } } }) === 71 && readStockEvent({ type: "stock_updated", data: { product_id: "x" } }) === null && readStockEvent({ type: "package_shipped", data: { product_id: 71 } }) === null && readStockEvent(null) === null, "M-6: stock_updated -> garment id only");
   const mail = shippedEmail({ ...shipped, name: "<b>Pat</b> Doe" }, { name: "Greenway Merch", url: "https://greenwaymerch.com", contactEmail: "help@x.com" });
   ok(mail.html.includes("&lt;b&gt;Pat&lt;/b&gt;") && !mail.html.includes("<b>Pat") && mail.html.includes('href="https://tools.usps.com/x?y=1"'), "email escapes names, links tracking");
   ok(mail.subject.includes("gm-abc123-xy") && mail.text.includes("9400"), "email subject + text");

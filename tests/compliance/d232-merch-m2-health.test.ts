@@ -82,7 +82,7 @@ describe("D232 M-2: wiring", () => {
   it("page and actions are owner/admin (settings.manage); the run is audited", () => {
     expect(read("src/app/admin/merch-studio/health/page.tsx")).toContain('requirePermission("settings.manage")');
     const a = read("src/app/admin/merch-studio/health/actions.ts");
-    expect(a.match(/requirePermission\("settings.manage"\)/g)).toHaveLength(2);
+    expect(a.match(/requirePermission\("settings.manage"\)/g)).toHaveLength(4); // M-6 added the webhook preview + register actions (owner/admin)
     expect(a).toContain("merch.health_check_run");
   });
   it("the daily run rides the platform-health cron (no new cron)", () => {
