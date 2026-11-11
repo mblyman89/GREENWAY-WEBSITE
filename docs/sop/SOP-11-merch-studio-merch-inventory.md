@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built) |
+| **Version** | 1.4 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -996,6 +996,11 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 - **Form 8.1:** `/admin/merch-studio/launch/record` prints a white page with each step, its status, who ticked it and when, the notes, and a signature line (the signer's name and date are typed on the last card).
 - Ticks and notes are audited (`merch.launch_step_ticked`, `merch.launch_step_unticked`, `merch.launch_note_saved`). Items 2 … 4 (journey stepper, tab strips, order coaching) follow in M-3b and M-7.
 
+**As built (D232 M-3b), items 2 and 3.**
+- **Product journey** (`src/components/admin/merch-studio/JourneyBar.tsx`) sits above the tabs for everyone who can open the Studio. It shows the nine pills for the open design (the one last opened on Design, in this browser): Garment → Design (n ⛔) → Print files → Mockups (optional) → Sample approved → Price → Publish → On the shop → Stock synced, each ✓ done, ⬜ to do, ⛔ blocked or ○ optional. A tab pill opens its tab; On the shop opens Merch Health and Stock synced opens Merch Inventory. The **Next step** line names the first blocked or unfinished pill, e.g. *"Next step: Order a sample at Printful; when it arrives, tick the checklist on Proof & Export (2 of 6)."* After Publish it reads *"Live on greenwaymerch.com. Next: Copy Printful stock in Inventory → Merch Inventory."*
+- **Where the facts come from:** the design, blockers, print files and sample ticks from this browser (until M-4 saves them on the server); Publish, Hidden, photos, price and stock date from the merch catalog; On the shop from the **last saved** Merch Health run's H-7 (no live calls). Rules: `src/lib/merch-studio/merch-journey-core.ts` (pure, 14 self-tests).
+- **Tab strips:** under the stepper, one line per tab: *"You are here: … Do this: … Then: … →"*, with the Then link opening the next tab. The first-visit "Show me around" tour is not built yet (it stays in G-78).
+
 ### B.6 Proposed build order (also in `06-FIX-PHASE-PLAN.md`, all PROPOSED)
 
 | Slice | Contents | Gaps | Needs |
@@ -1031,6 +1036,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.4 | 2026-11-11 | **M-3b built:** Product journey stepper (nine pills, Next step line, links to tabs, Merch Health and Merch Inventory) and the per-tab "You are here / Do this / Then" strips (G-78 items 2 and 3; the "Show me around" tour remains) | Greenway Dev |
 | 1.3 | 2026-11-11 | **M-3a built:** Setup & Launch coach `/admin/merch-studio/launch` (13 cards S-1 … S-12 + T, proven by Merch Health where it can, owner ticks for the rest, notes, progress, Next line), "Setup needs you" in the Studio header, printable form 8.1 at `/launch/record` (G-78 part; §4.2 points to it) | Greenway Dev |
 | 1.2 | 2026-11-11 | **M-2 built:** Merch Health `/admin/merch-studio/health` (H-1 … H-19 live, with fix and SOP section; Run check now; token-expiry date; run history); shop `/api/health` behind its own `MERCH_HEALTH_TOKEN` (Token D, §4.3, both projects); the daily check rides the platform-health cron and emails only on a change of reds or a Monday digest (G-77, G-80 DONE; F-11-4, F-11-5 resolved) | Greenway Dev |
 | 1.1 | 2026-11-11 | Owner answers Q-11-1 … Q-11-9 recorded (D232). **M-1 built:** the shop reads the www feed address, moves a bare host to www, never follows a redirect and remembers the last feed result for Merch Health; Publish is owner/admin (`merch.publish`); stale "Slice 5" and "drop it in merch-site/catalog/" copy removed; the README and finishing guide corrected (G-76, G-91 DONE) | Greenway Dev |
