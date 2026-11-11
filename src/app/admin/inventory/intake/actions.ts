@@ -1593,6 +1593,41 @@ export async function retryInboundEmailAction(logId: string) {
 }
 
 /** "Resolved": close a failure on purpose, with a reason (audited). */
+/**
+ * D230 "Reopen and try again": undo Resolved on a failed email (closed by
+ * mistake, or before the intake learned its format) and fetch it again.
+ */
+export async function reopenInboundEmailAction(logId: string) {
+  const session = await requirePermission("inventory.manage");
+  const { reopenInboundEmail } = await import("@/lib/inbound-email/inbound-reconcile-store");
+  const r = await reopenInboundEmail(logId, session.userId);
+  const params = new URLSearchParams();
+  if (r.ok) {
+    const { recordAudit } = await import("@/lib/auth/audit");
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inbound_email.reopen",
+      entityType: "inbound_email_log",
+      entityId: logId,
+      before: r.before,
+      after: r.retry.ok
+        ? { resolved_at: null, disposition: r.retry.disposition, staged: r.retry.staged, manifestIds: r.retry.manifestIds }
+        : { resolved_at: null, error: r.retry.error },
+    });
+    if (r.retry.ok && r.retry.staged > 0) {
+      params.set("mailretry", `Reopened and fetched again: ${r.retry.staged} manifest${r.retry.staged === 1 ? "" : "s"} made. It is on the table now.`);
+    } else if (r.retry.ok) {
+      params.set("mailretryerr", `Reopened and fetched again, but it still did not make a manifest (${r.retry.disposition.replace("_", " ")}): ${r.retry.note}`.slice(0, 600));
+    } else {
+      params.set("mailretryerr", `Reopened (it is back under Needs attention), but the fetch did not run: ${r.retry.error}`.slice(0, 600));
+    }
+  } else {
+    params.set("mailretryerr", r.error.slice(0, 600));
+  }
+  backToEmailTab(params);
+}
+
 export async function resolveInboundEmailAction(logId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
   const { resolveInboundEmail } = await import("@/lib/inbound-email/inbound-reconcile-store");

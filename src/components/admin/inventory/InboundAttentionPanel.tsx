@@ -11,7 +11,9 @@
  *   - Check the mailbox now (the same check, at once, 14 days back);
  *   - Find an email (the owner's words -> a mailbox search; pulls in matches);
  *   - every email that did not make a manifest, with what happened, when the
- *     next automatic retry runs, Try again and Resolved (reason + note).
+ *     next automatic retry runs, Try again and Resolved (reason + note);
+ *   - D230: "Marked Resolved" - failures closed in the last 30 days, each with
+ *     Reopen and try again (a Resolved row is otherwise closed for good).
  *
  * Server component: plain forms posting to server actions, each submit button
  * a SaveButton (pending + disabled, so a slow fetch never looks like a hang and
@@ -20,7 +22,7 @@
  */
 import { SaveButton } from "@/components/admin/orders/SaveButton";
 import { fmtPulledIn } from "@/lib/inventory/manifest-table-core";
-import { healthLine, MAX_FIND_DAYS, RESOLVE_REASONS, sourceRefFor, type AttentionItem, type HealthTone } from "@/lib/inbound-email/inbound-reconcile-core";
+import { healthLine, MAX_FIND_DAYS, RESOLVE_REASONS, resolveReasonLabel, sourceRefFor, type AttentionItem, type HealthTone } from "@/lib/inbound-email/inbound-reconcile-core";
 import type { AttentionView } from "@/lib/inbound-email/inbound-reconcile-store";
 import { CollapsedUntilLinked } from "@/components/admin/inventory/DismissibleBanner";
 
@@ -49,6 +51,7 @@ export function InboundAttentionPanel({
   findAction,
   retryAction,
   resolveAction,
+  reopenAction,
 }: {
   view: AttentionView;
   nowMs: number;
@@ -56,6 +59,7 @@ export function InboundAttentionPanel({
   findAction: FormAction;
   retryAction: RowAction;
   resolveAction: ResolveAction;
+  reopenAction: RowAction;
 }) {
   const health = healthLine(view.heartbeat, nowMs, view.migrationApplied);
   const { items, summary } = view;
@@ -213,6 +217,38 @@ export function InboundAttentionPanel({
           })}
         </ul>
       )}
+
+      {view.migrationApplied && view.resolved.length > 0 ? (
+        <details className="mt-4 rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2" data-testid="resolved-list">
+          <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-text)]">
+            Marked Resolved ({view.resolved.length}) - closed without a manifest in the last 30 days
+          </summary>
+          <p className="mt-2 text-[11px] text-[var(--admin-text-faint)]">
+            Resolved closes an email for good: Try again, Find and the 15-minute check all skip it. If one was closed by
+            mistake, or before the system could read its format, press Reopen and try again.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {view.resolved.map((r) => {
+              const reopen = reopenAction.bind(null, r.id);
+              return (
+                <li key={r.id} data-testid="resolved-row" className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--admin-border)] pt-2 text-xs">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-semibold text-[var(--admin-text)]">{r.subject || "(no subject)"}</span>
+                    <span className="ml-2 text-[var(--admin-text-muted)]">from {r.from_address || "unknown sender"}</span>
+                    <span className="ml-2 text-[var(--admin-text-faint)]">
+                      Resolved {r.resolved_at ? fmtPulledIn(r.resolved_at) : ""}: {resolveReasonLabel(r.resolved_reason)}
+                      {r.resolved_note ? ` - "${r.resolved_note}"` : ""}
+                    </span>
+                  </span>
+                  <form action={reopen} data-testid="reopen-form">
+                    <SaveButton label="Reopen and try again" busyLabel="Fetching again..." variant="confirm" />
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      ) : null}
     </CollapsedUntilLinked>
   );
 }

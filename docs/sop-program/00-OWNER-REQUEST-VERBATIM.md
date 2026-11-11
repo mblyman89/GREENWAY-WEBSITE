@@ -2671,3 +2671,55 @@ Fix:
   - a Drive CSV is fetched under its own name;
   - an HTML page is refused.
 - Owner step after deploy: Receiving → Incoming (email) → Needs attention → **Try again** on the Evergreen Herbal row (M07825652483).
+
+## D230 — Receiving: the Evergreen Herbal email said "successful" but made no manifest (2026-11-11)
+
+### Owner request (verbatim)
+
+> I went to receiving, incoming (email), needs attention, and then pressed try again. it says it was successful, but it did not create the manifest and add it to the receiving table. can you log in and let me know where it went or what I did wrong or if there is a bug there. follow the standing rules. thank you.
+
+### Findings (read-only)
+
+- `inbound_email_log` row `7e47e391-81ce-4293-b84c-a51a4beefc15` is unchanged since the D229 diagnosis:
+  - disposition is still `no_manifest`, with no manifest;
+  - `retry_count` is still 2, and `last_retry_at` is still 2026-11-10 22:07 UTC, which is before D229 deployed (production 037b0608 at 23:58 UTC);
+  - the note is still the old "PDF fetch failed" text.
+  - So no fetch ran after the fix.
+- What happened, from `audit_logs`:
+  - **39701 `inbound_email.resolve`** by michael@ at 2026-11-11 00:16:53 UTC, with reason `other` and note "new format". The **Resolved** button was pressed, not **Try again**. That button's message is "Marked Resolved. It is off the Needs attention list". The row left the list, which looks like success.
+  - **39704 `inbound_email.find`** ("evergreen herbal"), with the result `found 2, onTable 2, retried 0, staged 0`. Find skipped the email because `retryInboundEmail` refuses a Resolved row ("This email was marked Resolved. It is closed."), and Find hides that refusal. Its message said "They are all on the table already. 0 made a manifest." "Found 2" is one email listed twice by the mailbox: there is one log row, and `sameEmailTwice` is not subtracted from onTable.
+  - There are no `inbound_email.retry` rows.
+- **The bug:** Resolved is one-way. Try again, Find and the 15-minute check all skip a Resolved row, and nothing on the page can reopen it or even show it. One wrong button press lost a real delivery, with no way back except the database.
+- The D229 code itself works on this email. A dry run of the real links through the deployed code path found:
+  - the "JSON link:" transfer;
+  - the CCRS CSV as the manifest (not the invoice);
+  - both fetched;
+  - collapsed to ONE manifest, `M07825652483`, EVERGREEN HERBAL, 19 lines, wcia.
+- No database trigger is on `inbound_email_log`. The `resolved_reason` check allows all-null, so a reopen needs no migration.
+
+### Decisions
+
+- **Reopen and try again.** A failure that was Resolved (and never made a manifest) can be reopened by a person with `inventory.manage`. Resolved is cleared with a compare-and-set on the exact `resolved_at` that was read, and only while `manifest_id` is null. Then the ordinary Try again runs at once. Its own compare-and-set, the delivery claim and the manifest dedupe key still prevent a double stage. Drafts only.
+  - Each reopen writes the audit row `inbound_email.reopen`, with the old reason and note in `before`.
+- **A "Marked Resolved" list** sits at the bottom of the Needs attention panel. It shows failures closed in the last 30 days (up to 25), with who closed them and why, and a **Reopen and try again** button on each.
+- **Find tells the truth.** A Resolved match is no longer counted silently as "on the table". The result now says "… was marked Resolved, so it was not fetched again. Open 'Marked Resolved' below and press Reopen and try again."
+- SOP-04 §4.4b gets step 4, and §4.4c one sentence. No migration.
+
+### As built
+
+- `inbound-reconcile-core.ts`: NEW `reopenEligibility` and `resolvedMatchNote`, and `LogRef.resolved_at`. The self-tests go from 126 to 131; both floors were bumped.
+- `inbound-reconcile-store.ts`:
+  - NEW `reopenInboundEmail` and `readResolvedRows`;
+  - `AttentionView.resolved`;
+  - `readLogRefs` now reads `resolved_at`;
+  - `findAndIngest` notes Resolved matches.
+- `actions.ts`: NEW `reopenInboundEmailAction` (requires `inventory.manage`, writes the audit row).
+- The page passes `reopenAction`. `InboundAttentionPanel.tsx` has the "Marked Resolved" list.
+- Tests: `fix-p3-2a-inbound-reconcile.test.ts` §6b (6 tests), run against the fake PostgREST:
+  - it lists the Resolved row;
+  - reopen undoes Resolved with the exact-`resolved_at` compare-and-set and stages on the same row;
+  - a reopened email that still fails returns to Needs attention;
+  - it refuses an open row, a row with a manifest, and a race;
+  - Find names the Resolved match;
+  - the wiring is in place.
+- Owner step after deploy: Receiving → Incoming (email) → open "Emails that did not make a manifest" → **Marked Resolved (1)** → **Reopen and try again** on the Evergreen Herbal row.

@@ -165,6 +165,8 @@ export type LogRef = {
   subject: string | null;
   received_at: string | null;
   disposition: string | null;
+  /** D230: set when a person marked the row Resolved (0320). */
+  resolved_at?: string | null;
 };
 
 export type MatchHow = "delivery_key" | "source_ref" | "message_id" | "fingerprint";
@@ -458,6 +460,31 @@ export type ResolveReason = (typeof RESOLVE_REASONS)[number]["code"];
 
 export function resolveReasonLabel(code: string | null | undefined): string {
   return RESOLVE_REASONS.find((r) => r.code === code)?.label ?? "Resolved";
+}
+
+/* ------------------------------------------------------------------ *
+ *  D230: reopen an email that was marked Resolved
+ * ------------------------------------------------------------------ */
+
+/** The dispositions a Resolved row can be reopened from (the failures). */
+const REOPENABLE = new Set(["received", "parse_failed", "no_manifest"]);
+
+/**
+ * May this Resolved row be reopened (Resolved undone, then fetched again)?
+ * Only a row that was closed while it still had no manifest. PURE.
+ */
+export function reopenEligibility(row: Pick<AttentionRow, "resolved_at" | "disposition" | "manifest_id">): RetryCheck {
+  if (!row.resolved_at) return { ok: false, reason: "This email is not marked Resolved. Use Try again." };
+  if (row.manifest_id) return { ok: false, reason: "This email already made its manifest. It is on the table." };
+  const disp = (row.disposition ?? "").toLowerCase();
+  if (!REOPENABLE.has(disp)) return { ok: false, reason: `This email's state (${disp || "unknown"}) cannot be fetched again.` };
+  return { ok: true };
+}
+
+/** One line telling a person that a Find match was closed with Resolved. PURE. */
+export function resolvedMatchNote(subject: string | null | undefined): string {
+  const s = (subject ?? "").trim() || "(no subject)";
+  return `"${s.slice(0, 120)}" was marked Resolved, so it was not fetched again. Open "Marked Resolved" below and press Reopen and try again.`;
 }
 
 export function validateResolve(reason: unknown, note: unknown): { ok: true; reason: ResolveReason; note: string | null } | { ok: false; error: string } {
@@ -1062,6 +1089,12 @@ export function __runInboundReconcileCoreTests(): { passed: number; failed: numb
   ok(!retryEligibility(row({ disposition: "duplicate" }), NOW).ok, "duplicate may not retry");
   ok(!retryEligibility(row({ disposition: "ignored" }), NOW).ok, "ignored may not retry");
   ok(!retryEligibility(row({ resolved_at: iso(1) }), NOW).ok, "resolved may not retry");
+  // D230 reopen
+  ok(reopenEligibility(row({ resolved_at: iso(1), disposition: "no_manifest" })).ok, "D230: resolved failure may reopen");
+  ok(!reopenEligibility(row({ resolved_at: null })).ok, "D230: open row is not reopened");
+  ok(!reopenEligibility(row({ resolved_at: iso(1), disposition: "staged" })).ok, "D230: staged never reopened");
+  ok(!reopenEligibility(row({ resolved_at: iso(1), disposition: "no_manifest", manifest_id: "m1" })).ok, "D230: row with a manifest never reopened");
+  ok(resolvedMatchNote("Fwd: Evergreen").includes("Reopen and try again"), "D230: find note names the button");
   ok(!retryEligibility(row({ disposition: "received", claimed_at: iso(1) }), NOW).ok, "in flight may not retry");
   ok(retryEligibility(row({ disposition: "received", claimed_at: iso(30) }), NOW).ok, "stuck may retry");
 
