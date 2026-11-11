@@ -2755,3 +2755,32 @@ Fix:
   - Find names the Resolved match;
   - the wiring is in place.
 - Owner step after deploy: Receiving → Incoming (email) → open "Emails that did not make a manifest" → **Marked Resolved (1)** → **Reopen and try again** on the Evergreen Herbal row.
+
+## D226 (merge) — check PR #1745 is safe to merge, fix every issue, then merge (2026-11-11)
+
+Owner, verbatim:
+
+> "thank you. please check it is safe to merge, then merge it for me."
+
+> "thank you. please fix all issues carefully and properly, then merge the pr for me. thank you."
+
+What the check found:
+- CI was green, but GitHub marked the PR as conflicting. `main` had moved 7 commits ahead since the PR was opened.
+- Migration number clash: D228 (#1748) had already merged `0357_ccrs_adopt_and_reopen.sql`. D226 also used 0357, plus 0358.
+
+What was done:
+- Rebased the branch onto `main` (d766e4a8).
+- Renumbered D226 only. D228's 0357 is untouched.
+  - `0357_orders_board_snapshot_source` became **0358**.
+  - `0358_orders_register_origin_backfill` became **0359**. Its undo table is now `orders_origin_backfill_0359`.
+  - Both rollbacks moved with them.
+  - The PG check is now `orders-source-0358-0359-pg-check.sql`.
+  - Also updated: factory-reset KEEP, schema-tables, the MIGRATIONS_TO_RUN entries (D228's 0357 entry kept in full), and the migration pins. The gate now lists 0359 → 0358 → 0357 → …; s14/s15/s16 now pin 0359.
+- `POST_APPLY_CHECKS` keeps both checks, D226 first.
+- D228's test pinned its check to position `[0]`. It now checks membership (`toContainEqual`), like the other slices. Nothing else changed.
+- Verified:
+  - Real Postgres 15 with CI's Supabase bootstrap: all 359 migrations applied in order, and 0359 re-applied cleanly.
+  - Both post-apply checks passed: `ORDERS SOURCE 0358 0359` and `CCRS 0357`.
+  - 83 related test files pass (2,231 tests).
+  - Pure self-tests pass, and eslint is clean on every changed file.
+- Owner step after deploy: apply **0357** (D228, if not already applied), then **0358**, then **0359**.

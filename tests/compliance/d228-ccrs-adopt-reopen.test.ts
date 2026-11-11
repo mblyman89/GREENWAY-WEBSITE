@@ -127,7 +127,7 @@ describe("migration 0357", () => {
     expect(RB).not.toMatch(/drop column/i);
     expect(PGC).toContain("CCRS 0357 CHECK PASSED");
     const { POST_APPLY_CHECKS } = await import("../../scripts/compliance/verify-migrations-execute");
-    expect(POST_APPLY_CHECKS[0]).toEqual({ file: "scripts/recon/ccrs-adopt-reopen-0357-pg-check.sql", mustPrint: "CCRS 0357 CHECK PASSED" });
+    expect(POST_APPLY_CHECKS).toContainEqual({ file: "scripts/recon/ccrs-adopt-reopen-0357-pg-check.sql", mustPrint: "CCRS 0357 CHECK PASSED" });
     // 0282 pg-check still proves the bare reopen of an applied email is refused
     expect(SRC("scripts/recon/ccrs-mail-0282-pg-check.sql")).toContain("set state = 'new', handled_at = null where id = %L$q$, id1), 'CCRS_MAIL_HANDLED'");
     expect(SRC("docs/MIGRATIONS_TO_RUN.md")).toContain("0357_ccrs_adopt_and_reopen.sql");
