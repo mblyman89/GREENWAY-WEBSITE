@@ -821,3 +821,24 @@ F-06-17 is fixed. The concierge `inventory` topic gained one fact: expiring and 
 | Does loyalty work offline? | Yes, from the saved member book: find, scan-attach, history and 150/300-point rewards up to the saved balance. A new signup or a reward code needs the internet (D173) |
 | Do online orders reach the register when the internet is down? | New ones cannot; orders already downloaded can be handed over. For new ones the store needs backup internet (cellular failover router or Starlink), or a phone hotspot (D172) |
 | What is the outage drill? | SOP-01 §4.32: arm everyone online, Wi-Fi off, unlock, count in, sell, void, return, drop, provisional X, Wi-Fi on, SYNC 0 and Exceptions empty (D175) |
+
+### SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (`docs/sop/SOP-11-merch-studio-merch-inventory.md`, verified at `d766e4a8`, D231)
+
+The concierge code is **unchanged** (record-only). Today `concierge-kb.ts` has two merch facts: the Remove rule (L194) and the cannabis line (L200). There are no Merch Studio, setup, Printful, Stripe or order facts. The helper `merch-studio` (`page-helpers-core.ts` L323–341) covers the tabs only. Merch Inventory and Reports → Merch have no helper.
+
+| Concierge topic | SOP-11 sections that ground it | Rating today -> after integration (target) |
+|---|---|---|
+| *new* `merch-setup` (Printful account, token and expiry, store id, webhook; Stripe LLC account, keys, webhook, Tax; Resend; tokens A/B/C; both Vercel tables) | §4.2–§4.4, form 8.1 | 0 -> 9 |
+| *new* `merch-studio-workflow` (the happy path, where work is saved, the six tabs, mockup limits, sample) | §4.6–§4.12, card 9.1 | 2 (helper only) -> 9 |
+| *new* `merch-publish` (what Publish does, the 100-variant limit, handle collisions, re-publish makes it Live) | §4.12, §5 | 0 -> 9 |
+| *new* `merch-inventory` (cards, stock labels, mismatch, hide/show/remove, copy stock, CSV) | §4.13–§4.16 | 1 (Remove rule) -> 9 |
+| *new* `merch-orders` (authorize → capture, WA only, draft → Confirm, cancel **and** refund, 7-day holds, alerts) | §4.17–§4.21, card 9.2, form 8.4 | 0 -> 9 |
+| *new* `merch-troubleshooting` (every §5 message; the feed redirect; checkout closed; webhook failing; token expired) | §5, §6 | 0 -> 9 |
+| *new* `merch-health` (what each check means, once G-77 is built) | Appendix B.4 | 0 -> 9 (after M-2) |
+
+**Role filter needed:** the Studio and editors are `content.edit`; Merch Inventory is `inventory.manage` (Remove `merch.remove`, owner/admin); orders are `orders.manage`; setup answers (tokens, keys) are **owner/admin only**. A budtender who asks how to set up Stripe is told that the owner does it.
+
+**Must ship with caveats** until the findings are fixed:
+- F-11-1: *"Products will not show on the shop until `MERCH_CATALOG_URL` is set to the www address."*
+- F-11-7: *"Re-publishing makes a hidden product Live; hide it again."*
+- F-11-10: *"Cancel at Printful does not refund; refund in Stripe too."*

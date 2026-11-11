@@ -15,7 +15,7 @@
  * library automatically, on the "Other" shelf, using its own title.
  */
 
-export type SopCategoryId = "cash" | "inventory" | "compliance" | "people" | "other";
+export type SopCategoryId = "cash" | "inventory" | "compliance" | "people" | "marketing" | "other";
 
 export type SopCategory = {
   id: SopCategoryId;
@@ -49,6 +49,12 @@ export const SOP_CATEGORIES: readonly SopCategory[] = [
     label: "People & Access",
     description: "Hiring, onboarding, back-office access, PINs, the handbook and offboarding.",
     icon: "\u{1F9D1}\u{200D}\u{1F91D}\u{200D}\u{1F9D1}",
+  },
+  {
+    id: "marketing",
+    label: "Marketing & Merch",
+    description: "The Merch Studio, Merch Inventory and the separate greenwaymerch.com shop: setup, designing, publishing, orders and health.",
+    icon: "\u{1F455}",
   },
   {
     id: "other",
@@ -153,6 +159,15 @@ export const SOP_CATALOG: readonly SopMeta[] = [
     summary:
       "Hiring and onboarding a new employee, back-office sign-ins and roles, clock PINs, the handbook gate, badges and visitors, offboarding and rehiring.",
     keywords: ["hire", "new hire", "onboarding", "i-9", "w-4", "handbook", "training", "badge", "visitor", "pin", "user", "role", "terminate", "offboarding", "rehire", "access"],
+  },
+  {
+    file: "SOP-11-merch-studio-merch-inventory.md",
+    category: "marketing",
+    shortTitle: "Merch Studio, Merch Inventory & Shop Setup",
+    audience: ["Owner (setup)", "Admin", "Managers", "Content editors"],
+    summary:
+      "Setting up Printful, Stripe, Resend and Vercel step by step, designing and publishing apparel to greenwaymerch.com, Merch Inventory, confirming, cancelling and refunding orders, and keeping it all healthy.",
+    keywords: ["merch", "merch studio", "printful", "stripe", "resend", "greenwaymerch", "apparel", "t-shirt", "hoodie", "hat", "design", "mockup", "sample", "publish", "webhook", "token", "refund", "health"],
   },
 ] as const;
 

@@ -1,0 +1,1006 @@
+# SOP-11 — Merch Studio, Merch Inventory and the Greenway Goods Store (greenwaymerch.com)
+
+| | |
+|---|---|
+| **Version** | 1.0 (living document: recon, audit and roadmap; no code changed in this slice) |
+| **Effective** | On owner approval |
+| **Owner** | Michael Lyman |
+| **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
+| **Seller** | **Greenway Merchandising LLC (dba Greenway Glass & Goods)**, never the cannabis licensee (`src/lib/merch-studio/listing-package-core.ts` L46). |
+| **Verified against** | `main@d766e4a8` (2026-11-11). Live read-only probes of greenwaymerch.com and greenwaymarijuana.com on 2026-11-11 08:36 UTC (§9.4). Printful, Stripe and Resend facts were checked against their own developer documents on the same day (Appendix A.3). |
+| **Program records** | Findings `F-11-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · gaps `G-76`…`G-93` in `docs/sop-program/05-GAP-REGISTER.md` · proposed plan rows `M-1`…`M-8` in `docs/sop-program/06-FIX-PHASE-PLAN.md` · owner request D231 in `00-OWNER-REQUEST-VERBATIM.md` · concierge coverage in `04-CONCIERGE-COVERAGE-LEDGER.md`. |
+| **Scope (this version)** | Merch Studio and Merch Inventory first, as the owner asked: *"I want you to first focus your attention entirely on the merch studio and merch inventory."* The **Creative Studio** (banners and ads for the cannabis site, `/admin/marketing/**`) is the second half of SOP-11 and gets its own version later (Appendix B, last row). |
+
+> **This SOP is a living document (owner decision D41).** The owner: *"write the full sop and add it to the repo and back office as a living doc, we will update it as we build from your roadmap strategy report."* Each time a gap in Appendix B is built, the section it names is rewritten to match the screen, the version goes up, and Appendix D records the change. Until then, the **interim** steps in this SOP are the procedure.
+
+> **The one thing to know before anything else.** Today **no product can reach greenwaymerch.com, even after you press Publish.** The shop asks the back office for its product list at `https://greenwaymarijuana.com/api/merch-catalog` (`merch-site/lib/site.ts` L30, `merch-site/lib/catalog.ts` L23). That address now **redirects to www** (live probe: `308 → https://www.greenwaymarijuana.com/api/merch-catalog`). A browser or server following a redirect to a **different host drops the `Authorization` header**, and this was proven in a local Node test. So the back office sees no token and answers *Not found* (404, `src/app/api/merch-catalog/route.ts` L20–27), and the shop quietly shows **its last good list, which is empty** (`catalog.ts` L38–44). **The fix takes one minute, at Vercel:** on the **merch** project, add `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` and redeploy (§4.2 step M-9; F-11-1, G-76). The second blocker is that **checkout is closed**: both `/api/checkout` and `/api/stripe/webhook` answer 503 today, so the Stripe keys, the webhook secret and/or `MERCH_SHIP_FLAT_CENTS` are not set (§9.4).
+
+> **How to use this document.** **Part 1** (§4.1) is the map: what each piece is and how a shirt goes from an idea to a customer's door. **Part 2** (§4.2–§4.5) is the **one-time setup**, written as a numbered walkthrough with a "you know it worked when…" check after every step: Printful, Stripe, Resend, Vercel, then the first test order. **Part 3** (§4.6–§4.12) covers the **six Studio tabs**, one by one. **Part 4** (§4.13–§4.16) is **Merch Inventory**. **Part 5** (§4.17–§4.21) covers **orders**: confirm, cancel, refund and holds. **Part 6** (§4.22–§4.24) covers the website editors, reports and the redirect ad. §5 explains every message you can see, and §6 covers what to do when something goes wrong. §8 has the printable checklists. **Appendix B is the roadmap**: the step-by-step setup guide and the health panel the owner asked for.
+
+---
+
+## Table of contents
+
+1. Purpose & scope
+2. Roles & permissions
+3. Before you start
+4. Procedures
+
+   **Part 1: The map**
+   - 4.1 The three systems, the two websites, and the life of one shirt
+
+   **Part 2: One-time setup (owner), step by step**
+   - 4.2 The setup walkthrough, steps S-1 to S-12 (Printful, Stripe, Resend, Vercel)
+   - 4.3 The three secret tokens (A, B, C)
+   - 4.4 Every Vercel variable, both projects (checked against the code)
+   - 4.5 The first test order, end to end (test mode, then live)
+
+   **Part 3: Merch Studio, tab by tab**
+   - 4.6 The Studio page and where your work is saved (read this first)
+   - 4.7 Tab 1, Garments
+   - 4.8 Tab 2, Design
+   - 4.9 Tab 3, Proof & Export (print files, mockups, the sample)
+   - 4.10 Tab 4, Artwork Check
+   - 4.11 Tab 5, Fulfillment & Pricing
+   - 4.12 Tab 6, Publish & Ads (the listing and the redirect ad)
+
+   **Part 4: Merch Inventory**
+   - 4.13 Reading the page
+   - 4.14 Hide, show and remove
+   - 4.15 Copying Printful stock to the website
+   - 4.16 The CSV export
+
+   **Part 5: Orders and money**
+   - 4.17 What happens when a customer pays
+   - 4.18 Confirming an order (the human click)
+   - 4.19 Cancelling an order **and** refunding the customer
+   - 4.20 Card holds that are never captured (the 7-day clock)
+   - 4.21 Shipped emails, problems at Printful and owner alerts
+
+   **Part 6: The shop's look, the reports and the ad**
+   - 4.22 Website → Merchandise editors
+   - 4.23 Reports → Merch
+   - 4.24 The Greenway Goods ad on the cannabis site (WAC 314-55-155)
+5. Messages you may see, and what to do
+6. Exceptions & troubleshooting
+7. Controls: what the app already does well, and what it does not do yet
+8. Checklists & forms
+9. Quick reference (cards, links, live status snapshot)
+10. Glossary
+
+- Appendix A: Source map (every claim pinned to file and line) and external sources
+- Appendix B: Findings, gaps and the **roadmap strategy**
+- Appendix C: Owner questions
+- Appendix D: Revision history
+
+---
+
+## 1. Purpose & scope
+
+**Purpose.** This SOP lets anyone on the team set up, use and keep healthy the Greenway Goods apparel business, with no guessing. It covers designing a garment, checking it prints well, publishing it to the separate shop, watching stock, and confirming, cancelling and refunding orders. It also covers the one-time account setup behind all of that. The owner's words: *"I am very confused on how to use the merch studio. I do not know how to properly set up my printful and stripe accounts… we need a printful store and stripe health maybe so we know when things break or go offline."*
+
+**What the business is.** It is print-on-demand apparel with **no inventory**. A customer pays on **greenwaymerch.com**. That order becomes a **draft** at **Printful**, and a person presses **Confirm**. Printful then prints that one item, charges the LLC's card and ships to the customer (`src/lib/merch-studio/fulfillment-core.ts` L80–88). The cannabis website only shows a **redirect ad** with no product details. Apparel is **never** rung up on the cannabis POS or sent with delivery (`page-helpers-core.ts` L339 note; SOP-05b covers the in-store merch items that *are* on the POS, which are a different thing).
+
+**In scope (v1.0):**
+- the Merch Studio, all six tabs;
+- Merch Inventory;
+- the back-office merch order panel and order detail;
+- Reports → Merch;
+- the five Website → Merchandise editors;
+- the shop app `merch-site/` (checkout, Stripe webhook, Printful webhook, order desk);
+- the setup of Printful, Stripe, Resend and the Vercel variables in both projects;
+- health and monitoring (what exists, what does not, and the plan).
+
+**Out of scope (v1.0):**
+- the **Creative Studio** (`/admin/marketing/**`, Midjourney builder, banners for the cannabis site; SOP-11 v2.0);
+- in-store merch and accessories sold on the POS (**SOP-05b**);
+- general website content (SOP-12/SOP-21).
+
+---
+
+## 2. Roles & permissions
+
+| Who | Can | Pinned |
+|---|---|---|
+| **Anyone with `content.edit`** (content editor, manager, admin, owner) | open the Merch Studio, design, export, make mockups, **publish a product to the shop**, edit and publish the redirect ad, edit the five shop-look editors | `src/app/admin/merch-studio/page.tsx` L35; `catalog-actions.ts` L38, L60; nav `src/components/admin/admin-nav-data.ts` L101, L164–168 |
+| **Anyone with `inventory.manage`** | open Merch Inventory, hide or show a product, copy Printful stock, download the CSV | `src/app/admin/inventory/merch/page.tsx` L35; nav L86 |
+| **Owner and admin only** (`merch.remove`, G-30A, owner Q05b-3) | **Remove** a product from the shop for good | `inventory/merch/page.tsx` L37; `concierge-kb.ts` L194 |
+| **Anyone with `orders.manage`** | see merch orders in the back office, **Confirm** or **Cancel** at Printful | `src/app/admin/orders/merch/[ref]/page.tsx`; `src/lib/orders/merch-actions.ts` |
+| **Anyone with `reports.view`** | Reports → Merch (traffic, sales, WA tax) | `src/app/admin/reports/merch/page.tsx` L67 |
+| **Whoever holds Token B** (`MERCH_ADMIN_KEY`) | the shop's own order desk `greenwaymerch.com/admin/orders` (12-hour cookie) | `merch-site/lib/admin.ts`; `merch-site/app/admin/orders/actions.ts` L35–42 |
+| **The owner** | accounts at Printful, Stripe, Resend and Vercel, every secret, the LLC card at Printful, refunds in Stripe | not in the app (§4.2) |
+
+> **Who should publish (recommendation, Q-11-1).** Publishing puts a product on sale **immediately** (§4.12). The Studio has no approval step, so any content editor can publish. Until the owner decides (Appendix C), the rule is: **only the owner or someone the owner names presses Publish**, after the sample is approved (§4.9.5).
+
+---
+
+## 3. Before you start
+
+1. **Use one computer for merch design work.** Designs and uploaded art are saved **in that browser only** (§4.6). If you clear the browser or switch computers, they are gone unless you have the ZIP or JSON backup.
+2. **Setup must be finished** (§4.2) before a real order can work. Check the live status card (§9.4) or, once it exists, the Merch Health panel (G-77).
+3. **Know the two websites.** **greenwaymarijuana.com** is the cannabis store and back office, where you design, publish and look at stock. **greenwaymerch.com** is the shop, where customers pay and where the private order desk lives.
+4. **Know the three outside accounts.** All of them belong to the **LLC**, not the dispensary:
+   - **Printful** makes and ships the item.
+   - **Stripe** takes the card payment.
+   - **Resend** sends the emails.
+5. **Money is in cents** in every setting that asks for money. For example, `599` means $5.99. The shop refuses `5.99` (`merch-site/lib/checkout-core.ts` L40–41, self-test L134).
+
+---
+
+## 4. Procedures
+
+### Part 1: The map
+
+### 4.1 The three systems, the two websites, and the life of one shirt
+
+```
+ BACK OFFICE (greenwaymarijuana.com)                SHOP (greenwaymerch.com)                     OUTSIDE
+ ───────────────────────────────────               ────────────────────────                     ───────
+ Merch Studio ─ Publish ──► site_settings           /api/checkout ─ re-prices from catalog ──►   Stripe Checkout
+   (6 tabs)                 "merch_catalog"             (WA ZIP only, card HELD not charged)        (card held)
+                            │                                                                         │
+ Merch Inventory ◄──────────┤  GET /api/merch-catalog ◄── shop reads it                               │ webhook
+   hide / show / remove     │  (Bearer Token A,            every 60 s + fresh                         ▼
+   copy Printful stock      │   404 if wrong)              at checkout and webhook   /api/stripe/webhook
+                            │                                                       WA? capture : cancel
+ Orders → Merch ◄──── Printful API (orders) ◄───────────── Printful DRAFT order ◄───────────────────┘
+   Confirm / Cancel                                         /admin/orders (Token B): Confirm
+ Reports → Merch ◄── Printful orders + Vercel Analytics                                  Printful ──► ships
+                                                            /api/printful/webhook/<Token C> ◄── "shipped" ──► Resend email
+```
+
+**The life of one shirt (nine steps, `fulfillment-core.ts` L80–88):**
+
+| # | Step | Who | Where | What the app does today |
+|---|---|---|---|---|
+| 1 | Pick a premium blank | Designer | Studio → Garments | Printful-backed catalog of garments, colours and placements |
+| 2 | Design on a true-to-inch canvas | Designer | Studio → Design | live print checks (DPI, text size, seams, zippers) |
+| 3 | Export print files and a proof | Studio | Studio → Proof & Export | 300-DPI transparent PNGs, ZIP, proof sheet, Printful mockups |
+| 4 | **Order one sample** | **Owner** | Printful dashboard | **not enforced**: a checklist ticked on this device only (F-11-6) |
+| 5 | Package and publish the listing | Owner | Studio → Publish & Ads | uploads print PNGs, writes the catalog, **live at once** |
+| 6 | Customer pays | Customer | greenwaymerch.com | Stripe Checkout, card **authorized only**, Washington addresses only |
+| 7 | Draft Printful order | Shop (automatic) | Stripe webhook | captures the card for a WA address, creates a Printful **draft** |
+| 8 | **Confirm** (a human click) | Owner/staff | shop order desk or back office | Printful charges the LLC card and starts production (2–5 business days) |
+| 9 | Ship | Printful | Printful webhook | the shop emails the customer the tracking link |
+
+> **Note: stale copy on the Fulfillment tab.** Step 5 on the tab still says *"drop it in merch-site/catalog/"* (`fulfillment-core.ts` L84). That was the old manual way. Since R73 S7 the **Publish to greenwaymerch.com** button does it, and there is no file to drop (F-11-12, G-91).
+
+---
+
+### Part 2: One-time setup (owner), step by step
+
+> **Coaching note.** Do the steps **in order**. Each one ends with **✅ You know it worked when…**. Do not move on until you see that. If a step fails, look up the message in §5. Allow about **2 hours**, plus up to 2 business days for Printful's resale-certificate review. Use the printable **form 8.1** to tick as you go and to record expiry dates.
+
+### 4.2 The setup walkthrough, steps S-1 to S-12
+
+**Step S-1. Make the three secret tokens (A, B, C).** (5 minutes, see §4.3.)
+Make three different random strings, each **at least 32 characters** (§4.3 shows how). Save them in your password manager as *Merch Token A (catalog)*, *Merch Token B (order desk)* and *Merch Token C (Printful webhook)*.
+✅ **You know it worked when** you have three different long strings saved and none of them has a space.
+
+**Step S-2. Printful: create or confirm the LLC account and its store.** (10 minutes)
+1. Sign in at **printful.com** with the **LLC's** login, not a personal one.
+2. **Stores** → there should be one store for the shop. A **Manual order platform / API** store is the right type, because our own website sends the orders. Write the store name on form 8.1.
+3. **Settings → Store settings**: set the **packing slip** to the Greenway Goods return address and contact email.
+✅ **You know it worked when** Stores shows exactly one API/manual store for greenwaymerch.com.
+
+**Step S-3. Printful: billing card, legal info and the Washington resale certificate.** (15 minutes, plus Printful's review)
+1. **Billing → Legal info**: enter the LLC's legal name and address first.
+2. **Billing → Billing methods**: add the **LLC's** card. Printful charges it when an order is **confirmed** (§4.18).
+3. **Billing → Resale certificates → Add certificate** → Washington. Washington accepts the MTC or SSUTA form. Sign it. Without it, Printful charges sales tax on its own invoices to you.
+✅ **You know it worked when** Billing shows the card as the default method and the certificate says *Approved* (or *Pending review*; write the date on form 8.1).
+
+**Step S-4. Printful: make the private token.** (10 minutes)
+1. Go to **developers.printful.com/tokens** (signed in as the LLC) → **Create token**.
+2. **Name:** `greenway-websites`.
+3. **Access level:** **A single store** → pick the store from S-2. With a single-store token you do **not** need `PRINTFUL_STORE_ID`. With an **Account** token, every call needs the store id, and the app sends `X-PF-Store-Id` whenever `PRINTFUL_STORE_ID` is set (`src/lib/merch-studio/printful-client.ts` L32).
+4. **Scopes:** tick at least:
+   - `orders` (create, confirm, cancel and read orders; the order board and the webhook need it);
+   - `webhooks` (to register the shipped notices in S-10);
+   - `file_library` (recommended for print files).
+
+   Printful has no separate "mockup" scope. For the future health check (G-77), also tick `stores_list` and `webhooks/read` if they are offered.
+5. **Expiration:** choose the **longest** date. Printful's documents say: *"Private Tokens have an expiration date… expired tokens cannot be refreshed and must be replaced manually."* **Write the expiry date on form 8.1** and put a calendar reminder **14 days before** it. Nothing in the app warns you today (F-11-4, G-77).
+6. **Copy the token now.** Printful shows it only once.
+✅ **You know it worked when** the token list shows `greenway-websites` with your scopes and an expiry date, and the token is in your password manager.
+
+**Step S-5. Stripe: the LLC account.** (20 minutes)
+1. Sign in at **dashboard.stripe.com**. Top-left, select (or create) the account for **Greenway Merchandising LLC**. **Never** use a dispensary account. Card networks and Stripe do not allow cannabis, and this shop sells only apparel.
+2. Finish **Settings → Business details** (legal entity, EIN, bank account for payouts) until the dashboard says payments and payouts are enabled.
+3. **Settings → Public details**: statement descriptor `GREENWAY GOODS` (or similar). Support email is `contact@greenwaymerch.com`.
+✅ **You know it worked when** the dashboard home has no "Activate payments" banner and you can see the **Test mode** switch.
+
+**Step S-6. Stripe: secret key (test first).** (5 minutes)
+1. Switch **Test mode ON**. Go to **Developers → API keys** → copy the **Secret key** `sk_test_…`. A restricted key `rk_test_…` also works. The shop accepts `sk_` or `rk_`, `live` or `test` (`merch-site/app/api/checkout/route.ts` L22).
+2. Later, for live, repeat with Test mode **OFF** (`sk_live_…`).
+✅ **You know it worked when** you have the `sk_test_…` key saved. It goes into Vercel in S-9.
+
+**Step S-7. Stripe: the webhook endpoint.** (5 minutes)
+1. **Developers → Webhooks → Add endpoint.** Newer dashboards say **Add destination → Webhook endpoint**.
+2. **URL:** `https://greenwaymerch.com/api/stripe/webhook`. Use exactly this; **no www**. Stripe treats a redirect as a failure: *"We consider redirect responses to webhook requests as failures"*. Today `www.greenwaymerch.com` redirects (307) to the apex, so **the apex is correct** (§9.4).
+3. **Events:** `checkout.session.completed` **and** `checkout.session.async_payment_succeeded`. These are the only two the shop handles (`merch-site/app/api/stripe/webhook/route.ts` L36).
+4. Open the endpoint → **Signing secret → Reveal** → copy `whsec_…`.
+5. Test mode and live mode have **separate** endpoints and secrets. Do this again in live mode when you go live (§4.5).
+✅ **You know it worked when** the endpoint shows **Enabled** with exactly those 2 events.
+
+**Step S-8. Stripe Tax (Washington).** (15 minutes; do it before going live)
+1. **Tax → Get started.** Head office = the LLC's Washington address. Default product tax code: General – Tangible Goods (or what your accountant says).
+2. **Registrations → Add → United States → Washington** with the LLC's WA sales-tax details.
+3. Only then set `MERCH_STRIPE_AUTOMATIC_TAX=true` (S-9). Without it the shop charges **no** sales tax (`checkout-core.ts` L118; self-test L155). Stripe Tax costs 0.5% per transaction where tax is calculated.
+✅ **You know it worked when** Tax → Registrations lists Washington as **Active**.
+
+**Step S-9. Vercel: the merch project's variables.** (15 minutes, table in §4.4.1)
+Merch project → **Settings → Environment Variables** → add every **required** row of §4.4.1. Mark secrets **Sensitive**. **Add `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog`** (the fix for F-11-1). Then **Deployments → ⋯ → Redeploy**. Variables only take effect after a redeploy.
+✅ **You know it worked when**:
+- `https://greenwaymerch.com/api/checkout` no longer answers *"Checkout isn't open yet"* when you try to buy in test mode (§4.5);
+- a **POST** to `/api/stripe/webhook` without a signature answers **400**, not **503** (503 means `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` is missing, `route.ts` L41).
+
+**Step S-10. Printful: register the "shipped" webhook.** (5 minutes, after S-9 is deployed)
+Printful has no button for this. It is one command, run once from Terminal. Replace the two placeholders:
+
+```bash
+curl -X POST https://api.printful.com/webhooks \
+  -H "Authorization: Bearer PASTE_PRINTFUL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://greenwaymerch.com/api/printful/webhook/PASTE_TOKEN_C","types":["package_shipped","order_failed","order_canceled","order_put_hold"]}'
+```
+
+- For an **Account** token, add `-H "X-PF-Store-Id: YOUR_STORE_ID" \` before `-d`.
+- A good answer starts with `{"code":200`; `401` means the token is wrong.
+- **Warning from Printful's documents:** *"only one webhook URL can be active for a store, so calling this method disables all existing webhook configuration."* Run it **only for this store**, and run it again if anyone ever changes Token C.
+- To check it later: `curl https://api.printful.com/webhooks -H "Authorization: Bearer PASTE_PRINTFUL_TOKEN"` shows the current URL and types.
+
+✅ **You know it worked when** the check command shows the greenwaymerch.com URL and the 4 types.
+
+**Step S-11. Resend (emails).** (15 minutes)
+1. **resend.com → Domains**: `greenwaymerch.com` must say **Verified**. If it does not, add the DNS records it lists and **do not** delete the Google Workspace MX records.
+2. **API Keys**: a *Sending access* key for greenwaymerch.com → `RESEND_API_KEY`.
+3. In Vercel (merch): `MERCH_EMAIL_FROM` = `Greenway Merch <orders@greenwaymerch.com>` and `MERCH_ORDER_ALERT_EMAIL` = `orders@greenwaymerch.com`.
+4. **If `RESEND_API_KEY` or `MERCH_EMAIL_FROM` is missing, no email is sent at all.** That includes the alerts to you, which then exist only in the Vercel logs as `[merch-alert]` lines (`merch-site/lib/fulfillment.ts` L41–43, L55–58; F-11-9).
+✅ **You know it worked when** Resend → Domains is Verified, and after your test order (§4.5) Resend → Emails shows the shipped email as **Delivered**.
+
+**Step S-12. Vercel: the main project's variables.** (5 minutes, table in §4.4.2)
+Main project → add:
+- `MERCH_CATALOG_TOKEN` (Token A, **the same** value as the merch project);
+- `PRINTFUL_API_TOKEN` (the same token as S-4);
+- `PRINTFUL_STORE_ID` (only for an Account token);
+- for Reports → Merch: `VERCEL_ANALYTICS_TOKEN`, `MERCH_VERCEL_PROJECT` and, sometimes, `VERCEL_TEAM_ID`.
+
+Redeploy.
+✅ **You know it worked when** **Merch Studio → Proof & Export → Generate mockups** no longer says *"Printful isn't connected"*, and **Orders** shows the merch panel without a *not connected* note.
+
+### 4.3 The three secret tokens (A, B, C)
+
+| Token | Variable | Where it goes | What it protects | What happens if it is wrong |
+|---|---|---|---|---|
+| **A** | `MERCH_CATALOG_TOKEN` | **both** projects, the same value | the private product feed `GET /api/merch-catalog` | the back office answers 404 to anything other than the exact token; a token shorter than 32 characters is treated as **off** (`src/app/api/merch-catalog/route.ts` L23–27). The shop also ignores a token shorter than 32 characters (`merch-site/lib/catalog.ts` L32) and shows only its built-in list |
+| **B** | `MERCH_ADMIN_KEY` | merch project | the shop's order desk `greenwaymerch.com/admin/orders` | the desk keeps asking for the key |
+| **C** | `PRINTFUL_WEBHOOK_TOKEN` | merch project **and** in the S-10 URL | Printful's shipped and problem notices (Printful does not sign them) | Printful's notices get 404; no shipped emails and no problem alerts |
+
+**How to make one** (Mac Terminal): `openssl rand -hex 32` prints 64 random characters. Run it three times. Never reuse the same value for two tokens. If one leaks, make a new one, update Vercel, redeploy, and for Token C run S-10 again.
+
+### 4.4 Every Vercel variable, both projects (checked against the code)
+
+#### 4.4.1 Merch project (greenwaymerch.com)
+
+| Variable | Need | Value | Read at (code) | If missing |
+|---|---|---|---|---|
+| `MERCH_SITE_URL` | yes | `https://greenwaymerch.com` | `merch-site/lib/site.ts` | links and emails fall back to the default `https://greenwaymerch.com` |
+| `NEXT_PUBLIC_MERCH_CONTACT_EMAIL` | yes | `contact@greenwaymerch.com` | footer, reply-to | no contact shown (it is **set today**, §9.4) |
+| `NEXT_PUBLIC_MERCH_CONTACT_PHONE` | recommended | customer-service phone | footer, policies | not shown (set today) |
+| `NEXT_PUBLIC_MERCH_BUSINESS_ADDRESS` | recommended | one line | policy pages | not shown (set today) |
+| `MERCH_ORDER_ALERT_EMAIL` | yes | `orders@greenwaymerch.com` | `lib/fulfillment.ts` L58 | alerts are only logged |
+| `RESEND_API_KEY` | yes | `re_…` | `lib/fulfillment.ts` L41 | **no email at all** |
+| `MERCH_EMAIL_FROM` | **yes** | `Greenway Merch <orders@greenwaymerch.com>` | `lib/fulfillment.ts` L42 | **no email at all** |
+| `STRIPE_SECRET_KEY` | yes | `sk_test_…` then `sk_live_…` | `app/api/checkout/route.ts` L22; webhook L41 | checkout closed (503); webhook 503 |
+| `STRIPE_WEBHOOK_SECRET` | yes | `whsec_…` (test and live differ) | webhook `route.ts` L41 | webhook 503 (Stripe retries for up to 3 days, then gives up) |
+| `MERCH_SHIP_FLAT_CENTS` | **yes** | e.g. `599` | `lib/checkout-core.ts` L40–41 | checkout closed (503) |
+| `MERCH_SHIP_EXTRA_ITEM_CENTS` | optional | e.g. `200` | `checkout-core.ts` L47 | 0 |
+| `MERCH_FREE_SHIP_OVER_CENTS` | optional | e.g. `7500` | `checkout-core.ts` | no free shipping |
+| `MERCH_SHIP_MIN_DAYS` / `MERCH_SHIP_MAX_DAYS` | optional | e.g. `3` / `8` | `checkout-core.ts` L42–43 | no delivery estimate |
+| `MERCH_STRIPE_AUTOMATIC_TAX` | after S-8 | `true` | `checkout-core.ts` L118 | **no sales tax charged** |
+| `PRINTFUL_API_TOKEN` | yes | the S-4 token | `lib/fulfillment.ts` | paid orders alert *"Printful isn't connected"* and Stripe retries (webhook L100–101) |
+| `PRINTFUL_STORE_ID` | only for an Account token | store id | `lib/fulfillment.ts` | Printful refuses calls for an Account token |
+| `PRINTFUL_WEBHOOK_TOKEN` | yes | Token C | `app/api/printful/webhook/[token]/route.ts` L24 | every Printful notice gets 404 |
+| `MERCH_ADMIN_KEY` | yes | Token B | `lib/admin.ts` | order desk locked (set today) |
+| `MERCH_CATALOG_TOKEN` | yes | Token A | `lib/catalog.ts` L24 | the shop shows only its built-in list |
+| **`MERCH_CATALOG_URL`** | **yes, today (F-11-1)** | `https://www.greenwaymarijuana.com/api/merch-catalog` | `lib/catalog.ts` L23 | the default non-www address redirects and **drops Token A**, so **no Studio products appear** |
+| `MERCH_CONTENT_URL` | recommended | `https://www.greenwaymarijuana.com/api/merch-content` | `lib/site-content.ts` L21 | still works (the feed is public), but every read takes an extra redirect hop |
+| `MERCH_PRINTFUL_AUTO_CONFIRM` | **leave unset** | `true` only after many good orders | webhook `route.ts` L112–113 | orders stay **drafts** for a human Confirm (safe default) |
+
+> **Correction to the finishing guide.** `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 says `MERCH_CATALOG_URL` / `MERCH_CONTENT_URL` are *"don't add"*. That was right when greenwaymarijuana.com did not redirect to www. **It is wrong today** (F-11-1). Add `MERCH_CATALOG_URL` until the code fix in G-76 ships, then the variable can be removed.
+
+#### 4.4.2 Main project (greenwaymarijuana.com)
+
+| Variable | Need | Value | Read at | If missing |
+|---|---|---|---|---|
+| `MERCH_CATALOG_TOKEN` | yes | Token A (the same as merch) | `src/app/api/merch-catalog/route.ts` L23 | feed answers 404 to everyone, so the shop shows nothing new |
+| `PRINTFUL_API_TOKEN` | yes | the same token as the merch project | `src/lib/merch-studio/printful-client.ts` L25, L29 | mockups, live stock, the order panel, Confirm and Cancel say *"Printful isn't connected"* |
+| `PRINTFUL_STORE_ID` | Account token only | store id | `printful-client.ts` L32 | Printful refuses calls |
+| `VERCEL_ANALYTICS_TOKEN` | for Reports → Merch | Vercel token | `src/lib/merch/merch-reports-*` | the traffic card says it is not set up |
+| `MERCH_VERCEL_PROJECT` | for Reports → Merch | merch project id `prj_…` | same | the same |
+| `VERCEL_TEAM_ID` | if the token is Full Account | `team_…` | same | the same |
+
+### 4.5 The first test order, end to end (test mode, then live)
+
+> **Do this once in Stripe test mode, then once with a real card for a real shirt.** Each step names what you should see.
+
+1. **Publish a cheap test product** (§4.12) with one colour and one size. Within about 60 seconds it should appear on `greenwaymerch.com`. If it does not, see §6.1. Today it will not, until F-11-1 is fixed.
+2. Add it to the cart and check out with a **Washington** address. In test mode use card `4242 4242 4242 4242`, any future date and any CVC.
+3. In Stripe → **Payments**, the payment shows **Uncaptured** for a moment, then **Succeeded**. The webhook captured it because the address is in WA (`webhook route.ts` L103–104).
+4. In Stripe → **Developers → Webhooks → your endpoint**, the event shows **200**.
+5. In Printful → **Orders**, a **Draft** order appears with the right garment, colour, size and print files. It is also on `greenwaymerch.com/admin/orders` and in the back office under **Orders**.
+6. In test mode, **do not Confirm**. Cancel it at Printful (§4.19). In live mode, press **Confirm** (§4.18). Printful charges the LLC card and production starts.
+7. **Out-of-state test:** check out with an Oregon address. The card hold is released for free, the shopper gets a cancelled email, and you get an alert that says *"cancelled automatically (not charged)"* (webhook L74–87).
+8. When Printful ships the live order, the customer gets the **shipped** email with tracking. You can see it in Resend → Emails.
+9. **Go live:** Stripe live key, live webhook and live `whsec_` in Vercel (S-6, S-7), then redeploy. Record the date on form 8.1.
+
+✅ **Setup is complete when** all 9 steps passed and form 8.1 is filled and signed.
+
+---
+
+### Part 3: Merch Studio, tab by tab
+
+### 4.6 The Studio page and where your work is saved (read this first)
+
+**Where it is:** **MKTG & ADV → Merch Studio** (`/admin/merch-studio`). The header **?** opens the helper *How the Merch Studio works* (`src/lib/admin/page-helpers-core.ts` L323–341). The gold strip under the header reminds you that the seller is the LLC (`page.tsx` L53–56). There are six tabs, and the address remembers the open one as `?tab=garments|design|proof|check|fulfillment|publish` (`src/lib/merch-studio/studio-tabs-core.ts` L12–18).
+
+> **⚠ Where your work lives today (F-11-2).**
+> - **Drafts** are saved in **this browser's** local storage (`gw-merch-designs-v1`).
+> - **Uploaded art** is saved in **this browser's** IndexedDB (`gw-merch-assets`) (`src/components/admin/merch-studio/merch-assets.ts` L6–9, L15–17).
+>
+> Nothing is on the server until you publish. The Drafts panel still promises *"server-side designs arrive with the Greenway Goods website (Slice 5)"* (`DesignStudio.tsx` L563). That promise was never built, and the shop now exists.
+>
+> **What this means for you:**
+> - Design and publish on **the same computer and the same browser**.
+> - Never use a private window.
+> - Never "clear site data" for greenwaymarijuana.com.
+> - After every finished design, press **Proof & Export → Download print files (.zip)**. The ZIP holds the PNGs plus `design.json`.
+> - **Today the app has no way to load `design.json` back in.** No file picker in the Studio accepts JSON (the only file inputs take images, `AddPanel.tsx` L65, `ArtCheckPanel.tsx` L69). So the ZIP is a backup of the **print files**, not a restorable design (F-11-2, G-79).
+> - Publishing from another computer fails with *"Some artwork isn't on this device… Open the design on the computer it was made on."* (`PublishPanel.tsx` L270).
+
+**The order of work (the "happy path"):** Garments → Design → Proof & Export (ZIP + mockups) → **order a sample at Printful and approve it** → Publish & Ads → Merch Inventory → wait for orders. The Studio does not guide you through this order or stop you skipping a step today. Appendix B, G-78 adds a step-by-step coach.
+
+### 4.7 Tab 1, Garments
+
+1. Open **👕 Garments**. You see the premium blanks (`garment-catalog-core.ts` L171–249):
+   - Comfort Colors 1717, 6014 and 1566
+   - Bella + Canvas 3001
+   - Independent IND4000 and EXP54LWZ
+   - Lane Seven LS14003 full-zip
+   - Yupoong 6089M, 6245CM and 1501KC
+   - Richardson 112
+2. Each card shows the **fabric** and **weight**, the **sizes and Printful base price** (one unit, before placements and shipping), the **print placements** (max area, methods, Printful key and upcharge), the **source** of the measurements, and **Watch out for**.
+3. **Source matters.** A placement marked **studio-default** is an estimate, not from Printful's guide. There are **7** of them (`garment-catalog-core.ts`, `dimsSource: "studio-default"`, 7 occurrences, e.g. L151 wrists, L195 hoodie front, L214/L225–226 zip-hoodie and windbreaker fronts and back). For these, open Printful's own file template for that product before you finalise the art (F-11-14, Q-11-6).
+4. Pick a garment and a colour, then press **Start a new design on it**.
+
+✅ **Done when** the Design tab opens with that garment and colour.
+
+### 4.8 Tab 2, Design
+
+1. Choose a **placement pill** (front, back, sleeve and so on). The **green dashed box** is the exact printable area in true inches.
+2. **➕ Add**: headline, wordmark, arched text, small tagline (`AddPanel.tsx` L20–23), icons, shapes, or **your own art** (PNG, JPEG, WEBP, SVG; `AddPanel.tsx` L65).
+3. **✏️ Selected**: size, colour, font, curve and so on. **🗂️ Layers & Arrange**: Bring to front, Send to back. Keyboard shortcuts:
+   - arrows nudge 1/16″ (Shift = 1/4″);
+   - Ctrl+Z / Ctrl+Shift+Z undo and redo;
+   - Ctrl+D duplicates;
+   - Alt-drag skips snapping (helper step 2).
+4. **✅ Print checks** shows blockers (⛔) and warnings live: DPI, smallest letter height, thread colours for embroidery, seams, zippers, pouch pockets. **Fix every ⛔ before moving on.**
+5. **🎨 Colours & Preview**: see the design on each garment colour.
+6. **💾 Drafts**: autosaves in this browser (§4.6). **Duplicate this design** makes a copy.
+
+✅ **Done when** Print checks shows **0 ⛔** on every placement you used.
+
+### 4.9 Tab 3, Proof & Export (print files, mockups, the sample)
+
+1. Pick the saved design. The tab shows **Print files (n), exactly what Printful receives**: trimmed, transparent, true inches, DPI, and the distance from the collar or brim (`ProofPanel.tsx` L217).
+2. **Download print files (.zip)** (L208). The ZIP holds every 300-DPI sRGB PNG plus a README, a proof sheet and `design.json`. Keep it in the shared drive (form 8.2).
+3. **Open proof sheet** (L209). Print it or save it as a PDF. This is what you approve and measure the sample against.
+4. **Photo mockups (Printful)** (L253). Pick colours and press the button.
+   - The print files are uploaded to the **private** `merch-files` bucket. Printful gets a 1-hour link (`proof-actions.ts` L28, L88, L96).
+   - Wait for the pictures. **Printful allows 2 mockups a minute for new stores and 10 for established ones.** If you see that message, wait a minute (L97).
+   - If you see *"The private 'merch-files' bucket doesn't exist yet - apply migration 0281…"* (L56), the owner applies `supabase/migrations/0281_merch_print_files_bucket.sql` in Supabase.
+5. **Order a sample** (the human step, Printful dashboard):
+   1. Printful → **Orders → New order → Sample** (Printful gives 20% off samples, `ProofPanel.tsx` L282 text). Upload the PNGs from the ZIP to the same placements.
+   2. When it arrives, work through the **Sample checklist** on this tab (`print-export-core.ts` L360–368):
+      - measure the position and the size against the proof sheet;
+      - compare colours in daylight;
+      - check the fit (S–XL);
+      - check the neck label and the packing slip say Greenway Glass & Goods;
+      - wash cold inside-out and re-inspect;
+      - feel the print.
+   3. **⚠ The ticks are saved only on this device** (`gw-merch-sample-<id>`, `ProofPanel.tsx` L34, L90). **Publish does not check them** (F-11-6). Interim rule: fill in **form 8.2** and sign it before anyone presses Publish.
+
+✅ **Done when** the ZIP is saved, the proof sheet is printed, the mockups look right and form 8.2 is signed.
+
+### 4.10 Tab 4, Artwork Check
+
+Use this **before** you design. It tells you whether a file will print sharp on a garment, placement and method.
+1. Pick **Method**, **Placement** and the **Artwork file**. The file is read on this device only and nothing is uploaded (`ArtCheckPanel.tsx` L61–69).
+2. Set the **Print width**. Tick **gradients / soft shadows** or **photo** if they apply (L74–76).
+3. Optional: **Test a line of text** with a letter (cap) height (L79–82). For embroidery on a blank that supports it, there is a **3D puff** toggle (L83).
+
+✅ **Done when** the result shows no blockers at the width you plan to print.
+
+### 4.11 Tab 5, Fulfillment & Pricing
+
+1. **The pipeline** shows the nine steps of §4.1 (`FulfillmentPanel.tsx` L39; `fulfillment-core.ts` L80–88).
+2. **The unit-economics calculator:**
+   - Enter the **retail price**, the **Printful cost** (from the Garments tab: base price plus placement upcharges), the **shipping you charge** and the **shipping it costs you**.
+   - It works out the **card fee** (Stripe 2.9% + 30¢), the **profit** and the **margin**. It also warns that a **dispute** costs $15 (`fulfillment-core.ts`, `STRIPE_DISPUTE_CENTS`; self-tests L93–99).
+3. **Shipping cost:** the hint still says it comes *"From Printful's shipping-rates API at checkout… (Slice 5). Enter an estimate for now"* (`FulfillmentPanel.tsx` L68). **That was never built.** The shop charges the **flat** shipping you set in `MERCH_SHIP_FLAT_CENTS` (and the optional extras) and never asks Printful (F-11-12). Enter Printful's real US rate for the garment from printful.com/shipping. If it is higher than your flat price, you lose the difference on every order.
+4. **Suggested retail** ignores shipping (F-11-13). Use the calculator's **profit** line, not the suggestion alone.
+
+✅ **Done when** the margin is what you want **after** the real shipping cost. Write the price on form 8.2.
+
+### 4.12 Tab 6, Publish & Ads (the listing and the redirect ad)
+
+This tab has **two separate jobs** (`PublishPanel.tsx` L4–16).
+
+**A. The listing: Publish to greenwaymerch.com**
+1. **Design**: the dropdown lists only designs **saved in this browser** (`PublishPanel.tsx` L31, L235).
+2. Set the **Title** (up to 80 characters) and the **Description** (up to 1,000) (`listing-package-core.ts` L47). The title becomes the web address (the **handle**).
+3. **Colours** and **sizes**: at most **100 colour × size combinations**, which is Printful's limit (`listing-package-core.ts` L45, L171). Untick some colours or sizes, or split the design into two listings.
+4. **Retail price, smallest size (USD)**: it starts at **35** (L250, F-11-13). Change it to your form 8.2 price. **Add Printful's bigger-size upcharge (e.g. 2XL) to the price** passes the 2XL+ upcharge on to the customer.
+5. **Photos**: up to 8 `https://` pictures from the Media Library (`merch-inventory-core.ts`, `MERCH_ITEM_MAX_IMAGES = 8`). Mockups from §4.9 are a good choice.
+6. Read the issues list. **Every blocker must be fixed** before the button enables (L383).
+7. Press **Publish to greenwaymerch.com** (L383–384). What happens next (`PublishPanel.tsx` L265–285, `catalog-actions.ts` L38–97):
+   - every print PNG is rendered and uploaded to `media/merch-print/<handle>/<nonce>/`. This is the **public** bucket, because Printful must be able to fetch the files;
+   - the server checks each file really is a PNG, and enforces the 100-variant limit and the handle;
+   - it writes the product into the catalog **as Live**, with `stockSyncedAt` cleared (`merch-inventory-core.ts` L102, L107);
+   - it audits `merch.product_published` or `merch.product_republished`;
+   - the message reads *"Published "…". It is in Merch Inventory now and on greenwaymerch.com within about a minute"* with **Open Merch Inventory**.
+8. **Download listing package (.json)** (L400) is an optional backup of the listing, not of the design.
+
+> **⚠ Re-publishing (F-11-7).** Pressing Publish again for an **existing** handle replaces it **and makes it Live again, even if you had hidden it** in Merch Inventory. It also clears the stock-sync time (`merch-inventory-core.ts` L90–110, *"Re-publishing replaces it and puts it live again"*). Interim rule: after a re-publish of a hidden product, go to Merch Inventory and press **Hide** again. Then press **Copy Printful stock to the website** (§4.15).
+
+> **⚠ Same title, different design.** If another design already uses that web address, publishing is refused with *"Another design is already published as "…". Change the product title so it gets its own web address."* (L97–98). This is protection, not a bug.
+
+> **⚠ Old print files stay.** Each re-publish uploads to a new `<nonce>` folder. The old PNGs are not deleted until the product is **Removed** (`inventory/merch/actions.ts` L42–45 only removes the current set). They are harmless, but they take up space (F-11-15).
+
+**B. The Greenway Goods ad on the cannabis website** (also reached from Website → Merchandise → *Merch Ad Card (on Shop)*, which simply redirects here, `merch-site/ad-card/page.tsx` L13)
+1. **Show the ad on the cannabis website**: toggle it on.
+2. **Greenway Goods website address** must be `https://` on the **separate** merch domain. It cannot be greenwaymarijuana.com, and it cannot have `?` or `#`, an IP address or a port (`merch-ad-core.ts` L211+).
+3. Eyebrow, heading, intro and button words. **No prices, and no cart or product details.** The checker blocks words that look like a price or a checkout (*"Prices live only on the merch site - the cannabis site shows no product details"*).
+4. Up to 4 picture **tiles** and up to 12 **category cards**. Use **standard category cards** to fill them in. Without cards the shop's "Greenway Merch" filter stays hidden.
+5. Read **Live preview (exactly what customers will see)**. Then **Save draft** or **Publish to the website**. Publish is refused while a blocker remains, and the server checks again (`ad-actions.ts` L36–38). Publishing refreshes `/menu` and every category page (L58–59).
+
+✅ **Done when** the product is in Merch Inventory as **Live** and, within about a minute, visible on greenwaymerch.com. **Today it will not appear until F-11-1 is fixed** (§6.1).
+
+---
+
+### Part 4: Merch Inventory
+
+### 4.13 Reading the page
+
+**Where:** **Inventory → Merch Inventory** (`/admin/inventory/merch`). The subtitle says *"Publishing in Merch Studio adds products here automatically."* There are **Publish a design** and **Download CSV** buttons.
+
+| Card | Meaning |
+|---|---|
+| **Products** | every published product (live and hidden). The catalog holds at most **200** (`MERCH_CATALOG_MAX_ITEMS`, `merch-inventory-core.ts` L28) |
+| **Variants** | colour × size combinations |
+| **Need attention** | *n out of stock at Printful* plus *n website mismatches* (`page.tsx` L77) |
+| **Units sold** / **Revenue / gross profit** | from Printful orders. **Cancelled and failed orders are not counted** (`NOT_A_SALE`, L184) |
+
+**Filters:** Search, then **All / Live / Hidden / Needs attention** (`page.tsx` L47–50, L87).
+
+**Per product:** status badge, *n website mismatch* badge, **Hide/Show**, **Remove…** (owner/admin), and the variants table. The table columns are Colour, Size, **Printful stock**, **Website** (Shown or Hidden), Retail, Printful cost, Profit, Margin, Sold and Revenue.
+
+**Printful stock labels** (`merch-inventory-core.ts` L141):
+
+| Label | Meaning | Sellable? |
+|---|---|---|
+| **In stock** | Printful has the blank | yes |
+| **Made to order** | `stocked_on_demand` | yes |
+| **Out of stock** | Printful cannot make it now | no |
+| **Discontinued** | gone for good; remove that colour or size and re-publish | no |
+| **Not checked** | Printful did not answer or is not connected | unknown |
+
+A **website mismatch** means Printful's answer and what the website shows differ (`L232`). Fix it with §4.15.
+
+> **No helper.** This page has no **?** helper and no `helpId` (`page.tsx` L56; F-11-17, G-90). This SOP section is the helper until G-90 adds one.
+
+### 4.14 Hide, show and remove
+
+- **Hide** takes the product off greenwaymerch.com within about a minute and keeps it here. **Show** puts it back. Both are audited (`merch.product_hidden` / `merch.product_shown`, `actions.ts` L22–30).
+- **Remove** is **owner/admin only**. Type the product's web name (handle) **exactly** to confirm. It removes the product from the catalog **and** deletes its current print PNGs. Past orders at Printful are not affected (`actions.ts` L33–48). It is audited as `merch.product_removed` with the title and variants. **There is no undo.** You would have to publish again from the original browser (§4.6).
+- **Rule:** prefer **Hide**. Use **Remove** only for a product you will never sell again.
+
+> **⚠ Two people editing at once (F-11-16).** Each change re-reads the catalog and saves the whole list, and there is no version check (`merch-inventory-store.ts`). If two people press Hide or Publish in the same second, one change can be lost. Interim rule: one person at a time. Refresh the page after each change.
+
+### 4.15 Copying Printful stock to the website
+
+1. Press **Copy Printful stock to the website** (`page.tsx` L93).
+2. The server asks Printful once per **garment** (at most 40 garments, `merch-inventory-server.ts` L15–16). It sets every variant to sellable or not, saves, and audits `merch.stock_synced` (`actions.ts` L51–63).
+3. The message reads *"Checked n variants at Printful; m changed on greenwaymerch.com."* plus a note if Printful did not answer for some garments.
+
+**How often:** **daily**, and right after any re-publish (form 8.3). **Nothing does this automatically today.** There is no cron and no Printful `stock_updated` webhook (F-11-8, G-83). If Printful runs out of a colour, the shop keeps selling it until someone presses this button. The webhook then alerts you when Printful puts the order on hold.
+
+> **A safety net.** At checkout and in the webhook the shop re-reads the catalog fresh and drops variants marked out of stock (`merch-site/lib/catalog-core.ts` L267). So a sync stops further sales at once.
+
+### 4.16 The CSV export
+
+**Download CSV** (`/admin/inventory/merch/export`) gives one row per variant with the same columns as the table. Use it for the monthly review (form 8.3) or the accountant.
+
+---
+
+### Part 5: Orders and money
+
+### 4.17 What happens when a customer pays
+
+`merch-site/app/api/stripe/webhook/route.ts` L1–121:
+
+1. Checkout re-prices the cart from the **fresh** catalog, so prices in the browser are never trusted (`checkout/route.ts` L33). It accepts **US** addresses only. The session lasts at most 24 hours (`checkout-core.ts` L79–80). The card is **authorized only**, not charged (`capture_method=manual`, L85).
+2. Stripe calls the webhook. The shop checks the signature (5-minute tolerance) and re-reads the session from Stripe. Then (`region-core.ts` `decidePayment`):
+   - **Washington address** → **capture** the card → create a Printful **draft** order. With `MERCH_PRINTFUL_AUTO_CONFIRM=true` the order is confirmed straight away (L112–113), which is not recommended.
+   - **Not Washington** → **cancel** the authorization (free) → email the shopper *cancelled* → alert you *"cancelled automatically (not charged)"* (L74–87).
+   - **A problem with the order plan** (catalog changed, bad address) → **not captured** → alert *"Order … needs you - NOT sent to Printful"* with *"Holds expire after about 7 days"* (L90–95). See §4.20.
+   - **Printful not connected** → alert, answer 500 so Stripe retries (L100–101).
+   - **Printful down** → alert, answer 500 so Stripe retries for up to 3 days. **Printful rejected it** → alert, no retry (L116–117).
+
+### 4.18 Confirming an order (the human click)
+
+**Either place works.**
+- **Shop desk:** `greenwaymerch.com/admin/orders`. Enter Token B, which is remembered for 12 hours (`actions.ts` L24). Filter **Draft** → check the item, the address and paid vs Printful cost → **Confirm** (`POST /orders/{id}/confirm`, L42).
+- **Back office:** **Orders** → merch panel → open the order (`/admin/orders/merch/[ref]`) → **Confirm**. Only a **draft** can be confirmed (`merch-orders-core.ts` L79). The page re-reads Printful first, so a stale page can never confirm twice. The action is audited as `merch.order_confirm` (`merch-actions.ts` L32–51).
+
+**After Confirm**, Printful charges the LLC card and production takes about 2–5 business days.
+**Rule:** confirm every draft **the same business day** (form 8.3).
+
+### 4.19 Cancelling an order and refunding the customer
+
+> **Cancel is two systems, and the app only does one of them** (F-11-10). The order page says so: *"Cancels it at Printful (any Printful charge is returned to the LLC's card). This does **not** refund the customer: refund them in Stripe as well."* (`orders/merch/[ref]/page.tsx` L176–186).
+
+1. **Back office:** the order page → **Cancel this order…** → **Yes, cancel at Printful**. You can cancel orders that are Draft, Pending or Failed (`merch-orders-core.ts` L81). It is audited as `merch.order_cancel`.
+2. **Then, the same minute: Stripe** → **Payments** (link on the page, L170) → find the payment (search the customer email or the order ref) → **Refund** → full amount → reason. If the payment is still **Uncaptured**, press **Cancel** instead; that is free.
+3. Write it on form 8.4: order ref, Printful cancelled (time), Stripe refunded (time), by whom.
+
+**After production has started** (In process / Shipped), Printful will not cancel. Contact Printful support. For a customer return, see the shop's policy pages.
+
+### 4.20 Card holds that are never captured (the 7-day clock)
+
+The webhook leaves the authorization in place when something needs you (§4.17). Card networks keep a card-not-present hold for about **7 days** (Visa customer-initiated 7 days; Mastercard, Amex and Discover 7 days). **Then it expires and the sale is lost** (Stripe documents, Appendix A.3).
+
+**Today nothing reminds you** (F-11-11, G-84).
+
+**Rule:** every *"needs you"* alert is handled the same day. Stripe → Payments → filter **Uncaptured** → fix the cause → **Capture**. Then create the Printful order by hand, or resend the event from Stripe → Webhooks. Otherwise **Cancel** the hold.
+
+### 4.21 Shipped emails, problems at Printful and owner alerts
+
+- **Shipped:** Printful calls `/api/printful/webhook/<Token C>` and the shop emails the customer the tracking link. If the email fails, you get *"Shipped email NOT sent for …"* (`[token]/route.ts` L43–45).
+- **Problems:** `order_failed`, `order_canceled` and `order_put_hold` give an alert *"Printful: order put hold - …"* with the reason (`orders-core.ts` L170; route L31–32).
+- **Where alerts go:**
+  - by email to `MERCH_ORDER_ALERT_EMAIL` through Resend;
+  - **always** as well into the merch project's Vercel logs as `[merch-alert] …` (`fulfillment.ts` L55–58).
+- **If Resend is not set up, alerts exist only in the logs and nobody is told** (F-11-9).
+- **Weekly check** (form 8.3): Vercel → merch project → **Logs** → search `[merch-alert]`.
+
+---
+
+### Part 6: The shop's look, the reports and the ad
+
+### 4.22 Website → Merchandise editors
+
+All of them follow the same pattern: **draft → preview → Publish**, with revisions you can restore. Each has its own **?** helper (`page-helpers-core.ts` L246–300).
+
+| Editor | Where | What it controls |
+|---|---|---|
+| **Merch Header & Footer** | `/admin/merch-site/header-footer` | the header, announcement bar and footer on every shop page |
+| **Merch Banners** | `/admin/merch-site/banners` | a finished banner for the home page or any category (desktop, phone, alt text, link) |
+| **Merch Product Cards** | `/admin/merch-site/cards` | the wording on product and category cards, and each category's image and blurb |
+| **Merch Order Emails** | `/admin/merch-site/emails` | the shipped and cancelled-outside-Washington emails |
+| **Merch Ad Card (on Shop)** | `/admin/merch-site/ad-card` | redirects to Merch Studio → Publish & Ads (§4.12 B) |
+
+The shop reads published content from `/api/merch-content`, which is public and serves published content only, cached for 60 s. Like the catalog, that address now redirects to www. It still works because the feed is public (F-11-1). Set `MERCH_CONTENT_URL` to the www address to save the extra hop.
+
+### 4.23 Reports → Merch
+
+**Reports → Merch** (`/admin/reports/merch`, `reports.view`):
+- **Merch sales by day**: what customers paid, in Pacific days.
+- **Breakdown**: where the money went.
+- **Top merch items**.
+- **By delivery location**.
+- **Washington sales tax**: tax charged at checkout, read back from Printful orders. *"Greenway Merchandising LLC files this with WA DOR; Printful does not collect or remit it."*
+- **Cancelled / failed (not counted)**.
+- **greenwaymerch.com traffic** (Vercel Web Analytics: top pages, sources, countries, devices). Until `VERCEL_ANALYTICS_TOKEN` and `MERCH_VERCEL_PROJECT` are set, the card shows the three setup steps.
+
+The page has no **?** helper (G-90).
+
+### 4.24 The Greenway Goods ad on the cannabis site (WAC 314-55-155)
+
+The cannabis site may **link** to the LLC's shop. Its wording must still follow Washington's cannabis advertising rules (WAC 314-55-155), with no prices and no product details. The ad checker enforces the no-prices, no-checkout and separate-domain rules (§4.12 B). The checker cannot judge **appeal to children**, false health claims or the other WAC themes, so a person reads every ad before Publish (form 8.2, part C). The Creative Studio version of this SOP (v2.0) will cover advertising compliance in full.
+
+---
+
+## 5. Messages you may see, and what to do
+
+| Message (exact) | Where | Why | What to do |
+|---|---|---|---|
+| *Checkout isn't open yet. Please check back soon.* | shop cart | `STRIPE_SECRET_KEY` missing or invalid, or `MERCH_SHIP_FLAT_CENTS` missing (`checkout/route.ts` L22–24) | S-6/S-9; check both in Vercel and redeploy |
+| `{"error":"Webhook not configured."}` (503) | Stripe → Webhooks attempts | `STRIPE_WEBHOOK_SECRET` or `STRIPE_SECRET_KEY` missing (webhook L41) | S-7/S-9; then Stripe → event → **Resend** |
+| `Bad signature.` (400) | Stripe attempts | wrong `whsec_` (test vs live mixed up) | copy the signing secret of **this** endpoint and mode |
+| *Printful isn't connected yet: add PRINTFUL_API_TOKEN…* | Studio mockups, Inventory, Orders | no token in the **main** project (`printful-client.ts` L30) | S-4 and S-12 |
+| *Printful's mockup limit was hit (2 per minute for new stores, 10 for established)…* | Proof & Export | Printful rate limit (`proof-actions.ts` L97) | wait 60 s |
+| *The private 'merch-files' bucket doesn't exist yet - apply migration 0281…* | Proof & Export | migration not applied | owner applies 0281 |
+| *Some artwork isn't on this device (n). Open the design on the computer it was made on.* | Publish | art lives in the other browser (§4.6) | publish from the original computer |
+| *n variants - Printful allows 100 per product* | Publish issues | too many colour × size combinations | untick some, or split |
+| *Another design is already published as "…". Change the product title…* | Publish | handle collision (`merch-inventory-core.ts` L97–98) | new title |
+| *The catalog is full (200 products). Remove an old one first.* | Publish | catalog limit (L96) | remove a dead product |
+| *A print file didn't arrive in Storage as a PNG. Publish again.* | Publish | upload interrupted (`catalog-actions.ts` L74) | press Publish again |
+| *Type the product's web name exactly to confirm removal.* | Inventory | confirm text did not match | type the handle exactly |
+| *Printful now says this order is "…", so it can't be confirmed/cancelled from here.* | Order page | status moved on at Printful (`merch-actions.ts` L44) | open it at Printful |
+| *Not published: …* | Publish & Ads (ad) | an ad blocker (`ad-actions.ts` L38) | fix the field named |
+| Alert: *Order … needs you - NOT sent to Printful* | email / logs | plan problem; the card is **held** | §4.20 the same day |
+| Alert: *Order … paid but Printful isn't connected* | email / logs | no token in the **merch** project | S-4/S-9, then resend the Stripe event |
+| Alert: *Printful is unreachable / rejected order …* | email / logs | Printful down (Stripe retries) or refused | down: wait and check status (§9.4); rejected: fix it at Printful or refund |
+| Alert: *Out-of-state order … cancelled automatically (not charged)* | email | non-WA address | nothing to do |
+| Alert: *Out-of-state order … could NOT cancel the card hold* | email | Stripe refused the cancel | cancel it in the Stripe dashboard |
+| Alert: *Shipped email NOT sent for …* | email | Resend problem or no customer email | email the tracking link by hand |
+| Alert: *Printful: order failed / canceled / put hold - …* | email | Printful problem | open it at Printful; refund if it is cancelled |
+
+## 6. Exceptions & troubleshooting
+
+### 6.1 I published, Merch Inventory shows it Live, but greenwaymerch.com does not show it
+1. Wait about 60 s (the shop caches for 60 s).
+2. **Today the cause is F-11-1.** The default catalog address redirects to www and the token is dropped. Fix: merch project → add `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` → redeploy.
+3. Otherwise, check that Token A is **identical** in both projects and at least 32 characters long, and that both projects were redeployed after the change.
+4. Check the product is **Live** and not Hidden.
+
+### 6.2 Checkout says it isn't open
+See §5, first row. Check Vercel → merch → Environment Variables for `STRIPE_SECRET_KEY` and `MERCH_SHIP_FLAT_CENTS` (cents, digits only).
+
+### 6.3 Stripe says the webhook is failing
+Stripe → Webhooks → endpoint → **Event deliveries**:
+- **503** = variables missing;
+- **400** = wrong secret;
+- **3xx** = wrong URL (www);
+- **500** = Printful down or not connected (it retries by itself).
+
+Stripe disables an endpoint that keeps failing for days, so check that it still says **Enabled**.
+
+### 6.4 No "shipped" emails
+1. Run the S-10 check command; the URL and Token C must match.
+2. Check the Resend domain is Verified and `MERCH_EMAIL_FROM` is set.
+3. Search Vercel logs for `[merch-alert] Shipped email NOT sent`.
+
+### 6.5 Printful token expired
+Every Printful feature stops at once in **both** sites: mockups, stock, orders, and the webhook's order creation (paid orders alert and Stripe retries for up to 3 days). Make a new token (S-4), paste it in **both** projects, redeploy both, and re-run S-10 (the webhook registration belongs to the store and normally survives, but check it). Record the new expiry on form 8.1.
+
+### 6.6 I changed computers and my designs are gone
+They are in the old browser (§4.6). Go back to that computer. If it is lost, the print PNGs in the ZIP can be uploaded as **art** in a new design on the same placement. The design cannot be restored from `design.json` today (G-79).
+
+### 6.7 A hidden product came back
+A re-publish makes it Live (F-11-7). Hide it again.
+
+### 6.8 Printful or Stripe is down
+- Printful: `https://www.printfulstatus.com`
+- Stripe: `https://status.stripe.com`
+- Resend: `https://resend-status.com`
+
+Paid orders are safe. Stripe keeps retrying the webhook for up to 3 days, and alerts say *unreachable*. Do nothing until the status page is green, then check Stripe → Webhooks for failed deliveries and **Resend** them.
+
+## 7. Controls: what the app already does well, and what it does not do yet
+
+**What already works well (F-11-C):**
+- **Fail closed everywhere.** No Printful token means nothing is sent anywhere (`printful-client.ts` L9–10, L30). No Stripe or shipping settings means checkout stays closed, never a guessed price (`checkout-core.ts` L133). Dollars are refused in money settings (L134).
+- **Washington only, without fees.** The card is authorized, then captured only for a WA address, and other states are cancelled free (`checkout-core.ts` L85; webhook L74–104).
+- **The browser is never trusted for price.** Checkout and the webhook re-price from a **fresh** catalog read (`checkout/route.ts` L33; webhook L90).
+- **Idempotent.** Capture and cancel use idempotency keys (`gm-capture-…`, `gm-cancel-…`), and Printful orders use `update_existing=true` (webhook L75, L104, L113).
+- **A hidden, constant-time catalog feed.** 404 for any wrong token, 503 only on a read error (`merch-catalog/route.ts` L20–31). The shop keeps its last good list if the feed fails (`catalog.ts` L38–44).
+- **A human Confirm by default** (`MERCH_PRINTFUL_AUTO_CONFIRM` unset).
+- **Audits** on publish, re-publish, hide, show, remove, stock sync, confirm and cancel.
+- **The store never overwrites a catalog it could not read** (`merch-inventory-store.ts`).
+- **Remove is owner/admin only**, with a typed confirmation.
+- **Print files are verified PNGs** under the product's own folder (`catalog-actions.ts` L70–75).
+- **The ad cannot show prices or product details** on the cannabis site (`merch-ad-core.ts` L211+), checked again on the server.
+
+**What it does not do yet:** see Appendix B (F-11-1 … F-11-18, G-76 … G-93).
+
+## 8. Checklists & forms
+
+### Form 8.1 — Merch setup record (owner, one time; update on every change)
+
+| # | Step (§4.2) | Done ✓ | Date | Notes / expiry |
+|---|---|---|---|---|
+| S-1 | Tokens A, B, C made and saved in the password manager | ☐ | | |
+| S-2 | Printful LLC account; one API/manual store; packing slip | ☐ | | store name: |
+| S-3 | Printful legal info; LLC card; WA resale certificate | ☐ | | cert status: |
+| S-4 | Printful private token (scopes: orders, webhooks, file_library) | ☐ | | **expires:** |
+| S-5 | Stripe LLC account activated (payments + payouts) | ☐ | | |
+| S-6 | Stripe secret key (test, then live) | ☐ | | |
+| S-7 | Stripe webhook (2 events, apex URL), test **and** live | ☐ | | |
+| S-8 | Stripe Tax Washington registration; `MERCH_STRIPE_AUTOMATIC_TAX=true` | ☐ | | |
+| S-9 | Merch project variables **incl. `MERCH_CATALOG_URL` (www)**; redeployed | ☐ | | |
+| S-10 | Printful webhook registered (4 types); check command OK | ☐ | | |
+| S-11 | Resend domain Verified; `RESEND_API_KEY`, `MERCH_EMAIL_FROM`, alert email | ☐ | | |
+| S-12 | Main project variables; redeployed | ☐ | | |
+| 4.5 | Test order passed (all 9 steps); live order passed | ☐ | | |
+| | Vercel analytics token expiry | | | **expires:** |
+| | Signed (owner) | | | |
+
+### Form 8.2 — New product sign-off (one per product, before Publish)
+
+- **A. Design**
+  - Garment, colour(s) and placements.
+  - Studio-default placements checked against the Printful template ☐.
+  - 0 ⛔ print checks ☐.
+  - ZIP saved to the shared drive (path) ☐.
+- **B. Sample**
+  - Sample order # / date received.
+  - Every sample checklist item passed ☐ (position, size, colour, fit, label, wash, hand).
+- **C. Words**
+  - Title and description proofread ☐.
+  - Ad wording read against WAC 314-55-155 (no appeal to children, no health claims) ☐.
+- **D. Money**
+  - Printful cost, real shipping cost, flat shipping charged, retail, profit and margin.
+- **E. Approval**
+  - Approved by (owner/named person), date.
+  - Published by, date.
+  - Visible on greenwaymerch.com ☐.
+
+### Form 8.3 — Merch routine
+
+| When | Task |
+|---|---|
+| **Every business day** | Shop desk or Orders: **Confirm** every Draft ☐ · handle every alert email ☐ · Stripe → Payments → **Uncaptured** = 0 ☐ |
+| **Daily** (until G-83) | Merch Inventory → **Copy Printful stock to the website** ☐ · Needs attention = 0 ☐ |
+| **Weekly** | Vercel merch logs → search `[merch-alert]` ☐ · Stripe → Webhooks endpoint **Enabled**, no failed deliveries ☐ · Resend → Emails delivered ☐ |
+| **Monthly** | CSV export to the books ☐ · Reports → Merch WA sales tax to the accountant ☐ · Printful token expiry > 30 days away ☐ · Printful status, Stripe status ☐ |
+| **Each token change** | update both projects, redeploy both, re-run S-10 if Token C or Printful token changed, update form 8.1 ☐ |
+
+### Form 8.4 — Cancel and refund log
+
+| Date | Order ref | Reason | Printful cancelled (time, by) | Stripe refunded / hold cancelled (time, by) | Customer told |
+|---|---|---|---|---|---|
+
+## 9. Quick reference
+
+### 9.1 Card: publish a product (designer)
+Garments → Design (0 ⛔) → Proof & Export (ZIP, proof sheet, mockups) → **sample approved (form 8.2)** → Publish & Ads B → title, colours, sizes, **price**, photos → **Publish to greenwaymerch.com** → Merch Inventory → **Copy Printful stock**.
+
+### 9.2 Card: an order came in (owner/staff)
+Alert or desk → **Confirm** the draft the same day. To cancel: **Printful cancel + Stripe refund, both** (form 8.4). If an alert says *"needs you"*, deal with the held card within 7 days (§4.20).
+
+### 9.3 Links
+| What | Where |
+|---|---|
+| Studio | `/admin/merch-studio` |
+| Merch Inventory | `/admin/inventory/merch` |
+| Merch orders | `/admin/orders` (merch panel) |
+| Reports → Merch | `/admin/reports/merch` |
+| Shop | `https://greenwaymerch.com` |
+| Shop order desk | `https://greenwaymerch.com/admin/orders` (Token B) |
+| Printful tokens | `https://developers.printful.com/tokens` |
+| Stripe webhooks | `https://dashboard.stripe.com/webhooks` |
+| Status pages | printfulstatus.com · status.stripe.com · resend-status.com |
+| Long setup guide | `docs/MERCH-SITE-FINISHING-GUIDE.md` (see the correction in §4.4.1) |
+
+### 9.4 Live status snapshot (read-only probes, 2026-11-11 08:36 UTC)
+
+| Probe | Result | Meaning |
+|---|---|---|
+| `GET https://greenwaymerch.com` | 200 | shop is up |
+| `GET https://www.greenwaymerch.com` | 307 → apex | good: the apex is the main address, so the Stripe webhook URL must be the apex |
+| `POST /api/checkout` | **503** *Checkout isn't open yet* | Stripe key and/or `MERCH_SHIP_FLAT_CENTS` **not set** |
+| `POST /api/stripe/webhook` (unsigned) | **503** | `STRIPE_SECRET_KEY` and/or `STRIPE_WEBHOOK_SECRET` **not set** (set would give 400) |
+| `POST /api/printful/webhook/<wrong>` | 404 | expected (Token C guard works) |
+| `GET /admin/orders` | asks for the admin key | `MERCH_ADMIN_KEY` is set |
+| Shop footer | contact@greenwaymerch.com, phone, address shown | `NEXT_PUBLIC_MERCH_*` set |
+| `/tees` and every category | 0 products | consistent with F-11-1 and/or nothing published |
+| `GET https://greenwaymarijuana.com/api/merch-catalog` | **308 → www** | **F-11-1**: the token is dropped on that redirect |
+| `GET https://www.greenwaymarijuana.com/api/merch-catalog` (no token) | 404 | expected (hidden feed) |
+| `GET https://greenwaymarijuana.com/api/merch-content` | 308 → www | works (public), with an extra hop |
+
+Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, `PRINTFUL_*`, `RESEND_API_KEY` and `MERCH_EMAIL_FROM` are set, whether the Printful webhook is registered, and the token's expiry. **Merch Health** (G-77) will show all of these on one screen.
+
+## 10. Glossary
+
+| Term | Meaning |
+|---|---|
+| **Blank** | the plain garment Printful prints on |
+| **Placement** | a print area (front, back, sleeve, brim…), with a true size in inches |
+| **Studio-default** | a placement size the Studio estimated; confirm it with Printful's template |
+| **Print file** | the 300-DPI transparent PNG Printful prints from |
+| **Mockup** | Printful's photo-like picture of the design on the garment |
+| **Handle** | the product's web name, made from the title (e.g. `greenway-arch-tee`) |
+| **Variant** | one colour × size combination, with its own Printful variant id |
+| **Listing package** | the product data that Publish writes to the catalog |
+| **Catalog** | the list of published products, stored in site settings `merch_catalog` and read by the shop |
+| **Token A / B / C** | catalog feed secret / shop order-desk key / Printful webhook secret |
+| **Authorize / capture** | hold the card / actually charge it |
+| **Draft order** | a Printful order that does nothing until someone presses Confirm |
+| **Webhook** | one system calling another to say something happened |
+| **Live / Hidden** | shown on the shop / kept in the catalog but not shown |
+| **Website mismatch** | Printful's stock and the shop's Shown/Hidden disagree |
+
+---
+
+## Appendix A: Source map and external sources
+
+### A.1 Back office (main app)
+
+| Area | Files (all read for this SOP) |
+|---|---|
+| Studio page and tabs | `src/app/admin/merch-studio/page.tsx` (L35 permission, L50 helpId, L53–56 seller strip) · `src/lib/merch-studio/studio-tabs-core.ts` L12–18 · `src/components/admin/merch-studio/MerchStudio.tsx` |
+| Garments | `CatalogPanel.tsx` · `src/lib/merch-studio/garment-catalog-core.ts` (L31 `DimsSource`, L171–249 blanks, 7× `studio-default`) · `garment-colors-data.ts` · `garment-views-core.ts` |
+| Design | `DesignStudio.tsx` (L340–345 sub-tabs, L563 stale storage text) · `AddPanel.tsx` · `ElementPanel.tsx` · `MerchCanvas.tsx` · `IssueList.tsx` · `merch-assets.ts` (L6–9, L15–17 storage) · `src/lib/merch-studio/merch-design-core.ts` · `print-rules-core.ts` |
+| Proof & Export | `ProofPanel.tsx` (L34/L90 sample ticks, L208–209, L217, L253, L281) · `print-export.tsx` · `print-export-core.ts` L360–368 · `src/app/admin/merch-studio/proof-actions.ts` (L28, L56, L88, L96–97) · migration `0281_merch_print_files_bucket.sql` |
+| Artwork Check | `ArtCheckPanel.tsx` L48–83 |
+| Fulfillment | `FulfillmentPanel.tsx` (L39, L68) · `src/lib/merch-studio/fulfillment-core.ts` (L70–88, `SHIPPED_SLICE` L76) |
+| Publish & Ads | `PublishPanel.tsx` (L4–16, L31, L181–183, L235–285, L383–402) · `catalog-actions.ts` (L6–7, L29, L38–97) · `ad-actions.ts` (L36–38, L53–59) · `src/lib/merch-studio/listing-package-core.ts` (L42–47, L130–171) · `src/lib/merch/merch-ad-core.ts` L211+ · `src/lib/merch-studio/printful-client.ts` (L9–10, L18, L24–32) |
+| Merch Inventory | `src/app/admin/inventory/merch/page.tsx` (L35–37, L47–50, L56, L77, L87, L93) · `actions.ts` (L22–63) · `export/route.ts` · `src/lib/merch/merch-inventory-core.ts` (L28, L90–110, L129–134, L141–143, L160–172, L184, L208–232) · `merch-inventory-store.ts` (L13–20) · `merch-inventory-server.ts` (L11–22) |
+| Orders | `src/lib/orders/merch-orders-server.ts` · `merch-orders-core.ts` (L79, L81) · `src/app/admin/orders/merch-actions.ts` (L32–62) · `src/app/admin/orders/merch/[ref]/page.tsx` (L170, L176–186) |
+| Reports | `src/app/admin/reports/merch/page.tsx` (L1–11, L67) · `src/lib/merch/merch-reports-core.ts` |
+| Shop-look editors | `src/app/admin/merch-site/{header-footer,banners,cards,emails,ad-card}/page.tsx` · `MerchSiteEditor.tsx` |
+| Feeds | `src/app/api/merch-catalog/route.ts` (L7–31) · `src/app/api/merch-content/route.ts` |
+| Nav, helpers, concierge | `src/components/admin/admin-nav-data.ts` L86, L101, L161–168 · `src/lib/admin/page-helpers-core.ts` (L246–300 merch editors, L323–341 merch-studio, L372 test) · `src/lib/admin/concierge-kb.ts` (L194, L200: the only merch facts) · `src/lib/integrations/integration-guides.ts` (L30–97: leafly, weedmaps, flux, sage50, cultivera; no Printful/Stripe) |
+| Health patterns to reuse | `/admin/settings/platform-health` (`page.tsx`, `actions.ts`) + `/api/cron/platform-health` (`vercel.json` L82–83, `25 14 * * *`) · `src/components/admin/registers/IpadSetupPanel.tsx` · `src/components/admin/medical/GuidedIntakeWizard.tsx` · `/admin/settings/banking/bank-setup` |
+| Tests | `tests/merch-studio-core.test.ts` · `tests/merch-orders-panel-r73.test.tsx` · `tests/merch-intel-core.test.ts` · pure self-tests in each `*-core.ts` |
+
+### A.2 Shop (`merch-site/`, its own Vercel project, Next 16.4.3, Node 24.x, no database)
+
+| Area | Files |
+|---|---|
+| Catalog and content | `lib/site.ts` (L19 `siteUrl`, **L30 `MAIN_SITE_URL` non-www**) · `lib/catalog.ts` (L4–44) · `lib/catalog-data.json` · `lib/catalog-core.ts` (L260–268) · `lib/site-content.ts` L6–21 · `lib/site-content-core.ts` |
+| Checkout | `app/api/checkout/route.ts` (L10–33) · `lib/checkout-core.ts` (L11–19, L40–48, L79–118, self-tests L133–157) |
+| Stripe webhook | `app/api/stripe/webhook/route.ts` (L1–121; L36 events, L41 503, L74–117) · `lib/region-core.ts` (`decidePayment`) |
+| Printful | `lib/fulfillment.ts` (L14–23 client, L41–43 email, L55–58 alerts) · `lib/orders-core.ts` (L165–170) · `app/api/printful/webhook/[token]/route.ts` (L7–8, L24, L31–45) |
+| Order desk | `app/admin/orders/page.tsx` · `actions.ts` (L24 12-hour cookie, L35–42 confirm) · `lib/admin.ts` L6 |
+| Deploy | `vercel.json` (main only; **no crons**) · `README.md` (L45 *"Adding a product (no code)"*, stale) |
+| Owner guide | `docs/MERCH-SITE-FINISHING-GUIDE.md` (384 lines; §2.3 L94–104, §3.1/3.2 L114–152, Parts 4–7) |
+
+### A.3 External sources (checked 2026-11-11)
+
+- **Printful API documents** (developers.printful.com/docs):
+  - the general rate limit is 120 calls a minute; mockups are 2 a minute for new stores and 10 for established ones (matches `proof-actions.ts` L97);
+  - *"Private Tokens have an expiration date… expired tokens cannot be refreshed and must be replaced manually."*
+  - the scopes include `orders`, `orders/read`, `sync_products`, `file_library`, `webhooks`, `webhooks/read`, `product_templates` and `stores_list`;
+  - health-check endpoints: `GET /oauth/scopes`, `GET /stores`, `GET /webhooks` (current url + types), `GET /orders`;
+  - on `POST /webhooks`: *"only one webhook URL can be active for a store, so calling this method disables all existing webhook configuration."*
+  - extra events: `stock_updated`, `order_refunded`, `order_remove_hold`, `package_returned`, `order_put_hold_approval`.
+- **Printful status:** `https://www.printfulstatus.com/api/v2/status.json`.
+- **Stripe documents:**
+  - Webhook endpoints: `GET /v1/webhook_endpoints` returns `url`, `status` (enabled/disabled) and `enabled_events`.
+  - *"We consider redirect responses to webhook requests as failures."*
+  - Live-mode retries last up to 3 days.
+  - Place a hold on a payment method: card-not-present authorizations last about 7 days for Visa (customer-initiated), Mastercard, Amex and Discover, after which an uncaptured PaymentIntent is canceled.
+  - Status page: `https://status.stripe.com`.
+- **Resend status:** `https://resend-status.com/api/v2/status.json`.
+- **Local proof of F-11-1:** a Node 24 `fetch` with an `Authorization` header to a host that redirects to a different host arrives **without** the header (the same host keeps it). This is the WHATWG Fetch rule for cross-origin redirects.
+
+---
+
+## Appendix B: Findings, gaps and the roadmap strategy
+
+### B.1 Findings (also in `03-FINDINGS-LEDGER.md`)
+
+| ID | Type · Sev | Finding | Pin | Gap |
+|---|---|---|---|---|
+| **F-11-1** | BUG · **S1** | The shop's catalog address redirects to www, the token is dropped, and **no Studio product can appear** | `merch-site/lib/site.ts` L30; `catalog.ts` L23, L34–44; `api/merch-catalog/route.ts` L20–27; live probe 308 | **G-76** |
+| **F-11-2** | GAP · S2 | Designs and art live in one browser only; no restore from `design.json`; the stale *"Slice 5"* promise | `merch-assets.ts` L6–9; `DesignStudio.tsx` L563; `PublishPanel.tsx` L235, L270; no JSON input | **G-79** |
+| **F-11-3** | GAP · S2 | No in-app setup guide or step coach; setup lives in a 384-line Markdown file | `docs/MERCH-SITE-FINISHING-GUIDE.md`; helper L323–341 has no setup steps | **G-78** |
+| **F-11-4** | GAP · S2 | No health monitoring for Printful (token, scopes, expiry, webhook, status), Stripe (key, endpoint), Resend, the catalog round-trip or checkout open | no check in `/admin/compliance/health` or platform-health; `merch-site/vercel.json` no crons; `printfulConfigured()` only tests presence (`printful-client.ts` L24–25) | **G-77** |
+| **F-11-5** | GAP · S2 | The back office cannot see Stripe at all; its key lives only in the shop project | `STRIPE_*` read only in `merch-site/` | **G-80** |
+| **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** |
+| **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** |
+| **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** |
+| **F-11-9** | WEAKNESS · S2 | Owner alerts go only to the logs if Resend is not set up, and there is no place in the app to see them | `merch-site/lib/fulfillment.ts` L41–43, L55–58 | **G-85** (+ G-77 check) |
+| **F-11-10** | GAP · S3 | Cancel at Printful does not refund in Stripe; it is a manual two-system step | `orders/merch/[ref]/page.tsx` L176–186; `merch-actions.ts` L47 | **G-86** |
+| **F-11-11** | GAP · S2 | Held cards (*"needs you"*) expire in about 7 days with no reminder | webhook `route.ts` L19–20, L90–95 | **G-84** |
+| **F-11-12** | WEAKNESS · S3 | Stale copy: *"drop it in merch-site/catalog/"*, *"Slice 5"* shipping rates, *"Slice 5"* server designs, README *"Adding a product (no code)"*, finishing guide *"don't add"* `MERCH_CATALOG_URL` | `fulfillment-core.ts` L73–74, L84; `FulfillmentPanel.tsx` L39, L68; `DesignStudio.tsx` L563; `merch-assets.ts` L7; `merch-design-core.ts` L15; `merch-site/README.md` L45; guide §3.1 | **G-91** |
+| **F-11-13** | WEAKNESS · S3 | Retail starts at a hard-coded $35; suggested retail ignores shipping; flat shipping is never compared with Printful's real rate | `PublishPanel.tsx` L250; `FulfillmentPanel.tsx` L68; `checkout-core.ts` L40 | **G-87** |
+| **F-11-14** | WEAKNESS · S4 | 7 placements are studio estimates, not Printful's measurements | `garment-catalog-core.ts` L151, L195, L214, L225–226 (+2) | **G-92** |
+| **F-11-15** | WEAKNESS · S4 | Every re-publish leaves the previous print PNGs in the public bucket | `catalog-actions.ts` L6–7, L50; Remove cleans only the current set (`actions.ts` L42–45) | **G-93** |
+| **F-11-16** | WEAKNESS · S3 | Catalog writes have no version check; two quick edits can lose one | `merch-inventory-store.ts` (read → modify → write) | **G-88** |
+| **F-11-17** | GAP · S3 | Merch Inventory and Reports → Merch have no helper; the concierge has 2 merch facts; there are no Printful or Stripe integration guides | `inventory/merch/page.tsx` L56; `concierge-kb.ts` L194, L200; `integration-guides.ts` L30–97 | **G-90** |
+| **F-11-18** | WEAKNESS · S3 | The Printful webhook is registered by hand with `curl`; a later registration silently replaces it; nothing checks it is still right | guide §6.3; Printful docs (A.3); webhook route L7–8 | **G-89** |
+| **F-11-C** | STRENGTH | Fail-closed, WA-only free cancel, fresh re-pricing, idempotent, hidden constant-time feed, last-good fallback, human Confirm, audits, owner/admin Remove, verified PNGs, ad price guard | §7 | — |
+
+### B.2 Gaps (also in `05-GAP-REGISTER.md`)
+
+| Gap | What gets built | Sev |
+|---|---|---|
+| **G-76** | **Catalog feed reaches the back office again.** **Owner, now:** set `MERCH_CATALOG_URL` (and `MERCH_CONTENT_URL`) to www in the merch project. **Code:** change `MAIN_SITE_URL` to `https://www.greenwaymarijuana.com`, **and** have the shop fetch with `redirect: "manual"` so a redirect is reported (*"the feed moved to …"*) and never followed without the token. Add a self-test, and a Merch Health check (G-77) that detects a redirect | S1 |
+| **G-77** | **Merch Health panel and daily check** (the owner's *"printful store and stripe health"*). A new card set on `/admin/merch-studio/health` (and a line on platform-health), with a **Run check now** button, a daily cron and an email when anything turns red. The checks are in B.4 | S2 |
+| **G-78** | **Setup & Launch coach** (the owner's *"first step, do this, done great, step two…"*). A guided wizard for §4.2, plus a per-product **Product journey** stepper and **Next step** banners on every tab (B.5) | S2 |
+| **G-79** | **Designs saved on the server.** Drafts in a table and art in the private `merch-files` bucket, so any computer works, with **Import design (.json/.zip)**. The browser copy becomes an offline cache | S2 |
+| **G-80** | **Shop health endpoint** `greenwaymerch.com/api/health`, Bearer token, read-only. It reports the Stripe key mode, the webhook endpoint (url, status, events), checkout open/closed with the reason, Resend configured, the catalog fetch result (status, product count, last good age, redirect seen) and the Printful token present. The back office reads it for G-77. Stripe secrets never leave the shop project | S2 |
+| **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 |
+| **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 |
+| **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 |
+| **G-84** | **Held-card monitor.** The daily check lists uncaptured authorizations older than 3 days through the G-80 endpoint. It emails at day 3 and day 5, and the order page gets *"Capture / Cancel in Stripe"* coaching | S2 |
+| **G-85** | **Merch alerts inbox.** The shop POSTs each alert to a token-secured back-office endpoint, stored and shown on Merch Health and Orders with acknowledge. Email stays as a second channel | S2 |
+| **G-86** | **Cancel and refund in one guided step.** *Cancel at Printful* → the page then shows **Refund in Stripe**. This goes through a G-80-style shop endpoint (idempotent, audited) or, if the owner prefers, a deep link plus a confirm-done box. The order page shows both halves' status | S3 |
+| **G-87** | **Pricing guard.** No hard-coded $35 (last price or the calculator's suggestion). Suggested retail includes the real shipping gap. Publish warns when margin < the owner's minimum or flat shipping < Printful's US rate | S3 |
+| **G-88** | **Catalog version check.** Compare-and-set on `site_settings.updated_at` (the pattern used by D230 reopen). The loser gets *"Someone else changed the catalog - reload and try again"* | S3 |
+| **G-89** | **Register the Printful webhook from the app.** A button on Merch Health reads `GET /webhooks` first, shows what is there, then sets the URL with **all** needed types (the 4 order types plus `stock_updated` once G-83 ships). Audited, and re-checked daily by G-77 | S3 |
+| **G-90** | **Help everywhere.** `helpId` and helpers for Merch Inventory and Reports → Merch; **Printful**, **Stripe (merch)** and **Resend (merch)** integration guides on `/admin/integrations`; concierge facts for every §4 section and §5 message | S3 |
+| **G-91** | **Stale copy cleanup** (F-11-12 list), README *"Adding a product"* rewritten to *"Publish in Merch Studio"*, finishing guide §3.1 corrected | S3 |
+| **G-92** | **Confirm the 7 studio-default placements** against Printful's file templates (or the `GET /mockup-generator/printfiles/{id}` sizes), then mark the source | S4 |
+| **G-93** | **Print-file cleanup.** On re-publish, delete the previous `<nonce>` folder once the new one is saved (only `merch-print/<handle>/`) | S4 |
+
+### B.3 The strategy in one paragraph
+
+Fix the one thing that blocks every sale first. That is the www redirect (**M-1**), and the owner can do it today with one variable. Next, make the system **tell you when it is broken** before a customer does (**M-2**): one Merch Health screen and a daily email. It checks Printful, Stripe, Resend, the catalog feed and checkout using real API calls, not just "is a variable present". Then put the **hand-holding** on top of those checks (**M-3**). The setup coach can tick a step green by itself because the health check *proves* it is done: *"Step 4 ✓ Great, Printful accepted your token and it has the right permissions. Next: Step 5, Stripe."* After that, remove the traps that lose work or money: server-saved designs and the sample gate (**M-4**); re-publish keeping Hidden, the version check and cleanup (**M-5**); automatic stock and the in-app webhook button (**M-6**); and held-card, alert and refund follow-through (**M-7**). Finish with pricing, help and placements (**M-8**). Each slice is small, ships on its own and updates this SOP (D41) and the concierge (D42).
+
+### B.4 Merch Health: what is checked, and how (G-77, G-80)
+
+| # | Check | How (real call, not just a variable) | Green | Red tells you |
+|---|---|---|---|---|
+| H-1 | Printful token works | main: `GET /oauth/scopes` | 200 | *"Printful refused the token (expired or wrong). Make a new one: SOP-11 S-4"* |
+| H-2 | Printful permissions | same answer: has `orders`, `webhooks`, `file_library` | all present | names the missing scope |
+| H-3 | Printful token expiry | the date the owner typed in the coach (the API may not return it) | > 30 days | amber ≤ 30, red ≤ 7 days, with a countdown email |
+| H-4 | Printful store | `GET /stores` (needs `stores_list`) or a store-scoped call | 1 store, the name matches | *"Account token without PRINTFUL_STORE_ID"* |
+| H-5 | Printful webhook | `GET /webhooks` | URL = `https://greenwaymerch.com/api/printful/webhook/…` and the 4 types | *"Shipped emails are off: register it (button, G-89)"* |
+| H-6 | Printful service | `printfulstatus.com/api/v2/status.json` | `none` | Printful's own incident text |
+| H-7 | Catalog round-trip | shop `/api/health` reports its last feed fetch | 200, n products, no redirect | **F-11-1 message** if a 3xx was seen |
+| H-8 | Main site address | main: `HEAD` of the shop's configured feed URL with `redirect: manual` | 200/404 with no redirect | *"The feed address redirects; set MERCH_CATALOG_URL"* |
+| H-9 | Stripe key | shop `/api/health`: `GET /v1/balance` or `/v1/account` | 200 and mode = live (or test, shown) | *"Stripe key missing or revoked"* |
+| H-10 | Stripe webhook endpoint | shop `/api/health`: `GET /v1/webhook_endpoints` | apex URL, `enabled`, both events | *"Stripe disabled your webhook after failures"* |
+| H-11 | Checkout open | shop `/api/health`: shipping config parses, the key format is valid | open | the exact reason (`MERCH_SHIP_FLAT_CENTS`…) |
+| H-12 | Stripe Tax | `MERCH_STRIPE_AUTOMATIC_TAX` = true | on | amber *"No sales tax is charged"* |
+| H-13 | Email | shop `/api/health`: `RESEND_API_KEY` and `MERCH_EMAIL_FROM` present (domain check needs a full-access key, so it is optional) | both | *"Alerts only go to logs"* |
+| H-14 | Stripe and Resend service | `status.stripe.com`, `resend-status.com` JSON | operational | incident text |
+| H-15 | Held cards | shop `/api/health`: PaymentIntents `requires_capture` older than 3 days (G-84) | 0 | list with Capture/Cancel links |
+| H-16 | Drafts waiting | main: Printful `GET /orders?status=draft` older than 1 business day | 0 | *"n orders waiting for Confirm"* |
+| H-17 | Stock fresh | catalog `stockSyncedAt` | < 24 h | *"Copy Printful stock"* |
+| H-18 | Storage | the `merch-files` bucket exists (0281) | yes | *"Apply migration 0281"* |
+| H-19 | Auto-confirm | `MERCH_PRINTFUL_AUTO_CONFIRM` | unset | amber *"Orders go to production with no review"* |
+
+**Schedule and alerts:** the daily cron in the main project runs beside platform-health. It emails only on a **change** (green → red, or red → green) plus a weekly digest. The result history is kept like platform-health's run history. **Run check now** is for owner/admin.
+
+### B.5 The step-by-step coach (G-78): what it looks like
+
+**1. Setup & Launch** (`/admin/merch-studio/launch`, owner/admin). One card per step S-1 … S-12 and the §4.5 test order:
+- **What to do**: three to six short lines, with exact clicks, copy buttons for values, and links that open in a new tab.
+- **How we know it's done**: a health check or an owner tick.
+- **Status:** ⬜ not started · 🟡 in progress · ✅ done.
+
+When a check turns green, the card collapses with **"✅ Great, done!"**, and the next card opens with **"Next: Step 5 · Stripe secret key"**. A progress bar reads *"7 of 13 done · about 35 minutes left."* Dates the owner types (token expiry, resale certificate) are saved and feed H-3. **Print setup record** prints form 8.1, already filled in. A step that goes red later (an expired token) re-opens itself, and the Studio header shows *"Setup needs you: Step 4."*
+
+**2. Product journey stepper** (top of the Studio, for the open design):
+
+`Garment ✓ → Design ✓ (0 ⛔) → Print files ✓ → Mockups ✓ → Sample approved ⬜ → Price ✓ → Publish ⬜ → On the shop ⬜ → Stock synced ⬜`
+
+Each pill links to its tab. **"Next step"** names the one thing to do, for example *"Order a sample at Printful; when it arrives, tick the checklist on Proof & Export."* After Publish, it watches the shop until the product appears (through H-7) and then says *"Live on greenwaymerch.com. Next: copy Printful stock."*
+
+**3. Per-tab coaching strips.** A one-line "you are here / do this / then go to" strip at the top of each tab. There is also a first-visit **"Show me around"** that highlights each control in turn, the same pattern as the iPad setup panel and the guided intake wizard.
+
+**4. Order coaching.** On every merch order page, a strip names the next action by status:
+- Draft → *"Confirm today"*;
+- Held card → *"Capture or cancel within n days"*;
+- Cancelled at Printful → *"Now refund in Stripe ▸"*.
+
+### B.6 Proposed build order (also in `06-FIX-PHASE-PLAN.md`, all PROPOSED)
+
+| Slice | Contents | Gaps | Needs |
+|---|---|---|---|
+| **M-1** | Feed address fix in code + redirect self-test; stale copy; README and guide corrections | G-76, G-91 | — (owner sets `MERCH_CATALOG_URL` today) |
+| **M-2** | Shop `/api/health` + Merch Health panel + daily cron + change emails | G-80, G-77 | M-1 |
+| **M-3** | Setup & Launch coach, Product journey stepper, tab strips, Print form 8.1 | G-78 | M-2 |
+| **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration (designs table) |
+| **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — |
+| **M-6** | Webhook button; automatic stock (cron, then `stock_updated`) | G-89, G-83 | M-2 |
+| **M-7** | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | G-84, G-85, G-86 | M-2 (+ owner answer Q-11-4) |
+| **M-8** | Pricing guard; helpers, integration guides, concierge; placements | G-87, G-90, G-92 | — |
+
+---
+
+## Appendix C: Owner questions
+
+| # | Question | Recommendation |
+|---|---|---|
+| **Q-11-1** | Who may press **Publish to greenwaymerch.com**? Today anyone with `content.edit`. | Owner/admin only, or a new `merch.publish` permission the owner grants |
+| **Q-11-2** | Should the **sample gate** (G-81) be a hard block, or a warning the owner can override with a reason? | Hard block, with an owner-only override and a reason |
+| **Q-11-3** | May the shop's health endpoint reuse **Token A**, or should it have its own `MERCH_HEALTH_TOKEN`? | Its own token (one leak, one blast radius) |
+| **Q-11-4** | Refunds: should the back office be able to **refund in Stripe** (through the shop endpoint), or only guide you to the Stripe dashboard? | Guided first (no money moves from the back office); a button later if wanted |
+| **Q-11-5** | What flat shipping, extra-item and free-shipping amounts do you want (`MERCH_SHIP_*`, cents)? | Set from Printful's US rates for a tee; e.g. 599 / 200 / 7500, to be decided |
+| **Q-11-6** | May we order one sample per **studio-default** garment to measure the 7 estimated placements? | Yes, the zip hoodie, windbreaker and hoodie fronts first |
+| **Q-11-7** | Will you ever want `MERCH_PRINTFUL_AUTO_CONFIRM`? | Not until 20+ clean orders; Merch Health shows it amber |
+| **Q-11-8** | Minimum margin for the pricing warning (G-87)? | e.g. 35% after Printful, shipping gap and card fee |
+| **Q-11-9** | Is the Creative Studio (banners and ads for the cannabis site) next, as SOP-11 v2.0? | Yes, after M-1–M-3 |
+
+## Appendix D: Revision history
+
+| Version | Date | Change | By |
+|---|---|---|---|
+| 1.0 | 2026-11-11 | First version (recon and audit only, no code changed). Merch Studio and Merch Inventory first, as the owner asked (D231). It covers the setup walkthrough, every tab and order procedure, live probes, 18 findings (F-11-1 … F-11-18 + F-11-C), 18 gaps (G-76 … G-93) and the roadmap M-1 … M-8 | Greenway Dev |
