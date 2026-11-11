@@ -91,7 +91,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.1 (D232, #1754):** owner answers Q-11-1 … Q-11-9 recorded; the roadmap is approved; slice **M-1** built (www feed, redirect reported, `merch.publish` owner/admin, stale copy).
 
-**v1.2 (D232, #PM2X):** slice **M-2** built. Merch Health `/admin/merch-studio/health` (H-1 … H-19, Run check now, token expiry, history, morning check with change emails) and the shop `/api/health` behind its own `MERCH_HEALTH_TOKEN`.
+**v1.2 (D232, #1755):** slice **M-2** built. Merch Health `/admin/merch-studio/health` (H-1 … H-19, Run check now, token expiry, history, morning check with change emails) and the shop `/api/health` behind its own `MERCH_HEALTH_TOKEN`.
 
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
