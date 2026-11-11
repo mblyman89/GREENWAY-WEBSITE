@@ -78,7 +78,7 @@ export function IntegrationHelper({ aiConfigured }: { aiConfigured: boolean }) {
         <h2 className="text-sm font-bold text-[var(--admin-text)]">Ask about integrations</h2>
       </div>
       <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
-        Stuck connecting Leafly, WeedMaps, FLUX, Sage 50, or moving off Cultivera? Ask in plain
+        Stuck connecting Leafly, WeedMaps, FLUX, Sage 50, the merch shop&apos;s Printful, Stripe or Resend, or moving off Cultivera? Ask in plain
         language and get step-by-step help grounded in this back office. It never changes anything.
       </p>
 

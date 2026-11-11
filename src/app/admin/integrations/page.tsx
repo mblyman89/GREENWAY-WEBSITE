@@ -197,6 +197,24 @@ export default async function IntegrationsPage() {
             </div>
             {guideById("cultivera") ? <IntegrationGuidePanel guide={guideById("cultivera")!} /> : null}
           </Card>
+
+          {/* D232 M-8 (G-90): merch services (Greenway Merchandising LLC). Set up and checked on Setup & Launch and Merch Health. */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">👕 Merch: Printful, Stripe, Resend</h2>
+              <Badge tone="neutral">greenwaymerch.com</Badge>
+            </div>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              The separate merch shop (Greenway Merchandising LLC) uses its own Printful, Stripe and Resend
+              accounts. Their keys live in Vercel, not on this page. Setup &amp; Launch walks through each step and
+              Merch Health checks them every morning.
+            </p>
+            <div className="mt-3 flex gap-3 text-sm">
+              <Link href="/admin/merch-studio/launch" className="text-[var(--admin-accent)] hover:underline">Setup &amp; Launch →</Link>
+              <Link href="/admin/merch-studio/health" className="text-[var(--admin-accent)] hover:underline">Merch Health →</Link>
+            </div>
+            {(["printful", "stripe-merch", "resend-merch"] as const).map((id) => { const g = guideById(id); return g ? <IntegrationGuidePanel key={id} guide={g} /> : null; })}
+          </Card>
         </div>
 
         {/* Integrations AI helper */}

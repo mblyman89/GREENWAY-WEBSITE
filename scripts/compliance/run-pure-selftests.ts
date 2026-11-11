@@ -1133,6 +1133,7 @@ import { __runGarmentViewsTests } from "../../src/lib/merch-studio/garment-views
 import { __runMerchDesignTests } from "../../src/lib/merch-studio/merch-design-core";
 import { __runPrintExportTests } from "../../src/lib/merch-studio/print-export-core";
 import { __runListingPackageTests } from "../../src/lib/merch-studio/listing-package-core";
+import { __runPrintfileCheckTests } from "../../src/lib/merch-studio/printfile-check-core";
 import { __runMerchAdTests } from "../../src/lib/merch/merch-ad-core";
 import { __runMerchCatalogTests } from "../../merch-site/lib/catalog-core";
 import { __runCheckoutCoreTests as __runMerchCheckoutTests } from "../../merch-site/lib/checkout-core";
@@ -2763,11 +2764,12 @@ __runLiquidVolumeTests();
   assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 45); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
   assertRan("print-rules-core", __runPrintRulesTests(), 29); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
-  assertRan("fulfillment-core", __runFulfillmentTests(), 11); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
+  assertRan("fulfillment-core", __runFulfillmentTests(), 19); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
   assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 250); // R70 S2: garment views + exact print-frame inches for every blank/placement
   assertRan("merch-design-core", __runMerchDesignTests(), 42); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising
   assertRan("print-export-core", __runPrintExportTests(), 85); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
-  assertRan("listing-package-core", __runListingPackageTests(), 29); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
+  assertRan("listing-package-core", __runListingPackageTests(), 39); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
+  assertRan("printfile-check-core", __runPrintfileCheckTests(), 12); // D232 M-8 (G-92): studio-default placements vs Printful's print-file sizes
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)
   assertRan("merch-inventory-core", __runMerchInventoryTests(), 27); // R73 S7: Merch Studio publish -> catalog (site_settings), live feed, Printful stock, sales by variant, CSV
   assertRan("merch-reports-core", __runMerchReportsTests(), 20); // R73 S8: Reports > Merch sales, WA tax by month/place, Vercel traffic parse
@@ -2777,7 +2779,7 @@ __runLiquidVolumeTests();
   assertRan("merch-site region-core", __runMerchRegionTests(), 12); // R73 S2: Washington-only (WA ZIPs, authorize -> capture WA / cancel others for free)
   assertRan("merch-site site-content-core", __runMerchSiteContentTests(), 15); // R73 S3: greenwaymerch.com editable header/footer, banners, cards, email wording (published content_blocks)
   assertRan("merch-site seo-core", __runMerchSeoTests(), 19); // R73 S4: greenwaymerch.com JSON-LD (ProductGroup/Offer, OnlineStore, breadcrumbs) + Google Merchant feed, WA-only shipping
-  assertRan("page-helpers-core", __runPageHelpersTests(), 17); // R73 S5: Helpers page registry (guides moved off the top of the editors/studios)
+  assertRan("page-helpers-core", __runPageHelpersTests(), 18); // R73 S5: Helpers page registry (guides moved off the top of the editors/studios)
   assertRan("brand-sizes-core", __runBrandSizesTests(), 25); // R73 S6: Brand hub custom sizes + PNG export maths
   assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   assertRan("refund-journal-core", __runRefundJournalCoreTests(), 20); // Fix Phase 2.8 (G-48): the daily refund draft - DR 50910 + 32000 + 32100, CR 10110 / 10100

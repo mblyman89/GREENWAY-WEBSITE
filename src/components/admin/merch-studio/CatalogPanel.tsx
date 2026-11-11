@@ -5,7 +5,9 @@
  * their colours, sizes/base prices and print placements (inches, methods,
  * Printful placement keys and upcharges, cited source).
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { STUDIO_DEFAULT_STATUS, type PlacementCompare } from "@/lib/merch-studio/printfile-check-core";
+import { printfileSizesAction } from "@/app/admin/merch-studio/pricing-actions";
 import {
   BLANKS, METHOD_LABEL, PRINTFUL_SNAPSHOT_DATE, colorsFor, formatCents, isDarkColor, methodsFor, sizesFor,
   type Blank, type Category, type DimsSource,
@@ -21,7 +23,8 @@ const SOURCE_LABEL: Record<DimsSource, string> = {
   "printful-hat-guide": "Printful hat logo guide",
   "printful-hoodie-guide": "Printful hoodie placement guide",
   "industry-chart": "Industry chart (R69)",
-  "studio-default": "Studio default - confirm on Printful's template",
+  // D232 M-8 (G-92): samples approved (Q-11-6 "Q6: yes."), not measured yet - never "confirmed".
+  "studio-default": "Studio estimate - awaiting sample measurement",
 };
 
 export function CatalogPanel({ blankId, colorHex, onBlank, onColor }: {
@@ -93,6 +96,7 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor }: {
 
         <div className="overflow-x-auto">
           <span className={studioLabel}>Print placements</span>
+          {blank.placements.some((p) => p.dimsSource === "studio-default") ? <PrintfileCheck key={blank.id} blankId={blank.id} /> : null}
           <table className="w-full min-w-[40rem] text-left text-xs">
             <thead className="text-white/50"><tr><th className="py-1 pr-2">Placement</th><th className="pr-2">Max area</th><th className="pr-2">Methods (Printful key, upcharge)</th><th className="pr-2">Watch out for</th><th>Source</th></tr></thead>
             <tbody>
@@ -109,6 +113,33 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor }: {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * D232 M-8 (G-92): Printful's own print-file size next to each studio-default
+ * box (GET /mockup-generator/printfiles/{id}). Read-only; nothing is changed.
+ */
+function PrintfileCheck({ blankId }: { blankId: string }) {
+  const [rows, setRows] = useState<PlacementCompare[] | null>(null);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const run = () => {
+    setBusy(true); setMsg("");
+    printfileSizesAction({ blankId }).then((r) => { if (r.ok) setRows(r.rows); else setMsg(r.error); }).catch(() => setMsg("Couldn't reach Printful.")).finally(() => setBusy(false));
+  };
+  return (
+    <div className="my-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/5 p-2 text-xs text-white/80">
+      <p>Gold rows are studio estimates. {STUDIO_DEFAULT_STATUS}. Measure the sample with a ruler, then tell the developer the real width and height.{" "}
+        <button type="button" disabled={busy} className="text-[var(--admin-accent)] underline disabled:opacity-40" onClick={run}>{busy ? "Asking Printful..." : "Compare with Printful's print files"}</button>
+      </p>
+      {msg ? <p className="mt-1 text-[var(--admin-danger)]">{msg}</p> : null}
+      {rows ? (
+        <ul className="mt-1 space-y-0.5">
+          {rows.map((r) => <li key={r.placementId} className={r.verdict === "bigger" ? "text-[var(--admin-danger)]" : r.verdict === "no-file" ? "text-[var(--admin-gold)]" : "text-white/80"}><b>{r.label}:</b> {r.text}</li>)}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -18,7 +18,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { colorsFor, formatCents, getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
-import { buildListingPackage, listingFilename, LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
+import { buildListingPackage, listingFilename, suggestListingRetailCents, LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
+import { MIN_MARGIN_BPS, shippingGapCents } from "@/lib/merch-studio/fulfillment-core";
+import { printfulShippingRateAction } from "@/app/admin/merch-studio/pricing-actions";
 import type { MerchDesign } from "@/lib/merch-studio/merch-design-core";
 import type { Issue } from "@/lib/merch-studio/print-rules-core";
 import {
@@ -43,11 +45,11 @@ const btn = "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs font-bold disa
 
 export interface MerchAdBlockVM { draft: string | null; published: string | null; status: string; available: boolean }
 
-export function PublishPanel({ adBlock, mediaChoices, canPublish = false, isOwner = false }: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean; isOwner?: boolean }) {
+export function PublishPanel({ adBlock, mediaChoices, canPublish = false, isOwner = false, lastRetail = {} }: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean; isOwner?: boolean; lastRetail?: Record<string, number> }) {
   return (
     <div className="space-y-8">
       <AdEditor adBlock={adBlock} mediaChoices={mediaChoices} />
-      <ListingBuilder mediaChoices={mediaChoices} canPublish={canPublish} rights={{ canApprove: canPublish, isOwner }} />
+      <ListingBuilder mediaChoices={mediaChoices} canPublish={canPublish} rights={{ canApprove: canPublish, isOwner }} lastRetail={lastRetail} />
     </div>
   );
 }
@@ -233,7 +235,11 @@ function AdIssues({ issues }: { issues: ReturnType<typeof merchAdIssues> }) {
 // ---------------------------------------------------------------------------
 const toCents = (s: string) => { const n = Number.parseFloat(s.replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
 
-function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: MediaChoice[]; canPublish: boolean; rights: SampleRights }) {
+const dollarsOf = (c: number) => (c > 0 ? (c / 100).toFixed(2) : "");
+
+type ShipState = { blankId: string; chargedCents: number | null; costCents: number | null; problem: string; loading: boolean };
+
+function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { mediaChoices: MediaChoice[]; canPublish: boolean; rights: SampleRights; lastRetail: Record<string, number> }) {
   // This panel only mounts client-side after MerchStudio's restore, so reading localStorage in the initializer is hydration-safe (same as ProofPanel).
   const [designs, setDesigns] = useState<MerchDesign[]>(() => loadDesigns());
   // D232 M-4 (G-81): the server's sample approval for the picked design.
@@ -253,7 +259,10 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
     const b = design ? getBlank(design.blankId) : undefined;
     return b ? sizesFor(b).map((s) => s[0]) : [];
   });
-  const [retail, setRetail] = useState("35");
+  // D232 M-8 (G-87): no hard-coded $35. Start at this design's last published
+  // price (Merch Inventory); empty = use the 35% suggestion shown below.
+  const [retail, setRetail] = useState(() => dollarsOf(lastRetail[designs[0]?.id ?? ""] ?? 0));
+  const [ship, setShip] = useState<ShipState | null>(null);
   const [passUp, setPassUp] = useState(true);
   const [done, setDone] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -275,6 +284,25 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
     return () => { cancelled = true; };
   }, []);
 
+  // D232 M-8 (G-87): Printful's WA rate for this garment + the shop's flat shipping.
+  const blankKey = design?.blankId ?? "";
+  // Async only (no setState in the effect body): "loading" = no answer for this blank yet.
+  const checkShipping = useCallback((blankId: string) => {
+    if (!blankId) return () => {};
+    let cancelled = false;
+    printfulShippingRateAction({ blankId }).then((r) => {
+      if (cancelled) return;
+      setShip(r.ok ? { blankId, chargedCents: r.flatCents, costCents: r.costCents, problem: r.problem, loading: false } : { blankId, chargedCents: null, costCents: null, problem: r.error, loading: false });
+    }).catch(() => { if (!cancelled) setShip({ blankId, chargedCents: null, costCents: null, problem: "Couldn't ask Printful for its shipping rate.", loading: false }); });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => checkShipping(blankKey), [blankKey, checkShipping]);
+  const shipping = ship && ship.blankId === blankKey && !ship.loading ? { chargedCents: ship.chargedCents, costCents: ship.costCents } : undefined;
+
+  const suggested = design ? suggestListingRetailCents({ design, sizes, passSizeUpcharge: passUp, shipping }) : 0;
+  const retailCents = retail.trim() ? toCents(retail) : suggested;
+  const gap = shipping && shipping.chargedCents !== null && shipping.costCents !== null ? shippingGapCents(shipping.chargedCents, shipping.costCents) : 0;
+
   // R73 S7: render the print PNGs, upload them to stable public URLs (Printful
   // fetches them per order), then save the package to the merch catalog ->
   // greenwaymerch.com + Inventory > Merch Inventory.
@@ -282,7 +310,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
     if (!design) return;
     setPubMsg(null);
     try {
-      const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents: toCents(retail), passSizeUpcharge: passUp, generatedAt: new Date().toISOString() }).pkg;
+      const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, generatedAt: new Date().toISOString(), shipping }).pkg;
       if (!fresh) throw new Error("Fix the blockers first.");
       const { plans } = planPrintFiles(design);
       setBusy("Loading artwork...");
@@ -316,6 +344,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
   const pick = (id: string) => {
     const d = designs.find((x) => x.id === id) ?? null;
     setDesignId(id);
+    setRetail(dollarsOf(lastRetail[id] ?? 0));
     setDone(null);
     setPubMsg(null);
     setPhotos([]);
@@ -336,7 +365,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
     );
   }
 
-  const built = design ? buildListingPackage({ design, title, description, colors, sizes, retailCents: toCents(retail), passSizeUpcharge: passUp, generatedAt: "" }) : null;
+  const built = design ? buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, generatedAt: "", shipping }) : null;
   const issues: Issue[] = built?.issues ?? [];
   const blocked = issues.some((i) => i.level === "blocker");
   const pkg = built?.pkg ?? null;
@@ -383,7 +412,20 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
               </div>
             </>
           ) : null}
-          <Row label="Retail price, smallest size (USD)"><input className={studioInput} inputMode="decimal" value={retail} onChange={(e) => { setRetail(e.target.value); setDone(null); }} /></Row>
+          <Row label="Retail price, smallest size (USD)" hint={lastRetail[designId] ? `Last published price: ${formatCents(lastRetail[designId])}.` : "Empty = the suggested price below."}><input className={studioInput} inputMode="decimal" value={retail} placeholder={suggested ? dollarsOf(suggested) : ""} onChange={(e) => { setRetail(e.target.value); setDone(null); }} /></Row>
+          {/* D232 M-8 (G-87): suggestion at the owner's 35% minimum, shipping gap included. */}
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-2 text-xs text-white/75" aria-live="polite">
+            <p>
+              Suggested for {MIN_MARGIN_BPS / 100}% on every size: <b className="text-white">{suggested ? formatCents(suggested) : "-"}</b>
+              {suggested && retail.trim() && toCents(retail) !== suggested ? <> <button type="button" className="text-[var(--admin-accent)] underline" onClick={() => { setRetail(dollarsOf(suggested)); setDone(null); }}>Use it</button></> : null}
+            </p>
+            <p className="mt-1 text-white/60">
+              {!ship || ship.blankId !== blankKey || ship.loading
+                ? "Checking Printful's shipping rate to Washington..."
+                : <>Shipping, one item to WA: you charge {ship.chargedCents === null ? "? (run Merch Health)" : formatCents(ship.chargedCents)}, Printful charges {ship.costCents === null ? "?" : formatCents(ship.costCents)}{gap ? <> - <b className="text-[var(--admin-gold)]">you pay the {formatCents(gap)} gap</b> (included above)</> : ship.chargedCents !== null && ship.costCents !== null ? " - covered" : ""}.{ship.problem ? ` ${ship.problem}` : ""}{" "}
+                  <button type="button" className="text-[var(--admin-accent)] underline" onClick={() => { setShip({ blankId: blankKey, chargedCents: null, costCents: null, problem: "", loading: true }); checkShipping(blankKey); }}>Check Printful shipping</button></>}
+            </p>
+          </div>
           <Toggle label="Add Printful's bigger-size upcharge (e.g. 2XL) to the price" checked={passUp} onChange={(x) => { setPassUp(x); setDone(null); }} />
           <div className="space-y-2 border-t border-[var(--admin-border)] pt-3">
             <span className={studioLabel}>Product photos on greenwaymerch.com ({photos.length}/{MERCH_ITEM_MAX_IMAGES}) - mockups or lifestyle shots; none = the category photo</span>
@@ -425,7 +467,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
               onClick={() => {
                 if (!design || !pkg) return;
                 // Rebuild with the real timestamp at click time (render stays pure).
-                const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents: toCents(retail), passSizeUpcharge: passUp, generatedAt: new Date().toISOString() }).pkg;
+                const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, generatedAt: new Date().toISOString(), shipping }).pkg;
                 if (!fresh) return;
                 const name = listingFilename(fresh);
                 downloadBytes(name, JSON.stringify(fresh, null, 2), "application/json");
@@ -439,7 +481,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights }: { mediaChoices: Me
         <div className="space-y-3">
           {v.length ? (
             <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3 text-sm">
-              <p className="mb-2 text-white/80"><b className="text-white">{v.length}</b> variant{v.length === 1 ? "" : "s"} - profit per unit {formatCents(minProfit)}{maxProfit !== minProfit ? ` to ${formatCents(maxProfit)}` : ""} after the Printful estimate and the Stripe fee (shipping passed through, sales tax excluded).</p>
+              <p className="mb-2 text-white/80"><b className="text-white">{v.length}</b> variant{v.length === 1 ? "" : "s"} - profit per unit {formatCents(minProfit)}{maxProfit !== minProfit ? ` to ${formatCents(maxProfit)}` : ""} after the Printful estimate, the Stripe fee{gap ? ` and the ${formatCents(gap)} shipping gap` : " (shipping passed through)"}; sales tax excluded. Minimum margin {MIN_MARGIN_BPS / 100}%.</p>
               <div className="max-h-72 overflow-auto">
                 <table className="w-full text-xs">
                   <thead className="text-left text-white/50"><tr><th className="py-1">Colour</th><th>Size</th><th className="text-right">Printful</th><th className="text-right">Retail</th><th className="text-right">Fee</th><th className="text-right">Profit</th><th className="text-right">Margin</th></tr></thead>

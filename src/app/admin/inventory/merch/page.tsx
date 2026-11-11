@@ -57,6 +57,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
         title="Merch inventory"
         subtitle="Greenway Glass & Goods apparel on greenwaymerch.com. Publishing in Merch Studio adds products here automatically."
         breadcrumbs={<Breadcrumbs items={[{ label: "Inventory", href: "/admin/inventory" }, { label: "Merch" }]} />}
+        helpId="merch-inventory"
         action={
           <div className="flex flex-wrap gap-2">
             <Link href="/admin/merch-studio?tab=publish" className={`${btn} bg-[var(--admin-accent)] text-black`}>Publish a design</Link>

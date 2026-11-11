@@ -2900,3 +2900,12 @@ What was done:
 - **Auto-confirm switch** (Q-11-7): Merch Health → H-19. Built and **left off**. ON is owner-only with a reason after 20+ fulfilled orders (counted live); OFF is owner or admin any time; audited. The shop reads it from the catalog feed on each order (a failed feed means drafts).
 - Rules: `merch-payments-core.ts`, `merch-alerts-core.ts`, `merch-autoconfirm-core.ts`, shop `payments-core.ts`. Test: `tests/compliance/d232-merch-m7-holds-alerts-refund.test.ts`. SOP-11 v1.8.
 - **Owner steps:** apply migration **0361_merch_alerts.sql**. For the refund button: make a new random value of 32+ characters and add `MERCH_PAYMENTS_TOKEN` with the SAME value to **both** Vercel projects, then redeploy both (without it the page shows the Stripe link only). Redeploy the merch project so it posts alerts and lists holds.
+
+### As built (slice M-8)
+
+- Owner, verbatim (D232): *"Q6: yes."* and *"Q8: 35% is fine."*
+- **Pricing guard** (G-87, Q-11-8): no fixed $35. Publish starts empty, or at the last price used for that garment, and shows a suggested price (Printful cost, card fee, shipping gap, 35% minimum) with **Use it**. **Check Printful shipping** / **Fill both from Printful + Merch Health** read Printful's STANDARD rate to Washington (`POST /shipping/rates`) and the flat price from the last Merch Health run (H-11); a **Gap** line shows when the flat price is lower. Listings under 35% margin get a warning.
+- **Help everywhere** (G-90): helpers on Merch Inventory and Reports → Merch; Printful, Stripe (merch) and Resend (merch) guides on Integrations; a merch concierge topic.
+- **Studio-default placements** (G-92, Q-11-6): the 8 estimates are labelled "Studio estimate - awaiting sample measurement"; Garments has **Compare with Printful's print files** (`GET /mockup-generator/printfiles/{id}`). The numbers change only after the samples are measured.
+- Rules: `fulfillment-core.ts`, `listing-package-core.ts`, `printfile-check-core.ts`, `merch-health-core.ts`. Test: `tests/compliance/d232-merch-m8-pricing-help-placements.test.ts`. SOP-11 v1.9.
+- **Owner steps:** no migration, no new variable. Run Merch Health once so the studio can read the flat shipping. Measure the samples and send the sizes for the 8 placements.

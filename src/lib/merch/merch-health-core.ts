@@ -118,6 +118,19 @@ const pfProblem = (r: CallResult): string =>
 
 const cents = (n: number | null | undefined) => (typeof n === "number" ? `$${Math.floor(n / 100)}.${String(n % 100).padStart(2, "0")}` : "-");
 
+/**
+ * D232 M-8 (G-87): the shop's flat first-item shipping, cents, read back from
+ * a saved report's H-11 detail ("Open. Shipping $5.99 first item, ..."). The
+ * saved run keeps only the checks, so this is how the studio learns the flat
+ * rate without a live call. null = closed, unknown or never run.
+ */
+export function flatShippingFromReport(r: Pick<MerchHealthReport, "checks"> | null | undefined): number | null {
+  const h = (r?.checks ?? []).find((c) => c.id === "H-11");
+  if (!h || h.level !== "ok") return null;
+  const m = /Shipping \$(\d+)\.(\d{2}) first item/.exec(h.detail);
+  return m ? Number(m[1]) * 100 + Number(m[2]) : null;
+}
+
 /** D232 M-7 (G-84): " Orders: gm-a (4.1 d), gm-b (3.2 d)." from the shop's held list (max 5 named). */
 export function heldRefs(list: unknown): string {
   const rows = readHeldList(list);
@@ -335,5 +348,8 @@ export function __runMerchHealthCoreTests(): { passed: number; failed: number } 
   ok("shouldAlert: change, cleared, weekly, quiet", shouldAlert({ checks: g.checks }, { checks: g.checks }, false).send === false && shouldAlert({ checks: g.checks }, buildMerchHealth({ ...base, printfulConfigured: false, scopes: null }), false).why === "changed" && shouldAlert(buildMerchHealth({ ...base, printfulConfigured: false, scopes: null }), { checks: g.checks }, false).why === "changed" && shouldAlert({ checks: g.checks }, { checks: g.checks }, true).why === "weekly" && shouldAlert(null, { checks: g.checks }, false).send === false);
   ok("settings normalized", normalizeHealthSettings({ printfulTokenExpires: "2027-01-02" }).printfulTokenExpires === "2027-01-02" && normalizeHealthSettings({ printfulTokenExpires: "soon" }).printfulTokenExpires === "" && normalizeHealthSettings(null).printfulTokenExpires === "");
   ok("daysUntil", daysUntil("2026-11-12", now) === 1 && daysUntil("bad", now) === null);
+  // D232 M-8 (G-87): flat shipping read back from the saved H-11 detail.
+  ok("flat shipping read from H-11 (cents)", (() => { const g8 = buildMerchHealth(base); return flatShippingFromReport(g8) === 599 && flatShippingFromReport(null) === null; })());
+  ok("closed checkout -> no flat shipping", (() => { const sb = base.shop!.body!; return flatShippingFromReport(buildMerchHealth({ ...base, shop: { status: 200, body: { ...sb, checkout: { open: false, problem: "x" } } } })) === null; })());
   return { passed, failed };
 }
