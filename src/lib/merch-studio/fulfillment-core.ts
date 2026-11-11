@@ -52,17 +52,61 @@ export function unitEconomics(i: UnitEconomicsInput): UnitEconomics {
 }
 
 /**
- * Smallest retail price (rounded UP to a .00 or .99-style ending) whose margin
- * on retail reaches `targetBps`, assuming shipping is passed through at cost.
+ * D232 M-8 (G-87): the owner's minimum margin for the Publish warning.
+ * Michael, verbatim (SOP-11 Q-11-8): "Q8: 35% is fine." Margin is profit on
+ * retail after the Printful estimate, the shipping gap and the card fee.
  */
-export function suggestRetailCents(printfulCents: number, targetBps: number, ending: "00" | "99" = "00"): number {
+export const MIN_MARGIN_BPS = 3500;
+
+/** What shipping costs us beyond what the customer pays for it (never negative). */
+export function shippingGapCents(chargedCents: number, costCents: number): number {
+  return Math.max(0, Math.round(costCents || 0) - Math.round(chargedCents || 0));
+}
+
+/**
+ * Smallest retail price (rounded UP to a .00 or .99-style ending) whose margin
+ * on retail reaches `targetBps`. D232 M-8 (G-87): `ship` is one item's
+ * shipping (what the customer pays, what Printful charges us). The gap is a
+ * real cost on every order and the card fee is on retail + shipping, so the
+ * price covers both. No `ship` = shipping passed through at cost (old rule).
+ */
+export function suggestRetailCents(printfulCents: number, targetBps: number, ending: "00" | "99" = "00", ship?: { chargedCents: number; costCents: number }): number {
   if (targetBps >= 10000) return 0;
-  // retail*(1 - t) >= printful + fee(retail);  fee ~ 2.9% retail + 30
-  const raw = (printfulCents + STRIPE_FIXED_CENTS) / (1 - targetBps / 10000 - STRIPE_PCT_BPS / 10000);
-  let dollars = Math.ceil(raw / 100);
+  const charged = Math.max(0, Math.round(ship?.chargedCents ?? 0));
+  const shipCost = Math.max(0, Math.round(ship?.costCents ?? 0));
+  const gap = shippingGapCents(charged, shipCost);
+  // retail*(1 - t) >= printful + gap + fee(retail);  fee ~ 2.9% retail + 30
+  const raw = (printfulCents + gap + STRIPE_FIXED_CENTS) / (1 - targetBps / 10000 - STRIPE_PCT_BPS / 10000);
+  let dollars = Math.max(1, Math.ceil(raw / 100));
   const fit = (d: number) => (ending === "99" ? d * 100 - 1 : d * 100);
-  while (unitEconomics({ retailCents: fit(dollars), printfulCents, shippingChargedCents: 0, shippingCostCents: 0 }).marginBps < targetBps) dollars += 1;
+  while (unitEconomics({ retailCents: fit(dollars), printfulCents, shippingChargedCents: charged, shippingCostCents: shipCost }).marginBps < targetBps) dollars += 1;
   return fit(dollars);
+}
+
+export interface ShippingRate { id: string; name: string; cents: number; minDays: number | null; maxDays: number | null }
+
+/**
+ * D232 M-8 (G-87): read Printful's POST /shipping/rates `result`
+ * ([{ id: "STANDARD", name, rate: "13.60", currency, minDeliveryDays,
+ * maxDeliveryDays }], developers.printful.com/docs "Shipping Rate API").
+ * Picks STANDARD (what the shop's drafts use), else the cheapest USD rate.
+ * Rate strings become integer cents; anything unreadable is skipped.
+ */
+export function pickStandardRate(result: unknown): ShippingRate | null {
+  if (!Array.isArray(result)) return null;
+  const rows: ShippingRate[] = [];
+  for (const r of result) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as { id?: unknown; name?: unknown; rate?: unknown; currency?: unknown; minDeliveryDays?: unknown; maxDeliveryDays?: unknown };
+    if (o.currency !== undefined && o.currency !== "USD") continue;
+    const txt = typeof o.rate === "string" ? o.rate.trim() : typeof o.rate === "number" ? String(o.rate) : "";
+    if (!/^\d+(\.\d{1,2})?$/.test(txt)) continue;
+    const [d, c = ""] = txt.split(".");
+    const cents = Number(d) * 100 + Number((c + "00").slice(0, 2));
+    const day = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    rows.push({ id: typeof o.id === "string" ? o.id : "", name: typeof o.name === "string" ? o.name : "", cents, minDays: day(o.minDeliveryDays), maxDays: day(o.maxDeliveryDays) });
+  }
+  return rows.find((x) => x.id === "STANDARD") ?? rows.sort((a, b) => a.cents - b.cents)[0] ?? null;
 }
 
 /**
@@ -104,6 +148,17 @@ export function __runFulfillmentTests(): { passed: number; failed: number } {
   ok(r % 100 === 0 && unitEconomics({ retailCents: r, printfulCents: 1560, shippingChargedCents: 0, shippingCostCents: 0 }).marginBps >= 5000, "suggested retail meets 50%");
   ok(unitEconomics({ retailCents: r - 100, printfulCents: 1560, shippingChargedCents: 0, shippingCostCents: 0 }).marginBps < 5000, "suggested retail is the smallest");
   ok(suggestRetailCents(1560, 5000, "99") % 100 === 99, ".99 ending");
+  // D232 M-8 (G-87): 35% minimum, the shipping gap and Printful's rate string.
+  ok(MIN_MARGIN_BPS === 3500, "owner minimum 35%");
+  ok(shippingGapCents(599, 1360) === 761 && shippingGapCents(1500, 1360) === 0 && shippingGapCents(0, 0) === 0, "shipping gap, never negative");
+  const g = suggestRetailCents(1560, 3500, "00", { chargedCents: 599, costCents: 1360 });
+  ok(g > suggestRetailCents(1560, 3500) && unitEconomics({ retailCents: g, printfulCents: 1560, shippingChargedCents: 599, shippingCostCents: 1360 }).marginBps >= 3500, "gap-aware suggestion covers the gap");
+  ok(unitEconomics({ retailCents: g - 100, printfulCents: 1560, shippingChargedCents: 599, shippingCostCents: 1360 }).marginBps < 3500, "gap-aware suggestion is the smallest");
+  ok(suggestRetailCents(1560, 5000, "00", { chargedCents: 0, costCents: 0 }) === r, "gap 0 = old behaviour");
+  const pr = pickStandardRate([{ id: "EXPRESS", name: "Express", rate: "25.50", currency: "USD" }, { id: "STANDARD", name: "Flat Rate (3-4 business days)", rate: "13.6", currency: "USD", minDeliveryDays: 3, maxDeliveryDays: 4 }]);
+  ok(!!pr && pr.id === "STANDARD" && pr.cents === 1360 && pr.minDays === 3 && pr.maxDays === 4, "STANDARD picked, \"13.6\" = 1360 cents");
+  ok(pickStandardRate([{ id: "A", rate: "9.99", currency: "USD" }, { id: "B", rate: "7.25", currency: "USD" }])!.cents === 725, "no STANDARD -> cheapest");
+  ok(pickStandardRate([{ id: "STANDARD", rate: "abc" }, { id: "X", rate: "5.00", currency: "EUR" }]) === null && pickStandardRate(null) === null && pickStandardRate({}) === null, "junk and non-USD skipped");
   ok(JIT_PIPELINE.length === 9 && new Set(JIT_PIPELINE.map((s) => s.id)).size === 9, "pipeline steps");
   return { passed, failed };
 }

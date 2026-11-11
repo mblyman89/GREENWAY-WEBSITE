@@ -1136,10 +1136,12 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `PublishPanel.tsx` L250 (`useState("35")`); `FulfillmentPanel.tsx` L68; `merch-site/lib/checkout-core.ts` L40 (flat shipping only).
 - **Effect:** under-priced listings and a shipping loss on every order are possible.
 - **SOP impact:** SOP-11 §4.11, §4.12 step 4. **G-87**.
+- **Resolved (D232, M-8):** Publish starts empty or at the last price for that garment, with a suggested price (cost, card fee, shipping gap, 35% minimum). Printful STANDARD rate to WA is compared with the flat price from Merch Health H-11; the gap is shown and counted; `listing-thin` warns under 35% (`MIN_MARGIN_BPS`).
 
 ### F-11-14 · CONFIRMED · WEAKNESS · S4 — Seven placements are estimates
 - **Pin:** `src/lib/merch-studio/garment-catalog-core.ts`: 7 × `dimsSource: "studio-default"` (e.g. L151, L195, L214, L225–226).
 - **SOP impact:** SOP-11 §4.7 step 3. **G-92** (Q-11-6).
+- **Resolved (D232, M-8):** the count is 8 (not 7). They are labelled "Studio estimate - awaiting sample measurement" and Garments compares them with Printful's print files (`printfile-check-core.ts`). The numbers change only after the samples are measured.
 
 ### F-11-15 · CONFIRMED · WEAKNESS · S4 — Old print files stay after a re-publish
 - **Pin:** `src/app/admin/merch-studio/catalog-actions.ts` L6–7, L50 (a new `<nonce>` folder each time); Remove deletes only the current set (`inventory/merch/actions.ts` L42–45).
@@ -1154,6 +1156,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-17 · CONFIRMED · GAP · S3 — Too little help
 - **Pin:** `src/app/admin/inventory/merch/page.tsx` L56 and `src/app/admin/reports/merch/page.tsx` have no `helpId`. `concierge-kb.ts` has 2 merch facts (L194, L200). `integration-guides.ts` L30–97 has no Printful, Stripe or Resend guide.
 - **SOP impact:** SOP-11 §4.13, §4.23. **G-90**.
+- **Resolved (D232, M-8):** helpers `merch-inventory` and `merch-report` (both pages linked); Integrations has Printful, Stripe (merch) and Resend (merch) guides; concierge topic `merch` (18 facts).
 
 ### F-11-18 · CONFIRMED · WEAKNESS · S3 — The Printful webhook is registered by hand and nothing checks it
 - **Pin:** `docs/MERCH-SITE-FINISHING-GUIDE.md` §6.3 (curl). Printful docs: registering *"disables all existing webhook configuration."* The route lists the types at L7–8.

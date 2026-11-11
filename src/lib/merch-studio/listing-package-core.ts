@@ -36,7 +36,7 @@
 import { basePriceCents, colorsFor, getBlank, sizesFor, PRINTFUL_SNAPSHOT_DATE, type Blank, type UsedPlacement } from "./garment-catalog-core";
 import { usedPlacements, type MerchDesign } from "./merch-design-core";
 import { planPrintFiles, printfulItemDraft, slug, variantFor, type PrintFilePlan, type PrintfulItemDraft, type PrintfulPosition } from "./print-export-core";
-import { unitEconomics } from "./fulfillment-core";
+import { MIN_MARGIN_BPS, shippingGapCents, suggestRetailCents, unitEconomics } from "./fulfillment-core";
 import type { Issue } from "./print-rules-core";
 
 export const LISTING_FORMAT = "greenway-goods-listing";
@@ -59,6 +59,14 @@ export interface ListingInput {
   /** Hosted print-file URLs by plan key (from Proof & Export uploads); may be empty. */
   urls?: Readonly<Record<string, string>>;
   generatedAt: string;
+  /**
+   * D232 M-8 (G-87): one-item shipping, cents. chargedCents = the shop's flat
+   * first-item charge (MERCH_SHIP_FLAT_CENTS, from the last Merch Health run);
+   * costCents = Printful's STANDARD US rate for this garment (POST
+   * /shipping/rates). Either may be null (not known yet). The gap (cost -
+   * charged) is a cost on every order, so margins include it.
+   */
+  shipping?: { chargedCents: number | null; costCents: number | null };
 }
 
 export interface ListingVariant {
@@ -124,6 +132,7 @@ function usedList(d: MerchDesign, b: Blank): { used: UsedPlacement[]; puff: bool
   return { used, puff };
 }
 
+const fmt = (c: number) => `$${centsToPrice(c)}`;
 const issue = (id: string, level: Issue["level"], title: string, why: string, fix: string): Issue => ({ id, level, title, why, fix, source: "studio" });
 
 /** Build the package + every problem found. Blockers mean "do not import this yet". */
@@ -152,6 +161,9 @@ export function buildListingPackage(i: ListingInput): { pkg: ListingPackage | nu
   const retail = Math.max(0, Math.round(i.retailCents || 0));
   if (retail <= 0) issues.push(issue("listing-retail", "blocker", "Set a retail price", "The merch site needs a price to charge.", "Enter a retail price."));
 
+  const shipCharged = i.shipping?.chargedCents ?? null;
+  const shipCost = i.shipping?.costCents ?? null;
+  const gap = shipCharged !== null && shipCost !== null ? shippingGapCents(shipCharged, shipCost) : 0;
   const variants: ListingVariant[] = [];
   const missing: string[] = [];
   for (const color of colors) {
@@ -161,7 +173,7 @@ export function buildListingPackage(i: ListingInput): { pkg: ListingPackage | nu
       const est = basePriceCents(b, size, used, puff);
       if (!est) { missing.push(`${color} ${size}`); continue; }
       const r = retail + (i.passSizeUpcharge ? Math.max(0, (sizeBase.get(size) ?? minBase) - minBase) : 0);
-      const e = unitEconomics({ retailCents: r, printfulCents: est.cents, shippingChargedCents: 0, shippingCostCents: 0 });
+      const e = unitEconomics({ retailCents: r, printfulCents: est.cents, shippingChargedCents: gap ? shipCharged ?? 0 : 0, shippingCostCents: gap ? shipCost ?? 0 : 0 });
       variants.push({ color, size, printfulVariantId: v[2], inStock: v[4], printfulCents: est.cents, retailCents: r, cardFeeCents: e.cardFeeCents, profitCents: e.profitCents, marginBps: e.marginBps });
     }
   }
@@ -171,7 +183,10 @@ export function buildListingPackage(i: ListingInput): { pkg: ListingPackage | nu
   if (variants.length > PRINTFUL_MAX_SYNC_VARIANTS) issues.push(issue("listing-too-many", "blocker", `${variants.length} variants - Printful allows ${PRINTFUL_MAX_SYNC_VARIANTS} per product`, "Printful's sync-product API caps a product at 100 variants.", "Untick some colours or sizes, or split into two listings."));
   const loss = variants.filter((v) => v.profitCents <= 0);
   if (loss.length) issues.push(issue("listing-loss", "blocker", `${loss.length} variant${loss.length === 1 ? " sells" : "s sell"} at a loss`, "Retail is below the Printful estimate plus the Stripe fee.", "Raise the retail price (see Fulfillment & Pricing for a suggested price)."));
-  else if (variants.some((v) => v.marginBps < 3000)) issues.push(issue("listing-thin", "warning", "Some variants earn under 30% margin", "Before shipping, returns and reprints.", "Consider a higher price."));
+  else if (variants.some((v) => v.marginBps < MIN_MARGIN_BPS)) issues.push(issue("listing-thin", "warning", `Some variants earn under your ${MIN_MARGIN_BPS / 100}% minimum margin`, `After the Printful estimate, the card fee${gap ? ` and the ${fmt(gap)} shipping gap` : ""} (D232 Q-11-8: "Q8: 35% is fine."). Returns and reprints are not included.`, "Raise the retail price to the suggestion shown under the price box, or untick the sizes with the thinnest margin."));
+  // D232 M-8 (G-87): the flat shipping the shop charges vs Printful's real rate.
+  if (gap > 0) issues.push(issue("listing-ship-gap", "warning", `Flat shipping (${fmt(shipCharged ?? 0)}) is under Printful's US rate (${fmt(shipCost ?? 0)})`, `You pay the ${fmt(gap)} difference on every order. It is already taken out of the profit and margin above.`, "Raise MERCH_SHIP_FLAT_CENTS in the merch project (SOP-11 \u00a74.4.1), or price the gap in (the suggestion includes it)."));
+  else if (variants.length && (shipCharged === null || shipCost === null)) issues.push(issue("listing-ship-unknown", "tip", "Shipping isn't checked yet", shipCharged === null ? "The shop's flat shipping is not known (no Merch Health run has read it)." : "Printful's US shipping rate for this garment could not be read.", shipCharged === null ? "Run Merch Health (Setup & Launch) so the studio can read the flat shipping, then reload." : "Press \"Check Printful shipping\" again, or enter Printful's rate on Fulfillment & Pricing."));
 
   const urls = i.urls ?? {};
   const noUrl = plans.filter((p) => !urls[p.key]);
@@ -211,6 +226,34 @@ export function buildListingPackage(i: ListingInput): { pkg: ListingPackage | nu
     ],
   };
   return { pkg, issues };
+}
+
+/**
+ * D232 M-8 (G-87): the smallest whole-dollar retail (the smallest chosen size's
+ * price) at which EVERY chosen size meets `targetBps` after the Printful
+ * estimate, the shipping gap and the card fee. With the size upcharge passed
+ * on, bigger sizes carry their own upcharge. 0 = nothing to price yet.
+ */
+export function suggestListingRetailCents(i: Pick<ListingInput, "design" | "sizes" | "passSizeUpcharge" | "shipping">, targetBps = MIN_MARGIN_BPS): number {
+  const b = getBlank(i.design.blankId);
+  if (!b) return 0;
+  const { used, puff } = usedList(i.design, b);
+  const all = sizesFor(b);
+  const sizes = all.filter((s) => i.sizes.includes(s[0]));
+  if (!sizes.length) return 0;
+  const minBase = Math.min(...sizes.map((s) => s[1]));
+  const ch = i.shipping?.chargedCents ?? null;
+  const co = i.shipping?.costCents ?? null;
+  const ship = ch !== null && co !== null ? { chargedCents: ch, costCents: co } : undefined;
+  let need = 0;
+  for (const [size, base] of sizes) {
+    const est = basePriceCents(b, size, used, puff);
+    if (!est) continue;
+    const up = i.passSizeUpcharge ? Math.max(0, base - minBase) : 0;
+    need = Math.max(need, suggestRetailCents(est.cents, targetBps, "00", ship) - up);
+  }
+  // Re-round up to whole dollars after subtracting the upcharge.
+  return need > 0 ? Math.ceil(need / 100) * 100 : 0;
 }
 
 export function listingFilename(pkg: ListingPackage): string {
@@ -262,5 +305,21 @@ export function __runListingPackageTests(): { passed: number; failed: number } {
   ok(all.pkg!.variants.length > PRINTFUL_MAX_SYNC_VARIANTS === all.issues.some((x) => x.id === "listing-too-many"), "100-variant cap flagged exactly when exceeded");
   ok(listingFilename(p) === "greenway-goods-logo-tee-2026-10-18.json", "filename");
   ok(!JSON.stringify(p).includes("greenwaymarijuana"), "no cannabis host in the package");
+  // D232 M-8 (G-87): 35% minimum with the shipping gap.
+  const gapR = buildListingPackage({ ...base, shipping: { chargedCents: 599, costCents: 1360 } });
+  const gs = gapR.pkg!.variants[0];
+  ok(gs.profitCents === unitEconomics({ retailCents: 3500, printfulCents: gs.printfulCents, shippingChargedCents: 599, shippingCostCents: 1360 }).profitCents, "gap taken out of profit");
+  ok(gapR.issues.some((x) => x.id === "listing-ship-gap" && x.level === "warning" && x.title.includes("$5.99") && x.title.includes("$13.60")), "ship-gap warning names both amounts");
+  ok(!buildListingPackage({ ...base, shipping: { chargedCents: 1500, costCents: 1360 } }).issues.some((x) => x.id === "listing-ship-gap" || x.id === "listing-ship-unknown"), "flat >= Printful: no shipping warning");
+  ok(r.issues.some((x) => x.id === "listing-ship-unknown" && x.level === "tip"), "unknown shipping -> tip");
+  const minM = Math.min(...gapR.pkg!.variants.map((v) => v.marginBps));
+  ok(gapR.issues.some((x) => x.id === "listing-thin") === (minM < 3500 && minM > 0), "thin warning exactly under 35%");
+  ok(buildListingPackage({ ...base, retailCents: 10000 }).issues.every((x) => x.id !== "listing-thin"), "$100 tee is not thin");
+  const sug = suggestListingRetailCents({ ...base, shipping: { chargedCents: 599, costCents: 1360 } });
+  const atSug = buildListingPackage({ ...base, retailCents: sug, shipping: { chargedCents: 599, costCents: 1360 } });
+  ok(sug % 100 === 0 && atSug.pkg!.variants.every((v) => v.marginBps >= 3500) && !atSug.issues.some((x) => x.id === "listing-thin"), "suggested listing price clears 35% on every size");
+  ok(buildListingPackage({ ...base, retailCents: sug - 100, shipping: { chargedCents: 599, costCents: 1360 } }).pkg!.variants.some((v) => v.marginBps < 3500), "and $1 less does not");
+  ok(sug > suggestListingRetailCents(base), "the shipping gap raises the suggestion");
+  ok(suggestListingRetailCents({ ...base, sizes: [] }) === 0, "no sizes -> 0");
   return { passed, failed };
 }

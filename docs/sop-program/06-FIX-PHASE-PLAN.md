@@ -113,7 +113,7 @@ The owner asked for hand-holding and health first (*"first step, do this, done g
 | M-5 | Re-publish keeps Hidden; catalog compare-and-set; old print-file cleanup — **BUILT (D232)** | F-11-7, F-11-16, F-11-15 | G-82, G-88, G-93 | — |
 | M-6 | Printful webhook button; automatic stock (cron, then `stock_updated`) — **BUILT (D232)** | F-11-18, F-11-8 | G-89, G-83 | M-2 |
 | M-7 | Held-card monitor; alerts inbox; cancel-and-refund guidance or action — **BUILT (D232)** | F-11-11, F-11-9, F-11-10 | G-84, G-85, G-86 | M-2; Q-11-4 |
-| M-8 | Pricing guard; helpers, integration guides, concierge; studio-default placements | F-11-13, F-11-17, F-11-14 | G-87, G-90, G-92 | Q-11-6, Q-11-8 |
+| M-8 | Pricing guard; helpers, integration guides, concierge; studio-default placements — **BUILT (D232)** | F-11-13, F-11-17, F-11-14 | G-87, G-90, G-92 | Q-11-6, Q-11-8 |
 
 ### Phase 7 — Remaining S3/S4, then the next audits
 

@@ -7,7 +7,8 @@
  */
 import { useState } from "react";
 import { basePriceCents, formatCents, getBlank, sizesFor, placementsFor, METHOD_LABEL, type Method, type UsedPlacement } from "@/lib/merch-studio/garment-catalog-core";
-import { JIT_PIPELINE, SHIPPED_SLICE, STRIPE_DISPUTE_CENTS, suggestRetailCents, unitEconomics } from "@/lib/merch-studio/fulfillment-core";
+import { JIT_PIPELINE, MIN_MARGIN_BPS, SHIPPED_SLICE, STRIPE_DISPUTE_CENTS, shippingGapCents, suggestRetailCents, unitEconomics } from "@/lib/merch-studio/fulfillment-core";
+import { printfulShippingRateAction } from "@/app/admin/merch-studio/pricing-actions";
 import { NumberSlider, Row, Toggle, studioInput, studioLabel } from "@/components/admin/banner-studio/controls";
 
 const toCents = (s: string) => { const n = Number(s.replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
@@ -22,7 +23,20 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
   const [retail, setRetail] = useState("45.00");
   const [shipCharged, setShipCharged] = useState("0.00");
   const [shipCost, setShipCost] = useState("0.00");
-  const [target, setTarget] = useState(50);
+  // D232 M-8 (G-87): start at the owner's minimum ("Q8: 35% is fine.").
+  const [target, setTarget] = useState(MIN_MARGIN_BPS / 100);
+  const [shipMsg, setShipMsg] = useState("");
+  const fillShipping = () => {
+    setShipMsg("Asking Printful...");
+    printfulShippingRateAction({ blankId }).then((r) => {
+      if (!r.ok) { setShipMsg(r.error); return; }
+      if (r.flatCents !== null) setShipCharged((r.flatCents / 100).toFixed(2));
+      if (r.costCents !== null) setShipCost((r.costCents / 100).toFixed(2));
+      setShipMsg([r.flatCents === null ? "Flat shipping unknown: run Merch Health." : "", r.costCents === null ? r.problem : `Printful ${r.rate?.name || "STANDARD"} to WA.`].filter(Boolean).join(" "));
+    }).catch(() => setShipMsg("Couldn't ask Printful."));
+  };
+  const gap = shippingGapCents(toCents(shipCharged), toCents(shipCost));
+  const ship = { chargedCents: toCents(shipCharged), costCents: toCents(shipCost) };
 
   const usedList: UsedPlacement[] = Object.entries(used).filter(([, m]) => m).map(([placementId, m]) => ({ placementId, method: m as Method }));
   const est = basePriceCents(blank, sz, usedList, puff);
@@ -66,6 +80,7 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
           <Row label="Retail price (USD)"><input className={studioInput} inputMode="decimal" value={retail} onChange={(e) => setRetail(e.target.value)} /></Row>
           <Row label="Shipping charged to customer"><input className={studioInput} inputMode="decimal" value={shipCharged} onChange={(e) => setShipCharged(e.target.value)} /></Row>
           <Row label="Printful shipping cost" hint="Printful charges you its own shipping rate per order. The shop charges the customer your flat MERCH_SHIP_* amount, so enter Printful's US rate for this garment to see the gap."><input className={studioInput} inputMode="decimal" value={shipCost} onChange={(e) => setShipCost(e.target.value)} /></Row>
+          <p className="text-xs text-white/60"><button type="button" className="text-[var(--admin-accent)] underline" onClick={fillShipping}>Fill both from Printful + Merch Health</button>{shipMsg ? ` ${shipMsg}` : ""}{gap ? <> <b className="text-[var(--admin-gold)]">Gap {formatCents(gap)} per order</b> (you pay it).</> : null}</p>
         </div>
         <div className="space-y-3">
           {est && econ ? (
@@ -85,7 +100,7 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
           {est ? (
             <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-4">
               <NumberSlider label="Target margin (of retail)" value={target} min={10} max={80} step={5} unit="%" onChange={setTarget} />
-              <p className="mt-2 text-sm text-white/80">Lowest whole-dollar price for {target}%: <b className="text-white">{formatCents(suggestRetailCents(est.cents, target * 100))}</b> (or {formatCents(suggestRetailCents(est.cents, target * 100, "99"))}). Shipping passed through at cost.</p>
+              <p className="mt-2 text-sm text-white/80">Lowest whole-dollar price for {target}%: <b className="text-white">{formatCents(suggestRetailCents(est.cents, target * 100, "00", ship))}</b> (or {formatCents(suggestRetailCents(est.cents, target * 100, "99", ship))}). {gap ? `Includes the ${formatCents(gap)} shipping gap and the card fee on retail + shipping.` : "Shipping covered by what you charge (enter both shipping boxes to check)."}{target * 100 < MIN_MARGIN_BPS ? ` Below your ${MIN_MARGIN_BPS / 100}% minimum: Publish will warn.` : ""}</p>
             </div>
           ) : null}
         </div>

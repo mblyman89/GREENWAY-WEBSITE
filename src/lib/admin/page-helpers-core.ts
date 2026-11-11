@@ -11,9 +11,10 @@
  * Pure data + checks (no React) so the self-test runner can verify it.
  */
 
-export type HelperSection = "Website: Cannabis" | "Website: Merchandise" | "Studios";
+export type HelperSection = "Website: Cannabis" | "Website: Merchandise" | "Studios" | "Merch: Inventory & Reports";
 
-export const HELPER_SECTIONS: readonly HelperSection[] = ["Website: Cannabis", "Website: Merchandise", "Studios"];
+/** D232 M-8 (G-90): "Merch: Inventory & Reports" holds the Merch Inventory and Reports -> Merch helpers. */
+export const HELPER_SECTIONS: readonly HelperSection[] = ["Website: Cannabis", "Website: Merchandise", "Studios", "Merch: Inventory & Reports"];
 
 export type PageHelper = {
   /** Stable anchor id (kept equal to the old HelpPanel id). */
@@ -335,11 +336,51 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
       "Publish & Ads: (A) turn on the Greenway Goods ad on the cannabis website - one link to the separate merch website, your words and pictures, never prices or product details - draft, preview, publish. (B) pick a design, colours, sizes, price and product photos, then press Publish to greenwaymerch.com (owner or admin only, because it puts the product on sale; others can download the listing package and send it to them): the print files are rendered and stored, the product is on the merch website within about a minute and it is added to Inventory > Merch Inventory. Publishing the same title again updates it. The listing package download is still there as a backup.",
       "Merch Inventory (Inventory menu): every published product with Printful's live stock, what the website shows, price, cost, profit, units sold and revenue. Hide or show a product, remove it, copy Printful's stock onto the website, or download a CSV.",
       "Setup & Launch (the Setup & Launch button at the top, owner & admin): one card per setup step (Printful, Stripe, Vercel, Resend) and the first test order. Each card says exactly what to click, with copy buttons and links. It turns green by itself when Merch Health confirms it, or when you tick it for steps only you can see. Done cards fold away with \"✅ Great, done!\", the next one says \"Next:\", and a step that breaks later re-opens. The Studio shows \"Setup needs you\" until it is all done. Print setup record prints form 8.1, filled in.",
+      "Pricing (D232 M-8): the retail price starts at the design's last published price, or empty with the suggestion shown under it. The suggestion is the lowest whole-dollar price at which every chosen size earns at least 35% (the owner's minimum) after Printful's estimate, the card fee and the shipping gap. The studio asks Printful what it charges to ship one of this garment to Washington and compares it with the shop's flat shipping (read from the last Merch Health run). Publish warns when a size is under 35% or the flat shipping is under Printful's rate.",
+      "Garments: gold placements are studio estimates awaiting sample measurement. Press \"Compare with Printful's print files\" to see Printful's own print-file size next to the studio's box (red = the studio box is bigger, so art near the edge could be cut off).",
       "Merch Health (the Merch Health button at the top, owner & admin): 19 live checks of everything an order needs (Printful token, permissions, expiry date, store and webhook; the shop's catalog feed, Stripe key, Stripe webhook, checkout, sales tax, emails, card holds and auto-confirm; service status; drafts waiting; stock; file storage). Each one is green, amber, red or unknown, with the exact fix and the SOP-11 section. It runs again every morning and emails staff only when a red check appears or clears, plus a Monday summary.",
     ],
     notes: [
       "Everything designed here is sold by Greenway Merchandising LLC (dba Greenway Glass & Goods) on its own separate website (its own domain, cart and Stripe card checkout). The cannabis website only shows a redirect ad with no product details, and apparel is never rung up on the cannabis POS or delivered by cannabis delivery. Confirm this structure with your attorney before launch.",
     ],
+  },
+  // D232 M-8 (G-90): helpers for the two merch pages that had none (SOP-11 F-11-17).
+  {
+    id: "merch-inventory",
+    section: "Merch: Inventory & Reports",
+    page: "Merch Inventory",
+    href: "/admin/inventory/merch",
+    title: "How Merch Inventory works",
+    steps: [
+      "Every product published from Merch Studio is listed here: its garment, colours and sizes, how many variants can be sold, the price range, and Printful's live stock for each colour and size.",
+      "Need attention counts sizes Printful has out of stock and website mismatches (Printful's answer and what greenwaymerch.com shows differ). Filter with Show: Needs attention.",
+      "Copy Printful stock to the website fixes mismatches now. It also runs by itself every 6 hours and about a minute after Printful reports a stock change.",
+      "Hide takes a product off greenwaymerch.com without deleting it; Show puts it back. Re-publishing from the studio keeps a Hidden product hidden. Remove (owner or admin) takes the listing out of the catalog and deletes its print files.",
+      "Units sold, revenue and gross profit come from Printful orders placed by greenwaymerch.com. Gross profit is after Printful's cost, before card fees; sales tax is excluded.",
+      "Download CSV gives every variant with price, Printful cost, profit, margin, stock and sales, for your bookkeeper.",
+    ],
+    notes: [
+      "Prices change only by publishing again from Merch Studio \u2192 Publish & Ads (owner or admin). SOP-11 \u00a74.13-\u00a74.16 has the full walkthrough.",
+    ],
+    links: [{ label: "Merch Studio \u2192 Publish & Ads", href: "/admin/merch-studio?tab=publish" }, { label: "Merch Health", href: "/admin/merch-studio/health" }],
+  },
+  {
+    id: "merch-report",
+    section: "Merch: Inventory & Reports",
+    page: "Reports \u2192 Merch",
+    href: "/admin/reports/merch",
+    title: "How Reports \u2192 Merch works",
+    steps: [
+      "Pick a date range at the top. Everything below uses it.",
+      "Sales come from Printful orders placed by greenwaymerch.com; cancelled and failed orders are left out. The cards show merch orders, what customers paid, sales tax collected and margin after Printful; then sales by day, top items and a breakdown with order status at Printful.",
+      "Washington sales tax: the tax customers paid at checkout (Stripe), by month and by delivery place. Greenway Merchandising LLC files it with WA DOR; Printful does not collect or remit it, and it is never on the cannabis licensee's return.",
+      "greenwaymerch.com traffic comes from Vercel Web Analytics on the merch project: visitors, page views, pages per visitor and orders per 100 visitors.",
+      "Merch sales by day has an export button for your bookkeeper.",
+    ],
+    notes: [
+      "If it says Printful isn't connected, add PRINTFUL_API_TOKEN in Vercel (the same token Merch Studio uses). If traffic is empty, set VERCEL_ANALYTICS_TOKEN and MERCH_VERCEL_PROJECT (and VERCEL_TEAM_ID for a Full Account token) in the main project (SOP-11 \u00a74.4).",
+    ],
+    links: [{ label: "Merch Inventory", href: "/admin/inventory/merch" }, { label: "Orders", href: "/admin/orders" }],
   },
 ];
 
@@ -380,5 +421,7 @@ export function __runPageHelpersTests(): { passed: number; failed: number; failu
   ok(grouped.reduce((n, g) => n + g.items.length, 0) === PAGE_HELPERS.length, "every helper lands in exactly one section");
   ok(grouped.every((g) => g.items.length > 0), "no empty sections");
   ok(grouped.find((g) => g.section === "Studios")?.items.length === 2, "Studios = Creative + Merch");
+  // D232 M-8 (G-90): Merch Inventory + Reports -> Merch have helpers.
+  ok(["merch-inventory", "merch-report"].every((id) => PAGE_HELPERS.some((h) => h.id === id && h.section === "Merch: Inventory & Reports")), "merch inventory + report helpers");
   return { passed, failed: failures.length, failures };
 }

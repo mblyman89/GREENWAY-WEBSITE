@@ -111,12 +111,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-84 | **Held-card monitor**: uncaptured > 3 days emailed at day 3 and 5, with capture/cancel coaching | D231 | F-11-11 | SOP-11 §4.20 | **DONE (D232 M-7)** |
 | G-85 | **Merch alerts inbox** in the back office (the shop posts alerts; acknowledge) | D231 | F-11-9 | SOP-11 §4.21 weekly log search | **DONE (D232 M-7)** |
 | G-86 | **Cancel and refund in one guided step** | D231 | F-11-10 | SOP-11 §4.19, form 8.4 | **DONE (D232 M-7)** |
-| G-87 | **Pricing guard** (no fixed $35; shipping gap; minimum margin warning) | D231 | F-11-13 | SOP-11 §4.11, form 8.2 D | OPEN · PROPOSED M-8 |
+| G-87 | **Pricing guard** (no fixed $35; shipping gap; minimum margin warning) | D231 | F-11-13 | SOP-11 §4.11, form 8.2 D | **DONE (D232 M-8)** |
 | G-88 | **Catalog version check** (compare-and-set) | D231 | F-11-16 | SOP-11 §4.14 one at a time | **DONE (M-5, D232)** |
 | G-89 | **Register the Printful webhook from the app** (reads `GET /webhooks` first, all types, audited, checked daily) | D231 | F-11-18 | SOP-11 S-10 | **DONE (D232 M-6)** |
-| G-90 | **Help everywhere**: helpers for Merch Inventory and Reports → Merch; Printful, Stripe and Resend integration guides; concierge topics (04) | D231 | F-11-17 | SOP-11 itself | OPEN · PROPOSED M-8 |
+| G-90 | **Help everywhere**: helpers for Merch Inventory and Reports → Merch; Printful, Stripe and Resend integration guides; concierge topics (04) | D231 | F-11-17 | SOP-11 itself | **DONE (D232 M-8)** |
 | G-91 | **Stale copy cleanup** (Slice 5 texts, catalog-folder step, README, finishing guide §3.1) | D231 | F-11-12 | SOP-11 §4.1 note, §4.4.1 | **DONE (M-1, D232)** |
-| G-92 | **Confirm the 7 studio-default placements** | D231 | F-11-14 | SOP-11 §4.7 step 3 | OPEN · PROPOSED M-8 (Q-11-6) |
+| G-92 | **Confirm the 7 studio-default placements** | D231 | F-11-14 | SOP-11 §4.7 step 3 | **DONE (D232 M-8)** (labelled; numbers after sample measurement, Q-11-6) |
 | G-93 | **Delete the previous print files on re-publish** | D231 | F-11-15 | none needed | **DONE (M-5, D232)** |
 
 ---

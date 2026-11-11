@@ -95,7 +95,7 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
         {tab === "fulfillment" ? <FulfillmentPanel key={blankId} blankId={blankId} /> : null}
         {/* Publish reads saved drafts from this browser (listing package), so it mounts only after the restore. */}
         {tab === "publish" && restored ? (
-          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} canPublish={publish.canPublish ?? false} isOwner={publish.isOwner ?? false} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
+          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} canPublish={publish.canPublish ?? false} isOwner={publish.isOwner ?? false} lastRetail={Object.fromEntries((journey?.published ?? []).filter((p) => p.minRetailCents > 0).map((p) => [p.designId, p.minRetailCents]))} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
         ) : null}
         {extraTabs.map((t) => (tab === t.id ? <div key={t.id}>{t.render({ blankId, colorHex, setBlank, setColor: setColorHex })}</div> : null))}
       </div>

@@ -18,6 +18,7 @@ import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 import { ReportTable, type ReportColumn } from "@/components/admin/reports/ReportTable";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { resolveRange } from "@/lib/reports/range";
+import { helperHref } from "@/lib/admin/page-helpers-core";
 import { MERCH_BOARD_PAGES, MERCH_PAGE_LIMIT, merchStatusLabel } from "@/lib/orders/merch-orders-core";
 import { conversionPct, daySpan, fillDays, merchSalesReport, type TaxMonthRow, type TaxPlaceRow } from "@/lib/merch/merch-reports-core";
 import { loadMerchSales, loadMerchTraffic } from "@/lib/merch/merch-reports-server";
@@ -87,7 +88,9 @@ export default async function MerchReportPage({ searchParams }: { searchParams: 
         greenwaymerch.com - Greenway Merchandising LLC (dba Greenway Glass &amp; Goods). {range.label}. Sales and tax come from
         Printful orders placed by greenwaymerch.com; cancelled and failed orders are left out. Manage orders at{" "}
         <Link href="/admin/orders" className="font-bold text-[var(--admin-accent)] hover:underline">Orders</Link> and products at{" "}
-        <Link href="/admin/inventory/merch" className="font-bold text-[var(--admin-accent)] hover:underline">Merch Inventory</Link>.
+        <Link href="/admin/inventory/merch" className="font-bold text-[var(--admin-accent)] hover:underline">Merch Inventory</Link>.{" "}
+        {/* D232 M-8 (G-90): this tab shares the Reports header, so the helper link lives here. */}
+        <Link href={helperHref("merch-report")} className="font-bold text-[var(--admin-accent)] hover:underline">How this page works</Link>
       </Notice>
 
       {!board.configured ? (

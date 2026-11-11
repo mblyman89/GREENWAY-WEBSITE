@@ -106,6 +106,60 @@ export const INTEGRATION_GUIDES: IntegrationGuide[] = [
     ],
     notes: ["Use Menu Imports → Test mode + Clean Slate to rehearse safely, then start fresh for real."],
   },
+  // D232 M-8 (G-90): the three merch services (SOP-11 S-2..S-11). These belong to
+  // Greenway Merchandising LLC, never the cannabis licensee.
+  {
+    id: "printful",
+    title: "👕 Printful (merch printing)",
+    summary: "Prints and ships each greenwaymerch.com order one at a time for Greenway Merchandising LLC. Used by Merch Studio, Merch Inventory, Orders \u2192 Merch and Reports \u2192 Merch.",
+    href: "/admin/merch-studio/launch",
+    steps: [
+      "Sign in at printful.com with the LLC's login (not a personal one). Stores should show one Manual order platform / API store for greenwaymerch.com (SOP-11 S-2).",
+      "Billing: enter the LLC's legal info, add the LLC's card (Printful charges it when an order is confirmed) and add the Washington resale certificate (S-3).",
+      "developers.printful.com/tokens \u2192 Create token named greenway-websites, access A single store, scopes orders + webhooks (+ file_library), the longest expiry. Copy it now: Printful shows it only once (S-4).",
+      "Put it in Vercel as PRINTFUL_API_TOKEN in BOTH projects (main and merch), then redeploy both. PRINTFUL_STORE_ID is only needed for an Account-level token.",
+      "Type the token's expiry date on Merch Health \u2192 H-3 (Printful has no API that returns it).",
+      "Merch Health \u2192 H-5 \u2192 Register / repair the Printful webhook (needs PRINTFUL_WEBHOOK_TOKEN, the same value in both projects) (S-10).",
+    ],
+    notes: [
+      "You know it worked when Merch Health H-1 to H-5 are green.",
+      "Printful's private tokens expire and cannot be refreshed: make a new one before the date and replace it in both projects.",
+    ],
+  },
+  {
+    id: "stripe-merch",
+    title: "💳 Stripe (merch card payments)",
+    summary: "Card checkout on greenwaymerch.com under Greenway Merchandising LLC's own Stripe account. Never a dispensary account, never cannabis.",
+    href: "/admin/merch-studio/launch",
+    steps: [
+      "dashboard.stripe.com \u2192 select the Greenway Merchandising LLC account and finish Business details (EIN, payout bank) (SOP-11 S-5).",
+      "Test mode ON \u2192 Developers \u2192 API keys \u2192 copy the secret key sk_test_... (S-6).",
+      "Developers \u2192 Webhooks \u2192 Add endpoint https://greenwaymerch.com/api/stripe/webhook (no www) with checkout.session.completed and checkout.session.async_payment_succeeded; copy the whsec_... signing secret (S-7).",
+      "Tax \u2192 register Washington, then set MERCH_STRIPE_AUTOMATIC_TAX=true in the merch project (S-8).",
+      "Merch project in Vercel: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and MERCH_SHIP_FLAT_CENTS (checkout stays closed without it), then redeploy (S-9).",
+      "For the Refund and Release buttons on a merch order: MERCH_PAYMENTS_TOKEN, 32+ characters, the same value in both projects, different from MERCH_HEALTH_TOKEN; redeploy both.",
+    ],
+    notes: [
+      "You know it worked when Merch Health H-9 to H-12 are green.",
+      "Test and live mode have separate keys, endpoints and secrets: repeat S-6 and S-7 in live mode when you go live.",
+      "Set MERCH_SHIP_FLAT_CENTS at or above Printful's US shipping rate: Merch Studio warns when it is lower (you pay the difference on every order).",
+    ],
+  },
+  {
+    id: "resend-merch",
+    title: "✉️ Resend (merch emails)",
+    summary: "Sends greenwaymerch.com's shipped emails and owner alerts from orders@greenwaymerch.com.",
+    href: "/admin/merch-studio/health",
+    steps: [
+      "resend.com \u2192 Domains: greenwaymerch.com must say Verified. If not, add the DNS records it lists and do not delete the Google Workspace MX records (SOP-11 S-11).",
+      "API Keys \u2192 a Sending access key for greenwaymerch.com \u2192 RESEND_API_KEY in the merch project.",
+      "Merch project: MERCH_EMAIL_FROM = Greenway Merch <orders@greenwaymerch.com> and MERCH_ORDER_ALERT_EMAIL = orders@greenwaymerch.com, then redeploy.",
+    ],
+    notes: [
+      "If RESEND_API_KEY or MERCH_EMAIL_FROM is missing, no email is sent at all; alerts are still stored in the back office (Orders and Merch Health).",
+      "You know it worked when Merch Health H-13 is green and Resend \u2192 Emails shows the test order's shipped email as Delivered.",
+    ],
+  },
 ];
 
 export function guideById(id: string): IntegrationGuide | undefined {
