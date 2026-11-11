@@ -2843,3 +2843,12 @@ What was done:
 - Test: `tests/compliance/d232-merch-m1-feed-publish.test.ts`. SOP-11 v1.1.
 - **Owner step:** none needed for the code fix beyond the merch project's automatic redeploy from `main` (its `vercel.json` deploys when `merch-site/` changes). The `MERCH_CATALOG_URL` variable, if set, may stay.
 
+### As built (slice M-2, this message)
+
+- **Merch Health** `/admin/merch-studio/health` (owner & admin, `settings.manage`): the 19 checks H-1 … H-19 from SOP-11 B.4, live on every visit, each Green / Amber / Red / Unknown with the fix and the SOP section. It has **Run check now** (saves a run, no email), the Printful token-expiry date (H-3), and the last 20 runs. It is linked from the Merch Studio header (**Merch Health**) and Helpers. Pure rules: `src/lib/merch/merch-health-core.ts`. Calls: `merch-health-server.ts`.
+- **Shop** `greenwaymerch.com/api/health` (`merch-site/app/api/health/route.ts`) is behind its own `MERCH_HEALTH_TOKEN` (*"Q3: yes."*) and answers 404 otherwise. It reports presence flags, the Stripe key mode, the Stripe webhook endpoint, held cards, checkout and shipping parse, and the last feed result. It never returns a secret.
+- **Daily:** the run rides the existing `/api/cron/platform-health` (no new cron). It saves to `platform_health_runs` (kind `merch_health`) and emails staff only when the set of reds changed, or on a Monday digest (claimed `merch-health:daily:<day>`).
+- **Q5 answer path** (*"I have these set in vercel already I think, I can't remember."*): H-11 shows whether `MERCH_SHIP_FLAT_CENTS` is set and the amounts it parses to.
+- Test: `tests/compliance/d232-merch-m2-health.test.ts`. SOP-11 v1.2.
+- **Owner steps:** (1) make one random value of 32+ characters (`openssl rand -hex 32`); (2) add it as `MERCH_HEALTH_TOKEN` in **both** Vercel projects; (3) redeploy both; (4) open Merch Studio → Merch Health → Run check now; (5) type the Printful token's expiry date on H-3.
+

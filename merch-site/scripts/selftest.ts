@@ -7,9 +7,10 @@ import { __runSiteContentCoreTests } from "../lib/site-content-core";
 import { __runSeoCoreTests } from "../lib/seo-core";
 import { __runAnalyticsTests } from "../lib/analytics-core";
 import { __runFeedCoreTests } from "../lib/feed-core";
+import { __runHealthCoreTests } from "../lib/health-core";
 
 let failed = 0;
-for (const [name, run] of [["catalog-core", __runMerchCatalogTests], ["checkout-core", __runCheckoutCoreTests], ["orders-core", __runOrdersCoreTests], ["region-core", __runRegionCoreTests], ["site-content-core", __runSiteContentCoreTests], ["seo-core", __runSeoCoreTests], ["analytics-core", __runAnalyticsTests], ["feed-core", __runFeedCoreTests]] as const) {
+for (const [name, run] of [["catalog-core", __runMerchCatalogTests], ["checkout-core", __runCheckoutCoreTests], ["orders-core", __runOrdersCoreTests], ["region-core", __runRegionCoreTests], ["site-content-core", __runSiteContentCoreTests], ["seo-core", __runSeoCoreTests], ["analytics-core", __runAnalyticsTests], ["feed-core", __runFeedCoreTests], ["health-core", __runHealthCoreTests]] as const) {
   const r = run();
   console.log(`${name}: ${r.passed} passed, ${r.failed} failed`);
   failed += r.failed;

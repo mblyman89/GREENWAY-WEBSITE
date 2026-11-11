@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built) |
+| **Version** | 1.2 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -118,7 +118,7 @@
 ## 3. Before you start
 
 1. **Use one computer for merch design work.** Designs and uploaded art are saved **in that browser only** (§4.6). If you clear the browser or switch computers, they are gone unless you have the ZIP or JSON backup.
-2. **Setup must be finished** (§4.2) before a real order can work. Check the live status card (§9.4) or, once it exists, the Merch Health panel (G-77).
+2. **Setup must be finished** (§4.2) before a real order can work. Check the live status card (§9.4) and **Merch Health** (Merch Studio → **Merch Health** button, `/admin/merch-studio/health`, owner & admin; built in D232 M-2).
 3. **Know the two websites.** **greenwaymarijuana.com** is the cannabis store and back office, where you design, publish and look at stock. **greenwaymerch.com** is the shop, where customers pay and where the private order desk lives.
 4. **Know the three outside accounts.** All of them belong to the **LLC**, not the dispensary:
    - **Printful** makes and ships the item.
@@ -200,7 +200,7 @@ Make three different random strings, each **at least 32 characters** (§4.3 show
    - `file_library` (recommended for print files).
 
    Printful has no separate "mockup" scope. For the future health check (G-77), also tick `stores_list` and `webhooks/read` if they are offered.
-5. **Expiration:** choose the **longest** date. Printful's documents say: *"Private Tokens have an expiration date… expired tokens cannot be refreshed and must be replaced manually."* **Write the expiry date on form 8.1** and put a calendar reminder **14 days before** it. Nothing in the app warns you today (F-11-4, G-77).
+5. **Expiration:** choose the **longest** date. Printful's documents say: *"Private Tokens have an expiration date… expired tokens cannot be refreshed and must be replaced manually."* **Write the expiry date on form 8.1** and put a calendar reminder **14 days before** it. **D232 M-2:** also type the date on **Merch Health → H-3** (Printful has no API that returns it). H-3 turns amber at 30 days and red at 7 days, and the morning check emails staff when it turns red.
 6. **Copy the token now.** Printful shows it only once.
 ✅ **You know it worked when** the token list shows `greenway-websites` with your scopes and an expiry date, and the token is in your password manager.
 
@@ -279,6 +279,8 @@ Redeploy.
 
 **How to make one** (Mac Terminal): `openssl rand -hex 32` prints 64 random characters. Run it three times. Never reuse the same value for two tokens. If one leaks, make a new one, update Vercel, redeploy, and for Token C run S-10 again.
 
+**Token D, `MERCH_HEALTH_TOKEN` (D232 M-2; owner decision *"Q3: yes."*, its own token).** Put it in **both** projects with the same value (32+ characters, `openssl rand -hex 32`), then redeploy both. It lets the back office's Merch Health page ask `greenwaymerch.com/api/health` how the shop is doing (`merch-site/app/api/health/route.ts`). With no token, a short one, or a wrong one, the shop answers **404**, and Merch Health shows the shop checks (H-7 … H-15, H-19) as **Unknown** with this fix. The shop reports only whether each setting is **present** and what the shipping amounts parse to. It never returns a key.
+
 ### 4.4 Every Vercel variable, both projects (checked against the code)
 
 #### 4.4.1 Merch project (greenwaymerch.com)
@@ -307,6 +309,7 @@ Redeploy.
 | **`MERCH_CATALOG_URL`** | **yes until M-1 deploys (F-11-1); optional after** | `https://www.greenwaymarijuana.com/api/merch-catalog` | `lib/catalog.ts` L23 | the default non-www address redirects and **drops Token A**, so **no Studio products appear** |
 | `MERCH_CONTENT_URL` | recommended | `https://www.greenwaymarijuana.com/api/merch-content` | `lib/site-content.ts` L21 | still works (the feed is public), but every read takes an extra redirect hop |
 | `MERCH_PRINTFUL_AUTO_CONFIRM` | **leave unset** | `true` only after many good orders | webhook `route.ts` L112–113 | orders stay **drafts** for a human Confirm (safe default) |
+| `MERCH_HEALTH_TOKEN` | yes (D232 M-2) | Token D (the same as main) | `app/api/health/route.ts` | `/api/health` answers 404, so Merch Health shows the shop checks as Unknown |
 
 > **Correction to the finishing guide.** `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 says `MERCH_CATALOG_URL` / `MERCH_CONTENT_URL` are *"don't add"*. That was right when greenwaymarijuana.com did not redirect to www. **It is wrong today** (F-11-1). Add `MERCH_CATALOG_URL` until the code fix in G-76 ships, then the variable can be removed. **D232: G-76 is built (slice M-1)** and the guide row is corrected.
 
@@ -320,6 +323,8 @@ Redeploy.
 | `VERCEL_ANALYTICS_TOKEN` | for Reports → Merch | Vercel token | `src/lib/merch/merch-reports-*` | the traffic card says it is not set up |
 | `MERCH_VERCEL_PROJECT` | for Reports → Merch | merch project id `prj_…` | same | the same |
 | `VERCEL_TEAM_ID` | if the token is Full Account | `team_…` | same | the same |
+| `MERCH_HEALTH_TOKEN` | yes (D232 M-2) | Token D (the same as merch) | `src/lib/merch/merch-health-server.ts` | Merch Health does not ask the shop; its checks show Unknown with the setup steps |
+| `MERCH_SHOP_URL` | optional | `https://greenwaymerch.com` (the default) | `merch-health-server.ts` `merchShopOrigin()` | the default is used |
 
 ### 4.5 The first test order, end to end (test mode, then live)
 
@@ -791,7 +796,7 @@ Alert or desk → **Confirm** the draft the same day. To cancel: **Printful canc
 | `GET https://www.greenwaymarijuana.com/api/merch-catalog` (no token) | 404 | expected (hidden feed) |
 | `GET https://greenwaymarijuana.com/api/merch-content` | 308 → www | works (public), with an extra hop |
 
-Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, `PRINTFUL_*`, `RESEND_API_KEY` and `MERCH_EMAIL_FROM` are set, whether the Printful webhook is registered, and the token's expiry. **Merch Health** (G-77) will show all of these on one screen.
+Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, `PRINTFUL_*`, `RESEND_API_KEY` and `MERCH_EMAIL_FROM` are set, whether the Printful webhook is registered, and the token's expiry. **Merch Health** (G-77, built in D232 M-2) shows all of these on one screen, from inside both projects.
 
 ## 10. Glossary
 
@@ -879,8 +884,8 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **F-11-1** | BUG · **S1** | The shop's catalog address redirects to www, the token is dropped, and **no Studio product can appear** | `merch-site/lib/site.ts` L30; `catalog.ts` L23, L34–44; `api/merch-catalog/route.ts` L20–27; live probe 308 | **G-76** |
 | **F-11-2** | GAP · S2 | Designs and art live in one browser only; no restore from `design.json`; the stale *"Slice 5"* promise | `merch-assets.ts` L6–9; `DesignStudio.tsx` L563; `PublishPanel.tsx` L235, L270; no JSON input | **G-79** |
 | **F-11-3** | GAP · S2 | No in-app setup guide or step coach; setup lives in a 384-line Markdown file | `docs/MERCH-SITE-FINISHING-GUIDE.md`; helper L323–341 has no setup steps | **G-78** |
-| **F-11-4** | GAP · S2 | No health monitoring for Printful (token, scopes, expiry, webhook, status), Stripe (key, endpoint), Resend, the catalog round-trip or checkout open | no check in `/admin/compliance/health` or platform-health; `merch-site/vercel.json` no crons; `printfulConfigured()` only tests presence (`printful-client.ts` L24–25) | **G-77** |
-| **F-11-5** | GAP · S2 | The back office cannot see Stripe at all; its key lives only in the shop project | `STRIPE_*` read only in `merch-site/` | **G-80** |
+| **F-11-4** | GAP · S2 | No health monitoring for Printful (token, scopes, expiry, webhook, status), Stripe (key, endpoint), Resend, the catalog round-trip or checkout open | no check in `/admin/compliance/health` or platform-health; `merch-site/vercel.json` no crons; `printfulConfigured()` only tests presence (`printful-client.ts` L24–25) | **G-77** **Resolved (D232 M-2):** Merch Health H-1 … H-19, daily. |
+| **F-11-5** | GAP · S2 | The back office cannot see Stripe at all; its key lives only in the shop project | `STRIPE_*` read only in `merch-site/` | **G-80** **Resolved (D232 M-2):** the shop reports Stripe to the back office through `/api/health`. |
 | **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** |
 | **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** |
 | **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** |
@@ -901,10 +906,10 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | Gap | What gets built | Sev |
 |---|---|---|
 | **G-76** | **Catalog feed reaches the back office again.** **Owner, now:** set `MERCH_CATALOG_URL` (and `MERCH_CONTENT_URL`) to www in the merch project. **Code:** change `MAIN_SITE_URL` to `https://www.greenwaymarijuana.com`, **and** have the shop fetch with `redirect: "manual"` so a redirect is reported (*"the feed moved to …"*) and never followed without the token. Add a self-test, and a Merch Health check (G-77) that detects a redirect | S1 |
-| **G-77** | **Merch Health panel and daily check** (the owner's *"printful store and stripe health"*). A new card set on `/admin/merch-studio/health` (and a line on platform-health), with a **Run check now** button, a daily cron and an email when anything turns red. The checks are in B.4 | S2 |
+| **G-77** | **Merch Health panel and daily check** (the owner's *"printful store and stripe health"*). A new card set on `/admin/merch-studio/health` (and a line on platform-health), with a **Run check now** button, a daily cron and an email when anything turns red. The checks are in B.4  **DONE (D232 M-2)** | S2 |
 | **G-78** | **Setup & Launch coach** (the owner's *"first step, do this, done great, step two…"*). A guided wizard for §4.2, plus a per-product **Product journey** stepper and **Next step** banners on every tab (B.5) | S2 |
 | **G-79** | **Designs saved on the server.** Drafts in a table and art in the private `merch-files` bucket, so any computer works, with **Import design (.json/.zip)**. The browser copy becomes an offline cache | S2 |
-| **G-80** | **Shop health endpoint** `greenwaymerch.com/api/health`, Bearer token, read-only. It reports the Stripe key mode, the webhook endpoint (url, status, events), checkout open/closed with the reason, Resend configured, the catalog fetch result (status, product count, last good age, redirect seen) and the Printful token present. The back office reads it for G-77. Stripe secrets never leave the shop project | S2 |
+| **G-80** | **Shop health endpoint** `greenwaymerch.com/api/health`, Bearer token, read-only. It reports the Stripe key mode, the webhook endpoint (url, status, events), checkout open/closed with the reason, Resend configured, the catalog fetch result (status, product count, last good age, redirect seen) and the Printful token present. The back office reads it for G-77. Stripe secrets never leave the shop project  **DONE (D232 M-2)** | S2 |
 | **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 |
 | **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 |
 | **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 |
@@ -949,6 +954,17 @@ Fix the one thing that blocks every sale first. That is the www redirect (**M-1*
 
 **Schedule and alerts:** the daily cron in the main project runs beside platform-health. It emails only on a **change** (green → red, or red → green) plus a weekly digest. The result history is kept like platform-health's run history. **Run check now** is for owner/admin.
 
+**As built (D232 M-2).**
+- **Page:** `/admin/merch-studio/health` (`src/app/admin/merch-studio/health/page.tsx`). Owner & admin (`settings.manage`). It is linked from the **Merch Health** button in the Merch Studio header and from Helpers. The checks run **live every time the page opens**, grouped Printful · Shop & Stripe · Catalog · Email · Services. Each shows Green, Amber, Red or Unknown, what was seen, the **Fix**, and the SOP-11 section. **Run check now** saves a run without sending email. H-3 has the **token expiry date** form (site setting `merch_health_settings`). The last 20 runs are listed.
+- **Rules:** H-1 … H-19 come from `buildMerchHealth` (`src/lib/merch/merch-health-core.ts`, pure, 22 self-tests). The calls are made in `src/lib/merch/merch-health-server.ts` (Printful `/oauth/scopes`, `/stores`, `/webhooks`, `/orders?status=draft`; the shop `/api/health` with `redirect: "manual"`; the three status pages; the catalog; and the `media` and `merch-files` buckets).
+- **Differences from the plan above:**
+  - H-8 reads the shop's own last-feed result; no separate HEAD call is made.
+  - H-9 reads the key mode from the key prefix and the Stripe answers to the H-10 and H-15 calls (`merch-site/lib/health.ts`).
+  - H-14 uses `www.stripestatus.com`, because `status.stripe.com` has no JSON.
+  - H-18 checks both buckets.
+- **Shop side:** `merch-site/app/api/health/route.ts` sits behind Token D and answers 404 otherwise. It is built by `merch-site/lib/health.ts` from `health-core.ts` (pure, 10 self-tests). It makes a fresh catalog read and two Stripe reads (webhook endpoints and payment intents), and returns only presence flags.
+- **Daily run:** it rides the existing `/api/cron/platform-health` run (vercel.json `25 14 * * *`, so **no new cron**) and runs in parallel with the database check. Each run is one row in `platform_health_runs` (kind `merch_health`). Staff get an email (`ORDER_STAFF_EMAILS`) only when the set of red checks changed since the last run, or on Mondays as a digest. The email is claimed once per Pacific day (`merch-health:daily:<day>` in `compliance_reminder_log`).
+
 ### B.5 The step-by-step coach (G-78): what it looks like
 
 **1. Setup & Launch** (`/admin/merch-studio/launch`, owner/admin). One card per step S-1 … S-12 and the §4.5 test order:
@@ -976,7 +992,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 | Slice | Contents | Gaps | Needs |
 |---|---|---|---|
 | **M-1** | Feed address fix in code + redirect self-test; stale copy; README and guide corrections | G-76, G-91 | — (owner sets `MERCH_CATALOG_URL` today) |
-| **M-2** | Shop `/api/health` + Merch Health panel + daily cron + change emails | G-80, G-77 | M-1 |
+| **M-2** | Shop `/api/health` + Merch Health panel + daily cron + change emails | G-80, G-77 | M-1 **BUILT (D232)** |
 | **M-3** | Setup & Launch coach, Product journey stepper, tab strips, Print form 8.1 | G-78 | M-2 |
 | **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration (designs table) |
 | **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — |
@@ -1006,5 +1022,6 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.2 | 2026-11-11 | **M-2 built:** Merch Health `/admin/merch-studio/health` (H-1 … H-19 live, with fix and SOP section; Run check now; token-expiry date; run history); shop `/api/health` behind its own `MERCH_HEALTH_TOKEN` (Token D, §4.3, both projects); the daily check rides the platform-health cron and emails only on a change of reds or a Monday digest (G-77, G-80 DONE; F-11-4, F-11-5 resolved) | Greenway Dev |
 | 1.1 | 2026-11-11 | Owner answers Q-11-1 … Q-11-9 recorded (D232). **M-1 built:** the shop reads the www feed address, moves a bare host to www, never follows a redirect and remembers the last feed result for Merch Health; Publish is owner/admin (`merch.publish`); stale "Slice 5" and "drop it in merch-site/catalog/" copy removed; the README and finishing guide corrected (G-76, G-91 DONE) | Greenway Dev |
 | 1.0 | 2026-11-11 | First version (recon and audit only, no code changed). Merch Studio and Merch Inventory first, as the owner asked (D231). It covers the setup walkthrough, every tab and order procedure, live probes, 18 findings (F-11-1 … F-11-18 + F-11-C), 18 gaps (G-76 … G-93) and the roadmap M-1 … M-8 | Greenway Dev |
