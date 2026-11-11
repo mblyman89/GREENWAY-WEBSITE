@@ -3,7 +3,7 @@
  * two GET calls to Stripe with the shop's own key, plus the env shape and
  * the last catalog-feed result. Never returns a secret value.
  */
-import { freshProducts, lastFeedStatus } from "./catalog";
+import { feedAutoConfirm, freshProducts, lastFeedStatus } from "./catalog";
 import { parseShippingConfig } from "./checkout-core";
 import { checkStripeEndpoints, heldCards, stripeCallProblem, stripeKeyMode, type HeldCards, type StripeEndpointCheck, type StripeKeyMode } from "./health-core";
 import type { FeedStatus } from "./feed-core";
@@ -32,6 +32,8 @@ export interface ShopHealth {
   adminKeySet: boolean;
   catalogTokenSet: boolean;
   autoConfirm: boolean;
+  /** D232 M-7: where auto-confirm comes from ("env", "back-office" or "off"). */
+  autoConfirmSource: "env" | "back-office" | "off";
 }
 
 async function stripeGet(key: string, path: string): Promise<{ status: number; data: unknown }> {
@@ -66,7 +68,7 @@ export async function gatherShopHealth(): Promise<ShopHealth> {
       : { found: false, url: `${site}/api/stripe/webhook`, enabled: false, missingEvents: [], livemode: null, wrongHost: [], problem: stripeCallProblem(ep.status) };
     held = pi.status === 200
       ? { ...heldCards(pi.data, Math.floor(Date.now() / 1000)), problem: "" }
-      : { count: 0, over3Days: 0, oldestDays: 0, problem: stripeCallProblem(pi.status) };
+      : { count: 0, over3Days: 0, oldestDays: 0, list: [], problem: stripeCallProblem(pi.status) };
   }
 
   const keyOk = keyMode === "live" || keyMode === "test";
@@ -100,6 +102,7 @@ export async function gatherShopHealth(): Promise<ShopHealth> {
     printful: { tokenSet: env("PRINTFUL_API_TOKEN").length > 0, storeIdSet: env("PRINTFUL_STORE_ID").length > 0, webhookTokenSet: long("PRINTFUL_WEBHOOK_TOKEN", 16) },
     adminKeySet: long("MERCH_ADMIN_KEY", 16),
     catalogTokenSet: long("MERCH_CATALOG_TOKEN", 32),
-    autoConfirm: env("MERCH_PRINTFUL_AUTO_CONFIRM") === "true",
+    autoConfirm: env("MERCH_PRINTFUL_AUTO_CONFIRM") === "true" || feedAutoConfirm(),
+    autoConfirmSource: env("MERCH_PRINTFUL_AUTO_CONFIRM") === "true" ? "env" : feedAutoConfirm() ? "back-office" : "off",
   };
 }

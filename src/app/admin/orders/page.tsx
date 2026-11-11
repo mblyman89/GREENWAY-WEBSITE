@@ -63,6 +63,8 @@ import {
 import { withRenderBudget } from "@/lib/supabase/render-budget";
 // R73 S1 - Greenway Merch orders (Printful), the last panel on this page.
 import { MerchOrdersPanel } from "@/components/admin/orders/MerchOrdersPanel";
+import { MerchAlertsInbox } from "@/components/admin/merch/MerchAlertsInbox";
+import { can } from "@/lib/auth/roles";
 import { emptyMerchBoard, loadMerchOrderBoard } from "@/lib/orders/merch-orders-server";
 
 import { assessEmailReadiness } from "@/lib/orders/email-readiness-core";
@@ -187,7 +189,7 @@ export default async function OrdersAdminPage({
     mpage?: string;
   }>;
 }) {
-  await requirePermission("orders.view");
+  const session = await requirePermission("orders.view");
   const sp = await searchParams;
   // SLICE 26 grammar, now owned by order-panels-core (L-40) and used by BOTH
   // panels: every knob validated, garbage means "filter off", never an
@@ -960,6 +962,8 @@ export default async function OrdersAdminPage({
         {greenwaySection}
         {leaflySection}
         {/* R73 S1 - "its table ... to be the last table on that page". */}
+        {/* D232 M-7 (G-85): open greenwaymerch.com alerts, just above its orders (hidden when none). */}
+        <MerchAlertsInbox returnTo="/admin/orders#merch-alerts" canAck={can(session.profile.role, "orders.manage")} hideWhenEmpty />
         <MerchOrdersPanel board={merchBoard} query={mq} searchParams={sp} now={new Date()} />
       </div>
       )}

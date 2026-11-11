@@ -7,12 +7,14 @@
  *   - WebhookPanel (M-6, G-89): Check (reads Printful's webhook, changes
  *     nothing) then Register / repair (all 5 events, after the shop
  *     confirms Token C). Token C is never shown.
+ *   - AutoConfirmSwitch (M-7, Q-11-7): on (owner, reason, 20+ clean
+ *     orders) / off (owner or admin). Built and left off.
  */
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
-import { previewPrintfulWebhookAction, registerPrintfulWebhookAction, runMerchHealthNowAction, saveTokenExpiryAction } from "@/app/admin/merch-studio/health/actions";
+import { previewPrintfulWebhookAction, registerPrintfulWebhookAction, runMerchHealthNowAction, saveTokenExpiryAction, setAutoConfirmAction } from "@/app/admin/merch-studio/health/actions";
 import type { WebhookPreview } from "@/lib/merch/merch-webhook-server";
 
 export function RunMerchHealthButton() {
@@ -104,6 +106,54 @@ export function WebhookPanel() {
           <p className="text-xs text-[var(--admin-text-muted)]">Before registering, the shop is asked to accept a harmless test notice on that address; if it does not (wrong Token C, shop not deployed), nothing is changed at Printful. Token C is never shown here.</p>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function AutoConfirmSwitch({ on, isOwner, cleanOrders, minClean, since }: { on: boolean; isOwner: boolean; cleanOrders: number | null; minClean: number; since: string }) {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [reason, setReason] = useState("");
+  const send = (turn: "on" | "off") => {
+    if (turn === "on" && !window.confirm("Turn auto-confirm ON? Each paid order will go straight to Printful production with no review.")) return;
+    const fd = new FormData();
+    fd.set("turn", turn);
+    fd.set("reason", reason);
+    startTransition(async () => {
+      const res = await setAutoConfirmAction(fd);
+      toast(res.ok ? { tone: "success", message: res.message } : { tone: "error", message: res.error });
+      router.refresh();
+    });
+  };
+  const unlocked = cleanOrders !== null && cleanOrders >= minClean;
+  return (
+    <div className="mt-2 space-y-2 rounded-[var(--admin-radius-sm)] border border-white/10 p-3 text-sm">
+      <p>
+        Back-office switch: <strong>{on ? "ON" : "OFF"}</strong>
+        {since ? <span className="text-[var(--admin-text-muted)]"> (since {since})</span> : null}. Clean orders so far (fulfilled by Printful):{" "}
+        <strong>{cleanOrders === null ? "?" : cleanOrders}</strong> of {minClean} needed.
+      </p>
+      {on ? (
+        <Button variant="neutral" size="sm" disabled={pending} onClick={() => send("off")}>
+          {pending ? "Saving..." : "Turn auto-confirm off"}
+        </Button>
+      ) : isOwner ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs">
+            <span className="mb-1 block text-[var(--admin-text-muted)]">Reason (owner only)</span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} className="w-72 rounded-[var(--admin-radius-sm)] border border-white/15 bg-[var(--admin-surface-2)] px-2 py-1 text-sm" />
+          </label>
+          <Button variant="confirm" size="sm" disabled={pending || !unlocked || reason.trim().length < 5} onClick={() => send("on")}>
+            {pending ? "Saving..." : "Turn auto-confirm on"}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-[var(--admin-text-muted)]">Only the owner can turn it on.</p>
+      )}
+      <p className="text-xs text-[var(--admin-text-muted)]">
+        Recommended off until {minClean}+ clean orders (SOP-11 Q-11-7). The shop reads this switch on each order, no redeploy. If the shop cannot reach the back office, orders stay drafts.
+      </p>
     </div>
   );
 }

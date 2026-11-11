@@ -27,6 +27,14 @@ const catalogToken = () => (process.env.MERCH_CATALOG_TOKEN ?? "").trim();
 
 let lastGood: { name: string; data: unknown }[] = [];
 let lastFeed: FeedStatus | null = null;
+// D232 M-7 (Q-11-7): the back-office auto-confirm switch, from the last feed answer.
+let lastAutoConfirm = false;
+/**
+ * Is the back-office auto-confirm switch on? Only when the LAST feed read
+ * worked and said so: a failed read means off (orders wait as drafts).
+ * Call after freshProducts() so it reflects right now.
+ */
+export const feedAutoConfirm = (): boolean => lastFeed?.ok === true && lastAutoConfirm;
 /** What this server last saw from the catalog feed (null = not fetched yet). */
 export const lastFeedStatus = (): FeedStatus | null => lastFeed;
 const note = (s: Omit<FeedStatus, "at">) => {
@@ -50,8 +58,9 @@ async function studioFiles(fresh: boolean): Promise<{ name: string; data: unknow
       ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: CATALOG_REVALIDATE } }),
     });
     const answer = describeFeedAnswer(res.status, res.headers.get("location"));
-    if (!answer.ok) { note({ ok: false, status: res.status, products: lastGood.length, problem: answer.problem }); return lastGood; }
-    const body = (await res.json()) as { products?: unknown } | null;
+    if (!answer.ok) { lastAutoConfirm = false; note({ ok: false, status: res.status, products: lastGood.length, problem: answer.problem }); return lastGood; }
+    const body = (await res.json()) as { products?: unknown; autoConfirm?: unknown } | null;
+    lastAutoConfirm = body?.autoConfirm === true;
     if (!Array.isArray(body?.products)) { note({ ok: false, status: res.status, products: lastGood.length, problem: "The back office answered, but not with a product list." }); return lastGood; }
     lastGood = body.products.filter((p): p is { name: string; data: unknown } => !!p && typeof p === "object" && typeof (p as { name?: unknown }).name === "string");
     note({ ok: true, status: res.status, products: lastGood.length, problem: "" });

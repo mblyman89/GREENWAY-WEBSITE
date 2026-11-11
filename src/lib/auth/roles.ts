@@ -62,6 +62,7 @@ export type Permission =
   | "inventory.cost.fill"
   | "merch.remove"
   | "merch.publish"
+  | "merch.refund"
   | "inventory.recall.release"
   | "inventory.destruction.cancel"
   | "inventory.vendor_return.cancel"
@@ -164,6 +165,11 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // cards for it), so it is owner/admin only. Designers keep content.edit
   // for every other Merch Studio tab.
   "merch.publish": ["owner", "admin"],
+  // D232 M-7 (SOP-11 Q-11-4). Michael verbatim: "Q4: guidance first, but
+  // build the button too please and all that goes with it." Refunding a
+  // greenwaymerch.com customer (or releasing a card hold) moves the LLC's
+  // money, so it is owner/admin only, like Publish.
+  "merch.refund": ["owner", "admin"],
   // Fix Phase 1.1 (G-22 req 4): lifting a recall hold (Recalled -> anything
   // else). D37, Michael verbatim: "Q-05a-2- admin. No back up. Just my manager
   // and I." The admin is the recall coordinator, and releasing a hold is the
@@ -348,6 +354,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.cost.fill": "Key a missing non-cannabis unit cost (owner & admin)",
   "merch.remove": "Remove a product from greenwaymerch.com (owner & admin)",
   "merch.publish": "Publish a product to greenwaymerch.com (owner & admin)",
+  "merch.refund": "Refund a greenwaymerch.com order or release its card hold (owner & admin)",
   "inventory.recall.release": "Release a recall hold on a lot (owner & admin, recall coordinator)",
   "inventory.destruction.cancel": "Cancel a scheduled destruction (owner only)",
   "inventory.vendor_return.cancel": "Cancel a vendor return and release its reserved units (owner only)",
@@ -386,6 +393,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.cost.fill",
   "merch.remove",
   "merch.publish",
+  "merch.refund",
   "inventory.recall.release",
   "inventory.destruction.cancel",
   "inventory.vendor_return.cancel",

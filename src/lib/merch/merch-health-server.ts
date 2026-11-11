@@ -13,6 +13,8 @@
  *   3. Reads the three public status pages, our catalog and the buckets.
  *   4. buildMerchHealth (pure, merch-health-core.ts) turns it into H-1..H-19.
  *   5. Saves one row in platform_health_runs (kind merch_health, 0331).
+ *   7. Cron only (M-7, G-84): card holds 3+ / 5+ days old are emailed once per
+ *      hold and stage (merch-payments-server.ts sendHeldReminders).
  *   6. Cron only (rides the daily /api/cron/platform-health run, no new cron): emails staff when the set of red checks changed since the
  *      last run, plus a Monday digest; claimed once per Pacific day in
  *      compliance_reminder_log (merch-health:daily:<day>).
@@ -27,6 +29,9 @@ import { publicSiteOrigin } from "@/lib/site/site-domain-core";
 import { pacificToday } from "@/lib/reports/timezone";
 import { printful, printfulConfigured } from "@/lib/merch-studio/printful-client";
 import { readMerchCatalog } from "./merch-inventory-store";
+import { merchShopOrigin } from "./merch-shop-origin";
+import { readHeldList, type HeldItem } from "./merch-payments-core";
+import { sendHeldReminders } from "./merch-payments-server";
 import {
   MERCH_HEALTH_KIND,
   MERCH_HEALTH_PAGE,
@@ -41,7 +46,7 @@ import {
 
 const RUNS_TABLE = "platform_health_runs";
 const TIMEOUT_MS = 12_000;
-export const MERCH_SHOP_DEFAULT = "https://greenwaymerch.com";
+export { MERCH_SHOP_DEFAULT, merchShopOrigin } from "./merch-shop-origin";
 
 export const STATUS_PAGES = {
   printful: "https://www.printfulstatus.com/api/v2/status.json",
@@ -49,10 +54,6 @@ export const STATUS_PAGES = {
   resend: "https://resend-status.com/api/v2/status.json",
 } as const;
 
-export function merchShopOrigin(): string {
-  const v = (process.env.MERCH_SHOP_URL ?? "").trim().replace(/\/+$/, "");
-  return /^https:\/\//i.test(v) ? v : MERCH_SHOP_DEFAULT;
-}
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -116,6 +117,11 @@ async function bucketExists(admin: Admin | null, id: string): Promise<boolean | 
 
 /** Gather every input and build the report. Never throws. */
 export async function gatherMerchHealth(): Promise<MerchHealthReport> {
+  return (await gatherMerchHealthFull()).report;
+}
+
+/** The report plus the shop's card-hold list (D232 M-7, G-84: the day-3 / day-5 reminders). */
+async function gatherMerchHealthFull(): Promise<{ report: MerchHealthReport; held: HeldItem[] }> {
   const nowIso = new Date().toISOString();
   const admin = isSupabaseServiceConfigured ? createSupabaseAdminClient() : null;
   const shopOrigin = merchShopOrigin();
@@ -139,7 +145,9 @@ export async function gatherMerchHealth(): Promise<MerchHealthReport> {
 
   const live = cat.catalog.items.filter((i) => i.status === "live");
   const synced = live.map((i) => i.stockSyncedAt).filter(Boolean).sort();
-  return buildMerchHealth({
+  const shopBody = shopRes && shopRes.status === 200 ? (shopRes.body as ShopHealthLike | null) : null;
+  const held = readHeldList((shopBody?.stripe?.held as { list?: unknown } | null | undefined)?.list);
+  const report = buildMerchHealth({
     nowIso,
     shopOrigin,
     printfulConfigured: configured,
@@ -157,6 +165,7 @@ export async function gatherMerchHealth(): Promise<MerchHealthReport> {
     catalog: { readError: cat.readError, live: live.length, oldestStockSyncIso: synced[0] ?? null, neverSynced: live.length - synced.length, productIds: [...new Set(cat.catalog.items.map((x) => x.pkg.product.blank.printfulProductId))] },
     buckets: { media, merchFiles },
   });
+  return { report, held };
 }
 
 export type MerchHealthRunRow = { id: string; status: "ok" | "warn" | "fail"; summary: string; report: unknown; source: "cron" | "manual"; created_at: string };
@@ -203,7 +212,7 @@ export type MerchHealthOutcome = { report: MerchHealthReport; saved: boolean; al
 
 export async function runMerchHealth(opts: { source: "cron" | "manual"; runBy?: string | null }): Promise<MerchHealthOutcome> {
   const notes: string[] = [];
-  const report = await gatherMerchHealth();
+  const { report, held } = await gatherMerchHealthFull();
   if (!isSupabaseServiceConfigured) return { report, saved: false, alert: "skipped", notes: ["supabase not configured"] };
   const admin = createSupabaseAdminClient();
 
@@ -227,6 +236,10 @@ export async function runMerchHealth(opts: { source: "cron" | "manual"; runBy?: 
   }
 
   if (opts.source !== "cron") return { report, saved, alert: "skipped", notes };
+
+  // D232 M-7 (G-84): a card hold 3+ days old gets one email, 5+ days a second
+  // one (claimed per hold and stage), whether or not the reds changed.
+  notes.push(...(await sendHeldReminders(admin, held)));
 
   const day = pacificToday();
   const isMonday = new Date(`${day}T12:00:00Z`).getUTCDay() === 1;

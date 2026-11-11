@@ -8,6 +8,8 @@
  * Imported only by route handlers / server components (never by "use client").
  */
 
+import { feedUrl } from "./feed-core";
+
 const env = (k: string) => (process.env[k] ?? "").trim();
 const PRINTFUL = "https://api.printful.com";
 
@@ -52,9 +54,34 @@ export async function sendEmail(msg: { to: string; subject: string; html: string
   return { ok: true };
 }
 
-/** Owner alert (MERCH_ORDER_ALERT_EMAIL). Always also logged so Vercel logs show it. */
+/**
+ * D232 M-7 (G-85): also post the alert to the back office's inbox
+ * (/api/merch-alerts, Bearer MERCH_CATALOG_TOKEN, no redirect follow) so it
+ * shows on Merch Health and Orders with Acknowledge. Fails soft: a failure is
+ * logged and the email below still goes.
+ */
+async function postToBackOffice(subject: string, lines: string[]): Promise<void> {
+  const token = env("MERCH_CATALOG_TOKEN");
+  if (token.length < 32) return;
+  // Same back office as the catalog feed (MERCH_CATALOG_URL's origin), like the stock relay.
+  const feed = feedUrl(process.env.MERCH_CATALOG_URL, "/api/merch-catalog");
+  if (!/^https:\/\//.test(feed)) return;
+  const url = new URL("/api/merch-alerts", feed).toString();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ subject, lines }),
+    redirect: "manual",
+    cache: "no-store",
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  if (!res || res.status !== 200) console.error(`[merch-alert] back-office inbox answered ${res?.status ?? "network error"}; the email is the fallback.`);
+}
+
+/** Owner alert (MERCH_ORDER_ALERT_EMAIL + the back-office inbox). Always also logged so Vercel logs show it. */
 export async function alertOwner(subject: string, lines: string[]): Promise<void> {
   console.error(`[merch-alert] ${subject} :: ${lines.join(" | ")}`);
+  await postToBackOffice(subject, lines);
   const to = env("MERCH_ORDER_ALERT_EMAIL");
   if (!to) return;
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

@@ -7,6 +7,7 @@
  * Owner basis (D231, verbatim): "we need a printful store and stripe health
  * maybe so we know when things break or go offline."
  */
+import { readHeldList } from "./merch-payments-core";
 
 export type MerchCheckLevel = "ok" | "warn" | "fail" | "unknown";
 
@@ -44,11 +45,13 @@ export interface ShopHealthLike {
     webhookSecretSet?: boolean;
     automaticTax?: boolean;
     endpoint?: { found?: boolean; enabled?: boolean; missingEvents?: string[]; wrongHost?: string[]; livemode?: boolean | null; problem?: string } | null;
-    held?: { count?: number; over3Days?: number; oldestDays?: number; problem?: string } | null;
+    held?: { count?: number; over3Days?: number; oldestDays?: number; problem?: string; list?: unknown } | null;
   };
   email?: { resendKeySet?: boolean; fromSet?: boolean; alertToSet?: boolean };
   printful?: { tokenSet?: boolean; storeIdSet?: boolean; webhookTokenSet?: boolean };
   autoConfirm?: boolean;
+  /** D232 M-7: "env" | "back-office" | "off" (absent on a shop not redeployed since M-7). */
+  autoConfirmSource?: string;
 }
 
 export interface MerchHealthInput {
@@ -114,6 +117,14 @@ const pfProblem = (r: CallResult): string =>
   r.status === 401 ? "Printful refused the token (expired, revoked or wrong)." : r.status === 403 ? "The token is missing the permission for this." : r.status === 0 ? "Could not reach Printful." : `Printful answered ${r.status}.`;
 
 const cents = (n: number | null | undefined) => (typeof n === "number" ? `$${Math.floor(n / 100)}.${String(n % 100).padStart(2, "0")}` : "-");
+
+/** D232 M-7 (G-84): " Orders: gm-a (4.1 d), gm-b (3.2 d)." from the shop's held list (max 5 named). */
+export function heldRefs(list: unknown): string {
+  const rows = readHeldList(list);
+  if (rows.length === 0) return "";
+  const named = rows.slice(0, 5).map((h) => `${h.ref || h.id} (${h.days} d)`);
+  return ` Orders: ${named.join(", ")}${rows.length > 5 ? ` and ${rows.length - 5} more` : ""}.`;
+}
 
 export function buildMerchHealth(i: MerchHealthInput): MerchHealthReport {
   const checks: MerchCheck[] = [];
@@ -227,8 +238,8 @@ export function buildMerchHealth(i: MerchHealthInput): MerchHealthReport {
     const emailOk = !!em.resendKeySet && !!em.fromSet;
     add({ id: "H-13", group: "Email", title: "Shop email (receipts, alerts)", level: emailOk ? (em.alertToSet ? "ok" : "warn") : "fail", detail: emailOk ? (em.alertToSet ? "Resend key, sender and owner alert address set." : "MERCH_ORDER_ALERT_EMAIL is not set: owner alerts only go to the logs.") : `Missing: ${[!em.resendKeySet && "RESEND_API_KEY", !em.fromSet && "MERCH_EMAIL_FROM"].filter(Boolean).join(", ")}. Shipped emails and owner alerts only go to the logs.`, fix: emailOk && em.alertToSet ? "" : "Add the missing variables in the merch project (SOP-11 S-11) and redeploy.", sop: "§4.2 S-11" });
     const held = s.held ?? null;
-    add({ id: "H-15", group: "Shop & Stripe", title: "Card holds waiting", level: !held ? "unknown" : held.problem ? "warn" : (held.over3Days ?? 0) > 0 ? "fail" : (held.count ?? 0) > 0 ? "warn" : "ok", detail: !held ? "Needs a working Stripe key (H-9)." : held.problem ? held.problem : (held.count ?? 0) === 0 ? "No card is waiting for capture." : `${held.count} card hold(s) waiting; oldest ${held.oldestDays} day(s). Stripe releases a hold after about 7 days.`, fix: held && (held.count ?? 0) > 0 ? "Stripe → Payments → Uncaptured: capture (WA order you will fill) or cancel each one." : "", sop: "§4.20" });
-    add({ id: "H-19", group: "Shop & Stripe", title: "Auto-confirm", level: shop.autoConfirm ? "warn" : "ok", detail: shop.autoConfirm ? "MERCH_PRINTFUL_AUTO_CONFIRM is on: paid orders go to production with no review." : "Off: every paid order waits as a Printful draft for your Confirm (recommended until 20+ clean orders).", fix: shop.autoConfirm ? "Remove MERCH_PRINTFUL_AUTO_CONFIRM in the merch project unless you mean it." : "", sop: "§4.18" });
+    add({ id: "H-15", group: "Shop & Stripe", title: "Card holds waiting", level: !held ? "unknown" : held.problem ? "warn" : (held.over3Days ?? 0) > 0 ? "fail" : (held.count ?? 0) > 0 ? "warn" : "ok", detail: !held ? "Needs a working Stripe key (H-9)." : held.problem ? held.problem : (held.count ?? 0) === 0 ? "No card is waiting for capture." : `${held.count} card hold(s) waiting; oldest ${held.oldestDays} day(s). Stripe releases a hold after about 7 days.${heldRefs(held.list)}`, fix: held && (held.count ?? 0) > 0 ? "Open each order (Orders → Merch → the order → Stripe half) or Stripe → Payments → Uncaptured: capture (a WA order you will fill) or cancel / release each one." : "", sop: "§4.20" });
+    add({ id: "H-19", group: "Shop & Stripe", title: "Auto-confirm", level: shop.autoConfirm ? "warn" : "ok", detail: shop.autoConfirm ? (shop.autoConfirmSource === "back-office" ? "On from the back-office switch below: paid orders go to production with no review." : "MERCH_PRINTFUL_AUTO_CONFIRM is on in the merch project: paid orders go to production with no review.") : "Off: every paid order waits as a Printful draft for your Confirm (recommended until 20+ clean orders).", fix: shop.autoConfirm ? (shop.autoConfirmSource === "back-office" ? "Turn it off with the switch below unless you mean it." : "Remove MERCH_PRINTFUL_AUTO_CONFIRM in the merch project and use the switch below instead.") : "", sop: "§4.18" });
   } else {
     for (const [id, group, title, sop] of [["H-9", "Shop & Stripe", "Stripe secret key", "§4.2 S-6"], ["H-10", "Shop & Stripe", "Stripe webhook endpoint", "§4.2 S-7"], ["H-11", "Shop & Stripe", "Checkout open", "§4.4.1"], ["H-12", "Shop & Stripe", "Stripe Tax", "§4.2 S-8"], ["H-13", "Email", "Shop email (receipts, alerts)", "§4.2 S-11"], ["H-15", "Shop & Stripe", "Card holds waiting", "§4.20"], ["H-19", "Shop & Stripe", "Auto-confirm", "§4.18"]] as const) add(unknownShop(id, group, title, sop));
   }
@@ -315,6 +326,7 @@ export function __runMerchHealthCoreTests(): { passed: number; failed: number } 
   ok("test key amber, missing red", buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, stripe: { ...base.shop!.body!.stripe!, keyMode: "test" } } } }).checks[8].level === "warn" && buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, stripe: { ...base.shop!.body!.stripe!, keyMode: "missing" } } } }).checks[8].level === "fail");
   ok("disabled endpoint red; www endpoint explained", (() => { const sb = base.shop!.body!; const a = buildMerchHealth({ ...base, shop: { status: 200, body: { ...sb, stripe: { ...sb.stripe!, endpoint: { found: true, enabled: false, missingEvents: [] } } } } }); const b = buildMerchHealth({ ...base, shop: { status: 200, body: { ...sb, stripe: { ...sb.stripe!, endpoint: { found: false, enabled: false, missingEvents: ["x"], wrongHost: ["https://www.greenwaymerch.com/api/stripe/webhook"] } } } } }); return a.checks[9].level === "fail" && b.checks[9].detail.includes("www"); })());
   ok("checkout closed red with the reason; shipping shown in cents->$", (() => { const sb = base.shop!.body!; const r = buildMerchHealth({ ...base, shop: { status: 200, body: { ...sb, checkout: { open: false, problem: "Shipping price is not set up yet (MERCH_SHIP_FLAT_CENTS)." } } } }); return r.checks[10].level === "fail" && r.checks[10].detail.includes("MERCH_SHIP_FLAT_CENTS") && g.checks[10].detail.includes("$5.99") && g.checks[10].detail.includes("$75.00"); })());
+  ok("held refs named", heldRefs([{ id: "pi_a", ref: "gm-abc123-xy", days: 4.1 }]) === " Orders: gm-abc123-xy (4.1 d)." && heldRefs(undefined) === "");
   ok("held card over 3 days red", buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, stripe: { ...base.shop!.body!.stripe!, held: { count: 1, over3Days: 1, oldestDays: 4 } } } } }).checks[14].level === "fail");
   ok("auto-confirm on amber", buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, autoConfirm: true } } }).checks[18].level === "warn");
   ok("status page major red, maintenance amber, no answer unknown", statusPageLevel({ status: 200, body: { status: { indicator: "major" } } }).level === "fail" && statusPageLevel({ status: 200, body: { status: { indicator: "maintenance" } } }).level === "warn" && statusPageLevel(null).level === "unknown");

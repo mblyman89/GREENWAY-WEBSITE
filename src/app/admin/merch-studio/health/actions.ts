@@ -12,6 +12,8 @@
  *     M-6, G-89): read Printful's webhook, then set it with all 5 events
  *     after the shop confirms Token C. The register step is audited
  *     (merch.webhook_registered) with the masked before/after.
+ *   - setAutoConfirmAction (D232 M-7, Q-11-7): the auto-confirm switch.
+ *     ON is owner-only with a reason after 20+ clean orders; OFF any time.
  * All writes are audited.
  */
 import { revalidatePath } from "next/cache";
@@ -20,6 +22,8 @@ import { recordAudit } from "@/lib/auth/audit";
 import { MERCH_HEALTH_PAGE } from "@/lib/merch/merch-health-core";
 import { runMerchHealth, saveHealthSettings } from "@/lib/merch/merch-health-server";
 import { applyWebhook, previewWebhook, type WebhookPreview } from "@/lib/merch/merch-webhook-server";
+import { AUTO_CONFIRM_KEY, checkSwitch } from "@/lib/merch/merch-autoconfirm-core";
+import { cleanOrderCount, readAutoConfirm, saveAutoConfirm } from "@/lib/merch/merch-autoconfirm-server";
 
 export type MerchHealthActionResult = { ok: true; status: "ok" | "warn" | "fail"; summary: string } | { ok: false; error: string };
 
@@ -76,4 +80,36 @@ export async function registerPrintfulWebhookAction(): Promise<{ ok: true; messa
   revalidatePath(MERCH_HEALTH_PAGE);
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, message: r.changes.length ? `Registered: ${r.changes.join(" ")}` : "Registered again; nothing needed changing." };
+}
+
+/**
+ * D232 M-7 (Q-11-7). Owner, verbatim: "Q7: I agree with you. Build the auto
+ * confirm too and all that goes along with it so it's ready." The switch is
+ * built and left OFF. Turning it ON is owner-only, needs a typed reason and
+ * 20+ greenwaymerch.com orders Printful has fulfilled (counted live, right
+ * now). Turning it OFF is owner or admin, any time. Audited both ways
+ * (merch.auto_confirm_on / merch.auto_confirm_off / merch.auto_confirm_refused).
+ */
+export async function setAutoConfirmAction(formData: FormData): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const session = await requirePermission("settings.manage");
+  const turnOn = String(formData.get("turn") ?? "") === "on";
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 500);
+  const count = turnOn ? await cleanOrderCount() : { count: null, problem: "" };
+  const check = checkSwitch({ turnOn, role: session.profile.role, reason, cleanOrders: count.count, ordersProblem: count.problem });
+  const before = (await readAutoConfirm()).setting;
+  if (!check.ok) {
+    await recordAudit({ actorId: session.profile.id, actorEmail: session.email, action: "merch.auto_confirm_refused", entityType: "site_settings", entityId: AUTO_CONFIRM_KEY, before, after: { turnOn, reason, cleanOrders: count.count, problem: check.problem } });
+    return { ok: false, error: check.problem };
+  }
+  const next = { on: turnOn, reason, byEmail: session.email ?? "", at: new Date().toISOString(), cleanOrdersAtSwitch: count.count };
+  const saved = await saveAutoConfirm(next, session.profile.id);
+  if (!saved.ok) return saved;
+  await recordAudit({ actorId: session.profile.id, actorEmail: session.email, action: turnOn ? "merch.auto_confirm_on" : "merch.auto_confirm_off", entityType: "site_settings", entityId: AUTO_CONFIRM_KEY, before, after: next });
+  revalidatePath(MERCH_HEALTH_PAGE);
+  return {
+    ok: true,
+    message: turnOn
+      ? "Auto-confirm is ON. The next paid, clean order goes straight to Printful production (the shop reads the switch on each order)."
+      : "Auto-confirm is OFF. Paid orders wait as Printful drafts for your Confirm.",
+  };
 }

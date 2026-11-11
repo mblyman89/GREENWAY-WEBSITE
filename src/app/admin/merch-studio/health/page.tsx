@@ -17,7 +17,10 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { Badge, Card } from "@/components/admin/ui";
-import { RunMerchHealthButton, TokenExpiryForm, WebhookPanel } from "@/components/admin/merch-studio/MerchHealthControls";
+import { AutoConfirmSwitch, RunMerchHealthButton, TokenExpiryForm, WebhookPanel } from "@/components/admin/merch-studio/MerchHealthControls";
+import { MerchAlertsInbox } from "@/components/admin/merch/MerchAlertsInbox";
+import { MIN_CLEAN_ORDERS } from "@/lib/merch/merch-autoconfirm-core";
+import { cleanOrderCount, readAutoConfirm } from "@/lib/merch/merch-autoconfirm-server";
 import { gatherMerchHealth, listMerchHealthRuns, merchShopOrigin, readHealthSettings } from "@/lib/merch/merch-health-server";
 import type { MerchCheck, MerchCheckLevel } from "@/lib/merch/merch-health-core";
 
@@ -37,8 +40,8 @@ function when(iso: string): string {
 }
 
 export default async function MerchHealthPage() {
-  await requirePermission("settings.manage");
-  const [report, runs, settings] = await Promise.all([gatherMerchHealth(), listMerchHealthRuns(20), readHealthSettings()]);
+  const session = await requirePermission("settings.manage");
+  const [report, runs, settings, auto, clean] = await Promise.all([gatherMerchHealth(), listMerchHealthRuns(20), readHealthSettings(), readAutoConfirm(), cleanOrderCount()]);
   const shop = merchShopOrigin();
   const tokenSet = (process.env.MERCH_HEALTH_TOKEN ?? "").length >= 32;
 
@@ -75,6 +78,9 @@ export default async function MerchHealthPage() {
           </Card>
         ) : null}
 
+        {/* D232 M-7 (G-85): the shop's owner alerts, with Acknowledge. */}
+        <MerchAlertsInbox returnTo="/admin/merch-studio/health#merch-alerts" canAck />
+
         {GROUPS.map((g) => {
           const list = report.checks.filter((c) => c.group === g);
           if (list.length === 0) return null;
@@ -97,6 +103,12 @@ export default async function MerchHealthPage() {
                       </p>
                     ) : null}
                     {c.id === "H-5" ? <WebhookPanel /> : null}
+                    {c.id === "H-19" ? (
+                      <AutoConfirmSwitch on={auto.setting.on} isOwner={session.profile.role === "owner"} cleanOrders={clean.count} minClean={MIN_CLEAN_ORDERS} since={auto.setting.at ? when(auto.setting.at) : ""} />
+                    ) : null}
+                    {c.id === "H-15" && c.fix ? (
+                      <p className="mt-1 text-xs text-[var(--admin-text-muted)]">Each held order is listed on its order page (Orders → Merch → the order → Stripe half) with the exact Stripe link. Holds 3 and 5 days old are emailed to staff once each (SOP-11 §4.20).</p>
+                    ) : null}
                     {c.id === "H-3" ? (
                       <div className="mt-2">
                         <TokenExpiryForm current={settings.printfulTokenExpires} />
