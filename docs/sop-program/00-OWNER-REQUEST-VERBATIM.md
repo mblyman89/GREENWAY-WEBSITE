@@ -2866,3 +2866,11 @@ What was done:
 - **Tab strips:** *"You are here / Do this / Then →"* on every tab.
 - Test: `tests/compliance/d232-merch-m3b-journey.test.ts`. SOP-11 v1.4.
 - **Owner steps:** none.
+
+### As built (slice M-5)
+
+- **Re-publish keeps Hidden** (G-82): `upsertItem` keeps the item's status and its last Printful stock copy; the Publish message says *"It stays Hidden…"* when it is hidden.
+- **Catalog version check** (G-88): `updateMerchCatalog` writes only if `site_settings.updated_at` is unchanged since the read; the loser gets *"Someone else changed the catalog - reload and try again."*
+- **Print-file cleanup** (G-93): after a re-publish is saved, the previous `merch-print/<handle>/<nonce>/` PNGs are deleted (best effort, audited as `oldPrintFilesDeleted`).
+- Test: `tests/compliance/d232-merch-m5-republish.test.ts`. SOP-11 v1.5.
+- **Owner steps:** none.

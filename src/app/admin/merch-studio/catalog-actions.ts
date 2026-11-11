@@ -23,7 +23,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import { readObjectHead } from "@/lib/media/read-object-head";
-import { HANDLE_RE, PRINT_KEY_RE, isListingPackage, printKey, upsertItem } from "@/lib/merch/merch-inventory-core";
+import { HANDLE_RE, PRINT_KEY_RE, isListingPackage, printKey, stalePrintKeys, upsertItem, type MerchCatalogItem, type MerchItemStatus } from "@/lib/merch/merch-inventory-core";
 import { updateMerchCatalog } from "@/lib/merch/merch-inventory-store";
 import { PRINTFUL_MAX_SYNC_VARIANTS, type ListingPackage } from "@/lib/merch-studio/listing-package-core";
 
@@ -55,7 +55,8 @@ export async function startMerchPublishAction(input: { handle: string; fileKeys:
   return { ok: true, bucket: BUCKET, uploads };
 }
 
-export type PublishMerchResult = { ok: true; handle: string; created: boolean } | { ok: false; error: string };
+/** D232 M-5: status = what the product is NOW (a Hidden product stays Hidden on re-publish, G-82); cleaned = old print PNGs deleted (G-93). */
+export type PublishMerchResult = { ok: true; handle: string; created: boolean; status: MerchItemStatus; stockKept: boolean; cleaned: number } | { ok: false; error: string };
 
 export async function publishMerchListingAction(input: { pkg: unknown; files: { fileKey: string; key: string }[]; images: string[] }): Promise<PublishMerchResult> {
   const session = await requirePermission("merch.publish");
@@ -87,13 +88,29 @@ export async function publishMerchListingAction(input: { pkg: unknown; files: { 
   if (pkg.printfulOrderItem.files.some((f) => !f.url)) return { ok: false, error: "A print placement has no file. Publish again." };
 
   let created = false;
+  let prev: MerchCatalogItem | null = null;
+  let item: MerchCatalogItem | null = null;
   const res = await updateMerchCatalog((c) => {
     const r = upsertItem(c, { pkg, images: Array.isArray(input.images) ? input.images.map(String) : [], byEmail: session.email ?? null, nowIso: new Date().toISOString() });
     if (!r.ok) return r.error;
     created = r.created;
+    prev = r.prev;
+    item = r.item;
     return r.catalog;
   });
   if (!res.ok) return res;
-  await recordAudit({ actorId: session.userId, actorEmail: session.email, action: created ? "merch.product_published" : "merch.product_republished", entityType: "merch_product", entityId: handle, after: { title: pkg.product.title, variants: pkg.variants.length, designId: pkg.designId } });
-  return { ok: true, handle, created };
+  const saved = item as MerchCatalogItem | null;
+  const before = prev as MerchCatalogItem | null;
+  // G-93: the new package is saved, so the previous print PNGs (old <nonce>
+  // folder, merch-print/<handle>/ only) can go. Best effort; never fails the publish.
+  const stale = saved ? stalePrintKeys(before, saved, publicBase) : [];
+  let cleaned = 0;
+  if (stale.length) {
+    const rm = await createSupabaseAdminClient().storage.from(BUCKET).remove(stale).catch(() => null);
+    cleaned = rm && !rm.error ? stale.length : 0;
+  }
+  const status: MerchItemStatus = saved?.status ?? "live";
+  const stockKept = !!saved?.stockSyncedAt;
+  await recordAudit({ actorId: session.userId, actorEmail: session.email, action: created ? "merch.product_published" : "merch.product_republished", entityType: "merch_product", entityId: handle, after: { title: pkg.product.title, variants: pkg.variants.length, designId: pkg.designId, status, stockKept, oldPrintFilesDeleted: cleaned } });
+  return { ok: true, handle, created, status, stockKept, cleaned };
 }

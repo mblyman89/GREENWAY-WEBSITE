@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built) |
+| **Version** | 1.5 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built; v1.4 records slice **M-3b**, the Product journey stepper and tab strips, as built; v1.5 records slice **M-5**, re-publish keeps Hidden, the catalog version check and print-file cleanup, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -459,11 +459,11 @@ This tab has **two separate jobs** (`PublishPanel.tsx` L4–16).
    - the message reads *"Published "…". It is in Merch Inventory now and on greenwaymerch.com within about a minute"* with **Open Merch Inventory**.
 8. **Download listing package (.json)** (L400) is an optional backup of the listing, not of the design.
 
-> **⚠ Re-publishing (F-11-7).** Pressing Publish again for an **existing** handle replaces it **and makes it Live again, even if you had hidden it** in Merch Inventory. It also clears the stock-sync time (`merch-inventory-core.ts` L90–110, *"Re-publishing replaces it and puts it live again"*). Interim rule: after a re-publish of a hidden product, go to Merch Inventory and press **Hide** again. Then press **Copy Printful stock to the website** (§4.15).
+> **Re-publishing (F-11-7, fixed in D232 M-5).** Pressing Publish again for an **existing** handle replaces the listing but **keeps its status**: a product you hid in Merch Inventory **stays Hidden**, and the message says *"It stays Hidden: it is NOT on greenwaymerch.com. Show it in Inventory → Merch Inventory when you want it back."* The last Printful stock copy and its date are kept for every colour and size that was already there (`upsertItem`, `merch-inventory-core.ts`). New colours or sizes start as Printful reported them at publish; press **Copy Printful stock to the website** (§4.15) after adding any.
 
 > **⚠ Same title, different design.** If another design already uses that web address, publishing is refused with *"Another design is already published as "…". Change the product title so it gets its own web address."* (L97–98). This is protection, not a bug.
 
-> **⚠ Old print files stay.** Each re-publish uploads to a new `<nonce>` folder. The old PNGs are not deleted until the product is **Removed** (`inventory/merch/actions.ts` L42–45 only removes the current set). They are harmless, but they take up space (F-11-15).
+> **Old print files (F-11-15, fixed in D232 M-5).** Each re-publish uploads to a new `<nonce>` folder. Once the new listing is saved, the previous folder's PNGs under `merch-print/<handle>/` are deleted (`stalePrintKeys`, `catalog-actions.ts`), and the message says how many. Nothing outside that product's folder is ever touched. If the delete fails, the publish still stands and the old files are harmless.
 
 **B. The Greenway Goods ad on the cannabis website** (also reached from Website → Merchandise → *Merch Ad Card (on Shop)*, which simply redirects here, `merch-site/ad-card/page.tsx` L13)
 1. **Show the ad on the cannabis website**: toggle it on.
@@ -513,7 +513,7 @@ A **website mismatch** means Printful's answer and what the website shows differ
 - **Remove** is **owner/admin only**. Type the product's web name (handle) **exactly** to confirm. It removes the product from the catalog **and** deletes its current print PNGs. Past orders at Printful are not affected (`actions.ts` L33–48). It is audited as `merch.product_removed` with the title and variants. **There is no undo.** You would have to publish again from the original browser (§4.6).
 - **Rule:** prefer **Hide**. Use **Remove** only for a product you will never sell again.
 
-> **⚠ Two people editing at once (F-11-16).** Each change re-reads the catalog and saves the whole list, and there is no version check (`merch-inventory-store.ts`). If two people press Hide or Publish in the same second, one change can be lost. Interim rule: one person at a time. Refresh the page after each change.
+> **Two people editing at once (F-11-16, fixed in D232 M-5).** Each change re-reads the catalog and saves only if nobody else saved in between (compare-and-set on the row's `updated_at`, `merch-inventory-store.ts`). The second person gets *"Someone else changed the catalog - reload and try again."* and nothing of theirs is saved. Reload the page and do it again.
 
 ### 4.15 Copying Printful stock to the website
 
@@ -677,7 +677,7 @@ Every Printful feature stops at once in **both** sites: mockups, stock, orders, 
 They are in the old browser (§4.6). Go back to that computer. If it is lost, the print PNGs in the ZIP can be uploaded as **art** in a new design on the same placement. The design cannot be restored from `design.json` today (G-79).
 
 ### 6.7 A hidden product came back
-A re-publish makes it Live (F-11-7). Hide it again.
+Since D232 M-5 a re-publish keeps Hidden (F-11-7 fixed). If one came back, someone pressed **Show** in Merch Inventory; check the audit log (`merch.product_shown`) and hide it again.
 
 ### 6.8 Printful or Stripe is down
 - Printful: `https://www.printfulstatus.com`
@@ -889,7 +889,7 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **F-11-4** | GAP · S2 | No health monitoring for Printful (token, scopes, expiry, webhook, status), Stripe (key, endpoint), Resend, the catalog round-trip or checkout open | no check in `/admin/compliance/health` or platform-health; `merch-site/vercel.json` no crons; `printfulConfigured()` only tests presence (`printful-client.ts` L24–25) | **G-77** **Resolved (D232 M-2):** Merch Health H-1 … H-19, daily. |
 | **F-11-5** | GAP · S2 | The back office cannot see Stripe at all; its key lives only in the shop project | `STRIPE_*` read only in `merch-site/` | **G-80** **Resolved (D232 M-2):** the shop reports Stripe to the back office through `/api/health`. |
 | **F-11-6** | GAP · S2 | The sample step is owner-driven but not enforced; the ticks are on one device | `fulfillment-core.ts` L83; `ProofPanel.tsx` L34, L90; `publishMerchListingAction` has no sample check | **G-81** |
-| **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** |
+| **F-11-7** | BUG · S2 | Re-publish makes a **hidden** product Live again and clears the stock-sync time | `merch-inventory-core.ts` L90–110 (`status: "live"`, `stockSyncedAt: ""`) | **G-82** **Resolved (D232 M-5).** |
 | **F-11-8** | GAP · S3 | Stock copy is manual only (no cron, no `stock_updated` webhook) | `inventory/merch/actions.ts` L51; `merch-site/vercel.json`; webhook types L7–8 | **G-83** |
 | **F-11-9** | WEAKNESS · S2 | Owner alerts go only to the logs if Resend is not set up, and there is no place in the app to see them | `merch-site/lib/fulfillment.ts` L41–43, L55–58 | **G-85** (+ G-77 check) |
 | **F-11-10** | GAP · S3 | Cancel at Printful does not refund in Stripe; it is a manual two-system step | `orders/merch/[ref]/page.tsx` L176–186; `merch-actions.ts` L47 | **G-86** |
@@ -897,8 +897,8 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **F-11-12** | WEAKNESS · S3 | Stale copy: *"drop it in merch-site/catalog/"*, *"Slice 5"* shipping rates, *"Slice 5"* server designs, README *"Adding a product (no code)"*, finishing guide *"don't add"* `MERCH_CATALOG_URL` | `fulfillment-core.ts` L73–74, L84; `FulfillmentPanel.tsx` L39, L68; `DesignStudio.tsx` L563; `merch-assets.ts` L7; `merch-design-core.ts` L15; `merch-site/README.md` L45; guide §3.1 | **G-91** |
 | **F-11-13** | WEAKNESS · S3 | Retail starts at a hard-coded $35; suggested retail ignores shipping; flat shipping is never compared with Printful's real rate | `PublishPanel.tsx` L250; `FulfillmentPanel.tsx` L68; `checkout-core.ts` L40 | **G-87** |
 | **F-11-14** | WEAKNESS · S4 | 7 placements are studio estimates, not Printful's measurements | `garment-catalog-core.ts` L151, L195, L214, L225–226 (+2) | **G-92** |
-| **F-11-15** | WEAKNESS · S4 | Every re-publish leaves the previous print PNGs in the public bucket | `catalog-actions.ts` L6–7, L50; Remove cleans only the current set (`actions.ts` L42–45) | **G-93** |
-| **F-11-16** | WEAKNESS · S3 | Catalog writes have no version check; two quick edits can lose one | `merch-inventory-store.ts` (read → modify → write) | **G-88** |
+| **F-11-15** | WEAKNESS · S4 | Every re-publish leaves the previous print PNGs in the public bucket | `catalog-actions.ts` L6–7, L50; Remove cleans only the current set (`actions.ts` L42–45) | **G-93** **Resolved (D232 M-5).** |
+| **F-11-16** | WEAKNESS · S3 | Catalog writes have no version check; two quick edits can lose one | `merch-inventory-store.ts` (read → modify → write) | **G-88** **Resolved (D232 M-5).** |
 | **F-11-17** | GAP · S3 | Merch Inventory and Reports → Merch have no helper; the concierge has 2 merch facts; there are no Printful or Stripe integration guides | `inventory/merch/page.tsx` L56; `concierge-kb.ts` L194, L200; `integration-guides.ts` L30–97 | **G-90** |
 | **F-11-18** | WEAKNESS · S3 | The Printful webhook is registered by hand with `curl`; a later registration silently replaces it; nothing checks it is still right | guide §6.3; Printful docs (A.3); webhook route L7–8 | **G-89** |
 | **F-11-C** | STRENGTH | Fail-closed, WA-only free cancel, fresh re-pricing, idempotent, hidden constant-time feed, last-good fallback, human Confirm, audits, owner/admin Remove, verified PNGs, ad price guard | §7 | — |
@@ -913,18 +913,18 @@ Not checkable from outside: whether `MERCH_CATALOG_URL`, `MERCH_CATALOG_TOKEN`, 
 | **G-79** | **Designs saved on the server.** Drafts in a table and art in the private `merch-files` bucket, so any computer works, with **Import design (.json/.zip)**. The browser copy becomes an offline cache | S2 |
 | **G-80** | **Shop health endpoint** `greenwaymerch.com/api/health`, Bearer token, read-only. It reports the Stripe key mode, the webhook endpoint (url, status, events), checkout open/closed with the reason, Resend configured, the catalog fetch result (status, product count, last good age, redirect seen) and the Printful token present. The back office reads it for G-77. Stripe secrets never leave the shop project  **DONE (D232 M-2)** | S2 |
 | **G-81** | **Sample gate.** Sample approval saved on the server per design (who, when, the 8 checklist items, a photo), and **Publish is blocked** until it is approved. An owner override needs a typed reason and is audited | S2 |
-| **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 |
+| **G-82** | **Re-publish keeps Hidden.** `upsertItem` keeps `prev.status` and `prev.stockSyncedAt` (or runs a stock sync straight after publish), and the message says so | S2 **DONE (D232 M-5)** |
 | **G-83** | **Automatic stock.** A cron in the main project copies Printful stock every 6 hours. Optionally, Printful's `stock_updated` event drives it as well (registered through G-89, keeping all the order event types) | S3 |
 | **G-84** | **Held-card monitor.** The daily check lists uncaptured authorizations older than 3 days through the G-80 endpoint. It emails at day 3 and day 5, and the order page gets *"Capture / Cancel in Stripe"* coaching | S2 |
 | **G-85** | **Merch alerts inbox.** The shop POSTs each alert to a token-secured back-office endpoint, stored and shown on Merch Health and Orders with acknowledge. Email stays as a second channel | S2 |
 | **G-86** | **Cancel and refund in one guided step.** *Cancel at Printful* → the page then shows **Refund in Stripe**. This goes through a G-80-style shop endpoint (idempotent, audited) or, if the owner prefers, a deep link plus a confirm-done box. The order page shows both halves' status | S3 |
 | **G-87** | **Pricing guard.** No hard-coded $35 (last price or the calculator's suggestion). Suggested retail includes the real shipping gap. Publish warns when margin < the owner's minimum or flat shipping < Printful's US rate | S3 |
-| **G-88** | **Catalog version check.** Compare-and-set on `site_settings.updated_at` (the pattern used by D230 reopen). The loser gets *"Someone else changed the catalog - reload and try again"* | S3 |
+| **G-88** | **Catalog version check.** Compare-and-set on `site_settings.updated_at` (the pattern used by D230 reopen). The loser gets *"Someone else changed the catalog - reload and try again"* | S3 **DONE (D232 M-5)** |
 | **G-89** | **Register the Printful webhook from the app.** A button on Merch Health reads `GET /webhooks` first, shows what is there, then sets the URL with **all** needed types (the 4 order types plus `stock_updated` once G-83 ships). Audited, and re-checked daily by G-77 | S3 |
 | **G-90** | **Help everywhere.** `helpId` and helpers for Merch Inventory and Reports → Merch; **Printful**, **Stripe (merch)** and **Resend (merch)** integration guides on `/admin/integrations`; concierge facts for every §4 section and §5 message | S3 |
 | **G-91** | **Stale copy cleanup** (F-11-12 list), README *"Adding a product"* rewritten to *"Publish in Merch Studio"*, finishing guide §3.1 corrected | S3 |
 | **G-92** | **Confirm the 7 studio-default placements** against Printful's file templates (or the `GET /mockup-generator/printfiles/{id}` sizes), then mark the source | S4 |
-| **G-93** | **Print-file cleanup.** On re-publish, delete the previous `<nonce>` folder once the new one is saved (only `merch-print/<handle>/`) | S4 |
+| **G-93** | **Print-file cleanup.** On re-publish, delete the previous `<nonce>` folder once the new one is saved (only `merch-print/<handle>/`) | S4 **DONE (D232 M-5)** |
 
 ### B.3 The strategy in one paragraph
 
@@ -1009,7 +1009,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 | **M-2** | Shop `/api/health` + Merch Health panel + daily cron + change emails | G-80, G-77 | M-1 **BUILT (D232)** |
 | **M-3** | Setup & Launch coach, Product journey stepper, tab strips, Print form 8.1 | G-78 | M-2 |
 | **M-4** | Server-saved designs + import; sample gate | G-79, G-81 | migration (designs table) |
-| **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — |
+| **M-5** | Re-publish keeps Hidden; catalog version check; print-file cleanup | G-82, G-88, G-93 | — **BUILT (D232)** |
 | **M-6** | Webhook button; automatic stock (cron, then `stock_updated`) | G-89, G-83 | M-2 |
 | **M-7** | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | G-84, G-85, G-86 | M-2 (+ owner answer Q-11-4) |
 | **M-8** | Pricing guard; helpers, integration guides, concierge; placements | G-87, G-90, G-92 | — |
@@ -1036,6 +1036,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.5 | 2026-11-11 | **M-5 built:** re-publish keeps Hidden and the stock copy, and says so (G-82); catalog writes are compare-and-set on `updated_at`, the loser is told *"Someone else changed the catalog - reload and try again."* (G-88); the previous print PNGs are deleted after a re-publish is saved (G-93). §4.12, §4.14, §6.7 updated; F-11-7, F-11-15, F-11-16 resolved | Greenway Dev |
 | 1.4 | 2026-11-11 | **M-3b built:** Product journey stepper (nine pills, Next step line, links to tabs, Merch Health and Merch Inventory) and the per-tab "You are here / Do this / Then" strips (G-78 items 2 and 3; the "Show me around" tour remains) | Greenway Dev |
 | 1.3 | 2026-11-11 | **M-3a built:** Setup & Launch coach `/admin/merch-studio/launch` (13 cards S-1 … S-12 + T, proven by Merch Health where it can, owner ticks for the rest, notes, progress, Next line), "Setup needs you" in the Studio header, printable form 8.1 at `/launch/record` (G-78 part; §4.2 points to it) | Greenway Dev |
 | 1.2 | 2026-11-11 | **M-2 built:** Merch Health `/admin/merch-studio/health` (H-1 … H-19 live, with fix and SOP section; Run check now; token-expiry date; run history); shop `/api/health` behind its own `MERCH_HEALTH_TOKEN` (Token D, §4.3, both projects); the daily check rides the platform-health cron and emails only on a change of reds or a Monday digest (G-77, G-80 DONE; F-11-4, F-11-5 resolved) | Greenway Dev |

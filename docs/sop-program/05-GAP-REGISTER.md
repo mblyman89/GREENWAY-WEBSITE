@@ -106,18 +106,18 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-79 | **Designs saved on the server** (drafts table, art in `merch-files`), any computer, import `.json`/`.zip` | D231 | F-11-2 | SOP-11 §4.6, §6.6 | OPEN · PROPOSED M-4 |
 | G-80 | **Shop health endpoint** (`greenwaymerch.com/api/health`, its own token): Stripe mode, webhook endpoint, checkout reason, email configured, feed fetch result, held cards | D231 | F-11-5, F-11-4 | Stripe dashboard (SOP-11 §4.19–§4.20) | **DONE (M-2, D232)** |
 | G-81 | **Sample gate**: approval on the server per design; Publish blocked until approved; owner override with reason | D231 | F-11-6 | SOP-11 §4.9, form 8.2 | OPEN · PROPOSED M-4 |
-| G-82 | **Re-publish keeps Hidden** and the stock-sync time (or syncs at once) | D231 | F-11-7 | SOP-11 §4.12, §6.7 | OPEN · PROPOSED M-5 |
+| G-82 | **Re-publish keeps Hidden** and the stock-sync time (or syncs at once) | D231 | F-11-7 | SOP-11 §4.12, §6.7 | **DONE (M-5, D232)** |
 | G-83 | **Automatic stock copy** (cron every 6 h; later the `stock_updated` webhook) | D231 | F-11-8 | SOP-11 §4.15 daily | OPEN · PROPOSED M-6 |
 | G-84 | **Held-card monitor**: uncaptured > 3 days emailed at day 3 and 5, with capture/cancel coaching | D231 | F-11-11 | SOP-11 §4.20 | OPEN · PROPOSED M-7 |
 | G-85 | **Merch alerts inbox** in the back office (the shop posts alerts; acknowledge) | D231 | F-11-9 | SOP-11 §4.21 weekly log search | OPEN · PROPOSED M-7 |
 | G-86 | **Cancel and refund in one guided step** | D231 | F-11-10 | SOP-11 §4.19, form 8.4 | OPEN · PROPOSED M-7 (Q-11-4) |
 | G-87 | **Pricing guard** (no fixed $35; shipping gap; minimum margin warning) | D231 | F-11-13 | SOP-11 §4.11, form 8.2 D | OPEN · PROPOSED M-8 |
-| G-88 | **Catalog version check** (compare-and-set) | D231 | F-11-16 | SOP-11 §4.14 one at a time | OPEN · PROPOSED M-5 |
+| G-88 | **Catalog version check** (compare-and-set) | D231 | F-11-16 | SOP-11 §4.14 one at a time | **DONE (M-5, D232)** |
 | G-89 | **Register the Printful webhook from the app** (reads `GET /webhooks` first, all types, audited, checked daily) | D231 | F-11-18 | SOP-11 S-10 | OPEN · PROPOSED M-6 |
 | G-90 | **Help everywhere**: helpers for Merch Inventory and Reports → Merch; Printful, Stripe and Resend integration guides; concierge topics (04) | D231 | F-11-17 | SOP-11 itself | OPEN · PROPOSED M-8 |
 | G-91 | **Stale copy cleanup** (Slice 5 texts, catalog-folder step, README, finishing guide §3.1) | D231 | F-11-12 | SOP-11 §4.1 note, §4.4.1 | **DONE (M-1, D232)** |
 | G-92 | **Confirm the 7 studio-default placements** | D231 | F-11-14 | SOP-11 §4.7 step 3 | OPEN · PROPOSED M-8 (Q-11-6) |
-| G-93 | **Delete the previous print files on re-publish** | D231 | F-11-15 | none needed | OPEN · PROPOSED M-5 |
+| G-93 | **Delete the previous print files on re-publish** | D231 | F-11-15 | none needed | **DONE (M-5, D232)** |
 
 ---
 
