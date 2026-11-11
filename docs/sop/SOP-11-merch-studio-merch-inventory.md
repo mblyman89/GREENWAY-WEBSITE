@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built) |
+| **Version** | 1.3 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built; v1.2 records slice **M-2**, Merch Health, as built; v1.3 records slice **M-3a**, the Setup & Launch coach and form 8.1, as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
@@ -173,6 +173,8 @@
 > **Coaching note.** Do the steps **in order**. Each one ends with **✅ You know it worked when…**. Do not move on until you see that. If a step fails, look up the message in §5. Allow about **2 hours**, plus up to 2 business days for Printful's resale-certificate review. Use the printable **form 8.1** to tick as you go and to record expiry dates.
 
 ### 4.2 The setup walkthrough, steps S-1 to S-12
+
+> **In the app (D232 M-3a):** Merch Studio → **Setup & Launch** (`/admin/merch-studio/launch`, owner & admin) walks you through these same steps one card at a time. Steps that Merch Health can prove (S-2, S-4, S-6 … S-12) turn green by themselves; the rest you tick. **Print setup record** prints form 8.1 already filled in. The steps below are the paper copy.
 
 **Step S-1. Make the three secret tokens (A, B, C).** (5 minutes, see §4.3.)
 Make three different random strings, each **at least 32 characters** (§4.3 shows how). Save them in your password manager as *Merch Token A (catalog)*, *Merch Token B (order desk)* and *Merch Token C (Printful webhook)*.
@@ -987,6 +989,13 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 - Held card → *"Capture or cancel within n days"*;
 - Cancelled at Printful → *"Now refund in Stripe ▸"*.
 
+**As built (D232 M-3a), item 1.**
+- **Page:** `/admin/merch-studio/launch` (`src/app/admin/merch-studio/launch/page.tsx`), owner & admin (`settings.manage`). It runs Merch Health live on every visit and shows 13 cards (S-1 … S-12 and **T**, the test order) with a progress bar (*"n of 13 done · about 2 h 35 min left"* when nothing is done) and a **Next:** line. Each card has What to do, Done when, copy buttons, links, the health checks that prove it (with their fix) and, where the step needs your eyes, a tick box. Dates and notes (store name, resale-certificate status, analytics-token expiry, live date) are saved in site setting `merch_launch_progress`. The Printful token expiry is typed once, on S-4, and is the same value H-3 uses (`merch_health_settings`).
+- **Rules:** `src/lib/merch/merch-launch-core.ts` (pure, 19 self-tests). A step is **done** when every proof is green and, if it is a manual step, it is ticked. It is **Needs you** when a proof is red after the step was ticked or partly proven, so an expired token re-opens S-4 and S-12.
+- **Studio header:** owners and admins see **Setup & Launch** and **Merch Health** buttons, and a line *"Setup needs you: Step n · …"* (red) or *"Setup: n of 13 done… Next: …"* (amber), read from the **last saved** health run so the Studio stays fast.
+- **Form 8.1:** `/admin/merch-studio/launch/record` prints a white page with each step, its status, who ticked it and when, the notes, and a signature line (the signer's name and date are typed on the last card).
+- Ticks and notes are audited (`merch.launch_step_ticked`, `merch.launch_step_unticked`, `merch.launch_note_saved`). Items 2 … 4 (journey stepper, tab strips, order coaching) follow in M-3b and M-7.
+
 ### B.6 Proposed build order (also in `06-FIX-PHASE-PLAN.md`, all PROPOSED)
 
 | Slice | Contents | Gaps | Needs |
@@ -1022,6 +1031,7 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.3 | 2026-11-11 | **M-3a built:** Setup & Launch coach `/admin/merch-studio/launch` (13 cards S-1 … S-12 + T, proven by Merch Health where it can, owner ticks for the rest, notes, progress, Next line), "Setup needs you" in the Studio header, printable form 8.1 at `/launch/record` (G-78 part; §4.2 points to it) | Greenway Dev |
 | 1.2 | 2026-11-11 | **M-2 built:** Merch Health `/admin/merch-studio/health` (H-1 … H-19 live, with fix and SOP section; Run check now; token-expiry date; run history); shop `/api/health` behind its own `MERCH_HEALTH_TOKEN` (Token D, §4.3, both projects); the daily check rides the platform-health cron and emails only on a change of reds or a Monday digest (G-77, G-80 DONE; F-11-4, F-11-5 resolved) | Greenway Dev |
 | 1.1 | 2026-11-11 | Owner answers Q-11-1 … Q-11-9 recorded (D232). **M-1 built:** the shop reads the www feed address, moves a bare host to www, never follows a redirect and remembers the last feed result for Merch Health; Publish is owner/admin (`merch.publish`); stale "Slice 5" and "drop it in merch-site/catalog/" copy removed; the README and finishing guide corrected (G-76, G-91 DONE) | Greenway Dev |
 | 1.0 | 2026-11-11 | First version (recon and audit only, no code changed). Merch Studio and Merch Inventory first, as the owner asked (D231). It covers the setup walkthrough, every tab and order procedure, live probes, 18 findings (F-11-1 … F-11-18 + F-11-C), 18 gaps (G-76 … G-93) and the roadmap M-1 … M-8 | Greenway Dev |

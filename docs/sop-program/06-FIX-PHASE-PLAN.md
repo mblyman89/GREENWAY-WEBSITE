@@ -108,7 +108,7 @@ The owner asked for hand-holding and health first (*"first step, do this, done g
 |---|---|---|---|---|
 | M-1 | Feed address fix (www + `redirect: manual` + self-test); stale copy; README and guide corrections; `merch.publish` owner/admin (Q-11-1) — **BUILT (D232)** | F-11-1, F-11-12 | G-76, G-91 | — |
 | M-2 | Shop `/api/health` (own token) + Merch Health panel + daily cron + change emails (H-1 … H-19) — **BUILT (D232)**; the daily run rides the platform-health cron (no new cron) | F-11-4, F-11-5 | G-80, G-77 | M-1 |
-| M-3 | Setup & Launch coach (S-1 … S-12 + test order), Product journey stepper, per-tab next-step strips, printable form 8.1 | F-11-3 | G-78 | M-2 |
+| M-3 | Setup & Launch coach (S-1 … S-12 + test order), Product journey stepper, per-tab next-step strips, printable form 8.1 — **M-3a BUILT (D232):** coach + form 8.1 + Studio header line | F-11-3 | G-78 | M-2 |
 | M-4 | Designs on the server + import; sample gate | F-11-2, F-11-6 | G-79, G-81 | migration; Q-11-2 |
 | M-5 | Re-publish keeps Hidden; catalog compare-and-set; old print-file cleanup | F-11-7, F-11-16, F-11-15 | G-82, G-88, G-93 | — |
 | M-6 | Printful webhook button; automatic stock (cron, then `stock_updated`) | F-11-18, F-11-8 | G-89, G-83 | M-2 |

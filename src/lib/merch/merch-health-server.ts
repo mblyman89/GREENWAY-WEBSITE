@@ -180,6 +180,13 @@ export async function listMerchHealthRuns(limit = 20): Promise<{ rows: MerchHeal
   }
 }
 
+/** The last saved run's report (no live calls), for quick reads: the Studio header and form 8.1. */
+export async function latestMerchHealthReport(): Promise<{ report: MerchHealthReport | null; error: string | null }> {
+  const r = await listMerchHealthRuns(1);
+  const rep = (r.rows[0]?.report ?? null) as MerchHealthReport | null;
+  return { report: rep && Array.isArray(rep.checks) ? rep : null, error: r.error };
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

@@ -1075,6 +1075,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** the setup lives only in `docs/MERCH-SITE-FINISHING-GUIDE.md` (384 lines) and `merch-site/README.md`. The Studio helper (`page-helpers-core.ts` L323–341) describes the tabs and not the setup.
 - **Effect:** the owner: *"I am very confused on how to use the merch studio. I do not know how to properly set up my printful and stripe accounts."*
 - **SOP impact:** SOP-11 §4.2–§4.5 (interim walkthrough), Appendix B.5. **G-78**.
+- **Partly resolved (D232, M-3a):** the in-app Setup & Launch coach `/admin/merch-studio/launch` and printable form 8.1. The journey stepper and tab strips follow in M-3b.
 
 ### F-11-4 · CONFIRMED · GAP · S2 — Nothing monitors Printful, Stripe, Resend, the feed or checkout
 - **Pin:** `printfulConfigured()` only tests that the variable exists (`src/lib/merch-studio/printful-client.ts` L24–25). No merch check exists in `/admin/compliance/health` or `/admin/settings/platform-health`. `merch-site/vercel.json` has no crons. The Printful private token has an expiry date (Printful docs) that is recorded nowhere.

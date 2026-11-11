@@ -21,6 +21,20 @@ export const dynamic = "force-dynamic";
  * redirect ad (merch.ad, edited on the Publish & Ads tab) with no product data.
  * Permission: content.edit (same as Creative Studio) - designers already have it.
  */
+async function loadSetupBanner(): Promise<{ tone: "bad" | "warn"; text: string } | null> {
+  const [{ latestMerchHealthReport }, { readLaunchProgress }, core] = await Promise.all([
+    import("@/lib/merch/merch-health-server"),
+    import("@/lib/merch/merch-launch-server"),
+    import("@/lib/merch/merch-launch-core"),
+  ]);
+  const [last, prog] = await Promise.all([latestMerchHealthReport().catch(() => ({ report: null, error: null })), readLaunchProgress().catch(() => null)]);
+  if (!prog || prog.error) return null;
+  const sum = core.summarizeLaunch(last.report, prog.progress);
+  if (sum.needsYou) return { tone: "bad", text: `Setup needs you: ${core.stepNumber(sum.needsYou.step.id)} · ${sum.needsYou.step.title}. ${sum.needsYou.why}` };
+  if (sum.next) return { tone: "warn", text: `Setup: ${core.progressLine(sum)}. Next: ${core.stepNumber(sum.next.step.id)} · ${sum.next.step.title}.` };
+  return null;
+}
+
 async function loadPublishData() {
   if (!isSupabaseServiceConfigured) return { adBlock: { draft: null, published: null, status: "draft", available: isSupabaseServiceConfigured }, mediaChoices: [] as MediaChoice[] };
   let block = await getContentBlock(MERCH_AD_BLOCK).catch(() => null);
@@ -41,6 +55,10 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
   // Tabs switch client-side without a reload, so the Publish data is always
   // loaded (one content-block read + the same media list other editors use).
   const publish = { ...(await loadPublishData()), canPublish: can(session.profile.role, "merch.publish") };
+  // D232 M-3a: "Setup needs you: Step n" from the LAST SAVED Merch Health run
+  // (no live calls here, so the Studio stays fast). Owner & admin only.
+  const isOwnerAdmin = can(session.profile.role, "settings.manage");
+  const setup = isOwnerAdmin ? await loadSetupBanner() : null;
   const flash = sp.warning_error ? { tone: "bad" as const, text: String(sp.warning_error).slice(0, 300) } : sp.published ? { tone: "ok" as const, text: "Published - the Greenway Goods ad on the website now matches this." } : sp.saved ? { tone: "ok" as const, text: "Draft saved. Nothing changed on the website yet." } : null;
   return (
     <div>
@@ -50,11 +68,16 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
         breadcrumbs={<Breadcrumbs items={[{ label: "MKTG & ADV" }, { label: "Merch Studio" }]} />}
         helpId="merch-studio"
         action={
-          can(session.profile.role, "settings.manage") ? (
-            // D232 M-2: Merch Health (owner & admin), H-1..H-19 with the fix for each.
-            <Link href="/admin/merch-studio/health" className="rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:bg-white/5">
-              Merch Health
-            </Link>
+          isOwnerAdmin ? (
+            // D232 M-2: Merch Health (owner & admin), H-1..H-19 with the fix for each. M-3a: Setup & Launch.
+            <span className="flex flex-wrap gap-2">
+              <Link href="/admin/merch-studio/launch" className="rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:bg-white/5">
+                Setup & Launch
+              </Link>
+              <Link href="/admin/merch-studio/health" className="rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:bg-white/5">
+                Merch Health
+              </Link>
+            </span>
           ) : undefined
         }
       />
@@ -62,6 +85,12 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
         <b className="text-white">Sold by Greenway Glass & Goods</b> (Greenway Merchandising LLC) on its own website and Stripe checkout - never on the cannabis POS or delivery.{" "}
         <Link href="/admin/helpers#merch-studio" className="text-[var(--admin-accent)] hover:underline">Details</Link>
       </p>
+      {setup ? (
+        <p role="status" className={`mx-5 mt-3 rounded-[var(--admin-radius)] border px-3 py-1.5 text-xs text-white/90 sm:mx-8 ${setup.tone === "bad" ? "border-[var(--admin-danger)]/60 bg-[var(--admin-danger)]/10" : "border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10"}`}>
+          {setup.text}{" "}
+          <Link href="/admin/merch-studio/launch" className="text-[var(--admin-accent)] hover:underline">Open Setup & Launch</Link>
+        </p>
+      ) : null}
       {flash ? (
         <p role="status" className={`mb-4 rounded-[var(--admin-radius)] border p-3 text-sm ${flash.tone === "ok" ? "border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 text-white/90" : "border-[var(--admin-danger)]/60 bg-[var(--admin-danger)]/10 text-white/90"}`}>{flash.text}</p>
       ) : null}
