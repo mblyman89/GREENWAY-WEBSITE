@@ -1099,6 +1099,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `src/lib/merch/merch-inventory-core.ts` L90–110: `upsertItem` sets `status: "live"` (L102) and `stockSyncedAt: ""` (L107) even when the previous item was hidden. The comment at L90 says so (*"puts it live again"*).
 - **Effect:** a product hidden on purpose (for example, out of stock or a recall of a design) returns to sale after a small text fix.
 - **SOP impact:** SOP-11 §4.12 warning, §6.7. **G-82**.
+- **Resolved (D232, M-5):** `upsertItem` keeps the status and stock copy on re-publish; the message says when it stays Hidden.
 
 ### F-11-8 · CONFIRMED · GAP · S3 — Stock is copied by hand only
 - **Pin:** `src/app/admin/inventory/merch/actions.ts` L51–63 (button only); no cron; the Printful webhook types are the 4 order types only (`merch-site/app/api/printful/webhook/[token]/route.ts` L7–8).
@@ -1137,10 +1138,12 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-15 · CONFIRMED · WEAKNESS · S4 — Old print files stay after a re-publish
 - **Pin:** `src/app/admin/merch-studio/catalog-actions.ts` L6–7, L50 (a new `<nonce>` folder each time); Remove deletes only the current set (`inventory/merch/actions.ts` L42–45).
 - **SOP impact:** SOP-11 §4.12. **G-93**.
+- **Resolved (D232, M-5):** the previous `<nonce>` PNGs are deleted once the re-publish is saved (`stalePrintKeys`).
 
 ### F-11-16 · CONFIRMED · WEAKNESS · S3 — Catalog writes have no version check
 - **Pin:** `src/lib/merch/merch-inventory-store.ts` (read → change → write the whole list; no compare-and-set).
 - **SOP impact:** SOP-11 §4.14 (one person at a time). **G-88**.
+- **Resolved (D232, M-5):** `updateMerchCatalog` is compare-and-set on `updated_at`; the loser is told to reload.
 
 ### F-11-17 · CONFIRMED · GAP · S3 — Too little help
 - **Pin:** `src/app/admin/inventory/merch/page.tsx` L56 and `src/app/admin/reports/merch/page.tsx` have no `helpId`. `concierge-kb.ts` has 2 merch facts (L194, L200). `integration-guides.ts` L30–97 has no Printful, Stripe or Resend guide.

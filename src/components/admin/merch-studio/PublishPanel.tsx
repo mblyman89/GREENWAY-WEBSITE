@@ -282,7 +282,12 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
       setBusy("Publishing...");
       const res = await publishMerchListingAction({ pkg: fresh, files, images: photos });
       if (!res.ok) throw new Error(res.error);
-      setPubMsg({ tone: "ok", handle: res.handle, text: `${res.created ? "Published" : "Updated"} "${fresh.product.title}". It is in Merch Inventory now and on greenwaymerch.com within about a minute.` });
+      // D232 M-5 (G-82): a Hidden product stays Hidden on re-publish, and the message says so.
+      const where = res.status === "hidden"
+        ? "It stays Hidden: it is NOT on greenwaymerch.com. Show it in Inventory \u2192 Merch Inventory when you want it back."
+        : "It is in Merch Inventory now and on greenwaymerch.com within about a minute.";
+      const extra = res.created ? "" : `${res.stockKept ? " The last Printful stock copy was kept." : ""}${res.cleaned ? ` ${res.cleaned} old print file${res.cleaned === 1 ? "" : "s"} deleted.` : ""}`;
+      setPubMsg({ tone: "ok", handle: res.handle, text: `${res.created ? "Published" : "Updated"} "${fresh.product.title}". ${where}${extra}` });
     } catch (e) {
       setPubMsg({ tone: "bad", text: e instanceof Error ? e.message : "Publishing failed." });
     } finally { setBusy(null); }
@@ -324,7 +329,7 @@ function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoic
       <div>
         <h3 id="merch-listing-h" className="text-base font-bold text-white">B. Listing package for the Greenway Goods website</h3>
         <p className="mt-1 max-w-3xl text-sm text-white/70">
-          Turns a finished design into a product on the separate merch website: title, colours, sizes, Printful variant ids, your retail prices with profit per variant, the print files and their exact print positions. <b className="text-white">Publish to greenwaymerch.com</b> renders and stores the print files, puts the product on the merch site within about a minute and adds it to Inventory &gt; Merch Inventory. Re-publishing the same title updates it. Nothing is ever shown on the cannabis website. The JSON download is still there as a backup.
+          Turns a finished design into a product on the separate merch website: title, colours, sizes, Printful variant ids, your retail prices with profit per variant, the print files and their exact print positions. <b className="text-white">Publish to greenwaymerch.com</b> renders and stores the print files, puts the product on the merch site within about a minute and adds it to Inventory &gt; Merch Inventory. Re-publishing the same title updates it (a Hidden product stays Hidden, and the old print files are deleted). Nothing is ever shown on the cannabis website. The JSON download is still there as a backup.
         </p>
       </div>
       <div className="grid gap-5 xl:grid-cols-[26rem_1fr]">

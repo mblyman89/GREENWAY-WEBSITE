@@ -88,8 +88,13 @@ export function normalizeCatalog(raw: unknown): MerchCatalog {
   return out;
 }
 
-/** Publish (or re-publish) one package. Re-publishing replaces it and puts it live again. */
-export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images: readonly string[]; byEmail: string | null; nowIso: string }): { ok: true; catalog: MerchCatalog; created: boolean } | { ok: false; error: string } {
+/**
+ * Publish (or re-publish) one package. Re-publishing replaces the package but
+ * KEEPS the item's status (a Hidden product stays Hidden) and its last Printful
+ * stock copy: variants that were already synced keep their in-stock flag and
+ * stockSyncedAt is kept (D232 M-5, G-82 / F-11-7). `prev` is the item it replaced.
+ */
+export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images: readonly string[]; byEmail: string | null; nowIso: string }): { ok: true; catalog: MerchCatalog; created: boolean; prev: MerchCatalogItem | null; item: MerchCatalogItem } | { ok: false; error: string } {
   if (!isListingPackage(input.pkg)) return { ok: false, error: "That isn't a complete listing package." };
   const handle = input.pkg.product.handle;
   const prev = c.items.find((i) => i.handle === handle);
@@ -97,18 +102,21 @@ export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images
   if (prev && prev.pkg.designId && input.pkg.designId && prev.pkg.designId !== input.pkg.designId) {
     return { ok: false, error: `Another design is already published as "${handle}". Change the product title so it gets its own web address.` };
   }
+  // G-82: carry the last stock copy onto the new variants (same Printful variant id).
+  const synced = prev && prev.stockSyncedAt ? new Map(prev.pkg.variants.map((v) => [v.printfulVariantId, v.inStock])) : null;
+  const pkg: ListingPackage = synced ? { ...input.pkg, variants: input.pkg.variants.map((v) => (synced.has(v.printfulVariantId) ? { ...v, inStock: synced.get(v.printfulVariantId)! } : v)) } : input.pkg;
   const item: MerchCatalogItem = {
     handle,
-    status: "live",
+    status: prev?.status ?? "live",
     images: input.images.map(safeHttpsUrl).filter(Boolean).slice(0, MERCH_ITEM_MAX_IMAGES),
     publishedAt: prev?.publishedAt || input.nowIso,
     updatedAt: input.nowIso,
     byEmail: input.byEmail,
-    stockSyncedAt: "",
-    pkg: input.pkg,
+    stockSyncedAt: prev?.stockSyncedAt ?? "",
+    pkg,
   };
   const items = prev ? c.items.map((i) => (i.handle === handle ? item : i)) : [...c.items, item];
-  return { ok: true, catalog: { v: 1, items }, created: !prev };
+  return { ok: true, catalog: { v: 1, items }, created: !prev, prev: prev ?? null, item };
 }
 
 export function setItemStatus(c: MerchCatalog, handle: string, status: MerchItemStatus, nowIso: string): MerchCatalog | null {
@@ -288,6 +296,19 @@ export function printKeyFromUrl(url: string, publicPrefix: string): string | nul
   const k = url.slice(prefix.length);
   return PRINT_KEY_RE.test(k) ? k : null;
 }
+/**
+ * D232 M-5 (G-93 / F-11-15): after a re-publish is SAVED, the previous print
+ * PNGs that the new package no longer uses. Only our own keys under
+ * merch-print/<handle>/ are ever returned; a key the new package still uses is kept.
+ */
+export function stalePrintKeys(prev: MerchCatalogItem | null, next: MerchCatalogItem, publicPrefix: string): string[] {
+  if (!prev) return [];
+  const keep = new Set(next.pkg.printFiles.map((f) => printKeyFromUrl(f.url, publicPrefix)).filter(Boolean));
+  const own = `merch-print/${next.handle}/`;
+  return [...new Set(prev.pkg.printFiles.map((f) => printKeyFromUrl(f.url, publicPrefix)).filter((k): k is string => !!k && k.startsWith(own) && !keep.has(k)))];
+}
+/** G-88: the loser of two catalog writes at the same time. */
+export const MERCH_CATALOG_CONFLICT = "Someone else changed the catalog - reload and try again.";
 
 export function __runMerchInventoryTests(): { passed: number; failed: number; failures: string[] } {
   let passed = 0;
@@ -310,7 +331,9 @@ export function __runMerchInventoryTests(): { passed: number; failed: number; fa
   ok(c1.items[0].images.join() === "https://x.example/a.jpg", "only https images kept");
   const hid = setItemStatus(c1, "logo-tee", "hidden", now)!;
   const re = upsertItem(hid, { pkg: pkg("logo-tee"), images: [], byEmail: null, nowIso: "2026-03-01T00:00:00.000Z" });
-  ok(re.ok && !re.created && re.catalog.items.length === 1 && re.catalog.items[0].status === "live" && re.catalog.items[0].publishedAt === now, "re-publish replaces, goes live, keeps first publish date");
+  ok(re.ok && !re.created && re.catalog.items.length === 1 && re.catalog.items[0].status === "hidden" && re.catalog.items[0].publishedAt === now && re.prev?.status === "hidden", "re-publish replaces, KEEPS Hidden (G-82), keeps first publish date");
+  const reLive = upsertItem(c1, { pkg: pkg("logo-tee"), images: [], byEmail: null, nowIso: "2026-03-01T00:00:00.000Z" });
+  ok(reLive.ok && reLive.catalog.items[0].status === "live", "re-publish of a live product stays live");
   const clash = upsertItem(c1, { pkg: pkg("logo-tee", "ds-other"), images: [], byEmail: null, nowIso: now });
   ok(!clash.ok, "a different design can't take an existing web address");
   ok(setItemStatus(c1, "nope", "hidden", now) === null && removeItem(c1, "nope") === null, "unknown handle -> null");
@@ -341,6 +364,16 @@ export function __runMerchInventoryTests(): { passed: number; failed: number; fa
   const vs = ap.catalog.items[0].pkg.variants;
   ok(ap.checked === 3 && ap.changed === 2 && vs[1].inStock === false && vs[2].inStock === true && ap.catalog.items[0].stockSyncedAt === now, "stock copied onto variants");
   ok(applyStock(c1, new Map(), now).catalog.items[0].stockSyncedAt === "", "nothing checked -> untouched");
+  const reSynced = upsertItem(ap.catalog, { pkg: pkg("logo-tee"), images: [], byEmail: null, nowIso: "2026-03-01T00:00:00.000Z" });
+  ok(reSynced.ok && reSynced.catalog.items[0].stockSyncedAt === now && reSynced.catalog.items[0].pkg.variants[1].inStock === false && reSynced.catalog.items[0].pkg.variants[2].inStock === true, "re-publish keeps the stock copy and its date (G-82)");
+  const pubPre = "https://p.example/storage/v1/object/public/media";
+  const withFiles = (n: string) => ({ ...pkg("logo-tee"), printFiles: [{ key: "front", fileType: "front", method: "dtg", filename: "f.png", dpi: 300, pxW: 1, pxH: 1, position: { area_width: 1, area_height: 1, width: 1, height: 1, top: 0, left: 0 }, url: `${pubPre}/merch-print/logo-tee/${n}/front.png` }] }) as ListingPackage;
+  const o1 = upsertItem(emptyCatalog(), { pkg: withFiles("aaaaaaaaaaaa"), images: [], byEmail: null, nowIso: now });
+  const o2 = o1.ok ? upsertItem(o1.catalog, { pkg: withFiles("bbbbbbbbbbbb"), images: [], byEmail: null, nowIso: now }) : o1;
+  ok(o2.ok && stalePrintKeys(o2.prev, o2.item, pubPre).join() === "merch-print/logo-tee/aaaaaaaaaaaa/front.png", "old nonce folder is stale after re-publish (G-93)");
+  ok(o1.ok && stalePrintKeys(o1.prev, o1.item, pubPre).length === 0, "first publish deletes nothing");
+  const o3 = o1.ok ? upsertItem(o1.catalog, { pkg: withFiles("aaaaaaaaaaaa"), images: [], byEmail: null, nowIso: now }) : o1;
+  ok(o3.ok && stalePrintKeys(o3.prev, o3.item, pubPre).length === 0, "a key still in use is kept");
 
   const sales = salesByVariant([
     { printfulStatus: "fulfilled", items: [{ variantId: 1, quantity: 2, retailCents: 3500, costCents: 1500 }, { variantId: null, quantity: 1, retailCents: 1, costCents: 1 }] },
