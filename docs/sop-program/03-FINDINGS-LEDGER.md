@@ -1056,6 +1056,111 @@ State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-
 
 ---
 
+## SOP-11 · Merch Studio, Merch Inventory & the greenwaymerch.com shop (verified at `main@d766e4a8`)
+
+Owner request D231 (2026-11-11). Live read-only probes the same day. External facts from the Printful and Stripe developer documents (SOP-11 Appendix A.3).
+
+### F-11-1 · CONFIRMED · BUG · S1 — The shop's catalog request is redirected to www and loses its token, so no published product can appear
+- **Pin:** `merch-site/lib/site.ts` L30 `MAIN_SITE_URL = "https://greenwaymarijuana.com"`; `merch-site/lib/catalog.ts` L23 (default feed URL), L34 (`Authorization: Bearer`), L38–44 (any non-OK → `lastGood`, which starts empty). Live: `GET https://greenwaymarijuana.com/api/merch-catalog` → **308 → https://www.greenwaymarijuana.com/api/merch-catalog**. A Node fetch drops `Authorization` on a cross-origin redirect (local proof). `src/app/api/merch-catalog/route.ts` L20–27 answers 404 without the token.
+- **Effect:** Publish succeeds and Merch Inventory shows the product Live, but greenwaymerch.com never lists it. Checkout and the webhook re-price from the same feed. `/api/merch-content` also redirects, but it is public, so it only costs an extra hop.
+- **SOP impact:** SOP-11 "one thing to know", §4.4.1 (`MERCH_CATALOG_URL` now required), §6.1, §9.4. **G-76** (owner can fix today with one variable).
+
+### F-11-2 · CONFIRMED · GAP · S2 — Designs and art live in one browser only, and the backup cannot be restored
+- **Pin:** `src/components/admin/merch-studio/merch-assets.ts` L6–9, L15–17 (IndexedDB `gw-merch-assets`, localStorage `gw-merch-designs-v1`); `DesignStudio.tsx` L563 (stale *"server-side designs arrive with the Greenway Goods website (Slice 5)"*); `PublishPanel.tsx` L235 (`loadDesigns()`), L270 (*"Some artwork isn't on this device"*). No JSON file input exists (`AddPanel.tsx` L65 and `ArtCheckPanel.tsx` L69 accept images only).
+- **Effect:** clearing the browser or changing computers loses every unpublished design. Publishing works only on the original computer.
+- **SOP impact:** SOP-11 §3, §4.6, §6.6. **G-79**.
+
+### F-11-3 · CONFIRMED · GAP · S2 — There is no in-app setup guide or step coach
+- **Pin:** the setup lives only in `docs/MERCH-SITE-FINISHING-GUIDE.md` (384 lines) and `merch-site/README.md`. The Studio helper (`page-helpers-core.ts` L323–341) describes the tabs and not the setup.
+- **Effect:** the owner: *"I am very confused on how to use the merch studio. I do not know how to properly set up my printful and stripe accounts."*
+- **SOP impact:** SOP-11 §4.2–§4.5 (interim walkthrough), Appendix B.5. **G-78**.
+
+### F-11-4 · CONFIRMED · GAP · S2 — Nothing monitors Printful, Stripe, Resend, the feed or checkout
+- **Pin:** `printfulConfigured()` only tests that the variable exists (`src/lib/merch-studio/printful-client.ts` L24–25). No merch check exists in `/admin/compliance/health` or `/admin/settings/platform-health`. `merch-site/vercel.json` has no crons. The Printful private token has an expiry date (Printful docs) that is recorded nowhere.
+- **Effect:** an expired token, a disabled Stripe webhook, a closed checkout or a broken feed (F-11-1) is found only when a sale fails, if at all.
+- **SOP impact:** SOP-11 §9.4, form 8.3, Appendix B.4. **G-77**, **G-80**.
+
+### F-11-5 · CONFIRMED · GAP · S2 — The back office cannot see Stripe
+- **Pin:** `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are read only in `merch-site/` (checkout `route.ts` L22, webhook L39–41). The main project has no Stripe variable.
+- **Effect:** held cards, webhook status and refunds can only be seen in the Stripe dashboard.
+- **SOP impact:** SOP-11 §4.19–§4.20. **G-80** (shop health endpoint), G-84, G-86.
+
+### F-11-6 · CONFIRMED · GAP · S2 — The sample step is not enforced
+- **Pin:** `fulfillment-core.ts` L83 (sample, who: Owner); `ProofPanel.tsx` L34, L90 (ticks in localStorage `gw-merch-sample-<id>`); `publishMerchListingAction` (`catalog-actions.ts` L59–97) has no sample check.
+- **Effect:** a design can go on sale before anyone has seen a printed garment.
+- **SOP impact:** SOP-11 §4.9 step 5, form 8.2. **G-81**.
+
+### F-11-7 · CONFIRMED · BUG · S2 — Re-publishing a hidden product makes it Live again
+- **Pin:** `src/lib/merch/merch-inventory-core.ts` L90–110: `upsertItem` sets `status: "live"` (L102) and `stockSyncedAt: ""` (L107) even when the previous item was hidden. The comment at L90 says so (*"puts it live again"*).
+- **Effect:** a product hidden on purpose (for example, out of stock or a recall of a design) returns to sale after a small text fix.
+- **SOP impact:** SOP-11 §4.12 warning, §6.7. **G-82**.
+
+### F-11-8 · CONFIRMED · GAP · S3 — Stock is copied by hand only
+- **Pin:** `src/app/admin/inventory/merch/actions.ts` L51–63 (button only); no cron; the Printful webhook types are the 4 order types only (`merch-site/app/api/printful/webhook/[token]/route.ts` L7–8).
+- **Effect:** the shop keeps selling a colour Printful has run out of until someone presses the button.
+- **SOP impact:** SOP-11 §4.15, form 8.3. **G-83**.
+
+### F-11-9 · CONFIRMED · WEAKNESS · S2 — Without Resend, owner alerts go only to the logs
+- **Pin:** `merch-site/lib/fulfillment.ts` L41–43 (no key or from → no email), L55–58 (`[merch-alert]` log, then email if configured).
+- **Effect:** *"needs you"* and *"Printful rejected"* alerts can go unseen while a card hold expires.
+- **SOP impact:** SOP-11 S-11, §4.21. **G-85**.
+
+### F-11-10 · CONFIRMED · GAP · S3 — Cancel does not refund
+- **Pin:** `src/app/admin/orders/merch/[ref]/page.tsx` L176–186 (*"This does not refund the customer: refund them in Stripe as well"*); `merch-actions.ts` L47 (Printful DELETE only).
+- **Effect:** the customer can stay charged for a cancelled order if the second step is forgotten.
+- **SOP impact:** SOP-11 §4.19, form 8.4. **G-86**.
+
+### F-11-11 · CONFIRMED · GAP · S2 — Held cards expire with no reminder
+- **Pin:** `merch-site/app/api/stripe/webhook/route.ts` L19–20, L90–95 (the authorization is left in place on a plan problem, *"Holds expire after about 7 days"*). Nothing tracks it.
+- **Effect:** after about 7 days the sale is lost and the customer is not served.
+- **SOP impact:** SOP-11 §4.20. **G-84**.
+
+### F-11-12 · CONFIRMED · WEAKNESS · S3 — Stale instructions in the screens and guides
+- **Pin:** `fulfillment-core.ts` L73–74, L84 (*"drop it in merch-site/catalog/"*); `FulfillmentPanel.tsx` L68 (*"(Slice 5). Enter an estimate for now"*); `DesignStudio.tsx` L563; `merch-assets.ts` L7; `merch-design-core.ts` L15; `merch-site/README.md` L45 (*"Adding a product (no code)"*); `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 (*"don't add"* `MERCH_CATALOG_URL`).
+- **Effect:** the screens describe features that were replaced or never built.
+- **SOP impact:** SOP-11 §4.1 note, §4.11, §4.4.1 correction. **G-91**.
+
+### F-11-13 · CONFIRMED · WEAKNESS · S3 — Price starts at $35; shipping is not compared with the real cost
+- **Pin:** `PublishPanel.tsx` L250 (`useState("35")`); `FulfillmentPanel.tsx` L68; `merch-site/lib/checkout-core.ts` L40 (flat shipping only).
+- **Effect:** under-priced listings and a shipping loss on every order are possible.
+- **SOP impact:** SOP-11 §4.11, §4.12 step 4. **G-87**.
+
+### F-11-14 · CONFIRMED · WEAKNESS · S4 — Seven placements are estimates
+- **Pin:** `src/lib/merch-studio/garment-catalog-core.ts`: 7 × `dimsSource: "studio-default"` (e.g. L151, L195, L214, L225–226).
+- **SOP impact:** SOP-11 §4.7 step 3. **G-92** (Q-11-6).
+
+### F-11-15 · CONFIRMED · WEAKNESS · S4 — Old print files stay after a re-publish
+- **Pin:** `src/app/admin/merch-studio/catalog-actions.ts` L6–7, L50 (a new `<nonce>` folder each time); Remove deletes only the current set (`inventory/merch/actions.ts` L42–45).
+- **SOP impact:** SOP-11 §4.12. **G-93**.
+
+### F-11-16 · CONFIRMED · WEAKNESS · S3 — Catalog writes have no version check
+- **Pin:** `src/lib/merch/merch-inventory-store.ts` (read → change → write the whole list; no compare-and-set).
+- **SOP impact:** SOP-11 §4.14 (one person at a time). **G-88**.
+
+### F-11-17 · CONFIRMED · GAP · S3 — Too little help
+- **Pin:** `src/app/admin/inventory/merch/page.tsx` L56 and `src/app/admin/reports/merch/page.tsx` have no `helpId`. `concierge-kb.ts` has 2 merch facts (L194, L200). `integration-guides.ts` L30–97 has no Printful, Stripe or Resend guide.
+- **SOP impact:** SOP-11 §4.13, §4.23. **G-90**.
+
+### F-11-18 · CONFIRMED · WEAKNESS · S3 — The Printful webhook is registered by hand and nothing checks it
+- **Pin:** `docs/MERCH-SITE-FINISHING-GUIDE.md` §6.3 (curl). Printful docs: registering *"disables all existing webhook configuration."* The route lists the types at L7–8.
+- **SOP impact:** SOP-11 S-10. **G-89**.
+
+### F-11-C · CONFIRMED · STRENGTH — What already works well
+- **Pin:**
+  - fail-closed Printful and checkout (`printful-client.ts` L9–10, L30; `checkout-core.ts` L133–134);
+  - Washington only with a free cancel (`checkout-core.ts` L85; webhook L74–104);
+  - fresh server re-pricing (`checkout/route.ts` L33; webhook L90);
+  - idempotency keys and `update_existing` (webhook L75, L104, L113);
+  - a hidden constant-time feed (`merch-catalog/route.ts` L20–31) and the last-good fallback;
+  - a human Confirm by default;
+  - audits on every change;
+  - owner/admin Remove with a typed confirmation;
+  - verified PNG print files (`catalog-actions.ts` L70–75);
+  - the ad's price and product-detail guard (`merch-ad-core.ts` L211+), checked again on the server (`ad-actions.ts` L36–38).
+- **SOP impact:** SOP-11 §7.
+
+---
+
 ## Ledger index (updated each slice)
 
 | SOP slice | Findings | Confirmed | Suspected |
@@ -1070,6 +1175,7 @@ State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-
 | SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
 | SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4. **R-RET:** +F-15-22 (S1, FIXED), +F-15-23 (S2, FIXED) → 24. **Fix Phase 7.1:** F-15-8, F-15-10, F-15-13, F-15-17, F-15-18 FIXED | 24 | 0 |
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
+| SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 

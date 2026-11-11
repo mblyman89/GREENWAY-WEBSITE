@@ -2784,3 +2784,33 @@ What was done:
   - 83 related test files pass (2,231 tests).
   - Pure self-tests pass, and eslint is clean on every changed file.
 - Owner step after deploy: apply **0357** (D228, if not already applied), then **0358**, then **0359**.
+
+## D231 — SOP-11 (first half): Merch Studio, Merch Inventory and the greenwaymerch.com setup (2026-11-11)
+
+### Owner request (verbatim)
+
+> thank you. I would like to now work on SOP #11, The Creative Studio & Merch Studio (banners, ads, garment graphics). I want you to first focus your attention entirely on the merch studio and merch inventory. I am very confused on how to use the merch studio. I do not know how to properly set up my printful and stripe accounts. I think the page and its tabs are fine, but it needs significantly more helpers and walk throughs and other hand holding types of features to make certain we use the feature properly. so this sop is meant to deep audit the whole merch studio and merch inventory branch so you can document everything for the sop as well as for making targeted enhancements and hardening. we should add as much help in this branch as possible. if there is a way to incorporate a step type feature, a move along type helper. first step, do this, done great, step two do this, good job its done, next step.... we need a printful store and stripe health maybe so we know when things break or go offline. strategize from your documentation and auditing how you plan on improving the whole process so it is supremely helpful. no code edits, just deep recon, audit, report, document, strategize, summarize. let me know what you find and your plan. write the full sop and add it to the repo and back office as a living doc, we will update it as we build from your roadmap strategy report. make sure you go slow and are meticulous with recon and reporting and documenting. leave no stone un turned. I want it to be very thorough. follow the standing rules. thank you.
+
+### Findings (read-only)
+
+- Read-only recon of every Merch Studio tab, the publish path, Merch Inventory, merch orders, Reports → Merch, the five Website → Merchandise editors, both feeds, and the whole `merch-site/` app (checkout, Stripe webhook, Printful webhook, order desk). Also read: the env usage in both projects, the finishing guide, the helpers, the concierge and the health patterns.
+- Live probes on 2026-11-11:
+  - checkout and the Stripe webhook answer **503**, so Stripe and/or the shipping settings are not set;
+  - `https://greenwaymarijuana.com/api/merch-catalog` **308-redirects to www**. A cross-origin redirect drops the `Authorization` header (proven locally), so the shop's feed request reaches the back office without Token A and gets 404. **No published product can appear on the shop (F-11-1, S1).**
+- 18 findings (F-11-1 … F-11-18 + F-11-C) and 18 gaps (G-76 … G-93).
+
+### Decisions
+
+- **SOP writing resumes** (it was paused by D75) for SOP-11 only. Merch first, as the owner asked; the Creative Studio becomes SOP-11 v2.0.
+- **No feature code changed.** Only `docs/sop/SOP-11-merch-studio-merch-inventory.md`, its catalog entry (with a new **Marketing & Merch** shelf in `src/lib/sop-library/catalog-core.ts`, metadata only) and the program docs changed.
+- **Owner action today (no code):**
+  1. Merch project → add `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` (and `MERCH_CONTENT_URL` = `https://www.greenwaymarijuana.com/api/merch-content`) → redeploy.
+  2. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `MERCH_SHIP_FLAT_CENTS`.
+  3. Register the Printful webhook (SOP-11 S-10).
+  4. Write down the Printful token's expiry date (form 8.1).
+- The roadmap M-1 … M-8 (06 plan) is **PROPOSED**, waiting for the owner's go-ahead and answers Q-11-1 … Q-11-9.
+
+### As built
+
+- `docs/sop/SOP-11-merch-studio-merch-inventory.md` v1.0: a setup walkthrough S-1 … S-12 with a "you know it worked when" check per step; tokens A/B/C; both Vercel variable tables checked against the code; the first test order; every tab; inventory; orders, cancel and refund, and the 7-day holds; editors, reports and the ad; messages; troubleshooting; forms 8.1–8.4; a live status snapshot; findings, gaps, the Merch Health design (H-1 … H-19), the step coach design and the build order.
+- SOP Library: a new **Marketing & Merch** shelf with the SOP-11 entry (`tests/compliance/sop-library.test.ts` green).

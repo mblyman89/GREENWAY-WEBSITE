@@ -100,6 +100,21 @@ Each phase is a set of slices. Each slice follows the standing rules: commit →
 | 6.2 | One-step offboarding (D71) | G-54 | 0.3, 6.1 |
 | 6.3 | Checklist ↔ tracker in step; rehire periods; housekeeping | G-55, G-56, G-58 | 6.1 |
 
+### Phase M — Merch Studio, Merch Inventory and greenwaymerch.com (SOP-11, D231) · PROPOSED
+
+The owner asked for hand-holding and health first (*"first step, do this, done great, step two…"*; *"a printful store and stripe health"*). M-1 is a one-line owner setting today plus a small code fix. M-2 makes breakage visible. M-3 builds the coach on top of the health checks, so steps tick themselves green.
+
+| Order | Fix | Finding (03) | Gap | Depends on |
+|---|---|---|---|---|
+| M-1 | Feed address fix (www + `redirect: manual` + self-test); stale copy; README and guide corrections | F-11-1, F-11-12 | G-76, G-91 | owner sets `MERCH_CATALOG_URL` today |
+| M-2 | Shop `/api/health` (own token) + Merch Health panel + daily cron + change emails (H-1 … H-19) | F-11-4, F-11-5 | G-80, G-77 | M-1 |
+| M-3 | Setup & Launch coach (S-1 … S-12 + test order), Product journey stepper, per-tab next-step strips, printable form 8.1 | F-11-3 | G-78 | M-2 |
+| M-4 | Designs on the server + import; sample gate | F-11-2, F-11-6 | G-79, G-81 | migration; Q-11-2 |
+| M-5 | Re-publish keeps Hidden; catalog compare-and-set; old print-file cleanup | F-11-7, F-11-16, F-11-15 | G-82, G-88, G-93 | — |
+| M-6 | Printful webhook button; automatic stock (cron, then `stock_updated`) | F-11-18, F-11-8 | G-89, G-83 | M-2 |
+| M-7 | Held-card monitor; alerts inbox; cancel-and-refund guidance or action | F-11-11, F-11-9, F-11-10 | G-84, G-85, G-86 | M-2; Q-11-4 |
+| M-8 | Pricing guard; helpers, integration guides, concierge; studio-default placements | F-11-13, F-11-17, F-11-14 | G-87, G-90, G-92 | Q-11-6, Q-11-8 |
+
 ### Phase 7 — Remaining S3/S4, then the next audits
 
 1. Readable errors, disposition housekeeping, destruction hold text, removal of the back-office customer-return wizard (G-46, G-49, G-50, G-45) — **BUILT as 7.1** (owner message 16) — plus the remaining S3/S4 findings in 03.

@@ -100,6 +100,24 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-71 | **Platform-change early warning** (Supabase, Vercel, Next.js): vendor changelog watch, daily grants/health check, production smoke test of the money paths, pre-deadline review | D101 (owner message 11), D102–D104 (owner message 12) | F-15-22 | — | **BUILT**: G-71a daily DB health check BUILT; G-71b platform register + monthly review + rules 15/16 BUILT; G-71c money-path smoke test BUILT; G-71d error alerting BUILT; G-71e locked versions + upgrade PRs + Node 24 BUILT (owner message 14) |
 | G-72 | **Return a sale line one unit at a time; plain-English return and database errors**: refund limit = smaller of what was paid for the units coming back and what is still unrefunded on the line (cannabis and Other Inventory); messages say what happened and what to do | D105–D107 (owner message 13) | F-15-24 | SOP-15 §5.1, SOP-01 §4.23 | **BUILT** (R-RET-2) |
 | G-74 | **Upgrades the old way, no Dependabot**: `.github/dependabot.yml` removed; `scripts/platform/upgrade-plan.ts` lists patch/minor (7-day wait), majors, held majors, lockstep groups and deprecated pins; upgrades are Greenway Dev PRs through the full gate | D115, D116 (owner message 16: *"Can we go back to the old way of merging pr’s?"*) | — | Standing rule 17 | **BUILT** (G-74) |
+| G-76 | **Merch catalog feed reaches the back office again**: owner sets `MERCH_CATALOG_URL` (and `MERCH_CONTENT_URL`) to www now; the code moves `MAIN_SITE_URL` to www and fetches with `redirect: "manual"` so a redirect is reported, never followed without the token | D231 | F-11-1 | SOP-11 §4.4.1, §6.1 | OPEN · PROPOSED M-1 |
+| G-77 | **Merch Health panel and daily check** (Printful token, scopes, expiry, store, webhook, status page; catalog round-trip and redirect; Stripe key and webhook endpoint, checkout open, Tax; email; held cards; drafts waiting; stock age; bucket; auto-confirm), with Run now, a cron and change emails | D231 | F-11-4 | SOP-11 §9.4, form 8.3 | OPEN · PROPOSED M-2 |
+| G-78 | **Setup & Launch step coach** + Product journey stepper + per-tab "next step" strips + printable form 8.1 | D231 | F-11-3 | SOP-11 §4.2–§4.5 | OPEN · PROPOSED M-3 |
+| G-79 | **Designs saved on the server** (drafts table, art in `merch-files`), any computer, import `.json`/`.zip` | D231 | F-11-2 | SOP-11 §4.6, §6.6 | OPEN · PROPOSED M-4 |
+| G-80 | **Shop health endpoint** (`greenwaymerch.com/api/health`, its own token): Stripe mode, webhook endpoint, checkout reason, email configured, feed fetch result, held cards | D231 | F-11-5, F-11-4 | Stripe dashboard (SOP-11 §4.19–§4.20) | OPEN · PROPOSED M-2 |
+| G-81 | **Sample gate**: approval on the server per design; Publish blocked until approved; owner override with reason | D231 | F-11-6 | SOP-11 §4.9, form 8.2 | OPEN · PROPOSED M-4 |
+| G-82 | **Re-publish keeps Hidden** and the stock-sync time (or syncs at once) | D231 | F-11-7 | SOP-11 §4.12, §6.7 | OPEN · PROPOSED M-5 |
+| G-83 | **Automatic stock copy** (cron every 6 h; later the `stock_updated` webhook) | D231 | F-11-8 | SOP-11 §4.15 daily | OPEN · PROPOSED M-6 |
+| G-84 | **Held-card monitor**: uncaptured > 3 days emailed at day 3 and 5, with capture/cancel coaching | D231 | F-11-11 | SOP-11 §4.20 | OPEN · PROPOSED M-7 |
+| G-85 | **Merch alerts inbox** in the back office (the shop posts alerts; acknowledge) | D231 | F-11-9 | SOP-11 §4.21 weekly log search | OPEN · PROPOSED M-7 |
+| G-86 | **Cancel and refund in one guided step** | D231 | F-11-10 | SOP-11 §4.19, form 8.4 | OPEN · PROPOSED M-7 (Q-11-4) |
+| G-87 | **Pricing guard** (no fixed $35; shipping gap; minimum margin warning) | D231 | F-11-13 | SOP-11 §4.11, form 8.2 D | OPEN · PROPOSED M-8 |
+| G-88 | **Catalog version check** (compare-and-set) | D231 | F-11-16 | SOP-11 §4.14 one at a time | OPEN · PROPOSED M-5 |
+| G-89 | **Register the Printful webhook from the app** (reads `GET /webhooks` first, all types, audited, checked daily) | D231 | F-11-18 | SOP-11 S-10 | OPEN · PROPOSED M-6 |
+| G-90 | **Help everywhere**: helpers for Merch Inventory and Reports → Merch; Printful, Stripe and Resend integration guides; concierge topics (04) | D231 | F-11-17 | SOP-11 itself | OPEN · PROPOSED M-8 |
+| G-91 | **Stale copy cleanup** (Slice 5 texts, catalog-folder step, README, finishing guide §3.1) | D231 | F-11-12 | SOP-11 §4.1 note, §4.4.1 | OPEN · PROPOSED M-1 |
+| G-92 | **Confirm the 7 studio-default placements** | D231 | F-11-14 | SOP-11 §4.7 step 3 | OPEN · PROPOSED M-8 (Q-11-6) |
+| G-93 | **Delete the previous print files on re-publish** | D231 | F-11-15 | none needed | OPEN · PROPOSED M-5 |
 
 ---
 
@@ -962,6 +980,18 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Built:** `src/lib/customers/customer-search-core.ts` (pure, 69 self-tests): reads what was typed (phone in any format, 11 digits with a leading 1, email, up to 5 words), builds one database filter where every word must match first name, last name, email, phone digits or Customer ID, ranks best match first (whole name, starts-with, then most recent buyer and biggest spender), combines spend here + old POS spend and the later last purchase (`customerFigures`), and builds the register line (full name, last 4 phone digits, last purchase, total spent, medical, Customer ID). `searchCustomers` in `store.ts` is used by the register, the back-office list ("Best match" sort), and every picker through `listCustomers`; when nothing matches it asks `customer_search_fuzzy` for the closest spellings. Register: searches 350 ms after typing stops, 25 results, scrollable, stale answers ignored, a note when there are more or when the results are closest spellings; one batched loyalty read instead of one per hit. Back office: **Total spent** (with the Greenway / old POS split) and **Last purchase** (marked "old POS") columns, Customer ID shown, new sorts (old POS spend, old POS last purchase, last name). Profile: Total spent (all time), Last purchase, Customer ID, Customer since, Tax designation badge, and an old-POS record line. Import: Date Created → `imported_created_at`, Tax Designations → `tax_designations` (78 import self-tests); before 0335 the writer drops only those two and saves everything else. Tests `tests/compliance/g75-customer-search.test.ts` (16).
 - **Migration 0335** (`0335_customer_search.sql`): the two columns, `pg_trgm` and four trigram indexes, and `customer_search_fuzzy` (service_role only). Checked on Postgres 15 with all 335 migrations, applied twice; PG check `scripts/recon/customer-search-0335-pg-check.sql`. Against the owner's 15,149 real names (local copy only), "bil mclendon" → bill mcclendon (0.65), "mclendon bill" → 0.81, "jonh smith" → John / Jonah Smith, about 150 ms each.
 - **Owner action:** run 0335, then drop the same customer file on **Customers → Import customers** again (updates by Customer ID, no duplicates) to fill in Customer since and Tax designation. The register search works from the merge for web registers; the iPad app gets the new result layout when it next loads the register.
+
+## G-76 … G-93 · Merch Studio, Merch Inventory and greenwaymerch.com (OPEN, owner message D231) — S1 (G-76), S2–S4
+
+- **Owner basis:** *"it needs significantly more helpers and walk throughs and other hand holding types of features… if there is a way to incorporate a step type feature, a move along type helper. first step, do this, done great, step two do this, good job its done, next step.... we need a printful store and stripe health maybe so we know when things break or go offline."*
+- **Why:** F-11-1 … F-11-18. The S1 is F-11-1: the shop's feed request is redirected to www and loses Token A, so no published product can appear.
+- **Built:** nothing yet (recon only). The full design is in SOP-11 Appendix B: B.4 Merch Health checks H-1 … H-19, B.5 the step coach, B.6 the build order M-1 … M-8.
+- **Owner action now:**
+  1. Merch project → `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` (and `MERCH_CONTENT_URL`) → redeploy.
+  2. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `MERCH_SHIP_FLAT_CENTS`.
+  3. Register the Printful webhook (S-10).
+  4. Record the Printful token expiry.
+  5. Answer Q-11-1 … Q-11-9.
 
 ## R-DRAWER-1 · Open the cash drawer with or without a printed receipt (BUILT, owner request, R-DRAWER-1a–e) — S3
 - **Owner basis:** *"i want to build a setting in the register activity page of the back office that gives me the option of popping the cash drawer with a receipt or with out the receipt printed. most of my customers do not want a receipt and this new method should make for a more efficient process."*
