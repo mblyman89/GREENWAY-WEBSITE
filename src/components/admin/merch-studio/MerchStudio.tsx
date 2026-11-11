@@ -13,6 +13,7 @@ import { FulfillmentPanel } from "./FulfillmentPanel";
 import { DesignStudio } from "./DesignStudio";
 import { ProofPanel } from "./ProofPanel";
 import { PublishPanel, type MerchAdBlockVM } from "./PublishPanel";
+import { JourneyBar, type JourneyServer } from "./JourneyBar";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { STUDIO_TABS, type StudioTab } from "@/lib/merch-studio/studio-tabs-core";
 
@@ -20,12 +21,14 @@ import { STUDIO_TABS, type StudioTab } from "@/lib/merch-studio/studio-tabs-core
 const TABS = STUDIO_TABS;
 const SEL_KEY = "gw-merch-studio-sel";
 
-export function MerchStudio({ extraTabs = [], initialTab, publish }: {
+export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
   extraTabs?: { id: string; label: string; render: (sel: { blankId: string; colorHex: string; setBlank: (id: string) => void; setColor: (hex: string) => void }) => ReactNode }[];
   /** From ?tab= (server-validated). Wins over the tab remembered on this device. */
   initialTab?: StudioTab;
   /** R71 S4: the merch.ad block + media picker choices for Publish & Ads. */
   publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean };
+  /** D232 M-3b: catalog + last Merch Health facts for the Product journey stepper. */
+  journey?: JourneyServer;
 }) {
   const [tab, setTab] = useState<string>(initialTab ?? "garments");
   const [blankId, setBlankId] = useState(BLANKS[0].id);
@@ -80,6 +83,8 @@ export function MerchStudio({ extraTabs = [], initialTab, publish }: {
           {blank.brand} {blank.model} - {colorName}
         </span>
       </div>
+      {/* D232 M-3b: Product journey + tab coaching strip. Mounts after the restore and re-reads this browser's drafts on every tab change. */}
+      {restored && journey ? <JourneyBar key={tab} tab={tab} server={journey} onTab={setTab} /> : null}
       <div role="tabpanel">
         {tab === "garments" ? <CatalogPanel blankId={blankId} colorHex={colorHex} onBlank={setBlank} onColor={(hex) => setColorHex(hex)} /> : null}
         {/* Design only mounts client-side after the selection restore (tab starts on Garments for SSR), so its localStorage boot is hydration-safe. */}

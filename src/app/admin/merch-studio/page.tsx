@@ -10,6 +10,7 @@ import { getContentBlock, ensureContentBlocksSeeded } from "@/lib/cms/content-st
 import { listMedia } from "@/lib/media/store";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { MERCH_AD_BLOCK } from "@/lib/merch/merch-ad-core";
+import type { JourneyServer } from "@/components/admin/merch-studio/JourneyBar";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,25 @@ async function loadPublishData() {
   return { adBlock: { draft: block?.draft_value ?? null, published: block?.published_value ?? null, status: block?.status ?? "draft", available: !!block }, mediaChoices };
 }
 
+/** D232 M-3b: what the Product journey needs from the server (one catalog read + the last saved health run, no live calls). */
+async function loadJourney(): Promise<JourneyServer> {
+  const [{ readMerchCatalog }, { latestMerchHealthReport }] = await Promise.all([
+    import("@/lib/merch/merch-inventory-store"),
+    import("@/lib/merch/merch-health-server"),
+  ]);
+  const [cat, report] = await Promise.all([readMerchCatalog().catch(() => null), latestMerchHealthReport().catch(() => null)]);
+  const published = (cat?.catalog.items ?? []).map((i) => ({
+    designId: i.pkg.designId,
+    handle: i.handle,
+    status: i.status,
+    images: i.images.length,
+    stockSyncedAt: i.stockSyncedAt,
+    minRetailCents: i.pkg.variants.length ? Math.min(...i.pkg.variants.map((v) => v.retailCents)) : 0,
+  }));
+  const h7 = report?.report?.checks.find((c) => c.id === "H-7")?.level;
+  return { published, shopOk: h7 === "ok" ? true : h7 === "fail" || h7 === "warn" ? false : null };
+}
+
 export default async function MerchStudioPage({ searchParams }: { searchParams: Promise<{ tab?: string; saved?: string; published?: string; warning_error?: string }> }) {
   const session = await requirePermission("content.edit");
   const sp = await searchParams;
@@ -59,6 +79,7 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
   // (no live calls here, so the Studio stays fast). Owner & admin only.
   const isOwnerAdmin = can(session.profile.role, "settings.manage");
   const setup = isOwnerAdmin ? await loadSetupBanner() : null;
+  const journey = await loadJourney().catch((): JourneyServer => ({ published: [], shopOk: null }));
   const flash = sp.warning_error ? { tone: "bad" as const, text: String(sp.warning_error).slice(0, 300) } : sp.published ? { tone: "ok" as const, text: "Published - the Greenway Goods ad on the website now matches this." } : sp.saved ? { tone: "ok" as const, text: "Draft saved. Nothing changed on the website yet." } : null;
   return (
     <div>
@@ -94,7 +115,7 @@ export default async function MerchStudioPage({ searchParams }: { searchParams: 
       {flash ? (
         <p role="status" className={`mb-4 rounded-[var(--admin-radius)] border p-3 text-sm ${flash.tone === "ok" ? "border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 text-white/90" : "border-[var(--admin-danger)]/60 bg-[var(--admin-danger)]/10 text-white/90"}`}>{flash.text}</p>
       ) : null}
-      <MerchStudio initialTab={initialTab ?? (sp.saved || sp.published || sp.warning_error ? "publish" : undefined)} publish={publish} />
+      <MerchStudio initialTab={initialTab ?? (sp.saved || sp.published || sp.warning_error ? "publish" : undefined)} publish={publish} journey={journey} />
     </div>
   );
 }

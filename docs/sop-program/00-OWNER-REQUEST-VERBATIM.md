@@ -2859,3 +2859,10 @@ What was done:
 - **Form 8.1** printable at `/admin/merch-studio/launch/record`.
 - Ticks and notes audited. Test: `tests/compliance/d232-merch-m3a-launch.test.ts`. SOP-11 v1.3.
 - **Owner steps:** open Merch Studio → Setup & Launch and work down the cards; print the record at the end.
+
+### As built (slice M-3b)
+
+- **Product journey** above the Merch Studio tabs: Garment → Design (n ⛔) → Print files → Mockups → Sample approved → Price → Publish → On the shop → Stock synced, with a **Next step** line naming the one thing to do. Pills open their tab. Rules: `src/lib/merch-studio/merch-journey-core.ts`.
+- **Tab strips:** *"You are here / Do this / Then →"* on every tab.
+- Test: `tests/compliance/d232-merch-m3b-journey.test.ts`. SOP-11 v1.4.
+- **Owner steps:** none.
