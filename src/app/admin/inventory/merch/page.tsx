@@ -36,7 +36,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
   // Phase 4 (G-30A): only owner/admin see "Remove..." (the action re-checks).
   const canRemove = can(session.profile.role, "merch.remove");
   const sp = await searchParams;
-  const { catalog, readError } = await withRenderBudget(readMerchCatalog(), { catalog: emptyCatalog(), readError: "The catalog read timed out." }, "merch-inventory catalog");
+  const { catalog, readError } = await withRenderBudget(readMerchCatalog(), { catalog: emptyCatalog(), readError: "The catalog read timed out.", updatedAt: null }, "merch-inventory catalog");
   const ids = catalog.items.map((i) => i.pkg.product.blank.printfulProductId);
   const [stock, board] = await Promise.all([
     withRenderBudget(loadPrintfulStock(ids), { map: new Map<number, StockStatus>(), problem: "Printful stock check timed out." }, "merch-inventory stock"),
