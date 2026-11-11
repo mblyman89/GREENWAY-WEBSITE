@@ -136,7 +136,7 @@ Where to add them: merch project → **Settings** → **Environment Variables**.
 | 19 | `MERCH_ADMIN_KEY` | yes | **Token B** from Part 1 |
 | 20 | `MERCH_CATALOG_TOKEN` | yes | **Token A** from Part 1, the **same** value as in the main project |
 | 21 | `MERCH_PRINTFUL_AUTO_CONFIRM` | leave OFF for now | `true` sends paid orders straight to production with no review. Leave it unset until you've watched several orders go through. |
-| — | `MERCH_CATALOG_URL`, `MERCH_CONTENT_URL` | **don't add** | only for testing against a preview back office |
+| — | `MERCH_CATALOG_URL`, `MERCH_CONTENT_URL` | optional (D232) | Before the D232 code fix ships, **add** `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` (with www): the old default had no www, the main site redirects it, and the redirect drops Token A, so no product shows (SOP-11 F-11-1). After D232 the default is www and you may delete it. |
 
 ### 3.2 Main project (greenwaymarijuana.com, `greenway_website`)
 

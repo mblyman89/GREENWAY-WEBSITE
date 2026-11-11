@@ -40,11 +40,11 @@ const btn = "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs font-bold disa
 
 export interface MerchAdBlockVM { draft: string | null; published: string | null; status: string; available: boolean }
 
-export function PublishPanel({ adBlock, mediaChoices }: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[] }) {
+export function PublishPanel({ adBlock, mediaChoices, canPublish = false }: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean }) {
   return (
     <div className="space-y-8">
       <AdEditor adBlock={adBlock} mediaChoices={mediaChoices} />
-      <ListingBuilder mediaChoices={mediaChoices} />
+      <ListingBuilder mediaChoices={mediaChoices} canPublish={canPublish} />
     </div>
   );
 }
@@ -230,7 +230,7 @@ function AdIssues({ issues }: { issues: ReturnType<typeof merchAdIssues> }) {
 // ---------------------------------------------------------------------------
 const toCents = (s: string) => { const n = Number.parseFloat(s.replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
 
-function ListingBuilder({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
+function ListingBuilder({ mediaChoices, canPublish }: { mediaChoices: MediaChoice[]; canPublish: boolean }) {
   // This panel only mounts client-side after MerchStudio's restore, so reading localStorage in the initializer is hydration-safe (same as ProofPanel).
   const [designs] = useState<MerchDesign[]>(() => loadDesigns());
   const [designId, setDesignId] = useState(designs[0]?.id ?? "");
@@ -380,9 +380,10 @@ function ListingBuilder({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!pkg || blocked || !!busy} onClick={publishToSite}>
+            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!canPublish || !pkg || blocked || !!busy} onClick={publishToSite} title={canPublish ? undefined : "Only the owner or an admin can publish to greenwaymerch.com"}>
               Publish to greenwaymerch.com
             </button>
+            {!canPublish ? <span className="text-xs text-white/70">Only the owner or an admin can publish (it puts the product on sale). Download the listing package below and send it to them.</span> : null}
             {busy ? <span className="text-xs text-white/70">{busy}</span> : null}
             {pubMsg ? <span className={`text-xs ${pubMsg.tone === "ok" ? "text-[var(--admin-accent)]" : "text-[var(--admin-danger)]"}`}>{pubMsg.text}{pubMsg.tone === "ok" ? <> <Link className="underline" href="/admin/inventory/merch">Open Merch Inventory</Link></> : null}</span> : null}
           </div>

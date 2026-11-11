@@ -89,6 +89,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **WRITTEN, merch half (slice SOP-11, v1.0, verified at `d766e4a8`, D231):** `docs/sop/SOP-11-merch-studio-merch-inventory.md`. It covers the Merch Studio (6 tabs), Merch Inventory, merch orders, Reports → Merch, the Website → Merchandise editors, the `merch-site/` shop, and the owner setup of Printful, Stripe, Resend and Vercel. 18 findings (F-11-1 S1: the catalog feed redirect drops the token), gaps G-76 … G-93, and plan M-1 … M-8 (PROPOSED). The Creative Studio (`/admin/marketing/**`) follows as SOP-11 v2.0.
 
+**v1.1 (D232, #PM1X):** owner answers Q-11-1 … Q-11-9 recorded; the roadmap is approved; slice **M-1** built (www feed, redirect reported, `merch.publish` owner/admin, stale copy).
+
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
 **Code (≈28.7k lines):** `/admin/media/**`, `src/lib/media/*` (upload policy, folders, optimize), `/admin/content/*`, `src/lib/cms/*`, the content-schedule cron.

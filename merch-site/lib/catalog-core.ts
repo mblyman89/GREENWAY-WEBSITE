@@ -3,9 +3,9 @@
  *
  * The merch site is a SEPARATE Next.js app (Vercel project root = merch-site/)
  * run by Greenway Merchandising LLC (dba Greenway Glass & Goods). It has no
- * database. Products are the "listing package" JSON files the owner downloads
- * from the cannabis back office's Merch Studio (Publish & Ads tab) and drops
- * into merch-site/catalog/. This module turns those files into storefront
+ * database. Products are "listing packages" published from the back office's
+ * Merch Studio (Publish & Ads tab, read through lib/catalog.ts), plus any
+ * backup JSON files committed in merch-site/catalog/. This module turns those files into storefront
  * products, and prices carts SERVER-SIDE (the browser never sets a price).
  *
  * Owner direction (R72, verbatim): "We only need the one shop page with all

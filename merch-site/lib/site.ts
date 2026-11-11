@@ -26,5 +26,10 @@ export const contact = () => ({
   address: env("NEXT_PUBLIC_MERCH_BUSINESS_ADDRESS"),
 });
 
-/** Where the "Back to Greenway" link goes (the owner's main site). */
-export const MAIN_SITE_URL = "https://greenwaymarijuana.com";
+/**
+ * Where the "Back to Greenway" link goes (the owner's main site), and the
+ * base of the server-to-server feeds. D232 M-1 (F-11-1): the www address,
+ * because the bare domain 308-redirects there and a redirect drops the feed
+ * token. See lib/feed-core.ts.
+ */
+export { MAIN_SITE_ORIGIN as MAIN_SITE_URL } from "./feed-core";

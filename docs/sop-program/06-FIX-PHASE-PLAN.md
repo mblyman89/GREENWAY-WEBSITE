@@ -100,13 +100,13 @@ Each phase is a set of slices. Each slice follows the standing rules: commit →
 | 6.2 | One-step offboarding (D71) | G-54 | 0.3, 6.1 |
 | 6.3 | Checklist ↔ tracker in step; rehire periods; housekeeping | G-55, G-56, G-58 | 6.1 |
 
-### Phase M — Merch Studio, Merch Inventory and greenwaymerch.com (SOP-11, D231) · PROPOSED
+### Phase M — Merch Studio, Merch Inventory and greenwaymerch.com (SOP-11, D231) · APPROVED (D232: "build all things")
 
 The owner asked for hand-holding and health first (*"first step, do this, done great, step two…"*; *"a printful store and stripe health"*). M-1 is a one-line owner setting today plus a small code fix. M-2 makes breakage visible. M-3 builds the coach on top of the health checks, so steps tick themselves green.
 
 | Order | Fix | Finding (03) | Gap | Depends on |
 |---|---|---|---|---|
-| M-1 | Feed address fix (www + `redirect: manual` + self-test); stale copy; README and guide corrections | F-11-1, F-11-12 | G-76, G-91 | owner sets `MERCH_CATALOG_URL` today |
+| M-1 | Feed address fix (www + `redirect: manual` + self-test); stale copy; README and guide corrections; `merch.publish` owner/admin (Q-11-1) — **BUILT (D232)** | F-11-1, F-11-12 | G-76, G-91 | — |
 | M-2 | Shop `/api/health` (own token) + Merch Health panel + daily cron + change emails (H-1 … H-19) | F-11-4, F-11-5 | G-80, G-77 | M-1 |
 | M-3 | Setup & Launch coach (S-1 … S-12 + test order), Product journey stepper, per-tab next-step strips, printable form 8.1 | F-11-3 | G-78 | M-2 |
 | M-4 | Designs on the server + import; sample gate | F-11-2, F-11-6 | G-79, G-81 | migration; Q-11-2 |

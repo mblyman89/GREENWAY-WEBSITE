@@ -100,7 +100,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-71 | **Platform-change early warning** (Supabase, Vercel, Next.js): vendor changelog watch, daily grants/health check, production smoke test of the money paths, pre-deadline review | D101 (owner message 11), D102–D104 (owner message 12) | F-15-22 | — | **BUILT**: G-71a daily DB health check BUILT; G-71b platform register + monthly review + rules 15/16 BUILT; G-71c money-path smoke test BUILT; G-71d error alerting BUILT; G-71e locked versions + upgrade PRs + Node 24 BUILT (owner message 14) |
 | G-72 | **Return a sale line one unit at a time; plain-English return and database errors**: refund limit = smaller of what was paid for the units coming back and what is still unrefunded on the line (cannabis and Other Inventory); messages say what happened and what to do | D105–D107 (owner message 13) | F-15-24 | SOP-15 §5.1, SOP-01 §4.23 | **BUILT** (R-RET-2) |
 | G-74 | **Upgrades the old way, no Dependabot**: `.github/dependabot.yml` removed; `scripts/platform/upgrade-plan.ts` lists patch/minor (7-day wait), majors, held majors, lockstep groups and deprecated pins; upgrades are Greenway Dev PRs through the full gate | D115, D116 (owner message 16: *"Can we go back to the old way of merging pr’s?"*) | — | Standing rule 17 | **BUILT** (G-74) |
-| G-76 | **Merch catalog feed reaches the back office again**: owner sets `MERCH_CATALOG_URL` (and `MERCH_CONTENT_URL`) to www now; the code moves `MAIN_SITE_URL` to www and fetches with `redirect: "manual"` so a redirect is reported, never followed without the token | D231 | F-11-1 | SOP-11 §4.4.1, §6.1 | OPEN · PROPOSED M-1 |
+| G-76 | **Merch catalog feed reaches the back office again**: owner sets `MERCH_CATALOG_URL` (and `MERCH_CONTENT_URL`) to www now; the code moves `MAIN_SITE_URL` to www and fetches with `redirect: "manual"` so a redirect is reported, never followed without the token | D231 | F-11-1 | SOP-11 §4.4.1, §6.1 | **DONE (M-1, D232)** |
 | G-77 | **Merch Health panel and daily check** (Printful token, scopes, expiry, store, webhook, status page; catalog round-trip and redirect; Stripe key and webhook endpoint, checkout open, Tax; email; held cards; drafts waiting; stock age; bucket; auto-confirm), with Run now, a cron and change emails | D231 | F-11-4 | SOP-11 §9.4, form 8.3 | OPEN · PROPOSED M-2 |
 | G-78 | **Setup & Launch step coach** + Product journey stepper + per-tab "next step" strips + printable form 8.1 | D231 | F-11-3 | SOP-11 §4.2–§4.5 | OPEN · PROPOSED M-3 |
 | G-79 | **Designs saved on the server** (drafts table, art in `merch-files`), any computer, import `.json`/`.zip` | D231 | F-11-2 | SOP-11 §4.6, §6.6 | OPEN · PROPOSED M-4 |
@@ -115,7 +115,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-88 | **Catalog version check** (compare-and-set) | D231 | F-11-16 | SOP-11 §4.14 one at a time | OPEN · PROPOSED M-5 |
 | G-89 | **Register the Printful webhook from the app** (reads `GET /webhooks` first, all types, audited, checked daily) | D231 | F-11-18 | SOP-11 S-10 | OPEN · PROPOSED M-6 |
 | G-90 | **Help everywhere**: helpers for Merch Inventory and Reports → Merch; Printful, Stripe and Resend integration guides; concierge topics (04) | D231 | F-11-17 | SOP-11 itself | OPEN · PROPOSED M-8 |
-| G-91 | **Stale copy cleanup** (Slice 5 texts, catalog-folder step, README, finishing guide §3.1) | D231 | F-11-12 | SOP-11 §4.1 note, §4.4.1 | OPEN · PROPOSED M-1 |
+| G-91 | **Stale copy cleanup** (Slice 5 texts, catalog-folder step, README, finishing guide §3.1) | D231 | F-11-12 | SOP-11 §4.1 note, §4.4.1 | **DONE (M-1, D232)** |
 | G-92 | **Confirm the 7 studio-default placements** | D231 | F-11-14 | SOP-11 §4.7 step 3 | OPEN · PROPOSED M-8 (Q-11-6) |
 | G-93 | **Delete the previous print files on re-publish** | D231 | F-11-15 | none needed | OPEN · PROPOSED M-5 |
 
@@ -985,7 +985,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 - **Owner basis:** *"it needs significantly more helpers and walk throughs and other hand holding types of features… if there is a way to incorporate a step type feature, a move along type helper. first step, do this, done great, step two do this, good job its done, next step.... we need a printful store and stripe health maybe so we know when things break or go offline."*
 - **Why:** F-11-1 … F-11-18. The S1 is F-11-1: the shop's feed request is redirected to www and loses Token A, so no published product can appear.
-- **Built:** nothing yet (recon only). The full design is in SOP-11 Appendix B: B.4 Merch Health checks H-1 … H-19, B.5 the step coach, B.6 the build order M-1 … M-8.
+- **Approved (D232):** the owner approved all of M-1 … M-8 and answered Q-11-1 … Q-11-9 (00 log D232).
+- **Built:** **M-1 (D232):** G-76 (www feed, `redirect: "manual"`, `lastFeedStatus`) and G-91 (stale copy), plus `merch.publish` owner/admin (Q-11-1). The full design is in SOP-11 Appendix B: B.4 Merch Health checks H-1 … H-19, B.5 the step coach, B.6 the build order M-1 … M-8.
 - **Owner action now:**
   1. Merch project → `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` (and `MERCH_CONTENT_URL`) → redeploy.
   2. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `MERCH_SHIP_FLAT_CENTS`.

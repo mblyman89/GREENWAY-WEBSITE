@@ -14,17 +14,18 @@
  */
 import { cache } from "react";
 import { merchDefaults, resolveMerchContent, type MerchContent } from "./site-content-core";
-import { MAIN_SITE_URL } from "./site";
+import { feedUrl } from "./feed-core";
 
 export const MERCH_CONTENT_REVALIDATE = 60;
 
-export const contentSourceUrl = () => ((process.env.MERCH_CONTENT_URL ?? "").trim() || `${MAIN_SITE_URL}/api/merch-content`);
+/** D232 M-1: www by default; a bare greenwaymarijuana.com env value is moved to www (feed-core). */
+export const contentSourceUrl = () => feedUrl(process.env.MERCH_CONTENT_URL, "/api/merch-content");
 
 export const getMerchContent = cache(async (): Promise<MerchContent> => {
   const url = contentSourceUrl();
   if (!/^https:\/\//.test(url)) return merchDefaults();
   try {
-    const res = await fetch(url, { next: { revalidate: MERCH_CONTENT_REVALIDATE }, signal: AbortSignal.timeout(4000) });
+    const res = await fetch(url, { next: { revalidate: MERCH_CONTENT_REVALIDATE }, signal: AbortSignal.timeout(4000), redirect: "manual" });
     if (!res.ok) return merchDefaults();
     const body = (await res.json()) as { content?: unknown } | null;
     return resolveMerchContent(body?.content ?? null);
