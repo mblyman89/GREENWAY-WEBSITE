@@ -101,6 +101,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.6 (D232, #1759):** slice **M-4** built. Designs and art saved on the server (`merch_designs`, migration 0360), any computer, no silent overwrite, **Import design (.json/.zip)**; the sample gate: approval on the server with a photo, Publish blocked until approved for that exact print, owner-only override with a typed reason, audited.
 
+**v1.7 (D232, #PM6X):** slice **M-6** built. Merch Health registers the Printful webhook (reads first, probes Token C, all 5 events, audited); stock copied automatically every 6 hours and on Printful's `stock_updated` notice.
+
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
 **Code (≈28.7k lines):** `/admin/media/**`, `src/lib/media/*` (upload policy, folders, optimize), `/admin/content/*`, `src/lib/cms/*`, the content-schedule cron.

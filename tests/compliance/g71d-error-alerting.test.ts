@@ -125,7 +125,7 @@ describe("G-71d error alerting", () => {
     expect(store).toMatch(/addErrorDigest\(await runSmoke\(admin, await runCheck\(admin\)\)\)/);
     const vercel = JSON.parse(src("vercel.json")) as { crons: { path: string }[] };
     expect(vercel.crons.filter((c) => c.path.startsWith("/api/cron/platform")).length).toBe(1);
-    expect(vercel.crons.length).toBe(22); // 22 since D221 M4 added /api/cron/media-describe; 21 since D206 added /api/cron/coa-trust-all; 20 since D193 added /api/cron/db-vitals; 19 since D178 S1 added /api/cron/exception-retry (still one platform cron)
+    expect(vercel.crons.length).toBe(23); // 23 since D232 M-6 added /api/cron/merch-stock; 22 since D221 M4 added /api/cron/media-describe; 21 since D206 added /api/cron/coa-trust-all; 20 since D193 added /api/cron/db-vitals; 19 since D178 S1 added /api/cron/exception-retry (still one platform cron)
   });
 
   it("the page shows Recent errors", () => {

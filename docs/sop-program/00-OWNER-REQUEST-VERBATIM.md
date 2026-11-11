@@ -2882,3 +2882,11 @@ What was done:
 - **Sample gate** (G-81): owner/admin approves the sample on Proof & Export with every checklist item and a photo; Publish is blocked until the sample is approved for that exact print; a changed print needs a new sample. **Owner-only override** with a typed reason (5+ characters), audited as `merch.sample_overridden`.
 - Rules: `src/lib/merch-studio/merch-design-sync-core.ts` (43 self-tests). Test: `tests/compliance/d232-merch-m4-designs-sample.test.ts`. SOP-11 v1.6.
 - **Owner steps:** apply migration `0360_merch_designs.sql` in Supabase (SQL editor). Then open Merch Studio once on the computer where your designs are, so they upload. Approve each sample (Proof & Export) before publishing.
+
+### As built (slice M-6)
+
+- Owner, verbatim (D232): *"Thank you. I will apply the migrations and set the env variables in vercel while you finish the last three slices."*
+- **Register the Printful webhook from the app** (G-89): Merch Health → H-5 → **Check what is registered** (reads `GET /webhooks`, Token C hidden) then **Register / repair** (probes the shop with a harmless notice first; nothing changes at Printful unless the shop accepts Token C; sets all 5 events with every catalog garment watched; keeps other types). Owner/admin, audited `merch.webhook_registered`. H-5 re-checks it every morning.
+- **Automatic stock** (G-83): `/api/cron/merch-stock` every 6 hours, plus Printful's `stock_updated` relayed by the shop to `/api/merch-stock` (catalog token; the back office re-reads Printful, never trusts the body). Audited `merch.stock_synced` by `cron:merch-stock` / `printful:stock_updated`.
+- Rules: `src/lib/merch/merch-webhook-core.ts` (19 self-tests). Test: `tests/compliance/d232-merch-m6-webhook-stock.test.ts`. SOP-11 v1.7.
+- **Owner steps:** add `PRINTFUL_WEBHOOK_TOKEN` to the **main** project in Vercel with the same value as the merch project; redeploy both; open Merch Health and press **Register / repair the Printful webhook**. No migration.

@@ -613,6 +613,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       "/api/cron/db-vitals": 144, //      every 10 minutes at :09, :19 ... (D193 DB health B: database vital signs; clears stuck app connections at Partner Level 2; one email per restart or per hour of trouble, each claimed first; a healthy tick is one small read)
       "/api/cron/coa-trust-all": 288, // every 5 minutes at :01, :06 ... (D206: the overnight "re-read every COA and trust it" job; lease by compare-and-set; an idle tick is one read and writes nothing)
       "/api/cron/media-describe": 144, // every 10 minutes at :08, :18 ... (every 5-minute offset is taken; shares :08 only with exception-retry's one-read tick) (D221 M4: the media library vision + SEO worker; lease by compare-and-set, budget cap, an idle tick is one read and writes nothing)
+      "/api/cron/merch-stock": 4, //      every 6 hours at :40 (D232 M-6 G-83: copies Printful US stock onto the published merch variants; one Printful read per garment, compare-and-set write, audited as cron:merch-stock)
       "/api/cron/ach-notice-mail": 24, //  hourly at :50 (R41 S17: the Fed's encrypted ACH notice emails; OFF by default and an off tick is one settings read with no Google call; each Gmail id stored once, each owner email claimed once per stored email)
     };
     for (const c of crons) {

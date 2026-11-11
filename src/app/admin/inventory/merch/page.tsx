@@ -89,8 +89,9 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
             </label>
             <button type="submit" className={`${btn} bg-white/10 text-white`}>Apply</button>
           </form>
-          <form action={syncMerchStockAction} className="ml-auto">
+          <form action={syncMerchStockAction} className="ml-auto flex flex-col items-end gap-1">
             <button type="submit" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!catalog.items.length}>Copy Printful stock to the website</button>
+            <span className="text-xs text-white/50">Also runs by itself every 6 hours, and within a minute of Printful&apos;s stock notice once the webhook is registered (Merch Health, H-5).</span>
           </form>
         </div>
 
