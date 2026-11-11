@@ -14,7 +14,8 @@
  *                             about a minute, on greenwaymerch.com.
  *
  * Nothing here renders on the cannabis website (owner rule R71). Permission:
- * content.edit (same as the studio). Audited.
+ * merch.publish (owner & admin; D232, SOP-11 Q-11-1, Michael verbatim "Q1:
+ * owner/admin."). Audited.
  */
 import crypto from "node:crypto";
 import { requirePermission } from "@/lib/auth/session";
@@ -35,7 +36,7 @@ export type StartMerchPublishResult =
   | { ok: false; error: string };
 
 export async function startMerchPublishAction(input: { handle: string; fileKeys: string[] }): Promise<StartMerchPublishResult> {
-  await requirePermission("content.edit");
+  await requirePermission("merch.publish");
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Storage isn't configured on this deployment." };
   const handle = String(input?.handle ?? "");
   if (!HANDLE_RE.test(handle)) return { ok: false, error: "Give the product a title first (it becomes the web address)." };
@@ -57,7 +58,7 @@ export async function startMerchPublishAction(input: { handle: string; fileKeys:
 export type PublishMerchResult = { ok: true; handle: string; created: boolean } | { ok: false; error: string };
 
 export async function publishMerchListingAction(input: { pkg: unknown; files: { fileKey: string; key: string }[]; images: string[] }): Promise<PublishMerchResult> {
-  const session = await requirePermission("content.edit");
+  const session = await requirePermission("merch.publish");
   if (!isSupabaseServiceConfigured || !supabaseUrl) return { ok: false, error: "Storage isn't configured on this deployment." };
   if (!isListingPackage(input?.pkg)) return { ok: false, error: "That listing isn't complete. Fix the blockers and try again." };
   const src = input.pkg as ListingPackage;

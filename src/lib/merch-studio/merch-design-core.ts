@@ -12,8 +12,8 @@
  * labelled as such in the UI.
  *
  * Images are stored on this device (IndexedDB) by `assetId`; the design JSON
- * itself stays small enough for localStorage drafts (Slice 5 moves drafts to
- * Supabase with migration 0281+).
+ * itself stays small enough for localStorage drafts (server-saved designs
+ * are planned as SOP-11 M-4).
  */
 import { BLANKS, colorsFor, getBlank, getPlacement, nearestThread, type Blank, type Method, type Placement } from "./garment-catalog-core";
 import { checkDesign, type Issue, type RuleElement } from "./print-rules-core";

@@ -2814,3 +2814,32 @@ What was done:
 
 - `docs/sop/SOP-11-merch-studio-merch-inventory.md` v1.0: a setup walkthrough S-1 … S-12 with a "you know it worked when" check per step; tokens A/B/C; both Vercel variable tables checked against the code; the first test order; every tab; inventory; orders, cancel and refund, and the 7-day holds; editors, reports and the ad; messages; troubleshooting; forms 8.1–8.4; a live status snapshot; findings, gaps, the Merch Health design (H-1 … H-19), the step coach design and the build order.
 - SOP Library: a new **Marketing & Merch** shelf with the SOP-11 entry (`tests/compliance/sop-library.test.ts` green).
+
+## D232 — SOP-11 roadmap approved: build everything M-1 … M-8; answers to Q-11-1 … Q-11-9 (2026-11-11)
+
+### Owner request (verbatim)
+
+> Thank you! I want to build all things, serious to not serious. The big to the small. Q1: owner/admin. Q2: yes, owner only and reason. Q3: yes. Q4: guidance first, but build the button too please and all that goes with it. Q5: I have these set in vercel already I think, I can’t remember. Q6: yes. Q7: I agree with you. Build the auto confirm too and all that goes along with it so it’s ready. Q8: 35% is fine. Q9: yes. Please complete two slices. Follow the standing rules. Thank you!
+
+### Decisions
+
+- **Scope:** every row of Phase M (M-1 … M-8), most serious first (*"serious to not serious. The big to the small."*). Two slices per message (*"Please complete two slices."*).
+- **Q-11-1:** Publish to greenwaymerch.com is **owner/admin** (`merch.publish`).
+- **Q-11-2:** the sample gate is a **hard block** with an **owner-only override and a reason**.
+- **Q-11-3:** the shop health endpoint gets **its own token** (`MERCH_HEALTH_TOKEN`).
+- **Q-11-4:** **guidance first**, and **also build the refund button** "and all that goes with it".
+- **Q-11-5:** the owner believes `MERCH_SHIP_*` are set but is not sure, so Merch Health must show it.
+- **Q-11-6:** yes, order samples to measure the estimated placements.
+- **Q-11-7:** agreed (auto-confirm stays off until 20+ clean orders), and **build the auto-confirm controls** so they are ready.
+- **Q-11-8:** minimum margin **35%**.
+- **Q-11-9:** yes, the Creative Studio is next as SOP-11 v2.0.
+
+### As built (slice M-1, this message)
+
+- `merch-site/lib/feed-core.ts` (new, pure, 13 self-tests): `MAIN_SITE_ORIGIN` is `https://www.greenwaymarijuana.com`; `feedUrl()` moves a bare-host env value to www; `describeFeedAnswer()` turns a 3xx / 401-404 / 5xx into a plain message.
+- `merch-site/lib/catalog.ts` and `site-content.ts` fetch with `redirect: "manual"`, so a redirect is reported (logged) and never followed without the token; `lastFeedStatus()` keeps the last feed result for M-2's health endpoint. `site.ts` re-exports the www origin.
+- `merch.publish` (owner, admin) in `src/lib/auth/roles.ts`; both publish actions require it; the Publish button is greyed out with the reason for everyone else.
+- Stale copy removed (G-91): the studio's "Slice 5" and "drop it in merch-site/catalog/" text, the README's "Adding a product (no code)" (Publish is now the normal way), the finishing guide's "don't add" `MERCH_CATALOG_URL`.
+- Test: `tests/compliance/d232-merch-m1-feed-publish.test.ts`. SOP-11 v1.1.
+- **Owner step:** none needed for the code fix beyond the merch project's automatic redeploy from `main` (its `vercel.json` deploys when `merch-site/` changes). The `MERCH_CATALOG_URL` variable, if set, may stay.
+

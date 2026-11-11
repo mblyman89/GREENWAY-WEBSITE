@@ -25,7 +25,7 @@ export function MerchStudio({ extraTabs = [], initialTab, publish }: {
   /** From ?tab= (server-validated). Wins over the tab remembered on this device. */
   initialTab?: StudioTab;
   /** R71 S4: the merch.ad block + media picker choices for Publish & Ads. */
-  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[] };
+  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean };
 }) {
   const [tab, setTab] = useState<string>(initialTab ?? "garments");
   const [blankId, setBlankId] = useState(BLANKS[0].id);
@@ -90,7 +90,7 @@ export function MerchStudio({ extraTabs = [], initialTab, publish }: {
         {tab === "fulfillment" ? <FulfillmentPanel key={blankId} blankId={blankId} /> : null}
         {/* Publish reads saved drafts from this browser (listing package), so it mounts only after the restore. */}
         {tab === "publish" && restored ? (
-          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
+          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} canPublish={publish.canPublish ?? false} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
         ) : null}
         {extraTabs.map((t) => (tab === t.id ? <div key={t.id}>{t.render({ blankId, colorHex, setBlank, setColor: setColorHex })}</div> : null))}
       </div>

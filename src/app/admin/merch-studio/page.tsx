@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { MerchStudio } from "@/components/admin/merch-studio/MerchStudio";
@@ -32,14 +33,14 @@ async function loadPublishData() {
 }
 
 export default async function MerchStudioPage({ searchParams }: { searchParams: Promise<{ tab?: string; saved?: string; published?: string; warning_error?: string }> }) {
-  await requirePermission("content.edit");
+  const session = await requirePermission("content.edit");
   const sp = await searchParams;
   // Plain module, NOT the "use client" MerchStudio file (calling a client
   // export on the server threw and broke the whole page).
   const initialTab = studioTabFrom(sp.tab);
   // Tabs switch client-side without a reload, so the Publish data is always
   // loaded (one content-block read + the same media list other editors use).
-  const publish = await loadPublishData();
+  const publish = { ...(await loadPublishData()), canPublish: can(session.profile.role, "merch.publish") };
   const flash = sp.warning_error ? { tone: "bad" as const, text: String(sp.warning_error).slice(0, 300) } : sp.published ? { tone: "ok" as const, text: "Published - the Greenway Goods ad on the website now matches this." } : sp.saved ? { tone: "ok" as const, text: "Draft saved. Nothing changed on the website yet." } : null;
   return (
     <div>

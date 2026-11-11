@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (living document: recon, audit and roadmap; no code changed in this slice) |
+| **Version** | 1.1 (living document. v1.0 was recon and audit; v1.1 records the owner's answers (D232) and slice **M-1** as built) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
-| **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
+| **Applies to** | **Merch Studio** (`/admin/merch-studio`, permission `content.edit`: designers, content editors, managers, admin, owner; **Publish to greenwaymerch.com** is owner/admin only, `merch.publish`, D232). **Merch Inventory** (`/admin/inventory/merch`, `inventory.manage`; **Remove** is owner/admin only, `merch.remove`). **Merch orders** in the back office (`/admin/orders` merch panel and `/admin/orders/merch/[ref]`, `orders.manage`). **Reports → Merch** (`reports.view`). **Website → Merchandise** editors (`/admin/merch-site/*`, `content.edit`). The separate shop **greenwaymerch.com** (its own Vercel project `merch-site/`) and its private order desk `greenwaymerch.com/admin/orders` (Token B). The **account setup** at Printful, Stripe, Resend and Vercel is the **owner's** job. |
 | **Seller** | **Greenway Merchandising LLC (dba Greenway Glass & Goods)**, never the cannabis licensee (`src/lib/merch-studio/listing-package-core.ts` L46). |
 | **Verified against** | `main@d766e4a8` (2026-11-11). Live read-only probes of greenwaymerch.com and greenwaymarijuana.com on 2026-11-11 08:36 UTC (§9.4). Printful, Stripe and Resend facts were checked against their own developer documents on the same day (Appendix A.3). |
 | **Program records** | Findings `F-11-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · gaps `G-76`…`G-93` in `docs/sop-program/05-GAP-REGISTER.md` · proposed plan rows `M-1`…`M-8` in `docs/sop-program/06-FIX-PHASE-PLAN.md` · owner request D231 in `00-OWNER-REQUEST-VERBATIM.md` · concierge coverage in `04-CONCIERGE-COVERAGE-LEDGER.md`. |
@@ -13,7 +13,7 @@
 
 > **This SOP is a living document (owner decision D41).** The owner: *"write the full sop and add it to the repo and back office as a living doc, we will update it as we build from your roadmap strategy report."* Each time a gap in Appendix B is built, the section it names is rewritten to match the screen, the version goes up, and Appendix D records the change. Until then, the **interim** steps in this SOP are the procedure.
 
-> **The one thing to know before anything else.** Today **no product can reach greenwaymerch.com, even after you press Publish.** The shop asks the back office for its product list at `https://greenwaymarijuana.com/api/merch-catalog` (`merch-site/lib/site.ts` L30, `merch-site/lib/catalog.ts` L23). That address now **redirects to www** (live probe: `308 → https://www.greenwaymarijuana.com/api/merch-catalog`). A browser or server following a redirect to a **different host drops the `Authorization` header**, and this was proven in a local Node test. So the back office sees no token and answers *Not found* (404, `src/app/api/merch-catalog/route.ts` L20–27), and the shop quietly shows **its last good list, which is empty** (`catalog.ts` L38–44). **The fix takes one minute, at Vercel:** on the **merch** project, add `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` and redeploy (§4.2 step M-9; F-11-1, G-76). The second blocker is that **checkout is closed**: both `/api/checkout` and `/api/stripe/webhook` answer 503 today, so the Stripe keys, the webhook secret and/or `MERCH_SHIP_FLAT_CENTS` are not set (§9.4).
+> **The one thing to know before anything else.** Today **no product can reach greenwaymerch.com, even after you press Publish.** The shop asks the back office for its product list at `https://greenwaymarijuana.com/api/merch-catalog` (`merch-site/lib/site.ts` L30, `merch-site/lib/catalog.ts` L23). That address now **redirects to www** (live probe: `308 → https://www.greenwaymarijuana.com/api/merch-catalog`). A browser or server following a redirect to a **different host drops the `Authorization` header**, and this was proven in a local Node test. So the back office sees no token and answers *Not found* (404, `src/app/api/merch-catalog/route.ts` L20–27), and the shop quietly shows **its last good list, which is empty** (`catalog.ts` L38–44). **D232 update:** slice M-1 fixes this in code (the shop now asks the **www** address, moves a bare `greenwaymarijuana.com` value to www, and never follows a redirect). The fix reaches the shop when the merch project redeploys after the merge. **Until then (or to be safe), the one-minute fix at Vercel still works:** on the **merch** project, add `MERCH_CATALOG_URL` = `https://www.greenwaymarijuana.com/api/merch-catalog` and redeploy (§4.2 step M-9; F-11-1, G-76). The second blocker is that **checkout is closed**: both `/api/checkout` and `/api/stripe/webhook` answer 503 today, so the Stripe keys, the webhook secret and/or `MERCH_SHIP_FLAT_CENTS` are not set (§9.4).
 
 > **How to use this document.** **Part 1** (§4.1) is the map: what each piece is and how a shirt goes from an idea to a customer's door. **Part 2** (§4.2–§4.5) is the **one-time setup**, written as a numbered walkthrough with a "you know it worked when…" check after every step: Printful, Stripe, Resend, Vercel, then the first test order. **Part 3** (§4.6–§4.12) covers the **six Studio tabs**, one by one. **Part 4** (§4.13–§4.16) is **Merch Inventory**. **Part 5** (§4.17–§4.21) covers **orders**: confirm, cancel, refund and holds. **Part 6** (§4.22–§4.24) covers the website editors, reports and the redirect ad. §5 explains every message you can see, and §6 covers what to do when something goes wrong. §8 has the printable checklists. **Appendix B is the roadmap**: the step-by-step setup guide and the health panel the owner asked for.
 
@@ -102,15 +102,16 @@
 
 | Who | Can | Pinned |
 |---|---|---|
-| **Anyone with `content.edit`** (content editor, manager, admin, owner) | open the Merch Studio, design, export, make mockups, **publish a product to the shop**, edit and publish the redirect ad, edit the five shop-look editors | `src/app/admin/merch-studio/page.tsx` L35; `catalog-actions.ts` L38, L60; nav `src/components/admin/admin-nav-data.ts` L101, L164–168 |
+| **Anyone with `content.edit`** (content editor, manager, admin, owner) | open the Merch Studio, design, export, make mockups, download the listing package, edit and publish the redirect ad, edit the five shop-look editors | `src/app/admin/merch-studio/page.tsx` L35; `catalog-actions.ts` L38, L60; nav `src/components/admin/admin-nav-data.ts` L101, L164–168 |
 | **Anyone with `inventory.manage`** | open Merch Inventory, hide or show a product, copy Printful stock, download the CSV | `src/app/admin/inventory/merch/page.tsx` L35; nav L86 |
+| **Owner and admin only** (`merch.publish`, D232, owner Q-11-1: *"Q1: owner/admin."*) | **Publish to greenwaymerch.com** (it puts a product on sale). Everyone else sees the button greyed out with the reason | `src/lib/auth/roles.ts` (`merch.publish`); `catalog-actions.ts` (both actions); `PublishPanel.tsx` |
 | **Owner and admin only** (`merch.remove`, G-30A, owner Q05b-3) | **Remove** a product from the shop for good | `inventory/merch/page.tsx` L37; `concierge-kb.ts` L194 |
 | **Anyone with `orders.manage`** | see merch orders in the back office, **Confirm** or **Cancel** at Printful | `src/app/admin/orders/merch/[ref]/page.tsx`; `src/lib/orders/merch-actions.ts` |
 | **Anyone with `reports.view`** | Reports → Merch (traffic, sales, WA tax) | `src/app/admin/reports/merch/page.tsx` L67 |
 | **Whoever holds Token B** (`MERCH_ADMIN_KEY`) | the shop's own order desk `greenwaymerch.com/admin/orders` (12-hour cookie) | `merch-site/lib/admin.ts`; `merch-site/app/admin/orders/actions.ts` L35–42 |
 | **The owner** | accounts at Printful, Stripe, Resend and Vercel, every secret, the LLC card at Printful, refunds in Stripe | not in the app (§4.2) |
 
-> **Who should publish (recommendation, Q-11-1).** Publishing puts a product on sale **immediately** (§4.12). The Studio has no approval step, so any content editor can publish. Until the owner decides (Appendix C), the rule is: **only the owner or someone the owner names presses Publish**, after the sample is approved (§4.9.5).
+> **Who may publish (decided, Q-11-1, D232).** Publishing puts a product on sale **immediately** (§4.12). The owner decided: *"Q1: owner/admin."* Since slice M-1 the app enforces it (`merch.publish`). A designer finishes the design and downloads the listing package, then the owner or an admin publishes after the sample is approved (§4.9.5).
 
 ---
 
@@ -303,11 +304,11 @@ Redeploy.
 | `PRINTFUL_WEBHOOK_TOKEN` | yes | Token C | `app/api/printful/webhook/[token]/route.ts` L24 | every Printful notice gets 404 |
 | `MERCH_ADMIN_KEY` | yes | Token B | `lib/admin.ts` | order desk locked (set today) |
 | `MERCH_CATALOG_TOKEN` | yes | Token A | `lib/catalog.ts` L24 | the shop shows only its built-in list |
-| **`MERCH_CATALOG_URL`** | **yes, today (F-11-1)** | `https://www.greenwaymarijuana.com/api/merch-catalog` | `lib/catalog.ts` L23 | the default non-www address redirects and **drops Token A**, so **no Studio products appear** |
+| **`MERCH_CATALOG_URL`** | **yes until M-1 deploys (F-11-1); optional after** | `https://www.greenwaymarijuana.com/api/merch-catalog` | `lib/catalog.ts` L23 | the default non-www address redirects and **drops Token A**, so **no Studio products appear** |
 | `MERCH_CONTENT_URL` | recommended | `https://www.greenwaymarijuana.com/api/merch-content` | `lib/site-content.ts` L21 | still works (the feed is public), but every read takes an extra redirect hop |
 | `MERCH_PRINTFUL_AUTO_CONFIRM` | **leave unset** | `true` only after many good orders | webhook `route.ts` L112–113 | orders stay **drafts** for a human Confirm (safe default) |
 
-> **Correction to the finishing guide.** `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 says `MERCH_CATALOG_URL` / `MERCH_CONTENT_URL` are *"don't add"*. That was right when greenwaymarijuana.com did not redirect to www. **It is wrong today** (F-11-1). Add `MERCH_CATALOG_URL` until the code fix in G-76 ships, then the variable can be removed.
+> **Correction to the finishing guide.** `docs/MERCH-SITE-FINISHING-GUIDE.md` §3.1 says `MERCH_CATALOG_URL` / `MERCH_CONTENT_URL` are *"don't add"*. That was right when greenwaymarijuana.com did not redirect to www. **It is wrong today** (F-11-1). Add `MERCH_CATALOG_URL` until the code fix in G-76 ships, then the variable can be removed. **D232: G-76 is built (slice M-1)** and the guide row is corrected.
 
 #### 4.4.2 Main project (greenwaymarijuana.com)
 
@@ -987,20 +988,23 @@ Each pill links to its tab. **"Next step"** names the one thing to do, for examp
 
 ## Appendix C: Owner questions
 
+> **Answered by the owner on 2026-11-11 (D232).** Verbatim: *"Q1: owner/admin. Q2: yes, owner only and reason. Q3: yes. Q4: guidance first, but build the button too please and all that goes with it. Q5: I have these set in vercel already I think, I can’t remember. Q6: yes. Q7: I agree with you. Build the auto confirm too and all that goes along with it so it’s ready. Q8: 35% is fine. Q9: yes."* And: *"I want to build all things, serious to not serious. The big to the small."* Each row's **Decision** column below records it.
+
 | # | Question | Recommendation |
 |---|---|---|
-| **Q-11-1** | Who may press **Publish to greenwaymerch.com**? Today anyone with `content.edit`. | Owner/admin only, or a new `merch.publish` permission the owner grants |
-| **Q-11-2** | Should the **sample gate** (G-81) be a hard block, or a warning the owner can override with a reason? | Hard block, with an owner-only override and a reason |
-| **Q-11-3** | May the shop's health endpoint reuse **Token A**, or should it have its own `MERCH_HEALTH_TOKEN`? | Its own token (one leak, one blast radius) |
-| **Q-11-4** | Refunds: should the back office be able to **refund in Stripe** (through the shop endpoint), or only guide you to the Stripe dashboard? | Guided first (no money moves from the back office); a button later if wanted |
-| **Q-11-5** | What flat shipping, extra-item and free-shipping amounts do you want (`MERCH_SHIP_*`, cents)? | Set from Printful's US rates for a tee; e.g. 599 / 200 / 7500, to be decided |
-| **Q-11-6** | May we order one sample per **studio-default** garment to measure the 7 estimated placements? | Yes, the zip hoodie, windbreaker and hoodie fronts first |
-| **Q-11-7** | Will you ever want `MERCH_PRINTFUL_AUTO_CONFIRM`? | Not until 20+ clean orders; Merch Health shows it amber |
-| **Q-11-8** | Minimum margin for the pricing warning (G-87)? | e.g. 35% after Printful, shipping gap and card fee |
-| **Q-11-9** | Is the Creative Studio (banners and ads for the cannabis site) next, as SOP-11 v2.0? | Yes, after M-1–M-3 |
+| **Q-11-1** | Who may press **Publish to greenwaymerch.com**? Today anyone with `content.edit`. | Owner/admin only, or a new `merch.publish` permission the owner grants **Decision (D232):** owner/admin, built in M-1 as `merch.publish`. |
+| **Q-11-2** | Should the **sample gate** (G-81) be a hard block, or a warning the owner can override with a reason? | Hard block, with an owner-only override and a reason **Decision (D232):** hard block, owner-only override with a reason (M-4). |
+| **Q-11-3** | May the shop's health endpoint reuse **Token A**, or should it have its own `MERCH_HEALTH_TOKEN`? | Its own token (one leak, one blast radius) **Decision (D232):** its own `MERCH_HEALTH_TOKEN` (M-2). |
+| **Q-11-4** | Refunds: should the back office be able to **refund in Stripe** (through the shop endpoint), or only guide you to the Stripe dashboard? | Guided first (no money moves from the back office); a button later if wanted **Decision (D232):** guidance first, **and** build the refund button with everything it needs (M-7). |
+| **Q-11-5** | What flat shipping, extra-item and free-shipping amounts do you want (`MERCH_SHIP_*`, cents)? | Set from Printful's US rates for a tee; e.g. 599 / 200 / 7500, to be decided **Decision (D232):** the owner thinks they are set but is not sure. Merch Health (M-2) shows whether `MERCH_SHIP_FLAT_CENTS` is set and what it parses to. |
+| **Q-11-6** | May we order one sample per **studio-default** garment to measure the 7 estimated placements? | Yes, the zip hoodie, windbreaker and hoodie fronts first **Decision (D232):** yes, order the samples (M-8). |
+| **Q-11-7** | Will you ever want `MERCH_PRINTFUL_AUTO_CONFIRM`? | Not until 20+ clean orders; Merch Health shows it amber **Decision (D232):** agreed (leave it off until 20+ clean orders), **and** build the auto-confirm controls so they are ready (M-7). |
+| **Q-11-8** | Minimum margin for the pricing warning (G-87)? | e.g. 35% after Printful, shipping gap and card fee **Decision (D232):** 35% (M-8). |
+| **Q-11-9** | Is the Creative Studio (banners and ads for the cannabis site) next, as SOP-11 v2.0? | Yes, after M-1–M-3 **Decision (D232):** yes, the Creative Studio is next as SOP-11 v2.0, after the merch roadmap. |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.1 | 2026-11-11 | Owner answers Q-11-1 … Q-11-9 recorded (D232). **M-1 built:** the shop reads the www feed address, moves a bare host to www, never follows a redirect and remembers the last feed result for Merch Health; Publish is owner/admin (`merch.publish`); stale "Slice 5" and "drop it in merch-site/catalog/" copy removed; the README and finishing guide corrected (G-76, G-91 DONE) | Greenway Dev |
 | 1.0 | 2026-11-11 | First version (recon and audit only, no code changed). Merch Studio and Merch Inventory first, as the owner asked (D231). It covers the setup walkthrough, every tab and order procedure, live probes, 18 findings (F-11-1 … F-11-18 + F-11-C), 18 gaps (G-76 … G-93) and the roadmap M-1 … M-8 | Greenway Dev |

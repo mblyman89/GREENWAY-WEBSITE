@@ -42,7 +42,11 @@ Printful does not collect or remit the customer's sales tax, so the LLC is the s
 - Merchant Center (free listings): verify and claim the domain, then add a data source with the file URL `https://greenwaymerch.com/feeds/google.xml`, set to a daily scheduled fetch. Each product page also carries Product structured data, so prices stay in sync.
 - Shipping in the feed and markup comes from `MERCH_SHIP_*`. If those aren't set, no shipping is claimed. The destination is always Washington.
 
-## Adding a product (no code)
+## Adding a product
+
+The normal way: in the back office, open **Merch Studio**, go to **Publish & Ads** and press **Publish to greenwaymerch.com** (owner or admin). The product is on the shop within about a minute and in **Inventory > Merch Inventory**. This needs `MERCH_CATALOG_TOKEN` in both projects.
+
+The backup way (by hand, with a commit):
 
 1. In the back office, open **Merch Studio**, go to **Publish & Ads** and click **Download listing package**.
 2. Put the `.json` file in `merch-site/catalog/`. File-name order sets the "Featured" order, so prefix names with `01-`, `02-` and so on.
@@ -77,8 +81,8 @@ Step-by-step owner walkthrough for every variable: `docs/MERCH-SITE-FINISHING-GU
 | `STRIPE_WEBHOOK_SECRET` | Slice 6 | `whsec_...` from the Stripe webhook endpoint. |
 | `PRINTFUL_API_TOKEN` | Slice 6 | Printful private token with the `orders` and `webhooks` scopes. |
 | `PRINTFUL_STORE_ID` | Slice 6 | Needed if the token covers more than one store. |
-| `MERCH_CONTENT_URL` | no | R73 S3. Where the editable wording and banners come from. Default `https://greenwaymarijuana.com/api/merch-content` (set in the back office under Website -> Merchandise). Only set this for a preview or staging back office. |
-| `MERCH_CATALOG_TOKEN` | recommended | R73 S7. A long random string (32+ characters), the **same** value in the back-office Vercel project. Lets this site read the products published from Merch Studio (`https://greenwaymarijuana.com/api/merch-catalog`). Without it only `catalog/*.json` is used. Optional `MERCH_CATALOG_URL` overrides the source (preview back office only). |
+| `MERCH_CONTENT_URL` | no | R73 S3. Where the editable wording and banners come from. Default `https://www.greenwaymarijuana.com/api/merch-content` (set in the back office under Website -> Merchandise). Only set this for a preview or staging back office. |
+| `MERCH_CATALOG_TOKEN` | recommended | R73 S7. A long random string (32+ characters), the **same** value in the back-office Vercel project. Lets this site read the products published from Merch Studio (`https://www.greenwaymarijuana.com/api/merch-catalog`). Without it only `catalog/*.json` is used. Optional `MERCH_CATALOG_URL` overrides the source. D232: the default is the **www** address, because the bare domain redirects and a redirect drops the token; a bare `greenwaymarijuana.com` value is moved to www automatically. |
 | (Vercel setting) | recommended | R73 S8. Turn on **Web Analytics** in this project (Analytics tab > Enable). Page views then show in the back office at Reports > Merch. No env var here; the back office needs `VERCEL_ANALYTICS_TOKEN`, `MERCH_VERCEL_PROJECT` and optional `VERCEL_TEAM_ID`. Vercel Pro bills $0.03 per 1,000 events (vercel.com/docs/analytics/limits-and-pricing). |
 | `PRINTFUL_WEBHOOK_TOKEN` | Slice 6 | A long random string that becomes part of the Printful webhook URL. |
 | `MERCH_ADMIN_KEY` | Slice 6 | A long random string (32+ characters; 16 minimum) that you type to open `/admin/orders`. Changing it signs everyone out. |
