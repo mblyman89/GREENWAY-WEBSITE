@@ -2852,3 +2852,10 @@ What was done:
 - Test: `tests/compliance/d232-merch-m2-health.test.ts`. SOP-11 v1.2.
 - **Owner steps:** (1) make one random value of 32+ characters (`openssl rand -hex 32`); (2) add it as `MERCH_HEALTH_TOKEN` in **both** Vercel projects; (3) redeploy both; (4) open Merch Studio → Merch Health → Run check now; (5) type the Printful token's expiry date on H-3.
 
+### As built (slice M-3a, request "Please work on M-3 through M-5.")
+
+- **Setup & Launch** `/admin/merch-studio/launch` (owner & admin, `settings.manage`; *"Q1: owner/admin."*): 13 step cards (S-1 … S-12 and the test order T), each with what to do, done-when, copy buttons, links and the Merch Health checks that prove it. Proven steps go green by themselves (*"✅ Great, done!"*); manual steps take an owner tick. Progress bar and **Next:** line. Notes and dates saved in site setting `merch_launch_progress`. Rules: `src/lib/merch/merch-launch-core.ts`.
+- Studio header: **Setup & Launch** and **Merch Health** buttons and *"Setup needs you: Step n"* from the last saved health run.
+- **Form 8.1** printable at `/admin/merch-studio/launch/record`.
+- Ticks and notes audited. Test: `tests/compliance/d232-merch-m3a-launch.test.ts`. SOP-11 v1.3.
+- **Owner steps:** open Merch Studio → Setup & Launch and work down the cards; print the record at the end.
