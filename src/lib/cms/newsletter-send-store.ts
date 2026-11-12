@@ -24,6 +24,14 @@ import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import { greenwayBusiness } from "@/content/business";
 import { SEND_ID_TAG, POST_ID_TAG } from "@/lib/cms/email-events/normalize-core";
 import type { BlogPostRow } from "./types";
+import {
+  EMAIL_FONT_PX,
+  cleanEnv,
+  escapeHtml,
+  listUnsubscribeHeaders,
+  oneClickUnsubscribeUrl,
+  warningsFooterHtml,
+} from "./newsletter-email-core";
 
 const MEDIA_BUCKET = "media";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -39,12 +47,16 @@ export type SendConfig = {
 };
 
 export function newsletterSendConfig(): SendConfig {
-  const apiKey = process.env.RESEND_API_KEY ?? "";
-  const from =
-    process.env.NEWSLETTER_FROM_EMAIL ??
-    process.env.ORDER_EMAIL_FROM ??
-    null;
+  // F-22-19 (N-1): values are trimmed, so a pasted space or newline in Vercel
+  // no longer breaks the key or the from address.
+  const apiKey = cleanEnv(process.env.RESEND_API_KEY);
+  const from = cleanEnv(process.env.NEWSLETTER_FROM_EMAIL) ?? cleanEnv(process.env.ORDER_EMAIL_FROM);
   return { configured: Boolean(apiKey && from), from };
+}
+
+/** The trimmed Resend key (F-22-19). */
+export function resendApiKey(): string | null {
+  return cleanEnv(process.env.RESEND_API_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -200,13 +212,16 @@ export function buildNewsletterEmail(n: {
   subject: string;
   html: string;
 } {
+  // The subject is plain text (not HTML), so it is not escaped.
   const subject = `${greenwayBusiness.name}: ${n.title}`;
-  const readUrl = n.publicUrl;
+  // F-22-7 (N-1): the title and links are escaped before they go in the HTML.
+  const title = escapeHtml(n.title);
+  const readUrl = escapeHtml(n.publicUrl);
   const pdfBtn = n.pdfUrl
-    ? `<p style="margin:8px 0 0"><a href="${n.pdfUrl}" style="color:#7ed957;font-size:13px">Or open the PDF directly ↗</a></p>`
+    ? `<p style="margin:8px 0 0"><a href="${escapeHtml(n.pdfUrl)}" style="color:#7ed957;font-size:13px">Or open the PDF directly ↗</a></p>`
     : "";
   const unsubLine = n.unsubscribeUrl
-    ? `<br/><a href="${n.unsubscribeUrl}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a>`
+    ? `<br/><a href="${escapeHtml(n.unsubscribeUrl)}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a>`
     : "";
 
   const html = `<!doctype html>
@@ -216,22 +231,22 @@ export function buildNewsletterEmail(n: {
       <tr><td align="center" style="padding:28px 16px">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#0f0f0f;border:1px solid #1f1f1f;border-radius:16px;overflow:hidden">
           <tr><td style="padding:28px 28px 8px;text-align:center">
-            <h1 style="margin:0;font-size:22px;color:#7ed957;letter-spacing:0.5px">${greenwayBusiness.name}</h1>
+            <h1 style="margin:0;font-size:${EMAIL_FONT_PX.brand}px;color:#7ed957;letter-spacing:0.5px">${greenwayBusiness.name}</h1>
             <p style="margin:6px 0 0;color:#ffd700;font-size:12px;text-transform:uppercase;letter-spacing:2px">Newsletter</p>
           </td></tr>
           <tr><td style="padding:8px 28px 0;text-align:center">
-            <h2 style="margin:18px 0 6px;color:#ffffff;font-size:24px;line-height:1.25">${n.title}</h2>
-            <p style="margin:0;color:#b8b8b8;font-size:14px;line-height:1.6">Your latest update from the Greenway team is ready to read.</p>
+            <h2 style="margin:18px 0 6px;color:#ffffff;font-size:${EMAIL_FONT_PX.title}px;line-height:1.25">${title}</h2>
+            <p style="margin:0;color:#b8b8b8;font-size:${EMAIL_FONT_PX.body}px;line-height:1.6">Your latest update from the Greenway team is ready to read.</p>
           </td></tr>
           <tr><td align="center" style="padding:24px 28px 8px">
-            <a href="${readUrl}" style="display:inline-block;background:#7ed957;color:#000000;font-weight:bold;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:999px">Read the newsletter →</a>
+            <a href="${readUrl}" style="display:inline-block;background:#7ed957;color:#000000;font-weight:bold;font-size:${EMAIL_FONT_PX.button}px;text-decoration:none;padding:14px 28px;border-radius:999px">Read the newsletter →</a>
             ${pdfBtn}
           </td></tr>
           <tr><td style="padding:24px 28px 28px;border-top:1px solid #1f1f1f;margin-top:16px">
-            <p style="margin:16px 0 0;color:#6f6f6f;font-size:11px;line-height:1.6;text-align:center">
-              ${greenwayBusiness.name} &middot; ${greenwayBusiness.address?.full ?? "Port Orchard, WA"}<br/>
+            ${warningsFooterHtml(EMAIL_FONT_PX.warnings)}
+            <p style="margin:16px 0 0;color:#6f6f6f;font-size:${EMAIL_FONT_PX.warnings}px;line-height:1.6;text-align:center">
+              ${escapeHtml(greenwayBusiness.name)} &middot; ${escapeHtml(greenwayBusiness.address?.full ?? "Port Orchard, WA")}<br/>
               You're receiving this because you joined the Greenway loyalty program.
-              For adults 21+. Keep out of reach of children.
               ${unsubLine}
             </p>
           </td></tr>
@@ -266,19 +281,19 @@ async function resendBatch(
   // correlated to the exact campaign in the stats suite. Additive only — does
   // not change who receives the email or what it looks like.
   tags?: { name: string; value: string }[],
+  // G-109 (N-1): RFC 8058 one-click unsubscribe headers for this recipient.
+  emailHeaders?: Record<string, string>,
 ): Promise<boolean> {
   try {
+    const payload: Record<string, unknown> = { from, to, subject, html };
+    if (tags && tags.length > 0) payload.tags = tags;
+    if (emailHeaders && Object.keys(emailHeaders).length > 0) payload.headers = emailHeaders;
     const res = await fetch(RESEND_ENDPOINT, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      // Resend: a single email with multiple "to" is one send; for marketing we
-      // BCC nothing and put recipients in `to`. To protect privacy we send one
-      // request per recipient batch via the `to` array is visible to all — so we
-      // instead loop in small chunks using individual sends would be N calls.
-      // Here we use one-recipient-per-call to keep addresses private.
-      body: JSON.stringify(
-        tags && tags.length > 0 ? { from, to, subject, html, tags } : { from, to, subject, html },
-      ),
+      // F-22-19: every call carries exactly ONE recipient in `to`, so no member
+      // ever sees another member's address.
+      body: JSON.stringify(payload),
     });
     return res.ok;
   } catch {
@@ -301,7 +316,7 @@ export async function sendNewsletter(params: {
   if (!cfg.configured || !cfg.from) {
     return { ok: false, error: "Email sending is not configured yet. Add RESEND_API_KEY and NEWSLETTER_FROM_EMAIL." };
   }
-  const apiKey = process.env.RESEND_API_KEY!;
+  const apiKey = resendApiKey()!;
 
   const n = await getSendableNewsletter(params.newsletterId);
   if (!n) return { ok: false, error: "Newsletter not found." };
@@ -393,7 +408,15 @@ export async function sendNewsletter(params: {
           pdfUrl: n.pdfUrl,
           unsubscribeUrl: unsubscribeUrl(r.token),
         });
-        return resendBatch(apiKey, cfg.from!, [r.email], subject, html, campaignTags);
+        return resendBatch(
+          apiKey,
+          cfg.from!,
+          [r.email],
+          subject,
+          html,
+          campaignTags,
+          listUnsubscribeHeaders(oneClickUnsubscribeUrl(SITE_URL, r.token)),
+        );
       }),
     );
     for (const ok of results) {

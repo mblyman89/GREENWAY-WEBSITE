@@ -132,10 +132,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-105 | **Advertising-rule check** on banner text, prompts and a picture tick (Q-11-14) | D233, D234 | F-11-29 | SOP-11b §7.1 | **BUILT (C-8, D234)** |
 | G-106 | **Help and hand-holding** (tooltip, ? sheet, first-use tour, step strip, helper, concierge topics, empty states) | D233 (Q-11-15), D234 | F-11-31 | SOP-11b | **BUILT (C-6, D234)** |
 | G-107 | **Name dialog** for Save to brand | D233, D234 | F-11-30 | SOP-11b §4.6 | **BUILT (C-6, D234)** |
-| G-108 | **Four warnings + 21+ in every newsletter email (≥10% type rule)** | D236 | F-22-1 | SOP-22 App. B.3 | PROPOSED (N-1) |
-| G-109 | **One-click unsubscribe headers + POST endpoint** | D236 | F-22-2 | SOP-22 App. B.3 | PROPOSED (N-1) |
-| G-110 | **Keep the newsletter PDF on save; escape the title; trim config** | D236 | F-22-6, F-22-7, F-22-19 | SOP-22 App. B.3 | PROPOSED (N-1) |
-| G-111 | **Suppress hard bounces and complaints; broadcast gate (Q-22-3)** | D236 | F-22-4, F-22-17 | SOP-22 App. B.3 | PROPOSED (N-1) |
+| G-108 | **Four warnings + 21+ in every newsletter email (≥10% type rule)** | D236 | F-22-1 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
+| G-109 | **One-click unsubscribe headers + POST endpoint** | D236 | F-22-2 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
+| G-110 | **Keep the newsletter PDF on save; escape the title; trim config** | D236 | F-22-6, F-22-7, F-22-19 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
+| G-111 | **Suppress hard bounces and complaints; broadcast gate (Q-22-3)** | D236 | F-22-4, F-22-17 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
 | G-112 | **Background, batched (100), resumable, idempotent sending with per-recipient record and progress** | D236 | F-22-3 | SOP-22 App. B.3 | PROPOSED (N-2) |
 | G-113 | **Blog scheduling through the 5-minute cron; Sunday scheduled send with "ready for approval"** | D236 | F-22-5, F-22-9 | SOP-22 App. B.3 | PROPOSED (N-3) |
 | G-114 | **"This week at Greenway" facts feed (new vendors, fresh drops, promotions, vendor days, holiday calendar)** | D236 | F-22-11 | SOP-22 App. B.3 | PROPOSED (N-4) |

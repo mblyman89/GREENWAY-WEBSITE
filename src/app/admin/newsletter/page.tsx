@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
+import { BROADCAST_GATE_MESSAGE } from "@/lib/cms/newsletter-email-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
@@ -52,7 +54,9 @@ export default async function NewsletterSendPage({
     error?: string;
   }>;
 }) {
-  await requirePermission("blog.manage");
+  const session = await requirePermission("blog.manage");
+  // D237 N-1 (Q-22-3): only owner/admin see the send-to-everyone button.
+  const canBroadcast = can(session.profile.role, "newsletter.broadcast");
   const sp = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
@@ -104,7 +108,7 @@ export default async function NewsletterSendPage({
               "Design your newsletter in Canva and export a PDF.",
               "Upload it under Blog & Newsletter (set type = Newsletter) and Publish.",
               "Come here, pick it, and send a Test to yourself first.",
-              "Happy? Tick the confirm box and Send to the loyalty list.",
+              "Happy? The owner or an admin ticks the confirm box and sends it to the loyalty list.",
             ]}
           >
             <p className="mb-2">
@@ -253,7 +257,8 @@ export default async function NewsletterSendPage({
                   </div>
                 </form>
 
-                {/* Broadcast */}
+                {/* Broadcast (owner/admin only, D237 N-1) */}
+                {canBroadcast ? (
                 <form
                   action={broadcastNewsletterAction}
                   className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/25 bg-[var(--admin-orange-soft)] p-5"
@@ -275,7 +280,16 @@ export default async function NewsletterSendPage({
                   >
                     Send to {recipients.total} member(s)
                   </Button>
+                  <p className="text-[11px] text-[var(--admin-text-faint)]">
+                    Every email carries the four required warnings (WAC 314-55-155(7)), a one-click
+                    unsubscribe, and skips anyone who bounced or marked a past email as spam.
+                  </p>
                 </form>
+                ) : (
+                  <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 text-xs text-[var(--admin-text-muted)]">
+                    {BROADCAST_GATE_MESSAGE}
+                  </p>
+                )}
               </div>
             ) : null}
           </div>

@@ -3061,3 +3061,25 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Gaps `G-108` … `G-120` and **Phase N (N-1 … N-10) PROPOSED** in 05 and 06; the owner approves or reorders. Recommended start: N-1 send hardening (the S1 warnings).
 - Owner questions `Q-22-1` … `Q-22-9` (SOP-22 Appendix C): medical content, Google reviews, who may broadcast, Sunday time and automation, canvas vs Canva, AI web search, where Culture lives, prices in AI posts, vendor claims.
 - **Owner interim actions (until N-1):** put all four warnings in every Canva newsletter design at ≥10% of the largest type size; re-upload the PDF every time a newsletter post is saved (or check the Send Center afterwards); do not use **Scheduled** on blog posts, publish by hand; after each send, opt out hard bounces and complaints by hand; keep health topics to cited reporting with no product links and no claims.
+
+## D237 — Phase N approved; culture on the CULTURE card; N-1 … N-3 built (2026-11-12)
+
+### Owner request (verbatim)
+
+*"Thank you. I approve all from serious to small along with your recommendations, with one exception. On the blog page, there is a specific card type for the culture posts. On this page it shows the blog posts and the newsletters. It also has a "products" card type. Please make sure to look at the blog page on the customer facing website so you see all the card types. I want the culture posts to go here. Please complete 3 slices, pushing and merging often, the sandbox is unstable. Follow the standing rules. Thank you."*
+
+### Decisions
+
+- Every recommended option in SOP-22 Appendix C is approved: Q-22-1 (a) cited reporting only, no product links, no claims; Q-22-2 (a) curated reviews; Q-22-3 (a) owner/admin broadcast only; Q-22-4 (a) AI drafts by Thursday, owner approves, automatic Sunday send (time not named, so it is a setting); Q-22-5 (a) in-app canvas, Canva optional; Q-22-6 (a) web search on demand only; Q-22-8 (a) prices only in sale and vendor-day posts, from the promotion; Q-22-9 (a) vendor claims only with a source link.
+- **The exception (Q-22-7):** culture posts go on the existing `/blog` page as the existing **CULTURE** card. Checked on the live site: the page shows PRODUCTS, DEALS, CULTURE and NEWSLETTER cards (`src/lib/blog/posts.ts` L1, `src/components/blog/BlogCard.tsx` L8–12). No new tab or page.
+- Three slices: N-1, N-2, N-3, each shipped and merged on its own.
+
+### As built — N-1 send hardening (#PN1)
+
+- **G-108:** the email footer prints all four `REQUIRED_WARNINGS` at 11 px; the largest type is 24 px (`src/lib/cms/newsletter-email-core.ts` `EMAIL_FONT_PX`, `warningsFooterHtml`), so the 10% rule holds and a self-test enforces it.
+- **G-109:** every email carries `List-Unsubscribe: <https://…/api/unsubscribe?token=…>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`; new `src/app/api/unsubscribe/route.ts` (POST unsubscribes, GET goes to the friendly page).
+- **G-110:** saving a newsletter post keeps the stored PDF and pages (`mergeNewsletterAsset`; `blog/actions.ts` passes `undefined` when no new file); the title and links are HTML-escaped; env values are trimmed.
+- **G-111:** a hard bounce or complaint from the Resend webhook sets `email_opt_out` on the loyalty signup and is audited (`newsletter.suppress`, `ingest-store.ts`). New permission `newsletter.broadcast` = owner, admin; the Send Center hides the broadcast form for other roles.
+- Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; pure self-test `__runNewsletterEmailCoreTests` (35). SOP-22 v1.1.
+- **Owner steps:** none. (Managers and content editors can still prepare and test-send.)
+
