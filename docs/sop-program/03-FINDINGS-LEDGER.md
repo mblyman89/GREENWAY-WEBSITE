@@ -1278,12 +1278,12 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-1 · CONFIRMED · BUG · S1 — Newsletter email lacks the four WAC 314-55-155(7) warnings (only "For adults 21+. Keep out of reach of children.")
 - **Pin:** `newsletter-send-store.ts` L231–236; rule in `campaign-rules-core.ts` L86, L96
 - **SOP impact:** SOP-22 Appendix B.1; gap G-108; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** all four warnings at 11 px vs 24 px largest (`newsletter-email-core.ts` `warningsFooterHtml`, `EMAIL_FONT_PX`)
+- **Resolved (D237, N-1, #1774):** all four warnings at 11 px vs 24 px largest (`newsletter-email-core.ts` `warningsFooterHtml`, `EMAIL_FONT_PX`)
 
 ### F-22-2 · CONFIRMED · GAP · S2 — No `List-Unsubscribe` / `List-Unsubscribe-Post` header; the unsubscribe page is a GET page only
 - **Pin:** `newsletter-send-store.ts` L270–281; `unsubscribe/page.tsx` L17–33
 - **SOP impact:** SOP-22 Appendix B.1; gap G-109; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** `List-Unsubscribe` + `List-Unsubscribe-Post` on every email; `POST /api/unsubscribe` (`src/app/api/unsubscribe/route.ts`)
+- **Resolved (D237, N-1, #1774):** `List-Unsubscribe` + `List-Unsubscribe-Post` on every email; `POST /api/unsubscribe` (`src/app/api/unsubscribe/route.ts`)
 
 ### F-22-3 · CONFIRMED · WEAKNESS · S2 — Broadcast runs inside one server action, one email per call, 5 at a time, no per-recipient record, no resume, no batch API, no idempotency key
 - **Pin:** L384–414
@@ -1292,7 +1292,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-4 · CONFIRMED · GAP · S2 — Hard bounces and complaints are stored but never suppress the address
 - **Pin:** `ingest-store.ts`; no `email_opt_out` write in webhook path
 - **SOP impact:** SOP-22 Appendix B.1; gap G-111; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** `suppressBouncedAndComplained` in `ingest-store.ts` sets `email_opt_out`, audited `newsletter.suppress`
+- **Resolved (D237, N-1, #1774):** `suppressBouncedAndComplained` in `ingest-store.ts` sets `email_opt_out`, audited `newsletter.suppress`
 
 ### F-22-5 · CONFIRMED · BUG · S2 — Blog "Scheduled" status never publishes; `blog_post` is not a schedule target; the list and the concierge imply it works
 - **Pin:** `content-schedule-core.ts` L32–38, L295; `blog-store.ts` L193–203; `blog/page.tsx` L49, L116; `concierge-kb.ts` L278
@@ -1301,12 +1301,12 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-6 · CONFIRMED · BUG · S2 — Saving a newsletter post without a new PDF erases `pdf_media_id` and `page_media_ids`; the post drops out of the Send Center
 - **Pin:** `blog/actions.ts` L201–226; `blog-store.ts` L215–233; `newsletter/page.tsx` L80
 - **SOP impact:** SOP-22 Appendix B.1; gap G-110; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** `mergeNewsletterAsset` keeps stored values; `blog/actions.ts` passes `undefined` when no new PDF
+- **Resolved (D237, N-1, #1774):** `mergeNewsletterAsset` keeps stored values; `blog/actions.ts` passes `undefined` when no new PDF
 
 ### F-22-7 · CONFIRMED · BUG · S3 — Post title inserted into email HTML unescaped
 - **Pin:** `newsletter-send-store.ts` L223
 - **SOP impact:** SOP-22 Appendix B.1; gap G-110; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** `escapeHtml` on title and links in `buildNewsletterEmail`
+- **Resolved (D237, N-1, #1774):** `escapeHtml` on title and links in `buildNewsletterEmail`
 
 ### F-22-8 · CONFIRMED · GAP · S2 — No newsletter canvas: the email body is a fixed sentence + button; no sections, preheader or plain-text part; Canva PDF is the only design path
 - **Pin:** L204–242; `newsletter/page.tsx` L104
@@ -1347,7 +1347,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-17 · CONFIRMED · WEAKNESS · S3 — Every `blog.manage` role (including content_editor) can broadcast to the whole list
 - **Pin:** `newsletter/actions.ts` L52; `roles.ts` L112
 - **SOP impact:** SOP-22 Appendix B.1; gap G-111; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** new permission `newsletter.broadcast` (owner, admin); gate in `newsletter/actions.ts` and `newsletter/page.tsx`
+- **Resolved (D237, N-1, #1774):** new permission `newsletter.broadcast` (owner, admin); gate in `newsletter/actions.ts` and `newsletter/page.tsx`
 
 ### F-22-18 · CONFIRMED · GAP · S3 — Public blog has no category filter or Culture section
 - **Pin:** `(site)/blog/page.tsx`
@@ -1356,7 +1356,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-19 · CONFIRMED · WEAKNESS · S4 — Email config does not trim values; a misleading comment about recipients
 - **Pin:** `newsletter-send-store.ts` L41–47, L274–278
 - **SOP impact:** SOP-22 Appendix B.1; gap G-110; status **FIXED (N-1, D237)**.
-- **Resolved (D237, N-1, #PN1):** `cleanEnv` trims config; the batch comment is corrected
+- **Resolved (D237, N-1, #1774):** `cleanEnv` trims config; the batch comment is corrected
 
 ### F-22-20 · CONFIRMED · GAP · S3 — No Article structured data (JSON-LD) on blog posts
 - **Pin:** no `ld+json` under `src/app/(site)/blog`
