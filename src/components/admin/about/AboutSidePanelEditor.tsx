@@ -12,6 +12,8 @@ import { ContentImageField, type MediaChoice } from "@/components/admin/ContentI
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { cardDesign } from "@/lib/cms/banner-design-core";
+import { AdCheckStrip, StudioPictureRow } from "@/components/admin/BannerHandoff";
+import { designTexts } from "@/lib/marketing/ad-check-core";
 import {
   ABOUT_SIDE_BLOCK,
   ABOUT_SIDE_DEFAULT_ALT,
@@ -45,6 +47,8 @@ export function AboutSidePanelEditor({
   const dirty = value !== saved;
   const live = serializeAboutSide(resolveAboutSide(publishedJson)) === saved;
   const set = (p: Partial<AboutSidePanel>) => setPanel((x) => ({ ...x, ...p }));
+  // D234 C-8 (G-105, Q-11-14): Publish waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
 
   return (
     <form className="space-y-4 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
@@ -94,6 +98,7 @@ export function AboutSidePanelEditor({
               className={`h-56 w-full ${panel.fit === "cover" ? "object-cover" : "object-contain"}`}
             />
           </div>
+          <StudioPictureRow targetId="about" design={panel.design} current={panel.src} onUse={(src) => set({ src })} />
           <ContentImageField value={panel.src} onChange={(src) => set({ src })} mediaChoices={mediaChoices} />
           <button
             type="button"
@@ -128,10 +133,11 @@ export function AboutSidePanelEditor({
         <Button type="submit" variant="save" size="sm" formAction={saveDraftAction}>
           Save draft
         </Button>
-        <Button type="submit" variant="primary" size="sm" formAction={publishAction} disabled={dirty}>
+        <Button type="submit" variant="primary" size="sm" formAction={publishAction} disabled={dirty || !pictureOk}>
           Publish
         </Button>
         {dirty ? <span className="text-xs text-[var(--admin-gold)]">Save the draft first, then publish.</span> : null}
+        <AdCheckStrip texts={designTexts(panel.design, {})} checked={pictureOk} onChange={setPictureOk} />
       </div>
     </form>
   );

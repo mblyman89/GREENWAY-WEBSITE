@@ -1230,10 +1230,12 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-28 · CONFIRMED · GAP · S3 — Creative Studio results cannot be sent to a banner
 - **Pin:** `FluxResults.tsx` L85–110 (open in media, download, use as reference/source clip, enhance, seed only).
 - **SOP impact:** SOP-11b §4.2 step 6. **G-104**.
+- **Resolved (D234, C-8):** every image result has **Use in a banner…** (`flux/UseInBanner.tsx`): pick the banner and the link opens its editor with `?useImage=`; the editor's **Use the Creative Studio picture here** fills that slide's picture (`BannerHandoff.tsx` `StudioPictureRow`). **Make a picture for this banner** opens the studio at the banner's real picture size (`pictureAdvice` / the slot's size, fitted to FLUX by `studioSizeFor`) and preselects that banner and slide.
 
 ### F-11-29 · CONFIRMED · GAP · S2 — No advertising-rule check on AI pictures or banners
 - **Pin:** `campaign-rules-core.ts` L53–61 (bans) is used only by `src/app/admin/marketing/page.tsx` and strategy files; not by the Creative Studio or `checkDesign` (L1334–1385). Website = advertising (L99–113).
 - **SOP impact:** SOP-11b §7.1 (check by hand). **G-105** (Q-11-14).
+- **Resolved (D234, C-8):** `ad-check-core.ts` checks banner words and prompts against the shared compliance patterns and `UNIVERSAL_CONTENT_BANS` (warn only; price words skipped). Every banner editor shows `AdCheckStrip` and keeps Publish off until "I checked the picture for minors appeal" is ticked; `scheduleChangeAction` and `addReleaseItemAction` refuse a banner Go live without the tick (`pictureTickOk`). Both studios add the prompt warnings.
 
 ### F-11-30 · CONFIRMED · WEAKNESS · S4 — Save to brand uses a browser prompt box
 - **Pin:** `BannerEditorShell.tsx` L60 (`window.prompt`).

@@ -9,6 +9,8 @@ import { specForDesign } from "@/lib/cms/picture-shape-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
 import { WEEKDAYS, WEEKDAY_LABEL, cleanDays, describeSchedule } from "@/lib/cms/banner-schedule-core";
 import { DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
+import { AdCheckStrip, StudioPictureRow } from "@/components/admin/BannerHandoff";
+import { designTexts } from "@/lib/marketing/ad-check-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { ensureBoundBoxes, type BannerDesign } from "@/lib/cms/banner-design-core";
 import {
@@ -81,6 +83,8 @@ export function CarouselSlideCard({
   };
 
   const [image, setImage] = useState(d.image);
+  // D234 C-8 (G-105, Q-11-14): Publish waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
   // GW-035: friendly confirm dialog instead of the browser's window.confirm.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteFormRef = useRef<HTMLFormElement>(null);
@@ -257,6 +261,16 @@ export function CarouselSlideCard({
         {/* Background image */}
         <div>
           <span className={labelCls}>Background image (textless art works best)</span>
+          <div className="mb-2">
+            <StudioPictureRow
+              targetId="home-main"
+              anchor={`slide-${slide.id}`}
+              design={adv?.design}
+              spec={CAROUSEL_SLIDE_SPEC}
+              current={image}
+              onUse={setImage}
+            />
+          </div>
           <ContentImageField
             value={image}
             onChange={setImage}
@@ -670,9 +684,16 @@ export function CarouselSlideCard({
                 ? "This slide has changes that aren't live yet."
                 : "This slide is live and matches what visitors see."}
           </p>
-          <Button type="submit" disabled={unsaved} variant="confirm">
+          <Button type="submit" disabled={unsaved || !pictureOk} variant="confirm">
             Publish to homepage
           </Button>
+        </div>
+        <div className="mt-2">
+          <AdCheckStrip
+            texts={designTexts(adv?.design, homeLegacyWords(words, adv)).concat(adv?.design?.enabled ? [] : [cta0Label, cta1Label])}
+            checked={pictureOk}
+            onChange={setPictureOk}
+          />
         </div>
       </form>
     </div>

@@ -53,6 +53,8 @@ import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { CardEditorShell } from "@/components/admin/banner-studio/CardEditorShell";
+import { AdCheckStrip, StudioPictureRow } from "@/components/admin/BannerHandoff";
+import { designTexts } from "@/lib/marketing/ad-check-core";
 import { DesignedCard } from "@/components/site/DesignedCard";
 import { cardDesign, designFromLegacy, unbindDesign } from "@/lib/cms/banner-design-core";
 
@@ -190,6 +192,8 @@ export function SpecialsPresentationEditor(props: Props) {
   const todaysText = props.todaysText ?? { title: "Today's Deals", subtitle: "" };
   const [pres, setPres] = useState<SpecialsPresentation>(() => initialPresentation(props));
   const [showHistory, setShowHistory] = useState(false);
+  // D234 C-8 (G-105, Q-11-14): Publish waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
   // R43: a green ✎ Edit deep link (?tab=cards|banner|hero) opens the right tab.
   const [tab, setTab] = useState<TabKey>(props.initialTab ?? "hero");
   const formRef = useRef<HTMLFormElement>(null);
@@ -316,6 +320,15 @@ export function SpecialsPresentationEditor(props: Props) {
                 Media Library. <strong>Leave blank</strong> to keep the built-in gradient look (no
                 photo). The image sits behind a dark fade so the wording stays readable.
               </p>
+              <div className="mb-2">
+                <StudioPictureRow
+                  targetId="specials-hero"
+                  design={pres.heroDesign}
+                  spec={heroSpec}
+                  current={pres.heroBannerImage}
+                  onUse={(url) => setGlobal("heroBannerImage", url)}
+                />
+              </div>
               <ContentImageField
                 value={pres.heroBannerImage}
                 onChange={(next) => setGlobal("heroBannerImage", next)}
@@ -642,6 +655,15 @@ export function SpecialsPresentationEditor(props: Props) {
                 the Media Library. Leave blank to keep the built-in artwork. The banner title &amp;
                 subtitle come from Promotions and stay as-is.
               </p>
+              <div className="mb-2">
+                <StudioPictureRow
+                  targetId="specials-banner"
+                  design={pres.todaysDealsDesign}
+                  spec={spec}
+                  current={pres.todaysDealsBannerImage}
+                  onUse={(url) => setGlobal("todaysDealsBannerImage", url)}
+                />
+              </div>
               <ContentImageField
                 value={pres.todaysDealsBannerImage}
                 onChange={(next) => setGlobal("todaysDealsBannerImage", next)}
@@ -812,7 +834,7 @@ export function SpecialsPresentationEditor(props: Props) {
         <Button type="submit" formAction={saveDraftAction} variant="save">
           Save draft
         </Button>
-        <Button type="submit" formAction={publishAction} variant="primary">
+        <Button type="submit" formAction={publishAction} variant="primary" disabled={!pictureOk}>
           Publish
         </Button>
         {dirtyVsPublished ? (
@@ -822,6 +844,15 @@ export function SpecialsPresentationEditor(props: Props) {
         ) : (
           <span className="text-xs text-[var(--admin-text-muted)]">Matches what&rsquo;s live.</span>
         )}
+        <AdCheckStrip
+          texts={[
+            ...designTexts(pres.heroDesign, heroText),
+            ...designTexts(pres.todaysDealsDesign, todaysLegacy),
+            ...pres.days.flatMap((d) => designTexts(d.design, dayWords(d, engineByDay.get(d.weekday)))),
+          ]}
+          checked={pictureOk}
+          onChange={setPictureOk}
+        />
       </form>
 
       {/* R63: the Promotions connection, collapsed under the editor. */}

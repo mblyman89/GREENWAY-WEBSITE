@@ -10,6 +10,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { safeAdminPath } from "@/lib/media/return-state-core";
 import { validateScheduleInput, formatRunAt } from "@/lib/cms/content-schedule-core";
+import { PICTURE_TICK_ERROR, PICTURE_TICK_FIELD, pictureTickOk } from "@/lib/marketing/ad-check-core";
 import {
   createSchedule,
   cancelSchedule,
@@ -42,6 +43,11 @@ export async function scheduleChangeAction(formData: FormData): Promise<void> {
     new Date().toISOString(),
   );
   if (!v.ok) redirect(withFlash(back, `error=${encodeURIComponent(v.error)}`));
+  // D234 C-8 (G-105, Q-11-14): a banner may only be scheduled to go live
+  // once the owner ticked "I checked the picture for minors appeal".
+  if (!pictureTickOk(v.value.kind, v.value.key, v.value.action, formData.get(PICTURE_TICK_FIELD))) {
+    redirect(withFlash(back, `error=${encodeURIComponent(PICTURE_TICK_ERROR)}`));
+  }
 
   const label = await labelForTarget(v.value.kind, v.value.key);
   const res = await createSchedule(v.value, label, session.userId);

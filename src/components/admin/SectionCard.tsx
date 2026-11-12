@@ -28,6 +28,8 @@ import { LinkPicker, type PickerPost } from "./banner-studio/LinkPicker";
 // R61 S1: the ONE shared banner-editor shell (same studio + Basic mode drawer
 // as the home carousel, Shop, Loyalty and Specials banners).
 import { BasicMode, DesignCard } from "./banner-studio/BannerEditorShell";
+import { AdCheckStrip, StudioPictureRow } from "./BannerHandoff";
+import { designTexts, sectionTargetId } from "@/lib/marketing/ad-check-core";
 
 /** Textarea that grows with its content (Enter = new line, bible Q8). */
 function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -135,6 +137,8 @@ export function SectionCard({
   const [pickingFor, setPickingFor] = useState<string | null>(null);
   // GW-035: friendly confirm dialog instead of the browser's window.confirm.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // D234 C-8 (G-105, Q-11-14): Publish waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
   const deleteFormRef = useRef<HTMLFormElement>(null);
 
   const buttonsJson = JSON.stringify(
@@ -324,6 +328,16 @@ export function SectionCard({
               <span className={labelCls}>
                 Background image (textless art works best)
               </span>
+              <div className="mb-2">
+                <StudioPictureRow
+                  targetId={sectionTargetId(pageSlug, section.section_key)}
+                  anchor={`section-${section.id}`}
+                  design={design}
+                  spec={imageSpec}
+                  current={image}
+                  onUse={setImage}
+                />
+              </div>
               <ContentImageField
                 value={image}
                 onChange={setImage}
@@ -610,9 +624,16 @@ export function SectionCard({
                     ? "This section has changes that aren't live yet."
                     : "This section is live and matches what visitors see."}
               </p>
-              <Button type="submit" disabled={unsaved} variant="confirm">
+              <Button type="submit" disabled={unsaved || !pictureOk} variant="confirm">
                 Publish to page
               </Button>
+              <AdCheckStrip
+                texts={designTexts(design, { eyebrow, title, subtitle }).concat(
+                  design?.enabled ? [] : [body, ...buttons.map((b) => b.label)],
+                )}
+                checked={pictureOk}
+                onChange={setPictureOk}
+              />
             </div>
           </form>
         </>

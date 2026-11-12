@@ -340,6 +340,8 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
       "Add up to 8 reference images (FLUX.2) or 10 (FLUX 3). FLUX sees them as image 1, image 2… so name them in your prompt.",
       "Settings match the Playground: aspect ratio (or custom), safety tolerance 0-5, output format, prompt upsampling and 1, 2, 3, 4 or 8 images. Seed and model are optional extras.",
       "Results appear as they finish and are saved to your media library as DRAFTS. Nothing goes live automatically.",
+      "Use in a banner: under a finished image pick the banner and press \"Open the banner editor\", then press \"Use the Creative Studio picture here\" on the slide you want. Opened from \"✨ Make a picture for this banner\", the studio starts at that banner's size and picks that banner for you.",
+      "The advertising check warns about banned words in your prompt (WAC 314-55-155). It never blocks you; the banner editor asks you to tick \"I checked the picture for minors appeal\" before Publish.",
       "FLUX Video: text → video, image → video (keyframes), continue, edit or upscale a clip. Pick a quick format (Reel, feed, 16:9…), duration, resolution and audio. Draft first is on by default: a fast HD preview for about a third of the cost, then Enhance renders the same shot at full quality.",
       "Midjourney prompt: builds a copy-paste prompt from a structured brief with AI assist and full Midjourney parameters.",
     ],

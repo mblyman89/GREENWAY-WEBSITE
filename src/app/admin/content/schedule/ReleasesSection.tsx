@@ -17,6 +17,7 @@ import {
   unscheduleReleaseAction,
 } from "./release-actions";
 import { editHref, TargetSelect, type TargetGroups } from "./schedule-ui";
+import { PictureTickField } from "@/components/admin/SchedulePanel";
 
 const BADGE: Record<ReleaseStatus, string> = {
   draft: "bg-[var(--admin-surface)] text-[var(--admin-text-muted)]",
@@ -146,6 +147,7 @@ export function ReleasesSection({
                           <option value="unpublish">Come down</option>
                         </select>
                       </label>
+                      <PictureTickField always />
                       <button type="submit" className={BTN}>Add to release</button>
                     </form>
 

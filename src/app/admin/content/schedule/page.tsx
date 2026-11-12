@@ -9,6 +9,7 @@ import {
 } from "@/lib/cms/content-schedule-server";
 import { listReleases } from "@/lib/cms/content-release-server";
 import { scheduleChangeAction } from "./actions";
+import { PictureTickField } from "@/components/admin/SchedulePanel";
 import { ReleasesSection } from "./ReleasesSection";
 import { AsOfSection } from "./AsOfSection";
 import { listScheduledAreaItems } from "@/lib/cms/schedule-everywhere-server";
@@ -113,6 +114,7 @@ export default async function SchedulePage({
                 When (Pacific time)
                 <input type="datetime-local" name="run_at_local" required step={300} defaultValue={defaultRunAtLocal(nowIso)} className="rounded-md border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-sm text-[var(--admin-text)]" />
               </label>
+              <PictureTickField always />
               <button type="submit" className="admin-focus inline-flex items-center rounded-full bg-[var(--admin-accent)] px-4 py-2 text-xs font-black uppercase tracking-[0.1em] text-black hover:brightness-110">
                 Schedule
               </button>

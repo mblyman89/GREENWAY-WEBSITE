@@ -24,6 +24,8 @@ import { specForDesign } from "@/lib/cms/picture-shape-core";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import { ScheduleRepeatFields } from "@/components/admin/ScheduleRepeatFields";
+import { AdCheckStrip, StudioPictureRow } from "@/components/admin/BannerHandoff";
+import { designTexts } from "@/lib/marketing/ad-check-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
   TEXT_ALIGNS,
@@ -450,6 +452,8 @@ function SlideCard({
   );
   const [draftEnabled, setDraftEnabled] = useState<boolean>(slide.draftEnabled);
   const [open, setOpen] = useState<boolean>(index === 0);
+  // D234 C-8 (G-105, Q-11-14): Publish waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
 
   const serialized = useMemo(() => serializeShopHeroPresentation(pres), [pres]);
   const publishedSerialized = useMemo(
@@ -570,6 +574,19 @@ function SlideCard({
                 Optional. Use a <strong>textless</strong> picture (the words are added below). Leave
                 blank for a clean dark panel like today&apos;s banner.
               </p>
+              <div className="mb-2">
+                <StudioPictureRow
+                  targetId="shop"
+                  anchor={`slide-${slide.id}`}
+                  design={pres.design}
+                  spec={desktopSpec}
+                  current={pres.image}
+                  onUse={(url) => {
+                    setField("image", url);
+                    setOpen(true);
+                  }}
+                />
+              </div>
               <ContentImageField
                 value={pres.image}
                 onChange={(next) => setField("image", next)}
@@ -753,7 +770,7 @@ function SlideCard({
               <Button type="submit" formAction={saveDraftAction} variant="save">
                 Save draft
               </Button>
-              <Button type="submit" formAction={publishAction} variant="primary">
+              <Button type="submit" formAction={publishAction} variant="primary" disabled={!pictureOk}>
                 Publish this slide
               </Button>
               {dirtyVsPublished ? (
@@ -761,6 +778,15 @@ function SlideCard({
               ) : (
                 <span className="text-xs text-[var(--admin-text-muted)]">Matches what&rsquo;s live.</span>
               )}
+              <AdCheckStrip
+                texts={designTexts(pres.design, {
+                  eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+                  title: pres.title.show ? pres.title.text : "",
+                  subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+                }).concat(pres.design?.enabled ? [] : pres.ctas.map((c) => c.label))}
+                checked={pictureOk}
+                onChange={setPictureOk}
+              />
             </form>
           </div>
         </div>

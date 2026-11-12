@@ -18,6 +18,7 @@ import { useToast } from "@/components/admin/ux";
 import { fluxCreditsAction, submitFluxVideoAction } from "@/app/admin/marketing/midjourney/actions";
 import { FLUX_MAX_KEYFRAMES, FLUX_VIDEO_MODES, FLUX_VIDEO_RESOLUTIONS, type FluxVideoSettings } from "@/lib/marketing/flux-video-core";
 import { VIDEO_SNIPPETS, VIDEO_TEMPLATES } from "@/lib/marketing/flux-presets-core";
+import { adPromptWarnings } from "@/lib/marketing/ad-check-core";
 import { PromptBox } from "./PromptBox";
 import { ReferenceStrip, type RefImage } from "./ReferenceStrip";
 import { DEFAULT_VIDEO_SETTINGS, VideoSettings, type VideoUiSettings } from "./VideoSettings";
@@ -249,7 +250,7 @@ export function FluxVideoStudio({
             onChange={setPrompt}
             templates={mode === "upscale" ? [] : VIDEO_TEMPLATES}
             snippets={mode === "edit" || mode === "upscale" ? [] : VIDEO_SNIPPETS}
-            warnings={videoWarnings(prompt, mode)}
+            warnings={[...videoWarnings(prompt, mode), ...adPromptWarnings(prompt)]}
             onSubmit={() => canGo && generate()}
             placeholder={
               mode === "edit"
