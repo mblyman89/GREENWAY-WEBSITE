@@ -1287,7 +1287,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-3 · CONFIRMED · WEAKNESS · S2 — Broadcast runs inside one server action, one email per call, 5 at a time, no per-recipient record, no resume, no batch API, no idempotency key
 - **Pin:** L384–414
-- **SOP impact:** SOP-22 Appendix B.1; gap G-112; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-112; status **FIXED (N-2, D237)**.
+- **Resolved (D237, N-2, #PN2):** per-address queue `newsletter_send_recipients` (0362), batch endpoint with `Idempotency-Key`, lease + cron resume, Retry failed (`newsletter-queue-server.ts`, `newsletter-batch-core.ts`)
 
 ### F-22-4 · CONFIRMED · GAP · S2 — Hard bounces and complaints are stored but never suppress the address
 - **Pin:** `ingest-store.ts`; no `email_opt_out` write in webhook path
@@ -1384,7 +1385,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
 | SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
 | SOP-11b Creative Studio, Banner Design Studio & Scheduling (v2.0, D233) | 15 new (F-11-19…F-11-32 + F-11-C2; 0×S1, 5×S2 (F-11-19, 20, 21, 22, 29), 8×S3, 1×S4) | 15 | 0 |
-| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19 | 21 | 0 |
+| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19; N-2 fixed F-22-3 | 21 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 

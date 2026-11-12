@@ -1365,7 +1365,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D226: +1 KEEP orders_origin_backfill_0359 (0359; undo list for the register relabel, no FK).
     // D232 M-4: +1 KEEP merch_designs (0360; Merch Studio designs + sample approvals, no FK).
     // D232 M-7: +1 KEEP merch_alerts (0361; greenwaymerch.com owner alerts + acknowledge, no FK).
-    expect(plan.keep.length).toBe(212);
+    // D237 N-2: +1 KEEP newsletter_send_recipients (0362; emptied with newsletter_sends by its own TRUNCATE trigger, no FK).
+    expect(plan.keep.length).toBe(213);
     expect(plan.wipe.length).toBe(139);
   });
 

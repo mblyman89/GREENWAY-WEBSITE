@@ -13,7 +13,10 @@ import {
   listSendHistory,
   type SendableNewsletter,
 } from "@/lib/cms/newsletter-send-store";
-import { testSendNewsletterAction, broadcastNewsletterAction } from "./actions";
+import { testSendNewsletterAction, broadcastNewsletterAction, retryFailedNewsletterAction } from "./actions";
+import { listOpenSendProgress } from "@/lib/cms/newsletter-queue-server";
+import { progressLine } from "@/lib/cms/newsletter-batch-core";
+import { NewsletterSendAutoRefresh } from "@/components/admin/marketing/NewsletterSendAutoRefresh";
 import { getNewsletterStats } from "@/lib/reports/newsletter-stats";
 import { NewsletterStatsSection } from "@/components/admin/reports/NewsletterStatsSection";
 import { Button } from "@/components/admin/ui/Button";
@@ -52,6 +55,8 @@ export default async function NewsletterSendPage({
     sent?: string;
     failed?: string;
     error?: string;
+    queued?: string;
+    notice?: string;
   }>;
 }) {
   const session = await requirePermission("blog.manage");
@@ -74,12 +79,15 @@ export default async function NewsletterSendPage({
   // Engagement window: trailing 90 days. Reuses the same stats engine that
   // powers Reports → Customers → Newsletter Statistics (no new tracking).
   const { fromISO: engagementFromISO, toISO: engagementToISO } = engagementWindow();
-  const [newsletters, recipients, history, engagement] = await Promise.all([
+  const [newsletters, recipients, history, engagement, openSendsAll] = await Promise.all([
     listSendableNewsletters(),
     getRecipientStats(),
     listSendHistory(20),
     getNewsletterStats(engagementFromISO, engagementToISO),
+    listOpenSendProgress(),
   ]);
+  // D237 N-2: only queued broadcasts (rows in newsletter_send_recipients) have a bar.
+  const openSends = openSendsAll.filter((o) => o.pending + o.sent + o.failed > 0);
 
   const sendable = newsletters.filter((n) => n.status === "published" && n.pdfUrl);
   const selected: SendableNewsletter | null =
@@ -109,6 +117,8 @@ export default async function NewsletterSendPage({
               "Upload it under Blog & Newsletter (set type = Newsletter) and Publish.",
               "Come here, pick it, and send a Test to yourself first.",
               "Happy? The owner or an admin ticks the confirm box and sends it to the loyalty list.",
+              "It goes out in batches of 100. A bar shows how many are sent; you can leave this page and it keeps going.",
+              "If some addresses failed, the owner or an admin can press Retry failed on that send. Only those addresses get it again.",
             ]}
           >
             <p className="mb-2">
@@ -136,6 +146,30 @@ export default async function NewsletterSendPage({
         {sp.tested ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
             Test email sent to {decodeURIComponent(sp.tested)} — check your inbox.
+          </div>
+        ) : null}
+        {sp.queued !== undefined ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
+            Queued for {sp.queued} member(s). It goes out in batches of 100; you can leave this page and it keeps going.
+          </div>
+        ) : null}
+        {sp.notice ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
+            {decodeURIComponent(sp.notice)}
+          </div>
+        ) : null}
+        {openSends.length > 0 ? (
+          <div className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5" data-testid="newsletter-send-progress">
+            {openSends.map((o) => (
+              <div key={o.sendId}>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">{o.subject}</p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded bg-[var(--admin-border)]" role="progressbar" aria-valuenow={o.percent} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="h-full bg-[var(--admin-accent)]" style={{ width: `${o.percent}%` }} />
+                </div>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{progressLine(o)}</p>
+              </div>
+            ))}
+            <NewsletterSendAutoRefresh active />
           </div>
         ) : null}
         {sp.sent !== undefined ? (
@@ -308,7 +342,8 @@ export default async function NewsletterSendPage({
                     <th className="py-2 pr-4 font-medium">Type</th>
                     <th className="py-2 pr-4 font-medium">Sent / Failed</th>
                     <th className="py-2 pr-4 font-medium">Status</th>
-                    <th className="py-2 font-medium">By</th>
+                    <th className="py-2 pr-4 font-medium">By</th>
+                    {canBroadcast ? <th className="py-2 font-medium"><span className="sr-only">Actions</span></th> : null}
                   </tr>
                 </thead>
                 <tbody className="text-[var(--admin-text-muted)]">
@@ -324,7 +359,20 @@ export default async function NewsletterSendPage({
                       <td className="py-2 pr-4">
                         <StatusPill status={h.status} />
                       </td>
-                      <td className="py-2 text-[var(--admin-text-faint)]">{h.sent_by_email ?? "—"}</td>
+                      <td className="py-2 pr-4 text-[var(--admin-text-faint)]">{h.sent_by_email ?? "—"}</td>
+                      {canBroadcast ? (
+                        <td className="py-2">
+                          {h.send_kind === "broadcast" && h.failed_count > 0 && h.status !== "sending" ? (
+                            <form action={retryFailedNewsletterAction}>
+                              <input type="hidden" name="send_id" value={h.id} />
+                              <input type="hidden" name="newsletter_id" value={selected?.id ?? ""} />
+                              <Button type="submit" variant="neutral" size="sm">
+                                Retry failed
+                              </Button>
+                            </form>
+                          ) : null}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

@@ -213,6 +213,7 @@
     "merch_designs",
     "newsletter_assets",
     "newsletter_email_events",
+    "newsletter_send_recipients",
     "newsletter_sends",
     "noncannabis_adjustments",
     "noncannabis_invoice_lines",
