@@ -1288,7 +1288,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-3 · CONFIRMED · WEAKNESS · S2 — Broadcast runs inside one server action, one email per call, 5 at a time, no per-recipient record, no resume, no batch API, no idempotency key
 - **Pin:** L384–414
 - **SOP impact:** SOP-22 Appendix B.1; gap G-112; status **FIXED (N-2, D237)**.
-- **Resolved (D237, N-2, #PN2):** per-address queue `newsletter_send_recipients` (0362), batch endpoint with `Idempotency-Key`, lease + cron resume, Retry failed (`newsletter-queue-server.ts`, `newsletter-batch-core.ts`)
+- **Resolved (D237, N-2, #1775):** per-address queue `newsletter_send_recipients` (0362), batch endpoint with `Idempotency-Key`, lease + cron resume, Retry failed (`newsletter-queue-server.ts`, `newsletter-batch-core.ts`)
 
 ### F-22-4 · CONFIRMED · GAP · S2 — Hard bounces and complaints are stored but never suppress the address
 - **Pin:** `ingest-store.ts`; no `email_opt_out` write in webhook path
