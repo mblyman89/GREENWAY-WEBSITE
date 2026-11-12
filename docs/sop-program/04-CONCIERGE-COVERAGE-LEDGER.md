@@ -855,3 +855,15 @@ The concierge code is **unchanged** (record-only). Today there is one topic, `im
 | *new* `content-schedule` (what can be scheduled, Pacific 5-minute clock, releases, failed items, repeats and fallback) | §4.11–§4.14, §6.4 | 0 -> 9 |
 
 **Role filter:** all four are `content.edit`. Built in slice C-6 (G-106).
+
+### SOP-22 Newsletter, Blog, Culture & AI content (`docs/sop/SOP-22-newsletter-blog-culture-marketing.md`, verified at `a4ccd7cb`, D236)
+
+The concierge code is **unchanged** (record-only). Today there is one topic, `blog-newsletter` (`src/lib/admin/concierge-kb.ts` L272–281). It mentions **scheduling**, which does nothing for blog posts today (F-22-5); correct it in N-1 or N-10.
+
+| Concierge topic | SOP-22 sections that ground it | Rating today -> after integration (target) |
+|---|---|---|
+| `blog-newsletter` (correct the scheduling claim; post types; AI draft; hero and alt text; PDF re-upload) | §4.3–§4.4, §4.6, §6 | 5 -> 9 |
+| *new* `newsletter-sunday` (weekly rhythm, Send Center steps, four warnings, after-send checks) | §4.2, §4.6–§4.7, §7.1–§7.3, §8.2 | 0 -> 9 |
+| *new* `culture-posts` (sources, medical-claims rule, vendor claims, Google reviews rules) | §4.5, §7.1, §7.4 | 0 -> 9 |
+
+**Role filter:** `blog.manage` (the broadcast step per Q-22-3). Built in slice N-10 (G-120).

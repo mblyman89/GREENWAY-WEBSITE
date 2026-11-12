@@ -1271,6 +1271,96 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 
 ---
 
+## SOP-22 · The Sunday Newsletter, the Blog, Culture Posts and AI Marketing Content (verified at `main@a4ccd7cb`)
+
+Owner request D236 (2026-11-12). Read-only recon; no code changed. External rules re-read the same day (SOP-22 Appendix A.2).
+
+### F-22-1 · CONFIRMED · BUG · S1 — Newsletter email lacks the four WAC 314-55-155(7) warnings (only "For adults 21+. Keep out of reach of children.")
+- **Pin:** `newsletter-send-store.ts` L231–236; rule in `campaign-rules-core.ts` L86, L96
+- **SOP impact:** SOP-22 Appendix B.1; gap G-108; status OPEN (Phase N PROPOSED).
+
+### F-22-2 · CONFIRMED · GAP · S2 — No `List-Unsubscribe` / `List-Unsubscribe-Post` header; the unsubscribe page is a GET page only
+- **Pin:** `newsletter-send-store.ts` L270–281; `unsubscribe/page.tsx` L17–33
+- **SOP impact:** SOP-22 Appendix B.1; gap G-109; status OPEN (Phase N PROPOSED).
+
+### F-22-3 · CONFIRMED · WEAKNESS · S2 — Broadcast runs inside one server action, one email per call, 5 at a time, no per-recipient record, no resume, no batch API, no idempotency key
+- **Pin:** L384–414
+- **SOP impact:** SOP-22 Appendix B.1; gap G-112; status OPEN (Phase N PROPOSED).
+
+### F-22-4 · CONFIRMED · GAP · S2 — Hard bounces and complaints are stored but never suppress the address
+- **Pin:** `ingest-store.ts`; no `email_opt_out` write in webhook path
+- **SOP impact:** SOP-22 Appendix B.1; gap G-111; status OPEN (Phase N PROPOSED).
+
+### F-22-5 · CONFIRMED · BUG · S2 — Blog "Scheduled" status never publishes; `blog_post` is not a schedule target; the list and the concierge imply it works
+- **Pin:** `content-schedule-core.ts` L32–38, L295; `blog-store.ts` L193–203; `blog/page.tsx` L49, L116; `concierge-kb.ts` L278
+- **SOP impact:** SOP-22 Appendix B.1; gap G-113, G-120; status OPEN (Phase N PROPOSED).
+
+### F-22-6 · CONFIRMED · BUG · S2 — Saving a newsletter post without a new PDF erases `pdf_media_id` and `page_media_ids`; the post drops out of the Send Center
+- **Pin:** `blog/actions.ts` L201–226; `blog-store.ts` L215–233; `newsletter/page.tsx` L80
+- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status OPEN (Phase N PROPOSED).
+
+### F-22-7 · CONFIRMED · BUG · S3 — Post title inserted into email HTML unescaped
+- **Pin:** `newsletter-send-store.ts` L223
+- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status OPEN (Phase N PROPOSED).
+
+### F-22-8 · CONFIRMED · GAP · S2 — No newsletter canvas: the email body is a fixed sentence + button; no sections, preheader or plain-text part; Canva PDF is the only design path
+- **Pin:** L204–242; `newsletter/page.tsx` L104
+- **SOP impact:** SOP-22 Appendix B.1; gap G-118; status OPEN (Phase N PROPOSED).
+
+### F-22-9 · CONFIRMED · GAP · S2 — No Sunday cadence: no scheduled send, no reminder, no "ready for approval" state
+- **Pin:** (absence)
+- **SOP impact:** SOP-22 Appendix B.1; gap G-113; status OPEN (Phase N PROPOSED).
+
+### F-22-10 · CONFIRMED · GAP · S2 — AI blog writer is ungrounded (title, category, topic only; "Do not mention price, stock, or specific inventory"; 500 tokens)
+- **Pin:** `ai-blog.ts` L35, L85; `blog/actions.ts` L296–300
+- **SOP impact:** SOP-22 Appendix B.1; gap G-115; status OPEN (Phase N PROPOSED).
+
+### F-22-11 · CONFIRMED · GAP · S2 — No "this week at Greenway" facts feed, although the data exists (vendors `created_at`, lot received date, promotions window, vendor-day flag)
+- **Pin:** `0003` L38, `0214`, `0006` L78–81, `PromotionForm.tsx` L281
+- **SOP impact:** SOP-22 Appendix B.1; gap G-114; status OPEN (Phase N PROPOSED).
+
+### F-22-12 · CONFIRMED · GAP · S3 — No Google reviews source; Google's terms forbid storing reviews
+- **Pin:** (no match in `src/`); Places policies
+- **SOP impact:** SOP-22 Appendix B.1; gap G-119; status OPEN (Phase N PROPOSED).
+
+### F-22-13 · CONFIRMED · GAP · S2 — No news desk for culture posts; WSLCB feed and grounded web search exist but aren't wired to the blog
+- **Pin:** `regulatory-ingest.ts`; `provider.ts` L991; `ai-blog-ideas.ts` L74
+- **SOP impact:** SOP-22 Appendix B.1; gap G-116; status OPEN (Phase N PROPOSED).
+
+### F-22-14 · CONFIRMED · RISK · S1 — "Medical benefits" content collides with WAC 314-55-155(2)(a)(vii); no health-topic guard beyond the general check
+- **Pin:** WAC; `compliance.ts`
+- **SOP impact:** SOP-22 Appendix B.1; gap G-116; status OPEN (Phase N PROPOSED).
+
+### F-22-15 · CONFIRMED · GAP · S3 — Hero is upload-only (no Digital Assets picker, 4 MB); body is plain paragraphs (no headings, inline images, product cards, links)
+- **Pin:** `blog/actions.ts` L38, L166; `BlogEditorClient.tsx` L34; `[slug]/page.tsx` L128–129
+- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status OPEN (Phase N PROPOSED).
+
+### F-22-16 · CONFIRMED · WEAKNESS · S3 — Body/SEO AI compliance flags are computed but not shown at generate time
+- **Pin:** `ai-blog.ts` L86–94; `blog/actions.ts` L289–317
+- **SOP impact:** SOP-22 Appendix B.1; gap G-115; status OPEN (Phase N PROPOSED).
+
+### F-22-17 · CONFIRMED · WEAKNESS · S3 — Every `blog.manage` role (including content_editor) can broadcast to the whole list
+- **Pin:** `newsletter/actions.ts` L52; `roles.ts` L112
+- **SOP impact:** SOP-22 Appendix B.1; gap G-111; status OPEN (Phase N PROPOSED).
+
+### F-22-18 · CONFIRMED · GAP · S3 — Public blog has no category filter or Culture section
+- **Pin:** `(site)/blog/page.tsx`
+- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status OPEN (Phase N PROPOSED).
+
+### F-22-19 · CONFIRMED · WEAKNESS · S4 — Email config does not trim values; a misleading comment about recipients
+- **Pin:** `newsletter-send-store.ts` L41–47, L274–278
+- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status OPEN (Phase N PROPOSED).
+
+### F-22-20 · CONFIRMED · GAP · S3 — No Article structured data (JSON-LD) on blog posts
+- **Pin:** no `ld+json` under `src/app/(site)/blog`
+- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status OPEN (Phase N PROPOSED).
+
+### F-22-C · CONFIRMED · STRENGTH — What already works (B.2)
+- **Pin:** —
+- **SOP impact:** SOP-22 Appendix B.2 (keep these when building Phase N).
+
+---
+
 ## Ledger index (updated each slice)
 
 | SOP slice | Findings | Confirmed | Suspected |
@@ -1287,6 +1377,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
 | SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
 | SOP-11b Creative Studio, Banner Design Studio & Scheduling (v2.0, D233) | 15 new (F-11-19…F-11-32 + F-11-C2; 0×S1, 5×S2 (F-11-19, 20, 21, 22, 29), 8×S3, 1×S4) | 15 | 0 |
+| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4) | 21 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 
