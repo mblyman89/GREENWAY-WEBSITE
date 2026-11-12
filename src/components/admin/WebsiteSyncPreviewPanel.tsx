@@ -32,11 +32,23 @@ import type { DesignMove } from "@/lib/cms/banner-design-core";
  * saveDesignMoveAction (server re-validates + checks permission), then the
  * preview reloads. Nothing goes live until Publish in that banner's editor.
  */
-export function WebsiteSyncPreviewPanel({ canMove = false, initialPath }: { canMove?: boolean; initialPath?: string }) {
+export function WebsiteSyncPreviewPanel({
+  canMove = false,
+  initialPath,
+  initialDevice,
+  initialMove = false,
+}: {
+  canMove?: boolean;
+  initialPath?: string;
+  /** D234 C-2: "Check on the real page" opens at the studio's size… */
+  initialDevice?: "desktop" | "tablet" | "phone";
+  /** …with Move mode on (only if the viewer may move). */
+  initialMove?: boolean;
+}) {
   const [activePath, setActivePath] = useState<string>(
     PREVIEW_PAGES.some((p) => p.path === initialPath) ? (initialPath as string) : PREVIEW_PAGES[0].path,
   );
-  const [moveMode, setMoveMode] = useState(false);
+  const [moveMode, setMoveMode] = useState(canMove && initialMove);
   const [movable, setMovable] = useState<number | null>(null);
   const [reload, setReload] = useState(0);
   const [last, setLast] = useState<DesignMoveResult | null>(null);
@@ -141,6 +153,7 @@ export function WebsiteSyncPreviewPanel({ canMove = false, initialPath }: { canM
       <PreviewFrame
         path={activePath}
         height={820}
+        initialDevice={initialDevice}
         moveMode={canMove && moveMode}
         onDesignMove={canMove ? onDesignMove : undefined}
         onMoveReady={setMovable}

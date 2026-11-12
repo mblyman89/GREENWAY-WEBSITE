@@ -35,6 +35,7 @@ export function PreviewFrame({
   onDesignMove,
   onMoveReady,
   reloadSignal = 0,
+  initialDevice = "desktop",
 }: {
   path: string;
   height?: number;
@@ -49,8 +50,10 @@ export function PreviewFrame({
   onMoveReady?: (count: number) => void;
   /** R41 S7: bump to reload the preview (e.g. after a move was saved). */
   reloadSignal?: number;
+  /** D234 C-2: start at this size ("Check on the real page"). */
+  initialDevice?: Device;
 }) {
-  const [device, setDevice] = useState<Device>("desktop");
+  const [device, setDevice] = useState<Device>(initialDevice);
   const [nonce, setNonce] = useState(0); // bump to force reload
   const frameRef = useRef<HTMLIFrameElement>(null);
   const moveRef = useRef(moveMode);

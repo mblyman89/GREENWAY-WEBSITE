@@ -21,6 +21,7 @@ import { TextBoxPanel } from "./TextBoxPanel";
 import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
+import { WidthBar } from "./WidthBar";
 import { useStudioSiteFonts } from "./StudioSiteFonts";
 import { ShapePanel } from "./ShapePanel";
 import { SmokePanel } from "./SmokePanel";
@@ -62,6 +63,7 @@ export function BannerStudio({
   onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
 }) {
   const [device, setDevice] = useState<DesignDevice>("desktop");
+  const [width, setWidth] = useState<number | null>(null); // D234 C-2: null = reference size
   // R53: one picture per banner (the R42 phone picture was removed).
   const deviceSrc = imageSrc;
   const [tab, setTab] = useState<Tab>("text");
@@ -309,7 +311,10 @@ export function BannerStudio({
                 type="button"
                 role="radio"
                 aria-checked={device === d}
-                onClick={() => setDevice(d)}
+                onClick={() => {
+                  setDevice(d);
+                  setWidth(null);
+                }}
                 className={
                   device === d
                     ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black"
@@ -353,6 +358,16 @@ export function BannerStudio({
           </div>
         </div>
 
+        <WidthBar
+          width={width}
+          device={device}
+          card={!!design.frame.card}
+          onWidth={(w, d) => {
+            setWidth(w);
+            setDevice(d);
+          }}
+        />
+
         {device === "mobile" ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--admin-orange)]/12 px-3 py-1.5 text-xs text-[var(--admin-orange)]">
             <span>📱 Phone layout: moves and sizes here only change how the banner looks on phones.</span>
@@ -381,6 +396,7 @@ export function BannerStudio({
             onToggle={toggle}
             replayKey={replayKey}
             maxH={canvasMaxH}
+            width={width}
           />
         </div>
         <ArrangeBar

@@ -1344,6 +1344,7 @@ import { __runDrawerCloseSlipTests } from "../../src/lib/registers/drawer-close-
 import { __runCockpitAnalyticsTests } from "../../src/lib/admin/cockpit-analytics-core";
 import { __runAtmForecastTests } from "../../src/lib/atm/atm-forecast-core";
 import { __runStudioFontsCoreTests } from "../../src/lib/cms/studio-fonts-core";
+import { __runStudioWidthsCoreTests } from "../../src/lib/cms/studio-widths-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2885,6 +2886,7 @@ __runLiquidVolumeTests();
   assertRan("library-v2-core", __runLibraryV2CoreTests(), 60); // D221 M7: library facets, AI/human badges, bulk steps (never overwrite human values, attach stays human), health tiles, collections, search log
   assertRan("image-seo-core", __runImageSeoCoreTests(), 15); // D221 M8: seo_alt alt text, ImageObject JSON-LD, image sitemap
   assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 70); // D225: many pictures per category, variety per card, rotation rules (WCAG 2.2.2 pause, reduced motion). D224: one owner-chosen fallback picture per website category; own photo wins, owner fallback beats generic substitutes, always badged as representative
+  assertRan("studio-widths-core", __runStudioWidthsCoreTests(), 20); // D234 C-2 (SOP-11b G-97/G-98): real banner widths, interpPx at any width, Check on the real page
   assertRan("studio-fonts-core", __runStudioFontsCoreTests(), 14); // D234 C-1 (SOP-11b G-94): studio = website Heading/Body fonts; System default warning
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   console.log("ALL PURE SELF-TESTS PASSED");

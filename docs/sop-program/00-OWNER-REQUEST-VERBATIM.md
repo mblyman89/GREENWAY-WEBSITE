@@ -2960,3 +2960,10 @@ What was done:
 - **The website is untouched.** Test: `tests/compliance/d233-creative-c1-fonts-tags.test.ts`. Pure self-tests: `__runStudioFontsCoreTests`, plus the new `banner-design-core` cases. SOP-11b v2.1.
 - **Owner steps:** no migration, no new variable. Q-11-18: open **Branding → Fonts** and pick a Heading font (and a Body font) instead of System default. While the site is on System default, the studio shows the Checks warning on banner text.
 
+### As built (slice C-2)
+
+- **Width slider with real stops** (G-97, F-11-22): under Computer / Phone the studio has **Banner width** (320 … 1920 px) and one-tap stops for the widths the site really shows. These are 1408 (home and Shop), 1344 (Specials and Loyalty), 1216 (1280 laptop), 960 (1024 laptop), 770 (tablet 834), 398 / 358 / 328 (phones 430 / 390 / 360). **Reference** goes back to today's 1408 / 390 view. At a width the canvas lays out with the website's own sizing (`canvasRefPx` → `fluidPxAt`, the same math as `interpPx`), so the height and text sizes are what visitors see there. Below 768 the phone layout applies, like the site's container query, and moves write that layout. Cards keep their own shape, so they have no slider. (`studio-widths-core.ts`, `WidthBar.tsx`, `BannerStudio.tsx`, `StudioCanvas.tsx`.)
+- **Check on the real page** (G-98, F-11-24): the same bar links to **Website Sync → Live preview** at the editor's page (home `/`, Shop `/menu`, Specials, Loyalty, other pages). It opens at the matching size (Phone, Tablet under 1100, else Desktop) with **Move mode on** (`?tab=preview&path=…&device=…&move=1`; `website-sync/page.tsx`, `WebsiteSyncPreviewPanel.tsx`, `PreviewFrame.tsx`). It shows the last saved draft. Branding has no single page, so it has no link.
+- Nothing changes on the website. Test: `tests/compliance/d233-creative-c2-widths.test.ts` (fluidPxAt = interpPx at every stop; no width = today's reference size). Pure self-tests: `__runStudioWidthsCoreTests`. SOP-11b v2.2.
+- **Owner steps:** none. Try the stops before publishing; use **Check on the real page** for the last few pixels.
+
