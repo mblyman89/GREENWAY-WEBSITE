@@ -117,7 +117,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.4 (D234, #1767):** slice **C-4** built: drift guard (a test renders the real studio and the real website banner at every width stop and requires them to agree within 1% of the width) and Checks at every width, phone included (`AT_WIDTHS`) (G-99).
 
-**v2.5 (D234, #PC5):** slice **C-5** built: picture shape advice that fits each banner at every width (and the placement upload hints follow the design), a safe-area overlay on the focus picture, and a crop-edge hint (G-101).
+**v2.5 (D234, #1768):** slice **C-5** built: picture shape advice that fits each banner at every width (and the placement upload hints follow the design), a safe-area overlay on the focus picture, and a crop-edge hint (G-101).
 
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
