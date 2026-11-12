@@ -12,6 +12,7 @@ import {
   overlayStyle,
   resolveBoxText,
   roleInfo,
+  sizingOf,
   type BannerDesign,
   type DesignTextBox,
 } from "@/lib/cms/banner-design-core";
@@ -86,6 +87,8 @@ export function DesignedBanner({
 }: DesignedBannerProps) {
   // R61-S3: card designs (Type cards / Specials cards) scale with the card.
   const card = !!design.frame.card;
+  // D234 C-3: "scale" designs grow and shrink with the banner (old designs: "fluid", unchanged).
+  const mode = sizingOf(design);
   // R42 Q4: optional separate phone picture (unset = one picture, as before).
   const phoneSrc = design.image.srcMobile && design.image.srcMobile !== imageSrc ? design.image.srcMobile : "";
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
@@ -214,7 +217,7 @@ export function DesignedBanner({
           if (!text.trim()) return null;
           const Tag = boxEl(b, i);
           const suffix = bindSuffix(b);
-          const boxCss = css(withZ(b.curve ? curvedBoxStyle(b, card) : boxStyle(b, card), b.id));
+          const boxCss = css(withZ(b.curve ? curvedBoxStyle(b, mode) : boxStyle(b, mode), b.id));
           const boxCls = `gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim();
           // R58-S3: countdown / auto deal badge — a small client island ticks it.
           if (b.live) return <LiveBox key={b.id} as={Tag} box={b} card={card} text={text} style={boxCss} className={boxCls} attrs={{ ...(editable ? { "data-gw-design-box": b.id } : {}), ...en(b.id) }} />;
@@ -235,7 +238,7 @@ export function DesignedBanner({
         })}
         {design.buttons.map((btn) => {
           if (!btn.enabled || !btn.label.trim() || !btn.href.trim()) return null;
-          const style = css(withZ(buttonStyle(btn, card), btn.id));
+          const style = css(withZ(buttonStyle(btn, mode), btn.id));
           const fxc = buttonFxClass(btn);
           const className = `gw-dbox gw-dbtn${btn.hideOnMobile ? " gw-hide-sm" : ""}${fxc ? ` ${fxc}` : ""}`;
           const hooks = { ...(editable ? { "data-gw-design-button": btn.id } : {}), ...en(btn.id) };

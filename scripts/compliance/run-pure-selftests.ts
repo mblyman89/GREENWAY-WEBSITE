@@ -2701,7 +2701,7 @@ __runLiquidVolumeTests();
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 36); // R41 S15: R90 coded (no reminder), reminders checked on the 2027 character rule; R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 31); // R40: ACH guide journeys, blockers, explainer; R41 S6: Timberland setup journey
-  assertRan("banner-design-core", __runBannerDesignCoreTests(), 159); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
+  assertRan("banner-design-core", __runBannerDesignCoreTests(), 180); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 30); // R47: home carousel advanced options; R54 repeat/fallback
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
@@ -2886,7 +2886,7 @@ __runLiquidVolumeTests();
   assertRan("library-v2-core", __runLibraryV2CoreTests(), 60); // D221 M7: library facets, AI/human badges, bulk steps (never overwrite human values, attach stays human), health tiles, collections, search log
   assertRan("image-seo-core", __runImageSeoCoreTests(), 15); // D221 M8: seo_alt alt text, ImageObject JSON-LD, image sitemap
   assertRan("menu-card-fallback-core", __runMenuCardFallbackTests(), 70); // D225: many pictures per category, variety per card, rotation rules (WCAG 2.2.2 pause, reduced motion). D224: one owner-chosen fallback picture per website category; own photo wins, owner fallback beats generic substitutes, always badged as representative
-  assertRan("studio-widths-core", __runStudioWidthsCoreTests(), 20); // D234 C-2 (SOP-11b G-97/G-98): real banner widths, interpPx at any width, Check on the real page
+  assertRan("studio-widths-core", __runStudioWidthsCoreTests(), 22); // D234 C-2 (SOP-11b G-97/G-98): real banner widths, interpPx at any width, Check on the real page
   assertRan("studio-fonts-core", __runStudioFontsCoreTests(), 14); // D234 C-1 (SOP-11b G-94): studio = website Heading/Body fonts; System default warning
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   console.log("ALL PURE SELF-TESTS PASSED");

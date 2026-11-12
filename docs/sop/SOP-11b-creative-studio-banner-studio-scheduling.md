@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -177,6 +177,8 @@ Use this until slices C-1 … C-3 are built. Each step names the cause it remove
 
 > **Since v2.1 (C-1):** the studio now draws "Site font" text in the website's Heading/Body font and with the website's tags, so causes 1 and 2 are gone inside the studio. Step 1 still matters while the site font is **System default**: each visitor's device then picks the font, and Checks shows *"… text boxes use System default …"*. Pick the site fonts in Branding → Fonts (Q-11-18), or name a font on the box.
 
+> **Since v2.3 (C-3): use Scale mode and steps 2–4 no longer apply.** New banners start in **Scale** (Q-11-10). The banner keeps its shape and the words and buttons grow and shrink with it, like a picture, so items stay where you put them at every width. For an older banner, the studio shows **Sizing: Fixed sizes** under the width bar. Press **Switch to Scale…**, compare the before / after at Big screen, Laptop and Phone, then press **Switch to Scale** and save. **Switch back to fixed sizes** (or Ctrl+Z) undoes it exactly. You still place the Phone layout separately (step 5; Q-11-11). In Scale mode text never goes under 12 px. If Checks says *"Scale mode: … smaller than 12 px …"*, look at the 770 and 328 widths, because that text takes a little more room there (Q-11-13).
+
 1. **Set every text box's font on purpose. Do not leave it on "Site font".** Text tab → Font. Pick a library web font (for example Inter, Montserrat, Oswald, Bebas). With a named font, the studio and the website use the same font file (both pages load all the library fonts, `admin/layout.tsx` L26 and `(site)/layout.tsx` via `fontVariablesClassName`, `fonts-loader.ts` L207+), and the box sets its own font, so the h1/h2 heading rule cannot change it (`banner-design-core.ts` L1097–1098; `globals.css` L159–160). *Removes causes 1 and 2 (F-11-19, F-11-20).* Avoid "System default" for banner text: it is a different font on each visitor's device.
 2. **Leave room below the last line.** The banner's height changes with the screen width (home: 200 px on a phone up to 360 px on a big screen; §9.3), while text positions are percentages. Keep the bottom of the lowest text or button above about 85% of the height. *Reduces cause 3 (F-11-21).*
 3. **Keep the text block in the left 60% and away from the right edge.** As the banner gets narrower, the text gets bigger compared with the banner (on a 1024 px laptop the headline is about 15% bigger than "in proportion", Appendix B.3), so it needs spare width.
@@ -248,6 +250,7 @@ The Checks tab messages (`banner-design-core.ts` L1334–1385), word for word. T
 | "A text box ran past the edge of the banner — it was pulled back inside." | Check the box's place; narrow it. |
 | "The … box is empty — add text or hide it." | Type text or hide the box. |
 | "This small-print box is under 10% of your biggest text. You don't need warnings on banners (your age-gated site shows them in the footer on every page), but if you add one here, WAC 314-55-155(7) wants it at least 10% of the largest text." | Make the small print bigger, or remove it. |
+| "Scale mode: N text boxes get smaller than 12 px on a tablet (770 px banner) or a 360 phone (328 px banner) …" (v2.3) | That text is held at 12 px there so it stays readable, and it takes more room than in your design. Check the 770 and 328 width stops, or make the words bigger (computer about 22 px or more, phone about 15 px or more). |
 | "N text boxes use System default. Each visitor's device picks that font …" (v2.1) | Pick a web font for the box (Text → Font), or set the site's Heading and Body fonts in Branding → Fonts (Q-11-18). |
 | "The … and … boxes might overlap." | Move one. This is checked on the Computer layout only, and by estimate (L1368–1380). Check Phone yourself. |
 
@@ -266,6 +269,8 @@ The phone layout is separate. Open the studio, switch to 📱 Phone and place ea
 ### 6.3 It looks right on the home page but wrong on the Shop page
 
 The Shop banner can be up to 1920 px wide but no taller than 280 px (`ShopBannerCarousel.tsx` L331–332; `globals.css` L54; §9.3), so on a big screen it is much wider than the studio shows. Text stops growing at 1408 px, so on a 1920 px screen it is about 24% smaller than "in proportion" (Appendix B.3). Check it in Website Sync with a wide window. Q-11-12 asks how you want this fixed.
+
+**Since v2.3 (C-3, Q-11-12):** the Shop banner is capped at **1408 px, centred**, the same as the home banner (`ShopBannerCarousel.tsx`, `max-w-[88rem]`), so one design fits both. If it still differs, switch the banner to **Scale** (§4.9 note).
 
 ### 6.4 The scheduled banner did not appear
 
@@ -337,7 +342,7 @@ Arrows 0.5% · Shift+arrows 5% · Ctrl/⌘+Z undo · Ctrl+Shift+Z or Ctrl+Y redo
 | Home hero and sections | 1408 px | 200 → 360 px | `Hero.tsx` L94–96; live `clamp(200px…360px)` |
 | Specials | 1344 px | 200 → 260 px and 160 → 360 px | `SpecialsContent.tsx` L531 |
 | Loyalty | 1344 px | 200 → 360 px | `LoyaltySignupForm.tsx` L144 |
-| Shop (/menu) | **1920 px** | 200 → 280 px | `ShopBannerCarousel.tsx` L331–332; `globals.css` L54 |
+| Shop (/menu) | **1920 px** (v2.3: **1408 px**, centred) | 200 → 280 px | `ShopBannerCarousel.tsx` L331–332; `globals.css` L54 (v2.3: `max-w-[88rem]`) |
 | Phones | screen width − 32 px | phone height | `Hero.tsx` L94 (`px-4`) |
 
 The live site's heading font on 2026-11-11 was the system stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto…`), and none of the home banner's boxes set their own font.
@@ -348,6 +353,7 @@ The live site's heading font on 2026-11-11 was the system stack (`-apple-system,
 - **Computer / Phone layout:** two sets of positions. The phone set is used when the **banner** (not the screen) is narrower than 768 px (`globals.css` L708).
 - **Reference width:** the width the studio lays the banner out at: 1408 px (Computer) or 390 px (Phone).
 - **Fluid size:** today's rule: height and text size slide between the phone value and the computer value as the width changes, then stop (`interpPx`).
+- **Scale mode (v2.3):** the banner keeps its designed shape and everything in it grows and shrinks with its width, like a picture (`frame.scale`). Text never goes below 12 px. Shown as **Sizing: Scale** in the studio.
 - **Scale mode (proposed):** everything grows and shrinks together like a picture, so the layout looks the same at every width (G-96).
 - **Draft Mode / Move mode:** the real page showing drafts, where you can drag items.
 - **Release:** a named group of changes that go live together.
@@ -524,3 +530,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.0 | 2026-11-11 | First version of the second half (recon, audit and roadmap only, no code changed, D233). Creative Studio, Branding, the Banner Design Studio and scheduling procedures; the interim placement procedure (§4.9) and the real-page check (§4.10); six drift causes with numbers; 14 findings (F-11-19 … F-11-32 + F-11-C2); 14 gaps (G-94 … G-107); Phase C (C-1 … C-8) PROPOSED; questions Q-11-10 … Q-11-18. | Greenway Dev |
 | 2.1 | 2026-11-11 | Phase C approved (D234, all of Q-11-10 … Q-11-18 answered). Slice C-1 (#1764): the studio reads the website's Heading/Body fonts and draws the website's tags (h2/p/span); new Checks message for System default (§4.9 note, §5). | Greenway Dev |
 | 2.2 | 2026-11-11 | Slice C-2 (#1765): Banner width slider with the site's real widths, and ↗ Check on the real page (Website Sync, page, size, Move mode on) (§4.10, §4.9 step 7). | Greenway Dev |
+| 2.3 | 2026-11-11 | Slice C-3 (#PC3): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |

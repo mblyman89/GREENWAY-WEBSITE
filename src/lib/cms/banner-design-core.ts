@@ -315,7 +315,27 @@ export type DesignFrame = {
    * normal banner, byte-identical to before.
    */
   card?: DesignCardShape;
+  /**
+   * D234 C-3 (G-96, Q-11-10/11): SCALE mode. The banner keeps the shape of the
+   * 1408 (computer) / 390 (phone) design and text + buttons grow and shrink
+   * with its width, like a picture. Two layouts stay (Q-11-11). Text has a
+   * 12 px floor (Q-11-13). Absent = today's fixed sizes, byte-identical.
+   */
+  scale?: true;
 };
+
+/** D234 C-3: how a design sizes its contents. */
+export type SizeMode = "fluid" | "card" | "scale";
+/** Old call sites pass a boolean (true = card). */
+export type SizeArg = SizeMode | boolean;
+const modeOf = (m: SizeArg): SizeMode => (m === true ? "card" : m === false ? "fluid" : m);
+/** D234 C-3: text never shrinks below this in Scale mode (or below its own size when smaller). */
+export const SCALE_TEXT_FLOOR_PX = 12;
+/** D234 C-3: buttons never shrink below this height in Scale mode. */
+export const SCALE_BUTTON_FLOOR_PX = 28;
+/** D234 C-3: the narrowest real banner widths (tablet 834 → 770; phone 360 → 328), used by the 12 px check. */
+export const SCALE_CHECK_DESKTOP_PX = 770;
+export const SCALE_CHECK_PHONE_PX = 328;
 
 export type DesignCardShape = { ratio: number; ratioMobile: number };
 
@@ -673,7 +693,9 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
               ratioMobile: num(fr.card.ratioMobile, num(fr.card.ratio, 0.75, CARD_RATIO_MIN, CARD_RATIO_MAX), CARD_RATIO_MIN, CARD_RATIO_MAX),
             },
           }
-        : {}),
+        : fr.scale === true
+          ? { scale: true as const }
+          : {}),
     },
     image: {
       focusX: num(im.focusX, 50, 0, 100),
@@ -946,6 +968,31 @@ export function containerStyle(card = false): StyleMap {
   return { containerType: "inline-size", containerName: card ? "gwc" : "gwb", width: "100%" };
 }
 
+/** D234 C-3: the sizing mode of a design (card wins over scale). */
+export function sizingOf(design: Pick<BannerDesign, "frame">): SizeMode {
+  return design.frame.card ? "card" : design.frame.scale ? "scale" : "fluid";
+}
+
+/** D234 C-3: the same design in Scale mode (cards are left alone). */
+export function withScale(design: BannerDesign): BannerDesign {
+  return design.frame.card || design.frame.scale ? design : { ...design, frame: { ...design.frame, scale: true } };
+}
+
+/** D234 C-3: the same design back on fixed (fluid) sizes. */
+export function withoutScale(design: BannerDesign): BannerDesign {
+  if (!design.frame.scale) return design;
+  const { scale: _s, ...frame } = design.frame;
+  void _s;
+  return { ...design, frame };
+}
+
+/** D234 C-3: px at a reference width → container units, never below `floor` px. */
+function scalePx(px: number, refPx: number, floor: number): string {
+  const v = `${r4((px / refPx) * 100)}cqw`;
+  const f = Math.min(floor, px);
+  return f > 0 ? `max(${r4(f)}px, ${v})` : v;
+}
+
 /** R61-S3: is this a card-shaped design? */
 export function isCardDesign(design: Pick<BannerDesign, "frame">): boolean {
   return !!design.frame.card;
@@ -960,8 +1007,17 @@ export function cardPx(px: number): string {
  * Size that differs computer vs phone. Banners: fluid interpPx. Cards: two
  * container-unit values; the phone one is swapped in by globals.css.
  */
-function dualSize(s: StyleMap, key: "fontSize" | "height", mobilePx: number, desktopPx: number, card: boolean): void {
-  if (!card) {
+function dualSize(s: StyleMap, key: "fontSize" | "height", mobilePx: number, desktopPx: number, mode: SizeArg): void {
+  const m = modeOf(mode);
+  if (m === "scale") {
+    // D234 C-3: phone value swapped in by the gwb container query (globals.css).
+    const floor = key === "fontSize" ? SCALE_TEXT_FLOOR_PX : SCALE_BUTTON_FLOOR_PX;
+    s[`--gs-${key}-d`] = scalePx(desktopPx, DESKTOP_REF_PX, floor);
+    s[`--gs-${key}-m`] = scalePx(mobilePx, MOBILE_REF_PX, floor);
+    s[key] = `var(--gs-${key}, var(--gs-${key}-d))`;
+    return;
+  }
+  if (m === "fluid") {
     s[key] = interpPx(mobilePx, desktopPx);
     return;
   }
@@ -992,6 +1048,12 @@ export function frameStyle(design: BannerDesign): StyleMap {
     base["--gc-ar-d"] = String(c.ratio);
     base["--gc-ar-m"] = String(c.ratioMobile);
     base.aspectRatio = "var(--gc-ar, var(--gc-ar-d))";
+    base.height = "auto";
+  } else if (design.frame.scale) {
+    // D234 C-3: keep the design's shape (1408 × height, phone 390 × heightMobile).
+    base["--gs-ar-d"] = String(r4(DESKTOP_REF_PX / design.frame.height));
+    base["--gs-ar-m"] = String(r4(MOBILE_REF_PX / design.frame.heightMobile));
+    base.aspectRatio = "var(--gs-ar, var(--gs-ar-d))";
     base.height = "auto";
   } else base.height = interpPx(design.frame.heightMobile, design.frame.height);
   base.borderRadius = `${design.frame.radius}px`;
@@ -1074,7 +1136,7 @@ export function shadowAsFilter(textShadow: string): string {
     .join(" ");
 }
 
-export function boxStyle(box: DesignTextBox, card = false): StyleMap {
+export function boxStyle(box: DesignTextBox, card: SizeArg = false): StyleMap {
   const s: StyleMap = {
     position: "absolute",
     "--gx": `${box.x}%`,
@@ -1138,7 +1200,7 @@ export function boxStyle(box: DesignTextBox, card = false): StyleMap {
 /** R58: style of the box that HOLDS curved text — positioning/font only;
  * paint (fill, gradient, outline, shadow) moves onto the SVG letters. */
 const CURVE_STRIP = ["backgroundImage", "WebkitBackgroundClip", "backgroundClip", "WebkitTextFillColor", "WebkitTextStroke", "paintOrder", "textShadow", "filter", "backgroundColor", "padding", "borderRadius", "backdropFilter", "textDecorationLine"];
-export function curvedBoxStyle(box: DesignTextBox, card = false): StyleMap {
+export function curvedBoxStyle(box: DesignTextBox, card: SizeArg = false): StyleMap {
   const s = boxStyle(box, card);
   for (const k of CURVE_STRIP) delete s[k];
   s.width = "var(--gbw, var(--gw))";
@@ -1157,7 +1219,7 @@ export const BUTTON_SIZE_PX: Record<DesignButtonSize, { h: number; hm: number; f
   lg: { h: 48, hm: 40, font: 15, fontM: 13, px: 24 },
 };
 
-export function buttonStyle(btn: DesignButton, card = false): StyleMap {
+export function buttonStyle(btn: DesignButton, card: SizeArg = false): StyleMap {
   const sz = BUTTON_SIZE_PX[btn.size];
   const s: StyleMap = {
     position: "absolute",
@@ -1169,7 +1231,7 @@ export function buttonStyle(btn: DesignButton, card = false): StyleMap {
     alignItems: "center",
     justifyContent: "center",
     whiteSpace: "nowrap",
-    padding: card ? `0 ${cardPx(sz.px)}` : `0 ${sz.px}px`,
+    padding: modeOf(card) === "card" ? `0 ${cardPx(sz.px)}` : modeOf(card) === "scale" ? `0 ${r4(sz.px / sz.font)}em` : `0 ${sz.px}px`,
     fontWeight: "900",
     letterSpacing: btn.uppercase ? "0.12em" : "0.02em",
     textTransform: btn.uppercase ? "uppercase" : "none",
@@ -1311,7 +1373,8 @@ export type DesignWarningCode =
   | "LEGAL_TOO_SMALL"
   | "OVERLAP"
   | "BUTTON_LINK"
-  | "DEVICE_FONT";
+  | "DEVICE_FONT"
+  | "SMALL_TEXT";
 
 export type DesignWarning = { code: DesignWarningCode; message: string; boxId?: string; buttonId?: string };
 
@@ -1403,7 +1466,25 @@ export function checkDesign(rawOrDesign: unknown, legacy: { eyebrow?: string; ti
       boxId: dev[0].id,
       message: `${dev.length === 1 ? "1 text box uses" : `${dev.length} text boxes use`} System default. Each visitor's device picks that font (San Francisco on an iPhone, Segoe UI on Windows, Roboto on Android), so the words can wrap differently from this studio and items look moved. Pick a web font for the box (Text → Font), or set the site's Heading and Body fonts in Branding → Fonts.`,
     });
+  const small = smallScaleBoxes(design);
+  if (small.length)
+    w.push({
+      code: "SMALL_TEXT",
+      boxId: small[0].id,
+      message: `Scale mode: ${small.length === 1 ? "1 text box gets" : `${small.length} text boxes get`} smaller than ${SCALE_TEXT_FLOOR_PX} px on a tablet (${SCALE_CHECK_DESKTOP_PX} px banner) or a 360 phone (${SCALE_CHECK_PHONE_PX} px banner). It is held at ${SCALE_TEXT_FLOOR_PX} px there (or at its own size, if you made it smaller) so it stays readable, but it takes a little more room than in your design. Check the ${SCALE_CHECK_DESKTOP_PX} and ${SCALE_CHECK_PHONE_PX} widths, or make the words bigger (computer ${Math.ceil((SCALE_TEXT_FLOOR_PX * DESKTOP_REF_PX) / SCALE_CHECK_DESKTOP_PX)} px or more, phone ${Math.ceil((SCALE_TEXT_FLOOR_PX * MOBILE_REF_PX) / SCALE_CHECK_PHONE_PX)} px or more).`,
+    });
   return w;
+}
+
+/** D234 C-3: visible boxes that hit the 12 px floor at the narrowest real widths (Scale mode only). */
+export function smallScaleBoxes(design: BannerDesign): DesignTextBox[] {
+  if (sizingOf(design) !== "scale") return [];
+  return design.boxes.filter((b) => {
+    if (b.hidden) return false;
+    const d = (b.size * SCALE_CHECK_DESKTOP_PX) / DESKTOP_REF_PX < SCALE_TEXT_FLOOR_PX;
+    const m = !b.hideOnMobile && (b.sizeMobile * SCALE_CHECK_PHONE_PX) / MOBILE_REF_PX < SCALE_TEXT_FLOOR_PX;
+    return d || m;
+  });
 }
 
 // ── Move / drag math (bible PART 5.7) ────────────────────────────────────────
@@ -1860,6 +1941,32 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     const sys = { ...d0, boxes: d0.boxes.map((b) => ({ ...b, font: "system" })) };
     ok(checkDesign(sys, L).some((x) => x.code === "DEVICE_FONT"), "C-1: a box set to System default warns");
     ok(deviceFontBoxes(sys, L, { heading: "oswald", body: "inter" }).length === 3, "C-1: picked System default beats the site font");
+  }
+
+  // D234 C-3: Scale mode (G-96). Old designs unchanged; scale keeps the shape.
+  {
+    const d0 = defaultDesign("hero");
+    const sd = withScale(d0);
+    ok(sizingOf(d0) === "fluid" && sizingOf(sd) === "scale" && sizingOf(cardDesign()) === "card", "C-3: sizing modes");
+    ok(withScale(cardDesign()).frame.scale === undefined, "C-3: cards never switch to scale");
+    ok(!("scale" in normalizeDesign(d0)!.frame) && normalizeDesign(sd)!.frame.scale === true, "C-3: flag stored only when on");
+    ok(!("scale" in normalizeDesign({ ...d0, frame: { ...d0.frame, scale: "yes" } })!.frame), "C-3: only true is kept");
+    ok(JSON.stringify(frameStyle(d0)) === JSON.stringify(frameStyle(normalizeDesign(JSON.parse(JSON.stringify(d0)))!)), "C-3: fluid frame byte-identical");
+    const fs = frameStyle(sd);
+    ok(fs.aspectRatio === "var(--gs-ar, var(--gs-ar-d))" && fs["--gs-ar-d"] === String(r4(1408 / 260)) && fs["--gs-ar-m"] === String(r4(390 / 200)) && fs.height === "auto", "C-3: scale frame keeps the 1408/390 shape");
+    const hb = { ...d0.boxes[1], size: 48, sizeMobile: 24 };
+    const sb = boxStyle(hb, "scale");
+    ok(sb["--gs-fontSize-d"] === `max(12px, ${r4((48 / 1408) * 100)}cqw)` && sb["--gs-fontSize-m"] === `max(12px, ${r4((24 / 390) * 100)}cqw)` && sb.fontSize === "var(--gs-fontSize, var(--gs-fontSize-d))", "C-3: scale text in cqw with a 12 px floor");
+    ok(boxStyle({ ...hb, size: 10, sizeMobile: 10 }, "scale")["--gs-fontSize-d"] === `max(10px, ${r4((10 / 1408) * 100)}cqw)`, "C-3: text designed under 12 px is floored at its own size");
+    ok(JSON.stringify(boxStyle(hb)) === JSON.stringify(boxStyle(hb, false)) && JSON.stringify(boxStyle(hb, true)) === JSON.stringify(boxStyle(hb, "card")), "C-3: boolean callers unchanged");
+    const bt = buttonStyle(defaultButton(), "scale");
+    ok(bt.height === "var(--gs-height, var(--gs-height-d))" && bt["--gs-height-m"] === `max(28px, ${r4((34 / 390) * 100)}cqw)` && bt.padding === `0 ${r4(18 / 13)}em`, "C-3: scale button grows with the banner");
+    ok(withoutScale(sd).frame.scale === undefined && JSON.stringify(withoutScale(sd)) === JSON.stringify(d0), "C-3: switch back restores the old design exactly");
+    const Ls = { eyebrow: "New", title: "Hello", subtitle: "Come in" };
+    ok(!checkDesign(d0, Ls).some((x) => x.code === "SMALL_TEXT"), "C-3: no 12 px warning on fixed-size banners");
+    ok(checkDesign(sd, Ls).some((x) => x.code === "SMALL_TEXT"), "C-3: small scale text warns");
+    const big = { ...sd, boxes: sd.boxes.map((b) => ({ ...b, size: 40, sizeMobile: 20 })) };
+    ok(!checkDesign(big, Ls).some((x) => x.code === "SMALL_TEXT") && smallScaleBoxes(big).length === 0, "C-3: big enough text = no warning");
   }
   return { passed, failed };
 }
