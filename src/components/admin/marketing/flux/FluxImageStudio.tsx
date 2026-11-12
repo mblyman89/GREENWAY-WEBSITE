@@ -22,6 +22,8 @@ import { PromptBox } from "./PromptBox";
 import { ReferenceStrip, type RefImage } from "./ReferenceStrip";
 import { DEFAULT_IMAGE_SETTINGS, ImageSettings, sizeSummary, toRequestSettings, type ImageUiSettings } from "./ImageSettings";
 import { FluxResults } from "./FluxResults";
+import { useLocationSearch } from "@/components/admin/BannerHandoff";
+import { adPromptWarnings, readStudioQuery } from "@/lib/marketing/ad-check-core";
 import { jobKey, useFluxJobs, type FluxJob } from "./useFluxJobs";
 
 export function CreditsBadge({ credits }: { credits: number | null }) {
@@ -61,6 +63,18 @@ export function FluxImageStudio({
   const [uploads, setUploads] = useState<RefImage[]>([]);
   const [settings, setSettings] = useState<ImageUiSettings>(() => ({ ...DEFAULT_IMAGE_SETTINGS, model: fluxModel(defaultModel).id }));
   const [credits, setCredits] = useState<number | null>(initialCredits);
+  // D234 C-8 (G-104): opened from a banner ("Make a picture for this banner")
+  // → start at that banner's real picture size and send the result back to it.
+  const search = useLocationSearch();
+  const studioQuery = useMemo(() => {
+    const q = new URLSearchParams(search);
+    return readStudioQuery((k) => q.get(k));
+  }, [search]);
+  const [sizedFor, setSizedFor] = useState("");
+  if (studioQuery.size && sizedFor !== search) {
+    setSizedFor(search);
+    setSettings((s) => ({ ...s, size: "exact", exactW: studioQuery.size!.w, exactH: studioQuery.size!.h }));
+  }
   const [submitting, startSubmit] = useTransition();
 
   const refreshCredits = useCallback(() => {
@@ -76,7 +90,8 @@ export function FluxImageStudio({
     const seen = new Set<string>();
     return [...uploads, ...initialLibrary].filter((r) => (seen.has(r.url) ? false : (seen.add(r.url), true)));
   }, [uploads, initialLibrary]);
-  const warnings = promptWarnings(prompt, refs.length);
+  // D234 C-8 (G-105): the advertising-rule words in the prompt (warn only).
+  const warnings = [...promptWarnings(prompt, refs.length), ...adPromptWarnings(prompt)];
   const overCap = refs.length > model.maxRefs;
 
   // Trim the reference list when switching to a model with fewer slots.
@@ -222,6 +237,7 @@ export function FluxImageStudio({
           onReuseSeed={(seed) => setSettings((s) => ({ ...s, seed: String(seed) }))}
           onRemove={remove}
           onClear={clearFinished}
+          bannerFor={{ target: studioQuery.target?.id ?? null, slot: studioQuery.slot }}
           emptyText="Your images appear here as they finish. Each one is saved to the media library as a draft."
         />
       </div>

@@ -6,6 +6,7 @@
  */
 import Link from "next/link";
 import type { FluxJob } from "./useFluxJobs";
+import { UseInBanner } from "./UseInBanner";
 
 function elapsed(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -22,6 +23,7 @@ export function FluxResults({
   onRemove,
   onClear,
   emptyText,
+  bannerFor,
 }: {
   jobs: FluxJob[];
   now: number;
@@ -32,6 +34,8 @@ export function FluxResults({
   onRemove: (key: string) => void;
   onClear: () => void;
   emptyText: string;
+  /** D234 C-8 (G-104): show "Use in a banner" on images; target/slot from ?for=&slot=. */
+  bannerFor?: { target: string | null; slot: string | null };
 }) {
   if (jobs.length === 0) {
     return (
@@ -97,6 +101,9 @@ export function FluxResults({
                       <button type="button" onClick={() => onUseVideo(j)} className="rounded-md bg-[var(--admin-surface-2)] px-2 py-1 text-[0.68rem] font-bold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]" title="Use this clip as the source for Continue, Edit or Upscale">
                         Use as source clip
                       </button>
+                    )}
+                    {j.kind === "image" && bannerFor && (
+                      <UseInBanner imageUrl={j.asset.url} initialTarget={bannerFor.target} slot={bannerFor.slot} />
                     )}
                     {j.kind === "video" && j.draftCache && onEnhanceDraft && (
                       <button type="button" onClick={() => onEnhanceDraft(j)} className="rounded-md bg-[var(--admin-orange)] px-2 py-1 text-[0.68rem] font-bold text-black">

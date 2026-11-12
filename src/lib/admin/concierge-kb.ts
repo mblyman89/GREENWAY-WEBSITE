@@ -293,6 +293,8 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "FLUX Video (FLUX 3): text → video, image → video with 1–10 keyframes, continue a clip, edit a clip, or upscale a clip. Duration is 5–20 s (or auto), resolution HD/Full HD/QHD/4K, with optional audio. Draft first gives a fast HD preview for about a third of the cost; Enhance renders the same shot at full quality.",
       "The Midjourney tab builds a copy-paste prompt from a structured brief, with Greenway AI assist grounded in the store profile and live weekly deals.",
       "Generated images and videos are DRAFTS in Digital Assets. Review them before using them on the website or in marketing.",
+      "Use in a banner: under a finished image, pick the banner from \"Use in a banner…\" and press \"Open the banner editor\". In the editor press \"Use the Creative Studio picture here\" on the slide or banner you want, then Save draft and Publish. \"✨ Make a picture for this banner\" in every banner editor opens the studio at that banner's real picture size.",
+      "Advertising check (WAC 314-55-155): the studio warns about banned words in the prompt (for example candy, kids or cure), and every banner editor checks the banner's words next to Publish. It only warns. Prices and sale words are not flagged.",
     ],
   },
   // D234 C-6 (SOP-11b G-106): the banner studio, Branding and scheduling.
@@ -310,6 +312,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "New banners start in Scale mode, so words and buttons grow and shrink with the banner and stay where you put them at every width. Scale text never goes under 12 px.",
       "Picture & shade → Picture shape gives the best picture size for that banner, and the dashed clear box shows the part of the picture that shows at every width.",
       "Undo is Ctrl/⌘+Z (the last 60 steps). Save draft keeps your work; Publish or schedule it from the editor. Check it on the real page with Website Sync (Move mode fine-tunes from the real page).",
+      "Next to Publish every banner editor shows the advertising check: banned words in the banner's words are listed as warnings, and Publish stays off until you tick \"I checked the picture for minors appeal\". Scheduling a banner to go live needs the same tick.",
     ],
   },
   {

@@ -118,6 +118,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 **v2.4 (D234, #1767):** slice **C-4** built: drift guard (a test renders the real studio and the real website banner at every width stop and requires them to agree within 1% of the width) and Checks at every width, phone included (`AT_WIDTHS`) (G-99).
 
 **v2.5 (D234, #1768):** slice **C-5** built: picture shape advice that fits each banner at every width (and the placement upload hints follow the design), a safe-area overlay on the focus picture, and a crop-edge hint (G-101).
+**v2.8 (D234, #PC8):** slice **C-8** built: Creative Studio → **Use in a banner** and **Make a picture for this banner** at the banner's real size (G-104), and the advertising check: banned words in banner words and AI prompts (warn only) plus the required tick "I checked the picture for minors appeal" before Publish and before scheduling a banner to go live (G-105, Q-11-14). Phase C (C-1 … C-8) is complete.
+
 **v2.7 (D234, #1770):** slice **C-7** built: one schedule everywhere (repeat days and hours plus fallback for Shop banner slides and type cards, now applied on the public Shop page; calendars on Shop Banner, Type cards and Schedule & Releases; Loyalty and Specials banners grouped in the schedule picker; G-102) and **Preview as of** a date and time on Schedule & Releases (G-103).
 **v2.6 (D234, #1769):** slice **C-6** built: help inside the studio (tooltips, the ? key sheet, a 60-second first-use tour, the "Make a banner" step strip, empty states, the `banner-studio` helper and three concierge topics; G-106) and a proper name dialog for Save to brand (G-107).
 

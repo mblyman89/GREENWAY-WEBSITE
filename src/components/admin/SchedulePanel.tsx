@@ -20,6 +20,27 @@ import {
 } from "@/lib/cms/content-schedule-core";
 import type { ScheduleRow } from "@/lib/cms/content-schedule-server";
 import { scheduleChangeAction, cancelScheduleAction } from "@/app/admin/content/schedule/actions";
+import { PICTURE_TICK_FIELD, PICTURE_TICK_HELP, PICTURE_TICK_LABEL, needsPictureTick } from "@/lib/marketing/ad-check-core";
+
+/**
+ * D234 C-8 (G-105, Q-11-14 "warn with tick"): the picture tick on a schedule
+ * form. "Go live" on a banner is refused by the server without it; "Come
+ * down" never needs it. `always` shows it on forms that pick the item later.
+ */
+export function PictureTickField({ always = false, kind, targetKey }: { always?: boolean; kind?: string; targetKey?: string }) {
+  if (!always && !needsPictureTick(kind, targetKey)) return null;
+  return (
+    <label data-picture-tick className="flex basis-full items-start gap-2 text-xs text-[var(--admin-text)]">
+      <input type="checkbox" name={PICTURE_TICK_FIELD} value="1" className="mt-0.5 h-4 w-4 accent-[var(--admin-accent)]" />
+      <span>
+        <strong>{PICTURE_TICK_LABEL}</strong>{" "}
+        <span className="text-[var(--admin-text-muted)]">
+          {PICTURE_TICK_HELP} Needed to schedule a banner to go live.
+        </span>
+      </span>
+    </label>
+  );
+}
 
 export function SchedulePanel({
   kind,
@@ -110,6 +131,7 @@ export function SchedulePanel({
                 className="rounded-md border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-sm text-[var(--admin-text)]"
               />
             </label>
+            <PictureTickField kind={kind} targetKey={targetKey} />
             <button type="submit" className="admin-focus inline-flex items-center rounded-full bg-[var(--admin-accent)] px-4 py-2 text-xs font-black uppercase tracking-[0.1em] text-black hover:brightness-110">
               Schedule
             </button>

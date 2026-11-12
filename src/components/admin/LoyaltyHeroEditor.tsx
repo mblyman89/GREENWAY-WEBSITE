@@ -30,6 +30,8 @@ import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { specForDesign } from "@/lib/cms/picture-shape-core";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
+import { AdCheckStrip, StudioPictureRow } from "@/components/admin/BannerHandoff";
+import { designTexts } from "@/lib/marketing/ad-check-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
   LOYALTY_HERO_PRESENTATION_BLOCK,
@@ -274,6 +276,8 @@ export function LoyaltyHeroEditor(props: Props) {
   } = props;
   const [pres, setPres] = useState<LoyaltyHeroPresentation>(() => initialPresentation(props));
   const [showHistory, setShowHistory] = useState(false);
+  // D234 C-8 (G-105, Q-11-14): Publish waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const serialized = useMemo(() => serializeLoyaltyHeroPresentation(pres), [pres]);
@@ -325,6 +329,15 @@ export function LoyaltyHeroEditor(props: Props) {
               added below as editable text). Paste a URL or pick from the Media Library. Need
               on-brand art? Generate a &ldquo;Loyalty hero&rdquo; in Creative Studio.
             </p>
+            <div className="mb-2">
+              <StudioPictureRow
+                targetId="loyalty"
+                design={pres.design}
+                spec={desktopSpec}
+                current={pres.image}
+                onUse={(url) => setField("image", url)}
+              />
+            </div>
             <ContentImageField
               value={pres.image}
               onChange={(next) => setField("image", next)}
@@ -489,7 +502,7 @@ export function LoyaltyHeroEditor(props: Props) {
         <Button type="submit" formAction={saveDraftAction} variant="save">
           Save draft
         </Button>
-        <Button type="submit" formAction={publishAction} variant="primary">
+        <Button type="submit" formAction={publishAction} variant="primary" disabled={!pictureOk}>
           Publish
         </Button>
         {dirtyVsPublished ? (
@@ -499,6 +512,15 @@ export function LoyaltyHeroEditor(props: Props) {
         ) : (
           <span className="text-xs text-[var(--admin-text-muted)]">Matches what&rsquo;s live.</span>
         )}
+        <AdCheckStrip
+          texts={designTexts(pres.design, {
+            eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+            title: pres.title.show ? pres.title.text : "",
+            subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+          })}
+          checked={pictureOk}
+          onChange={setPictureOk}
+        />
       </form>
 
       {/* History / restore */}

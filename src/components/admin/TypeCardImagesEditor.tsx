@@ -43,6 +43,8 @@ import { CardEditorShell } from "@/components/admin/banner-studio/CardEditorShel
 import { ScheduleRepeatFields } from "@/components/admin/ScheduleRepeatFields";
 import { DesignedCard } from "@/components/site/DesignedCard";
 import { cardDesign } from "@/lib/cms/banner-design-core";
+import { AdCheckStrip } from "@/components/admin/BannerHandoff";
+import { designTexts } from "@/lib/marketing/ad-check-core";
 
 const input =
   "w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)] focus:outline-none";
@@ -70,6 +72,8 @@ export function TypeCardImagesEditor({
   const [openId, setOpenId] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+  // D234 C-8 (G-105, Q-11-14): saving publishes live, so it waits for the picture tick.
+  const [pictureOk, setPictureOk] = useState(false);
 
   const initialJson = useMemo(() => JSON.stringify(normalizeTypeCards(initialCards)), [initialCards]);
   const json = JSON.stringify(normalizeTypeCards(cards));
@@ -309,13 +313,21 @@ export function TypeCardImagesEditor({
         }
       />
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" variant="save" disabled={!dirty && isCustom}>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="save" disabled={(!dirty && isCustom) || !pictureOk}>
           Save Type Cards
         </Button>
         <span className="text-xs text-white/50">
           {dirty ? "Saving publishes these cards to the live homepage." : "No changes yet."}
         </span>
+        <AdCheckStrip
+          texts={cards
+            .filter((c) => c.enabled)
+            .flatMap((c) => designTexts(c.adv?.design, { title: c.label, subtitle: c.cta }))}
+          checked={pictureOk}
+          onChange={setPictureOk}
+          what="Save Type Cards"
+        />
       </div>
 
       {pickingCard ? (

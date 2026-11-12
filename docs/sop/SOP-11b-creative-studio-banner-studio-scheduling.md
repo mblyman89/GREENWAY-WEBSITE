@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5; v2.6 = slice C-6; v2.7 = slice C-7) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5; v2.6 = slice C-6; v2.7 = slice C-7; v2.8 = slice C-8) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -111,7 +111,7 @@ What the website shows is drawn by `src/components/site/DesignedBanner.tsx`. The
 3. Optional: add reference images, up to 8 (FLUX.2) or 10 (FLUX 3). FLUX reads them as image 1, image 2…, so name them in the prompt (same helper).
 4. Pick the size. Choose a **website placement** (for example "Website section banner") instead of a bare ratio, so the picture fits the banner it is for. The placements are listed in `src/lib/marketing/creative-placements-core.ts` L88+.
 5. Press generate. Results appear as they finish and are **saved as drafts** in Digital Assets (helper; `flux-client.ts` L181). Each card has **Open in media (draft)**, **Download** and, for re-use, **Use as reference** and the seed (`FluxResults.tsx` L85–110).
-6. To put the picture on a banner today: open the banner's editor → **Picture & shade** tab → pick it from the library. There is no "Use in a banner" button yet (F-11-28, G-104).
+6. To put the picture on a banner: under the finished image pick the banner in **Use in a banner…** and press **Open the banner editor →**. In the editor press **Use the Creative Studio picture here** on the slide or banner you want, then **Save draft** and Publish. You can still pick it from the library in the editor. **Since v2.8** every banner editor also has **✨ Make a picture for this banner (W × H px)**: it opens the studio at that banner's real picture size (FLUX.2 exact pixels, up to 4 MP) and picks that banner and slide for **Use in a banner** (`UseInBanner.tsx`, `BannerHandoff.tsx`, `ad-check-core.ts`; G-104, F-11-28 resolved).
 
 **You know it worked when** the card shows the image and **Open in media (draft)** opens it in Digital Assets.
 
@@ -125,7 +125,7 @@ What the website shows is drawn by `src/components/site/DesignedBanner.tsx`. The
 
 1. Creative Studio → **Midjourney prompt** (`MidjourneyBuilder.tsx` L38). It builds a copy-paste prompt from a structured brief, with Greenway AI assist (`concierge-kb.ts` L284+).
 2. Paste it into Midjourney, download the picture, and upload it to Digital Assets yourself.
-3. **Everything AI-made is a draft.** *"Generated images and videos are DRAFTS in Digital Assets. Review them before using them on the website or in marketing."* (`concierge-kb.ts` L284+). Before you use one, run the advertising check in §7.1 yourself. The studio does not check it (F-11-29).
+3. **Everything AI-made is a draft.** *"Generated images and videos are DRAFTS in Digital Assets. Review them before using them on the website or in marketing."* (`concierge-kb.ts` L284+). Before you use one, look at the picture with §7.1 in mind. **Since v2.8** the studio warns about banned words in the prompt (lines starting *"Advertising check: …"*), and the banner editor will not Publish until you tick **I checked the picture for minors appeal** (F-11-29 resolved).
 
 ### Part 3: Branding
 
@@ -294,7 +294,7 @@ Move the focus point (Picture & shade) toward the subject, or use a picture with
 
 ### 7.1 Advertising rules (WAC 314-55-155) for every picture and banner
 
-The website is an advertising surface (`campaign-rules-core.ts` L99–113). Nothing in the Creative Studio or the Banner Studio checks these rules today (F-11-29). Check them yourself before you publish. The rules below are copied from `campaign-rules-core.ts` L53–61:
+The website is an advertising surface (`campaign-rules-core.ts` L99–113). **Since v2.8** (G-105, owner Q-11-14 *"warn with tick"*): every banner editor shows an **Advertising check (WAC 314-55-155)** box next to Publish. It lists banned words found in the banner's visible words (for example *candy*, *kids*, *cure*) and "worth a second look" words (for example *best*). It only warns; prices and sale words are not flagged. **Publish stays off until you tick "I checked the picture for minors appeal"**, because no word check can see the picture. Scheduling a banner to **Go live** (on the editor, on Schedule & Releases, or in a release) needs the same tick; the server refuses it otherwise. "Come down" never needs it. The Creative Studio warns about the same words in your prompt. The word lists are the shared compliance patterns (`compliance-patterns.json`) and the bans below (`ad-check-core.ts`). The checks help; you still decide. The rules below are copied from `campaign-rules-core.ts` L53–61:
 
 - No false or misleading statements.
 - Nothing that promotes over-consumption.
@@ -497,8 +497,8 @@ Fix the cheap, certain causes first (fonts and tags, C-1), then let you **see** 
 | G-101 | Picture shape advice that matches the banner (per placement), a safe-area overlay in the studio, and a "subject is near the crop edge" hint | F-11-32 |
 | G-102 | One schedule everywhere: repeats and fallback for Shop slides and type cards; the calendar on Shop Banner and on Schedule & Releases; type cards, Loyalty and Specials banners on the Schedule page | F-11-26 |
 | G-103 | **Preview as of** a date and time (with earlier releases applied) | F-11-27 |
-| G-104 | Creative Studio → **Use in a banner** (pick the editor and slide), and placement sizes taken from the real banner | F-11-28 |
-| G-105 | Advertising-rule check: words in the banner text and the AI prompt against the bans; a short "I checked the picture for minors appeal" tick before Publish or Schedule (warn, Q-11-14) | F-11-29 |
+| G-104 | Creative Studio → **Use in a banner** (pick the editor and slide), and placement sizes taken from the real banner (**built v2.8**) | F-11-28 |
+| G-105 | Advertising-rule check: words in the banner text and the AI prompt against the bans; a short "I checked the picture for minors appeal" tick before Publish or Schedule (warn, Q-11-14) (**built v2.8**) | F-11-29 |
 | G-106 | Help and hand-holding: a tooltip component (hover and keyboard), a **?** key shortcut sheet, a dismissible first-use tour of the studio, a "Make a banner" step strip (picture → text → phone → check → publish), a `banner-studio` helper, concierge topics `banner-studio`, `branding`, `content-schedule`, empty states that say what to do | F-11-31 |
 | G-107 | A proper name dialog for Save to brand | F-11-30 |
 
@@ -541,5 +541,6 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.3 | 2026-11-11 | Slice C-3 (#1766): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |
 | 2.4 | 2026-11-11 | Slice C-4 (#1767): drift guard (a test renders the real studio and the real website banner at every width stop; they must agree within 1% of the width) and Checks at every width, phone included (§5). | Greenway Dev |
 | 2.5 | 2026-11-11 | Slice C-5 (#1768): picture shape advice per banner and placement, safe-area overlay, crop-edge hint (§4.9 step 6, §6.5). | Greenway Dev |
+| 2.8 | 2026-11-11 | Slice C-8 (#PC8): Creative Studio → Use in a banner and "Make a picture for this banner" at the banner's real size; the advertising check (banned words in the banner's words and the AI prompt, warn only) and the required tick "I checked the picture for minors appeal" before Publish and before scheduling a banner to go live (§4.2, §4.4, §7.1). | Greenway Dev |
 | 2.7 | 2026-11-11 | Slice C-7 (#1770): one schedule everywhere (repeats and fallback for Shop slides and type cards, enforced on the Shop page; calendars on Shop Banner, Type cards and Schedule & Releases; Loyalty and Specials banners grouped in the picker) and Preview as of (§4.11, §4.13, §4.14, §6.4). | Greenway Dev |
 | 2.6 | 2026-11-11 | Slice C-6 (#1769): help in the studio (tooltips, ? key sheet, first-use tour, "Make a banner" step strip, empty states, `banner-studio` helper, concierge topics) and the Save-to-brand name dialog (§4.6 step 3, §4.7, §4.8, §9.2). | Greenway Dev |

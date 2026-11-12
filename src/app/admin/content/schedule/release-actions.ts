@@ -19,6 +19,7 @@ import {
   TARGET_KIND_LABEL,
 } from "@/lib/cms/content-schedule-core";
 import { labelForTarget } from "@/lib/cms/content-schedule-server";
+import { PICTURE_TICK_ERROR, PICTURE_TICK_FIELD, pictureTickOk } from "@/lib/marketing/ad-check-core";
 import {
   addReleaseItem,
   cancelRelease,
@@ -67,6 +68,8 @@ export async function addReleaseItemAction(fd: FormData): Promise<void> {
   if (!isTargetKind(kind) || !isValidTargetKey(kind, key)) back("error", "Choose an item to add.", id);
   if (!isScheduleAction(action)) back("error", "Choose Go live or Come down.", id);
   if (!actionsFor(kind).includes(action)) back("error", `${TARGET_KIND_LABEL[kind]} can only be set to go live.`, id);
+  // D234 C-8 (G-105, Q-11-14): a banner going live in a release needs the picture tick.
+  if (!pictureTickOk(kind, key, action, fd.get(PICTURE_TICK_FIELD))) back("error", PICTURE_TICK_ERROR, id);
   const label = await labelForTarget(kind, key);
   const res = await addReleaseItem(id, { kind, key, action, label }, session.userId);
   if (res.error) back("error", res.error, id);
