@@ -3029,3 +3029,15 @@ What was done:
 - The concierge (`image-generator`, `banner-studio`) and the Creative Studio helper now say this. Test: `tests/compliance/d233-creative-c8-use-in-banner-ad-check.test.tsx`. Pure self-tests: `__runAdCheckCoreTests` (30). SOP-11b v2.8.
 - **Phase C is complete** (slices C-1 to C-8). There are no further slices.
 - **Owner steps:** no migration, no new variable. Before each Publish (or Go live schedule) of a banner, look at the picture and tick **I checked the picture for minors appeal**. Read any ⚠ advertising warnings and change the words if they apply.
+
+## D235 — "Please help me get the merch health token issue resolved"
+
+Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both projects with the same value for both. … Please recon the code and fix it if there is something blocking the two systems from communicating from the merch health token not being read or accepted."*
+
+### As built (D235)
+
+- **What was wrong (F-11-19):** nothing in your token. The **merch project has not deployed since 2026-10-18**. Its build rule (`merch-site/vercel.json`) only looked at the **last** commit of each merge, and that is always a docs-only "PR number" commit, so Vercel skipped every merch build: M-1 … M-8 never reached greenwaymerch.com. The live shop has **no `/api/health` at all**, so it answers the website's "page not found" to every token, right or wrong. Proof from outside: `/api/health` and `/api/payments` return the HTML 404 page, and the shop still links the old bare `greenwaymarijuana.com` address that M-1 changed.
+- **Fixed:** the shop's build rule now compares with the last successful deploy and builds whenever it is unsure (`merch-site/scripts/vercel-ignore.sh`). Merch Health now says *"The shop's live build has no /api/health at all … The token is not the problem"* with the redeploy steps, instead of blaming the token. The main project now trims spaces or line breaks from `MERCH_HEALTH_TOKEN`, as the shop always did.
+- Test: `tests/compliance/d235-merch-shop-deploys.test.ts`. Pure self-tests: `__runMerchHealthCoreTests` (28). SOP-11 v1.10.
+- **Owner steps (once):** Vercel → the **merch** project → **Deployments** → **Create Deployment** → `main` → **Create** (or open the newest main deployment, even one marked Canceled or Ignored, → ⋯ → **Redeploy**). When it says **Ready**, open `https://greenwaymerch.com/api/health` in a browser. The short text *Not found* is right (it means the token check is now there); the big shop "page not found" page means it is still the old build. Then Merch Studio → Merch Health → **Run check now**. Expect the Stripe checks to stay red until the Stripe keys are set. This first deploy also brings M-1's feed fix, so published products can reach the shop.
+

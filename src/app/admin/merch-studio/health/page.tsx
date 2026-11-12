@@ -43,7 +43,7 @@ export default async function MerchHealthPage() {
   const session = await requirePermission("settings.manage");
   const [report, runs, settings, auto, clean] = await Promise.all([gatherMerchHealth(), listMerchHealthRuns(20), readHealthSettings(), readAutoConfirm(), cleanOrderCount()]);
   const shop = merchShopOrigin();
-  const tokenSet = (process.env.MERCH_HEALTH_TOKEN ?? "").length >= 32;
+  const tokenSet = (process.env.MERCH_HEALTH_TOKEN ?? "").trim().length >= 32;
 
   return (
     <div>
