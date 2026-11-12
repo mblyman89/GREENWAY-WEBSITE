@@ -66,6 +66,8 @@ export function fluidPxAt(mobilePx: number, desktopPx: number, w: number): numbe
 export function canvasRefPx(design: Pick<BannerDesign, "frame">, device: DesignDevice, width: number | null | undefined): { w: number; h: number } {
   if (!width || design.frame.card) return frameRefPx(design, device);
   const w = Math.round(Math.min(MAX_STUDIO_WIDTH, Math.max(MIN_STUDIO_WIDTH, width)));
+  // D234 C-3: Scale mode keeps the design's shape (1408 × height / 390 × phone height).
+  if (design.frame.scale) return { w, h: Math.round(device === "mobile" ? (w * design.frame.heightMobile) / MOBILE_REF_PX : (w * design.frame.height) / DESKTOP_REF_PX) };
   return { w, h: Math.round(fluidPxAt(design.frame.heightMobile, design.frame.height, w)) };
 }
 
@@ -123,6 +125,9 @@ export function __runStudioWidthsCoreTests(): { passed: number; failed: number }
   ok(canvasRefPx(d, "desktop", 5000).w === MAX_STUDIO_WIDTH, "width clamped");
   const card = { frame: { height: 200, heightMobile: 160, radius: 16, card: { ratio: 0.75, ratioMobile: 0.75 } } };
   ok(canvasRefPx(card, "desktop", 1216).w === frameRefPx(card, "desktop").w, "cards ignore the slider");
+  const sc = { frame: { ...d.frame, scale: true as const } };
+  ok(canvasRefPx(sc, "desktop", 704).h === 180 && canvasRefPx(sc, "mobile", 351).h === 180, "C-3: scale keeps the shape at any width");
+  ok(canvasRefPx(sc, "desktop", null).h === 360, "C-3: scale reference = design height");
   ok(bannerWidthForScreen(1280) === 1216 && bannerWidthForScreen(1920) === 1408 && bannerWidthForScreen(390) === 358 && bannerWidthForScreen(834) === 770, "screen → banner width");
   ok(WIDTH_STOPS.every((s) => layoutForWidth(s.w) === s.device), "each stop's layout matches the container query");
   ok(WIDTH_STOPS.some((s) => s.w === 1344) && WIDTH_STOPS.some((s) => s.w === 1408), "both full-width placements listed");

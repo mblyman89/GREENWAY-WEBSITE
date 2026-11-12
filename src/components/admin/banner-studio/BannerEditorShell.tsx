@@ -21,7 +21,7 @@ import { useState } from "react";
 import { Button } from "@/components/admin/ui";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
-import { designFromLegacy, type BannerDesign, type DesignBind, type DesignPreset } from "@/lib/cms/banner-design-core";
+import { designFromLegacy, withScale, type BannerDesign, type DesignBind, type DesignPreset } from "@/lib/cms/banner-design-core";
 import type { BrandSaved } from "@/lib/brand/brand-kit-core";
 import { listBrandBannersAction, saveBrandBannerAction } from "@/app/admin/settings/branding/brand-actions";
 
@@ -155,7 +155,8 @@ export function DesignCard({
           onChange={(e) => {
             if (e.target.checked) {
               onChange(
-                design ? { ...design, enabled: true } : makeNew ? makeNew() : designFromLegacy({ ...seed, preset }),
+                // D234 C-3 (Q-11-10): NEW banners start in Scale mode; stored ones keep theirs.
+                design ? { ...design, enabled: true } : withScale(makeNew ? makeNew() : designFromLegacy({ ...seed, preset })),
               );
               setOpen(true);
             } else if (design) {

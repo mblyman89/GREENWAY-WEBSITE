@@ -22,6 +22,7 @@ import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { WidthBar } from "./WidthBar";
+import { ScaleSwitch } from "./ScaleSwitch";
 import { useStudioSiteFonts } from "./StudioSiteFonts";
 import { ShapePanel } from "./ShapePanel";
 import { SmokePanel } from "./SmokePanel";
@@ -367,6 +368,7 @@ export function BannerStudio({
             setDevice(d);
           }}
         />
+        <ScaleSwitch design={design} imageSrc={deviceSrc} imageAlt={imageAlt} legacy={legacy} onChange={change} />
 
         {device === "mobile" ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--admin-orange)]/12 px-3 py-1.5 text-xs text-[var(--admin-orange)]">

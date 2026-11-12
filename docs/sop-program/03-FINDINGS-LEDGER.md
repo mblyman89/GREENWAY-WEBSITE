@@ -1193,6 +1193,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `banner-design-core.ts` L919–925 (`interpPx` clamp), L983–998 (frame height), L1076–1084 (x/y/w in %), L1153–1157 (button heights fixed px); `banner-elements-core.ts` L356–357 (line thickness px). Cards are proportional (L43, L954–957).
 - **Effect:** the shape and the text-to-width ratio change at every width except 1408 and 390: home 3.91 → 3.42 at 1024 (headline +15%), 2.96 at 768 (+34%); phone 360: +19% (SOP-11b B.3).
 - **SOP impact:** SOP-11b §4.9 steps 2–4. **G-96**.
+- **Resolved (D234, C-3):** Scale mode (`frame.scale`; `banner-design-core.ts` `sizingOf`, `dualSize` `--gs-*` cqw with a 12 px floor, `frameStyle` aspect ratio 1408/height and 390/phone height; `globals.css` gwb swap). New banners start in Scale (`BannerEditorShell.tsx` `withScale`); existing ones switch by choice (`ScaleSwitch.tsx`, before/after). Fixed-size designs are byte-identical.
 
 ### F-11-22 · CONFIRMED · WEAKNESS · S2 — Only two preview widths
 - **Pin:** `BannerStudio.tsx` L63, L303–317 (Computer / Phone); `banner-design-core.ts` L39–40; `StudioCanvas.tsx` L141–144. Phone switch is the banner width < 768 (`globals.css` L708).
@@ -1204,6 +1205,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `Hero.tsx` L94–96 (1408); `SpecialsContent.tsx` L531 and `LoyaltySignupForm.tsx` L144 (1344); `ShopBannerCarousel.tsx` L331–332 + `globals.css` L54 (up to 1920, height capped 280 live).
 - **Effect:** Shop at 1856 px: shape 6.63 vs 5.03 in the studio, headline −24% vs in proportion.
 - **SOP impact:** SOP-11b §6.3, §9.3. **G-100** (Q-11-12).
+- **Resolved (D234, C-3):** `ShopBannerCarousel.tsx` caps the Shop banner at `max-w-[88rem]` (1408 px, centred), like `Hero.tsx`. Specials/Loyalty (1344) keep their width; in Scale mode a 1344 banner is simply the 1408 design in proportion.
 
 ### F-11-24 · CONFIRMED · GAP · S3 — No "check on the real page" from inside the studio
 - **Pin:** no `website-sync` link in `src/components/admin/banner-studio/*`, `ShopBannerEditor.tsx`, `CarouselSlideCard.tsx`. Move mode exists (`PreviewDesignDrag.tsx` L3–24; `WebsiteSyncPreviewPanel.tsx` L29–33).

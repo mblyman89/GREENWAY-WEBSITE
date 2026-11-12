@@ -712,6 +712,13 @@ h1, h2, h3, h4, h5, h6 {
     --gbw: var(--gmw, var(--gw));
     /* R55: shape height (phone override) */
     --gbh: var(--gmh, var(--gh));
+    /* D234 C-3: Scale mode phone sizes (banner-design-core dualSize) */
+    --gs-fontSize: var(--gs-fontSize-m);
+    --gs-height: var(--gs-height-m);
+  }
+  /* D234 C-3: Scale mode phone shape (390 x phone height) */
+  .gw-dframe {
+    --gs-ar: var(--gs-ar-m);
   }
   .gw-dimg {
     --gip: var(--gip-m);
