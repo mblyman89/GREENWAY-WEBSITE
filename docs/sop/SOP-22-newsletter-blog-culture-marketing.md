@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (N-1 send hardening built, D237 #PN1; living document) |
+| **Version** | 1.1 (N-1 send hardening built, D237 #1774; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Blog & Newsletter** (`/admin/blog`, nav MKTG & ADV, permission `blog.manage`, `src/components/admin/admin-nav-data.ts` L98). **Email Newsletter** Send Center (`/admin/newsletter`, `blog.manage`, L99). **Marketing & Advertising** hub (`/admin/marketing`, `content.edit`, L96). **Digital Assets** (`/admin/media`, `media.manage`, L95). **Blog wording** (`/admin/blog/content`, `content.edit`, L148). **Regulatory Watch** (`/admin/compliance/regulatory`, `reports.view`, L133). The public pages `/blog`, `/blog/[slug]` and `/unsubscribe` |
@@ -529,7 +529,7 @@ Every slice keeps the rule that a person approves before anything is published o
 
 | Order | Slice | What it delivers | Gaps | Depends on |
 |---|---|---|---|---|
-| **N-1** | **Send hardening** (small, first) · **BUILT (D237, #PN1)** | All four warnings + 21+ in the email footer (pure footer core with a self-test that the four strings match `REQUIRED_WARNINGS` and the type size is ≥10% of the headline size). `List-Unsubscribe` (https + mailto) and `List-Unsubscribe-Post` headers. A POST one-click endpoint. Title and URL escaping. Keep the existing PDF and pages unless a new file is uploaded or "Remove" is ticked. Trim env values. Hard bounce or complaint → `email_opt_out` (audited). Broadcast limited per Q-22-3 | G-108 … G-111 | Q-22-3 |
+| **N-1** | **Send hardening** (small, first) · **BUILT (D237, #1774)** | All four warnings + 21+ in the email footer (pure footer core with a self-test that the four strings match `REQUIRED_WARNINGS` and the type size is ≥10% of the headline size). `List-Unsubscribe` (https + mailto) and `List-Unsubscribe-Post` headers. A POST one-click endpoint. Title and URL escaping. Keep the existing PDF and pages unless a new file is uploaded or "Remove" is ticked. Trim env values. Hard bounce or complaint → `email_opt_out` (audited). Broadcast limited per Q-22-3 | G-108 … G-111 | Q-22-3 |
 | **N-2** | **Reliable sending** | `newsletter_send_recipients` table (one row per address, status). Resend batch endpoint, 100 per call, with an `Idempotency-Key` per batch. A cron worker sends and resumes. A progress bar in the Send Center. "Retry failed only". The send never double-sends | G-112 | N-1 |
 | **N-3** | **Scheduling + Sunday cadence** | `blog_post` publish/unpublish as a schedule target (the same audited 5-minute cron and calendar as SOP-11b). Newsletter states: draft → ready for approval → approved → scheduled (Sunday, set time) → sending → sent. A reminder on Friday if nothing is ready. The owner approves on the phone | G-113 | N-2; Q-22-4 |
 | **N-4** | **"This week" facts feed** | A pure core + server reader that returns last week's new vendors, lots received (fresh drops, grouped by vendor and type), promotions active and next 14 days (with dates and the below-cost check), vendor days, and a holiday and cannabis-calendar list (US holidays, 4/20, 7/10, local events you add). Shown as a card on Blog & Newsletter and given to the AI | G-114 | — |
@@ -561,4 +561,4 @@ Every slice keeps the rule that a person approves before anything is published o
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-11-12 | Recon, audit and roadmap (D236). Verified at `main@a4ccd7cb`. 20 findings (F-22-1 … F-22-20) + F-22-C: 2×S1 (F-22-1, F-22-14), 10×S2, 7×S3, 1×S4. Gaps G-108 … G-120. Phase N (N-1 … N-10) PROPOSED. Questions Q-22-1 … Q-22-9. No code changed |
-| 1.1 | 2026-11-12 | **N-1 send hardening built (D237, #PN1).** Four warnings in every newsletter email at ≥10% of the largest type (G-108); `List-Unsubscribe` + one-click `POST /api/unsubscribe` (G-109); PDF kept on save, title escaped, config trimmed (G-110); hard bounce / complaint → `email_opt_out` audited, broadcast owner/admin only via `newsletter.broadcast` (G-111). Culture = CULTURE card on `/blog` (D237). Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; self-test `__runNewsletterEmailCoreTests` (35) |
+| 1.1 | 2026-11-12 | **N-1 send hardening built (D237, #1774).** Four warnings in every newsletter email at ≥10% of the largest type (G-108); `List-Unsubscribe` + one-click `POST /api/unsubscribe` (G-109); PDF kept on save, title escaped, config trimmed (G-110); hard bounce / complaint → `email_opt_out` audited, broadcast owner/admin only via `newsletter.broadcast` (G-111). Culture = CULTURE card on `/blog` (D237). Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; self-test `__runNewsletterEmailCoreTests` (35) |

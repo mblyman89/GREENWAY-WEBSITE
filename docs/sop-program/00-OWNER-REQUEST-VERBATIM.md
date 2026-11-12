@@ -3074,7 +3074,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - **The exception (Q-22-7):** culture posts go on the existing `/blog` page as the existing **CULTURE** card. Checked on the live site: the page shows PRODUCTS, DEALS, CULTURE and NEWSLETTER cards (`src/lib/blog/posts.ts` L1, `src/components/blog/BlogCard.tsx` L8–12). No new tab or page.
 - Three slices: N-1, N-2, N-3, each shipped and merged on its own.
 
-### As built — N-1 send hardening (#PN1)
+### As built — N-1 send hardening (#1774)
 
 - **G-108:** the email footer prints all four `REQUIRED_WARNINGS` at 11 px; the largest type is 24 px (`src/lib/cms/newsletter-email-core.ts` `EMAIL_FONT_PX`, `warningsFooterHtml`), so the 10% rule holds and a self-test enforces it.
 - **G-109:** every email carries `List-Unsubscribe: <https://…/api/unsubscribe?token=…>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`; new `src/app/api/unsubscribe/route.ts` (POST unsubscribes, GET goes to the friendly page).
