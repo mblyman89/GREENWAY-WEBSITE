@@ -122,7 +122,7 @@ The owner's biggest pain is that overlays land in a different place on the websi
 | Order | Fix | Finding (03) | Gap | Depends on |
 |---|---|---|---|---|
 | C-1 | Studio = website: site font variables in the studio; same h1/h2/p tags; System-default warning — **BUILT (D234)** | F-11-19, F-11-20 | G-94, G-95 | — |
-| C-2 | Width slider with real placement stops (1920, 1408, 1344, 1216, 1024, 834, 430, 390, 360); "Check on the real page" button | F-11-22, F-11-24 | G-97, G-98 | C-1 |
+| C-2 | Width slider with real placement stops (1920, 1408, 1344, 1216, 1024, 834, 430, 390, 360); "Check on the real page" button — **BUILT (D234)** | F-11-22, F-11-24 | G-97, G-98 | C-1 |
 | C-3 | Scale mode (cqw + aspect ratio, card pattern) for new banners; "Switch to Scale" with before/after; text floor; Shop width | F-11-21, F-11-23 | G-96, G-100 | C-2; Q-11-10 … Q-11-13 |
 | C-4 | Drift guard: Playwright studio vs site at the stops (≤1% of width); overlap/out-of-frame checks at every stop, phone included | F-11-25 | G-99 | C-3 |
 | C-5 | Picture shape per placement, safe-area overlay, crop-edge hint | F-11-32 | G-101 | C-3 |

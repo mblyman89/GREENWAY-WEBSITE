@@ -1198,6 +1198,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `BannerStudio.tsx` L63, L303–317 (Computer / Phone); `banner-design-core.ts` L39–40; `StudioCanvas.tsx` L141–144. Phone switch is the banner width < 768 (`globals.css` L708).
 - **Effect:** laptops and tablets (768–1407 px) and real phone widths (328–398 px banners) are never seen in the studio.
 - **SOP impact:** SOP-11b §4.10. **G-97**.
+- **Resolved (D234, C-2):** `WidthBar.tsx` (slider 320–1920 + stops 1408, 1344, 1216, 960, 770, 398, 358, 328); `StudioCanvas.tsx` lays out at `canvasRefPx(design, device, width)` (`studio-widths-core.ts`, same math as `interpPx`); below 768 the phone layout.
 
 ### F-11-23 · CONFIRMED · WEAKNESS · S3 — Banners are mounted at other widths than the studio's
 - **Pin:** `Hero.tsx` L94–96 (1408); `SpecialsContent.tsx` L531 and `LoyaltySignupForm.tsx` L144 (1344); `ShopBannerCarousel.tsx` L331–332 + `globals.css` L54 (up to 1920, height capped 280 live).
@@ -1207,6 +1208,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-24 · CONFIRMED · GAP · S3 — No "check on the real page" from inside the studio
 - **Pin:** no `website-sync` link in `src/components/admin/banner-studio/*`, `ShopBannerEditor.tsx`, `CarouselSlideCard.tsx`. Move mode exists (`PreviewDesignDrag.tsx` L3–24; `WebsiteSyncPreviewPanel.tsx` L29–33).
 - **SOP impact:** SOP-11b §4.10. **G-98**.
+- **Resolved (D234, C-2):** "Check on the real page" in the shared studio (`WidthBar.tsx`, `realPageHref`) → `/admin/website-sync?tab=preview&path=…&device=…&move=1`; the page, panel and frame accept the size and Move mode.
 
 ### F-11-25 · CONFIRMED · WEAKNESS · S3 — Checks look at one width; no test guards studio = website
 - **Pin:** `banner-design-core.ts` L1367–1380 (overlap "desktop, approximate", estimated heights). No studio-vs-site test (Playwright is installed, `package.json` L20, L56).

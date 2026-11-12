@@ -19,6 +19,7 @@ import { getEndorsementConfig } from "@/lib/medical/store";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getContentValues } from "@/lib/cms/render-content";
 import { WebsiteSyncPreviewPanel } from "@/components/admin/WebsiteSyncPreviewPanel";
+import { parsePreviewDevice } from "@/lib/cms/studio-widths-core";
 import {
   dealSourceSummary,
   endorsementStatusLine,
@@ -56,7 +57,7 @@ type WebsiteSyncTab = (typeof WEBSITE_SYNC_TABS)[number]["id"];
 export default async function WebsiteSyncPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; path?: string }>;
+  searchParams: Promise<{ tab?: string; path?: string; device?: string; move?: string }>;
 }) {
   const session = await requireStaff();
   const role = session.profile.role;
@@ -130,7 +131,12 @@ export default async function WebsiteSyncPage({
         {activeTab === "preview" ? (
           <>
             <EditLinksGuide />
-            <WebsiteSyncPreviewPanel canMove={can(role, "content.edit")} initialPath={typeof sp.path === "string" ? sp.path : undefined} />
+            <WebsiteSyncPreviewPanel
+              canMove={can(role, "content.edit")}
+              initialPath={typeof sp.path === "string" ? sp.path : undefined}
+              initialDevice={parsePreviewDevice(sp.device)}
+              initialMove={sp.move === "1"}
+            />
           </>
         ) : (
           <>

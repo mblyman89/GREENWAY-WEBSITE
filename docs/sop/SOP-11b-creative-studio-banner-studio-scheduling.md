@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -183,11 +183,13 @@ Use this until slices C-1 … C-3 are built. Each step names the cause it remove
 4. **Buttons and lines do not shrink.** Buttons are a fixed height (32, 40 or 48 px; `banner-design-core.ts` L1153–1157) and line shapes are a fixed thickness (`banner-elements-core.ts` L356–357). Give buttons a little extra space, especially on the phone layout.
 5. **Always finish the Phone layout separately.** Switch to 📱 Phone and place each item. Phones from 360 to 430 px wide show the banner at 328–398 px wide (the page has 16 px margins), not the 390 px the studio shows (Appendix B.3).
 6. **Use a picture of the right shape and set its focus point.** The banner crops the picture to fill (`banner-design-core.ts` L1000–1023, `object-fit: cover`). The crop changes with the width, so keep the important part of the picture near the focus point, not at the top or bottom edge. The recommended upload is 1600×560 or 1920×640 (`image-spec-core.ts` L116–118). The home banner at full width is 1408×360, a wider shape, so the top and bottom of the picture are cut off (F-11-32).
-7. **Check on the real page at three widths before you publish** (§4.10). Fix the last few pixels **there**, with Move mode. Move mode saves from the real page, so what you drop is what visitors see at that width.
+7. **Check on the real page at three widths before you publish** (§4.10; v2.2: try the width stops in the studio first, then **↗ Check on the real page**). Fix the last few pixels **there**, with Move mode. Move mode saves from the real page, so what you drop is what visitors see at that width.
 
 **You know it worked when** the banner looks the same in Website Sync at Desktop, at Tablet and with your browser window made narrower (about 1280 and 1024 px), and at Phone.
 
 ### 4.10 Checking on the real page (Website Sync and Move mode)
+
+**In the studio first (v2.2, C-2).** Under 🖥 Computer / 📱 Phone, the **Banner width** bar lays the canvas out at any width (320 … 1920 px) with the website's own sizing. Tap a stop: **1408** (home and Shop, full width), **1344** (Specials and Loyalty), **1216** (1280 laptop), **960** (1024 laptop), **770** (tablet), **398 / 358 / 328** (phones 430 / 390 / 360). Below 768 the phone layout shows and your moves change the phone layout. **Reference** goes back to the usual 1408 / 390 view. **↗ Check on the real page** (same bar) opens the steps below for you at the right page and size with Move mode on. Save draft first: it shows the saved draft.
 
 1. Save the banner (draft).
 2. Open **Website → Website Sync**. Pick the page (home, Shop, Specials, Loyalty…).
@@ -521,3 +523,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 |---|---|---|---|
 | 2.0 | 2026-11-11 | First version of the second half (recon, audit and roadmap only, no code changed, D233). Creative Studio, Branding, the Banner Design Studio and scheduling procedures; the interim placement procedure (§4.9) and the real-page check (§4.10); six drift causes with numbers; 14 findings (F-11-19 … F-11-32 + F-11-C2); 14 gaps (G-94 … G-107); Phase C (C-1 … C-8) PROPOSED; questions Q-11-10 … Q-11-18. | Greenway Dev |
 | 2.1 | 2026-11-11 | Phase C approved (D234, all of Q-11-10 … Q-11-18 answered). Slice C-1 (#1764): the studio reads the website's Heading/Body fonts and draws the website's tags (h2/p/span); new Checks message for System default (§4.9 note, §5). | Greenway Dev |
+| 2.2 | 2026-11-11 | Slice C-2 (#PC2): Banner width slider with the site's real widths, and ↗ Check on the real page (Website Sync, page, size, Move mode on) (§4.10, §4.9 step 7). | Greenway Dev |

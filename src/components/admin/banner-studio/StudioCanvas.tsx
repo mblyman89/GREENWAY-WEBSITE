@@ -25,7 +25,6 @@ import {
   curvedBoxStyle,
   buttonStyle,
   containerStyle,
-  frameRefPx,
   frameStyle,
   imageStyle,
   layerZ,
@@ -45,6 +44,7 @@ import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/
 import { ButtonInner } from "@/components/site/ButtonInner";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { useStudioFontVars } from "./StudioSiteFonts";
+import { canvasRefPx } from "@/lib/cms/studio-widths-core";
 
 export type StudioTarget = "box" | "button" | "element";
 export type StudioSelection = { target: StudioTarget; id: string } | null;
@@ -89,7 +89,8 @@ export function StudioCanvas({
   onLegacyEdit,
   group = [],
   onToggle,
-  replayKey = 0, maxH }: {
+  replayKey = 0, maxH, width = null }: {
+  /** D234 C-2: lay out at this banner width (null = the reference size). */ width?: number | null;
   design: BannerDesign;
   device: DesignDevice;
   legacy: { eyebrow?: string; title?: string; subtitle?: string };
@@ -134,7 +135,7 @@ export function StudioCanvas({
   // R61-S3: card designs lay out at CARD_REF_PX on both devices (frameRefPx).
   const card = !!design.frame.card;
   const fontVars = useStudioFontVars();
-  const { w: refW, h: frameH } = frameRefPx(design, device);
+  const { w: refW, h: frameH } = canvasRefPx(design, device, width);
   const scale = Math.min(card ? 1.25 : 1, availW / refW, maxH && maxH > 0 ? maxH / frameH : Infinity);
 
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
