@@ -130,8 +130,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-103 | **Preview as of** a date/time | D233 | F-11-27 | SOP-11b §4.13 | APPROVED (D234; C-7) |
 | G-104 | **Creative Studio → Use in a banner** | D233 | F-11-28 | SOP-11b §4.2 step 6 | APPROVED (D234; C-8) |
 | G-105 | **Advertising-rule check** on banner text, prompts and a picture tick (Q-11-14) | D233 | F-11-29 | SOP-11b §7.1 | APPROVED (D234; C-8) |
-| G-106 | **Help and hand-holding** (tooltip, ? sheet, first-use tour, step strip, helper, concierge topics, empty states) | D233 (Q-11-15) | F-11-31 | SOP-11b | APPROVED (D234; C-6) |
-| G-107 | **Name dialog** for Save to brand | D233 | F-11-30 | SOP-11b §4.6 | APPROVED (D234; C-6) |
+| G-106 | **Help and hand-holding** (tooltip, ? sheet, first-use tour, step strip, helper, concierge topics, empty states) | D233 (Q-11-15), D234 | F-11-31 | SOP-11b | **BUILT (C-6, D234)** |
+| G-107 | **Name dialog** for Save to brand | D233, D234 | F-11-30 | SOP-11b §4.6 | **BUILT (C-6, D234)** |
 
 ---
 
@@ -1014,7 +1014,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Why:** F-11-19 … F-11-32. Six causes of the drift (SOP-11b Appendix B.2): fonts, tags, fluid sizes, two preview widths, mount widths, picture crop.
 - **Requirements:** SOP-11b Appendix B.5. Existing banners must render exactly as before unless the owner switches them (a test proves it).
 - **Owner action now:** follow SOP-11b §4.9; answer Q-11-10 … Q-11-18.
-- **D234:** all answered (Phase C APPROVED). C-1 BUILT (G-94, G-95). C-2 BUILT (G-97, G-98). C-3 BUILT (G-96, G-100). C-4 BUILT (G-99). C-5 BUILT (G-101).
+- **D234:** all answered (Phase C APPROVED). C-1 BUILT (G-94, G-95). C-2 BUILT (G-97, G-98). C-3 BUILT (G-96, G-100). C-4 BUILT (G-99). C-5 BUILT (G-101). C-6 BUILT (G-106, G-107).
 
 ## R-DRAWER-1 · Open the cash drawer with or without a printed receipt (BUILT, owner request, R-DRAWER-1a–e) — S3
 - **Owner basis:** *"i want to build a setting in the register activity page of the back office that gives me the option of popping the cash drawer with a receipt or with out the receipt printed. most of my customers do not want a receipt and this new method should make for a more efficient process."*

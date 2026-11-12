@@ -126,7 +126,7 @@ The owner's biggest pain is that overlays land in a different place on the websi
 | C-3 | Scale mode (cqw + aspect ratio, card pattern) for new banners; "Switch to Scale" with before/after; text floor; Shop width — **BUILT (D234)** | F-11-21, F-11-23 | G-96, G-100 | C-2; Q-11-10 … Q-11-13 |
 | C-4 | Drift guard: Playwright studio vs site at the stops (≤1% of width); overlap/out-of-frame checks at every stop, phone included — **BUILT (D234)** | F-11-25 | G-99 | C-3 |
 | C-5 | Picture shape per placement, safe-area overlay, crop-edge hint — **BUILT (D234)** | F-11-32 | G-101 | C-3 |
-| C-6 | Help: tooltip component, ? shortcut sheet, first-use tour, "Make a banner" step strip, `banner-studio` helper, concierge topics, empty states; Save-to-brand dialog | F-11-31, F-11-30 | G-106, G-107 | C-1 … C-5; Q-11-15 |
+| C-6 | Help: tooltip component, ? shortcut sheet, first-use tour, "Make a banner" step strip, `banner-studio` helper, concierge topics, empty states; Save-to-brand dialog — **BUILT (D234)** | F-11-31, F-11-30 | G-106, G-107 | C-1 … C-5; Q-11-15 |
 | C-7 | One schedule everywhere (repeats/fallback for Shop slides and type cards; calendar on Shop Banner and Schedule & Releases); Preview as of | F-11-26, F-11-27 | G-102, G-103 | Q-11-16 |
 | C-8 | Creative Studio → Use in a banner; advertising-rule check | F-11-28, F-11-29 | G-104, G-105 | Q-11-14 |
 

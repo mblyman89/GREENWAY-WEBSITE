@@ -1236,10 +1236,12 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-30 · CONFIRMED · WEAKNESS · S4 — Save to brand uses a browser prompt box
 - **Pin:** `BannerEditorShell.tsx` L60 (`window.prompt`).
 - **SOP impact:** SOP-11b §4.6 step 3. **G-107**.
+- **Resolved (D234, C-6):** `BrandNameDialog.tsx` replaces the prompt in `BannerEditorShell.tsx` `BrandBannersRow` (name from `suggestBrandName`, rules `brandNameError` / `brandNameNote` in `studio-help-core.ts`).
 
 ### F-11-31 · CONFIRMED · GAP · S3 — Help is thin for a tool this big
 - **Pin:** one long shortcut line (`BannerStudio.tsx` L395); 21 static `hint=` rows (`controls.tsx` L15–20) and 25 `title=` hovers; no tooltip component, no `aria-describedby`; no `banner-studio` helper (`page-helpers-core.ts`: branding L67, shop-banner-editor L134, content-schedule L168, midjourney-builder L305); one concierge topic `image-generator` (`concierge-kb.ts` L284).
 - **SOP impact:** SOP-11b itself. **G-106** (Q-11-15).
+- **Resolved (D234, C-6):** `StudioHelp.tsx` (`Tip` with `aria-describedby`, `KeySheet` on **?**, `TourStrip`, `StepStrip`) wired in `BannerStudio.tsx`; words in `studio-help-core.ts`; empty states in `TextBoxPanel`, `ButtonPanel`, `LayersPanel`; helper `banner-studio` (`page-helpers-core.ts`); concierge topics `banner-studio`, `branding`, `content-schedule` (`concierge-kb.ts`).
 
 ### F-11-32 · CONFIRMED · WEAKNESS · S3 — The recommended picture shape does not match the banner
 - **Pin:** `image-spec-core.ts` L116–118 (1600×560 = 2.86, 1920×640 = 3.0) vs home 1408×360 (3.91) and Shop up to 6.63; crop `object-fit: cover` with a focus point (`banner-design-core.ts` L1000–1023).

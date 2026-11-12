@@ -33,6 +33,8 @@ import { IntroFields } from "./IntroFields";
 import { LayersPanel } from "./LayersPanel";
 import { CustomFontFaces } from "@/components/admin/fonts/CustomFontUpload";
 import { ArrangeBar } from "./ArrangeBar";
+import { KeySheet, StepStrip, Tip, TourStrip, useStudioHelp } from "./StudioHelp";
+import { CONTROL_HELP, STEP_TAB, TAB_HELP, makeBannerSteps, type StepId } from "@/lib/cms/studio-help-core";
 import { useStudioDock, type DockSize } from "./useStudioDock";
 import { toggleRef, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import type { PickerPost } from "./LinkPicker";
@@ -249,37 +251,52 @@ export function BannerStudio({
 
   const siteFonts = useStudioSiteFonts();
   const warnCount = checkAllWidths(design, legacy, siteFonts).length; // D234 C-4: every width
+  // D234 C-6: "?" sheet, tour strip, "Make a banner" steps.
+  const help = useStudioHelp(rootRef, device);
+  const steps = makeBannerSteps({ design, legacy, imageSrc: deviceSrc, seenPhone: help.seenPhone, warnCount });
+  const goStep = (id: StepId) => {
+    const t = STEP_TAB[id];
+    if (t) setTab(t);
+    else if (id === "phone") {
+      setDevice("mobile");
+      setWidth(null);
+    } else rootRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); // publish: the editor's buttons sit below the studio
+  };
   const tabBtn = (id: Tab, label: string) => (
-    <button
-      key={id}
-      type="button"
-      role="tab"
-      aria-selected={tab === id}
-      onClick={() => setTab(id)}
-      className={
-        tab === id
-          ? "rounded-t-md border-b-2 border-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-white"
-          : "rounded-t-md px-3 py-1.5 text-xs text-white/60 hover:text-white"
-      }
-    >
-      {label}
-    </button>
+    <Tip key={id} text={TAB_HELP[id]}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === id}
+        onClick={() => setTab(id)}
+        className={
+          tab === id
+            ? "rounded-t-md border-b-2 border-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-white"
+            : "rounded-t-md px-3 py-1.5 text-xs text-white/60 hover:text-white"
+        }
+      >
+        {label}
+      </button>
+    </Tip>
   );
 
   return (
     <div ref={rootRef} className="space-y-3">
       <CustomFontFaces />
+      <TourStrip visible={help.tour} onStart={() => help.setSheet("tour")} onDismiss={help.dismissTour} />
+      <StepStrip steps={steps} onGo={goStep} />
       <div className="rounded-md border border-[#ffd700]/30 bg-[#ffd700]/5 px-3 py-2 text-xs text-white/80">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={askAi}
-            disabled={aiBusy || !imageSrc}
-            className="rounded-full bg-[#ffd700] px-3 py-1 text-xs font-bold text-black hover:bg-[#ffe34d] disabled:opacity-40"
-            title={imageSrc ? "AI looks at the picture and suggests where the text and focus should go" : "Pick a picture first"}
-          >
-            {aiBusy ? "✨ Looking at the picture…" : `✨ AI suggest (${device === "mobile" ? "phone" : "computer"})`}
-          </button>
+          <Tip text={imageSrc ? CONTROL_HELP.ai : "Pick a picture first."}>
+            <button
+              type="button"
+              onClick={askAi}
+              disabled={aiBusy || !imageSrc}
+              className="rounded-full bg-[#ffd700] px-3 py-1 text-xs font-bold text-black hover:bg-[#ffe34d] disabled:opacity-40"
+            >
+              {aiBusy ? "✨ Looking at the picture…" : `✨ AI suggest (${device === "mobile" ? "phone" : "computer"})`}
+            </button>
+          </Tip>
           <span className="text-white/55">Suggests the picture focus, where the text fits best, the shade and text colour. Nothing is saved until you press Save.</span>
         </div>
         {ai ? (
@@ -308,23 +325,24 @@ export function BannerStudio({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div role="radiogroup" aria-label="Preview size" className="flex gap-1">
             {(["desktop", "mobile"] as DesignDevice[]).map((d) => (
-              <button
-                key={d}
-                type="button"
-                role="radio"
-                aria-checked={device === d}
-                onClick={() => {
-                  setDevice(d);
-                  setWidth(null);
-                }}
-                className={
-                  device === d
-                    ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black"
-                    : "rounded-full bg-white/10 px-3 py-1 text-xs text-white/75 hover:bg-white/20"
-                }
-              >
-                {d === "desktop" ? "🖥 Computer" : "📱 Phone"}
-              </button>
+              <Tip key={d} text={CONTROL_HELP[d]}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={device === d}
+                  onClick={() => {
+                    setDevice(d);
+                    setWidth(null);
+                  }}
+                  className={
+                    device === d
+                      ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black"
+                      : "rounded-full bg-white/10 px-3 py-1 text-xs text-white/75 hover:bg-white/20"
+                  }
+                >
+                  {d === "desktop" ? "🖥 Computer" : "📱 Phone"}
+                </button>
+              </Tip>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1">
@@ -412,8 +430,13 @@ export function BannerStudio({
           onSelectMany={selectMany}
         />
       </div>
-      <p className="text-[0.7rem] text-white/45">
-        Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · drag the gold knob to rotate (Shift = 15° steps) · Shift-click to select several, then drag them together or use Arrange · Ctrl/⌘+C / V / D copy, paste (into any banner), duplicate · click an item, then arrow keys nudge it (Shift = bigger steps) · 🔒 locked items stay put · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
+      <p className="flex flex-wrap items-center gap-2 text-[0.7rem] text-white/45">
+        Drag to move · double-click text to type · click an item, then arrow keys nudge it · Ctrl/⌘+Z undo · Delete removes.
+        <Tip text={CONTROL_HELP.keys}>
+          <button type="button" onClick={() => help.setSheet("keys")} className="rounded-full bg-white/10 px-2 py-0.5 text-white/80 hover:bg-white/20">
+            ? All keys & tour
+          </button>
+        </Tip>
       </p>
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-white/10">
@@ -451,6 +474,7 @@ export function BannerStudio({
         )}
       </div>
 
+      <KeySheet mode={help.sheet} onMode={help.setSheet} onClose={() => help.setSheet(false)} onGo={goStep} />
       <ConfirmDialog
         open={!!pendingDelete}
         title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? (design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "anim" ? "Delete this animation?" : "Delete this shape or icon?") : "Delete this text box?"}

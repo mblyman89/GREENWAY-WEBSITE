@@ -83,6 +83,31 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
     ],
   },
   {
+    // D234 C-6 (SOP-11b G-106): the studio's own helper; the studio's "?" sheet links here.
+    id: "banner-studio",
+    section: "Website: Cannabis",
+    page: "Banner Design Studio",
+    href: "/admin/content/shop-banner",
+    title: "How the Banner Design Studio works",
+    steps: [
+      "Open the studio from any banner editor (Shop Banner slides, home carousel slides, page sections, the Loyalty hero, Specials, type cards or Branding → Saved banners) and turn on \"Use custom design\". It is the same studio everywhere.",
+      "Follow the \"Make a banner\" strip at the top: Picture → Text → Phone → Check → Publish. Each step gets a ✓ when it is done; click a step to jump to it. Publish happens in the editor, below the studio.",
+      "Picture & shade: click the most important spot of the picture (the focus point) and keep the subject inside the dashed clear box. Picture shape tells you the best picture size for this banner.",
+      "Text and Buttons: add one headline and, if you want, a button. Drag to move, double-click to type, Ctrl/⌘+Z undoes anything.",
+      "Press 📱 Phone and place each item again for phones. Moves there change phones only.",
+      "Open ✓ Checks and try the Banner width stops. Fix anything it lists, then Save draft, and Publish (or schedule) from the editor.",
+    ],
+    notes: [
+      "Press ? in the studio (when you are not typing) for every keyboard shortcut and the 60-second tour. Hover or Tab to a tab or button to see what it does.",
+      "Save this design to brand banners asks for a name in a small dialog. The name starts as your headline; saving the same name again adds another one, it does not replace it.",
+      "New banners start in Scale mode: the words and buttons grow and shrink with the banner, so they stay where you put them at every width.",
+    ],
+    links: [
+      { label: "Branding → Saved banners", href: "/admin/settings/branding?tab=banners" },
+      { label: "Schedule & Releases", href: "/admin/content/schedule" },
+    ],
+  },
+  {
     id: "legal-policies",
     section: "Website: Cannabis",
     page: "Legal Policies",
