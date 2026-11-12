@@ -115,13 +115,13 @@ The owner asked for hand-holding and health first (*"first step, do this, done g
 | M-7 | Held-card monitor; alerts inbox; cancel-and-refund guidance or action — **BUILT (D232)** | F-11-11, F-11-9, F-11-10 | G-84, G-85, G-86 | M-2; Q-11-4 |
 | M-8 | Pricing guard; helpers, integration guides, concierge; studio-default placements — **BUILT (D232)** | F-11-13, F-11-17, F-11-14 | G-87, G-90, G-92 | Q-11-6, Q-11-8 |
 
-### Phase C — Creative Studio, the Banner Design Studio and scheduling (SOP-11b, D233) · PROPOSED
+### Phase C — Creative Studio, the Banner Design Studio and scheduling (SOP-11b, D233) · APPROVED (D234)
 
 The owner's biggest pain is that overlays land in a different place on the website. The cheap, certain causes go first (fonts and tags), then the owner can see every width, then the root cause is removed (Scale mode), then a test locks it in. Help, scheduling and the Creative handoff follow.
 
 | Order | Fix | Finding (03) | Gap | Depends on |
 |---|---|---|---|---|
-| C-1 | Studio = website: site font variables in the studio; same h1/h2/p tags; System-default warning | F-11-19, F-11-20 | G-94, G-95 | — |
+| C-1 | Studio = website: site font variables in the studio; same h1/h2/p tags; System-default warning — **BUILT (D234)** | F-11-19, F-11-20 | G-94, G-95 | — |
 | C-2 | Width slider with real placement stops (1920, 1408, 1344, 1216, 1024, 834, 430, 390, 360); "Check on the real page" button | F-11-22, F-11-24 | G-97, G-98 | C-1 |
 | C-3 | Scale mode (cqw + aspect ratio, card pattern) for new banners; "Switch to Scale" with before/after; text floor; Shop width | F-11-21, F-11-23 | G-96, G-100 | C-2; Q-11-10 … Q-11-13 |
 | C-4 | Drift guard: Playwright studio vs site at the stops (≤1% of width); overlap/out-of-frame checks at every stop, phone included | F-11-25 | G-99 | C-3 |

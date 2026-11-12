@@ -9,21 +9,13 @@
  * `@container gwb (max-width: 767px)` rules from globals.css apply exactly as
  * they do for shoppers on a phone.
  *
- * Interactions:
- *  - Drag any text box or button (pointer events + setPointerCapture, works
- *    with mouse, pen and touch). Positions are stored in % of the banner.
- *  - Drag the right-edge handle of a selected text box to change its wrap width.
- *  - Snap guides: banner edges/centre + R57 smart guides to other items,
- *    equal-spacing snap and gap readouts (banner-guides-core).
- *    Hold Alt while dragging to turn snapping off.
- *  - Keyboard (WCAG 2.2 SC 2.5.7 — dragging always has a non-drag path):
- *    Tab to an item, arrows move 0.5% (Shift = 5%), Delete removes (asks
- *    first), Escape deselects. The side panels also have X/Y number boxes.
- *  - On "Phone" every move writes the phone overrides (mx/my/mw) only.
- *  - R53: click focuses (arrows work at once); double-click types on the canvas
- *    (contenteditable plaintext-only; Esc/click-away = ONE undo step).
- *  - R55: shapes (drag, width handle, arrows) and layer order (z-index, same
- *    rule as the public banner). Locked items select but never move.
+ * Interactions: drag text/buttons/shapes (pointer capture; % positions); the
+ * right-edge handle sets wrap width; snap guides (edges, centre, R57 smart
+ * guides, equal spacing; Alt = off); keyboard (WCAG 2.2 SC 2.5.7): Tab, arrows
+ * 0.5% (Shift 5%), Delete (asks), Escape. "Phone" moves write mx/my/mw only.
+ * R53 click focuses, double-click types (plaintext-only; one undo step). R55
+ * layer order (z-index like the public banner); locked items never move.
+ * D234 C-1: the website's fonts (StudioSiteFonts) and tags (h2/p/span).
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import {
@@ -52,6 +44,7 @@ import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
+import { useStudioFontVars } from "./StudioSiteFonts";
 
 export type StudioTarget = "box" | "button" | "element";
 export type StudioSelection = { target: StudioTarget; id: string } | null;
@@ -140,6 +133,7 @@ export function StudioCanvas({
 
   // R61-S3: card designs lay out at CARD_REF_PX on both devices (frameRefPx).
   const card = !!design.frame.card;
+  const fontVars = useStudioFontVars();
   const { w: refW, h: frameH } = frameRefPx(design, device);
   const scale = Math.min(card ? 1.25 : 1, availW / refW, maxH && maxH > 0 ? maxH / frameH : Infinity);
 
@@ -358,7 +352,7 @@ export function StudioCanvas({
         style={{ width: refW * scale, height: frameH * scale, maxWidth: "100%" }}
       >
         <div style={{ width: refW, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-          <div style={css(containerStyle(card))} className={card && device === "mobile" ? "gw-dcard-m" : undefined}>
+          <div style={{ ...css(containerStyle(card)), ...fontVars }} className={card && device === "mobile" ? "gw-dcard-m" : undefined}>
             <div
               ref={frameRef}
               style={css(frameStyle(design))}
@@ -421,11 +415,12 @@ export function StudioCanvas({
                 const text = resolveBoxText(b, legacy);
                 const sel = isSel("box", b.id);
                 const isEd = editing === b.id;
+                const Tag = roleInfo(b.role).html;
                 if (isEd) {
                   // Remounts (new key) on enter/exit so React never fights the
                   // browser over the text nodes the user is typing into.
                   return (
-                    <div
+                    <Tag
                       key={`${b.id}-edit`}
                       ref={(el) => {
                         if (el && document.activeElement !== el) {
@@ -450,11 +445,11 @@ export function StudioCanvas({
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       {text}
-                    </div>
+                    </Tag>
                   );
                 }
                 return (
-                  <div
+                  <Tag
                     key={b.id}
                     role="button"
                     tabIndex={0}
@@ -475,7 +470,7 @@ export function StudioCanvas({
                     <StudioBoxText box={b} card={card} text={text} empty={`(empty ${roleInfo(b.role).label.toLowerCase()})`} />
                     {sel && !b.locked ? <WidthHandle scale={scale} onStart={(e) => startDrag(e, "box", b.id, "resize")} onMove={onPointerMove} onEnd={endDrag} /> : null}
                     {handles("box", b.id, b.locked)}
-                  </div>
+                  </Tag>
                 );
               })}
 

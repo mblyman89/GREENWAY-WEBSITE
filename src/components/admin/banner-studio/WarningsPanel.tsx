@@ -8,6 +8,7 @@
  */
 import { checkDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 import type { StudioSelection } from "./StudioCanvas";
+import { useStudioSiteFonts } from "./StudioSiteFonts";
 
 export function WarningsPanel({
   design,
@@ -18,7 +19,9 @@ export function WarningsPanel({
   legacy: { eyebrow?: string; title?: string; subtitle?: string };
   onSelect: (s: StudioSelection) => void;
 }) {
-  const warnings = checkDesign(design, legacy);
+  // D234 C-1: the site fonts decide whether "Site font" text is System default.
+  const siteFonts = useStudioSiteFonts();
+  const warnings = checkDesign(design, legacy, siteFonts);
   return (
     <div className="space-y-2">
       {warnings.length === 0 ? (

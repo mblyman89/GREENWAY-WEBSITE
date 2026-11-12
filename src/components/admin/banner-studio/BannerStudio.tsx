@@ -21,6 +21,7 @@ import { TextBoxPanel } from "./TextBoxPanel";
 import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
+import { useStudioSiteFonts } from "./StudioSiteFonts";
 import { ShapePanel } from "./ShapePanel";
 import { SmokePanel } from "./SmokePanel";
 import { AnimPanel } from "./AnimPanel";
@@ -242,7 +243,8 @@ export function BannerStudio({
     design.buttons.some((b) => b.mx !== null || b.my !== null) ||
     (design.elements ?? []).some((e) => e.mx !== null || e.my !== null || e.mw !== null || e.mh !== null);
 
-  const warnCount = checkDesign(design, legacy).length;
+  const siteFonts = useStudioSiteFonts();
+  const warnCount = checkDesign(design, legacy, siteFonts).length;
   const tabBtn = (id: Tab, label: string) => (
     <button
       key={id}

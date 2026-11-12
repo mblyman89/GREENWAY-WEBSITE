@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Version** | 2.0 (SOP-11, second half; living document. v2.0 is recon, audit and the roadmap only. **No feature code changed**, D233) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
 | **Verified against** | `main@c384a5e6` (2026-11-11). Live read-only probes of greenwaymarijuana.com on 2026-11-11 (frame heights and fonts, §9.3). The numbers in Appendix B.3 come from the same formula the site uses (`interpPx`, `src/lib/cms/banner-design-core.ts` L919–925) |
-| **Program records** | Findings `F-11-19` … `F-11-32` and `F-11-C2` in `docs/sop-program/03-FINDINGS-LEDGER.md` · gaps `G-94` … `G-107` in `docs/sop-program/05-GAP-REGISTER.md` · plan rows `C-1` … `C-8` (Phase C, PROPOSED) in `docs/sop-program/06-FIX-PHASE-PLAN.md` · owner request D233 in `00-OWNER-REQUEST-VERBATIM.md` |
+| **Program records** | Findings `F-11-19` … `F-11-32` and `F-11-C2` in `docs/sop-program/03-FINDINGS-LEDGER.md` · gaps `G-94` … `G-107` in `docs/sop-program/05-GAP-REGISTER.md` · plan rows `C-1` … `C-8` (Phase C, APPROVED D234) in `docs/sop-program/06-FIX-PHASE-PLAN.md` · owner request D233 in `00-OWNER-REQUEST-VERBATIM.md` |
 | **Scope (this version)** | The owner: *"This one is for the creative studio, and the editor in the branding page and the scheduler. Recon and audit the code. Deep research the internet. Help me optimize, enhance, harden, make more powerful and easier to use, etc. it too should have significant help."* The Merch Studio is SOP-11 (v1.0 … v1.9) |
 
 > **This SOP is a living document (owner decision D41).** Each time a Phase C slice is built, the "As built" note goes into 00, the finding gets its "Resolved" line in 03, and this SOP gets a new version row in Appendix D.
@@ -175,6 +175,8 @@ The studio's own one-line guide (`BannerStudio.tsx` L395), word for word:
 
 Use this until slices C-1 … C-3 are built. Each step names the cause it removes.
 
+> **Since v2.1 (C-1):** the studio now draws "Site font" text in the website's Heading/Body font and with the website's tags, so causes 1 and 2 are gone inside the studio. Step 1 still matters while the site font is **System default**: each visitor's device then picks the font, and Checks shows *"… text boxes use System default …"*. Pick the site fonts in Branding → Fonts (Q-11-18), or name a font on the box.
+
 1. **Set every text box's font on purpose. Do not leave it on "Site font".** Text tab → Font. Pick a library web font (for example Inter, Montserrat, Oswald, Bebas). With a named font, the studio and the website use the same font file (both pages load all the library fonts, `admin/layout.tsx` L26 and `(site)/layout.tsx` via `fontVariablesClassName`, `fonts-loader.ts` L207+), and the box sets its own font, so the h1/h2 heading rule cannot change it (`banner-design-core.ts` L1097–1098; `globals.css` L159–160). *Removes causes 1 and 2 (F-11-19, F-11-20).* Avoid "System default" for banner text: it is a different font on each visitor's device.
 2. **Leave room below the last line.** The banner's height changes with the screen width (home: 200 px on a phone up to 360 px on a big screen; §9.3), while text positions are percentages. Keep the bottom of the lowest text or button above about 85% of the height. *Reduces cause 3 (F-11-21).*
 3. **Keep the text block in the left 60% and away from the right edge.** As the banner gets narrower, the text gets bigger compared with the banner (on a 1024 px laptop the headline is about 15% bigger than "in proportion", Appendix B.3), so it needs spare width.
@@ -244,6 +246,7 @@ The Checks tab messages (`banner-design-core.ts` L1334–1385), word for word. T
 | "A text box ran past the edge of the banner — it was pulled back inside." | Check the box's place; narrow it. |
 | "The … box is empty — add text or hide it." | Type text or hide the box. |
 | "This small-print box is under 10% of your biggest text. You don't need warnings on banners (your age-gated site shows them in the footer on every page), but if you add one here, WAC 314-55-155(7) wants it at least 10% of the largest text." | Make the small print bigger, or remove it. |
+| "N text boxes use System default. Each visitor's device picks that font …" (v2.1) | Pick a web font for the box (Text → Font), or set the site's Heading and Body fonts in Branding → Fonts (Q-11-18). |
 | "The … and … boxes might overlap." | Move one. This is checked on the Computer layout only, and by estimate (L1368–1380). Check Phone yourself. |
 
 Schedule & Releases: a failed item *"is tried up to three times and then shows here as failed, with the reason"* (helper L168–185). Fix the reason (for example, the item was deleted) and schedule it again.
@@ -494,7 +497,7 @@ Fix the cheap, certain causes first (fonts and tags, C-1), then let you **see** 
 | C-5 | Picture shape, safe area, crop hint | G-101 | Builds on C-3's fixed shape |
 | C-6 | Help and hand-holding; name dialog | G-106, G-107 | Written once the studio is stable |
 | C-7 | One schedule everywhere; calendar; preview as of | G-102, G-103 | Independent; Q-11-16 |
-| C-8 | Creative → banner; advertising check | G-104, G-105 | Q-11-14 |
+| C-8 | Creative → banner; advertising check | G-104, G-105 | Q-11-14 **Answered D234:** *warn with tick* |
 
 Rules for every slice: pure core + self-tests; one compliance test file per slice (`tests/compliance/d233-creative-c<N>-*.test.ts`); existing banners render exactly as before unless you switch them (a test proves it); SOP-11b, 00, 03, 05, 06 updated in the same PR.
 
@@ -502,18 +505,19 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 
 | # | Question | Our recommendation |
 |---|---|---|
-| Q-11-10 | Should **new** banners use Scale mode (everything grows and shrinks together, like a picture)? Existing banners keep today's look and get a "Switch to Scale" button with a before/after. | Yes, new = Scale; existing by choice. |
-| Q-11-11 | Keep a separate **Phone layout** in Scale mode? | Yes: Scale within phones and within computers, still two layouts. |
-| Q-11-12 | The Shop banner on very wide screens: cap it at 1408 px (centred, like home), or keep it full width with Scale mode (it gets taller)? | Cap at 1408 px, the same as home, so one design fits both. |
-| Q-11-13 | In Scale mode, small text could get too small on a 360 px phone. Set a floor (for example 12 px) with a warning? | Yes, 12 px floor and a Checks warning. |
+| Q-11-10 | Should **new** banners use Scale mode (everything grows and shrinks together, like a picture)? Existing banners keep today's look and get a "Switch to Scale" button with a before/after. | Yes, new = Scale; existing by choice. **Answered D234:** *yes* (new = Scale; existing by choice) |
+| Q-11-11 | Keep a separate **Phone layout** in Scale mode? | Yes: Scale within phones and within computers, still two layouts. **Answered D234:** *yes* |
+| Q-11-12 | The Shop banner on very wide screens: cap it at 1408 px (centred, like home), or keep it full width with Scale mode (it gets taller)? | Cap at 1408 px, the same as home, so one design fits both. **Answered D234:** *yes* (cap at 1408 px) |
+| Q-11-13 | In Scale mode, small text could get too small on a 360 px phone. Set a floor (for example 12 px) with a warning? | Yes, 12 px floor and a Checks warning. **Answered D234:** *yes* (12 px floor + warning) |
 | Q-11-14 | Advertising check: warn only, or block Publish when a banned word is found? | Warn, plus a required tick for the picture check. |
-| Q-11-15 | First-use tour: show it once automatically, or only when someone presses "Show me how"? | A small "New here? 60-second tour" strip that can be dismissed and re-opened from **?**. |
-| Q-11-16 | Give Shop slides and type cards the same repeats (days/hours) and fallback as home slides? | Yes. |
-| Q-11-17 | Approve Phase C (C-1 … C-8) in that order, two slices per message? | Yes. |
-| Q-11-18 | Pick a web font for site headings (Branding → Fonts) instead of System default, so every visitor sees the same font? | Yes; any library font. This is a setting, not code. |
+| Q-11-15 | First-use tour: show it once automatically, or only when someone presses "Show me how"? | A small "New here? 60-second tour" strip that can be dismissed and re-opened from **?**. **Answered D234:** *I agree with your recommendation.* |
+| Q-11-16 | Give Shop slides and type cards the same repeats (days/hours) and fallback as home slides? | Yes. **Answered D234:** *yes* |
+| Q-11-17 | Approve Phase C (C-1 … C-8) in that order, two slices per message? | Yes. **Answered D234:** *"I approve and agree."* |
+| Q-11-18 | Pick a web font for site headings (Branding → Fonts) instead of System default, so every visitor sees the same font? | Yes; any library font. This is a setting, not code. **Answered D234:** *yes, setting not code* (Branding → Fonts) |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 2.0 | 2026-11-11 | First version of the second half (recon, audit and roadmap only, no code changed, D233). Creative Studio, Branding, the Banner Design Studio and scheduling procedures; the interim placement procedure (§4.9) and the real-page check (§4.10); six drift causes with numbers; 14 findings (F-11-19 … F-11-32 + F-11-C2); 14 gaps (G-94 … G-107); Phase C (C-1 … C-8) PROPOSED; questions Q-11-10 … Q-11-18. | Greenway Dev |
+| 2.1 | 2026-11-11 | Phase C approved (D234, all of Q-11-10 … Q-11-18 answered). Slice C-1 (#PC1): the studio reads the website's Heading/Body fonts and draws the website's tags (h2/p/span); new Checks message for System default (§4.9 note, §5). | Greenway Dev |

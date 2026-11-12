@@ -2933,3 +2933,30 @@ What was done:
 
 - SOP-11b v2.0: map, Creative Studio (FLUX Image, FLUX Video, Midjourney), Branding, the Banner Design Studio (tabs, keys, undo), the interim placement procedure §4.9, the real-page check §4.10, scheduling §4.11–§4.14, messages, troubleshooting, advertising rules, a banner launch check form 8.1, the real banner widths §9.3, Appendix B (findings, six causes, the numbers, strategy, gaps, build order) and Appendix C (Q-11-10 … Q-11-18).
 - SOP Library: the entry sits on the **Marketing & Merch** shelf.
+
+## D234 — SOP-11b Phase C approved; slices C-1 … C-3 (2026-11-11)
+
+### Owner request (verbatim)
+
+> Thank you. I want to fix everything. Q-11-10: yes. Q-11-11: yes. Q-11-12: yes. Q-11-13: yes. Q-11-14: warn with tick. Q-11-15: I agree with your recommendation. Q-11-16: yes. Q-11-17: I approve and agree. Q11-18: yes, setting not code. Please complete 3 slices. Return back with a summary report. Follow the standing rules. Thank you!
+
+### Decisions
+
+- **Phase C (C-1 … C-8) is APPROVED, in that order** (Q-11-17: *"I approve and agree."*). This message builds **C-1, C-2 and C-3**.
+- **Q-11-10** (*"yes"*): new banners use **Scale mode**. Existing banners keep today's look and switch only when the owner presses **Switch to Scale** (with a before/after).
+- **Q-11-11** (*"yes"*): Scale mode keeps a separate **Phone layout**.
+- **Q-11-12** (*"yes"*): the Shop banner is capped at **1408 px**, centred, like home.
+- **Q-11-13** (*"yes"*): Scale-mode text has a **12 px floor**, with a Checks warning.
+- **Q-11-14** (*"warn with tick"*): the advertising check warns and needs a picture tick (C-8).
+- **Q-11-15** (*"I agree with your recommendation."*): a dismissible "New here? 60-second tour" strip, re-opened from **?** (C-6).
+- **Q-11-16** (*"yes"*): Shop slides and type cards get repeats and fallback (C-7).
+- **Q-11-18** (*"yes, setting not code"*): the owner picks the site heading font in **Branding → Fonts**. No code.
+
+### As built (slice C-1)
+
+- **Studio = website fonts** (G-94, F-11-19): the five studio routes' segment layout (`StudioRulesLayout.tsx`) now reads `site.font.heading` / `site.font.body` with `getContentValues`, the same blocks and the same `fontStack` defaults as `src/app/(site)/layout.tsx`. It also adds the @font-face for an uploaded site font. The canvas container gets `--font-heading` / `--font-body` and the body font (`StudioSiteFonts.tsx`, `studio-fonts-core.ts`).
+- **Same tags** (G-95, F-11-20): each canvas text box is drawn with the website's tag for its role: h2 for the headline, p for body text, span for the badge (`roleInfo(b.role).html`; the same table `DesignedBanner.tsx` uses). A headline on "Site font" now takes the Heading font in the studio too. The margin is reset by `boxStyle` (`margin: 0`), so the tag adds no space.
+- **System default warning:** a new Checks message (`DEVICE_FONT`) appears when a visible text box ends up in System default on the website (the box is set to it, or it is on "Site font" and the site font is System default). It never blocks. Without the site fonts (outside the studio routes) nothing changes.
+- **The website is untouched.** Test: `tests/compliance/d233-creative-c1-fonts-tags.test.ts`. Pure self-tests: `__runStudioFontsCoreTests`, plus the new `banner-design-core` cases. SOP-11b v2.1.
+- **Owner steps:** no migration, no new variable. Q-11-18: open **Branding → Fonts** and pick a Heading font (and a Body font) instead of System default. While the site is on System default, the studio shows the Checks warning on banner text.
+

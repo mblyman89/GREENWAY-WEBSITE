@@ -26,6 +26,7 @@ import { normalizeEnter, normalizeIntro, type Enter, type Intro } from "./banner
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
+import { effectiveBoxFont, isDeviceFont, type SiteFontIds } from "@/lib/cms/studio-fonts-core";
 import { buttonFxStyle, normalizeButtonFx, type ButtonFx } from "@/lib/cms/button-fx-core";
 import { normalizeBeam, normalizeTextMotion, textMotion, type Beam, type TextMotionFields } from "@/lib/cms/banner-motion-core";
 import { MAX_ANIMS } from "@/lib/cms/banner-anim-core";
@@ -1309,7 +1310,8 @@ export type DesignWarningCode =
   | "EMPTY_BOX"
   | "LEGAL_TOO_SMALL"
   | "OVERLAP"
-  | "BUTTON_LINK";
+  | "BUTTON_LINK"
+  | "DEVICE_FONT";
 
 export type DesignWarning = { code: DesignWarningCode; message: string; boxId?: string; buttonId?: string };
 
@@ -1331,7 +1333,22 @@ function rawOutOfFrame(raw: unknown): { id: string }[] {
  * can be reported before clamping; everything else is computed on the
  * normalized design.
  */
-export function checkDesign(rawOrDesign: unknown, legacy: { eyebrow?: string; title?: string; subtitle?: string } = {}): DesignWarning[] {
+/**
+ * D234 C-1 (SOP-11b, G-94 / F-11-19): visible text boxes whose font on the
+ * website is "System default" (each visitor's device picks it: San Francisco,
+ * Segoe UI, Roboto…), so lines can wrap differently from the studio. "Site
+ * font" boxes count when the site's Heading/Body font is System default; with
+ * unknown site fonts only boxes set to System default themselves count.
+ */
+export function deviceFontBoxes(design: BannerDesign, legacy: { eyebrow?: string; title?: string; subtitle?: string } = {}, siteFonts?: SiteFontIds | null): DesignTextBox[] {
+  return design.boxes.filter((b) => {
+    if (b.hidden || !resolveBoxText(b, legacy).trim()) return false;
+    const f = effectiveBoxFont(b.font, roleInfo(b.role).html, siteFonts);
+    return f !== null && isDeviceFont(f);
+  });
+}
+
+export function checkDesign(rawOrDesign: unknown, legacy: { eyebrow?: string; title?: string; subtitle?: string } = {}, siteFonts?: SiteFontIds | null): DesignWarning[] {
   const design = normalizeDesign(rawOrDesign);
   if (!design) return [];
   const w: DesignWarning[] = [];
@@ -1379,6 +1396,13 @@ export function checkDesign(rawOrDesign: unknown, legacy: { eyebrow?: string; ti
         w.push({ code: "OVERLAP", boxId: b.id, message: `The ${roleInfo(a.role).label.toLowerCase()} and ${roleInfo(b.role).label.toLowerCase()} boxes might overlap.` });
     }
   }
+  const dev = deviceFontBoxes(design, legacy, siteFonts);
+  if (dev.length)
+    w.push({
+      code: "DEVICE_FONT",
+      boxId: dev[0].id,
+      message: `${dev.length === 1 ? "1 text box uses" : `${dev.length} text boxes use`} System default. Each visitor's device picks that font (San Francisco on an iPhone, Segoe UI on Windows, Roboto on Android), so the words can wrap differently from this studio and items look moved. Pick a web font for the box (Text → Font), or set the site's Heading and Body fonts in Branding → Fonts.`,
+    });
   return w;
 }
 
@@ -1826,5 +1850,16 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     ok(boxStyle({ ...plain, outline: true, backdropColor: "#ffffff" }).WebkitTextStroke === "1px #ffffff", "R55 legacy outline unchanged");
   }
 
+  // D234 C-1: System default warning (G-94).
+  {
+    const d0 = defaultDesign("hero");
+    const L = { eyebrow: "New", title: "Hello there", subtitle: "Come in" };
+    ok(!checkDesign(d0, L).some((x) => x.code === "DEVICE_FONT"), "C-1: unknown site fonts + Site font boxes = no warning (old behaviour)");
+    ok(checkDesign(d0, L, { heading: "system", body: "system" }).some((x) => x.code === "DEVICE_FONT"), "C-1: site on System default warns");
+    ok(!checkDesign(d0, L, { heading: "oswald", body: "inter" }).some((x) => x.code === "DEVICE_FONT"), "C-1: web site fonts = no warning");
+    const sys = { ...d0, boxes: d0.boxes.map((b) => ({ ...b, font: "system" })) };
+    ok(checkDesign(sys, L).some((x) => x.code === "DEVICE_FONT"), "C-1: a box set to System default warns");
+    ok(deviceFontBoxes(sys, L, { heading: "oswald", body: "inter" }).length === 3, "C-1: picked System default beats the site font");
+  }
   return { passed, failed };
 }
