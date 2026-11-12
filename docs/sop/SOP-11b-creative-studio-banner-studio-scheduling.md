@@ -520,4 +520,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | Version | Date | Change | By |
 |---|---|---|---|
 | 2.0 | 2026-11-11 | First version of the second half (recon, audit and roadmap only, no code changed, D233). Creative Studio, Branding, the Banner Design Studio and scheduling procedures; the interim placement procedure (§4.9) and the real-page check (§4.10); six drift causes with numbers; 14 findings (F-11-19 … F-11-32 + F-11-C2); 14 gaps (G-94 … G-107); Phase C (C-1 … C-8) PROPOSED; questions Q-11-10 … Q-11-18. | Greenway Dev |
-| 2.1 | 2026-11-11 | Phase C approved (D234, all of Q-11-10 … Q-11-18 answered). Slice C-1 (#PC1): the studio reads the website's Heading/Body fonts and draws the website's tags (h2/p/span); new Checks message for System default (§4.9 note, §5). | Greenway Dev |
+| 2.1 | 2026-11-11 | Phase C approved (D234, all of Q-11-10 … Q-11-18 answered). Slice C-1 (#1764): the studio reads the website's Heading/Body fonts and draws the website's tags (h2/p/span); new Checks message for System default (§4.9 note, §5). | Greenway Dev |
