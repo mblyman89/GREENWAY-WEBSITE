@@ -5,6 +5,7 @@ import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
+import { specForDesign } from "@/lib/cms/picture-shape-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
 import { WEEKDAYS, WEEKDAY_LABEL, cleanDays, describeSchedule } from "@/lib/cms/banner-schedule-core";
 import { DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
@@ -260,7 +261,7 @@ export function CarouselSlideCard({
             value={image}
             onChange={setImage}
             mediaChoices={mediaChoices}
-            spec={CAROUSEL_SLIDE_SPEC}
+            spec={specForDesign(CAROUSEL_SLIDE_SPEC, adv?.design?.enabled ? adv.design : null)}
             allowVideo
           />
         </div>

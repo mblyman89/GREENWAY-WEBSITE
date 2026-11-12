@@ -5,6 +5,7 @@ import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { SECTION_BANNER_SPEC, resolveImageSpec } from "@/lib/cms/image-spec-core";
+import { specForDesign } from "@/lib/cms/picture-shape-core";
 import {
   HOME_CARD_COUNT_OPTIONS,
   BRAND_COUNT_KEY,
@@ -327,7 +328,7 @@ export function SectionCard({
                 value={image}
                 onChange={setImage}
                 mediaChoices={mediaChoices}
-                spec={imageSpec}
+                spec={specForDesign(imageSpec, design?.enabled ? design : null)}
                 allowVideo
               />
             </div>

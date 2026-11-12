@@ -27,6 +27,7 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
+import { specForDesign } from "@/lib/cms/picture-shape-core";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
@@ -328,7 +329,7 @@ export function LoyaltyHeroEditor(props: Props) {
               value={pres.image}
               onChange={(next) => setField("image", next)}
               mediaChoices={mediaChoices}
-              spec={desktopSpec}
+              spec={specForDesign(desktopSpec, pres.design?.enabled ? pres.design : null, "desktop")}
               allowVideo
             />
           </div>
@@ -345,7 +346,7 @@ export function LoyaltyHeroEditor(props: Props) {
               value={pres.imageMobile}
               onChange={(next) => setField("imageMobile", next)}
               mediaChoices={mediaChoices}
-              spec={mobileSpec}
+              spec={specForDesign(mobileSpec, pres.design?.enabled ? pres.design : null, "mobile")}
               allowVideo
             />
           </div>

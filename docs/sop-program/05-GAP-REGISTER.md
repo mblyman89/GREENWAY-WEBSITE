@@ -125,7 +125,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-98 | **"Check on the real page"** from every banner editor (Website Sync, page, width, Move mode on) | D233, D234 | F-11-24 | SOP-11b §4.10 | **BUILT (C-2, D234)** |
 | G-99 | **Drift guard** (Playwright studio vs site, ≤1% of width) and checks at every width | D233, D234 | F-11-25 | SOP-11b §5 | **BUILT (C-4, D234)** (rendered-CSS guard in vitest; CI has no browser) |
 | G-100 | **Placement max widths**; Shop banner width (Q-11-12) | D233, D234 | F-11-23 | SOP-11b §6.3 | **BUILT (C-3, D234)** |
-| G-101 | **Picture shape per placement**, safe-area overlay, crop-edge hint | D233 | F-11-32 | SOP-11b §4.9 step 6 | APPROVED (D234; C-5) |
+| G-101 | **Picture shape per placement**, safe-area overlay, crop-edge hint | D233, D234 | F-11-32 | SOP-11b §4.9 step 6 | **BUILT (C-5, D234)** |
 | G-102 | **One schedule everywhere** (repeats/fallback for Shop slides and type cards; calendar on Shop Banner and Schedule & Releases) | D233 (Q-11-16) | F-11-26 | SOP-11b §4.11 | APPROVED (D234; C-7) |
 | G-103 | **Preview as of** a date/time | D233 | F-11-27 | SOP-11b §4.13 | APPROVED (D234; C-7) |
 | G-104 | **Creative Studio → Use in a banner** | D233 | F-11-28 | SOP-11b §4.2 step 6 | APPROVED (D234; C-8) |
@@ -1014,7 +1014,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Why:** F-11-19 … F-11-32. Six causes of the drift (SOP-11b Appendix B.2): fonts, tags, fluid sizes, two preview widths, mount widths, picture crop.
 - **Requirements:** SOP-11b Appendix B.5. Existing banners must render exactly as before unless the owner switches them (a test proves it).
 - **Owner action now:** follow SOP-11b §4.9; answer Q-11-10 … Q-11-18.
-- **D234:** all answered (Phase C APPROVED). C-1 BUILT (G-94, G-95). C-2 BUILT (G-97, G-98). C-3 BUILT (G-96, G-100). C-4 BUILT (G-99).
+- **D234:** all answered (Phase C APPROVED). C-1 BUILT (G-94, G-95). C-2 BUILT (G-97, G-98). C-3 BUILT (G-96, G-100). C-4 BUILT (G-99). C-5 BUILT (G-101).
 
 ## R-DRAWER-1 · Open the cash drawer with or without a printed receipt (BUILT, owner request, R-DRAWER-1a–e) — S3
 - **Owner basis:** *"i want to build a setting in the register activity page of the back office that gives me the option of popping the cash drawer with a receipt or with out the receipt printed. most of my customers do not want a receipt and this new method should make for a more efficient process."*

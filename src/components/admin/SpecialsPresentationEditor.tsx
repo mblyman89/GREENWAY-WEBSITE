@@ -28,6 +28,7 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
+import { specForDesign } from "@/lib/cms/picture-shape-core";
 import {
   BADGE_STYLES,
   TEXT_ALIGNS,
@@ -577,7 +578,7 @@ export function SpecialsPresentationEditor(props: Props) {
                           value={day.image ?? ""}
                           onChange={(v) => updateDay(day.weekday, { image: v })}
                           mediaChoices={mediaChoices}
-                          spec={cardSpec}
+                          spec={specForDesign(cardSpec, day.design?.enabled ? day.design : null)}
                         />
                       </div>
                       <p className="mt-1 text-[11px] text-[var(--admin-text-muted)]">

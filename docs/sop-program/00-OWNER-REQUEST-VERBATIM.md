@@ -2983,3 +2983,12 @@ What was done:
 - Nothing changes on the website. Pure self-tests: `__runStudioDriftCoreTests` (19). SOP-11b v2.4.
 - **Owner steps:** none. If Checks names widths, press that stop on the Banner width bar and fix it there.
 
+### As built (slice C-5)
+
+- **Picture shape per placement** (G-101, F-11-32): the studio's **Picture & shade** tab has a **Picture shape** box. It gives the picture size that fits THIS banner at every width the site shows, worked out from the banner's real shape at each width stop (`picture-shape-core.ts` `pictureAdvice`, using the same `canvasRefPx` layout as the canvas). It shows one picture for computers and phones (the tallest shape, so wider widths only trim the top and bottom), plus computer-only and phone-only sizes. Example: a Scale hero (1408 × 260, phone 390 × 200) gets *"2400 × 1234 px (1.95:1)"* for both, instead of the old 1600 × 560 for every slot. After a picture is picked, the box says how it fits, for example *"… wider than this banner on a phone, so phones cut about 32% of its width …"*.
+- **Upload hints follow the design:** when a placement has a studio design turned on, its Canva size hint shows **Fits this banner** (`specForDesign`). This covers the home carousel slides, page / home sections, the Shop banner and the Loyalty hero (computer and phone pictures), and the Specials day cards. With no design, the hint is exactly the old one.
+- **Safe-area overlay:** the focus-point picture shows a dashed clear box. It is the part of the picture that shows at EVERY width of the current layout (computer or phone), with the site's exact crop (cover, focus point, zoom around the focus, flips; `visibleWindow`, `safeArea`). The parts cut at some width are dimmed.
+- **Crop-edge hint:** *"The picture is cut close to the focus point (on the left) at 398, 358, 328 px wide, so a subject bigger than a small spot may be cut off. Zoom out, move the focus point, or use a picture shaped like the banner (see Picture shape)."* (`cropEdgeHint`; the cut is within 15% of the visible part from the focus point). A picture's own edge is not a cut.
+- Nothing changes on the website. Test: `tests/compliance/d233-creative-c5-picture-shape.test.tsx`. Pure self-tests: `__runPictureShapeCoreTests` (28). SOP-11b v2.5.
+- **Owner steps:** none. For new art, make it at the size in **Picture shape** and keep the subject inside the clear box.
+
