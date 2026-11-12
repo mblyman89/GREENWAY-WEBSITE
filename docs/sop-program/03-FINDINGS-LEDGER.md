@@ -1181,11 +1181,13 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **Pin:** `src/app/admin/layout.tsx` L24–29 sets no `--font-heading` / `--font-body`; `src/app/(site)/layout.tsx` L115–131 does. `globals.css` L136 (`var(--font-body, Arial, …)`), L159–160. A box on "Site font" sets no font (`banner-design-core.ts` L193–196, L1097–1098). Live 2026-11-11: heading font = system stack; no home box sets a font.
 - **Effect:** the studio wraps the text in Arial, the website in the visitor's device font; line breaks and box heights differ, so items look moved.
 - **SOP impact:** SOP-11b §4.9 step 1 (interim: name a web font). **G-94**.
+- **Resolved (D234, C-1):** `StudioRulesLayout.tsx` reads `site.font.heading` / `site.font.body` (same keys and `fontStack` defaults as the site layout) and provides them; the canvas container sets `--font-heading` / `--font-body` (`StudioSiteFonts.tsx`, `studio-fonts-core.ts`). Checks warns (`DEVICE_FONT`) on text in System default.
 
 ### F-11-20 · CONFIRMED · BUG · S2 — The studio draws plain boxes; the website draws h1/h2/p
 - **Pin:** `StudioCanvas.tsx` L456–475 (`<div role="button">`); `DesignedBanner.tsx` L105–109, L215 (`boxEl` → h1/h2/p by role); `globals.css` L159–160 (headings take `--font-heading`).
 - **Effect:** a headline on "Site font" uses the heading font live and the body font in the studio.
 - **SOP impact:** SOP-11b §4.9 step 1. **G-95**.
+- **Resolved (D234, C-1):** `StudioCanvas.tsx` draws each box as `roleInfo(b.role).html` (h2/p/span), like `DesignedBanner.tsx`; `boxStyle` resets the margin.
 
 ### F-11-21 · CONFIRMED · WEAKNESS · S2 — Height and text size do not grow in step with the width; positions do
 - **Pin:** `banner-design-core.ts` L919–925 (`interpPx` clamp), L983–998 (frame height), L1076–1084 (x/y/w in %), L1153–1157 (button heights fixed px); `banner-elements-core.ts` L356–357 (line thickness px). Cards are proportional (L43, L954–957).
