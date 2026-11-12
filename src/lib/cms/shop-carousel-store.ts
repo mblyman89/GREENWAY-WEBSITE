@@ -27,6 +27,7 @@ import {
   normalizeShopHeroPresentation,
   serializeShopHeroPresentation,
   slideHasContent,
+  pickLiveShopSlides,
 } from "./shop-carousel-core";
 import {
   type ShopCarouselSlideRow,
@@ -171,9 +172,13 @@ export async function getShopCarouselForRender(): Promise<ShopRenderSlide[]> {
       preview ? row.draft_enabled : row.status === "published" && row.enabled,
     );
 
-    const resolved = visible
+    const withContent = visible
       .map((row) => resolveForRender(row, preview))
       .filter((s) => slideHasContent(s.presentation));
+    // D234 C-7 (G-102): visitors get the slide schedule (start/end, repeat
+    // days, daily hours) and the fallback rule, like home slides. Before this
+    // the Shop page ignored the schedule. Staff preview shows every slide.
+    const resolved = pickLiveShopSlides(withContent, preview, Date.now());
 
     if (resolved.length === 0) return SHOP_CAROUSEL_FALLBACK_SLIDES;
     const shown = resolved.slice(0, MAX_SHOP_CAROUSEL_SLIDES);

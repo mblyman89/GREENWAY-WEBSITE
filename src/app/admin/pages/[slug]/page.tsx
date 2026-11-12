@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SectionCard } from "@/components/admin/SectionCard";
 import { CarouselSlideCard } from "@/components/admin/CarouselSlideCard";
+import { calendarEntry } from "@/lib/cms/schedule-everywhere-core";
 import { BannerScheduleCalendar } from "@/components/admin/BannerScheduleCalendar";
 import { homeSlideSchedule, normalizeHomeSlideAdvanced } from "@/lib/cms/home-slide-advanced-core";
 import { type MediaChoice } from "@/components/admin/ContentImageField";
@@ -500,15 +501,28 @@ async function TypeCardsTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   const cards = readTypeCards(categoryRow?.settings);
   const isCustom = hasCustomTypeCards(categoryRow?.settings);
   const posts = await listPublishedPostLinks().catch(() => []);
+  // D234 C-7 (G-102): the type cards' schedule on a calendar too.
+  const calendarCards = isCustom ? cards.filter((c) => c.enabled).map((c) => calendarEntry(c.id, c.label, c.adv)) : [];
 
   return (
-    <TypeCardImagesEditor
-      cards={cards}
-      isCustom={isCustom}
-      posts={posts}
-      mediaChoices={mediaChoices}
-      saveAction={saveTypeCardImagesAction}
-    />
+    <div className="space-y-5">
+      {calendarCards.length > 0 ? (
+        <BannerScheduleCalendar
+          banners={calendarCards}
+          anchorPrefix="tc-label-"
+          nowMs={Date.parse(new Date().toISOString())}
+          noun="card"
+          emptyFallback="the type cards row is empty"
+        />
+      ) : null}
+      <TypeCardImagesEditor
+        cards={cards}
+        isCustom={isCustom}
+        posts={posts}
+        mediaChoices={mediaChoices}
+        saveAction={saveTypeCardImagesAction}
+      />
+    </div>
   );
 }
 

@@ -1220,10 +1220,12 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-26 · CONFIRMED · GAP · S3 — Scheduling differs in each place
 - **Pin:** repeats/fallback only on home slides (`home-slide-advanced-core.ts` L76–77; `banner-schedule-core.ts` L65–110); Shop slides and type cards are start/end only (`shop-carousel-core.ts` L372–378; `type-cards-core.ts` L197–203); the calendar is only on `pages/[slug]/page.tsx` L454; Schedule & Releases has 5 kinds (`content-schedule-core.ts` L32–38).
 - **SOP impact:** SOP-11b §4.11. **G-102** (Q-11-16).
+- **Resolved (D234, C-7):** Shop slides and type cards share the home-slide schedule (`schedule-everywhere-core.ts` `cleanRepeat`, `scheduleOf`, `pickLive`; `ScheduleRepeatFields.tsx`). The public Shop banner now applies it (`shop-carousel-store.ts` `pickLiveShopSlides`; it ignored the schedule before). Calendars are on Shop Banner, Type cards and Schedule & Releases (`BannerScheduleCalendar.tsx` noun props). Loyalty and Specials banners have their own group in the picker (`content-schedule-server.ts`). No new schedule kind or migration was needed.
 
 ### F-11-27 · CONFIRMED · GAP · S3 — No "preview the site as of a date"
 - **Pin:** no as-of preview in `src/lib/cms` or `src/components/site`; Releases list/add/remove only (`content-release-server.ts` L56–135).
 - **SOP impact:** SOP-11b §4.13. **G-103**.
+- **Resolved (D234, C-7):** **Preview as of** on Schedule & Releases (`schedule/AsOfSection.tsx`, `?asof=`): `previewAsOf` applies pending changes and timed releases before the chosen time in order (a Go live uses the saved draft), then each item's own schedule and the fallback rule. Untimed releases are listed as not counted.
 
 ### F-11-28 · CONFIRMED · GAP · S3 — Creative Studio results cannot be sent to a banner
 - **Pin:** `FluxResults.tsx` L85–110 (open in media, download, use as reference/source clip, enhance, seed only).

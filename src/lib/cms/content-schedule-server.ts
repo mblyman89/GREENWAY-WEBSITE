@@ -440,8 +440,17 @@ export async function listScheduleTargets(): Promise<ScheduleTargetOption[]> {
       if (r.locked) continue;
       out.push({ kind: "faq_item", key: r.id, label: first(r.draft_question || r.question) || "(untitled question)", group: "FAQ questions" });
     }
-    for (const r of (blocks.data ?? []) as { block_key: string; page: string; label: string }[])
-      out.push({ kind: "content_block", key: r.block_key, label: `${r.page}: ${r.label}`, group: "Page wording (publish only)" });
+    // D234 C-7 (G-102): the Loyalty and Specials banners get their own group
+    // (they are content blocks, so they were hidden among the page wording).
+    const BANNER_BLOCKS: Record<string, string> = {
+      "loyalty.hero.presentation": "Loyalty page banner",
+      "specials.deals.presentation": "Specials page banner and deal cards",
+    };
+    for (const r of (blocks.data ?? []) as { block_key: string; page: string; label: string }[]) {
+      const banner = BANNER_BLOCKS[r.block_key];
+      if (banner) out.push({ kind: "content_block", key: r.block_key, label: banner, group: "Loyalty & Specials banners (publish only)" });
+      else out.push({ kind: "content_block", key: r.block_key, label: `${r.page}: ${r.label}`, group: "Page wording (publish only)" });
+    }
   } catch (e) {
     console.error("[content-schedule] target list failed:", e instanceof Error ? e.message : e);
   }

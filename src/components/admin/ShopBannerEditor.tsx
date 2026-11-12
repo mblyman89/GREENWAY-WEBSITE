@@ -23,6 +23,7 @@ import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { specForDesign } from "@/lib/cms/picture-shape-core";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
+import { ScheduleRepeatFields } from "@/components/admin/ScheduleRepeatFields";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
   TEXT_ALIGNS,
@@ -643,7 +644,8 @@ function SlideCard({
               <div className="mb-1 text-sm font-semibold">Schedule (optional)</div>
               <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
                 Leave blank to show it whenever it&apos;s published. Set a start/end to have the slide
-                appear and retire on its own — handy for a one-off sale.
+                appear and retire on its own — handy for a one-off sale. Pick days and hours to repeat it
+                (store time, Pacific).
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
@@ -665,6 +667,13 @@ function SlideCard({
                   />
                 </label>
               </div>
+              {/* D234 C-7 (G-102): repeats + fallback, like home slides. */}
+              <ScheduleRepeatFields
+                value={pres}
+                noun="slide"
+                inputClass={INPUT_CLASS}
+                onChange={(patch) => setPres((p) => ({ ...p, ...patch }))}
+              />
             </div>
 
             <BasicMode hint="classic words, fonts, buttons, text position and picture focus">

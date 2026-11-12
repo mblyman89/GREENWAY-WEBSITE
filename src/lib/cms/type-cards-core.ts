@@ -15,6 +15,8 @@
  */
 import { checkHref } from "@/lib/cms/link-target-core";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
+import type { Weekday } from "@/lib/cms/banner-schedule-core";
+import { cleanRepeat, isLiveBySchedule, pickLive } from "@/lib/cms/schedule-everywhere-core";
 import {
   IMAGE_FOCUSES,
   isHeroColor,
@@ -56,6 +58,11 @@ export type TypeCardAdvanced = {
   /** Optional show window (ISO). */
   scheduleStart?: string;
   scheduleEnd?: string;
+  /** D234 C-7 (G-102): repeat days, daily hours, fallback (only when used). */
+  scheduleDays?: Weekday[];
+  scheduleFrom?: string;
+  scheduleTo?: string;
+  fallback?: boolean;
   /**
    * R61-S3: the owner's custom CARD design (the shared Banner Studio, card
    * frame). Stored even when switched off (so ticking it again restores it);
@@ -188,6 +195,7 @@ export function normalizeTypeCardAdvanced(raw: unknown): TypeCardAdvanced | unde
   if (ss) out.scheduleStart = ss;
   const se = cleanIso(raw.scheduleEnd);
   if (se) out.scheduleEnd = se;
+  Object.assign(out, cleanRepeat(raw));
   const design = normalizeDesign(raw.design);
   if (design && design.frame.card) out.design = design;
   return Object.keys(out).length > 0 ? out : undefined;
@@ -195,13 +203,8 @@ export function normalizeTypeCardAdvanced(raw: unknown): TypeCardAdvanced | unde
 
 /** R47: is the card inside its optional show window? Bad / absent dates = open. */
 export function isTypeCardLiveAt(card: TypeCard, whenMs: number): boolean {
-  const a = card.adv;
-  if (!a) return true;
-  const s = a.scheduleStart ? Date.parse(a.scheduleStart) : NaN;
-  const e = a.scheduleEnd ? Date.parse(a.scheduleEnd) : NaN;
-  if (Number.isFinite(s) && whenMs < s) return false;
-  if (Number.isFinite(e) && whenMs > e) return false;
-  return true;
+  // D234 C-7: start/end plus repeat days and daily hours (store time).
+  return isLiveBySchedule(card.adv, whenMs);
 }
 
 /** A card must link somewhere safe; blank or blocked → /menu. */
@@ -291,7 +294,8 @@ export function hideOutOfWindowTypeCards(
   preview: boolean,
   nowMs: number = Date.now(),
 ): TypeCard[] {
-  return preview ? cards : cards.filter((c) => isTypeCardLiveAt(c, nowMs));
+  // D234 C-7: fallback cards show only when no other card is live.
+  return preview ? cards : pickLive(cards, (c) => c.adv, nowMs);
 }
 
 /**

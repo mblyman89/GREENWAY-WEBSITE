@@ -52,6 +52,8 @@ import {
   SCRIPT_SCALE_DEFAULT,
 } from "@/lib/loyalty/loyalty-hero-core";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
+import type { Weekday } from "@/lib/cms/banner-schedule-core";
+import { cleanRepeat, isLiveBySchedule, pickLive } from "@/lib/cms/schedule-everywhere-core";
 
 /** Up to ten slides shown publicly + the editor's add cap (owner request). */
 export const MAX_SHOP_CAROUSEL_SLIDES = 10;
@@ -225,6 +227,15 @@ export type ShopHeroPresentation = {
   scheduleStart: string | null;
   scheduleEnd: string | null;
   /**
+   * D234 C-7 (G-102): optional repeat days, daily hours and the fallback tick,
+   * the same as home slides. ABSENT until used, so old slides stay
+   * byte-identical.
+   */
+  scheduleDays?: Weekday[];
+  scheduleFrom?: string;
+  scheduleTo?: string;
+  fallback?: boolean;
+  /**
    * R41 S6: optional Banner Studio design for this slide. Only used when
    * `design.enabled`; otherwise the classic slide renders exactly as before.
    * ABSENT from the default + stored JSON until the owner turns it on, so every
@@ -303,6 +314,8 @@ export function normalizeShopHeroPresentation(input: unknown): ShopHeroPresentat
     promotion: normalizeShopSlidePromotion(obj.promotion),
     scheduleStart: cleanSchedule(obj.scheduleStart),
     scheduleEnd: cleanSchedule(obj.scheduleEnd),
+    // D234 C-7: repeat + fallback only when used.
+    ...cleanRepeat(obj),
     // R41 S6: only present when a valid design is stored (never a null key).
     ...(design ? { design } : {}),
   };
@@ -329,6 +342,8 @@ export function serializeShopHeroPresentation(p: ShopHeroPresentation): string {
     promotion: n.promotion,
     scheduleStart: n.scheduleStart,
     scheduleEnd: n.scheduleEnd,
+    // D234 C-7: only when used, so old slides stay byte-identical.
+    ...cleanRepeat(n),
     // R41 S6: appended LAST and only when set, so old slides stay byte-identical.
     ...(n.design ? { design: n.design } : {}),
   });
@@ -370,11 +385,16 @@ export function resolveShopHeroPresentation(
  * hides a slide forever. Pure so the store + tests agree.
  */
 export function isSlideLiveAt(p: ShopHeroPresentation, whenMs: number): boolean {
-  const startMs = p.scheduleStart ? Date.parse(p.scheduleStart) : NaN;
-  const endMs = p.scheduleEnd ? Date.parse(p.scheduleEnd) : NaN;
-  if (Number.isFinite(startMs) && whenMs < startMs) return false;
-  if (Number.isFinite(endMs) && whenMs > endMs) return false;
-  return true;
+  // D234 C-7: start/end plus repeat days and daily hours (store time).
+  return isLiveBySchedule(p, whenMs);
+}
+
+/**
+ * D234 C-7: the slides a VISITOR sees: live ones, or the fallback slide(s)
+ * when none is live. Staff preview shows every slide.
+ */
+export function pickLiveShopSlides<T extends { presentation: ShopHeroPresentation }>(slides: readonly T[], preview: boolean, whenMs: number): T[] {
+  return preview ? [...slides] : pickLive(slides, (s) => s.presentation, whenMs);
 }
 
 /** Does a presentation carry anything worth rendering (image or any shown text)? */

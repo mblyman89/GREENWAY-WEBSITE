@@ -2,6 +2,9 @@
  * R54 Slice B — month calendar of scheduled banners (server component, no JS).
  * Shared by any banner area (R58): pass CalendarBanner[] and an anchor id prefix.
  * Shows this month and next. ⚠️ marks days where 2+ banners START.
+ * D234 C-7 (G-102): `noun` / `emptyFallback` / `title` let the Shop Banner,
+ * Type cards and Schedule & Releases pages use it with their own wording
+ * (defaults keep the home carousel wording exactly as it was).
  */
 import {
   STORE_TZ,
@@ -24,12 +27,25 @@ export function BannerScheduleCalendar({
   banners,
   anchorPrefix,
   nowMs,
+  noun = "slide",
+  emptyFallback = "the homepage falls back to the built-in starter slides",
+  title = "Schedule calendar",
+  hrefFor,
 }: {
   banners: CalendarBanner[];
   /** e.g. "slide-" → chips link to #slide-<id>. */
   anchorPrefix: string;
   nowMs: number;
+  /** "slide", "card", "banner" (wording only). */
+  noun?: string;
+  /** What visitors see when every scheduled item ends and no fallback is set. */
+  emptyFallback?: string;
+  title?: string;
+  /** Optional full link per item (pages that list several areas). */
+  hrefFor?: (id: string) => string;
 }) {
+  const nouns = `${noun}s`;
+  const Noun = noun.charAt(0).toUpperCase() + noun.slice(1);
   const today = storeParts(nowMs, STORE_TZ).date;
   const color = new Map(banners.map((b, i) => [b.id, COLORS[i % COLORS.length]!]));
   const months = [today, nextMonth(today)];
@@ -40,22 +56,22 @@ export function BannerScheduleCalendar({
   return (
     <details className="rounded-lg border border-white/10 p-3" open={clashDays.length > 0}>
       <summary className="cursor-pointer text-sm font-semibold text-white">
-        🗓️ Schedule calendar{" "}
+        🗓️ {title}{" "}
         <span className="font-normal text-white/50">
-          (published slides · store time)
-          {clashDays.length ? <span className="ml-2 text-amber-300">⚠️ {clashDays.length} day(s) with 2+ slides starting</span> : null}
+          (published {nouns} · store time)
+          {clashDays.length ? <span className="ml-2 text-amber-300">⚠️ {clashDays.length} day(s) with 2+ {nouns} starting</span> : null}
         </span>
       </summary>
       <div className="mt-3 space-y-4">
         {fallbacks.length === 0 ? (
           <p className="text-xs text-amber-300">
-            ⚠️ No fallback slide is set. If every scheduled slide ends, the homepage falls back to the built-in starter slides. Tick
-            &ldquo;Fallback slide&rdquo; on one slide&apos;s schedule to choose what shows instead.
+            ⚠️ No fallback {noun} is set. If every scheduled {noun} ends, {emptyFallback}. Tick
+            &ldquo;Fallback {noun}&rdquo; on one {noun}&apos;s schedule to choose what shows instead.
           </p>
         ) : (
-          <p className="text-xs text-white/50">Fallback: {fallbacks.map((f) => f.label).join(", ")}. Shows whenever no other slide is live.</p>
+          <p className="text-xs text-white/50">Fallback: {fallbacks.map((f) => f.label).join(", ")}. Shows whenever no other {noun} is live.</p>
         )}
-        {!anyScheduled ? <p className="text-xs text-white/50">No slide has a schedule yet. Slides without one show every day and are left off the calendar.</p> : null}
+        {!anyScheduled ? <p className="text-xs text-white/50">No {noun} has a schedule yet. {Noun}s without one show every day and are left off the calendar.</p> : null}
         {months.map((m) => {
           const days = buildScheduleCalendar(banners, m, today);
           const title = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${m.slice(0, 7)}-01T12:00:00Z`));
@@ -76,13 +92,13 @@ export function BannerScheduleCalendar({
                   >
                     <div className="flex items-center justify-between text-white/60">
                       <span>{Number(d.date.slice(8, 10))}</span>
-                      {d.startClash ? <span aria-label="Two or more slides start this day">⚠️</span> : null}
+                      {d.startClash ? <span aria-label={`Two or more ${nouns} start this day`}>⚠️</span> : null}
                     </div>
                     <div className="mt-0.5 space-y-0.5">
                       {d.live.slice(0, 3).map((b) => (
                         <a
                           key={b.id}
-                          href={`#${anchorPrefix}${b.id}`}
+                          href={hrefFor ? hrefFor(b.id) : `#${anchorPrefix}${b.id}`}
                           className="block truncate rounded px-1 text-black"
                           style={{ background: color.get(b.id) }}
                         >
@@ -98,7 +114,7 @@ export function BannerScheduleCalendar({
             </div>
           );
         })}
-        <p className="text-[0.7rem] text-white/40">▶ = starts that day. Click a slide to jump to it. Daily time windows aren&apos;t drawn; see each slide&apos;s summary.</p>
+        <p className="text-[0.7rem] text-white/40">▶ = starts that day. Click a {noun} to jump to it. Daily time windows aren&apos;t drawn; see each slide&apos;s summary.</p>
       </div>
     </details>
   );

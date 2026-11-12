@@ -18,6 +18,8 @@ import { listShopPromotionChoices } from "@/lib/cms/shop-promotion-choices";
 import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import { SchedulePanel } from "@/components/admin/SchedulePanel";
 import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
+import { BannerScheduleCalendar } from "@/components/admin/BannerScheduleCalendar";
+import { calendarEntry } from "@/lib/cms/schedule-everywhere-core";
 import {
   seedShopBannerAction,
   addShopBannerSlideAction,
@@ -137,6 +139,11 @@ export default async function AdminShopBannerPage({
     ]),
   );
 
+  // D234 C-7 (G-102): calendar of the PUBLISHED schedule (what visitors get).
+  const calendarBanners = rows
+    .filter((r) => r.enabled && r.status === "published")
+    .map((r) => calendarEntry(r.id, r.presentation.title.text.split("\n")[0] || r.slide_key, r.presentation));
+
   return (
     <div>
       <AdminPageHeader
@@ -171,6 +178,15 @@ export default async function AdminShopBannerPage({
                     : "Draft saved."}
           </div>
         )}
+
+        {rows.length > 0 ? (
+          <BannerScheduleCalendar
+            banners={calendarBanners}
+            anchorPrefix="slide-"
+            nowMs={Date.parse(nowIso)}
+            emptyFallback="the Shop page falls back to its built-in starter banner"
+          />
+        ) : null}
 
         <ShopBannerEditor
           slides={slides}
