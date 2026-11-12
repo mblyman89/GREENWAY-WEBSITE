@@ -40,6 +40,7 @@ import { HERO_COLORS, HERO_FONTS, heroFontStack, type ImageFocus } from "@/lib/l
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { CardEditorShell } from "@/components/admin/banner-studio/CardEditorShell";
+import { ScheduleRepeatFields } from "@/components/admin/ScheduleRepeatFields";
 import { DesignedCard } from "@/components/site/DesignedCard";
 import { cardDesign } from "@/lib/cms/banner-design-core";
 
@@ -559,6 +560,13 @@ function TypeCardAdvancedEditor({
               />
             </label>
           </div>
+          {/* D234 C-7 (G-102): repeats + fallback, like home slides. */}
+          <ScheduleRepeatFields
+            value={a}
+            noun="card"
+            inputClass={input}
+            onChange={(patch) => onChange(patch as Partial<TypeCardAdvanced>)}
+          />
           {card.adv ? (
             <button type="button" onClick={onReset} className="text-xs text-white/50 underline hover:text-white">
               Reset advanced options (back to the classic card)

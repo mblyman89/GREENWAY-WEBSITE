@@ -3004,3 +3004,15 @@ What was done:
 - **Save to brand name dialog** (G-107, F-11-30): **Save this design to brand banners** opens a small dialog instead of the browser prompt box. The name starts as the headline's first line (else "Saved banner"); an empty name or one over 80 characters is explained; a name already used gets *"A saved banner already has this name. Saving adds another one; it does not replace it."* (`BrandNameDialog.tsx`; rules `suggestBrandName`, `brandNameError`, `brandNameNote`).
 - Nothing changes on the website. Test: `tests/compliance/d233-creative-c6-help-name-dialog.test.tsx`. Pure self-tests: `__runStudioHelpCoreTests` (22). SOP-11b v2.6.
 - **Owner steps:** none. Open any Design Studio and press **?** for the keys and the tour.
+
+### As built (slice C-7)
+
+- **One schedule everywhere** (G-102, F-11-26; Q-11-16 *"yes"*):
+  - **Shop banner slides** and **type cards** now have the same schedule as home slides: start/end, **Repeat on** days, **Each day from / until** hours, and a **Fallback** tick (*"shows only when no other slide is live … Its own schedule is ignored."*). A summary line shows, for example *"Summary: Every Fri, Sat · 16:00–21:00"* (`ScheduleRepeatFields.tsx`; rules in `schedule-everywhere-core.ts`, using the home slides' `banner-schedule-core.ts`). Times are store time (Pacific).
+  - **Fixed on the website:** the public Shop banner now applies each slide's schedule and the fallback rule (`shop-carousel-store.ts`, `pickLiveShopSlides`). Before this it showed every published slide, whatever its start/end said. Type cards also use the fallback rule. Staff preview still shows everything.
+  - **Calendars:** the month calendar (⚠️ on days where 2+ start) is now also on the **Shop Banner** page, the **Type cards** tab, and on **Schedule & Releases** (**Calendars**, one per area; a chip opens that item).
+  - The **Loyalty** and **Specials** banners have their own group in the Schedule a change picker: *"Loyalty & Specials banners (publish only)"*.
+  - Old slides and cards are stored exactly as before until a repeat or fallback is used (a test proves it). No migration.
+- **Preview as of** (G-103, F-11-27): on Schedule & Releases, pick a date and time (Pacific) and press **Show**. It lists which home slides, Shop slides and type cards will be showing then, and why the others are not. Every scheduled change and timed release before then is counted, in order (a Go live uses the saved draft); releases with no time yet are listed as **Not counted** (`previewAsOf`; `schedule/AsOfSection.tsx`).
+- The helper (Shop banner, Schedule & Releases) and the concierge `content-schedule` topic now say this. Test: `tests/compliance/d233-creative-c7-one-schedule.test.tsx`. Pure self-tests: `__runScheduleEverywhereCoreTests` (23). SOP-11b v2.7.
+- **Owner steps:** no migration, no new variable. **Check your Shop banner slides once:** any slide with an end date in the past now comes down from the Shop page (it used to stay up). If you want one slide to show whenever nothing else is scheduled, open it and tick **Fallback slide**, then Publish.

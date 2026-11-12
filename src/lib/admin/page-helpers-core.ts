@@ -166,6 +166,7 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
       "Drag order with the up/down arrows. The first live slide shows first, then they auto-rotate.",
       "Use a slide's buttons to send shoppers to a filtered menu (handy for a sale).",
       "Leave a slide's schedule blank to show it always, or set a start/end for a one-off sale.",
+      "To repeat a slide, pick its days and hours (for example Fri to Sun, 4 pm to 9 pm). Tick Fallback slide on one slide to show it whenever no other slide is live. The calendar at the top shows what is scheduled.",
     ],
     notes: [
       "Each slide is fully yours to style: the same editor as the Loyalty banner, for every slide, plus buttons and an optional schedule. Nothing goes live until you Publish that slide.",
@@ -201,6 +202,7 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
       "At that time the website publishes the saved draft, exactly as if you had pressed Publish, or hides the item.",
       "For a sale: schedule the banner to go live Friday morning and to come down Sunday night.",
       "For a launch with several changes, make a Release, add the items, and give the release one time (or press Publish now).",
+      "To check a date, use Preview as of: pick the date and time and press Show. It lists which home slides, Shop slides and type cards will be showing then, with every scheduled change and timed release before it counted.",
     ],
     notes: [
       "Every change is recorded in the audit log under your name. If something cannot be published (for example the item was deleted), it is tried up to three times and then shows here as failed, with the reason.",

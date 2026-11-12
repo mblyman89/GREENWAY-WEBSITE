@@ -335,8 +335,9 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Schedule & Releases can make a saved draft go live, or come down, at a time: home slides, Shop banner slides, page sections, FAQ questions and page wording (page wording can only be published, not hidden).",
       "Times are Pacific and run on a 5-minute clock. If something cannot be published, it is tried up to three times and then shows as failed, with the reason.",
       "A Release groups several changes under one time (or Publish now).",
-      "Home carousel slides also have repeat days and hours, a fallback slide (shows only when no other slide is live) and a month calendar. Shop banner slides and type cards have start/end only today.",
-      "There is no \"show me the site as it will look on Friday\" preview yet; check each draft in Website Sync before scheduling it.",
+      "Home carousel slides, Shop banner slides and type cards all have start/end, repeat days and hours, and a fallback (shows only when nothing else in that area is live). Each has a month calendar, and Schedule & Releases shows all of them.",
+      "Preview as of (on Schedule & Releases): pick a date and time to see which home slides, Shop slides and type cards will be showing then, with every scheduled change and timed release before it counted. Releases with no time yet are not counted.",
+      "The Loyalty and Specials banners are listed under \"Loyalty & Specials banners\" when you schedule a change (go live only).",
     ],
   },
 

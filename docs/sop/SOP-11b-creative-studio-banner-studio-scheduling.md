@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5; v2.6 = slice C-6) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5; v2.6 = slice C-6; v2.7 = slice C-7) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -212,9 +212,11 @@ Use this until slices C-1 … C-3 are built. Each step names the cause it remove
 | What | How it is scheduled | Repeats (days/hours) | Fallback | Pin |
 |---|---|---|---|---|
 | Home carousel slides | Start/end, **repeat days and hours**, fallback slide, month calendar | Yes | Yes | `home-slide-advanced-core.ts` L76–77; `banner-schedule-core.ts` L65–93, L110; `pages/[slug]/page.tsx` L454 |
-| Shop banner slides | Start/end only, on the slide ("Schedule (optional)") | No | No | `ShopBannerEditor.tsx` L642; `shop-carousel-core.ts` L372–378 |
-| Type cards | Start/end only | No | No | `TypeCardImagesEditor.tsx` L548–557; `type-cards-core.ts` L197–203 |
-| Home slide, Shop slide, page section, FAQ question, page wording | **Schedule & Releases**: Go live / Come down at a time | — | — | `content-schedule-core.ts` L32–38 |
+| Shop banner slides | Start/end, **repeat days and hours**, fallback slide, month calendar on the Shop Banner page (since v2.7) | Yes | Yes | `ShopBannerEditor.tsx` "Schedule (optional)" + `ScheduleRepeatFields.tsx`; `shop-carousel-core.ts` `isSlideLiveAt`, `pickLiveShopSlides`; `shop-carousel-store.ts` `getShopCarouselForRender` |
+| Type cards | Start/end, **repeat days and hours**, fallback card, month calendar on the Type cards tab (since v2.7) | Yes | Yes | `TypeCardImagesEditor.tsx` + `ScheduleRepeatFields.tsx`; `type-cards-core.ts` `isTypeCardLiveAt`, `hideOutOfWindowTypeCards` |
+| Home slide, Shop slide, page section, FAQ question, page wording, Loyalty and Specials banners | **Schedule & Releases**: Go live / Come down at a time. Since v2.7 the Loyalty and Specials banners have their own group in the picker, **"Loyalty & Specials banners (publish only)"** | — | — | `content-schedule-core.ts` L32–38; `content-schedule-server.ts` `listScheduleTargets` |
+
+> **Since v2.7 (C-7, Q-11-16 *"yes"*):** one schedule everywhere. Shop banner slides and type cards have the same **Repeat on** days, **Each day from / until** hours and **Fallback** tick as home slides, with the same rules (store time; a fallback shows only when nothing else in that area is live; staff preview shows everything). The Shop page now hides a Shop slide outside its schedule. Before v2.7 it showed every published slide, whatever its start/end said. Old slides and cards are stored exactly as before until you use a repeat.
 
 Times are **Pacific** (`banner-schedule-core.ts` L19) and the clock runs every 5 minutes (`vercel.json` L37–40). Pages refresh at most 60 seconds later (`(site)/page.tsx` L84; `(site)/menu/page.tsx` L59).
 
@@ -233,13 +235,13 @@ Note: *"If something cannot be published (for example the item was deleted), it 
 
 *"For a launch with several changes, make a Release, add the items, and give the release one time (or press Publish now)."* (helper L168–185; `schedule/page.tsx` L22; `content-release-server.ts` L56–135).
 
-There is no "show me the site as it will look on Friday" preview yet (F-11-27, G-103). Today, check each item's draft in Website Sync before you add it.
+**Preview as of (since v2.7, G-103):** on Schedule & Releases, under **Preview as of**, pick a date and time (Pacific) and press **Show**. You see which home slides, Shop banner slides and type cards will be showing then, and why the others are not (*"Switched off"*, *"Outside its own schedule"*, *"Fallback, not needed"*). Every scheduled change and every release with a time before then is counted, in time order (**Changes counted**). A Go live uses the saved draft. A release with no time yet is listed as **Not counted** (`schedule-everywhere-core.ts` `previewAsOf`; `schedule/AsOfSection.tsx`). For page sections, FAQ questions and page wording, it lists the change; check their drafts in Website Sync.
 
-### 4.14 Home slides: repeats, fallback and the calendar
+### 4.14 Repeats, fallback and the calendar (home slides, Shop slides, type cards)
 
-1. On a home slide, set start/end, and optionally the **days** and **from/to hours** (for example Fri–Sun, 4 pm – 9 pm) (`banner-schedule-core.ts` L65–93).
-2. Tick **fallback** on one slide. It shows only when no other slide is live (`home-slide-advanced-core.ts` L76–77; `banner-schedule-core.ts` L110).
-3. The month calendar shows this month and next, and ⚠️ marks days where 2 or more banners start (`BannerScheduleCalendar.tsx` L1–5). It is only on the home carousel page today (F-11-26).
+1. On a home slide, a Shop banner slide (Schedule (optional)) or a type card (Advanced options), set start/end, and optionally the **days** and **from/to hours** (for example Fri–Sun, 4 pm – 9 pm) (`banner-schedule-core.ts` L65–93).
+2. Tick **fallback** on one slide (or card). It shows only when no other slide (or card) in that area is live (`home-slide-advanced-core.ts` L76–77; `banner-schedule-core.ts` L110).
+3. The month calendar shows this month and next, and ⚠️ marks days where 2 or more banners start (`BannerScheduleCalendar.tsx` L1–5). Since v2.7 it is on the home carousel tab, the Shop Banner page, the Type cards tab, and on Schedule & Releases (**Calendars**, one per area; a chip opens that item).
 
 ## 5. Messages you may see, and what to do
 
@@ -282,7 +284,7 @@ The Shop banner can be up to 1920 px wide but no taller than 280 px (`ShopBanner
 
 1. Wait 5 minutes for the clock, plus up to 60 seconds for the page (§4.11).
 2. Schedule & Releases: is it **failed**? Read the reason (§5).
-3. A Shop slide or type card with an **end** time in the past is hidden (`shop-carousel-core.ts` L372–378).
+3. A home slide, Shop slide or type card outside its own schedule (end in the past, or not one of its days or hours) is hidden, and the fallback shows instead (§4.14). Use **Preview as of** on Schedule & Releases with that date and time to see why (§4.13).
 
 ### 6.5 The picture's subject is cut off
 
@@ -539,4 +541,5 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.3 | 2026-11-11 | Slice C-3 (#1766): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |
 | 2.4 | 2026-11-11 | Slice C-4 (#1767): drift guard (a test renders the real studio and the real website banner at every width stop; they must agree within 1% of the width) and Checks at every width, phone included (§5). | Greenway Dev |
 | 2.5 | 2026-11-11 | Slice C-5 (#1768): picture shape advice per banner and placement, safe-area overlay, crop-edge hint (§4.9 step 6, §6.5). | Greenway Dev |
+| 2.7 | 2026-11-11 | Slice C-7 (#PC7): one schedule everywhere (repeats and fallback for Shop slides and type cards, enforced on the Shop page; calendars on Shop Banner, Type cards and Schedule & Releases; Loyalty and Specials banners grouped in the picker) and Preview as of (§4.11, §4.13, §4.14, §6.4). | Greenway Dev |
 | 2.6 | 2026-11-11 | Slice C-6 (#1769): help in the studio (tooltips, ? key sheet, first-use tour, "Make a banner" step strip, empty states, `banner-studio` helper, concierge topics) and the Save-to-brand name dialog (§4.6 step 3, §4.7, §4.8, §9.2). | Greenway Dev |

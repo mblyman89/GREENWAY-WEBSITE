@@ -1348,6 +1348,7 @@ import { __runStudioWidthsCoreTests } from "../../src/lib/cms/studio-widths-core
 import { __runStudioDriftCoreTests } from "../../src/lib/cms/studio-drift-core";
 import { __runPictureShapeCoreTests } from "../../src/lib/cms/picture-shape-core";
 import { __runStudioHelpCoreTests } from "../../src/lib/cms/studio-help-core";
+import { __runScheduleEverywhereCoreTests } from "../../src/lib/cms/schedule-everywhere-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2893,6 +2894,7 @@ __runLiquidVolumeTests();
   assertRan("studio-drift-core", __runStudioDriftCoreTests(), 19); // D234 C-4 (SOP-11b G-99): studio vs site drift guard, overlap/out-of-frame at every width
   assertRan("picture-shape-core", __runPictureShapeCoreTests(), 28); // D234 C-5 (SOP-11b G-101): picture shape per placement, safe area, crop-edge hint
   assertRan("studio-help-core", __runStudioHelpCoreTests(), 22); // D234 C-6 (SOP-11b G-106/G-107): studio help (tips, ? sheet, tour, step strip) + Save-to-brand name rules
+  assertRan("schedule-everywhere-core", __runScheduleEverywhereCoreTests(), 23); // D234 C-7 (SOP-11b G-102/G-103): one schedule everywhere (repeats/fallback for Shop slides + type cards) + Preview as of
   assertRan("studio-fonts-core", __runStudioFontsCoreTests(), 14); // D234 C-1 (SOP-11b G-94): studio = website Heading/Body fonts; System default warning
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   console.log("ALL PURE SELF-TESTS PASSED");

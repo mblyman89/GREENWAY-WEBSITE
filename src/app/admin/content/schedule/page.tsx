@@ -10,6 +10,9 @@ import {
 import { listReleases } from "@/lib/cms/content-release-server";
 import { scheduleChangeAction } from "./actions";
 import { ReleasesSection } from "./ReleasesSection";
+import { AsOfSection } from "./AsOfSection";
+import { listScheduledAreaItems } from "@/lib/cms/schedule-everywhere-server";
+import { parseAsOf } from "@/lib/cms/schedule-everywhere-core";
 import { ScheduleTable, TargetSelect, groupTargets, SCHEDULE_ROUTE } from "./schedule-ui";
 
 /**
@@ -21,13 +24,14 @@ import { ScheduleTable, TargetSelect, groupTargets, SCHEDULE_ROUTE } from "./sch
  *   no card of their own to hang a Schedule strip on;
  * - Releases (R46-S2): named groups of changes that go live together;
  * - the last 14 days of history, with the reason for anything that failed.
+ * - D234 C-7: "Preview as of" a date and time, and a calendar per banner area.
  */
 export const dynamic = "force-dynamic";
 
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ scheduled?: string; error?: string }>;
+  searchParams: Promise<{ scheduled?: string; error?: string; asof?: string }>;
 }) {
   await requirePermission("content.edit");
   const sp = await searchParams;
@@ -42,11 +46,13 @@ export default async function SchedulePage({
     );
   }
 
-  const [{ ready, rows }, targets, releases] = await Promise.all([
+  const [{ ready, rows }, targets, releases, areaItems] = await Promise.all([
     listSchedules({ recentDays: 14 }),
     listScheduleTargets(),
     listReleases(),
+    listScheduledAreaItems(),
   ]);
+  const asOfMs = parseAsOf(sp.asof);
   const upcoming = rows.filter((r) => (r.status === "pending" || r.status === "running") && !r.release_id);
   const history = rows
     .filter((r) => r.status === "done" || r.status === "failed" || r.status === "cancelled")
@@ -116,6 +122,16 @@ export default async function SchedulePage({
 
         {/* Releases (R46-S2) */}
         {ready ? <ReleasesSection releases={releases} rows={rows} groups={groups} nowIso={nowIso} /> : null}
+
+        {/* D234 C-7: Preview as of + calendars */}
+        <AsOfSection
+          items={areaItems}
+          changes={rows}
+          releases={releases}
+          nowIso={nowIso}
+          asOfMs={asOfMs}
+          asOfRaw={sp.asof}
+        />
 
         {/* History */}
         <section>
