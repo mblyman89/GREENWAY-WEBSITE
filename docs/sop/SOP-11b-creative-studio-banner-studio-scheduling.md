@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -252,7 +252,8 @@ The Checks tab messages (`banner-design-core.ts` L1334–1385), word for word. T
 | "This small-print box is under 10% of your biggest text. You don't need warnings on banners (your age-gated site shows them in the footer on every page), but if you add one here, WAC 314-55-155(7) wants it at least 10% of the largest text." | Make the small print bigger, or remove it. |
 | "Scale mode: N text boxes get smaller than 12 px on a tablet (770 px banner) or a 360 phone (328 px banner) …" (v2.3) | That text is held at 12 px there so it stays readable, and it takes more room than in your design. Check the 770 and 328 width stops, or make the words bigger (computer about 22 px or more, phone about 15 px or more). |
 | "N text boxes use System default. Each visitor's device picks that font …" (v2.1) | Pick a web font for the box (Text → Font), or set the site's Heading and Body fonts in Branding → Fonts (Q-11-18). |
-| "The … and … boxes might overlap." | Move one. This is checked on the Computer layout only, and by estimate (L1368–1380). Check Phone yourself. |
+| "The … and … boxes might overlap." | Move one. This one is checked on the Computer layout at the reference size, by estimate (L1368–1380). Since v2.4 the next message covers every other width, Phone included. |
+| "The … runs past the bottom (or right edge) of the banner at 398, 358, 328 px wide …" / "The … and the … might overlap at … px wide." (v2.4) | Press each named stop on the **Banner width** bar and fix it there: move the item up or left, narrow it or make it smaller. The height of text is an estimate, so if it looks fine at that stop, it is fine. |
 
 Schedule & Releases: a failed item *"is tried up to three times and then shows here as failed, with the reason"* (helper L168–185). Fix the reason (for example, the item was deleted) and schedule it again.
 
@@ -484,7 +485,7 @@ Fix the cheap, certain causes first (fonts and tags, C-1), then let you **see** 
 | G-96 | **Scale mode**: a per-banner "Scale with the banner" switch (cqw units, aspect ratio, like cards); default for new banners (Q-11-10); optional Figma-style pins (left/right/centre) | F-11-21, F-11-23 |
 | G-97 | **Width slider** with stops for every real placement (1408, 1344, 1216, 1024, 834, 430, 390, 360) and the Shop's 1920; a "show all widths" strip | F-11-22 |
 | G-98 | **"Check on the real page"** button in every banner editor: opens Website Sync at that page and width with Move mode on | F-11-24 |
-| G-99 | **Drift guard**: a Playwright test that renders a fixed set of designs in the studio and on the site at the stop widths and compares each item's box (≤1% of width); the Checks tab runs overlap/out-of-frame at every stop, phone included | F-11-25 |
+| G-99 | **Drift guard**: a Playwright test that renders a fixed set of designs in the studio and on the site at the stop widths and compares each item's box (≤1% of width); the Checks tab runs overlap/out-of-frame at every stop, phone included (**built v2.4**: the guard compares the CSS both real components emit, evaluated at each stop, because CI has no browser) | F-11-25 |
 | G-100 | Each placement registers its real max width; the Shop banner either caps at 1408 or uses Scale mode (Q-11-12) | F-11-23 |
 | G-101 | Picture shape advice that matches the banner (per placement), a safe-area overlay in the studio, and a "subject is near the crop edge" hint | F-11-32 |
 | G-102 | One schedule everywhere: repeats and fallback for Shop slides and type cards; the calendar on Shop Banner and on Schedule & Releases; type cards, Loyalty and Specials banners on the Schedule page | F-11-26 |
@@ -531,3 +532,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.1 | 2026-11-11 | Phase C approved (D234, all of Q-11-10 … Q-11-18 answered). Slice C-1 (#1764): the studio reads the website's Heading/Body fonts and draws the website's tags (h2/p/span); new Checks message for System default (§4.9 note, §5). | Greenway Dev |
 | 2.2 | 2026-11-11 | Slice C-2 (#1765): Banner width slider with the site's real widths, and ↗ Check on the real page (Website Sync, page, size, Move mode on) (§4.10, §4.9 step 7). | Greenway Dev |
 | 2.3 | 2026-11-11 | Slice C-3 (#1766): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |
+| 2.4 | 2026-11-11 | Slice C-4 (#PC4): drift guard (a test renders the real studio and the real website banner at every width stop; they must agree within 1% of the width) and Checks at every width, phone included (§5). | Greenway Dev |

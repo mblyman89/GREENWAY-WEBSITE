@@ -1374,7 +1374,9 @@ export type DesignWarningCode =
   | "OVERLAP"
   | "BUTTON_LINK"
   | "DEVICE_FONT"
-  | "SMALL_TEXT";
+  | "SMALL_TEXT"
+  /** D234 C-4: a problem at one of the site's real widths (studio-drift-core widthWarnings). */
+  | "AT_WIDTHS";
 
 export type DesignWarning = { code: DesignWarningCode; message: string; boxId?: string; buttonId?: string };
 
