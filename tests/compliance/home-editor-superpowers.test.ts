@@ -165,7 +165,8 @@ describe("editor superpowers — home settings config + brand grid control", () 
     expect(src).toContain("Grid — cards shown");
     // uses the per-section image spec (exact band size in the Canva helper)
     expect(src).toContain("resolveImageSpec");
-    expect(src).toContain("spec={imageSpec}");
+    // D234 C-5: the home spec still feeds the hint; with a studio design on, it follows the design.
+    expect(src).toContain("spec={specForDesign(imageSpec, design?.enabled ? design : null)}");
   });
 
   it("saveSectionAction merges settings_json without dropping sibling keys", () => {

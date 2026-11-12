@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -185,6 +185,7 @@ Use this until slices C-1 … C-3 are built. Each step names the cause it remove
 4. **Buttons and lines do not shrink.** Buttons are a fixed height (32, 40 or 48 px; `banner-design-core.ts` L1153–1157) and line shapes are a fixed thickness (`banner-elements-core.ts` L356–357). Give buttons a little extra space, especially on the phone layout.
 5. **Always finish the Phone layout separately.** Switch to 📱 Phone and place each item. Phones from 360 to 430 px wide show the banner at 328–398 px wide (the page has 16 px margins), not the 390 px the studio shows (Appendix B.3).
 6. **Use a picture of the right shape and set its focus point.** The banner crops the picture to fill (`banner-design-core.ts` L1000–1023, `object-fit: cover`). The crop changes with the width, so keep the important part of the picture near the focus point, not at the top or bottom edge. The recommended upload is 1600×560 or 1920×640 (`image-spec-core.ts` L116–118). The home banner at full width is 1408×360, a wider shape, so the top and bottom of the picture are cut off (F-11-32).
+   > **Since v2.5 (C-5):** use the size in **Picture & shade → Picture shape**. It fits THIS banner at every width, computer and phone (for example a Scale hero 1408 × 260 / phone 390 × 200 → 2400 × 1234). With a studio design on, the placement's Canva size hint says **Fits this banner** with the same size. On the focus picture, keep the subject inside the dashed clear box: that part shows at every width; the dimmed parts are cut at some width. If the box says *"The picture is cut close to the focus point …"*, zoom out, move the focus point, or use a picture of the advised shape.
 7. **Check on the real page at three widths before you publish** (§4.10; v2.2: try the width stops in the studio first, then **↗ Check on the real page**). Fix the last few pixels **there**, with Move mode. Move mode saves from the real page, so what you drop is what visitors see at that width.
 
 **You know it worked when** the banner looks the same in Website Sync at Desktop, at Tablet and with your browser window made narrower (about 1280 and 1024 px), and at Phone.
@@ -281,7 +282,7 @@ The Shop banner can be up to 1920 px wide but no taller than 280 px (`ShopBanner
 
 ### 6.5 The picture's subject is cut off
 
-Move the focus point (Picture & shade) toward the subject, or use a picture with more space around it (§4.9 step 6).
+Move the focus point (Picture & shade) toward the subject, or use a picture with more space around it (§4.9 step 6). Since v2.5 the Picture tab shows the safe area (the clear box shows at every width) and warns *"The picture is cut close to the focus point …"*, naming the widths. Check those width stops.
 
 ## 7. Controls & compliance
 
@@ -533,3 +534,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.2 | 2026-11-11 | Slice C-2 (#1765): Banner width slider with the site's real widths, and ↗ Check on the real page (Website Sync, page, size, Move mode on) (§4.10, §4.9 step 7). | Greenway Dev |
 | 2.3 | 2026-11-11 | Slice C-3 (#1766): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |
 | 2.4 | 2026-11-11 | Slice C-4 (#1767): drift guard (a test renders the real studio and the real website banner at every width stop; they must agree within 1% of the width) and Checks at every width, phone included (§5). | Greenway Dev |
+| 2.5 | 2026-11-11 | Slice C-5 (#PC5): picture shape advice per banner and placement, safe-area overlay, crop-edge hint (§4.9 step 6, §6.5). | Greenway Dev |

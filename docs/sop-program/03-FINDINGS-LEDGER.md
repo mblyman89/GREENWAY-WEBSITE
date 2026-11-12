@@ -1244,6 +1244,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-32 · CONFIRMED · WEAKNESS · S3 — The recommended picture shape does not match the banner
 - **Pin:** `image-spec-core.ts` L116–118 (1600×560 = 2.86, 1920×640 = 3.0) vs home 1408×360 (3.91) and Shop up to 6.63; crop `object-fit: cover` with a focus point (`banner-design-core.ts` L1000–1023).
 - **SOP impact:** SOP-11b §4.9 step 6. **G-101**.
+- **Resolved (D234, C-5):** `picture-shape-core.ts` (`pictureAdvice` from the banner's real shape at every stop; `specForDesign` for the placement hints in `CarouselSlideCard`, `SectionCard`, `ShopBannerEditor`, `LoyaltyHeroEditor`, `SpecialsPresentationEditor`; `safeArea` overlay and `cropEdgeHint` in `PictureShapeFields.tsx` on the Picture tab).
 
 ### F-11-C2 · CONFIRMED · STRENGTH — What already works well (Creative and Banner)
 - **Pin:**

@@ -5,7 +5,9 @@
  * Focal point: click the thumbnail where the important part of the photo is;
  * the banner keeps that spot in view when it's cropped (object-position).
  */
+import { useState } from "react";
 import { BeamFields } from "./MotionFields";
+import { PictureShapeFields, SafeAreaOverlay, type NaturalSize } from "./PictureShapeFields";
 import { ImageFxFields } from "./ImageFxFields";
 import {
   OVERLAY_DIRECTIONS,
@@ -42,6 +44,9 @@ export function ImagePanel({
   mediaChoices?: MediaChoice[];
 }) {
   const im = design.image;
+  // D234 C-5: the picture's real size (for the safe area, shape advice and crop-edge hint).
+  const [nat, setNat] = useState<{ w: number; h: number; src: string } | null>(null);
+  const natHere = nat && nat.src === imageSrc ? nat : null;
   const mobile = device === "mobile";
   const fx = mobile ? (im.focusXMobile ?? im.focusX) : im.focusX;
   const fy = mobile ? (im.focusYMobile ?? im.focusY) : im.focusY;
@@ -61,7 +66,7 @@ export function ImagePanel({
         <p className="mb-1 text-[0.68rem] font-semibold uppercase tracking-wide text-white/60">
           Focus point {mobile ? "— phone" : "— computer"}
         </p>
-        <p className="mb-2 text-[0.7rem] text-white/50">Click the most important part of the picture. It stays in view however the banner is cropped.</p>
+        <p className="mb-2 text-[0.7rem] text-white/50">Click the most important part of the picture. That spot stays in view at every width. Keep the whole subject inside the clear box (the dark parts are cut off at some width).</p>
         {imageSrc ? (
           <div
             role="button"
@@ -83,7 +88,14 @@ export function ImagePanel({
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- editor thumbnail for any path/URL */}
-            <img src={imageSrc} alt="" className="block w-full select-none" draggable={false} />
+            <img
+              src={imageSrc}
+              alt=""
+              className="block w-full select-none"
+              draggable={false}
+              onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight, src: imageSrc })}
+            />
+            <SafeAreaOverlay design={design} device={device} nat={natHere} />
             <span
               aria-hidden="true"
               className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_2px_#000]"
@@ -98,6 +110,9 @@ export function ImagePanel({
             Use the computer focus on phones
           </button>
         ) : null}
+        <div className="mt-2">
+          <PictureShapeFields design={design} device={device} nat={natHere} />
+        </div>
       </div>
 
       <NumberSlider label="Zoom" value={im.zoom} min={100} max={250} unit="%" onChange={(zoom) => setImage({ zoom })} />
