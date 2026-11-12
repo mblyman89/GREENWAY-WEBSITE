@@ -534,4 +534,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.2 | 2026-11-11 | Slice C-2 (#1765): Banner width slider with the site's real widths, and ↗ Check on the real page (Website Sync, page, size, Move mode on) (§4.10, §4.9 step 7). | Greenway Dev |
 | 2.3 | 2026-11-11 | Slice C-3 (#1766): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |
 | 2.4 | 2026-11-11 | Slice C-4 (#1767): drift guard (a test renders the real studio and the real website banner at every width stop; they must agree within 1% of the width) and Checks at every width, phone included (§5). | Greenway Dev |
-| 2.5 | 2026-11-11 | Slice C-5 (#PC5): picture shape advice per banner and placement, safe-area overlay, crop-edge hint (§4.9 step 6, §6.5). | Greenway Dev |
+| 2.5 | 2026-11-11 | Slice C-5 (#1768): picture shape advice per banner and placement, safe-area overlay, crop-edge hint (§4.9 step 6, §6.5). | Greenway Dev |
