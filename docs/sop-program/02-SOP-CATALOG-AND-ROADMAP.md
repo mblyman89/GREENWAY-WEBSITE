@@ -171,7 +171,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.1 (D237, #1774):** owner approved Phase N (culture posts = the CULTURE card on `/blog`). N-1 send hardening built: four warnings in every email, one-click unsubscribe, PDF kept on save, bounce/complaint suppression, owner/admin-only broadcast.
 
-**v1.2 (D237, #PN2):** N-2 reliable sending built: per-address queue `newsletter_send_recipients` (migration 0362), Resend batch endpoint 100 per call with an `Idempotency-Key`, resumed by the 5-minute content-schedule cron, progress bar and Retry failed (G-112, F-22-3). Owner step: apply 0362.
+**v1.2 (D237, #1775):** N-2 reliable sending built: per-address queue `newsletter_send_recipients` (migration 0362), Resend batch endpoint 100 per call with an `Idempotency-Key`, resumed by the 5-minute content-schedule cron, progress bar and Retry failed (G-112, F-22-3). Owner step: apply 0362.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
