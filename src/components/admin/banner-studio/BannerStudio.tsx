@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ConfirmDialog } from "@/components/admin/ux";
-import { checkDesign, mobileImageSrc, type BannerDesign, type DesignBind, type DesignDevice } from "@/lib/cms/banner-design-core";
+import { mobileImageSrc, type BannerDesign, type DesignBind, type DesignDevice } from "@/lib/cms/banner-design-core";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { StudioCanvas, type StudioSelection } from "./StudioCanvas";
 import { TextBoxPanel } from "./TextBoxPanel";
@@ -22,6 +22,7 @@ import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { WidthBar } from "./WidthBar";
+import { checkAllWidths } from "@/lib/cms/studio-drift-core";
 import { ScaleSwitch } from "./ScaleSwitch";
 import { useStudioSiteFonts } from "./StudioSiteFonts";
 import { ShapePanel } from "./ShapePanel";
@@ -247,7 +248,7 @@ export function BannerStudio({
     (design.elements ?? []).some((e) => e.mx !== null || e.my !== null || e.mw !== null || e.mh !== null);
 
   const siteFonts = useStudioSiteFonts();
-  const warnCount = checkDesign(design, legacy, siteFonts).length;
+  const warnCount = checkAllWidths(design, legacy, siteFonts).length; // D234 C-4: every width
   const tabBtn = (id: Tab, label: string) => (
     <button
       key={id}

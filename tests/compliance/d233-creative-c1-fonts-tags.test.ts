@@ -67,7 +67,9 @@ describe("C-1: System default warning", () => {
     expect(checkDesign(defaultDesign("hero"), L, { heading: "oswald", body: "inter" }).some((w) => w.code === "DEVICE_FONT")).toBe(false);
   });
   it("Checks tab and tab counter pass the site fonts", () => {
-    expect(read("src/components/admin/banner-studio/WarningsPanel.tsx")).toContain("checkDesign(design, legacy, siteFonts)");
-    expect(read("src/components/admin/banner-studio/BannerStudio.tsx")).toContain("checkDesign(design, legacy, siteFonts).length");
+    // D234 C-4: checkAllWidths = checkDesign(design, legacy, siteFonts) + every-width checks.
+    expect(read("src/components/admin/banner-studio/WarningsPanel.tsx")).toContain("checkAllWidths(design, legacy, siteFonts)");
+    expect(read("src/components/admin/banner-studio/BannerStudio.tsx")).toContain("checkAllWidths(design, legacy, siteFonts).length");
+    expect(read("src/lib/cms/studio-drift-core.ts")).toContain("checkDesign(design, legacy, siteFonts)");
   });
 });

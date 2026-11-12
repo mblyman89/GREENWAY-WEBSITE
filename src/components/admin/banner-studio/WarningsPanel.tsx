@@ -6,7 +6,8 @@
  * ESTIMATE (the photo is unknown), per WCAG 2.2 SC 1.4.3 (4.5:1 normal text,
  * 3:1 large text: 24px+, or 18.67px+ bold).
  */
-import { checkDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
+import type { BannerDesign } from "@/lib/cms/banner-design-core";
+import { checkAllWidths } from "@/lib/cms/studio-drift-core";
 import type { StudioSelection } from "./StudioCanvas";
 import { useStudioSiteFonts } from "./StudioSiteFonts";
 
@@ -21,11 +22,12 @@ export function WarningsPanel({
 }) {
   // D234 C-1: the site fonts decide whether "Site font" text is System default.
   const siteFonts = useStudioSiteFonts();
-  const warnings = checkDesign(design, legacy, siteFonts);
+  // D234 C-4: plus every real width the site uses (1408 … 770, phones 398 … 328).
+  const warnings = checkAllWidths(design, legacy, siteFonts);
   return (
     <div className="space-y-2">
       {warnings.length === 0 ? (
-        <p className="rounded-md bg-[var(--admin-accent-soft)] px-3 py-2 text-xs text-[var(--admin-accent)]">✓ Looks good — no readability or layout problems found.</p>
+        <p className="rounded-md bg-[var(--admin-accent-soft)] px-3 py-2 text-xs text-[var(--admin-accent)]">✓ Looks good — no readability or layout problems found, at every width the site uses (computer 1408 to 770, phones 398 to 328).</p>
       ) : (
         <ul className="space-y-1.5">
           {warnings.map((w, i) => (

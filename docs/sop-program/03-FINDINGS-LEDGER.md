@@ -1215,6 +1215,7 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 ### F-11-25 · CONFIRMED · WEAKNESS · S3 — Checks look at one width; no test guards studio = website
 - **Pin:** `banner-design-core.ts` L1367–1380 (overlap "desktop, approximate", estimated heights). No studio-vs-site test (Playwright is installed, `package.json` L20, L56).
 - **SOP impact:** SOP-11b §5. **G-99**.
+- **Resolved (D234, C-4):** `tests/compliance/d233-creative-c4-drift-guard.test.tsx` compares the real `DesignedBanner` and `StudioCanvas` at every stop (≤1% of width; CSS evaluated in `studio-drift-core.ts`, since CI has no browser). The Checks tab uses `checkAllWidths` (out-of-frame and overlap at every stop, phone included; `AT_WIDTHS`).
 
 ### F-11-26 · CONFIRMED · GAP · S3 — Scheduling differs in each place
 - **Pin:** repeats/fallback only on home slides (`home-slide-advanced-core.ts` L76–77; `banner-schedule-core.ts` L65–110); Shop slides and type cards are start/end only (`shop-carousel-core.ts` L372–378; `type-cards-core.ts` L197–203); the calendar is only on `pages/[slug]/page.tsx` L454; Schedule & Releases has 5 kinds (`content-schedule-core.ts` L32–38).
