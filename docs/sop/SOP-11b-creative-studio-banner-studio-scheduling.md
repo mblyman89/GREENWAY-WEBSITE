@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5) |
+| **Version** | 2.1 (SOP-11, second half; living document. v2.0 was recon, audit and the roadmap, D233; Phase C approved D234; v2.1 = slice C-1; v2.2 = slice C-2; v2.3 = slice C-3; v2.4 = slice C-4; v2.5 = slice C-5; v2.6 = slice C-6) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Creative Studio** (`/admin/marketing/midjourney`, nav MKTG & ADV, permission `content.edit`, `src/components/admin/admin-nav-data.ts` L100). **Branding** (`/admin/settings/branding`, `content.edit`, L146). The **Banner Design Studio** wherever it opens (Shop Banner L150, home carousel slides, page sections, Loyalty hero, Specials, type cards, About side panel, Branding → Saved banners). **Schedule & Releases** (`/admin/content/schedule`, `content.edit`, L152). **Website Sync** preview and Move mode (`/admin/website-sync`, L139; Move needs `content.edit`, `src/app/admin/website-sync/page.tsx` L133) |
@@ -148,11 +148,13 @@ Open **Website → Branding** (`/admin/settings/branding`). The tab is in the ad
 
 1. Branding → **Saved banners**. Pick what the design is for (website banner, card, blog, newsletter, social, print or a custom W×H), design it, add it (helper `branding`).
 2. **Save as picture** draws the same public banner off-screen and saves a PNG at the exact size into a Digital Assets folder (Merch by default) (`BrandDesignExport.tsx` L3–10; folders `brand-sizes-core.ts` L178–182).
-3. From any banner editor, **Save to brand** asks for a name in a plain browser box (`BannerEditorShell.tsx` L60). Type a clear name, for example "Friday 20% off - Nov". (F-11-30 replaces this box with a proper dialog.)
+3. From any banner editor, **Save this design to brand banners** opens a small name dialog (v2.6, C-6; `BrandNameDialog.tsx`). The name starts as the headline's first line (else "Saved banner"). Change it to a clear name, for example "Friday 20% off - Nov", and press **Save to brand banners** (or Enter; Esc or **Cancel** closes it). An empty name, or one over 80 characters, is explained in the dialog. If the name is already used it says *"A saved banner already has this name. Saving adds another one; it does not replace it."* After saving: *"Saved "…" to Website → Branding → Saved banners."*
 
 ### Part 4: The Banner Design Studio
 
 ### 4.7 Where the studio opens, and its nine tabs
+
+> **Help in the studio (v2.6, C-6).** Hover or Tab to any tab, to 🖥 Computer / 📱 Phone or to the AI button to see what it does (screen readers read the same words). The first time, a strip says *"👋 New here? Take the 60-second tour of the studio."*: **Start the tour** shows six short cards; **Hide (press ? to see it again)** hides the strip in this browser. Under it, the **Make a banner:** strip walks through **Picture → Text → Phone → Check → Publish**. A done step gets a ✓, the next step is gold, and clicking a step opens its tab (Phone switches to the phone layout; Publish scrolls to the editor's Save draft / Publish buttons below the studio). The full guide is the helper **"How the Banner Design Studio works"** (Helpers page, `banner-studio`), and the concierge knows the studio, Branding and scheduling.
 
 The studio is the same everywhere. It opens from: Shop Banner (each slide), home carousel slides, page sections, the Loyalty hero, Specials, type cards, the About side panel and Branding → Saved banners (`BannerEditorShell.tsx`, used by each of those editors).
 
@@ -162,9 +164,11 @@ At the top: **🖥 Computer** and **📱 Phone** (`BannerStudio.tsx` L303–317)
 
 ### 4.8 Moving, sizing, keys and undo
 
-The studio's own one-line guide (`BannerStudio.tsx` L395), word for word:
+Under the canvas the studio shows a short line (v2.6, C-6; `BannerStudio.tsx` L434), word for word:
 
-> Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · drag the gold knob to rotate (Shift = 15° steps) · Shift-click to select several, then drag them together or use Arrange · Ctrl/⌘+C / V / D copy, paste (into any banner), duplicate · click an item, then arrow keys nudge it (Shift = bigger steps) · 🔒 locked items stay put · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
+> Drag to move · double-click text to type · click an item, then arrow keys nudge it · Ctrl/⌘+Z undo · Delete removes.
+
+Next to it, **? All keys & tour** (or the **?** key when you are not typing) opens the full list of keys (§9.2) and the tour. Esc closes it. (Before v2.6 the studio showed one long line with every key.)
 
 - Arrow keys move 0.5%; Shift moves 5% (`StudioCanvas.tsx` L19–21).
 - Undo keeps the last 60 steps. Changes made within 600 ms of each other count as one step (`BannerStudio.tsx` L12, L39–40).
@@ -335,7 +339,7 @@ The four warnings (L45–50) appear in the site footer on every page, so banners
 
 ### 9.2 Keys in the studio
 
-Arrows 0.5% · Shift+arrows 5% · Ctrl/⌘+Z undo · Ctrl+Shift+Z or Ctrl+Y redo · Ctrl/⌘+C / V / D copy, paste, duplicate · Alt while dragging = no snapping · Delete removes · Esc deselects (`BannerStudio.tsx` L133, L395; `StudioCanvas.tsx` L18–21).
+**?** this list and the tour · Arrows 0.5% · Shift+arrows 5% · Ctrl/⌘+Z undo · Ctrl+Shift+Z or Ctrl+Y redo · Ctrl/⌘+C / V / D copy, paste, duplicate · Alt while dragging = no snapping · Delete removes · Esc deselects (`BannerStudio.tsx` L133; `StudioCanvas.tsx` L18–21). The same list is in the studio: press **?** (`studio-help-core.ts` `STUDIO_SHORTCUTS`, v2.6).
 
 ### 9.3 How wide each banner really is (live, 2026-11-11)
 
@@ -535,3 +539,4 @@ Rules for every slice: pure core + self-tests; one compliance test file per slic
 | 2.3 | 2026-11-11 | Slice C-3 (#1766): Scale mode (new banners start in it; Switch to Scale with a before/after for existing ones; separate Phone layout; 12 px floor + Checks message). The Shop banner is capped at 1408 px (§4.9 note, §5, §6.3, §9.3, §10). | Greenway Dev |
 | 2.4 | 2026-11-11 | Slice C-4 (#1767): drift guard (a test renders the real studio and the real website banner at every width stop; they must agree within 1% of the width) and Checks at every width, phone included (§5). | Greenway Dev |
 | 2.5 | 2026-11-11 | Slice C-5 (#1768): picture shape advice per banner and placement, safe-area overlay, crop-edge hint (§4.9 step 6, §6.5). | Greenway Dev |
+| 2.6 | 2026-11-11 | Slice C-6 (#PC6): help in the studio (tooltips, ? key sheet, first-use tour, "Make a banner" step strip, empty states, `banner-studio` helper, concierge topics) and the Save-to-brand name dialog (§4.6 step 3, §4.7, §4.8, §9.2). | Greenway Dev |

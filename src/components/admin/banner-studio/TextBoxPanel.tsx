@@ -147,6 +147,12 @@ export function TextBoxPanel({
         </div>
       ) : null}
 
+      {design.boxes.length === 0 && !adding ? (
+        <p className="rounded-lg border border-dashed border-white/15 p-2 text-xs text-white/60" data-empty-state="text">
+          No words on this banner yet. Press <b>＋ Add text box</b> and pick <b>Headline</b> first; you can add a subhead, a price or fine print after that.
+        </p>
+      ) : null}
+
       <ul className="space-y-1">
         {design.boxes.map((b, i) => {
           const text = resolveBoxText(b, legacy);

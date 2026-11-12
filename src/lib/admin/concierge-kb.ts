@@ -295,6 +295,50 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Generated images and videos are DRAFTS in Digital Assets. Review them before using them on the website or in marketing.",
     ],
   },
+  // D234 C-6 (SOP-11b G-106): the banner studio, Branding and scheduling.
+  {
+    id: "banner-studio",
+    area: "website",
+    title: "Banner Design Studio (designing banners)",
+    tab: "Website",
+    href: "/admin/helpers#banner-studio",
+    facts: [
+      "The Banner Design Studio is the same everywhere: Shop Banner slides, home carousel slides, page sections, the Loyalty hero, Specials, type cards, the About side panel and Branding → Saved banners. Turn on \"Use custom design\" in the editor to open it.",
+      "It has nine tabs: Text, Buttons, Shapes & icons, Lottie & Rive, Animate, Smoke & fog, Layers, Picture & shade, and Checks (Checks shows a count when something needs a look).",
+      "The \"Make a banner\" strip walks through Picture → Text → Phone → Check → Publish. Press ? in the studio for every keyboard shortcut and a 60-second tour.",
+      "🖥 Computer and 📱 Phone are separate layouts: moves on Phone change phones only. The Banner width bar shows the banner at the website's real widths (1408, 1344, 1216, 960, 770 and phones 398 / 358 / 328 px).",
+      "New banners start in Scale mode, so words and buttons grow and shrink with the banner and stay where you put them at every width. Scale text never goes under 12 px.",
+      "Picture & shade → Picture shape gives the best picture size for that banner, and the dashed clear box shows the part of the picture that shows at every width.",
+      "Undo is Ctrl/⌘+Z (the last 60 steps). Save draft keeps your work; Publish or schedule it from the editor. Check it on the real page with Website Sync (Move mode fine-tunes from the real page).",
+    ],
+  },
+  {
+    id: "branding",
+    area: "website",
+    title: "Branding (colours, logos, fonts, saved banners)",
+    tab: "Website",
+    href: "/admin/settings/branding",
+    facts: [
+      "Website → Branding has six tabs: Colours, Logos, Fonts, Slogans/mission/about, Saved banners, and Social & guidelines.",
+      "Fonts: the Heading font is for big titles and the Body font for paragraphs. A banner text box set to \"Site font\" uses them on the website. Each choice is a draft until you Publish.",
+      "Saved banners are designs any Design Studio can start from. \"Save as picture\" saves a PNG at the exact size into a Digital Assets folder (Merch by default).",
+      "From a banner editor, \"Save this design to brand banners\" asks for a name in a small dialog; the name starts as the headline. Saving a name that is already used adds another one, it does not replace it.",
+    ],
+  },
+  {
+    id: "content-schedule",
+    area: "website",
+    title: "Scheduling banners and content (Schedule & Releases)",
+    tab: "Website",
+    href: "/admin/content/schedule",
+    facts: [
+      "Schedule & Releases can make a saved draft go live, or come down, at a time: home slides, Shop banner slides, page sections, FAQ questions and page wording (page wording can only be published, not hidden).",
+      "Times are Pacific and run on a 5-minute clock. If something cannot be published, it is tried up to three times and then shows as failed, with the reason.",
+      "A Release groups several changes under one time (or Publish now).",
+      "Home carousel slides also have repeat days and hours, a fallback slide (shows only when no other slide is live) and a month calendar. Shop banner slides and type cards have start/end only today.",
+      "There is no \"show me the site as it will look on Friday\" preview yet; check each draft in Website Sync before scheduling it.",
+    ],
+  },
 
   // ── Employee ───────────────────────────────────────────────────────────
   {

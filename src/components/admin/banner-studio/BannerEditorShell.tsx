@@ -24,6 +24,8 @@ import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { designFromLegacy, withScale, type BannerDesign, type DesignBind, type DesignPreset } from "@/lib/cms/banner-design-core";
 import type { BrandSaved } from "@/lib/brand/brand-kit-core";
 import { listBrandBannersAction, saveBrandBannerAction } from "@/app/admin/settings/branding/brand-actions";
+import { BrandNameDialog } from "@/components/admin/banner-studio/BrandNameDialog";
+import { suggestBrandName } from "@/lib/cms/studio-help-core";
 
 /**
  * R64: the Brand hub's saved banners inside every Design Studio — start from
@@ -34,6 +36,25 @@ function BrandBannersRow({ design, imageSrc, onPick }: { design: BannerDesign; i
   const [list, setList] = useState<BrandSaved[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // D234 C-6 (G-107): a real name dialog instead of the browser prompt box.
+  const [naming, setNaming] = useState(false);
+  // The saved names, so the dialog can say when a name is already used.
+  const [names, setNames] = useState<BrandSaved[] | null>(null);
+  const openNaming = () => {
+    setNaming(true);
+    if (!list) void listBrandBannersAction().then(setNames, () => setNames(null));
+  };
+  const save = async (name: string) => {
+    setBusy(true);
+    const r = await saveBrandBannerAction({ name, image: imageSrc, design }).catch(() => ({ ok: false as const, error: "Couldn't save it." }));
+    setBusy(false);
+    setNaming(false);
+    if (r.ok) {
+      setMsg(`Saved "${name}" to Website → Branding → Saved banners.`);
+      if (list) setList(r.banners);
+      setNames(r.banners);
+    } else setMsg(r.error);
+  };
   const load = async () => {
     setBusy(true);
     setMsg(null);
@@ -56,22 +77,15 @@ function BrandBannersRow({ design, imageSrc, onPick }: { design: BannerDesign; i
           variant="neutral"
           size="sm"
           disabled={busy}
-          onClick={async () => {
-            const name = window.prompt("Name for this saved brand banner:", "Saved banner");
-            if (name === null) return;
-            setBusy(true);
-            const r = await saveBrandBannerAction({ name, image: imageSrc, design }).catch(() => ({ ok: false as const, error: "Couldn't save it." }));
-            setBusy(false);
-            if (r.ok) {
-              setMsg("Saved to Website → Branding → Saved banners.");
-              if (list) setList(r.banners);
-            } else setMsg(r.error);
-          }}
+          onClick={openNaming}
         >
           Save this design to brand banners
         </Button>
       </div>
       {msg ? <p className="mt-1 text-[var(--admin-gold)]">{msg}</p> : null}
+      {naming ? (
+        <BrandNameDialog open initial={suggestBrandName(design)} existing={list ?? names} busy={busy} onSave={(n) => void save(n)} onCancel={() => setNaming(false)} />
+      ) : null}
       {list ? (
         list.length === 0 ? (
           <p className="mt-2 text-[var(--admin-text-muted)]">No saved brand banners yet — add some in Website → Branding.</p>

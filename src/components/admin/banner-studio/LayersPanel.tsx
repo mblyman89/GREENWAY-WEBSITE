@@ -72,7 +72,7 @@ export function LayersPanel({
           </button>
         ) : null}
       </div>
-      {frontFirst.length === 0 ? <p className="text-xs text-white/45">Nothing on the banner yet.</p> : null}
+      {frontFirst.length === 0 ? <p className="rounded-lg border border-dashed border-white/15 p-2 text-xs text-white/60" data-empty-state="layers">Nothing on the banner yet. Add text, a button or a shape from the other tabs and it shows up here, front to back.</p> : null}
       <ul className="space-y-1">
         {frontFirst.map((l, i) => {
           const it = info(l.kind, l.id);

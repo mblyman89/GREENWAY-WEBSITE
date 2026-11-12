@@ -98,7 +98,7 @@ export function ButtonPanel({
           </li>
         ))}
       </ul>
-      {design.buttons.length === 0 ? <p className="text-xs text-white/45">No buttons. Add one to send shoppers somewhere.</p> : null}
+      {design.buttons.length === 0 ? <p className="rounded-lg border border-dashed border-white/15 p-2 text-xs text-white/60" data-empty-state="buttons">No buttons yet. Add one to send shoppers somewhere, like a deals page or a brand. A banner can also work with no button.</p> : null}
 
       {btn ? (
         <div className="space-y-3 rounded-lg border border-white/10 bg-black/30 p-3">

@@ -2992,3 +2992,15 @@ What was done:
 - Nothing changes on the website. Test: `tests/compliance/d233-creative-c5-picture-shape.test.tsx`. Pure self-tests: `__runPictureShapeCoreTests` (28). SOP-11b v2.5.
 - **Owner steps:** none. For new art, make it at the size in **Picture shape** and keep the subject inside the clear box.
 
+### As built (slice C-6)
+
+- **Help inside the Banner Design Studio** (G-106, F-11-31; Q-11-15 *"I agree with your recommendation."*):
+  - **Tooltips** on the nine tabs, 🖥 Computer / 📱 Phone and the AI button. They show on hover AND keyboard focus, and the words are linked to the control with `aria-describedby`, so a screen reader reads them too. Esc hides one (`StudioHelp.tsx` `Tip`; words in `studio-help-core.ts` `TAB_HELP`, `CONTROL_HELP`).
+  - **The ? sheet:** press **?** in the studio (not while typing) or the **? All keys & tour** button. It lists every key (`STUDIO_SHORTCUTS`, 14 rows) and replaces the long one-line shortcut guide. It links to the new helper.
+  - **First-use tour:** a strip *"👋 New here? Take the 60-second tour of the studio."* with **Start the tour** and **Hide (press ? to see it again)**. Six short cards (`TOUR_STEPS`); hidden once dismissed (this browser, `gw-studio-tour-dismissed`).
+  - **"Make a banner" step strip:** Picture → Text → Phone → Check → Publish. Each step gets a ✓ when done; the next one is gold; click a step to jump to its tab (Phone switches the layout; Publish scrolls to the editor's buttons below). Check shows *"(n to look at)"* (`makeBannerSteps`).
+  - **Empty states:** Text, Buttons and Layers now say what to do when there is nothing there.
+  - **Helper and concierge:** a new helper **"How the Banner Design Studio works"** (`banner-studio`, Website: Cannabis) and three concierge topics: `banner-studio`, `branding`, `content-schedule`.
+- **Save to brand name dialog** (G-107, F-11-30): **Save this design to brand banners** opens a small dialog instead of the browser prompt box. The name starts as the headline's first line (else "Saved banner"); an empty name or one over 80 characters is explained; a name already used gets *"A saved banner already has this name. Saving adds another one; it does not replace it."* (`BrandNameDialog.tsx`; rules `suggestBrandName`, `brandNameError`, `brandNameNote`).
+- Nothing changes on the website. Test: `tests/compliance/d233-creative-c6-help-name-dialog.test.tsx`. Pure self-tests: `__runStudioHelpCoreTests` (22). SOP-11b v2.6.
+- **Owner steps:** none. Open any Design Studio and press **?** for the keys and the tour.
