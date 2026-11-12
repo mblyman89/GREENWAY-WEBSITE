@@ -1163,6 +1163,11 @@ Owner request D231 (2026-11-11). Live read-only probes the same day. External fa
 - **SOP impact:** SOP-11 S-10. **G-89**.
 - **Resolved (D232, M-6):** Merch Health H-5 Check / Register button: reads `GET /webhooks` first, probes the shop with Token C before writing, all 5 events, keeps other types, audited; H-5 checked daily.
 
+### F-11-19 · CONFIRMED · GAP · S1 — The merch shop has not deployed since 2026-10-18 (MERCH_HEALTH_TOKEN "not accepted")
+- **Pin:** `merch-site/vercel.json` L9 `"ignoreCommand": "git diff --quiet HEAD^ HEAD -- ."`. Every merge ends with a docs-only "PR number" commit, so the diff of the last commit inside `merch-site/` is always empty and Vercel skips the build (proved: the rule exits 0 for the heads of the M-1, M-2, M-6 and M-7 merges). Live probe 2026-11-12: `greenwaymerch.com/api/health` and `/api/payments` answer Next's **HTML** 404 page (the route answers plain-text "Not found"), and the live shop still links the bare `greenwaymarijuana.com`, which M-1 changed to www.
+- **SOP impact:** SOP-11 §4.3 Token D. The owner's token was set correctly; the shop could never accept it.
+- **Resolved (D235):** `merch-site/scripts/vercel-ignore.sh` compares with the last successful deploy (`VERCEL_GIT_PREVIOUS_SHA`) and builds whenever it is unsure. Merch Health tells an HTML 404 (route missing → redeploy) from the token's 404 (`isMissingRoute404`, `SHOP_ROUTE_MISSING`). The main project trims `MERCH_HEALTH_TOKEN` like the shop. Owner: one manual redeploy of the merch project.
+
 ### F-11-C · CONFIRMED · STRENGTH — What already works well
 - **Pin:**
   - fail-closed Printful and checkout (`printful-client.ts` L9–10, L30; `checkout-core.ts` L133–134);

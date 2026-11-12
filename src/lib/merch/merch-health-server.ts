@@ -37,6 +37,7 @@ import {
   MERCH_HEALTH_PAGE,
   MERCH_HEALTH_SETTINGS_KEY,
   buildMerchHealth,
+  isMissingRoute404,
   normalizeHealthSettings,
   shouldAlert,
   type CallResult,
@@ -57,7 +58,7 @@ export const STATUS_PAGES = {
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
-async function getJson(url: string, headers: Record<string, string> = {}): Promise<CallResult & { problem?: string }> {
+async function getJson(url: string, headers: Record<string, string> = {}): Promise<CallResult & { problem?: string; routeMissing?: boolean }> {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   try {
@@ -65,8 +66,9 @@ async function getJson(url: string, headers: Record<string, string> = {}): Promi
     if (res.status >= 300 && res.status < 400) {
       return { status: res.status, body: null, problem: `It redirected to ${res.headers.get("location") ?? "another address"}; set MERCH_SHOP_URL to the final address (no redirect).` };
     }
+    const routeMissing = isMissingRoute404(res.status, res.headers.get("content-type"));
     const body = (await res.json().catch(() => null)) as unknown;
-    return { status: res.status, body };
+    return routeMissing ? { status: res.status, body, routeMissing } : { status: res.status, body };
   } catch (e) {
     const aborted = (e as { name?: string })?.name === "AbortError";
     return { status: 0, body: null, problem: aborted ? "No answer within 12 seconds." : "Could not reach it (network error)." };
@@ -125,7 +127,8 @@ async function gatherMerchHealthFull(): Promise<{ report: MerchHealthReport; hel
   const nowIso = new Date().toISOString();
   const admin = isSupabaseServiceConfigured ? createSupabaseAdminClient() : null;
   const shopOrigin = merchShopOrigin();
-  const token = process.env.MERCH_HEALTH_TOKEN ?? "";
+  // D235: trimmed like the shop does (a pasted trailing space or newline must not break the header).
+  const token = (process.env.MERCH_HEALTH_TOKEN ?? "").trim();
   const configured = printfulConfigured();
 
   const [scopes, stores, webhooks, drafts, shopRes, pfPage, stPage, rsPage, cat, settings, media, merchFiles] = await Promise.all([
@@ -157,7 +160,7 @@ async function gatherMerchHealthFull(): Promise<{ report: MerchHealthReport; hel
     drafts,
     tokenExpires: settings.printfulTokenExpires,
     shop: shopRes
-      ? { status: shopRes.status, body: shopRes.status === 200 ? (shopRes.body as ShopHealthLike) : null, problem: shopRes.problem }
+      ? { status: shopRes.status, body: shopRes.status === 200 ? (shopRes.body as ShopHealthLike) : null, problem: shopRes.problem, routeMissing: shopRes.routeMissing }
       : token
         ? { status: 0, body: null, problem: "MERCH_HEALTH_TOKEN in this project is shorter than 32 characters." }
         : null,

@@ -65,7 +65,7 @@ export interface MerchHealthInput {
   /** Owner-entered Printful token expiry (YYYY-MM-DD) or "". */
   tokenExpires: string;
   /** null = the shop was not asked (no MERCH_HEALTH_TOKEN here). */
-  shop: { status: number; body: ShopHealthLike | null; problem?: string } | null;
+  shop: { status: number; body: ShopHealthLike | null; problem?: string; routeMissing?: boolean } | null;
   statusPages: { printful: CallResult | null; stripe: CallResult | null; resend: CallResult | null };
   /** productIds (M-6): every garment in the catalog, for H-5's stock watch. */
   catalog: { readError: string | null; live: number; oldestStockSyncIso: string | null; neverSynced: number; productIds?: number[] };
@@ -139,16 +139,35 @@ export function heldRefs(list: unknown): string {
   return ` Orders: ${named.join(", ")}${rows.length > 5 ? ` and ${rows.length - 5} more` : ""}.`;
 }
 
+/**
+ * D235: the shop's own /api/health answers a plain-text "Not found" for a
+ * wrong token; a shop build WITHOUT the route answers Next's HTML 404 page.
+ * The second is not a token problem: the live shop is older than M-2.
+ */
+export const SHOP_ROUTE_MISSING =
+  "The shop's live build has no /api/health at all (it answered the website's 404 page, not the token check). The token is not the problem: the merch project has not deployed the code from slice M-2 onward.";
+export const SHOP_REDEPLOY_FIX =
+  "Make the merch project build the newest code: Vercel → the merch (greenwaymerch.com) project → Deployments → Create Deployment → type main → Create (or open the newest main deployment, even one marked Canceled, → ⋯ → Redeploy). When it says Ready, press Run check now (SOP-11 §4.3).";
+
+/** Is this 404 the website's "page not found" (route missing), not the route's own refusal? */
+export function isMissingRoute404(status: number, contentType: string | null | undefined): boolean {
+  return status === 404 && /text\/html/i.test(contentType ?? "");
+}
+
 export function buildMerchHealth(i: MerchHealthInput): MerchHealthReport {
   const checks: MerchCheck[] = [];
   const add = (c: MerchCheck) => checks.push(c);
   const shop = i.shop?.status === 200 ? i.shop.body : null;
   const shopWhy = !i.shop
     ? "MERCH_HEALTH_TOKEN is not set in this (main) Vercel project, so the shop was not asked."
-    : i.shop.status === 404
-      ? "The shop answered 404: MERCH_HEALTH_TOKEN is missing in the merch project, shorter than 32 characters, or not the same value in both projects (or the shop has not redeployed since M-2)."
-      : i.shop.problem || `The shop answered ${i.shop.status}.`;
-  const shopFix = "Set MERCH_HEALTH_TOKEN (the same 32+ character value) in BOTH Vercel projects and redeploy both (SOP-11 §4.3).";
+    : i.shop.status === 404 && i.shop.routeMissing
+      ? SHOP_ROUTE_MISSING
+      : i.shop.status === 404
+        ? "The shop answered 404: MERCH_HEALTH_TOKEN is missing in the merch project, shorter than 32 characters, or not the same value in both projects (or the shop has not redeployed since M-2)."
+        : i.shop.problem || `The shop answered ${i.shop.status}.`;
+  const shopFix = i.shop?.status === 404 && i.shop.routeMissing
+    ? SHOP_REDEPLOY_FIX
+    : "Set MERCH_HEALTH_TOKEN (the same 32+ character value) in BOTH Vercel projects and redeploy both (SOP-11 §4.3).";
   const unknownShop = (id: string, group: MerchCheck["group"], title: string, sop: string): MerchCheck => ({ id, group, title, level: "unknown", detail: shopWhy, fix: shopFix, sop });
 
   // ---------------- Printful (main project token) ----------------
@@ -328,6 +347,8 @@ export function __runMerchHealthCoreTests(): { passed: number; failed: number } 
   ok("all green", g.status === "ok" && g.checks.every((c) => c.level === "ok"));
   ok("F-11-1 redirect is red on H-8 and H-7", (() => { const r = buildMerchHealth({ ...base, shop: { status: 200, body: { ...base.shop!.body!, feed: { ok: false, status: 308, problem: "The feed address redirects to https://www…" }, products: 0 } } }); return r.checks.find((c) => c.id === "H-8")!.level === "fail" && r.checks.find((c) => c.id === "H-7")!.level === "fail" && r.status === "fail"; })());
   ok("no shop token -> shop checks unknown, not green", (() => { const r = buildMerchHealth({ ...base, shop: null }); return ["H-7", "H-9", "H-10", "H-11", "H-15", "H-19"].every((id) => r.checks.find((c) => c.id === id)!.level === "unknown") && r.checks.find((c) => c.id === "H-9")!.detail.includes("MERCH_HEALTH_TOKEN"); })());
+  ok("route missing (HTML 404) says redeploy, not token", (() => { const c = buildMerchHealth({ ...base, shop: { status: 404, body: null, routeMissing: true } }).checks.find((x) => x.id === "H-11")!; return c.detail === SHOP_ROUTE_MISSING && c.fix === SHOP_REDEPLOY_FIX && !c.fix.includes("MERCH_HEALTH_TOKEN"); })());
+  ok("HTML 404 is a missing route; text 404 is the token check", isMissingRoute404(404, "text/html; charset=utf-8") && !isMissingRoute404(404, "text/plain;charset=UTF-8") && !isMissingRoute404(200, "text/html"));
   ok("shop 404 explains the token", buildMerchHealth({ ...base, shop: { status: 404, body: null } }).checks.find((c) => c.id === "H-11")!.detail.includes("same value in both"));
   ok("printful 401 -> H-1 red", buildMerchHealth({ ...base, scopes: { status: 401, body: null } }).checks.find((c) => c.id === "H-1")!.level === "fail");
   ok("no token -> H-1 red", buildMerchHealth({ ...base, printfulConfigured: false, scopes: null }).checks[0].level === "fail");
