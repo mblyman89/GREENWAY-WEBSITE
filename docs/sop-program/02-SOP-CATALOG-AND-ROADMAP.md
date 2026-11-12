@@ -113,7 +113,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.2 (D234, #1765):** slice **C-2** built: a Banner width slider with the site's real widths (same sizing math), and **Check on the real page** (Website Sync at that page and size, Move mode on) (G-97, G-98).
 
-**v2.3 (D234, #PC3):** slice **C-3** built: Scale mode (text and buttons grow and shrink with the banner; separate Phone layout; 12 px floor + warning). New banners start in Scale; existing banners switch by choice with a before/after. The Shop banner is capped at 1408 px (G-96, G-100).
+**v2.3 (D234, #1766):** slice **C-3** built: Scale mode (text and buttons grow and shrink with the banner; separate Phone layout; 12 px floor + warning). New banners start in Scale; existing banners switch by choice with a before/after. The Shop banner is capped at 1408 px (G-96, G-100).
 
 ### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
 **Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
