@@ -918,6 +918,12 @@ export const TABLE_RULES: readonly TableRule[] = [
   // acknowledged them. An operations record of the separate merch LLC's shop,
   // not test data; no FK.
   { table: "merch_alerts", disposition: "KEEP", because: "The greenwaymerch.com owner alerts and who acknowledged them (the merch LLC's operations record)." },
+  // newsletter_send_recipients (0362, D237 N-2): one row per address of a
+  // queued newsletter broadcast (batches of 100). It belongs with
+  // newsletter_sends, which is WIPE; no FK, and its own AFTER TRUNCATE
+  // trigger on newsletter_sends empties it in the same reset, so the pinned
+  // WIPE list in 0240 is not reopened (the 0344 product_latest_facts pattern).
+  { table: "newsletter_send_recipients", disposition: "KEEP", because: "The per-address list of a queued newsletter send. It is emptied automatically together with the newsletter send history by its own trigger, so the reset function's pinned WIPE list (0240) is not reopened." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
   // points at (FK to media_assets, KEEP); it is a decision about products,

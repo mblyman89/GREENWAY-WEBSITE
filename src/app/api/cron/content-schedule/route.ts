@@ -33,11 +33,19 @@
  *   - CRON_SECRET set            -> Bearer must match, else staff session.
  *   - Production + secret unset  -> staff session or 503. Never open.
  *   - Development + unset        -> warn and continue, for local testing.
+ *
+ * NEWSLETTER QUEUE (D237 N-2, G-112). The same tick also works queued
+ * newsletter broadcasts (newsletter_send_recipients, batches of 100) for up
+ * to 50 seconds, so no new cron is added (the cron list is pinned). The
+ * Send button starts the queue itself; this tick finishes whatever is left
+ * and picks up a send whose worker was cut off (4-minute lease). It never
+ * throws and never changes this route's status code.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runContentScheduleTick } from "@/lib/cms/content-schedule-server";
+import { runNewsletterQueue } from "@/lib/cms/newsletter-queue-server";
 
 export const dynamic = "force-dynamic";
 /** 25 rows a tick, each a few small queries: far below this. */
@@ -73,7 +81,13 @@ export async function GET(req: NextRequest) {
   // then "failed" with the reason on the Schedule page); only an unreadable
   // database is a 500, so the logs stay quiet when the system is healthy.
   const result = await runContentScheduleTick();
-  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  const newsletterQueue = await runNewsletterQueue({ budgetMs: 50_000 }).catch((e: unknown) => ({
+    ok: false,
+    sends: 0,
+    batches: 0,
+    error: e instanceof Error ? e.message : String(e),
+  }));
+  return NextResponse.json({ ...result, newsletterQueue }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same path.

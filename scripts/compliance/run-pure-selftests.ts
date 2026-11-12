@@ -1351,6 +1351,7 @@ import { __runStudioHelpCoreTests } from "../../src/lib/cms/studio-help-core";
 import { __runScheduleEverywhereCoreTests } from "../../src/lib/cms/schedule-everywhere-core";
 import { __runAdCheckCoreTests } from "../../src/lib/marketing/ad-check-core";
 import { __runNewsletterEmailCoreTests } from "../../src/lib/cms/newsletter-email-core";
+import { __runNewsletterBatchCoreTests } from "../../src/lib/cms/newsletter-batch-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2901,6 +2902,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("studio-fonts-core", __runStudioFontsCoreTests(), 14); // D234 C-1 (SOP-11b G-94): studio = website Heading/Body fonts; System default warning
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   assertRan("newsletter-email-core", __runNewsletterEmailCoreTests(), 35); // D237 N-1 (SOP-22 G-108..G-111): four warnings at size, one-click unsubscribe, PDF kept, bounce/complaint suppression, owner/admin broadcast
+  assertRan("newsletter-batch-core", __runNewsletterBatchCoreTests(), 42); // D237 N-2 (SOP-22 G-112): batches of 100, idempotency keys, retry rules, progress, resume lease
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

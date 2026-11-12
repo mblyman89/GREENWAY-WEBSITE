@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (N-1 send hardening built, D237 #1774; living document) |
+| **Version** | 1.2 (N-2 reliable sending built, D237 #PN2; N-1 #1774; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Blog & Newsletter** (`/admin/blog`, nav MKTG & ADV, permission `blog.manage`, `src/components/admin/admin-nav-data.ts` L98). **Email Newsletter** Send Center (`/admin/newsletter`, `blog.manage`, L99). **Marketing & Advertising** hub (`/admin/marketing`, `content.edit`, L96). **Digital Assets** (`/admin/media`, `media.manage`, L95). **Blog wording** (`/admin/blog/content`, `content.edit`, L148). **Regulatory Watch** (`/admin/compliance/regulatory`, `reports.view`, L133). The public pages `/blog`, `/blog/[slug]` and `/unsubscribe` |
@@ -15,6 +15,8 @@
 > **D237 (owner approval):** every recommended option in Appendix C is approved, with one exception: **culture posts go on the existing `/blog` page as the existing CULTURE card** (the page already shows PRODUCTS, DEALS, CULTURE and NEWSLETTER cards: `src/lib/blog/posts.ts` L1, `src/components/blog/BlogCard.tsx` L8–12). There is no separate Culture tab or page.
 >
 > **Fixed in v1.1 (N-1):** every newsletter email now carries all four warnings at ≥10% of the largest type size; it carries one-click unsubscribe headers; saving a newsletter post keeps its PDF; hard bounces and spam complaints opt the address out automatically (audited); only the **owner or an admin** can send to the whole list. Items 1 and 3 below are kept for history and are no longer true.
+>
+> **Fixed in v1.2 (N-2):** a broadcast is now queued, one row per address, and sent in batches of 100 with an `Idempotency-Key`, in the background. A progress bar shows how many are sent; you can leave the page. Failed addresses can be retried without re-sending to anyone else. **Owner step:** apply migration `0362_newsletter_send_recipients.sql`; until then the send works the old way (one request, stay on the page).
 
 > **The three things to know before anything else (v1.0).**
 > 1. **(Fixed in N-1.) The email that went out before v1.1 was missing three of the four required warnings.** Washington treats a newsletter as advertising. WAC 314-55-155(7) requires all four warnings in every non-outdoor ad, at no less than 10% of the largest type size. The email wrapper prints only *"For adults 21+. Keep out of reach of children."* (`src/lib/cms/newsletter-send-store.ts` L234). The app's own campaign planner says email needs all four (`src/lib/marketing/campaign-rules-core.ts` L86, L96). This is finding **F-22-1 (S1)**, and slice **N-1** fixes it. Until then, put all four warnings in the Canva design itself (§4.6 step 2).
@@ -225,8 +227,9 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
    - the unsubscribe link is there;
    - it looks right on a phone.
 8. **Broadcast (owner or admin only):** check the recipient count, then tick **"I confirm…"** and press **Send to everyone**. You cannot broadcast the same newsletter again for one hour (`BROADCAST_COOLDOWN_MS`, L252).
-9. **Stay on the page until it finishes.** Today the whole send runs inside that one request, 5 at a time, one email per call (L384–405). If the browser or the server stops part-way, the record stays "queued" and nobody is told who got it (F-22-3).
-10. Read the result line: sent, partial or failed, with the counts.
+9. **You can leave the page (since v1.2, N-2).** The send is queued, one row per address in `newsletter_send_recipients`, and goes out in batches of 100 through Resend's batch endpoint, each batch with its own `Idempotency-Key` (`newsletter-queue-server.ts`, rules in `newsletter-batch-core.ts`). It starts right after you press Send, and the 5-minute content-schedule cron finishes whatever is left (`src/app/api/cron/content-schedule/route.ts`). A bar shows *"Sending: X of N sent…"* and the page updates itself every 15 seconds. An address already marked sent is never sent again. (Before migration 0362 is applied, the old way still runs: stay on the page until it finishes.)
+10. Read the result in **Send history**: sent, partial or failed, with the counts.
+11. **If some failed:** the owner or an admin presses **Retry failed** on that row. Only the failed addresses are queued again (with a new key); everyone who already has it is skipped. Each retry is audited (`newsletter.retry_failed`).
 
 ### 4.7 After the send: stats, unsubscribes, bounces
 
@@ -257,8 +260,8 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
 | Send Center lists **no newsletters** | Only *published* posts of kind *newsletter* with a *PDF* are sendable (`page.tsx` L80) | Publish the post, then upload the PDF again (F-22-6) |
 | *"Tick the confirmation box before sending to everyone."* | The confirm tick was not ticked (`actions.ts` L57–58) | Tick it and send again |
 | Broadcast refused, sent within the last hour | The 1-hour cooldown (`newsletter-send-store.ts` L316–330) | Wait. If the first send really failed, check the send history first, so nobody gets two copies |
-| Result **partial** with "N recipient(s) failed to send." | Some calls to Resend failed (L405–414) | Today the app cannot tell you which members failed. Do not re-send to everyone. Note it and wait for N-2 |
-| Send stuck at **queued** | The request stopped mid-send (F-22-3) | Check Resend → Emails for what went out. Do not re-send blindly |
+| Result **partial** with "N recipient(s) failed to send." | Some calls to Resend failed (L405–414) | Since v1.2 each address has its own row. Press **Retry failed** on that send (owner/admin). Do not re-send to everyone |
+| Send shows **sending** for a while | Queued in batches of 100 (v1.2). If the worker was cut off, the next 5-minute tick picks it up after a 4-minute lease | Wait; the bar keeps moving. Do not re-send. If it sits still for over 15 minutes, check that migration 0362 is applied and the content-schedule cron is running |
 | "Not configured" in the Send Center | `RESEND_API_KEY` or the from address is missing (L41–47) | Set both in Vercel (Production), then redeploy. No spaces before or after the value (F-22-19) |
 | AI button says AI is not configured | No AI key | Set `AI_API_KEY` or `OPENAI_API_KEY` |
 | Alt text: *"… compliance flag(s) to review."* | The suggestion contains a watched word | Read it and change the words |
@@ -269,7 +272,7 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
 - **The PDF link vanished from a newsletter.** You saved the post without uploading the PDF again. The save writes an empty PDF and empty page images (`src/app/admin/blog/actions.ts` L201–226 → `src/lib/cms/blog-store.ts` L215–233). Upload the PDF again and save.
 - **The email title shows odd characters** (for example `&amp;`, or the layout breaks after a `<`). The title goes into the email HTML unescaped (`newsletter-send-store.ts` L223, F-22-7). Avoid `<`, `>` and `&` in newsletter titles until N-1.
 - **A member says they unsubscribed but still gets emails.** Check that their email address is not on two loyalty rows: the list is de-duplicated by email, but opt-out is stored per row. Opt out every row with that address.
-- **A big list and a slow send.** Each email is its own call, 5 at a time, inside one request with no special time limit (F-22-3). The bigger the list, the closer it gets to the server's time limit. N-2 moves sending into the background in batches of 100 (Resend's batch limit).
+- **A big list and a slow send.** Each email is its own call, 5 at a time, inside one request with no special time limit (F-22-3). The bigger the list, the closer it gets to the server's time limit. Since v1.2 (N-2) sending runs in the background in batches of 100 (Resend's batch limit), about 0.6 s apart, resuming on the next cron tick.
 - **Gmail puts it in Promotions or Spam.** Check SPF, DKIM and DMARC on the sending domain in Resend. The missing one-click unsubscribe header (F-22-2) also counts against you at Gmail and Yahoo.
 - **The AI wrote something generic or wrong.** It only knows what you put in Topic (F-22-10). Add the facts and run it again. Never publish facts you have not checked.
 
@@ -530,7 +533,7 @@ Every slice keeps the rule that a person approves before anything is published o
 | Order | Slice | What it delivers | Gaps | Depends on |
 |---|---|---|---|---|
 | **N-1** | **Send hardening** (small, first) · **BUILT (D237, #1774)** | All four warnings + 21+ in the email footer (pure footer core with a self-test that the four strings match `REQUIRED_WARNINGS` and the type size is ≥10% of the headline size). `List-Unsubscribe` (https + mailto) and `List-Unsubscribe-Post` headers. A POST one-click endpoint. Title and URL escaping. Keep the existing PDF and pages unless a new file is uploaded or "Remove" is ticked. Trim env values. Hard bounce or complaint → `email_opt_out` (audited). Broadcast limited per Q-22-3 | G-108 … G-111 | Q-22-3 |
-| **N-2** | **Reliable sending** | `newsletter_send_recipients` table (one row per address, status). Resend batch endpoint, 100 per call, with an `Idempotency-Key` per batch. A cron worker sends and resumes. A progress bar in the Send Center. "Retry failed only". The send never double-sends | G-112 | N-1 |
+| **N-2** | **Reliable sending** · **BUILT (D237, #PN2)** | `newsletter_send_recipients` table (one row per address, status). Resend batch endpoint, 100 per call, with an `Idempotency-Key` per batch. A cron worker sends and resumes. A progress bar in the Send Center. "Retry failed only". The send never double-sends | G-112 | N-1 |
 | **N-3** | **Scheduling + Sunday cadence** | `blog_post` publish/unpublish as a schedule target (the same audited 5-minute cron and calendar as SOP-11b). Newsletter states: draft → ready for approval → approved → scheduled (Sunday, set time) → sending → sent. A reminder on Friday if nothing is ready. The owner approves on the phone | G-113 | N-2; Q-22-4 |
 | **N-4** | **"This week" facts feed** | A pure core + server reader that returns last week's new vendors, lots received (fresh drops, grouped by vendor and type), promotions active and next 14 days (with dates and the below-cost check), vendor days, and a holiday and cannabis-calendar list (US holidays, 4/20, 7/10, local events you add). Shown as a card on Blog & Newsletter and given to the AI | G-114 | — |
 | **N-5** | **Grounded AI content engine** | "New post from…" picker with 7 templates: new vendor, fresh drops, review spotlight, sale, vendor day, holiday, culture. Each sends only the feed facts for that item. Prompts for 5 headline options + excerpt + structured body (headings, short paragraphs, call to action) within the WAC rules. Suggests 3 pictures from Digital Assets (vendor and product links, AI descriptions). Shows the compliance flags in the draft. Drafts only | G-115 | N-4; Q-22-8 |
@@ -562,3 +565,4 @@ Every slice keeps the rule that a person approves before anything is published o
 |---|---|---|
 | 1.0 | 2026-11-12 | Recon, audit and roadmap (D236). Verified at `main@a4ccd7cb`. 20 findings (F-22-1 … F-22-20) + F-22-C: 2×S1 (F-22-1, F-22-14), 10×S2, 7×S3, 1×S4. Gaps G-108 … G-120. Phase N (N-1 … N-10) PROPOSED. Questions Q-22-1 … Q-22-9. No code changed |
 | 1.1 | 2026-11-12 | **N-1 send hardening built (D237, #1774).** Four warnings in every newsletter email at ≥10% of the largest type (G-108); `List-Unsubscribe` + one-click `POST /api/unsubscribe` (G-109); PDF kept on save, title escaped, config trimmed (G-110); hard bounce / complaint → `email_opt_out` audited, broadcast owner/admin only via `newsletter.broadcast` (G-111). Culture = CULTURE card on `/blog` (D237). Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; self-test `__runNewsletterEmailCoreTests` (35) |
+| 1.2 | 2026-11-12 | **N-2 reliable sending built (D237, #PN2).** Migration 0362 `newsletter_send_recipients` (one row per address, service role only, no FK, emptied with `newsletter_sends` by a TRUNCATE trigger) and the `sending` status + `claimed_at` lease on `newsletter_sends`. Resend batch endpoint, 100 per call, `Idempotency-Key` per batch and round; retry on 429/5xx/network up to 3 tries; worker started after Send and resumed by the 5-minute content-schedule cron (no new cron). Progress bar, auto-refresh, **Retry failed** (owner/admin, audited). Inline fallback until 0362 is applied (G-112, F-22-3). Test `tests/compliance/d237-newsletter-n2-reliable-sending.test.ts`; self-test `__runNewsletterBatchCoreTests` (42) |

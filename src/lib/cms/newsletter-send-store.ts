@@ -32,10 +32,16 @@ import {
   oneClickUnsubscribeUrl,
   warningsFooterHtml,
 } from "./newsletter-email-core";
+import { batchNoFor, isMissingRecipientsTable } from "./newsletter-batch-core";
 
 const MEDIA_BUCKET = "media";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const SITE_URL = greenwayBusiness.website.replace(/\/$/, "");
+
+/** The public site address without a trailing slash (used by the N-2 queue worker). */
+export function siteUrl(): string {
+  return SITE_URL;
+}
 
 // ---------------------------------------------------------------------------
 // Config / env
@@ -267,7 +273,16 @@ export function buildNewsletterEmail(n: {
 export const BROADCAST_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 export type SendResult =
-  | { ok: true; sendId: string; recipientCount: number; delivered: number; failed: number; status: string }
+  | {
+      ok: true;
+      sendId: string;
+      recipientCount: number;
+      delivered: number;
+      failed: number;
+      status: string;
+      /** D237 N-2: the broadcast was queued; the worker sends it in batches of 100. */
+      queued?: boolean;
+    }
   | { ok: false; error: string };
 
 async function resendBatch(
@@ -392,8 +407,45 @@ export async function sendNewsletter(params: {
         ...(n.id ? [{ name: POST_ID_TAG, value: n.id }] : []),
       ];
 
+  // D237 N-2 (G-112, F-22-3): a broadcast is QUEUED, one row per address,
+  // and the worker (newsletter-queue-server.ts) sends it 100 per Resend batch
+  // call with an Idempotency-Key, resuming from the 5-minute cron if cut off.
+  // Before migration 0362 is applied the table is missing and we fall back
+  // to the one-request send below, exactly as before.
+  if (!isTest) {
+    const rows = recipients.map((r, i) => ({
+      send_id: sendId,
+      email: r.email,
+      unsubscribe_token: r.token,
+      batch_no: batchNoFor(i),
+    }));
+    let missing = false;
+    let insertError: string | null = null;
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await admin.from("newsletter_send_recipients").insert(rows.slice(i, i + 500));
+      if (error) {
+        if (isMissingRecipientsTable(error)) missing = true;
+        else insertError = error.message;
+        break;
+      }
+    }
+    if (!missing) {
+      if (insertError) {
+        await admin
+          .from("newsletter_sends")
+          .update({ status: "failed", error_summary: `Could not queue the send: ${insertError}`.slice(0, 500), completed_at: new Date().toISOString() })
+          .eq("id", sendId);
+        await admin.from("newsletter_send_recipients").delete().eq("send_id", sendId);
+        return { ok: false, error: `Could not queue the send: ${insertError}` };
+      }
+      await admin.from("newsletter_sends").update({ status: "sending" }).eq("id", sendId);
+      return { ok: true, sendId, recipientCount: recipients.length, delivered: 0, failed: 0, status: "sending", queued: true };
+    }
+  }
+
   // Send one message per recipient (keeps addresses private) with light
-  // concurrency to avoid hammering the API.
+  // concurrency to avoid hammering the API. (Test sends; and broadcasts
+  // before 0362 is applied.)
   let delivered = 0;
   let failed = 0;
   const CONCURRENCY = 5;

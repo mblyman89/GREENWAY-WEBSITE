@@ -3083,3 +3083,12 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; pure self-test `__runNewsletterEmailCoreTests` (35). SOP-22 v1.1.
 - **Owner steps:** none. (Managers and content editors can still prepare and test-send.)
 
+### As built — N-2 reliable sending (#PN2)
+
+- **G-112 / F-22-3:** a broadcast creates one `newsletter_send_recipients` row per address (migration 0362) and is sent in batches of 100 through `POST https://api.resend.com/emails/batch`, each with `Idempotency-Key` `gw-nl-<send>-b<batch>-r<round>`. 429, 5xx and network errors retry (3 tries); other errors mark the row failed with the reason. A send is claimed with a 4-minute lease (`claimed_at`), so two workers never send the same batch and a cut-off worker is resumed.
+- The worker starts right after Send (`after()` in `newsletter/actions.ts`) and the existing 5-minute `/api/cron/content-schedule` tick finishes what is left (50 s budget). No new cron.
+- Send Center: progress bar ("Sending: X of N sent… You can leave this page; it keeps going."), updates every 15 s, **Retry failed** for owner/admin (audited `newsletter.retry_failed`).
+- Factory reset: the new table is KEEP and is emptied with `newsletter_sends` by its own TRUNCATE trigger (the 0240 WIPE list is not reopened).
+- Test `tests/compliance/d237-newsletter-n2-reliable-sending.test.ts`; pure self-test `__runNewsletterBatchCoreTests` (42). SOP-22 v1.2.
+- **Owner step:** apply migration `supabase/migrations/0362_newsletter_send_recipients.sql` (rollback in `supabase/rollbacks/`). Until it is applied, broadcasts still use the old one-request send (stay on the page).
+

@@ -136,7 +136,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-109 | **One-click unsubscribe headers + POST endpoint** | D236 | F-22-2 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
 | G-110 | **Keep the newsletter PDF on save; escape the title; trim config** | D236 | F-22-6, F-22-7, F-22-19 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
 | G-111 | **Suppress hard bounces and complaints; broadcast gate (Q-22-3)** | D236 | F-22-4, F-22-17 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
-| G-112 | **Background, batched (100), resumable, idempotent sending with per-recipient record and progress** | D236 | F-22-3 | SOP-22 App. B.3 | PROPOSED (N-2) |
+| G-112 | **Background, batched (100), resumable, idempotent sending with per-recipient record and progress** | D236 | F-22-3 | SOP-22 App. B.3 | **BUILT (N-2, D237)** |
 | G-113 | **Blog scheduling through the 5-minute cron; Sunday scheduled send with "ready for approval"** | D236 | F-22-5, F-22-9 | SOP-22 App. B.3 | PROPOSED (N-3) |
 | G-114 | **"This week at Greenway" facts feed (new vendors, fresh drops, promotions, vendor days, holiday calendar)** | D236 | F-22-11 | SOP-22 App. B.3 | PROPOSED (N-4) |
 | G-115 | **Grounded AI content engine: post-type templates, headline options, longer structured drafts, auto-picked library images, flags shown** | D236 | F-22-10, F-22-16 | SOP-22 App. B.3 | PROPOSED (N-5) |
