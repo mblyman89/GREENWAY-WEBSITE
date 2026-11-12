@@ -17,6 +17,7 @@ import type {
   BlogKind,
 } from "./types";
 import { blogPosts as staticBlogPosts } from "@/lib/blog/posts";
+import { mergeNewsletterAsset } from "./newsletter-email-core";
 
 const MEDIA_BUCKET = "media";
 
@@ -221,15 +222,13 @@ export async function upsertNewsletterAsset(
     page_paths?: string[];
   },
 ): Promise<void> {
+  // F-22-6 (N-1): a value that is not given keeps what is stored. Saving a
+  // newsletter post without uploading the PDF again used to erase the PDF.
+  const existing = await getNewsletterAsset(postId);
+  const merged = mergeNewsletterAsset(existing, input);
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("newsletter_assets").upsert(
-    {
-      post_id: postId,
-      pdf_media_id: input.pdf_media_id ?? null,
-      pdf_path: input.pdf_path ?? null,
-      page_media_ids: input.page_media_ids ?? [],
-      page_paths: input.page_paths ?? [],
-    },
+    { post_id: postId, ...merged },
     { onConflict: "post_id" },
   );
   if (error) throw new Error(error.message);

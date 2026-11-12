@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { sendNewsletter } from "@/lib/cms/newsletter-send-store";
+import { can } from "@/lib/auth/roles";
+import { BROADCAST_GATE_MESSAGE } from "@/lib/cms/newsletter-email-core";
 
 const ADMIN = "/admin/newsletter";
 
@@ -49,7 +51,12 @@ export async function testSendNewsletterAction(formData: FormData): Promise<void
 
 /** Broadcast to the full loyalty list. Requires an explicit confirm checkbox. */
 export async function broadcastNewsletterAction(formData: FormData): Promise<void> {
+  // D237 N-1 (Q-22-3, F-22-17): only the owner or an admin can send to everyone.
   const session = await requirePermission("blog.manage");
+  if (!can(session.profile.role, "newsletter.broadcast")) {
+    const id = String(formData.get("newsletter_id") ?? "");
+    redirect(`${ADMIN}?selected=${encodeURIComponent(id)}&error=${encodeURIComponent(BROADCAST_GATE_MESSAGE)}`);
+  }
   const newsletterId = String(formData.get("newsletter_id") ?? "");
   const confirmed = formData.get("confirm") === "on";
 

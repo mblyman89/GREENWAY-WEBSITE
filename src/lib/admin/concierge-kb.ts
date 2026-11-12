@@ -275,7 +275,10 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     tab: "MKTG & ADV",
     href: "/admin/blog",
     facts: [
-      "Blog & Newsletter is where you write posts and newsletters with drafts, scheduling, SEO help, and AI assist.",
+      "Blog & Newsletter is where you write posts and newsletters with drafts, SEO help, and AI assist.",
+      "Saving a newsletter post keeps its PDF; upload a new PDF only when you want to replace it.",
+      "Every newsletter email carries the four Washington warnings (WAC 314-55-155(7)) and a one-click unsubscribe. Hard bounces and spam complaints are taken off the list automatically.",
+      "Only the owner or an admin can send a newsletter to the whole list; anyone with Blog access can prepare it and send a test.",
       "Once a newsletter is published, send it to your loyalty list from MKTG & ADV → Email Newsletter (the Newsletter Send Center).",
       "The Send Center shows engagement stats (opens/clicks) for the last 90 days, with a link to the full customer newsletter report.",
     ],

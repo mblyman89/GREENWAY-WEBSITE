@@ -169,6 +169,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 **Code (recon, verified at `main@a4ccd7cb`):** `/admin/blog` (`src/app/admin/blog/*`, `src/lib/cms/blog-store.ts`, `ai-blog.ts`, `ai-blog-ideas.ts`), `/admin/newsletter` Send Center (`src/app/admin/newsletter/*`, `src/lib/cms/newsletter-send-store.ts`), the marketing hub (`src/lib/marketing/*`), Regulatory Watch (`src/lib/regulatory/regulatory-ingest.ts`), the AI provider (`src/lib/ai/provider.ts`), the public blog (`src/app/(site)/blog/*`).
 **v1.0 (D236, #1773):** recon, audit and roadmap only, written as `docs/sop/SOP-22-newsletter-blog-culture-marketing.md`. Weekly rhythm (Monday brief → Sunday broadcast), six blog post types, culture and the medical-claims rule, WAC 314-55-155 / CAN-SPAM / Gmail-Yahoo / Google-reviews rules, forms 8.1 and 8.2; 20 findings F-22-1 … F-22-20 + F-22-C (2×S1: F-22-1 the email lacks the four warnings, F-22-14 medical claims); gaps G-108 … G-120; Phase N (N-1 … N-10) PROPOSED; Q-22-1 … Q-22-9. No code changed.
 
+**v1.1 (D237, #PN1):** owner approved Phase N (culture posts = the CULTURE card on `/blog`). N-1 send hardening built: four warnings in every email, one-click unsubscribe, PDF kept on save, bounce/complaint suppression, owner/admin-only broadcast.
+
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
 ---
@@ -199,7 +201,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half v1.0 … v1.9; Creative Studio, Banner Studio & Scheduling v2.0 as SOP-11b, D233)** |
 | **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
 | **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
-| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v1.0 recon/audit/roadmap, D236; Phase N PROPOSED)** |
+| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v1.1, D237; Phase N APPROVED, N-1 BUILT)** |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |

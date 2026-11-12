@@ -1277,11 +1277,13 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-1 · CONFIRMED · BUG · S1 — Newsletter email lacks the four WAC 314-55-155(7) warnings (only "For adults 21+. Keep out of reach of children.")
 - **Pin:** `newsletter-send-store.ts` L231–236; rule in `campaign-rules-core.ts` L86, L96
-- **SOP impact:** SOP-22 Appendix B.1; gap G-108; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-108; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** all four warnings at 11 px vs 24 px largest (`newsletter-email-core.ts` `warningsFooterHtml`, `EMAIL_FONT_PX`)
 
 ### F-22-2 · CONFIRMED · GAP · S2 — No `List-Unsubscribe` / `List-Unsubscribe-Post` header; the unsubscribe page is a GET page only
 - **Pin:** `newsletter-send-store.ts` L270–281; `unsubscribe/page.tsx` L17–33
-- **SOP impact:** SOP-22 Appendix B.1; gap G-109; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-109; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** `List-Unsubscribe` + `List-Unsubscribe-Post` on every email; `POST /api/unsubscribe` (`src/app/api/unsubscribe/route.ts`)
 
 ### F-22-3 · CONFIRMED · WEAKNESS · S2 — Broadcast runs inside one server action, one email per call, 5 at a time, no per-recipient record, no resume, no batch API, no idempotency key
 - **Pin:** L384–414
@@ -1289,7 +1291,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-4 · CONFIRMED · GAP · S2 — Hard bounces and complaints are stored but never suppress the address
 - **Pin:** `ingest-store.ts`; no `email_opt_out` write in webhook path
-- **SOP impact:** SOP-22 Appendix B.1; gap G-111; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-111; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** `suppressBouncedAndComplained` in `ingest-store.ts` sets `email_opt_out`, audited `newsletter.suppress`
 
 ### F-22-5 · CONFIRMED · BUG · S2 — Blog "Scheduled" status never publishes; `blog_post` is not a schedule target; the list and the concierge imply it works
 - **Pin:** `content-schedule-core.ts` L32–38, L295; `blog-store.ts` L193–203; `blog/page.tsx` L49, L116; `concierge-kb.ts` L278
@@ -1297,11 +1300,13 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-6 · CONFIRMED · BUG · S2 — Saving a newsletter post without a new PDF erases `pdf_media_id` and `page_media_ids`; the post drops out of the Send Center
 - **Pin:** `blog/actions.ts` L201–226; `blog-store.ts` L215–233; `newsletter/page.tsx` L80
-- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** `mergeNewsletterAsset` keeps stored values; `blog/actions.ts` passes `undefined` when no new PDF
 
 ### F-22-7 · CONFIRMED · BUG · S3 — Post title inserted into email HTML unescaped
 - **Pin:** `newsletter-send-store.ts` L223
-- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** `escapeHtml` on title and links in `buildNewsletterEmail`
 
 ### F-22-8 · CONFIRMED · GAP · S2 — No newsletter canvas: the email body is a fixed sentence + button; no sections, preheader or plain-text part; Canva PDF is the only design path
 - **Pin:** L204–242; `newsletter/page.tsx` L104
@@ -1341,7 +1346,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-17 · CONFIRMED · WEAKNESS · S3 — Every `blog.manage` role (including content_editor) can broadcast to the whole list
 - **Pin:** `newsletter/actions.ts` L52; `roles.ts` L112
-- **SOP impact:** SOP-22 Appendix B.1; gap G-111; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-111; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** new permission `newsletter.broadcast` (owner, admin); gate in `newsletter/actions.ts` and `newsletter/page.tsx`
 
 ### F-22-18 · CONFIRMED · GAP · S3 — Public blog has no category filter or Culture section
 - **Pin:** `(site)/blog/page.tsx`
@@ -1349,7 +1355,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-19 · CONFIRMED · WEAKNESS · S4 — Email config does not trim values; a misleading comment about recipients
 - **Pin:** `newsletter-send-store.ts` L41–47, L274–278
-- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-110; status **FIXED (N-1, D237)**.
+- **Resolved (D237, N-1, #PN1):** `cleanEnv` trims config; the batch comment is corrected
 
 ### F-22-20 · CONFIRMED · GAP · S3 — No Article structured data (JSON-LD) on blog posts
 - **Pin:** no `ld+json` under `src/app/(site)/blog`
@@ -1377,7 +1384,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
 | SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
 | SOP-11b Creative Studio, Banner Design Studio & Scheduling (v2.0, D233) | 15 new (F-11-19…F-11-32 + F-11-C2; 0×S1, 5×S2 (F-11-19, 20, 21, 22, 29), 8×S3, 1×S4) | 15 | 0 |
-| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4) | 21 | 0 |
+| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19 | 21 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 

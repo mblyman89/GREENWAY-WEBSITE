@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (recon, audit and the roadmap only, D236; living document) |
+| **Version** | 1.1 (N-1 send hardening built, D237 #PN1; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Blog & Newsletter** (`/admin/blog`, nav MKTG & ADV, permission `blog.manage`, `src/components/admin/admin-nav-data.ts` L98). **Email Newsletter** Send Center (`/admin/newsletter`, `blog.manage`, L99). **Marketing & Advertising** hub (`/admin/marketing`, `content.edit`, L96). **Digital Assets** (`/admin/media`, `media.manage`, L95). **Blog wording** (`/admin/blog/content`, `content.edit`, L148). **Regulatory Watch** (`/admin/compliance/regulatory`, `reports.view`, L133). The public pages `/blog`, `/blog/[slug]` and `/unsubscribe` |
@@ -12,8 +12,12 @@
 
 > **This SOP is a living document (owner decision D41).** When a Phase N slice is built, the "As built" note goes into 00, the finding gets its "Resolved" line in 03, and this SOP gets a new version row in Appendix D.
 
-> **The three things to know before anything else.**
-> 1. **The email that goes out today is missing three of the four required warnings.** Washington treats a newsletter as advertising. WAC 314-55-155(7) requires all four warnings in every non-outdoor ad, at no less than 10% of the largest type size. The email wrapper prints only *"For adults 21+. Keep out of reach of children."* (`src/lib/cms/newsletter-send-store.ts` L234). The app's own campaign planner says email needs all four (`src/lib/marketing/campaign-rules-core.ts` L86, L96). This is finding **F-22-1 (S1)**, and slice **N-1** fixes it. Until then, put all four warnings in the Canva design itself (§4.6 step 2).
+> **D237 (owner approval):** every recommended option in Appendix C is approved, with one exception: **culture posts go on the existing `/blog` page as the existing CULTURE card** (the page already shows PRODUCTS, DEALS, CULTURE and NEWSLETTER cards: `src/lib/blog/posts.ts` L1, `src/components/blog/BlogCard.tsx` L8–12). There is no separate Culture tab or page.
+>
+> **Fixed in v1.1 (N-1):** every newsletter email now carries all four warnings at ≥10% of the largest type size; it carries one-click unsubscribe headers; saving a newsletter post keeps its PDF; hard bounces and spam complaints opt the address out automatically (audited); only the **owner or an admin** can send to the whole list. Items 1 and 3 below are kept for history and are no longer true.
+
+> **The three things to know before anything else (v1.0).**
+> 1. **(Fixed in N-1.) The email that went out before v1.1 was missing three of the four required warnings.** Washington treats a newsletter as advertising. WAC 314-55-155(7) requires all four warnings in every non-outdoor ad, at no less than 10% of the largest type size. The email wrapper prints only *"For adults 21+. Keep out of reach of children."* (`src/lib/cms/newsletter-send-store.ts` L234). The app's own campaign planner says email needs all four (`src/lib/marketing/campaign-rules-core.ts` L86, L96). This is finding **F-22-1 (S1)**, and slice **N-1** fixes it. Until then, put all four warnings in the Canva design itself (§4.6 step 2).
 > 2. **"Scheduled" on a blog post does nothing.** Nothing ever publishes it (F-22-5). Publish by hand on the day.
 > 3. **Saving a newsletter post without uploading the PDF again removes its PDF.** The post then disappears from the Send Center (F-22-6). Until N-1, upload the PDF again every time you save a newsletter post, or open the Send Center afterwards to check it is still listed.
 
@@ -77,7 +81,7 @@ It covers today's procedure, everything the audit found to fix, enhance and hard
 |---|---|---|
 | Write, edit, publish, delete blog and newsletter posts; AI drafts; AI ideas | `blog.manage` | owner, admin, manager, content_editor (L112) |
 | Send a test newsletter | `blog.manage` | same (`src/app/admin/newsletter/actions.ts` L17) |
-| **Broadcast the newsletter to the whole list** | `blog.manage` + the confirm tick | same (L52–58). See F-22-17 and Q-22-3 |
+| **Broadcast the newsletter to the whole list** | `newsletter.broadcast` + the confirm tick | **owner, admin only** (D237, Q-22-3; `roles.ts` `newsletter.broadcast`). Managers and content editors see *"Only the owner or an admin can send a newsletter to the whole list. You can prepare it and send yourself a test."* (`newsletter-email-core.ts` `BROADCAST_GATE_MESSAGE`) |
 | Marketing hub: strategist, idea notebook | `content.edit` | owner, admin, manager, content_editor (L111) |
 | Blog page wording (headings, intro) | `content.edit` | same |
 | Digital Assets | `media.manage` | see roles.ts |
@@ -173,6 +177,8 @@ The compliance check flags many of these words (`src/lib/ai/compliance.ts`, `che
 
 ### 4.5 Culture posts: news, vendors, strains and the medical-claims rule
 
+**Where they go (D237):** a culture post is a normal blog post with category **CULTURE**. It shows on `/blog` with the white CULTURE card, next to PRODUCTS, DEALS and NEWSLETTER (`BlogCard.tsx` L8–12). The editor already defaults new posts to CULTURE (`src/app/admin/blog/actions.ts` L101–102).
+
 **Sources you can use today:**
 1. **State news (WSLCB):** Regulatory Watch already collects every WSLCB bulletin and writes a briefing (`regulatory-ingest.ts`). Open the item, read the source link, and write a short "What it means for you" post. Link to the bulletin.
 2. **Federal and national news:** you find it yourself today. Use reputable outlets and official sources (DEA, HHS, Congress.gov, the WA Legislature). The app's Idea assistant will **not** invent news (`ai-blog-ideas.ts` L74). N-6 adds a sourced news desk.
@@ -207,18 +213,18 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
    - **Culture pick** (one sourced news item);
    - **Review of the week**;
    - store hours and address;
-   - **the four warnings** at no less than 10% of the largest type size. The text of each warning is in §7.1. Today the email wrapper lacks three of them (F-22-1), so they *must* be in your design until N-1.
+   - **the four warnings** at no less than 10% of the largest type size (§7.1). Since v1.1 the email itself always carries them (11 px against a 24 px headline, `EMAIL_FONT_PX` in `newsletter-email-core.ts`); keep them in the PDF too, because the PDF is advertising on its own.
 3. **Export the PDF** (Canva → Share → Download → PDF Standard). Keep it under 4 MB.
 4. **Blog & Newsletter → New post.** Category **NEWSLETTER**, kind **Newsletter**. The title becomes the email subject, as *"Greenway Marijuana: [title]"* (L203). Write a short excerpt and add 1–3 paragraphs in the body, because the blog page shows them.
 5. **Upload the PDF** in the newsletter section. Optionally add page image paths, one per line.
-6. **Publish.** **Whenever you save this post again, upload the PDF again** (F-22-6), or check that the post still shows in the Send Center.
+6. **Publish.** Saving the post again keeps the PDF unless you upload a new one (fixed in N-1, F-22-6).
 7. **Send Center → choose the newsletter → Test send** to your own address. Check that:
    - the subject is right;
    - the button opens the blog page;
    - the PDF opens;
    - the unsubscribe link is there;
    - it looks right on a phone.
-8. **Broadcast:** check the recipient count, then tick **"I confirm…"** and press **Send to everyone**. You cannot broadcast the same newsletter again for one hour (`BROADCAST_COOLDOWN_MS`, L252).
+8. **Broadcast (owner or admin only):** check the recipient count, then tick **"I confirm…"** and press **Send to everyone**. You cannot broadcast the same newsletter again for one hour (`BROADCAST_COOLDOWN_MS`, L252).
 9. **Stay on the page until it finishes.** Today the whole send runs inside that one request, 5 at a time, one email per call (L384–405). If the browser or the server stops part-way, the record stays "queued" and nobody is told who got it (F-22-3).
 10. Read the result line: sent, partial or failed, with the counts.
 
@@ -227,7 +233,7 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
 - **Send Center → Engagement (90 days):** delivered, opens, clicks, bounces and complaints per send. The data comes from the Resend webhook (`src/lib/cms/email-events/ingest-store.ts`, stored once per event).
 - **Full report:** Reports → Customers → newsletter, with a CSV export (`src/app/admin/reports/customers/newsletter-export/route.ts`).
 - **Unsubscribes** take effect immediately (`signups-store.ts` `unsubscribeByToken`).
-- **Bounces and complaints are recorded, but they do not stop future sends** (F-22-4). Until N-1, look at the bounce and complaint list after each send. For each hard bounce or complaint, open the member in Loyalty and opt them out of email by hand.
+- **Hard bounces and spam complaints opt the address out automatically** (N-1, `suppressBouncedAndComplained` in `ingest-store.ts`, audit action `newsletter.suppress`). Soft bounces, delays, opens and clicks never do. Gmail and Yahoo also show an **Unsubscribe** button now, because every email carries `List-Unsubscribe` + `List-Unsubscribe-Post` (one click, `POST /api/unsubscribe`).
 - **What good looks like** (industry rule of thumb, not a law): keep spam complaints under 0.1%, and never reach 0.3%, which is Gmail's limit (§7.3).
 
 ### 4.8 The Marketing & Advertising hub (strategist, idea notebook, planner)
@@ -510,7 +516,7 @@ Never edit a review. Never use a review that mentions effects or health (§4.5).
 | G-119 | Reviews spotlight (per Q-22-2) | F-22-12 | N-9 |
 | G-120 | Help: helper, concierge topics corrected and added, "Sunday checklist" page | F-22-5 (concierge wording) | N-10 |
 
-### B.4 The roadmap strategy (Phase N, PROPOSED)
+### B.4 The roadmap strategy (Phase N, APPROVED D237)
 
 **The order:**
 1. Make what goes out today legal and safe (N-1, N-2).
@@ -523,7 +529,7 @@ Every slice keeps the rule that a person approves before anything is published o
 
 | Order | Slice | What it delivers | Gaps | Depends on |
 |---|---|---|---|---|
-| **N-1** | **Send hardening** (small, first) | All four warnings + 21+ in the email footer (pure footer core with a self-test that the four strings match `REQUIRED_WARNINGS` and the type size is ≥10% of the headline size). `List-Unsubscribe` (https + mailto) and `List-Unsubscribe-Post` headers. A POST one-click endpoint. Title and URL escaping. Keep the existing PDF and pages unless a new file is uploaded or "Remove" is ticked. Trim env values. Hard bounce or complaint → `email_opt_out` (audited). Broadcast limited per Q-22-3 | G-108 … G-111 | Q-22-3 |
+| **N-1** | **Send hardening** (small, first) · **BUILT (D237, #PN1)** | All four warnings + 21+ in the email footer (pure footer core with a self-test that the four strings match `REQUIRED_WARNINGS` and the type size is ≥10% of the headline size). `List-Unsubscribe` (https + mailto) and `List-Unsubscribe-Post` headers. A POST one-click endpoint. Title and URL escaping. Keep the existing PDF and pages unless a new file is uploaded or "Remove" is ticked. Trim env values. Hard bounce or complaint → `email_opt_out` (audited). Broadcast limited per Q-22-3 | G-108 … G-111 | Q-22-3 |
 | **N-2** | **Reliable sending** | `newsletter_send_recipients` table (one row per address, status). Resend batch endpoint, 100 per call, with an `Idempotency-Key` per batch. A cron worker sends and resumes. A progress bar in the Send Center. "Retry failed only". The send never double-sends | G-112 | N-1 |
 | **N-3** | **Scheduling + Sunday cadence** | `blog_post` publish/unpublish as a schedule target (the same audited 5-minute cron and calendar as SOP-11b). Newsletter states: draft → ready for approval → approved → scheduled (Sunday, set time) → sending → sent. A reminder on Friday if nothing is ready. The owner approves on the phone | G-113 | N-2; Q-22-4 |
 | **N-4** | **"This week" facts feed** | A pure core + server reader that returns last week's new vendors, lots received (fresh drops, grouped by vendor and type), promotions active and next 14 days (with dates and the below-cost check), vendor days, and a holiday and cannabis-calendar list (US holidays, 4/20, 7/10, local events you add). Shown as a card on Blog & Newsletter and given to the AI | G-114 | — |
@@ -546,7 +552,7 @@ Every slice keeps the rule that a person approves before anything is published o
 | Q-22-4 | **Sunday send time and automation.** | (a) **AI drafts by Thursday; you approve; it sends automatically at a fixed Sunday time (please name the time, Pacific).** (b) Someone presses Send on Sunday. (c) Fully automatic (not recommended) |
 | Q-22-5 | **Canvas vs Canva.** | (a) **Build the in-app canvas (N-8); keep Canva PDF as an optional link.** (b) Keep Canva as the main design tool and only improve the email wrapper |
 | Q-22-6 | **AI web search for news** costs per lookup (within your AI budget cap). OK to use it for the culture desk? | (a) **Yes, on demand only (a person presses "Find news").** (b) Yes, plus a weekly automatic digest. (c) No; Regulatory Watch and manual sources only |
-| Q-22-7 | **Where does Culture live on the website?** | (a) **A "Culture" tab on /blog (same posts table).** (b) A separate /culture page |
+| Q-22-7 | **Where does Culture live on the website?** | **Answered D237:** on the existing `/blog` page as the existing **CULTURE** card (not a tab, not a separate page). All other questions: the recommended option (a) is approved; Q-22-4 send time not named yet, so it is a setting |
 | Q-22-8 | **Prices and deals in AI posts.** The AI is told never to mention price or stock today. | (a) **Allow prices and dates in Sale and Vendor-day posts only, taken from the promotion (never typed by the AI), with the below-cost check.** (b) Keep prices out of posts |
 | Q-22-9 | **Vendor claims** (awards, "best", potency records). | (a) **Only with a source link; the AI never adds superlatives.** (b) Allow the vendor's own wording |
 
@@ -555,3 +561,4 @@ Every slice keeps the rule that a person approves before anything is published o
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-11-12 | Recon, audit and roadmap (D236). Verified at `main@a4ccd7cb`. 20 findings (F-22-1 … F-22-20) + F-22-C: 2×S1 (F-22-1, F-22-14), 10×S2, 7×S3, 1×S4. Gaps G-108 … G-120. Phase N (N-1 … N-10) PROPOSED. Questions Q-22-1 … Q-22-9. No code changed |
+| 1.1 | 2026-11-12 | **N-1 send hardening built (D237, #PN1).** Four warnings in every newsletter email at ≥10% of the largest type (G-108); `List-Unsubscribe` + one-click `POST /api/unsubscribe` (G-109); PDF kept on save, title escaped, config trimmed (G-110); hard bounce / complaint → `email_opt_out` audited, broadcast owner/admin only via `newsletter.broadcast` (G-111). Culture = CULTURE card on `/blog` (D237). Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; self-test `__runNewsletterEmailCoreTests` (35) |

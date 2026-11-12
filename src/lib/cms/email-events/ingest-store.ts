@@ -14,8 +14,56 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import type { NormalizedEmailEvent } from "./normalize-core";
+import { suppressionsFrom, type SuppressReason } from "../newsletter-email-core";
+import { recordAudit } from "@/lib/auth/audit";
 
-export type IngestResult = { stored: number; skipped: number; error?: string };
+export type IngestResult = { stored: number; skipped: number; suppressed?: number; error?: string };
+
+/** Escape % _ \ for a case-insensitive exact ILIKE match. */
+function ilikeExact(v: string): string {
+  return v.replace(/[\\%_]/g, (c) => "\\" + c);
+}
+
+/**
+ * G-111 / F-22-4 (N-1): a hard bounce or a spam complaint takes the address
+ * off the marketing list (email_opt_out = true), exactly like pressing
+ * Unsubscribe. Soft bounces and delays never do. Each change is audited.
+ * Returns how many members were newly opted out.
+ */
+export async function suppressBouncedAndComplained(
+  events: NormalizedEmailEvent[],
+): Promise<number> {
+  const list = suppressionsFrom(events);
+  if (list.length === 0 || !isSupabaseServiceConfigured) return 0;
+  const admin = createSupabaseAdminClient();
+  let changed = 0;
+  for (const { email, reason } of list) {
+    const { data } = await admin
+      .from("loyalty_signups")
+      .select("id, email_opt_out")
+      .ilike("email", ilikeExact(email))
+      .eq("email_opt_out", false);
+    const rows = (data as { id: string }[] | null) ?? [];
+    if (rows.length === 0) continue;
+    const ids = rows.map((r) => r.id);
+    const { error } = await admin
+      .from("loyalty_signups")
+      .update({ email_opt_out: true, unsubscribed_at: new Date().toISOString() })
+      .in("id", ids);
+    if (error) continue;
+    changed += ids.length;
+    await recordAudit({
+      actorId: null,
+      actorEmail: null,
+      action: "newsletter.suppress",
+      entityType: "loyalty_signup",
+      entityId: ids[0],
+      before: { email_opt_out: false },
+      after: { email_opt_out: true, reason: reason as SuppressReason, members: ids.length },
+    });
+  }
+  return changed;
+}
 
 export async function ingestEmailEvents(
   events: NormalizedEmailEvent[],
@@ -67,5 +115,11 @@ export async function ingestEmailEvents(
     return { stored: 0, skipped: rows.length, error: error.message };
   }
   const stored = count ?? rows.length;
-  return { stored, skipped: rows.length - stored };
+  let suppressed = 0;
+  try {
+    suppressed = await suppressBouncedAndComplained(events);
+  } catch {
+    suppressed = 0; // never fail the webhook over the opt-out step
+  }
+  return { stored, skipped: rows.length - stored, suppressed };
 }

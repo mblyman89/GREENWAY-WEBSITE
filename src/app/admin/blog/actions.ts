@@ -201,7 +201,8 @@ export async function updatePostAction(formData: FormData): Promise<void> {
   // Newsletter page paths (one per line) if in newsletter mode.
   if (kind === "newsletter") {
     const pdf = formData.get("pdf_file");
-    let pdfMediaId: string | null = null;
+    // F-22-6 (N-1): undefined = no new PDF, keep the stored one.
+    let pdfMediaId: string | undefined = undefined;
     if (pdf instanceof File && pdf.size > 0 && pdf.type === PDF_MIME) {
       const buffer = Buffer.from(await pdf.arrayBuffer());
       const asset = await uploadMedia({
