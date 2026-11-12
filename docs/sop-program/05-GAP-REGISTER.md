@@ -132,6 +132,19 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-105 | **Advertising-rule check** on banner text, prompts and a picture tick (Q-11-14) | D233, D234 | F-11-29 | SOP-11b §7.1 | **BUILT (C-8, D234)** |
 | G-106 | **Help and hand-holding** (tooltip, ? sheet, first-use tour, step strip, helper, concierge topics, empty states) | D233 (Q-11-15), D234 | F-11-31 | SOP-11b | **BUILT (C-6, D234)** |
 | G-107 | **Name dialog** for Save to brand | D233, D234 | F-11-30 | SOP-11b §4.6 | **BUILT (C-6, D234)** |
+| G-108 | **Four warnings + 21+ in every newsletter email (≥10% type rule)** | D236 | F-22-1 | SOP-22 App. B.3 | PROPOSED (N-1) |
+| G-109 | **One-click unsubscribe headers + POST endpoint** | D236 | F-22-2 | SOP-22 App. B.3 | PROPOSED (N-1) |
+| G-110 | **Keep the newsletter PDF on save; escape the title; trim config** | D236 | F-22-6, F-22-7, F-22-19 | SOP-22 App. B.3 | PROPOSED (N-1) |
+| G-111 | **Suppress hard bounces and complaints; broadcast gate (Q-22-3)** | D236 | F-22-4, F-22-17 | SOP-22 App. B.3 | PROPOSED (N-1) |
+| G-112 | **Background, batched (100), resumable, idempotent sending with per-recipient record and progress** | D236 | F-22-3 | SOP-22 App. B.3 | PROPOSED (N-2) |
+| G-113 | **Blog scheduling through the 5-minute cron; Sunday scheduled send with "ready for approval"** | D236 | F-22-5, F-22-9 | SOP-22 App. B.3 | PROPOSED (N-3) |
+| G-114 | **"This week at Greenway" facts feed (new vendors, fresh drops, promotions, vendor days, holiday calendar)** | D236 | F-22-11 | SOP-22 App. B.3 | PROPOSED (N-4) |
+| G-115 | **Grounded AI content engine: post-type templates, headline options, longer structured drafts, auto-picked library images, flags shown** | D236 | F-22-10, F-22-16 | SOP-22 App. B.3 | PROPOSED (N-5) |
+| G-116 | **Culture news desk: WSLCB + sourced web news, vendor achievements, health-topic guard** | D236 | F-22-13, F-22-14 | SOP-22 App. B.3 | PROPOSED (N-6) |
+| G-117 | **Rich post body (blocks), library picker for hero and inline images, Culture filter, Article JSON-LD** | D236 | F-22-15, F-22-18, F-22-20 | SOP-22 App. B.3 | PROPOSED (N-7) |
+| G-118 | **Newsletter canvas (sections, AI fill, preview desktop/phone, preheader, plain text, PDF optional)** | D236 | F-22-8 | SOP-22 App. B.3 | PROPOSED (N-8) |
+| G-119 | **Reviews spotlight (per Q-22-2)** | D236 | F-22-12 | SOP-22 App. B.3 | PROPOSED (N-9) |
+| G-120 | **Help: helper, concierge topics corrected and added, "Sunday checklist" page** | D236 | F-22-5 (concierge wording) | SOP-22 App. B.3 | PROPOSED (N-10) |
 
 ---
 
@@ -1015,6 +1028,13 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** SOP-11b Appendix B.5. Existing banners must render exactly as before unless the owner switches them (a test proves it).
 - **Owner action now:** follow SOP-11b §4.9; answer Q-11-10 … Q-11-18.
 - **D234:** all answered (Phase C APPROVED). C-1 BUILT (G-94, G-95). C-2 BUILT (G-97, G-98). C-3 BUILT (G-96, G-100). C-4 BUILT (G-99). C-5 BUILT (G-101). C-6 BUILT (G-106, G-107). C-7 BUILT (G-102, G-103). C-8 BUILT (G-104, G-105).
+
+## G-108 … G-120 · Newsletter, blog, culture and AI marketing content (PROPOSED; owner message D236) — S1–S4
+
+- **Owner basis:** *"I want extensive ai help building marketing and advertising content. We will send a newsletter out every Sunday. I want the ai to create blog and culture content."* … *"we will create the newsletters, but I want to make sure we have a canvas to build the newsletters."*
+- **Why:** F-22-1 … F-22-20. Two S1: the newsletter email lacks three of the four WAC 314-55-155(7) warnings (F-22-1); medical-benefits content collides with WAC 314-55-155(2)(a)(vii) (F-22-14).
+- **Requirements:** SOP-22 Appendix B.4. A person approves before anything is published or sent. AI uses only facts from the back office or cited sources. Old posts and newsletters render exactly as before (a test proves it).
+- **Owner action now:** follow SOP-22 §4.2–§4.7 by hand; put the four warnings in every Canva design; re-upload the PDF on every save of a newsletter post; publish by hand (no Scheduled); opt out bounces and complaints by hand; answer Q-22-1 … Q-22-9.
 
 ## R-DRAWER-1 · Open the cash drawer with or without a printed receipt (BUILT, owner request, R-DRAWER-1a–e) — S3
 - **Owner basis:** *"i want to build a setting in the register activity page of the back office that gives me the option of popping the cash drawer with a receipt or with out the receipt printed. most of my customers do not want a receipt and this new method should make for a more efficient process."*

@@ -178,6 +178,15 @@ export const SOP_CATALOG: readonly SopMeta[] = [
       "Making pictures and video in the Creative Studio, the Branding page, building banners that land on the website where you placed them, checking them on the real page, and scheduling banners and releases.",
     keywords: ["creative studio", "flux", "midjourney", "branding", "banner", "banner studio", "overlay", "text box", "placement", "move mode", "website sync", "schedule", "release", "fallback", "font"],
   },
+  {
+    file: "SOP-22-newsletter-blog-culture-marketing.md",
+    category: "marketing",
+    shortTitle: "Newsletter, Blog, Culture & AI Content",
+    audience: ["Owner", "Admin", "Managers", "Content editors"],
+    summary:
+      "The weekly rhythm to the Sunday newsletter, writing blog posts with the AI, culture posts and the medical-claims rule, sending from the Send Center, and the advertising, email and Google review rules.",
+    keywords: ["newsletter", "sunday", "blog", "culture", "ai", "content", "send center", "resend", "unsubscribe", "canva", "vendor day", "fresh drops", "reviews", "google reviews", "medical", "warnings", "advertising"],
+  },
 ] as const;
 
 /** URL segment for a file: "SOP-05a-inventory-core.md" -> "sop-05a". */
