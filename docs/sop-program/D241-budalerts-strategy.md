@@ -1,4 +1,4 @@
-# D224 — Budalerts in the Vendor Menus feature: research, code recon and strategy (read-only round, 2026-11-13)
+# D241 (research, first filed as D224) — Budalerts in the Vendor Menus feature: research, code recon and strategy (read-only round, 2026-11-13)
 
 Owner request (verbatim, also in 00-OWNER-REQUEST-VERBATIM.md): "I have found another great resource for us to include in our vendor menu feature. please go to this website and gather everything you need to include it in our menu builder. please first visit the site, get what you need, then recon the code, document your findings in a strategy roadmap report. report back with your strategy for including them in the vendor menu. no code edits yet please, just research, recon and reporting." — https://budalerts.com/brands
 

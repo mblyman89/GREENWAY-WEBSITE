@@ -3231,10 +3231,25 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - **Checks before the change:** all 19 lots pass the go-live gate (CCRS ID, linked lab result, lab passed). There are no open destruction events and no recall hold on these products.
 - **Undo trail:** 39 `audit_logs` rows as the owner: 19 `inventory_lot.expires_on_corrected` (before/after values), 19 `inventory_lot.status_changed`, and 1 `inbound_manifest.raw_payload_corrected` (holds the full original JSON).
 
-## D224 — Budalerts for the vendor menu feature: research, recon and strategy (2026-11-13, read-only round)
+## D241 (research; first filed as "D224", renumbered because main used D224-D240) — Budalerts for the vendor menu feature: research, recon and strategy (2026-11-13, read-only round)
 
 Owner (verbatim): "thank you! I have found another great resource for us to include in our vendor menu feature. please go to this website and gather everything you need to include it in our menu builder. please first visit the site, get what you need, then recon the code, document your findings in a strategy roadmap report. report back with your strategy for including them in the vendor menu. no code edits yet please, just research, recon and reporting. thank you! https://budalerts.com/brands"
 
-- No code edits this round. Report: docs/sop-program/D224-budalerts-strategy.md.
+- No code edits this round. Report: docs/sop-program/D241-budalerts-strategy.md.
 - Key finding: Budalerts shows RETAIL dispensary shelf prices (from Weedmaps/Leafly/Jane), not wholesale vendor menus. The plan adds it as a separate "Retail market" layer and never counts it as a vendor menu.
-- Merge status: docs-only branch `d224-budalerts-recon`, DO NOT MERGE until the owner says so.
+- Merge status: carried on branch `d241-budalerts-fetcher`, DO NOT MERGE until the owner says so.
+
+## D241 (build) — Budalerts fetcher on the Vendor Menus page (2026-11-13)
+
+Owner (verbatim): "thank you. I have received permission from them to use their brand photos and descriptions and prices for the brands I carry currently. so long as we do not advertise or sell the info, we are fine to use it internally. we want the images and descriptions and prices. please build the fetcher so it is respectful with its scraping. I want all the product data for the remaining vendors we cant get data from on cultivera or growflow or leaflink. please build this so it will complete our internal records. we have the green light to build a fantastic fetcher to complement our vendor menu branch. if you are fine with this. please begin building it. I want everything to be included on the same vendor menu page, so its all in one place. vendors who are in the top table can be moved out to a done table after having gathered their data. if you agree with all of this and accept the permission given, then please begin building everything. push work often, but do not merge any slices, another agent is working. just get the work done and safely out of the sandbox. I will let you know when it is safe to merge. follow the standing rules. thank you."
+
+Permission as stated by the owner, accepted and recorded:
+- Budalerts allows us to use brand photos, descriptions and prices for the brands Greenway currently carries.
+- Use is INTERNAL ONLY: never advertised, never sold.
+- The build enforces this. Budalerts data only shows in the back office, it is never sent to the public site, Leafly, Weedmaps or any feed, and the fetcher only fetches brands linked to a vendor we carry.
+
+Verified facts that shape the build:
+- The public brand, product and dispensary pages carry name, size, price, $/g, category, strain, store and image. They carry NO description text (checked on 3 product pages, a brand page and a strain page, 2026-11-13). A description column is kept and filled only when a page provides one; it is never invented.
+- Each brand page shows at most the 24 best-priced listings. The fetcher widens coverage by also reading the brand's per-category pages from the WA sitemap.
+
+Merge status: DO NOT MERGE. Another agent is working; the owner will say when it is safe.
