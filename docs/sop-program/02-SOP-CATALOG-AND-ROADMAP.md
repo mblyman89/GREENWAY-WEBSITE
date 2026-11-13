@@ -185,6 +185,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.8 (D238, #1782):** N-8b canvas AI studio built: Draft the newsletter from this week's facts, Improve the selected section, Suggest 5 subjects (all checked for invented prices/links, superlatives, health claims and compliance before use), and a picture studio that edits or makes pictures with GPT Image, Gemini or FLUX, including Remove background; results saved to Media; budget-guarded, logged and audited (G-118). No migration.
 
+**v1.9 (D238, #PN8c):** N-8c moving and interactive canvas built: GIF maker (2-10 pictures into an email-sized GIF), Live countdown (drawn at open time), One-tap poll (tracked answer links), Clicks by section with poll votes, and a hosted View in your browser copy (G-118). No migration.
+
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
 ---
@@ -215,7 +217,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half v1.0 … v1.9; Creative Studio, Banner Studio & Scheduling v2.0 as SOP-11b, D233)** |
 | **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
 | **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
-| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v1.8, D238; Phase N APPROVED, N-1 … N-6, N-8a, N-8b BUILT)** |
+| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v1.9, D238; Phase N APPROVED, N-1 … N-6, N-8 BUILT)** |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |
