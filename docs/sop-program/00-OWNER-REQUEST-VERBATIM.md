@@ -3151,7 +3151,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - No migration (stored in `site_settings`). Test `tests/compliance/d237-newsletter-n8a-canvas.test.ts`; pure self-test `__runNewsletterCanvasCoreTests` (82). SOP-22 v1.7.
 - **Owner step:** none.
 
-### As built — N-8b canvas AI studio (#PN8b)
+### As built — N-8b canvas AI studio (#1782)
 
 - **"the ability to ask the ai to help with building the newsletter like how canva has its ai":** the AI studio panel on the canvas. Draft the newsletter writes headline, intro, notes, button, subject and preview text from this week's facts only; Improve the selected section (presets or your own ask); Suggest 5 subjects.
 - **"you can select an image and ask it to manipulate it or remove the background":** the picture studio edits the selected Image section: Remove background, Studio clean-up, Brighten and sharpen, Wide email banner, Seasonal backdrop, or any ask. With no picture selected it makes a new one.
