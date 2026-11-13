@@ -179,6 +179,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.5 (D237, #1778):** N-5 grounded AI built: "New post from…" on New post with 7 templates fed only by this week's facts; 5 headlines, excerpt, sectioned body, 3 Digital Assets pictures; rule and compliance flags shown at once; prices only in Sale/Vendor-day from the promotion, below-cost held back, no superlatives; drafts only (G-115, F-22-10, F-22-16). No migration.
 
+**v1.6 (D237, #PN6):** N-6 culture news desk built: Regulatory Watch, Find news (on demand only) and Vendor wins into CULTURE drafts with their source links; health-topic guard (therapeutic wording blocked; health needs a source, the provider line and no product/deal links) on draft, save, Publish and scheduled publish (G-116, F-22-13, F-22-14). No migration.
+
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
 ---
@@ -209,7 +211,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half v1.0 … v1.9; Creative Studio, Banner Studio & Scheduling v2.0 as SOP-11b, D233)** |
 | **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
 | **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
-| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v1.5, D237; Phase N APPROVED, N-1 … N-5 BUILT)** |
+| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v1.6, D237; Phase N APPROVED, N-1 … N-6 BUILT)** |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |
