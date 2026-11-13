@@ -3230,3 +3230,11 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
   - `inbound_manifests.raw_payload`: the 19 `lab_result_list[].coa_expire_date` values changed from 2026 to 2027.
 - **Checks before the change:** all 19 lots pass the go-live gate (CCRS ID, linked lab result, lab passed). There are no open destruction events and no recall hold on these products.
 - **Undo trail:** 39 `audit_logs` rows as the owner: 19 `inventory_lot.expires_on_corrected` (before/after values), 19 `inventory_lot.status_changed`, and 1 `inbound_manifest.raw_payload_corrected` (holds the full original JSON).
+
+## D224 — Budalerts for the vendor menu feature: research, recon and strategy (2026-11-13, read-only round)
+
+Owner (verbatim): "thank you! I have found another great resource for us to include in our vendor menu feature. please go to this website and gather everything you need to include it in our menu builder. please first visit the site, get what you need, then recon the code, document your findings in a strategy roadmap report. report back with your strategy for including them in the vendor menu. no code edits yet please, just research, recon and reporting. thank you! https://budalerts.com/brands"
+
+- No code edits this round. Report: docs/sop-program/D224-budalerts-strategy.md.
+- Key finding: Budalerts shows RETAIL dispensary shelf prices (from Weedmaps/Leafly/Jane), not wholesale vendor menus. The plan adds it as a separate "Retail market" layer and never counts it as a vendor menu.
+- Merge status: docs-only branch `d224-budalerts-recon`, DO NOT MERGE until the owner says so.
