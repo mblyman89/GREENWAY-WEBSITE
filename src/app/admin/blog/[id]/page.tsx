@@ -18,6 +18,8 @@ import {
   acceptBlogSuggestionAction,
   rejectBlogSuggestionAction,
 } from "../actions";
+import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
+import { SchedulePanel } from "@/components/admin/SchedulePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +38,11 @@ export default async function BlogEditorPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; ai?: string; topic?: string; error?: string; back?: string }>;
+  searchParams: Promise<{ saved?: string; ai?: string; topic?: string; error?: string; back?: string; scheduled?: string }>;
 }) {
   await requirePermission("blog.manage");
   const { id } = await params;
-  const { saved, ai, topic, error, back } = await searchParams;
+  const { saved, ai, topic, error, back, scheduled } = await searchParams;
   const topicSeed = (topic ?? "").slice(0, 300);
 
   if (!isSupabaseServiceConfigured) notFound();
@@ -50,6 +52,9 @@ export default async function BlogEditorPage({
   const newsletter = post.kind === "newsletter" ? await getNewsletterAsset(id) : null;
   const pending = await listBlogSuggestions(id, "pending");
   const heroSrc = await resolveHeroSrc(post.hero_media_id, post.hero_image_path);
+  // D237 N-3 (F-22-5): blog posts are real schedule targets (5-minute cron).
+  const sched = await openSchedulesByTarget("blog_post");
+  const nowIso = new Date().toISOString();
 
   const initial: BlogEditorInitial = {
     id,
@@ -109,6 +114,11 @@ export default async function BlogEditorPage({
             Saved.
           </div>
         )}
+        {scheduled && (
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            {scheduled}
+          </div>
+        )}
         {ai && (
           <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
             AI draft generated — review and Accept/Reject below.
@@ -120,7 +130,8 @@ export default async function BlogEditorPage({
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--admin-text-faint)]">
             Status: {post.status}
           </span>
-          {(["draft", "scheduled", "published", "archived"] as const).map((s) => (
+          {/* D237 N-3 (F-22-5): "Scheduled" is set by a real schedule below, not a button. */}
+          {(["draft", "published", "archived"] as const).map((s) => (
             <form key={s} action={setPostStatusAction}>
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="status" value={s} />
@@ -139,6 +150,18 @@ export default async function BlogEditorPage({
               Delete
             </button>
           </form>
+        </div>
+
+        {/* D237 N-3 (F-22-5, G-113): go live / come down at a set Pacific time. */}
+        <div id="schedule">
+          <SchedulePanel
+            kind="blog_post"
+            targetKey={id}
+            returnTo={`/admin/blog/${id}#schedule`}
+            open={sched.byKey[id] ?? []}
+            ready={sched.ready}
+            nowIso={nowIso}
+          />
         </div>
 
         {/* AI assist panel (body + SEO drafts, persisted, Accept/Reject) */}

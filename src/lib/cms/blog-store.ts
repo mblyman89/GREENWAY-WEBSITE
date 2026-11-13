@@ -207,6 +207,29 @@ export async function setPostStatus(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * D237 N-3 (F-22-5): a draft post that has a go-live schedule shows as
+ * "Scheduled"; cancelling it puts it back to draft. Only draft <-> scheduled
+ * is touched (a published or archived post keeps its status). Never throws.
+ */
+export async function markBlogPostScheduled(id: string, actorId: string | null): Promise<void> {
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.from("blog_posts").update({ status: "scheduled", updated_by: actorId }).eq("id", id).eq("status", "draft");
+  } catch {
+    // best effort: the schedule itself is what publishes
+  }
+}
+
+export async function unmarkBlogPostScheduled(id: string, actorId: string | null): Promise<void> {
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.from("blog_posts").update({ status: "draft", updated_by: actorId }).eq("id", id).eq("status", "scheduled");
+  } catch {
+    // best effort
+  }
+}
+
 export async function deletePost(id: string): Promise<void> {
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("blog_posts").delete().eq("id", id);

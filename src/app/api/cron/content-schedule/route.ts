@@ -40,12 +40,19 @@
  * Send button starts the queue itself; this tick finishes whatever is left
  * and picks up a send whose worker was cut off (4-minute lease). It never
  * throws and never changes this route's status code.
+ *
+ * SUNDAY CADENCE (D237 N-3, G-113). Before the queue, the tick sends every
+ * newsletter the owner or an admin approved whose send time has come (same
+ * sendNewsletter as the Send button), and on the reminder day emails the
+ * reminder list once if no newsletter is ready. Blog posts are schedule
+ * targets too (runContentScheduleTick, kind blog_post).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runContentScheduleTick } from "@/lib/cms/content-schedule-server";
 import { runNewsletterQueue } from "@/lib/cms/newsletter-queue-server";
+import { runNewsletterCadenceTick } from "@/lib/cms/newsletter-cadence-server";
 
 export const dynamic = "force-dynamic";
 /** 25 rows a tick, each a few small queries: far below this. */
@@ -81,13 +88,20 @@ export async function GET(req: NextRequest) {
   // then "failed" with the reason on the Schedule page); only an unreadable
   // database is a 500, so the logs stay quiet when the system is healthy.
   const result = await runContentScheduleTick();
+  const newsletterCadence = await runNewsletterCadenceTick().catch((e: unknown) => ({
+    ok: false,
+    sent: 0,
+    failed: 0,
+    reminded: false,
+    error: e instanceof Error ? e.message : String(e),
+  }));
   const newsletterQueue = await runNewsletterQueue({ budgetMs: 50_000 }).catch((e: unknown) => ({
     ok: false,
     sends: 0,
     batches: 0,
     error: e instanceof Error ? e.message : String(e),
   }));
-  return NextResponse.json({ ...result, newsletterQueue }, { status: result.ok ? 200 : 500 });
+  return NextResponse.json({ ...result, newsletterCadence, newsletterQueue }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same path.

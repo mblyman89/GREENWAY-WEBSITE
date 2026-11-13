@@ -34,6 +34,8 @@ import {
 } from "@/lib/cms/ai-blog-ideas";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
+import { voidApprovalOnEdit } from "@/lib/cms/newsletter-cadence-server";
+import { APPROVAL_VOIDED_MESSAGE } from "@/lib/cms/newsletter-cadence-core";
 
 const MAX_IMG_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -236,6 +238,21 @@ export async function updatePostAction(formData: FormData): Promise<void> {
     after: { slug, title: formData.get("title"), category, kind },
   });
 
+  // D237 N-3: editing an approved newsletter takes the approval back, so the
+  // owner approves exactly what goes out on Sunday.
+  if (kind === "newsletter" && (await voidApprovalOnEdit(id))) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "newsletter.approval_voided",
+      entityType: "newsletter",
+      entityId: id,
+      after: { reason: "edited after approval" },
+    });
+    revalidateBlog(slug);
+    redirect(`/admin/blog/${id}?saved=1&error=${encodeURIComponent(APPROVAL_VOIDED_MESSAGE)}`);
+  }
+
   revalidateBlog(slug);
   redirect(`/admin/blog/${id}?saved=1`);
 }
@@ -250,6 +267,11 @@ export async function setPostStatusAction(formData: FormData): Promise<void> {
   if (!["draft", "scheduled", "published", "archived"].includes(status)) redirect("/admin/blog");
   const post = await getPostById(id);
   if (!post) redirect("/admin/blog");
+  // D237 N-3 (F-22-5): "Scheduled" only means something with a time. Use the
+  // Schedule panel; it sets this status and the 5-minute cron publishes it.
+  if (status === "scheduled") {
+    redirect(`/admin/blog/${id}?error=${encodeURIComponent("Use \u201cSchedule this to go live\u201d below and pick a Pacific time. The post then shows as Scheduled and goes live by itself.")}#schedule`);
+  }
 
   await setPostStatus(id, status, session.userId);
   await recordAudit({

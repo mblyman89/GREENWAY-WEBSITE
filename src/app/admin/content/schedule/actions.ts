@@ -16,6 +16,7 @@ import {
   cancelSchedule,
   labelForTarget,
 } from "@/lib/cms/content-schedule-server";
+import { markBlogPostScheduled, unmarkBlogPostScheduled } from "@/lib/cms/blog-store";
 
 const SCHEDULE_ROUTE = "/admin/content/schedule";
 
@@ -61,6 +62,8 @@ export async function scheduleChangeAction(formData: FormData): Promise<void> {
     entityId: v.value.key,
     after: { action: v.value.action, run_at: v.value.runAt, schedule_id: res.id ?? null, label },
   });
+  // D237 N-3 (F-22-5): a draft post with a go-live time shows as Scheduled.
+  if (v.value.kind === "blog_post" && v.value.action === "publish") await markBlogPostScheduled(v.value.key, session.userId);
   revalidatePath(back.split(/[?#]/)[0]);
   revalidatePath(SCHEDULE_ROUTE);
   const when = formatRunAt(v.value.runAt);
@@ -83,6 +86,7 @@ export async function cancelScheduleAction(formData: FormData): Promise<void> {
     entityId: res.row?.target_key ?? id,
     after: { schedule_id: id },
   });
+  if (res.row?.target_kind === "blog_post" && res.row.action === "publish") await unmarkBlogPostScheduled(res.row.target_key, session.userId);
   revalidatePath(back.split(/[?#]/)[0]);
   revalidatePath(SCHEDULE_ROUTE);
   redirect(withFlash(back, `scheduled=${encodeURIComponent("Schedule cancelled.")}`));
