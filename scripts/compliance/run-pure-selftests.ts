@@ -1368,6 +1368,9 @@ import { __runCuratedReviewsCoreTests } from "../../src/lib/cms/curated-reviews-
 import { __runSundayChecklistCoreTests } from "../../src/lib/cms/sunday-checklist-core";
 import { __runNewsletterFrameCoreTests } from "../../src/lib/cms/newsletter-frame-core";
 import { __runNewsletterDesignCoreTests } from "../../src/lib/cms/newsletter-design-core";
+import { __runNewsletterStyleCoreTests } from "../../src/lib/cms/newsletter-style-core";
+import { __runNewsletterLayoutCoreTests } from "../../src/lib/cms/newsletter-layout-core";
+import { __runNewsletterTemplatesCoreTests } from "../../src/lib/cms/newsletter-templates-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2922,13 +2925,16 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   assertRan("newsletter-email-core", __runNewsletterEmailCoreTests(), 35); // D237 N-1 (SOP-22 G-108..G-111): four warnings at size, one-click unsubscribe, PDF kept, bounce/complaint suppression, owner/admin broadcast
   assertRan("culture-desk-core", __runCultureDeskCoreTests(), 44); // D237 N-6 (SOP-22 G-116, F-22-14 S1, Q-22-1, Q-22-6): health-topic guard (therapeutic blocked, health needs source + provider line, no product/deal links), cited-only Find news
-  assertRan("newsletter-canvas-core", __runNewsletterCanvasCoreTests(), 107); // D238 N-8a (SOP-22 G-118, F-22-8, Q-22-5 (a)): newsletter canvas sections, fixed warnings + unsubscribe footer, Gmail 102 KB clip check, image weight/format checks, compression plan, QR, UTM per block
+  assertRan("newsletter-canvas-core", __runNewsletterCanvasCoreTests(), 128); // D238 N-8a (SOP-22 G-118, F-22-8, Q-22-5 (a)): newsletter canvas sections, fixed warnings + unsubscribe footer, Gmail 102 KB clip check, image weight/format checks, compression plan, QR, UTM per block
   assertRan("newsletter-ai-core", __runNewsletterAiCoreTests(), 60); // D238 N-8b (SOP-22 G-118): canvas AI studio copy check (no invented money/links, superlatives, health), layout/improve/subject prompts + appliers (review locked), picture ask screen + safety note, GPT Image / Gemini bodies and parsers
   assertRan("newsletter-motion-core", __runNewsletterMotionCoreTests(), 49); // D238 N-8c (SOP-22 G-118): live countdown SVG frames (no fonts) + query guard, GIF maker plan + retry, poll answer tags, clicks by section report
   assertRan("blog-blocks-core", __runBlogBlocksCoreTests(), 70); // D239 N-7 (SOP-22 G-117): block body backward-compatible with text[], image/product/button link guards, Article JSON-LD, same-page /blog filters (Q-22-7), library hero pick
   assertRan("curated-reviews-core", __runCuratedReviewsCoreTests(), 41); // D239 N-9 (SOP-22 G-119, Q-22-2 (a)): curated reviews: first name only, Google https link only, permission tick, health wording held back, canvas/blog/spotlight conversions, spotlight needs a curated quote
   assertRan("newsletter-frame-core", __runNewsletterFrameCoreTests(), 64); // D243 E-1 (SOP-22 G-121): locked newsletter brand frame: 3 header styles, wordmark light/dark, issue number + date, footer always has the four warnings + unsubscribe
   assertRan("newsletter-design-core", __runNewsletterDesignCoreTests(), 93); // D243 E-2 (SOP-22 G-122): Banner Studio design section in the newsletter: saved as one picture (alt + link), stale-picture check, QR on the picture, live product rows + countdown, price/date/tiny/huge text warnings
+  assertRan("newsletter-style-core", __runNewsletterStyleCoreTests(), 30); // D243 E-3 (SOP-22 G-123): per-section style (background, words colour, links colour, padding, rounded box, border), auto ink for readability, accent contrast fix, WCAG 4.5:1 heads-up
+  assertRan("newsletter-layout-core", __runNewsletterLayoutCoreTests(), 35); // D243 E-3 (SOP-22 G-123): 2/3 columns that stack on phones, words over a picture with shade and Outlook fallback, drag-to-reorder and duplicate
+  assertRan("newsletter-templates-core", __runNewsletterTemplatesCoreTests(), 54); // D243 E-3 (SOP-22 G-123): 5 templates with "Replace:" placeholders, saved sections (max 40), Gmail/iPhone inbox lines, preview-only outline and forced-dark preview
   assertRan("sunday-checklist-core", __runSundayChecklistCoreTests(), 33); // D239 N-10 (SOP-22 G-120): Sunday checklist strip: Form 8.1 (10 rows) and Form 8.2 (12 checks) word for word, newsletter-only rows, admin-route links
   assertRan("post-templates-core", __runPostTemplatesCoreTests(), 43); // D237 N-5 (SOP-22 G-115, Q-22-8, Q-22-9): 7 templates from the This-week facts, below-cost held back, price/date/superlative/link checks, 3 pictures
   assertRan("this-week-feed-core", __runThisWeekFeedCoreTests(), 44); // D237 N-4 (SOP-22 G-114, F-22-11): new vendors, fresh drops by vendor+type, deals now/next 14 days from the promotion, holidays + local events
