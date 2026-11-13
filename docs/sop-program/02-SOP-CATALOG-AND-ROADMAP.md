@@ -187,7 +187,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.9 (D238, #1783):** N-8c moving and interactive canvas built: GIF maker (2-10 pictures into an email-sized GIF), Live countdown (drawn at open time), One-tap poll (tracked answer links), Clicks by section with poll votes, and a hosted View in your browser copy (G-118). No migration.
 
-**v2.0 (D239, #PN7):** N-7 rich posts built: block body (heading, image from Digital Assets, product card, quote, button, source list) kept in the same paragraphs, a library picker for the hero, All/Store/Culture/Newsletters chips on the same `/blog` page (Q-22-7) and Article JSON-LD (G-117). No migration.
+**v2.0 (D239, #1784):** N-7 rich posts built: block body (heading, image from Digital Assets, product card, quote, button, source list) kept in the same paragraphs, a library picker for the hero, All/Store/Culture/Newsletters chips on the same `/blog` page (Q-22-7) and Article JSON-LD (G-117). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 

@@ -1347,7 +1347,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-15 · CONFIRMED · GAP · S3 — Hero is upload-only (no Digital Assets picker, 4 MB); body is plain paragraphs (no headings, inline images, product cards, links)
 - **Pin:** `blog/actions.ts` L38, L166; `BlogEditorClient.tsx` L34; `[slug]/page.tsx` L128–129
 - **SOP impact:** SOP-22 Appendix B.1; gap G-117; status FIXED (D239, N-7).
-- **Resolved (D239, N-7, #PN7):** block body (`blog-blocks-core.ts`, `BlogBody.tsx`) with an Insert toolbar and a Digital Assets picker for inline images and the hero (`hero_media_pick`), kept backward-compatible in `text[]`
+- **Resolved (D239, N-7, #1784):** block body (`blog-blocks-core.ts`, `BlogBody.tsx`) with an Insert toolbar and a Digital Assets picker for inline images and the hero (`hero_media_pick`), kept backward-compatible in `text[]`
 
 ### F-22-16 · CONFIRMED · WEAKNESS · S3 — Body/SEO AI compliance flags are computed but not shown at generate time
 - **Pin:** `ai-blog.ts` L86–94; `blog/actions.ts` L289–317
@@ -1362,7 +1362,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-18 · CONFIRMED · GAP · S3 — Public blog has no category filter or Culture section
 - **Pin:** `(site)/blog/page.tsx`
 - **SOP impact:** SOP-22 Appendix B.1; gap G-117; status FIXED (D239, N-7).
-- **Resolved (D239, N-7, #PN7):** All / Store / Culture / Newsletters chips filter the cards on the same `/blog` page (`BlogFilterGrid.tsx`; Q-22-7)
+- **Resolved (D239, N-7, #1784):** All / Store / Culture / Newsletters chips filter the cards on the same `/blog` page (`BlogFilterGrid.tsx`; Q-22-7)
 
 ### F-22-19 · CONFIRMED · WEAKNESS · S4 — Email config does not trim values; a misleading comment about recipients
 - **Pin:** `newsletter-send-store.ts` L41–47, L274–278
@@ -1372,7 +1372,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-20 · CONFIRMED · GAP · S3 — No Article structured data (JSON-LD) on blog posts
 - **Pin:** no `ld+json` under `src/app/(site)/blog`
 - **SOP impact:** SOP-22 Appendix B.1; gap G-117; status FIXED (D239, N-7).
-- **Resolved (D239, N-7, #PN7):** BlogPosting JSON-LD on every `/blog/[slug]` page (`blogArticleSchema`, `jsonLdText`)
+- **Resolved (D239, N-7, #1784):** BlogPosting JSON-LD on every `/blog/[slug]` page (`blogArticleSchema`, `jsonLdText`)
 
 ### F-22-C · CONFIRMED · STRENGTH — What already works (B.2)
 - **Pin:** —
