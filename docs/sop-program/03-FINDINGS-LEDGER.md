@@ -1322,7 +1322,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-10 · CONFIRMED · GAP · S2 — AI blog writer is ungrounded (title, category, topic only; "Do not mention price, stock, or specific inventory"; 500 tokens)
 - **Pin:** `ai-blog.ts` L35, L85; `blog/actions.ts` L296–300
 - **SOP impact:** SOP-22 Appendix B.1; gap G-115; status FIXED (D237, N-5).
-- **Resolved (D237, N-5, #PN5):** `post-templates-core.ts` + `post-templates-server.ts`: 7 templates fed only by the This-week facts, re-read on the server; `NewPostFromPicker.tsx` on `/admin/blog/new`
+- **Resolved (D237, N-5, #1778):** `post-templates-core.ts` + `post-templates-server.ts`: 7 templates fed only by the This-week facts, re-read on the server; `NewPostFromPicker.tsx` on `/admin/blog/new`
 
 ### F-22-11 · CONFIRMED · GAP · S2 — No "this week at Greenway" facts feed, although the data exists (vendors `created_at`, lot received date, promotions window, vendor-day flag)
 - **Pin:** `0003` L38, `0214`, `0006` L78–81, `PromotionForm.tsx` L281
@@ -1348,7 +1348,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-16 · CONFIRMED · WEAKNESS · S3 — Body/SEO AI compliance flags are computed but not shown at generate time
 - **Pin:** `ai-blog.ts` L86–94; `blog/actions.ts` L289–317
 - **SOP impact:** SOP-22 Appendix B.1; gap G-115; status FIXED (D237, N-5).
-- **Resolved (D237, N-5, #PN5):** rule issues and `checkCompliance` flags shown in the New post from… draft at once; must-fix refused on save (`createPostFromDraftAction`)
+- **Resolved (D237, N-5, #1778):** rule issues and `checkCompliance` flags shown in the New post from… draft at once; must-fix refused on save (`createPostFromDraftAction`)
 
 ### F-22-17 · CONFIRMED · WEAKNESS · S3 — Every `blog.manage` role (including content_editor) can broadcast to the whole list
 - **Pin:** `newsletter/actions.ts` L52; `roles.ts` L112

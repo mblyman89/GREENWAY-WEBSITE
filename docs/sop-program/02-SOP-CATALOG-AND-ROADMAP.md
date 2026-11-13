@@ -177,7 +177,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.4 (D237, #1777):** N-4 "This week at Greenway" facts feed built: a card on Blog & Newsletter with last week's new vendors and fresh drops, deals running and coming (below-cost flagged and kept from the AI), vendor days, and holidays, 4/20, 7/10 and local events (G-114, F-22-11). No migration; optional owner step: add local events.
 
-**v1.5 (D237, #PN5):** N-5 grounded AI built: "New post from…" on New post with 7 templates fed only by this week's facts; 5 headlines, excerpt, sectioned body, 3 Digital Assets pictures; rule and compliance flags shown at once; prices only in Sale/Vendor-day from the promotion, below-cost held back, no superlatives; drafts only (G-115, F-22-10, F-22-16). No migration.
+**v1.5 (D237, #1778):** N-5 grounded AI built: "New post from…" on New post with 7 templates fed only by this week's facts; 5 headlines, excerpt, sectioned body, 3 Digital Assets pictures; rule and compliance flags shown at once; prices only in Sale/Vendor-day from the promotion, below-cost held back, no superlatives; drafts only (G-115, F-22-10, F-22-16). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
