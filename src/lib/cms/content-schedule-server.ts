@@ -24,6 +24,7 @@ import { publishShopCarouselSlide } from "./shop-carousel-store";
 import { publishSection } from "./page-sections-store";
 import { publishFaqItem } from "./faq-store";
 import { publishContentBlock } from "./content-store";
+import { setPostStatus } from "./blog-store";
 import {
   selectDue,
   statusAfterFailure,
@@ -205,6 +206,11 @@ export async function labelForTarget(kind: ScheduleTargetKind, key: string): Pro
       const d = data as { draft_question?: string | null; question?: string | null } | null;
       return d ? (d.draft_question || d.question || null) : null;
     }
+    if (kind === "blog_post") {
+      const { data } = await admin.from("blog_posts").select("title,kind").eq("id", key).maybeSingle();
+      const d = data as { title?: string; kind?: string } | null;
+      return d ? `${d.kind === "newsletter" ? "Newsletter" : "Blog"}: ${d.title ?? ""}` : null;
+    }
     const { data } = await admin.from("content_blocks").select("label,page").eq("block_key", key).maybeSingle();
     const d = data as { label?: string; page?: string } | null;
     return d ? `${d.page}: ${d.label}` : null;
@@ -228,6 +234,9 @@ export async function applyScheduledChange(
   actorId: string | null,
 ): Promise<string | null> {
   try {
+    // D237 N-3 (F-22-5): a blog post goes live / comes down through the same
+    // setPostStatus the editor's Publish / Archive buttons use.
+    if (kind === "blog_post") return await applyBlogPostChange(key, action, actorId);
     // Locked sections / FAQ items are refused before ANY write.
     if (kind === "page_section" || kind === "faq_item") {
       const lockTable = ENABLE_TABLE[kind] as string;
@@ -279,6 +288,23 @@ export async function applyScheduledChange(
   }
 }
 
+/** D237 N-3: publish or unpublish (archive) one blog post. */
+async function applyBlogPostChange(id: string, action: ScheduleAction, actorId: string | null): Promise<string | null> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("blog_posts").select("id,status,slug").eq("id", id).maybeSingle();
+  if (error) return error.message;
+  const row = data as { id: string; status: string; slug: string } | null;
+  if (!row) return "That post no longer exists.";
+  if (action === "publish") {
+    if (row.status === "published") return null; // already live: nothing to do
+    await setPostStatus(id, "published", actorId);
+    return null;
+  }
+  if (row.status !== "published") return null; // already down
+  await setPostStatus(id, "archived", actorId);
+  return null;
+}
+
 /**
  * Refresh the public site after scheduled changes. The editors' own actions
  * use the same safety net: the root layout covers every public page (banners,
@@ -291,6 +317,11 @@ export function revalidateAfterScheduledChanges(kinds: Iterable<ScheduleTargetKi
     if (set.has("carousel_slide")) revalidatePath("/");
     if (set.has("shop_slide")) revalidatePath("/menu");
     if (set.has("faq_item")) revalidatePath("/faq");
+    if (set.has("blog_post")) {
+      revalidatePath("/blog");
+      revalidatePath("/blog/[slug]", "page");
+      revalidatePath("/admin/blog");
+    }
     revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
     revalidatePath("/admin/content/schedule");
   } catch (e) {
@@ -421,12 +452,13 @@ export async function listScheduleTargets(): Promise<ScheduleTargetOption[]> {
   const out: ScheduleTargetOption[] = [];
   const first = (s: string | null | undefined) => String(s ?? "").split("\n")[0].trim();
   try {
-    const [home, shop, sections, faq, blocks] = await Promise.all([
+    const [home, shop, sections, faq, blocks, posts] = await Promise.all([
       admin.from("home_carousel_slides").select("id,draft_title,title,sort_order").order("sort_order").limit(50),
       admin.from("shop_carousel_slides").select("id,slide_key,draft_presentation,presentation,sort_order").order("sort_order").limit(50),
       admin.from("page_sections").select("id,page_slug,section_key,draft_title,title,locked,sort_order").order("page_slug").order("sort_order").limit(300),
       admin.from("faq_items").select("id,draft_question,question,locked,sort_order").order("sort_order").limit(300),
       admin.from("content_blocks").select("block_key,page,label").order("page").order("block_key").limit(500),
+      admin.from("blog_posts").select("id,title,kind,status").order("updated_at", { ascending: false }).limit(200),
     ]);
     for (const r of (home.data ?? []) as { id: string; draft_title: string | null; title: string | null }[])
       out.push({ kind: "carousel_slide", key: r.id, label: first(r.draft_title || r.title) || "(untitled slide)", group: "Home carousel" });
@@ -439,6 +471,11 @@ export async function listScheduleTargets(): Promise<ScheduleTargetOption[]> {
     for (const r of (faq.data ?? []) as { id: string; draft_question: string | null; question: string | null; locked: boolean }[]) {
       if (r.locked) continue;
       out.push({ kind: "faq_item", key: r.id, label: first(r.draft_question || r.question) || "(untitled question)", group: "FAQ questions" });
+    }
+    // D237 N-3: blog posts and newsletters (not archived).
+    for (const r of (posts.data ?? []) as { id: string; title: string; kind: string; status: string }[]) {
+      if (r.status === "archived") continue;
+      out.push({ kind: "blog_post", key: r.id, label: `${first(r.title) || "(untitled post)"} (${r.status})`, group: r.kind === "newsletter" ? "Newsletter posts" : "Blog posts" });
     }
     // D234 C-7 (G-102): the Loyalty and Specials banners get their own group
     // (they are content blocks, so they were hidden among the page wording).

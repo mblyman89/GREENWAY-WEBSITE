@@ -35,6 +35,7 @@ export const SCHEDULE_TARGET_KINDS = [
   "page_section", //   page builder sections (page_sections)
   "faq_item", //       FAQ questions (faq_items)
   "content_block", //  page wording blocks (content_blocks) - publish only
+  "blog_post", //      blog & newsletter posts (blog_posts) - D237 N-3, migration 0363
 ] as const;
 export type ScheduleTargetKind = (typeof SCHEDULE_TARGET_KINDS)[number];
 
@@ -51,6 +52,7 @@ export const TARGET_KIND_LABEL: Record<ScheduleTargetKind, string> = {
   page_section: "Page section",
   faq_item: "FAQ question",
   content_block: "Page wording",
+  blog_post: "Blog post",
 };
 
 /**
@@ -289,10 +291,14 @@ export function __runContentScheduleCoreTests(): { passed: number; failed: numbe
   };
 
   // Kinds / actions
-  eq("kinds", SCHEDULE_TARGET_KINDS.length, 5);
+  eq("kinds", SCHEDULE_TARGET_KINDS.length, 6);
   eq("block publish only", actionsFor("content_block"), ["publish"]);
   eq("slide both", actionsFor("carousel_slide"), ["publish", "unpublish"]);
-  eq("isTargetKind bad", isTargetKind("blog_post"), false);
+  // D237 N-3 (F-22-5): blog posts are a schedule target now (publish + unpublish).
+  eq("isTargetKind blog_post", isTargetKind("blog_post"), true);
+  eq("blog both", actionsFor("blog_post"), ["publish", "unpublish"]);
+  eq("blog uuid key", isValidTargetKey("blog_post", "0b8f3c1e-1d2a-4c3b-9a8e-123456789abc"), true);
+  eq("isTargetKind bad", isTargetKind("newsletter"), false);
   eq("isScheduleAction bad", isScheduleAction("delete"), false);
   eq("uuid key ok", isValidTargetKey("faq_item", "0b8f3c1e-1d2a-4c3b-9a8e-123456789abc"), true);
   eq("uuid key bad", isValidTargetKey("faq_item", "home.hero.title"), false);

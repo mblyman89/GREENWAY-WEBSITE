@@ -23,6 +23,8 @@ export function editHref(r: { target_kind: ScheduleTargetKind; target_key: strin
       return `/admin/content/shop-banner#slide-${r.target_key}`;
     case "faq_item":
       return `/admin/pages/faq?tab=qanda#faq-${r.target_key}`;
+    case "blog_post":
+      return `/admin/blog/${r.target_key}#schedule`;
     default:
       return null;
   }
