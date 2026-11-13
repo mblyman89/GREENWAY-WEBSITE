@@ -24,6 +24,7 @@ import {
   saveCanvas,
   sendCanvasTest,
 } from "@/lib/cms/newsletter-canvas-server";
+import { buildCanvasGif } from "@/lib/cms/newsletter-motion-server";
 
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
@@ -207,4 +208,20 @@ export async function testSendCanvasAction(postId: string, raw: unknown, to: str
     after: { testEmail: email, ok: res.ok },
   });
   return res;
+}
+
+export type GifOut = { ok: true; url: string; bytes: number; frames: number; width: number } | Fail;
+
+/** D238 N-8c: join 2-10 pictures into a moving GIF (saved to Media as a new file). */
+export async function buildGifAction(p: { urls: string[]; seconds: number; shape: string; title: string }): Promise<GifOut> {
+  const session = await requirePermission("blog.manage");
+  const urls = (Array.isArray(p?.urls) ? p.urls : []).map((u) => String(u).slice(0, 2000)).slice(0, 12);
+  try {
+    const r = await buildCanvasGif({ urls, seconds: Number(p?.seconds), shape: String(p?.shape ?? "wide"), width: 600, title: String(p?.title ?? "").slice(0, 120), uploadedBy: session.userId });
+    if (!r.ok) return r;
+    await recordAudit({ actorId: session.userId, actorEmail: session.email, action: "newsletter.canvas.gif", entityType: "media_asset", entityId: r.mediaId, after: { frames: r.frames, bytes: r.bytes, width: r.width } });
+    return { ok: true, url: r.url, bytes: r.bytes, frames: r.frames, width: r.width };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message.slice(0, 300) : "Could not make the GIF." };
+  }
 }

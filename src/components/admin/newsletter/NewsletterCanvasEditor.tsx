@@ -330,8 +330,23 @@ function summary(b: CanvasBlock): string {
     case "review": return b.name || b.quote.slice(0, 30);
     case "hours": return "from the store info";
     case "spacer": return `${b.height}px`;
+    case "countdown": return b.endsAt ? `ends ${b.endsAt.slice(0, 16).replace("T", " ")} UTC` : "no end time";
+    case "poll": return `${b.question.slice(0, 30)} · ${b.options.length} answers`;
     default: return "";
   }
+}
+
+/** ISO (UTC) to the value of a datetime-local box, in this computer's time. */
+function toLocalInput(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return "";
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fromLocalInput(v: string): string {
+  const ms = new Date(v).getTime();
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
 }
 
 function MediaPick({ media, onPick }: { media: CanvasMediaChoice[]; onPick: (url: string) => void }) {
@@ -440,6 +455,30 @@ function BlockFields({
       return <Row label="Extra note (holiday hours etc.)"><Input value={b.note} onChange={(e) => update({ ...b, note: e.target.value })} /></Row>;
     case "spacer":
       return <Row label={`Height ${b.height}px`}><input type="range" min={8} max={80} value={b.height} onChange={(e) => update({ ...b, height: Number(e.target.value) })} className="w-full" /></Row>;
+    case "countdown":
+      return (
+        <>
+          <Row label="Ends at (your computer's time)"><Input type="datetime-local" value={toLocalInput(b.endsAt)} onChange={(e) => update({ ...b, endsAt: fromLocalInput(e.target.value) })} /></Row>
+          <Row label="Words above the timer"><Input value={b.label} onChange={(e) => update({ ...b, label: e.target.value })} placeholder="The deal ends in" /></Row>
+          <Row label="Link when tapped (optional)"><Input value={b.href} onChange={(e) => update({ ...b, href: e.target.value })} placeholder="https://www.greenwaymarijuana.com/specials" /></Row>
+          <p className="text-[11px] text-[var(--admin-text-faint)]">The timer is drawn by our site each time the email is opened, so it always shows the real time left. Outlook for Windows shows it still; the end time is printed under it.</p>
+        </>
+      );
+    case "poll":
+      return (
+        <>
+          <Row label="Question"><Input value={b.question} onChange={(e) => update({ ...b, question: e.target.value })} /></Row>
+          {b.options.map((opt, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="flex-1"><Row label={`Answer ${i + 1}`}><Input value={opt} onChange={(e) => update({ ...b, options: b.options.map((x, k) => (k === i ? e.target.value : x)) })} /></Row></div>
+              <Button type="button" variant="neutral" size="sm" disabled={b.options.length <= 2} onClick={() => update({ ...b, options: b.options.filter((_, k) => k !== i) })}>Remove</Button>
+            </div>
+          ))}
+          {b.options.length < 4 ? <Button type="button" variant="neutral" size="sm" onClick={() => update({ ...b, options: [...b.options, `Option ${b.options.length + 1}`] })}>Add an answer</Button> : null}
+          <Row label="Page a vote opens (our site)"><Input value={b.href} onChange={(e) => update({ ...b, href: e.target.value })} placeholder="https://www.greenwaymarijuana.com/menu" /></Row>
+          <p className="text-[11px] text-[var(--admin-text-faint)]">Each answer is a tracked link: a tap is a vote. Results show in Clicks by section below once it is sent.</p>
+        </>
+      );
     default:
       return <p className="text-xs text-[var(--admin-text-faint)]">Nothing to set.</p>;
   }

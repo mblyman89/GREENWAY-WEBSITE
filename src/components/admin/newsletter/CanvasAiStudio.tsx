@@ -28,7 +28,8 @@ import {
   type AiIssue,
   type ImageEngine,
 } from "@/lib/cms/newsletter-ai-core";
-import { NewsletterCanvasEditor } from "./NewsletterCanvasEditor";
+import { NewsletterCanvasEditor, type CanvasMediaChoice } from "./NewsletterCanvasEditor";
+import { CanvasGifMaker } from "./CanvasGifMaker";
 import { aiBuildCanvasAction, aiFluxPollAction, aiImageAction, aiImproveBlockAction, aiSubjectIdeasAction } from "@/app/admin/newsletter/canvas/ai-actions";
 
 type Api = { doc: CanvasDoc; setDoc: (d: CanvasDoc) => void; selected: CanvasBlock | null; update: (b: CanvasBlock) => void };
@@ -269,5 +270,16 @@ export function CanvasAiStudio({ postId, aiConfigured, engines, api }: { postId:
 /** Client wrapper so the server page can hand the studio to the editor's tool slot. */
 export function NewsletterCanvasWithAi(props: Omit<Parameters<typeof NewsletterCanvasEditor>[0], "extraTools"> & { aiConfigured: boolean; engines: ImageEngine[] }) {
   const { aiConfigured, engines, ...rest } = props;
-  return <NewsletterCanvasEditor {...rest} extraTools={(api) => <CanvasAiStudio postId={rest.postId} aiConfigured={aiConfigured} engines={engines} api={api} />} />;
+  const media: CanvasMediaChoice[] = rest.media;
+  return (
+    <NewsletterCanvasEditor
+      {...rest}
+      extraTools={(api) => (
+        <>
+          <CanvasAiStudio postId={rest.postId} aiConfigured={aiConfigured} engines={engines} api={api} />
+          <CanvasGifMaker media={media} api={api} />
+        </>
+      )}
+    />
+  );
 }
