@@ -3092,7 +3092,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Test `tests/compliance/d237-newsletter-n2-reliable-sending.test.ts`; pure self-test `__runNewsletterBatchCoreTests` (42). SOP-22 v1.2.
 - **Owner step:** apply migration `supabase/migrations/0362_newsletter_send_recipients.sql` (rollback in `supabase/rollbacks/`). Until it is applied, broadcasts still use the old one-request send (stay on the page).
 
-### As built — N-3 scheduling + Sunday cadence (#PN3)
+### As built — N-3 scheduling + Sunday cadence (#1776)
 
 - **F-22-5:** `blog_post` is a content-schedule target (`content-schedule-core.ts`, `content-schedule-server.ts` `applyBlogPostChange`). The post editor has the Schedule panel (`src/app/admin/blog/[id]/page.tsx`); a publish schedule sets the post to Scheduled, cancelling it returns it to Draft, and the 5-minute cron publishes it. The bare Scheduled button is refused with a pointer to the panel.
 - **F-22-9 / G-113:** table `newsletter_approvals` (migration 0363). Ready for approval (Blog access) → Approve and schedule with a Pacific time (owner/admin, `newsletter.broadcast`) → at that time the existing `/api/cron/content-schedule` tick publishes the post and sends it (claimed approved → sending first, so it sends once). Editing an approved newsletter voids the approval. A failure goes back to Ready with the reason; never retried by itself. No new cron.

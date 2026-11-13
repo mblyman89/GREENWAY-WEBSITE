@@ -1298,7 +1298,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-5 · CONFIRMED · BUG · S2 — Blog "Scheduled" status never publishes; `blog_post` is not a schedule target; the list and the concierge imply it works
 - **Pin:** `content-schedule-core.ts` L32–38, L295; `blog-store.ts` L193–203; `blog/page.tsx` L49, L116; `concierge-kb.ts` L278
 - **SOP impact:** SOP-22 Appendix B.1; gap G-113, G-120; status **FIXED (N-3, D237)**.
-- **Resolved (D237, N-3, #PN3):** `blog_post` schedule target (migration 0363 kind check, `applyBlogPostChange` in `content-schedule-server.ts`), Schedule panel on the post editor, bare Scheduled refused, concierge facts corrected
+- **Resolved (D237, N-3, #1776):** `blog_post` schedule target (migration 0363 kind check, `applyBlogPostChange` in `content-schedule-server.ts`), Schedule panel on the post editor, bare Scheduled refused, concierge facts corrected
 
 ### F-22-6 · CONFIRMED · BUG · S2 — Saving a newsletter post without a new PDF erases `pdf_media_id` and `page_media_ids`; the post drops out of the Send Center
 - **Pin:** `blog/actions.ts` L201–226; `blog-store.ts` L215–233; `newsletter/page.tsx` L80
@@ -1317,7 +1317,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-9 · CONFIRMED · GAP · S2 — No Sunday cadence: no scheduled send, no reminder, no "ready for approval" state
 - **Pin:** (absence)
 - **SOP impact:** SOP-22 Appendix B.1; gap G-113; status **FIXED (N-3, D237)**.
-- **Resolved (D237, N-3, #PN3):** `newsletter_approvals` (0363), Ready → Approve and schedule → auto send by the 5-minute cron (`newsletter-cadence-server.ts` `runNewsletterCadenceTick`), reminder once a day; Sunday time is a setting (Q-22-4)
+- **Resolved (D237, N-3, #1776):** `newsletter_approvals` (0363), Ready → Approve and schedule → auto send by the 5-minute cron (`newsletter-cadence-server.ts` `runNewsletterCadenceTick`), reminder once a day; Sunday time is a setting (Q-22-4)
 
 ### F-22-10 · CONFIRMED · GAP · S2 — AI blog writer is ungrounded (title, category, topic only; "Do not mention price, stock, or specific inventory"; 500 tokens)
 - **Pin:** `ai-blog.ts` L35, L85; `blog/actions.ts` L296–300
