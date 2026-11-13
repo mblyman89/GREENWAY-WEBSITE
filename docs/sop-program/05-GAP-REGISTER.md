@@ -138,7 +138,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-111 | **Suppress hard bounces and complaints; broadcast gate (Q-22-3)** | D236 | F-22-4, F-22-17 | SOP-22 App. B.3 | **BUILT (N-1, D237)** |
 | G-112 | **Background, batched (100), resumable, idempotent sending with per-recipient record and progress** | D236 | F-22-3 | SOP-22 App. B.3 | **BUILT (N-2, D237)** |
 | G-113 | **Blog scheduling through the 5-minute cron; Sunday scheduled send with "ready for approval"** | D236 | F-22-5, F-22-9 | SOP-22 App. B.3 | **BUILT (N-3, D237)** |
-| G-114 | **"This week at Greenway" facts feed (new vendors, fresh drops, promotions, vendor days, holiday calendar)** | D236 | F-22-11 | SOP-22 App. B.3 | PROPOSED (N-4) |
+| G-114 | **"This week at Greenway" facts feed (new vendors, fresh drops, promotions, vendor days, holiday calendar)** | D236 | F-22-11 | SOP-22 App. B.3 | BUILT (N-4, D237) |
 | G-115 | **Grounded AI content engine: post-type templates, headline options, longer structured drafts, auto-picked library images, flags shown** | D236 | F-22-10, F-22-16 | SOP-22 App. B.3 | PROPOSED (N-5) |
 | G-116 | **Culture news desk: WSLCB + sourced web news, vendor achievements, health-topic guard** | D236 | F-22-13, F-22-14 | SOP-22 App. B.3 | PROPOSED (N-6) |
 | G-117 | **Rich post body (blocks), library picker for hero and inline images, Culture filter, Article JSON-LD** | D236 | F-22-15, F-22-18, F-22-20 | SOP-22 App. B.3 | PROPOSED (N-7) |
