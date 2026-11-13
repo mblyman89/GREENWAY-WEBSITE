@@ -38,6 +38,8 @@ import { voidApprovalOnEdit } from "@/lib/cms/newsletter-cadence-server";
 import { APPROVAL_VOIDED_MESSAGE } from "@/lib/cms/newsletter-cadence-core";
 import { parseLocalEventsText } from "@/lib/cms/this-week-feed-core";
 import { saveLocalEvents } from "@/lib/cms/this-week-feed-server";
+import { loadTemplateItems, draftFromTemplate, checkFinalDraft, type TemplateItemsOut, type TemplateDraftOut } from "@/lib/cms/post-templates-server";
+import { normalizeDraft, draftToParagraphs, type DraftIssue } from "@/lib/cms/post-templates-core";
 
 const MAX_IMG_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -502,4 +504,92 @@ export async function saveBlogLocalEventsAction(formData: FormData): Promise<voi
   });
   revalidatePath("/admin/blog");
   redirect(`/admin/blog?saved=events#this-week`);
+}
+
+// ---------------------------------------------------------------------------
+// D237 N-5 (SOP-22 G-115; F-22-10, F-22-16): "New post from…" — grounded AI.
+// The facts are re-read on the server from the This-week feed every time; the
+// browser sends only the template, the item id and the notes. Drafts only.
+// ---------------------------------------------------------------------------
+export async function loadTemplateItemsAction(key: string): Promise<TemplateItemsOut> {
+  await requirePermission("blog.manage");
+  try {
+    return await loadTemplateItems(String(key ?? ""));
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not read this week's facts." };
+  }
+}
+
+export async function draftFromTemplateAction(input: { key: string; itemId: string; notes: string }): Promise<TemplateDraftOut> {
+  const session = await requirePermission("blog.manage");
+  try {
+    const res = await draftFromTemplate({
+      key: String(input?.key ?? ""),
+      itemId: String(input?.itemId ?? ""),
+      notes: String(input?.notes ?? ""),
+      actorId: session.userId,
+      actorEmail: session.email,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "blog.ai.template_draft",
+      entityType: "blog_post",
+      after: res.ok
+        ? { template: input?.key, item: input?.itemId, issues: res.issues.length, complianceFlags: res.complianceFlags.length, pictures: res.pictures.length }
+        : { template: input?.key, item: input?.itemId, error: res.error },
+    }).catch(() => {});
+    return res;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI draft failed." };
+  }
+}
+
+export type CreateFromDraftOut = { ok: true; id: string } | { ok: false; error: string; blocking?: string[]; issues?: DraftIssue[] };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function createPostFromDraftAction(input: {
+  key: string;
+  itemId: string;
+  notes: string;
+  title: string;
+  draft: unknown;
+  heroMediaId?: string | null;
+}): Promise<CreateFromDraftOut> {
+  const session = await requirePermission("blog.manage");
+  const title = String(input?.title ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+  if (!title) return { ok: false, error: "Pick or type a headline first." };
+  const draft = normalizeDraft(input?.draft);
+  const checked = { ...draft, headlines: [title] };
+  const final = await checkFinalDraft(String(input?.key ?? ""), String(input?.itemId ?? ""), String(input?.notes ?? ""), checked);
+  if (!final.ok) return { ok: false, error: final.error };
+  if (final.blocking.length > 0) {
+    return { ok: false, error: "Fix the must-fix items before creating the draft.", blocking: final.blocking, issues: final.issues };
+  }
+  let slug = slugify(title);
+  if (!slug) return { ok: false, error: "That headline does not make a usable web address. Use some letters or numbers." };
+  if (!(await isSlugAvailable(slug))) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
+  const hero = input?.heroMediaId && UUID_RE.test(String(input.heroMediaId)) ? String(input.heroMediaId) : null;
+  const post = await createPost({
+    slug,
+    title,
+    category: final.t.category,
+    kind: "article",
+    excerpt: draft.excerpt || null,
+    author: "Greenway Team",
+    body: draftToParagraphs(draft),
+    hero_media_id: hero,
+    createdBy: session.userId,
+  });
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "blog.create",
+    entityType: "blog_post",
+    entityId: post.id,
+    after: { slug, title, category: final.t.category, kind: "article", fromTemplate: final.t.key, item: input?.itemId, hero, headsUp: final.issues.length + final.complianceFlags.length },
+  });
+  revalidateBlog(slug);
+  return { ok: true, id: post.id };
 }

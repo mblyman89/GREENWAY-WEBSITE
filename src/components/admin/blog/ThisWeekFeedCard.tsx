@@ -32,7 +32,10 @@ export function ThisWeekFeedCard({
         <p className="text-sm font-semibold text-[var(--admin-text)]">This week at Greenway</p>
         <p className={muted}>
           {feed.fromDay} to {feed.toDay} (Pacific). Real facts from Vendors, Inventory and Promotions. The AI writer uses
-          only these.
+          only these.{" "}
+          <Link href="/admin/blog/new#from" className="font-semibold text-[var(--admin-accent)] underline">
+            New post from these facts &rarr;
+          </Link>
         </p>
         {partial ? (
           <p className="mt-1 text-xs text-[var(--admin-gold)]">Some rows could not be read. The list may be short; reload to try again.</p>
