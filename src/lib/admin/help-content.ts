@@ -878,8 +878,23 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I send a newsletter?",
-        a: "Use Newsletter Send. You compose (or AI-draft) the email, preview it, and send to your subscribers. Engagement — opens and clicks — shows up in the Customers report.",
+        a: "Open Email Newsletter (the Send Center) and press New canvas newsletter. Build it from sections, use Fill from this week and the AI studio, then send a test to yourself and read it on a phone. Press Ready for approval; the owner or an admin presses Approve and schedule and it sends by itself on Sunday at the set time. Opens and clicks show in the Send Center and the Customers report.",
         href: "/admin/newsletter",
+      },
+      {
+        q: "What do I check before a post or newsletter goes out?",
+        a: "Use the Sunday checklist on Blog & Newsletter or in the Send Center. It shows the Monday brief and the 12 pre-publish checks: facts checked, no health or cure wording, no over-consumption, alcohol, tobacco, driving or youth appeal, 21+ visible, the four warnings on newsletters, sale dates and nothing below cost or free, no vendor-day giveaways, reviews word for word with permission, news sources named, nothing aimed outside Washington, hero alt text, and a test read on a phone.",
+        href: "/admin/blog#sunday-checklist",
+      },
+      {
+        q: "How do I write a culture post?",
+        a: "On New post, use the Culture news desk: pick a Regulatory Watch item, Find news or a Vendor win and press Draft with AI. Every culture post names and links its source. Health wording (treats, cures, relieves) is blocked; a post that touches health needs a cited source and gets the line \"Talk to your healthcare provider\".",
+        href: "/admin/blog/new#culture",
+      },
+      {
+        q: "How do I use a customer review?",
+        a: "Ask the customer first. Only after they say yes, add it under Blog & Newsletter > Curated reviews: word for word, first name only, the Google link, and tick Permission given. Then pick it in the newsletter canvas, the post editor (Insert a review) or a Review spotlight post.",
+        href: "/admin/blog/reviews",
       },
     ],
   },

@@ -3194,3 +3194,11 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Only ticked reviews with a first name and no health-benefit wording (WAC 314-55-155) can be used: **Pick a curated review** in the canvas Customer review section, **Insert a review** in the post editor (an N-7 quote block) and the **Review spotlight** in New post from…, which refuses a review that is not on the list.
 - `src/lib/cms/curated-reviews-core.ts`, `curated-reviews-server.ts` (site_settings `curated_reviews`, no migration), `src/app/admin/blog/reviews/`. Test `tests/compliance/d237-newsletter-n9-curated-reviews.test.ts`; pure self-test `__runCuratedReviewsCoreTests` (41). SOP-22 v2.1.
 - **Owner step:** none (add reviews as customers agree).
+
+### As built — N-10 help (#PN10)
+
+- **G-120:** Blog & Newsletter and the Send Center have updated helper steps and a **Sunday checklist** strip: the Monday brief (SOP-22 Form 8.1) and the 12 pre-publish checks (Form 8.2), word for word, each with a link to where it is done.
+- Concierge: `blog-newsletter` corrected; new topics `newsletter-sunday` (start to send) and `culture-posts` (news desk and the health rule). Help Center newsletter answer corrected; answers added for the checklist, culture posts and curated reviews.
+- `src/lib/cms/sunday-checklist-core.ts`, `src/components/admin/blog/SundayChecklistStrip.tsx`. Test `tests/compliance/d237-newsletter-n10-help.test.ts`; pure self-test `__runSundayChecklistCoreTests` (33). SOP-22 v2.2.
+- **Owner step:** none.
+- **Phase N complete:** N-1 … N-10 built (#1774, #1775, #1776, #1777, #1778, #1779, #1781, #1782, #1783, #1784, #1785, #PN10).

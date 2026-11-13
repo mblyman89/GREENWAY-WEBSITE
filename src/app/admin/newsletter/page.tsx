@@ -35,6 +35,7 @@ import { Input } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
 import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 import { createCanvasNewsletterAction } from "./canvas/actions";
+import { SundayChecklistStrip } from "@/components/admin/blog/SundayChecklistStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +152,8 @@ export default async function NewsletterSendPage({
               "If some addresses failed, the owner or an admin can press Retry failed on that send. Only those addresses get it again.",
               "Sunday newsletter: when it is finished, press Ready for approval. The owner or an admin presses Approve and schedule and picks the time. It publishes and sends by itself at that time.",
               "Editing an approved newsletter takes the approval back. It must be approved again.",
+              "The owner or an admin sets the Sunday send time and the Friday reminder in the Sunday newsletter box. No time is set until the owner picks one.",
+              "Before you press Ready for approval, run the Sunday checklist on this page (the 12 checks, including the four warnings and a test read on a phone).",
             ]}
           >
             <p className="mb-2">
@@ -190,6 +193,8 @@ export default async function NewsletterSendPage({
             {decodeURIComponent(sp.notice)}
           </div>
         ) : null}
+        {/* D239 N-10 (SOP-22 G-120): Forms 8.1 and 8.2 in the app. */}
+        <SundayChecklistStrip />
         {openSends.length > 0 ? (
           <div className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5" data-testid="newsletter-send-progress">
             {openSends.map((o) => (

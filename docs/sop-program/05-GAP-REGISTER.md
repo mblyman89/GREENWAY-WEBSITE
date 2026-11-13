@@ -144,7 +144,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-117 | **Rich post body (blocks), library picker for hero and inline images, Culture filter, Article JSON-LD** | D236 | F-22-15, F-22-18, F-22-20 | SOP-22 App. B.3 | BUILT (N-7, D239) |
 | G-118 | **Newsletter canvas (sections, AI fill, preview desktop/phone, preheader, plain text, PDF optional)** | D236 | F-22-8 | SOP-22 App. B.3 | BUILT (N-8a, D238; AI studio N-8b; motion + interactive N-8c) |
 | G-119 | **Reviews spotlight (per Q-22-2)** | D236 | F-22-12 | SOP-22 App. B.3 | BUILT (N-9, D239; curated per Q-22-2 (a)) |
-| G-120 | **Help: helper, concierge topics corrected and added, "Sunday checklist" page** | D236 | F-22-5 (concierge wording) | SOP-22 App. B.3 | PROPOSED (N-10) |
+| G-120 | **Help: helper, concierge topics corrected and added, "Sunday checklist" page** | D236 | F-22-5 (concierge wording) | SOP-22 App. B.3 | BUILT (N-10, D239) |
 
 ---
 
