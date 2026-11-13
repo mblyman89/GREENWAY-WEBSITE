@@ -3274,3 +3274,27 @@ As built (branch d241-budalerts-fetcher, slices S1-S4):
 - S4 one page: on /admin/purchasing/menus a Budalerts toolbar ("Fetch all due brands", "Refresh brand list"), a Budalerts column on "Still need a menu" (link suggestions, Link by slug, Fetch, View listings, unlink), and a new "Done - data gathered from Budalerts" table. A vendor moves there once a linked brand has a pull with at least one listing. Listings browser /admin/purchasing/menus/budalerts/[id]: photo, retail price, $/g, size, strain, store, "Save photo" / "Save all photos". No purchase-order hand-off (these are retail prices at other stores, not wholesale).
 - Category pages are taken from the brand page's own category links (same set the sitemap lists), at most 8 per brand.
 - Owner steps: run 0364 in the Supabase SQL editor, open Vendor Menus, click "Load Budalerts brand list", then "Link + fetch" on the suggested rows.
+
+## D243 — Phase E "Email Studio": the newsletter editor, upgraded (2026-11-13)
+
+Owner (verbatim): "Thank you. I want to build these, just not yet. I want to enhance the email newsletter builder first. I don't really like the way it is built right now. I was hoping to have more creative freedom. I want the editor to be the same one used for building banners and other content from the website editors. But with added features like QR codes and the other things requested earlier. I like the idea of having a formatted header and footer and title and logo and such so every newsletter has the same format, with a customized body. For the ai help, I wanted to be able to generate an image or gif using the ai. Or, use it to remove the background of an image I add to the canvas. Or stretch or extend or other types of advanced features you'd find in canva or adobe. The ai is meant to assist the build process. Change the color, remove this from the image, etc. various image styles and transformations. I should be able to ask it a question and it does the thing I need on the canvas, by visually inspecting the canvas and then doing the request. I want the website editors plus all the above plus more. Use your advanced knowledge to add value and features and techniques and methods to boost creativity while being professional. We want it to look good and cool. We want it to wow them. Please give the newsletter editor a massive upgrade so it is fully capable and completely packed with useful and expert level features. The website editor on steroids. Follow the standing rules. Thank you."
+
+Owner approval (verbatim): "Thank you. I want to go with your recommendations. I have all ai keys set. I want to use powerful models. Complete all slices back to back. Push often to protect the work. Follow the standing rules. Thank you."
+
+Decisions (the recommendations the owner approved):
+1. Free-form design sections are turned into pictures in the email (with alt text and a link). Prices, dates, the four warnings and the footer stay live HTML text.
+2. One locked brand header and footer for every newsletter, editable only by the owner or an admin in Newsletter settings.
+3. FLUX for erase (flux-pro-1.0-fill with a painted mask) and extend (flux-pro-1.0-expand); GPT Image or Gemini for the rest.
+4. "Ask the canvas" shows the proposed changes first; the user presses Apply (with Undo).
+5. Order E-1 → E-6, back to back, one report at the end.
+
+Slices: E-1 brand frame (G-121) · E-2 Banner Studio as an email "Design section" (G-122) · E-3 full-page editor, layouts, templates and inbox previews (G-123) · E-4 AI picture tools (G-124) · E-5 Ask the canvas (G-125) · E-6 polish: animated sections as GIFs, dark-mode-safe logos, contrast, inbox size, first-name merge tags (G-126). Every AI call keeps the WAC 314-55-155 checks and the monthly AI budget. Old canvases keep working.
+
+### As built — E-1 brand frame (#PE1)
+
+- **G-121:** Newsletter Send > **Brand frame** (`/admin/newsletter/frame`), owner or admin only (others see it read-only). One header and footer for every canvas newsletter, saved in `site_settings` key `newsletter_brand_frame` (no migration).
+- Header: the Greenway wordmark (white on the dark look, dark ink on the light look; new email-sized PNGs in `public/brand/email/`) or an uploaded logo (one for dark, one for light), the newsletter title, a tagline, the issue number (newsletters counted in the app plus "issues before the app") and the date. Three styles: Classic, Bold (colour band) and Minimal.
+- Footer: social icons (Instagram, Facebook, Google, Yelp, Leafly), address, hours, phone, a 21+ badge and a note. The four warnings and the unsubscribe link are always printed, whatever is switched off.
+- The frame is used by the canvas preview, the send check, the test email, every send and the web copy. With the frame on, the old Header section is hidden. Frame off or missing = the pre-E-1 email, byte for byte (a test proves it).
+- `src/lib/cms/newsletter-frame-core.ts` (pure, 64 self-tests), `newsletter-frame-server.ts`, `src/app/admin/newsletter/frame/{page,actions}.ts(x)`, `src/components/admin/newsletter/BrandFrameEditor.tsx`. Test `tests/compliance/d243-email-studio-e1-frame.test.ts`. Concierge fact added. SOP-22 v2.3.
+- **Owner step:** open Newsletter Send > Brand frame, pick a style, check the title and tagline, set "Issues before the app" if any went out before, press Save frame.
