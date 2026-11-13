@@ -159,7 +159,7 @@ export async function aiSubjectIdeas(doc: CanvasDoc, postId: string, actor: Acto
 // ── Pictures ───────────────────────────────────────────────────────────────
 
 export async function imageEngines(): Promise<ImageEngine[]> {
-  const gem = /^AIza|.{20,}/.test(geminiApiKey()) && Boolean(process.env.AI_GEMINI_API_KEY || /^gemini/i.test(process.env.AI_MODEL_HEAVY ?? ""));
+  const gem = Boolean(geminiApiKey()) && (Boolean(process.env.AI_GEMINI_API_KEY) || /^gemini/i.test(process.env.AI_MODEL_HEAVY ?? ""));
   return availableEngines({ openaiImage: Boolean(OPENAI_KEY) && !/generativelanguage/.test(OPENAI_BASE), gemini: gem, flux: await isFluxConfigured() });
 }
 

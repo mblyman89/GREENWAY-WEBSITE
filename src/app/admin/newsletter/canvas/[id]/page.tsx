@@ -7,7 +7,10 @@ import { Button } from "@/components/admin/ui/Button";
 import { listMedia, publicUrlForKey } from "@/lib/media/store";
 import { starterCanvas } from "@/lib/cms/newsletter-canvas-core";
 import { getCanvasPost, loadCanvas, renderOptsFor } from "@/lib/cms/newsletter-canvas-server";
-import { NewsletterCanvasEditor, type CanvasMediaChoice } from "@/components/admin/newsletter/NewsletterCanvasEditor";
+import { type CanvasMediaChoice } from "@/components/admin/newsletter/NewsletterCanvasEditor";
+import { NewsletterCanvasWithAi } from "@/components/admin/newsletter/CanvasAiStudio";
+import { isAiConfigured } from "@/lib/ai/provider";
+import { imageEngines } from "@/lib/cms/newsletter-ai-server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +26,7 @@ export default async function NewsletterCanvasPage({ params }: { params: Promise
   const post = await getCanvasPost(id);
   if (!post || post.kind !== "newsletter") notFound();
 
-  const [saved, assets] = await Promise.all([loadCanvas(id), listMedia({ status: "published", limit: 200 }).catch(() => [])]);
+  const [saved, assets, engines] = await Promise.all([loadCanvas(id), listMedia({ status: "published", limit: 200 }).catch(() => []), imageEngines().catch(() => [])]);
   const initial = saved ?? starterCanvas(post.title);
   const media: CanvasMediaChoice[] = assets
     .filter((a) => /^image\/(png|jpeg|gif|webp)$/.test(a.mime_type ?? ""))
@@ -53,13 +56,15 @@ export default async function NewsletterCanvasPage({ params }: { params: Promise
               "Moving GIFs: upload a GIF on an Image section. Outlook for Windows shows only the first frame, so put the key words in the first frame.",
               "The send check runs as you type. Press Run send check to weigh every picture. Press Compress images to shrink heavy ones (new copies are saved; originals are kept).",
               "The footer with the four warnings and the unsubscribe link is always added and cannot be removed.",
+              "AI studio (below the selected section): Draft the newsletter writes the headline, intro, notes, button, subject and preview text from this week's facts only. Improve rewrites the selected section. Suggest 5 subjects gives subject ideas. Anything that breaks the copy or compliance rules is not applied.",
+              "Picture studio: pick an Image section and ask the AI to edit it (Remove background, Studio clean-up, Brighten, Banner, Seasonal) with GPT Image, Gemini or FLUX, or pick no picture to make a new one. Results are saved to Media as new files; originals are kept.",
               "Send yourself a test, then publish the post and send it from the Send Center (or the Sunday approval).",
             ]}
           />
         }
       />
       <div className="px-5 py-6 sm:px-8">
-        <NewsletterCanvasEditor postId={post.id} postTitle={post.title} initial={initial} renderOpts={renderOptsFor(post, null)} media={media} />
+        <NewsletterCanvasWithAi postId={post.id} postTitle={post.title} initial={initial} renderOpts={renderOptsFor(post, null)} media={media} aiConfigured={isAiConfigured} engines={engines} />
       </div>
     </div>
   );
