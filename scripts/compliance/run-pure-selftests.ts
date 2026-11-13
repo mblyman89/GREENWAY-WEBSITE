@@ -1359,6 +1359,7 @@ import { __runCultureDeskCoreTests } from "../../src/lib/cms/culture-desk-core";
 import { __runNewsletterCanvasCoreTests } from "../../src/lib/cms/newsletter-canvas-core";
 import { __runNewsletterAiCoreTests } from "../../src/lib/cms/newsletter-ai-core";
 import { __runNewsletterMotionCoreTests } from "../../src/lib/cms/newsletter-motion-core";
+import { __runBlogBlocksCoreTests } from "../../src/lib/blog/blog-blocks-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2913,6 +2914,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("newsletter-canvas-core", __runNewsletterCanvasCoreTests(), 90); // D238 N-8a (SOP-22 G-118, F-22-8, Q-22-5 (a)): newsletter canvas sections, fixed warnings + unsubscribe footer, Gmail 102 KB clip check, image weight/format checks, compression plan, QR, UTM per block
   assertRan("newsletter-ai-core", __runNewsletterAiCoreTests(), 60); // D238 N-8b (SOP-22 G-118): canvas AI studio copy check (no invented money/links, superlatives, health), layout/improve/subject prompts + appliers (review locked), picture ask screen + safety note, GPT Image / Gemini bodies and parsers
   assertRan("newsletter-motion-core", __runNewsletterMotionCoreTests(), 49); // D238 N-8c (SOP-22 G-118): live countdown SVG frames (no fonts) + query guard, GIF maker plan + retry, poll answer tags, clicks by section report
+  assertRan("blog-blocks-core", __runBlogBlocksCoreTests(), 70); // D239 N-7 (SOP-22 G-117): block body backward-compatible with text[], image/product/button link guards, Article JSON-LD, same-page /blog filters (Q-22-7), library hero pick
   assertRan("post-templates-core", __runPostTemplatesCoreTests(), 43); // D237 N-5 (SOP-22 G-115, Q-22-8, Q-22-9): 7 templates from the This-week facts, below-cost held back, price/date/superlative/link checks, 3 pictures
   assertRan("this-week-feed-core", __runThisWeekFeedCoreTests(), 44); // D237 N-4 (SOP-22 G-114, F-22-11): new vendors, fresh drops by vendor+type, deals now/next 14 days from the promotion, holidays + local events
   assertRan("newsletter-cadence-core", __runNewsletterCadenceCoreTests(), 43); // D237 N-3 (SOP-22 G-113, Q-22-4): Sunday cadence, approval stages, send-time checks, reminder dedupe

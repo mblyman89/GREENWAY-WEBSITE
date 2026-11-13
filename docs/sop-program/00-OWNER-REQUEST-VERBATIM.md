@@ -3167,3 +3167,23 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Email cannot run scripts, so nothing here uses them; the web copy is served with a no-scripts security policy. The fixed warnings and unsubscribe footer stay on every version.
 - `src/lib/cms/newsletter-motion-core.ts`, `newsletter-motion-server.ts`, `/api/newsletter/countdown`, `/newsletter-web/[slug]`, `CanvasGifMaker.tsx`, `CanvasClickReport.tsx`. No migration. Test `tests/compliance/d237-newsletter-n8c-motion.test.ts`; pure self-test `__runNewsletterMotionCoreTests` (49). SOP-22 v1.9.
 - **Owner step:** none.
+
+## D239 — The last three Phase N slices: N-7, N-9, N-10 (2026-11-12)
+
+### Owner request (verbatim)
+
+*"Thank you! Please work on the last three slices now. Report back with what was done, and what I need to do, all steps from the first slice from this round. I will be to my computer soon. Follow the standing rules. Thank you!"*
+
+### Decisions
+
+- "The last three slices" are the Phase N slices not yet built: **N-7** rich posts (G-117), **N-9** reviews (G-119) and **N-10** help (G-120) (`docs/sop-program/06-FIX-PHASE-PLAN.md` L145, L147, L148).
+- Q-22-7 stands: the Culture and Store filters are chips on the same `/blog` page, not a new tab or page.
+- Q-22-2 (a) stands: curated reviews only (quote, first name, Google link, permission tick); no live Google block, nothing copied from Google without permission.
+
+### As built — N-7 rich posts (#PN7)
+
+- **F-22-15:** the post body has blocks (Heading, Image from Digital Assets, Product card, Quote, Button, Source list) added from an Insert toolbar; each block is one paragraph with a short code, so old posts render exactly as before and no migration is needed. **Pick from Digital Assets** sets the hero from the library.
+- **F-22-18:** `/blog` has All, Store, Culture and Newsletters chips that filter the cards in place (Q-22-7).
+- **F-22-20:** each post page carries Article (BlogPosting) JSON-LD.
+- `src/lib/blog/blog-blocks-core.ts`, `src/components/blog/BlogBody.tsx`, `BlogFilterGrid.tsx`; editor and save in `BlogEditorClient.tsx` and `admin/blog/actions.ts`. Test `tests/compliance/d237-newsletter-n7-rich-posts.test.ts`; pure self-test `__runBlogBlocksCoreTests` (70). SOP-22 v2.0.
+- **Owner step:** none.

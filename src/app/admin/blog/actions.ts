@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { uploadMedia } from "@/lib/media/store";
+import { uploadMedia, getMedia } from "@/lib/media/store";
+import { pickedHeroId } from "@/lib/blog/blog-blocks-core";
 import {
   createPost,
   updatePost,
@@ -184,6 +185,12 @@ export async function updatePostAction(formData: FormData): Promise<void> {
       uploadedBy: session.userId,
     });
     heroMediaId = asset.id;
+  }
+  // D239 N-7 (F-22-15): or a hero picked from Digital Assets (only when no new file was uploaded).
+  if (!heroMediaId) {
+    const picked = pickedHeroId(formData.get("hero_media_pick"), false);
+    const asset = picked ? await getMedia(picked).catch(() => null) : null;
+    if (asset && /^image\/(png|jpeg|gif|webp)$/.test(asset.mime_type ?? "")) heroMediaId = asset.id;
   }
 
   await updatePost(id, {

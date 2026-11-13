@@ -1,4 +1,4 @@
-import { BlogGrid } from "@/components/blog/BlogGrid";
+import { BlogFilterGrid } from "@/components/blog/BlogFilterGrid";
 import { blogPosts } from "@/lib/blog/posts";
 import type { BlogPost } from "@/lib/blog/posts";
 import { resolveBlogCopy } from "@/lib/blog/blog-content-core";
@@ -107,7 +107,8 @@ export function BlogContent({
         </div>
 
         <div className="mt-9 md:mt-12 lg:mt-16">
-          <BlogGrid posts={posts} readMoreLabel={readMore} />
+          {/* D239 N-7 (F-22-18, Q-22-7): same-page filter chips, no new tab or page. */}
+          <BlogFilterGrid posts={posts} readMoreLabel={readMore} />
         </div>
       </div>
     </section>
