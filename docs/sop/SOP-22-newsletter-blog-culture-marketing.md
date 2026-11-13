@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (N-2 reliable sending built, D237 #1775; N-1 #1774; living document) |
+| **Version** | 1.3 (N-3 scheduling + Sunday cadence built, D237 #PN3; N-2 #1775; N-1 #1774; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Blog & Newsletter** (`/admin/blog`, nav MKTG & ADV, permission `blog.manage`, `src/components/admin/admin-nav-data.ts` L98). **Email Newsletter** Send Center (`/admin/newsletter`, `blog.manage`, L99). **Marketing & Advertising** hub (`/admin/marketing`, `content.edit`, L96). **Digital Assets** (`/admin/media`, `media.manage`, L95). **Blog wording** (`/admin/blog/content`, `content.edit`, L148). **Regulatory Watch** (`/admin/compliance/regulatory`, `reports.view`, L133). The public pages `/blog`, `/blog/[slug]` and `/unsubscribe` |
@@ -18,9 +18,11 @@
 >
 > **Fixed in v1.2 (N-2):** a broadcast is now queued, one row per address, and sent in batches of 100 with an `Idempotency-Key`, in the background. A progress bar shows how many are sent; you can leave the page. Failed addresses can be retried without re-sending to anyone else. **Owner step:** apply migration `0362_newsletter_send_recipients.sql`; until then the send works the old way (one request, stay on the page).
 
+> **Fixed in v1.3 (N-3):** a blog post can be scheduled to publish or unpublish at a Pacific time from its **Schedule** panel; the 5-minute content-schedule cron does it (F-22-5). The Sunday newsletter has a cadence: **Ready for approval** → the owner or an admin presses **Approve and schedule** with a time → it publishes and sends by itself (F-22-9). A reminder email goes out (default Friday 9:00 AM Pacific) when nothing is ready. **Owner steps:** apply migration `0363_newsletter_approvals_blog_schedule.sql`, then set the Sunday send time in the Send Center (Q-22-4 names no time, so none is set and nothing sends by itself until you pick one). Item 2 below is kept for history and is no longer true.
+
 > **The three things to know before anything else (v1.0).**
 > 1. **(Fixed in N-1.) The email that went out before v1.1 was missing three of the four required warnings.** Washington treats a newsletter as advertising. WAC 314-55-155(7) requires all four warnings in every non-outdoor ad, at no less than 10% of the largest type size. The email wrapper prints only *"For adults 21+. Keep out of reach of children."* (`src/lib/cms/newsletter-send-store.ts` L234). The app's own campaign planner says email needs all four (`src/lib/marketing/campaign-rules-core.ts` L86, L96). This is finding **F-22-1 (S1)**, and slice **N-1** fixes it. Until then, put all four warnings in the Canva design itself (§4.6 step 2).
-> 2. **"Scheduled" on a blog post does nothing.** Nothing ever publishes it (F-22-5). Publish by hand on the day.
+> 2. **(Fixed in N-3.) "Scheduled" on a blog post did nothing before v1.3.** Nothing ever published it (F-22-5). Since v1.3, use the post's Schedule panel (§4.3 step 9).
 > 3. **Saving a newsletter post without uploading the PDF again removes its PDF.** The post then disappears from the Send Center (F-22-6). Until N-1, upload the PDF again every time you save a newsletter post, or open the Send Center afterwards to check it is still listed.
 
 > **How to use this document.** §4.1 is the map. §4.2 is the weekly rhythm. §4.3 to §4.5 cover blog and culture posts with the AI as it works today. §4.6 and §4.7 cover the Sunday newsletter. §4.8 covers the Marketing hub. §7 covers the rules: Washington advertising law, email law, Google's rules and the AI rules. Appendix B has the audit and the roadmap. Appendix C has the questions for you.
@@ -105,7 +107,7 @@ It covers today's procedure, everything the audit found to fix, enhance and hard
 
 | What | Where | What it does today |
 |---|---|---|
-| Blog & Newsletter list | `/admin/blog` | All posts. Counts by status, including a **Scheduled** card that never publishes anything (`src/app/admin/blog/page.tsx` L49, L116; F-22-5) |
+| Blog & Newsletter list | `/admin/blog` | All posts. Counts by status, including a **Scheduled** card. Since v1.3 (N-3) a post shows as Scheduled when its Schedule panel has a publish time, and the 5-minute cron publishes it then (F-22-5 fixed) |
 | Post editor | `/admin/blog/[id]` | Title, title typography, category (PRODUCTS, DEALS, CULTURE, NEWSLETTER, `src/lib/cms/types.ts`), kind (article or newsletter), excerpt, body (plain paragraphs only), hero upload plus AI alt text, SEO fields, live preview (`src/components/admin/blog/BlogEditorClient.tsx`). For newsletters: a PDF upload and page images |
 | AI on a post | the editor's AI panel | **Write body**: 2–4 paragraphs from title, category and topic only. **SEO**: title and description. **Alt text**. **Ideas**: 6 ideas, from evergreen, trend or local angles (`src/lib/cms/ai-blog.ts`, `ai-blog-ideas.ts`, `BlogIdeaAssistant.tsx`) |
 | Send Center | `/admin/newsletter` | Lists **published newsletter posts that have a PDF** (`page.tsx` L80). Shows the recipient count, a test send, the broadcast (confirm tick, 1-hour cooldown, audit), 90-day engagement and the last 20 sends |
@@ -128,7 +130,7 @@ This is the recommended week. It works today by hand. Phase N automates the fact
 | **Thursday** | Build the newsletter in Canva from this week's posts (§4.6). Export the PDF | Content editor | Canva |
 | **Friday** | Create the newsletter post, upload the PDF, publish, **send a test** to two inboxes (Gmail and iPhone Mail). Read it on a phone | Content editor | Blog & Newsletter, Send Center |
 | **Saturday** | Owner approval (reply "approved" or edits) | Owner | — |
-| **Sunday, morning** | Broadcast (§4.6 steps 8–10). Pick a fixed send time and keep it (Q-22-4) | Owner or admin | Send Center |
+| **Sunday, morning** | Broadcast (§4.6 steps 8–10). Since v1.3 it sends by itself at the approved time (§4.6, The Sunday way). Pick a fixed send time and keep it (Q-22-4) | Owner or admin | Send Center |
 | **Following Sunday** | Read last week's opens, clicks and unsubscribes (§4.7) before planning the next one | Owner | Send Center |
 
 **Why a fixed day and time:** subscribers learn when to expect it, and a predictable cadence keeps spam complaints down (§7.3).
@@ -149,7 +151,7 @@ This is the recommended week. It works today by hand. Phase N automates the fact
 6. **Hero picture:** upload it (download it from Digital Assets first; F-22-15), then press **Suggest alt text**. The alt suggestion shows any compliance flags (`BlogEditorClient.tsx` L145).
 7. Press **SEO**: accept or edit the SEO title (about 60 characters or fewer) and the description (about 155 characters).
 8. Check the live preview on the right, then go through Form 8.2.
-9. **Publish** (status = Published). Do **not** use Scheduled (F-22-5). If it must go live on a set day, publish it by hand that morning.
+9. **Publish** (status = Published), or, since v1.3 (N-3), schedule it: open the post, go to **Schedule this to go live**, pick the Pacific date and time (5-minute steps) and press Schedule. The post shows as **Scheduled** and the 5-minute content-schedule cron publishes it at that time (audited, same calendar as SOP-11b). You can also schedule it to unpublish. Choosing the Scheduled status button by itself is refused, because a schedule needs a time.
 
 ### 4.4 The six blog post types: facts, headline, picture, checks
 
@@ -231,6 +233,18 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
 10. Read the result in **Send history**: sent, partial or failed, with the counts.
 11. **If some failed:** the owner or an admin presses **Retry failed** on that row. Only the failed addresses are queued again (with a new key); everyone who already has it is skipped. Each retry is audited (`newsletter.retry_failed`).
 
+**The Sunday way (since v1.3, N-3).** Steps 8–9 can run by themselves on Sunday:
+
+1. After step 7 (the test looks right), open the **Sunday newsletter** box in the Send Center and press **Ready for approval** on the newsletter (anyone with Blog access; audited `newsletter.ready`). The post does not have to be published yet.
+2. **The owner or an admin** checks it and presses **Approve and schedule**. The time box starts at next Sunday at the set send time (Pacific); change it if you want. It must be in the future and within 60 days (audited `newsletter.approve`).
+3. At that time the 5-minute content-schedule cron publishes the newsletter post if it is not published yet, then sends it to the loyalty list the same way as step 8 (queued in batches of 100). Audited `newsletter.scheduled_send`. Each approval sends once.
+4. **Editing** an approved newsletter takes the approval back (it returns to Ready for approval, audited `newsletter.approval_voided`). The owner approves exactly what goes out.
+5. **Back to draft** takes the ready mark or the approval away; it will not send.
+6. If the send fails, the newsletter goes back to **Ready for approval** with the reason (audited `newsletter.scheduled_send_failed`). It is never retried by itself.
+7. **Settings (owner or admin):** the Sunday send time (empty until you pick one, Q-22-4), and the reminder: on or off, day (default Friday), time (default 9:00 AM Pacific) and who gets it (empty = the store staff list). The reminder emails once that day only when no newsletter is ready, approved or sending (audited `newsletter.cadence_save`).
+
+Code: `src/lib/cms/newsletter-cadence-core.ts` (rules, self-test 43), `newsletter-cadence-server.ts` (approvals, tick, reminder), table `newsletter_approvals` (migration 0363), `src/app/admin/newsletter/actions.ts`.
+
 ### 4.7 After the send: stats, unsubscribes, bounces
 
 - **Send Center → Engagement (90 days):** delivered, opens, clicks, bounces and complaints per send. The data comes from the Resend webhook (`src/lib/cms/email-events/ingest-store.ts`, stored once per event).
@@ -265,7 +279,9 @@ The only workflow the app has today is *Canva → PDF → newsletter post → Se
 | "Not configured" in the Send Center | `RESEND_API_KEY` or the from address is missing (L41–47) | Set both in Vercel (Production), then redeploy. No spaces before or after the value (F-22-19) |
 | AI button says AI is not configured | No AI key | Set `AI_API_KEY` or `OPENAI_API_KEY` |
 | Alt text: *"… compliance flag(s) to review."* | The suggestion contains a watched word | Read it and change the words |
-| A post with status **Scheduled** is not live | Nothing publishes scheduled posts (F-22-5) | Publish by hand |
+| A post with status **Scheduled** is not live | Before v1.3 nothing published it (F-22-5). Since v1.3 it goes live at the time in its Schedule panel | Check the time in the post's Schedule panel and that migration 0363 is applied. Before 0363, publish by hand |
+| "You edited an approved newsletter, so it needs approval again before it can send." | The newsletter changed after it was approved (v1.3) | The owner or an admin approves it again in the Send Center's Sunday newsletter box |
+| A newsletter went back to **Ready for approval** with "Last try failed" | The scheduled send failed (v1.3). It is never retried by itself | Read the reason, fix it, and approve it again with a new time |
 
 ## 6. Exceptions & troubleshooting
 
@@ -433,7 +449,7 @@ Never edit a review. Never use a review that mentions effects or health (§4.5).
 | Schedule | `src/lib/cms/content-schedule-core.ts` (target kinds L32–38), cron `/api/cron/content-schedule` every 5 min (`vercel.json`) |
 | Marketing | `src/app/admin/marketing/{page,actions}`, `src/lib/marketing/{strategy-ai,campaign-rules-core,competitive-playbook-core,ideas-store,canva-core,ad-check-core,creative-ai}.ts` |
 | Reusable for Phase N | `src/lib/regulatory/regulatory-ingest.ts` (WSLCB feed), `provider.generateWebSearch` (L991), `src/lib/vendors/vendor-gemini-research-core.ts`, `src/lib/media/{library-picker-core,library-picker-server,media-describe-core}.ts`, `src/lib/vendors/store.ts` `listVendors`, promotions (`0006`), lots received date (`0214`) |
-| Help | `src/lib/admin/concierge-kb.ts` topic `blog-newsletter` (L272–281; says "scheduling", which does not work, F-22-5) |
+| Help | `src/lib/admin/concierge-kb.ts` topic `blog-newsletter` (says "scheduling"; true since v1.3, N-3 added the blog Schedule panel and the Sunday approval facts) |
 
 ### A.2 External sources (read 2026-11-12)
 
@@ -534,7 +550,7 @@ Every slice keeps the rule that a person approves before anything is published o
 |---|---|---|---|---|
 | **N-1** | **Send hardening** (small, first) · **BUILT (D237, #1774)** | All four warnings + 21+ in the email footer (pure footer core with a self-test that the four strings match `REQUIRED_WARNINGS` and the type size is ≥10% of the headline size). `List-Unsubscribe` (https + mailto) and `List-Unsubscribe-Post` headers. A POST one-click endpoint. Title and URL escaping. Keep the existing PDF and pages unless a new file is uploaded or "Remove" is ticked. Trim env values. Hard bounce or complaint → `email_opt_out` (audited). Broadcast limited per Q-22-3 | G-108 … G-111 | Q-22-3 |
 | **N-2** | **Reliable sending** · **BUILT (D237, #1775)** | `newsletter_send_recipients` table (one row per address, status). Resend batch endpoint, 100 per call, with an `Idempotency-Key` per batch. A cron worker sends and resumes. A progress bar in the Send Center. "Retry failed only". The send never double-sends | G-112 | N-1 |
-| **N-3** | **Scheduling + Sunday cadence** | `blog_post` publish/unpublish as a schedule target (the same audited 5-minute cron and calendar as SOP-11b). Newsletter states: draft → ready for approval → approved → scheduled (Sunday, set time) → sending → sent. A reminder on Friday if nothing is ready. The owner approves on the phone | G-113 | N-2; Q-22-4 |
+| **N-3** | **Scheduling + Sunday cadence** · **BUILT (D237, #PN3)** | `blog_post` publish/unpublish as a schedule target (the same audited 5-minute cron and calendar as SOP-11b). Newsletter states: draft → ready for approval → approved → scheduled (Sunday, set time) → sending → sent. A reminder on Friday if nothing is ready. The owner approves on the phone | G-113 | N-2; Q-22-4 |
 | **N-4** | **"This week" facts feed** | A pure core + server reader that returns last week's new vendors, lots received (fresh drops, grouped by vendor and type), promotions active and next 14 days (with dates and the below-cost check), vendor days, and a holiday and cannabis-calendar list (US holidays, 4/20, 7/10, local events you add). Shown as a card on Blog & Newsletter and given to the AI | G-114 | — |
 | **N-5** | **Grounded AI content engine** | "New post from…" picker with 7 templates: new vendor, fresh drops, review spotlight, sale, vendor day, holiday, culture. Each sends only the feed facts for that item. Prompts for 5 headline options + excerpt + structured body (headings, short paragraphs, call to action) within the WAC rules. Suggests 3 pictures from Digital Assets (vendor and product links, AI descriptions). Shows the compliance flags in the draft. Drafts only | G-115 | N-4; Q-22-8 |
 | **N-6** | **Culture news desk** | Sources: Regulatory Watch items (WSLCB), grounded web search for federal and national cannabis news (shown to the asker with sources; only reviewed text is saved), vendor achievements from vendor research. Each culture draft carries its source links. A **health-topic guard**: if the text touches health, it needs a cited source, adds the "talk to your healthcare provider" line, blocks product and deal links in that post, and blocks therapeutic wording outright | G-116 | N-5; Q-22-1, Q-22-6 |
@@ -565,4 +581,5 @@ Every slice keeps the rule that a person approves before anything is published o
 |---|---|---|
 | 1.0 | 2026-11-12 | Recon, audit and roadmap (D236). Verified at `main@a4ccd7cb`. 20 findings (F-22-1 … F-22-20) + F-22-C: 2×S1 (F-22-1, F-22-14), 10×S2, 7×S3, 1×S4. Gaps G-108 … G-120. Phase N (N-1 … N-10) PROPOSED. Questions Q-22-1 … Q-22-9. No code changed |
 | 1.1 | 2026-11-12 | **N-1 send hardening built (D237, #1774).** Four warnings in every newsletter email at ≥10% of the largest type (G-108); `List-Unsubscribe` + one-click `POST /api/unsubscribe` (G-109); PDF kept on save, title escaped, config trimmed (G-110); hard bounce / complaint → `email_opt_out` audited, broadcast owner/admin only via `newsletter.broadcast` (G-111). Culture = CULTURE card on `/blog` (D237). Test `tests/compliance/d237-newsletter-n1-send-hardening.test.ts`; self-test `__runNewsletterEmailCoreTests` (35) |
+| 1.3 | 2026-11-12 | **N-3 scheduling + Sunday cadence built (D237, #PN3).** Migration 0363: `content_schedule` accepts `blog_post` (publish/unpublish through the 5-minute cron; Schedule panel on the post; Scheduled status set by the schedule, the bare button refused) and table `newsletter_approvals` (service role only, RLS on, FK only to `blog_posts`). Sunday cadence: Ready for approval (Blog access) → Approve and schedule with a Pacific time (owner/admin) → the cron publishes and sends; edit voids the approval; a failure returns to Ready, never retried by itself. Settings in `site_settings` `newsletter_cadence`: Sunday send time (empty, Q-22-4), reminder default Friday 9:00 AM, once a day via `compliance_reminder_log` (G-113, F-22-5, F-22-9). Test `tests/compliance/d237-newsletter-n3-schedule-cadence.test.ts`; self-test `__runNewsletterCadenceCoreTests` (43) |
 | 1.2 | 2026-11-12 | **N-2 reliable sending built (D237, #1775).** Migration 0362 `newsletter_send_recipients` (one row per address, service role only, no FK, emptied with `newsletter_sends` by a TRUNCATE trigger) and the `sending` status + `claimed_at` lease on `newsletter_sends`. Resend batch endpoint, 100 per call, `Idempotency-Key` per batch and round; retry on 429/5xx/network up to 3 tries; worker started after Send and resumed by the 5-minute content-schedule cron (no new cron). Progress bar, auto-refresh, **Retry failed** (owner/admin, audited). Inline fallback until 0362 is applied (G-112, F-22-3). Test `tests/compliance/d237-newsletter-n2-reliable-sending.test.ts`; self-test `__runNewsletterBatchCoreTests` (42) |
