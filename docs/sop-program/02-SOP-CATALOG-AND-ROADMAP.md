@@ -185,7 +185,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.8 (D238, #1782):** N-8b canvas AI studio built: Draft the newsletter from this week's facts, Improve the selected section, Suggest 5 subjects (all checked for invented prices/links, superlatives, health claims and compliance before use), and a picture studio that edits or makes pictures with GPT Image, Gemini or FLUX, including Remove background; results saved to Media; budget-guarded, logged and audited (G-118). No migration.
 
-**v1.9 (D238, #PN8c):** N-8c moving and interactive canvas built: GIF maker (2-10 pictures into an email-sized GIF), Live countdown (drawn at open time), One-tap poll (tracked answer links), Clicks by section with poll votes, and a hosted View in your browser copy (G-118). No migration.
+**v1.9 (D238, #1783):** N-8c moving and interactive canvas built: GIF maker (2-10 pictures into an email-sized GIF), Live countdown (drawn at open time), One-tap poll (tracked answer links), Clicks by section with poll votes, and a hosted View in your browser copy (G-118). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
