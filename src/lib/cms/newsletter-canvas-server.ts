@@ -18,6 +18,8 @@ import { greenwayBusiness } from "@/content/business";
 import { uploadMedia, publicUrlForKey } from "@/lib/media/store";
 import { qrSvg } from "@/lib/printing/qr-core";
 import { getThisWeekFeed } from "./this-week-feed-server";
+import { frameContextFor } from "./newsletter-frame-server";
+import type { BrandFrame, FrameIssue } from "./newsletter-frame-core";
 import {
   canvasSettingKey,
   canvasPlainText,
@@ -86,8 +88,13 @@ export async function saveCanvas(postId: string, raw: unknown, updatedBy: string
 }
 
 /** Render options for one newsletter (unsubscribe null = preview / sample link). */
-export function renderOptsFor(post: { slug: string } | null, unsubscribeUrl: string | null): RenderOpts {
+export function renderOptsFor(post: { slug: string } | null, unsubscribeUrl: string | null, ctx?: { frame: BrandFrame; issue: FrameIssue } | null): RenderOpts {
   return {
+    // D243 E-1: the locked brand frame and this issue's number and date.
+    frame: ctx?.frame ?? null,
+    issue: ctx?.issue ?? null,
+    phone: greenwayBusiness.phone.display,
+    phoneHref: `tel:${greenwayBusiness.phone.tel}`,
     businessName: greenwayBusiness.name,
     address: greenwayBusiness.address?.full ?? "Port Orchard, WA",
     siteUrl: SITE,
@@ -107,13 +114,13 @@ export async function canvasEmailFor(
   postId: string | null,
 ): Promise<{ doc: CanvasDoc; post: CanvasPostInfo; render: (unsubscribeUrl: string | null) => { html: string; text: string } } | null> {
   if (!postId) return null;
-  const [doc, post] = await Promise.all([loadCanvas(postId), getCanvasPost(postId)]);
+  const [doc, post, ctx] = await Promise.all([loadCanvas(postId), getCanvasPost(postId), frameContextFor(postId)]);
   if (!doc || !post || !doc.useForEmail || doc.blocks.length === 0) return null;
   return {
     doc,
     post,
     render: (unsub) => {
-      const o = renderOptsFor(post, unsub);
+      const o = renderOptsFor(post, unsub, ctx);
       return { html: renderCanvasEmail(doc, o), text: canvasPlainText(doc, o) };
     },
   };
@@ -195,8 +202,8 @@ export async function probeImages(doc: CanvasDoc): Promise<Map<string, ImageInfo
 }
 
 /** The full send-readiness check: HTML size, plain text and real image weights. */
-export async function runCanvasCheck(doc: CanvasDoc, post: { slug: string } | null): Promise<CanvasCheck> {
-  const o = renderOptsFor(post, null);
+export async function runCanvasCheck(doc: CanvasDoc, post: { id?: string; slug: string } | null): Promise<CanvasCheck> {
+  const o = renderOptsFor(post, null, await frameContextFor(post?.id ?? null));
   const html = renderCanvasEmail(doc, o);
   const text = canvasPlainText(doc, o);
   const probed = await probeImages(doc);
@@ -384,7 +391,7 @@ export async function sendCanvasTest(params: {
   if (!cfg.configured || !cfg.from || !apiKey) return { ok: false, error: "Email sending is not configured yet. Add RESEND_API_KEY and NEWSLETTER_FROM_EMAIL." };
   const post = await getCanvasPost(params.postId);
   if (!post) return { ok: false, error: "Newsletter not found." };
-  const o = renderOptsFor(post, null);
+  const o = renderOptsFor(post, null, await frameContextFor(post.id));
   const html = renderCanvasEmail(params.doc, o);
   const text = canvasPlainText(params.doc, o);
   const check = checkCanvas(params.doc, html, text);

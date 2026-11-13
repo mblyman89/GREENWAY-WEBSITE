@@ -32,6 +32,7 @@ import {
   EMAIL_FONT_PX,
 } from "./newsletter-email-core";
 import type { ThisWeekFeed } from "./this-week-feed-core";
+import { defaultFrame, frameFooterHtml, frameFooterText, frameHeaderHtml, frameHeaderText, type BrandFrame, type FrameIssue } from "./newsletter-frame-core";
 import { countdownImageUrl, formatEndsAt, pollContent, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, COUNTDOWN_W } from "./newsletter-motion-core";
 
 // ── Limits ────────────────────────────────────────────────────────────────
@@ -378,7 +379,18 @@ export type RenderOpts = {
   webUrl: string | null;
   /** utm_campaign value (the post slug). */
   campaign: string;
+  /** D243 E-1: the locked brand frame (null/off = the pre-E-1 look). */
+  frame?: BrandFrame | null;
+  /** D243 E-1: issue number and date for the frame header. */
+  issue?: FrameIssue | null;
+  phone?: string;
+  phoneHref?: string;
 };
+
+/** D243 E-1: true when the brand frame wraps this email. */
+export function frameOn(o: RenderOpts): o is RenderOpts & { frame: BrandFrame } {
+  return !!o.frame && o.frame.enabled;
+}
 
 /** The sample unsubscribe link used in previews and size checks (as long as a real one). */
 export const SAMPLE_UNSUBSCRIBE_URL = "https://www.greenwaymarijuana.com/unsubscribe?token=sample-0000000000000000000000000000000000000000000000000000000000000000";
@@ -507,7 +519,12 @@ export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
   const web = o.webUrl
     ? `<tr><td style="padding:0 0 10px;text-align:center"><a href="${escapeHtml(o.webUrl)}" style="color:#8a8a8a;font-size:${CANVAS_FONT_PX.small}px;text-decoration:underline">View in your browser</a></td></tr>`
     : "";
-  const body = doc.blocks.map((b) => blockHtml(b, t, o, doc.theme)).join("\n");
+  const framed = frameOn(o);
+  // With the frame on, its header replaces the old "Header" section.
+  const body = (framed ? frameHeaderHtml(o.frame!, t, doc.theme, o, o.issue) + "\n" : "") + doc.blocks.filter((b) => !(framed && b.type === "header")).map((b) => blockHtml(b, t, o, doc.theme)).join("\n");
+  const footer = framed
+    ? frameFooterHtml(o.frame!, t, o, unsub)
+    : `<tr><td data-gw-footer="fixed" style="padding:20px 28px 28px;border-top:1px solid ${t.border}">${warningsFooterHtml(EMAIL_FONT_PX.warnings)}<p style="margin:16px 0 0;color:#8a8a8a;font-size:${EMAIL_FONT_PX.warnings}px;line-height:1.6;text-align:center">${escapeHtml(o.businessName)} &middot; ${escapeHtml(o.address)}<br/>You're receiving this because you joined the Greenway loyalty program.<br/><a data-gw-unsubscribe="1" href="${escapeHtml(unsub)}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a></p></td></tr>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="color-scheme" content="${doc.theme === "dark" ? "dark" : "light"}"/><title>${escapeHtml(doc.subject || o.businessName)}</title>
 <style>@media only screen and (max-width:620px){.gw-col{display:block!important;width:100%!important;padding:0 0 16px!important}}</style></head>
@@ -516,16 +533,19 @@ export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">${web}</table>
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${t.card};border:1px solid ${t.border};border-radius:16px">
 ${body}
-<tr><td data-gw-footer="fixed" style="padding:20px 28px 28px;border-top:1px solid ${t.border}">${warningsFooterHtml(EMAIL_FONT_PX.warnings)}<p style="margin:16px 0 0;color:#8a8a8a;font-size:${EMAIL_FONT_PX.warnings}px;line-height:1.6;text-align:center">${escapeHtml(o.businessName)} &middot; ${escapeHtml(o.address)}<br/>You're receiving this because you joined the Greenway loyalty program.<br/><a data-gw-unsubscribe="1" href="${escapeHtml(unsub)}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a></p></td></tr>
+${footer}
 </table></td></tr></table></body></html>`;
 }
 
 /** The plain-text part (sent with the HTML; also read by some spam filters). */
 export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
   const out: string[] = [];
+  const framed = frameOn(o);
+  if (framed) out.push(...frameHeaderText(o.frame!, o, o.issue));
   for (const b of doc.blocks) {
     switch (b.type) {
       case "header":
+        if (framed) break;
         out.push(o.businessName.toUpperCase() + (b.tagline ? ` | ${b.tagline}` : ""));
         break;
       case "headline":
@@ -573,7 +593,8 @@ export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
         break;
     }
   }
-  out.push("", warningsFooterText(), "", `${o.businessName} | ${o.address}`, "You're receiving this because you joined the Greenway loyalty program.", `Unsubscribe: ${o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL}`);
+  if (framed) out.push("", ...frameFooterText(o.frame!, o, o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL));
+  else out.push("", warningsFooterText(), "", `${o.businessName} | ${o.address}`, "You're receiving this because you joined the Greenway loyalty program.", `Unsubscribe: ${o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL}`);
   if (o.webUrl) out.unshift(`View in your browser: ${o.webUrl}`, "");
   return out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
@@ -948,5 +969,18 @@ export function __runNewsletterCanvasCoreTests(): { passed: number; failed: numb
   ok("countdown bad date must-fix", checkCanvas(normalizeCanvas({ subject: "s", blocks: [{ type: "countdown", endsAt: "x" }] }), mh, mt).issues.some((i) => i.code === "countdown" && i.level === "must-fix"));
   ok("poll needs 2 answers", checkCanvas(normalizeCanvas({ subject: "s", blocks: [{ type: "poll", question: "q", options: ["a"] }] }), mh, mt).issues.some((i) => i.code === "poll"));
   ok("blank poll + countdown are valid", blankBlock("poll").type === "poll" && blankBlock("countdown").type === "countdown" && Date.parse((blankBlock("countdown") as { endsAt: string }).endsAt) > Date.now());
+  // D243 E-1: the brand frame wraps the body
+  const e1d = starterCanvas("Week 1");
+  const e1o: RenderOpts = { ...o, frame: defaultFrame(), issue: { number: 7, date: "2026-06-07" }, phone: "360-BUY-WEED", phoneHref: "tel:+13604436988" };
+  const e1h = renderCanvasEmail(e1d, e1o);
+  const e1t = canvasPlainText(e1d, e1o);
+  ok("frame: header once", e1h.split('data-gw-frame="header"').length === 2);
+  ok("frame: old header section hidden", !e1h.includes(">Newsletter</p>"));
+  ok("frame: footer has warnings + unsubscribe", e1h.includes('data-gw-frame="footer"') && e1h.includes('data-gw-unsubscribe="1" href="https://www.greenwaymarijuana.com/unsubscribe?token=abc"'));
+  ok("frame: issue in text part", e1t.includes("Issue 7") && e1t.includes("Keep out of the reach of children."));
+  ok("frame: check passes compliance", !checkCanvas(e1d, e1h, e1t).issues.some((i) => ["warnings", "warnings-size", "unsubscribe"].includes(i.code)));
+  const e1off = renderCanvasEmail(e1d, { ...e1o, frame: { ...defaultFrame(), enabled: false } });
+  ok("frame off: old look", !e1off.includes("data-gw-frame") && e1off.includes('data-gw-footer="fixed"'));
+  ok("frame null: same as before", renderCanvasEmail(e1d, o) === renderCanvasEmail(e1d, { ...o, frame: null }));
   return { passed, failed };
 }
