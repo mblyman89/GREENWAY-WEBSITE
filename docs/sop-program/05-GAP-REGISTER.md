@@ -149,7 +149,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-122 | **Banner Studio as an email "Design section" (all banner tools plus QR, countdown, menu product cards), saved as a hosted picture** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-2, D243, #1791) |
 | G-123 | **Full-page email editor: library + inspector, drag to reorder, columns, text over a picture, section styles, saved sections, templates, phone/desktop/dark and inbox previews** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-3, D243, #1792) |
 | G-124 | **AI picture tools: generate picture or GIF, remove background, erase (mask), extend, recolor, relight, upscale, variations, style looks, before/after** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-4, D243, #1793) |
-| G-125 | **Ask the canvas: a vision model looks at the canvas, proposes changes, Apply and Undo** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-5, D243, #PE5) |
+| G-125 | **Ask the canvas: a vision model looks at the canvas, proposes changes, Apply and Undo** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-5, D243, #1794) |
 | G-126 | **Polish: animated design sections as GIFs, dark-mode-safe logos, contrast and readability checks, inbox size check, first-name merge tags** | D243 | (enhancement) | SOP-22 App. B.5 | PROPOSED (E-6) |
 
 ---
@@ -1148,4 +1148,4 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Owner basis:** *"I like the idea of having a formatted header and footer and title and logo and such so every newsletter has the same format, with a customized body."* … *"I want the website editors plus all the above plus more."* … *"The website editor on steroids."*
 - **Why:** the N-8 canvas is a fixed list of sections with form fields; it has no free design, no shared brand frame, and the AI can only rewrite text or edit one picture.
 - **Requirements:** every email keeps the four warnings (≥10% type) and the unsubscribe link in live text; free design becomes hosted pictures with alt text; every AI call goes through the WAC 314-55-155 checks and the monthly AI budget; AI results are new Media files (originals are never changed); old canvases render as before.
-- **Built so far:** E-1 (G-121, #1790); E-2 (G-122, #1791); E-3 (G-123, #1792); E-4 (G-124, #1793); E-5 (G-125, #PE5).
+- **Built so far:** E-1 (G-121, #1790); E-2 (G-122, #1791); E-3 (G-123, #1792); E-4 (G-124, #1793); E-5 (G-125, #1794).

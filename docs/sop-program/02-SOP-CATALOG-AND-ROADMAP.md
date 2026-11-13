@@ -201,7 +201,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.6 (D243, #1793):** E-4 AI picture tools built: make, edit, remove background, erase/replace a painted area (FLUX Fill), extend (FLUX Expand), recolour, relight, style, variations, enlarge 2×, AI GIF; new Media files, before/after slider, undoable swap. No migration.
 
-**v2.7 (D243, #PE5):** E-5 Ask the canvas built: the AI looks at a picture of the email and the section list, answers and proposes steps (words, style, look, sections, picture tools), checked against the copy and compliance rules; Apply then Undo. No migration.
+**v2.7 (D243, #1794):** E-5 Ask the canvas built: the AI looks at a picture of the email and the section list, answers and proposes steps (words, style, look, sections, picture tools), checked against the copy and compliance rules; Apply then Undo. No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
