@@ -74,6 +74,7 @@ export default async function NewsletterCanvasPage({ params }: { params: Promise
               "The footer with the four warnings and the unsubscribe link is always added and cannot be removed.",
               "AI studio (below the selected section): Draft the newsletter writes the headline, intro, notes, button, subject and preview text from this week's facts only. Improve rewrites the selected section. Suggest 5 subjects gives subject ideas. Anything that breaks the copy or compliance rules is not applied.",
               "Picture studio: pick an Image section and ask the AI to edit it (Remove background, Studio clean-up, Brighten, Banner, Seasonal) with GPT Image, Gemini or FLUX, or pick no picture to make a new one. Results are saved to Media as new files; originals are kept.",
+              "Picture tools (D243 E-4): select a section with a picture, pick a tool (Make, Edit with words, Remove background, Erase, Replace what I paint, Extend, Change a colour, Relight, Style look, Variations, Enlarge 2×, AI GIF). For Erase and Replace, paint over the area with the brush. Compare with the before/after slider, then Use it here (Undo puts the old picture back). Erase, Replace and Extend need the FLUX key.",
               "Customer review: pick one from Curated reviews (Blog & Newsletter > Curated reviews). Only reviews the customer said we may quote are listed.",
               "Send yourself a test, then publish the post and send it from the Send Center (or the Sunday approval).",
             ]}
