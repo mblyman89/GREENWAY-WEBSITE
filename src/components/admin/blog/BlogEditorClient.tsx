@@ -24,6 +24,7 @@ import { FONT_OPTIONS } from "@/lib/cms/fonts";
 import { TITLE_SIZE_OPTIONS } from "@/lib/blog/title-style";
 import { BlogBody } from "@/components/blog/BlogBody";
 import { BLOG_BLOCK_SNIPPETS, blogBlockIssues, blogPlainText } from "@/lib/blog/blog-blocks-core";
+import { reviewToBlogParagraph, type CuratedReviewChoice } from "@/lib/cms/curated-reviews-core";
 
 /** D239 N-7 (F-22-15): a published image from Digital Assets. */
 export type BlogMediaChoice = { id: string; url: string; title: string; alt: string };
@@ -59,6 +60,8 @@ type Props = {
   updateAction: (formData: FormData) => void | Promise<void>;
   /** D239 N-7: published images from Digital Assets for the hero and inline images. */
   media?: BlogMediaChoice[];
+  /** D239 N-9 (Q-22-2 (a)): curated reviews with the permission tick. */
+  reviews?: CuratedReviewChoice[];
 };
 
 const fieldCls =
@@ -103,7 +106,7 @@ function CharCount({
   );
 }
 
-export function BlogEditorClient({ initial, categories, aiEnabled, updateAction, media = [] }: Props) {
+export function BlogEditorClient({ initial, categories, aiEnabled, updateAction, media = [], reviews = [] }: Props) {
   const { toast } = useToast();
   const [aiPending, startAi] = useTransition();
 
@@ -300,6 +303,23 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction,
                 </Button>
               ),
             )}
+            {reviews.length > 0 ? (
+              <select
+                value=""
+                onChange={(e) => {
+                  const r = reviews.find((x) => x.id === e.target.value);
+                  if (r) insertBlock(reviewToBlogParagraph(r));
+                }}
+                className="rounded-full border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1 text-xs text-[var(--admin-text)]"
+                data-testid="blog-review-pick"
+                aria-label="Insert a curated review"
+              >
+                <option value="">Insert a review…</option>
+                {reviews.map((r) => (
+                  <option key={r.id} value={r.id}>{`${r.firstName}: ${r.quote.slice(0, 60)}${r.quote.length > 60 ? "…" : ""}`}</option>
+                ))}
+              </select>
+            ) : null}
           </div>
           <textarea
             ref={bodyRef}

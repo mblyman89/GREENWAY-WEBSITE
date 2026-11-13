@@ -107,6 +107,10 @@ export default async function BlogAdminPage({
             Newsletter Send Center
           </Link>
           <span aria-hidden="true">·</span>
+          <Link href="/admin/blog/reviews" className="text-[var(--admin-accent)] hover:underline">
+            Curated reviews
+          </Link>
+          <span aria-hidden="true">·</span>
           <a href="/blog" target="_blank" rel="noopener noreferrer" className="text-[var(--admin-accent)] hover:underline">
             View live blog ↗
           </a>

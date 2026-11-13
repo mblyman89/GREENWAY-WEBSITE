@@ -87,7 +87,7 @@ describe("D237 N-5 grounded AI content engine", () => {
 
   it("the picker is on New post and shows flags at draft time (F-22-16)", () => {
     const page = read("src/app/admin/blog/new/page.tsx");
-    expect(page).toContain("<NewPostFromPicker aiEnabled={isAiConfigured} />");
+    expect(page).toMatch(/<NewPostFromPicker aiEnabled=\{isAiConfigured\}[^>]*\/>/); // D239 N-9 adds reviews=
     const ui = read("src/components/admin/blog/NewPostFromPicker.tsx");
     expect(ui).toContain("result.complianceFlags.map");
     expect(ui).toContain("result.pictures.map");
