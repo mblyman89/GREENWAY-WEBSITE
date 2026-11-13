@@ -281,6 +281,9 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Only the owner or an admin can send a newsletter to the whole list; anyone with Blog access can prepare it and send a test.",
       "Once a newsletter is published, send it to your loyalty list from MKTG & ADV → Email Newsletter (the Newsletter Send Center).",
       "The Send Center shows engagement stats (opens/clicks) for the last 90 days, with a link to the full customer newsletter report.",
+      "Scheduling a blog post (D237 N-3): open the post and use the Schedule panel to pick a Pacific date and time to publish or unpublish it. The post shows as Scheduled until then; the site checks every 5 minutes.",
+      "Sunday newsletter (D237 N-3): when the newsletter is finished, press Ready for approval in the Send Center's Sunday newsletter box. The owner or an admin presses Approve and schedule and picks the time; at that time it publishes the newsletter post and sends it to the loyalty list by itself. Editing an approved newsletter takes the approval back. A failed send goes back to Ready for approval and is never retried by itself.",
+      "Sunday send time and reminder (D237 N-3, Q-22-4): the owner or an admin sets the Sunday send time and the reminder in the Send Center. No time is set until the owner picks one. The reminder (default Friday 9:00 AM Pacific) emails once that day when no newsletter is ready or approved.",
     ],
   },
   {

@@ -10,6 +10,9 @@ import { can } from "@/lib/auth/roles";
 import { BROADCAST_GATE_MESSAGE } from "@/lib/cms/newsletter-email-core";
 import { runNewsletterQueue, retryFailedRecipients } from "@/lib/cms/newsletter-queue-server";
 import { RETRY_FAILED_MESSAGE } from "@/lib/cms/newsletter-batch-core";
+import { markReady, approve, backToDraft, saveCadence } from "@/lib/cms/newsletter-cadence-server";
+import { validateSendAt } from "@/lib/cms/newsletter-cadence-core";
+import { pacificLocalToUtc, snapUpToGrid } from "@/lib/cms/content-schedule-core";
 
 const ADMIN = "/admin/newsletter";
 
@@ -137,4 +140,103 @@ export async function retryFailedNewsletterAction(formData: FormData): Promise<v
   }
   revalidatePath(ADMIN);
   redirect(`${back}notice=${encodeURIComponent(res.requeued > 0 ? RETRY_FAILED_MESSAGE : "No failed addresses to retry.")}`);
+}
+
+// ── D237 N-3 (G-113, Q-22-4): the Sunday newsletter cadence ─────────────────
+
+function cadenceBack(postId: string): string {
+  return postId ? `${ADMIN}?selected=${encodeURIComponent(postId)}&` : `${ADMIN}?`;
+}
+
+/** Anyone with Blog access: this week's newsletter is ready for the owner to approve. */
+export async function markNewsletterReadyAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("blog.manage");
+  const postId = String(formData.get("post_id") ?? "");
+  if (!postId) redirect(`${ADMIN}?error=${encodeURIComponent("Choose a newsletter first.")}`);
+  const res = await markReady(postId, session.userId);
+  if (res.error) redirect(`${cadenceBack(postId)}error=${encodeURIComponent(res.error)}#sunday`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "newsletter.ready",
+    entityType: "newsletter",
+    entityId: postId,
+  });
+  revalidatePath(ADMIN);
+  redirect(`${cadenceBack(postId)}notice=${encodeURIComponent("Marked ready for approval.")}#sunday`);
+}
+
+/** Owner / admin only: approve a ready newsletter and pick when it sends (Pacific). */
+export async function approveNewsletterAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("blog.manage");
+  const postId = String(formData.get("post_id") ?? "");
+  const back = cadenceBack(postId);
+  if (!can(session.profile.role, "newsletter.broadcast")) {
+    redirect(`${back}error=${encodeURIComponent(BROADCAST_GATE_MESSAGE)}#sunday`);
+  }
+  if (!postId) redirect(`${ADMIN}?error=${encodeURIComponent("Choose a newsletter first.")}`);
+  const picked = pacificLocalToUtc(formData.get("send_at"));
+  const sendAt = picked ? snapUpToGrid(picked) : null;
+  const bad = validateSendAt(sendAt, new Date().toISOString());
+  if (bad || !sendAt) redirect(`${back}error=${encodeURIComponent(bad ?? "Pick a date and time.")}#sunday`);
+  const res = await approve(postId, sendAt, session.userId);
+  if (res.error) redirect(`${back}error=${encodeURIComponent(res.error)}#sunday`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "newsletter.approve",
+    entityType: "newsletter",
+    entityId: postId,
+    after: { sendAt },
+  });
+  revalidatePath(ADMIN);
+  redirect(`${back}notice=${encodeURIComponent("Approved. It sends to the loyalty list at the time you picked.")}#sunday`);
+}
+
+/** Take the ready mark or the approval back. Approving and un-approving are owner/admin. */
+export async function newsletterBackToDraftAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("blog.manage");
+  const postId = String(formData.get("post_id") ?? "");
+  const back = cadenceBack(postId);
+  if (!postId) redirect(`${ADMIN}?error=${encodeURIComponent("Choose a newsletter first.")}`);
+  const res = await backToDraft(postId);
+  if (res.error) redirect(`${back}error=${encodeURIComponent(res.error)}#sunday`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "newsletter.back_to_draft",
+    entityType: "newsletter",
+    entityId: postId,
+  });
+  revalidatePath(ADMIN);
+  redirect(`${back}notice=${encodeURIComponent("Back to draft. It will not send.")}#sunday`);
+}
+
+/** Owner / admin: the Sunday send time and the reminder settings. */
+export async function saveNewsletterCadenceAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("blog.manage");
+  if (!can(session.profile.role, "newsletter.broadcast")) {
+    redirect(`${ADMIN}?error=${encodeURIComponent(BROADCAST_GATE_MESSAGE)}#sunday`);
+  }
+  const res = await saveCadence(
+    {
+      sendTime: String(formData.get("send_time") ?? "").trim() || null,
+      remindDay: Number(formData.get("remind_day")),
+      remindTime: String(formData.get("remind_time") ?? "").trim(),
+      remindEnabled: formData.get("remind_enabled") === "on",
+      remindEmails: String(formData.get("remind_emails") ?? ""),
+    },
+    session.userId,
+  );
+  if (!res.ok) redirect(`${ADMIN}?error=${encodeURIComponent(res.error ?? "Save failed.")}#sunday`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "newsletter.cadence_save",
+    entityType: "site_settings",
+    entityId: "newsletter_cadence",
+    after: res.settings as unknown as Record<string, unknown>,
+  });
+  revalidatePath(ADMIN);
+  redirect(`${ADMIN}?notice=${encodeURIComponent("Sunday settings saved.")}#sunday`);
 }
