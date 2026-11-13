@@ -93,7 +93,7 @@ export function NewsletterCanvasEditor({
   /** D239 N-9 (Q-22-2 (a)): curated reviews with the permission tick. */
   reviews?: CuratedReviewChoice[];
   /** N-8b/N-8c slot: the AI studio and motion tools render here. */
-  extraTools?: (api: { doc: CanvasDoc; setDoc: (d: CanvasDoc) => void; selected: CanvasBlock | null; update: (b: CanvasBlock) => void; commit?: (d: CanvasDoc) => void }) => ReactNode;
+  extraTools?: (api: { doc: CanvasDoc; setDoc: (d: CanvasDoc) => void; selected: CanvasBlock | null; update: (b: CanvasBlock) => void; commit?: (d: CanvasDoc) => void; html?: string }) => ReactNode;
 }) {
   const [doc, setDocRaw] = useState<CanvasDoc>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(initial.blocks[0]?.id ?? null);
@@ -374,7 +374,7 @@ export function NewsletterCanvasEditor({
             </div>
           ) : null}
 
-          {extraTools ? extraTools({ doc, setDoc, selected, update, commit }) : null}
+          {extraTools ? extraTools({ doc, setDoc, selected, update, commit, html }) : null}
         </div>
 
         {/* Pane 3: preview + checks */}
