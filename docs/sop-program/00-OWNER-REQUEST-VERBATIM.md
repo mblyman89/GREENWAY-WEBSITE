@@ -3180,7 +3180,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Q-22-7 stands: the Culture and Store filters are chips on the same `/blog` page, not a new tab or page.
 - Q-22-2 (a) stands: curated reviews only (quote, first name, Google link, permission tick); no live Google block, nothing copied from Google without permission.
 
-### As built — N-7 rich posts (#PN7)
+### As built — N-7 rich posts (#1784)
 
 - **F-22-15:** the post body has blocks (Heading, Image from Digital Assets, Product card, Quote, Button, Source list) added from an Insert toolbar; each block is one paragraph with a short code, so old posts render exactly as before and no migration is needed. **Pick from Digital Assets** sets the hero from the library.
 - **F-22-18:** `/blog` has All, Store, Culture and Newsletters chips that filter the cards in place (Q-22-7).
