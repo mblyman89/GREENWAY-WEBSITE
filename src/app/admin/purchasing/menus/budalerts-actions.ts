@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * D241 — server actions for Budalerts on the Vendor Menus page.
+ * D242 — server actions for Budalerts on the Vendor Menus page.
  *
  * Kept in its own file (not menus/actions.ts) so it never collides with the
  * other agent's work in that file. Every action:
@@ -9,7 +9,7 @@
  *   - writes an audit row (`budalerts.*`);
  *   - returns a plain-English message and never throws at the browser.
  *
- * Budalerts material is INTERNAL USE ONLY (owner's permission, D241).
+ * Budalerts material is INTERNAL USE ONLY (owner's permission, D242).
  */
 
 import { revalidatePath } from "next/cache";

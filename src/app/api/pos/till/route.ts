@@ -60,6 +60,7 @@ import { checkPop } from "@/lib/registers/drawer-pop-core";
 import { atmDropSuccessMessage, atmWitnessCheck } from "@/lib/registers/atm-drop-core";
 import { dropBillsWords } from "@/lib/registers/drop-bills-core";
 import { getAtmDropSettings } from "@/lib/registers/atm-drop-settings-store";
+import { getRegisterSwitches } from "@/lib/pos/register-switches-store";
 import { drawerCustodian, popsForSession, POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
 
 export const runtime = "nodejs";
@@ -93,7 +94,10 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
-  const validated = validateTillRequest(body);
+  // D241: the owner's swap dual-approval switch (read only for a swap).
+  const swapApprovalRequired =
+    (body as { action?: unknown } | null)?.action === "swap" ? (await getRegisterSwitches()).swapApprovalRequired : true;
+  const validated = validateTillRequest(body, { swapApprovalRequired });
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
   }
@@ -373,26 +377,34 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     // A swap moves ZERO net cash (big bills in, equal change out) but every
     // trip into the safe needs a manager/lead approval PIN — same role gate
     // as /api/pos/approve, verified right here.
-    if (!isValidPin(till.approverPin)) {
-      return NextResponse.json({ error: "Approver PIN must be 4–6 digits." }, { status: 400 });
-    }
-    const approver = await getEmployeeByPin(till.approverPin);
-    if (!approver) {
-      await notePinFailure(throttleScope);
-      return NextResponse.json({ error: "No active employee for the approver PIN." }, { status: 401 });
-    }
-    await notePinSuccess(throttleScope);
-    if (!SWAP_APPROVER_ROLES.has(approver.job_role)) {
-      return NextResponse.json(
-        { error: `${approver.full_name} is not a manager or lead — safe swaps need a manager PIN.` },
-        { status: 403 },
-      );
-    }
-    if (approver.id === employee.id) {
-      return NextResponse.json(
-        { error: "A swap cannot approve itself — a manager or lead must enter their PIN." },
-        { status: 400 },
-      );
+    // D241: unless the owner turned swap approval OFF (Register Activity →
+    // Register switches) and no approver PIN was typed: then the cashier's
+    // own PIN is enough, and the audit row says approval was not required.
+    // A PIN that WAS typed is still checked in full.
+    const approvalSkipped = !swapApprovalRequired && till.approverPin === "";
+    let approver: Awaited<ReturnType<typeof getEmployeeByPin>> = null;
+    if (!approvalSkipped) {
+      if (!isValidPin(till.approverPin)) {
+        return NextResponse.json({ error: "Approver PIN must be 4–6 digits." }, { status: 400 });
+      }
+      approver = await getEmployeeByPin(till.approverPin);
+      if (!approver) {
+        await notePinFailure(throttleScope);
+        return NextResponse.json({ error: "No active employee for the approver PIN." }, { status: 401 });
+      }
+      await notePinSuccess(throttleScope);
+      if (!SWAP_APPROVER_ROLES.has(approver.job_role)) {
+        return NextResponse.json(
+          { error: `${approver.full_name} is not a manager or lead — safe swaps need a manager PIN.` },
+          { status: 403 },
+        );
+      }
+      if (approver.id === employee.id) {
+        return NextResponse.json(
+          { error: "A swap cannot approve itself — a manager or lead must enter their PIN." },
+          { status: 400 },
+        );
+      }
     }
 
     const result = await recordSwap({
@@ -400,7 +412,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       deviceId: auth.device.id,
       amountMinor: till.amountMinor,
       performedBy: employee.id,
-      approvedBy: approver.id,
+      approvedBy: approver?.id ?? null,
       notes: till.notes ?? null,
       // Fix Phase 2.7b (F-01-8): the bills both ways, checked equal to the
       // amount by validateTillRequest (little-safe-core#checkSwapDenoms).
@@ -419,7 +431,9 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         via: "register",
         deviceId: auth.device.id,
         amountMinor: till.amountMinor,
-        approvedBy: approver.id,
+        approvedBy: approver?.id ?? null,
+        // D241: true = no approver because the owner turned swap approval off.
+        approvalNotRequired: approvalSkipped,
         // Fix Phase 2.7b (F-01-8): kept here too, so the bills survive even
         // before migration 0317 adds the columns (billsSaved false).
         bills_in: till.inDenoms ? denomWords(till.inDenoms) : null,

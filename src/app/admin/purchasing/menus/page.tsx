@@ -35,7 +35,7 @@ import { VendorSearch } from "./vendor-search";
 import { FetchLogoButton, FetchAllLogosButton } from "./fetch-logo-button";
 import { LinkVendorButton, VendorPickList } from "./link-vendor-button";
 import type { VendorPickOption } from "@/lib/purchasing/vendor-menu-coverage-core";
-// D241 — Budalerts (internal use only): toolbar, per-row link/fetch, and the "done" table.
+// D242 — Budalerts (internal use only): toolbar, per-row link/fetch, and the "done" table.
 import { loadBudalertsBoard } from "@/lib/purchasing/budalerts-board-store";
 import type { BudalertsRowInfo } from "@/lib/purchasing/budalerts-core";
 import { BudalertsToolbar, BudalertsDoneTable } from "./budalerts-sections";
@@ -322,7 +322,7 @@ function Chip({ href, active, children }: { href: string; active: boolean; child
 
 async function NeededTable({ now, p }: { now: number; p: CoverageParams }) {
   const cov = await loadVendorMenuCoverage(now);
-  // D241 — vendors whose data came from Budalerts move to the "done" table below.
+  // D242 — vendors whose data came from Budalerts move to the "done" table below.
   const board = await loadBudalertsBoard(now);
   const all = board.stillNeeded;
   const rows = filterSortNeeded(all, p);

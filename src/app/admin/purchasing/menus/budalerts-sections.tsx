@@ -1,5 +1,5 @@
 /**
- * D241 — Budalerts sections on the Vendor Menus page (server components).
+ * D242 — Budalerts sections on the Vendor Menus page (server components).
  *
  *   - BudalertsToolbar: the "Fetch all due brands" loop, the brand-list
  *     refresh, the last run, and the internal-use note. Sits above the

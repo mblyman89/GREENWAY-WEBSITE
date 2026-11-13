@@ -1,10 +1,10 @@
 -- ============================================================================
--- 0364 - BUDALERTS BRAND MENUS  (D241)
+-- 0364 - BUDALERTS BRAND MENUS  (D242)
 --
 -- WHY. Some vendors we carry sell on none of Cultivera, GrowFlow or LeafLink,
 -- so the Vendor Menus page has no menu for them. Budalerts (budalerts.com)
 -- lists the products of those brands at Washington stores with photos and
--- prices. Owner, verbatim (D241): "I have received permission from them to
+-- prices. Owner, verbatim (D242): "I have received permission from them to
 -- use their brand photos and descriptions and prices for the brands I carry
 -- currently. so long as we do not advertise or sell the info, we are fine to
 -- use it internally." INTERNAL USE ONLY. Nothing here is read by the public
@@ -51,7 +51,7 @@ revoke all on table public.budalerts_brand_links from public, anon, authenticate
 grant select, insert, update, delete on table public.budalerts_brand_links to service_role;
 
 comment on table public.budalerts_brand_links is
-  'D241 (0364): Budalerts brand page (slug) to vendor card, linked by a person. Internal use only (owner permission from Budalerts). Service role only.';
+  'D242 (0364): Budalerts brand page (slug) to vendor card, linked by a person. Internal use only (owner permission from Budalerts). Service role only.';
 
 -- 2. brand snapshots ---------------------------------------------------------
 create table if not exists public.budalerts_brand_snapshots (
@@ -88,7 +88,7 @@ revoke all on table public.budalerts_brand_snapshots from public, anon, authenti
 grant select, insert, update, delete on table public.budalerts_brand_snapshots to service_role;
 
 comment on table public.budalerts_brand_snapshots is
-  'D241 (0364): one polite pull of one Budalerts brand (main page + category pages). Internal use only. Service role only.';
+  'D242 (0364): one polite pull of one Budalerts brand (main page + category pages). Internal use only. Service role only.';
 
 -- 3. menu items --------------------------------------------------------------
 create table if not exists public.budalerts_menu_items (
@@ -127,7 +127,7 @@ revoke all on table public.budalerts_menu_items from public, anon, authenticated
 grant select, insert, update, delete on table public.budalerts_menu_items to service_role;
 
 comment on table public.budalerts_menu_items is
-  'D241 (0364): listings of a Budalerts pull. price_minor in cents. description only when a page carries one. Internal use only. Service role only.';
+  'D242 (0364): listings of a Budalerts pull. price_minor in cents. description only when a page carries one. Internal use only. Service role only.';
 
 -- 4. fetch state (one row) ---------------------------------------------------
 create table if not exists public.budalerts_fetch_state (
@@ -152,6 +152,6 @@ revoke all on table public.budalerts_fetch_state from public, anon, authenticate
 grant select, insert, update, delete on table public.budalerts_fetch_state to service_role;
 
 comment on table public.budalerts_fetch_state is
-  'D241 (0364): one row. Last request time to budalerts.com (3 second gap across servers), run lease, background switch (off by default), cached Washington brand slugs from the sitemap. Service role only.';
+  'D242 (0364): one row. Last request time to budalerts.com (3 second gap across servers), run lease, background switch (off by default), cached Washington brand slugs from the sitemap. Service role only.';
 
 notify pgrst, 'reload schema';

@@ -928,7 +928,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   // plain uuid with no FK into newsletter_sends (WIPE).
   { table: "newsletter_approvals", disposition: "KEEP", because: "The Sunday newsletter approval per newsletter post (ready, approved with a send time, sent). It belongs with the kept blog posts." },
   { table: "newsletter_send_recipients", disposition: "KEEP", because: "The per-address list of a queued newsletter send. It is emptied automatically together with the newsletter send history by its own trigger, so the reset function's pinned WIPE list (0240) is not reopened." },
-  // budalerts_* (0364, D241): Budalerts brand menus gathered with the owner's
+  // budalerts_* (0364, D242): Budalerts brand menus gathered with the owner's
   // permission (internal use only). FKs only to vendors and media_assets (both
   // KEEP) and to each other, so the pinned WIPE list in 0240 is not reopened.
   // A fresh pull replaces the data at any time.

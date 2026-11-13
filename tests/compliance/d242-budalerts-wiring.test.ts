@@ -1,5 +1,5 @@
 /**
- * D241 — Budalerts fetcher wiring (structural). Pins the politeness rails,
+ * D242 — Budalerts fetcher wiring (structural). Pins the politeness rails,
  * the internal-use-only media rules, the standing data rules, and that
  * everything lives on the ONE Vendor Menus page with a "done" table.
  */
@@ -20,7 +20,7 @@ const page = read("src/app/admin/purchasing/menus/page.tsx");
 const browser = read("src/app/admin/purchasing/menus/budalerts/[id]/page.tsx");
 const vercel = read("vercel.json");
 
-describe("D241 Budalerts fetcher — politeness", () => {
+describe("D242 Budalerts fetcher — politeness", () => {
   it("only requests allow-listed URLs with an honest User-Agent", () => {
     expect(fetcher).toContain('import "server-only"');
     expect(fetcher).toContain("isAllowedBudalertsUrl(url)");
@@ -50,7 +50,7 @@ describe("D241 Budalerts fetcher — politeness", () => {
   });
 });
 
-describe("D241 Budalerts — standing data rules", () => {
+describe("D242 Budalerts — standing data rules", () => {
   it("store selects named columns, pages its reads and handles a missing 0364", () => {
     expect(store).not.toMatch(/\.select\(\s*["']\*["']/);
     expect(store).toContain("pagedAll");
@@ -69,7 +69,7 @@ describe("D241 Budalerts — standing data rules", () => {
   });
 });
 
-describe("D241 Budalerts — internal use only", () => {
+describe("D242 Budalerts — internal use only", () => {
   it("saves photos as drafts with platform other (never auto-published) and never into the public KB", () => {
     expect(media).toContain('platform: "other"');
     expect(media).toContain("BUDALERTS_CREDIT");
@@ -85,7 +85,7 @@ describe("D241 Budalerts — internal use only", () => {
   });
 });
 
-describe("D241 Budalerts — actions", () => {
+describe("D242 Budalerts — actions", () => {
   it("every action needs inventory.manage and writes an audit row", () => {
     expect(actions.startsWith('"use server"')).toBe(true);
     const exported = actions.match(/export async function \w+/g) ?? [];
@@ -102,7 +102,7 @@ describe("D241 Budalerts — actions", () => {
   });
 });
 
-describe("D241 Budalerts — one Vendor Menus page with a done table", () => {
+describe("D242 Budalerts — one Vendor Menus page with a done table", () => {
   it("the page splits Still need a menu and adds the Done table", () => {
     expect(page).toContain("loadBudalertsBoard(now)");
     expect(page).toContain("board.stillNeeded");

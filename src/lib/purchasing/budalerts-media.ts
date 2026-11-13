@@ -1,7 +1,7 @@
 /**
  * src/lib/purchasing/budalerts-media.ts
  *
- * D241 — save Budalerts product photos into the media library, then link the
+ * D242 — save Budalerts product photos into the media library, then link the
  * saved asset back onto the listing row.
  *
  * INTERNAL USE ONLY (owner's permission from Budalerts):

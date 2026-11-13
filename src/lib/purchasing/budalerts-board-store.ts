@@ -1,7 +1,7 @@
 /**
  * src/lib/purchasing/budalerts-board-store.ts
  *
- * D241 — what the Vendor Menus page needs from Budalerts, in ONE cache()d
+ * D242 — what the Vendor Menus page needs from Budalerts, in ONE cache()d
  * load per request (the "Still need a menu" table and the new "Done — from
  * Budalerts" table share it):
  *

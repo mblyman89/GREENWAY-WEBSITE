@@ -1,5 +1,5 @@
 /**
- * D241 — Budalerts fetcher pure core. Vitest mirror of the self-tests plus
+ * D242 — Budalerts fetcher pure core. Vitest mirror of the self-tests plus
  * parser checks against real pages saved from budalerts.com (fixtures).
  */
 import { readFileSync } from "node:fs";
@@ -17,7 +17,7 @@ import {
 
 const fx = (name: string) => readFileSync(join(process.cwd(), "tests/fixtures/budalerts", name), "utf8");
 
-describe("budalerts-core (D241)", () => {
+describe("budalerts-core (D242)", () => {
   it("passes its own pure self-tests", () => {
     const r = __runBudalertsCoreTests();
     expect(r.failed).toBe(0);

@@ -1963,7 +1963,7 @@ describe("the migration list is ordered the way the database will see it", () =>
     // D237 N-3 (owner "I approve all from serious to small along with your recommendations"): 0363
     // newsletter_approvals, the Sunday approval per newsletter post (service role only, RLS on, FK only to
     // blog_posts), and content_schedule accepts target_kind 'blog_post'. Re-verified: 363 files, `sort -c` clean.
-    // D241 (owner "please build the fetcher so it is respectful with its scraping"): 0364 budalerts_brand_links,
+    // D242 (owner "please build the fetcher so it is respectful with its scraping"): 0364 budalerts_brand_links,
     // budalerts_brand_snapshots, budalerts_menu_items, budalerts_fetch_state (service role only, RLS on, FKs only to
     // vendors, media_assets and each other). Re-verified: 364 files, `sort -c` clean.
     expect(listed[listed.length - 1]).toMatch(/^0364_/);

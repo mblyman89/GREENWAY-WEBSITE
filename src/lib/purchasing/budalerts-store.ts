@@ -1,7 +1,7 @@
 /**
  * src/lib/purchasing/budalerts-store.ts
  *
- * D241 — reads and writes for the Budalerts brand menus (migration 0364).
+ * D242 — reads and writes for the Budalerts brand menus (migration 0364).
  * Decisions live in budalerts-core.ts (pure); this file only moves rows.
  *
  * Standing rules:
@@ -12,7 +12,7 @@
  *   - Every call reads its `{ error }`. A missing table (42P01 / PGRST205)
  *     becomes the plain message "migration 0364 has not been run yet".
  *
- * Budalerts permission (owner, D241): internal use only. Nothing here is
+ * Budalerts permission (owner, D242): internal use only. Nothing here is
  * ever shown on the public site or sold.
  */
 import "server-only";

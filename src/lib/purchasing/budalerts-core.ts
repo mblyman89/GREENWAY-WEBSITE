@@ -1,8 +1,8 @@
 /**
- * D241 — Budalerts fetcher, PURE core (no I/O, no Date.now, no env).
+ * D242 — Budalerts fetcher, PURE core (no I/O, no Date.now, no env).
  *
  * Owner request (verbatim in docs/sop-program/00-OWNER-REQUEST-VERBATIM.md,
- * "D241 (build)"): Budalerts gave permission to use brand photos,
+ * "D242 (build)"): Budalerts gave permission to use brand photos,
  * descriptions and prices for the brands Greenway carries, INTERNAL USE
  * ONLY — never advertise or sell the data. Build a respectful fetcher for
  * the vendors we cannot get from Cultivera / GrowFlow / LeafLink; show it

@@ -1,4 +1,4 @@
--- D241 post-apply scenario check for 0364_budalerts_menus.
+-- D242 post-apply scenario check for 0364_budalerts_menus.
 -- Run by scripts/compliance/verify-migrations-execute.ts after every
 -- migration has been applied. One transaction, rolled back.
 --

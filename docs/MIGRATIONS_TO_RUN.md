@@ -4202,7 +4202,7 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0359_orders_register_origin_backfill.rollback.sql` (puts
   `greenway` back on exactly the listed rows, then drops the list table).
 
-- [ ] **`supabase/migrations/0364_budalerts_menus.sql`** — D241 Budalerts brand menus (owner: "please build the
+- [ ] **`supabase/migrations/0364_budalerts_menus.sql`** — D242 Budalerts brand menus (owner: "please build the
   fetcher so it is respectful with its scraping ... I want all the product data for the remaining vendors we cant get
   data from on cultivera or growflow or leaflink"). Run it AFTER 0363. Four new tables, service role only, RLS on:
   `budalerts_brand_links` (Budalerts brand page to vendor, linked by a person), `budalerts_brand_snapshots` (one polite

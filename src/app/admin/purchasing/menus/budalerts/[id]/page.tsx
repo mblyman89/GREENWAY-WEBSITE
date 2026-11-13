@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * D241 — one Budalerts brand pull: every listing with its photo, retail price
+ * D242 — one Budalerts brand pull: every listing with its photo, retail price
  * (integer cents, formatted), price per gram, size, strain, the store that
  * lists it, and a link back to the Budalerts product page.
  *

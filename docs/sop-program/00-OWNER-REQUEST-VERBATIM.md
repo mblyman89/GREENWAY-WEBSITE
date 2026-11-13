@@ -3231,15 +3231,28 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - **Checks before the change:** all 19 lots pass the go-live gate (CCRS ID, linked lab result, lab passed). There are no open destruction events and no recall hold on these products.
 - **Undo trail:** 39 `audit_logs` rows as the owner: 19 `inventory_lot.expires_on_corrected` (before/after values), 19 `inventory_lot.status_changed`, and 1 `inbound_manifest.raw_payload_corrected` (holds the full original JSON).
 
-## D241 (research; first filed as "D224", renumbered because main used D224-D240) — Budalerts for the vendor menu feature: research, recon and strategy (2026-11-13, read-only round)
+## D241 — Register switches (browser registers, swap approval) and an on-screen keypad (2026-11-12)
+
+> "Please merge the online orders work. Make sure there are no collisions before you do. Then I want to work on a few small enhancements. I want to add a toggle setting in register activity that lets me turn off or disable use of the web browser registers. I only want them on if the iPads have failed in some way. I also want a toggle for dual approval on cash swaps with the master so I can turn it off if needed. Finally, my employees would like a digital key pad for the register screen. Anytime something needs to be typed by hand, I want a keypad button to be available for them. Follow the standing rules. Thank you."
+
+- **Merge:** PR #1780 (D240) merged after the checks passed, `git merge-tree` against main was clean, and the branch was already on top of main.
+- **As built (PR not merged yet; waiting for the owner):**
+  - **Where:** Admin → Registers → **Register switches** (`/admin/registers/switches`). It needs `settings.manage` (owner/admin), the same as the other register settings pages. It is saved as `site_settings` key `pos_register_switches`, so **no migration** is needed. Every save is audited as `pos.register_switches_saved` with before and after values.
+  - **Defaults:** both switches start **ON**, so nothing changes until the owner flips them. To keep browser registers off, the owner must untick "Allow browser registers" once.
+  - **Browser registers switch:** when off, `/api/pos/unlock` refuses unlocks from anything that is not the iPad app (the app's `capacitor://localhost` origin), returns `web_registers_off`, and audits `register.unlock_blocked_web`. The browser lock screen shows a red "browser registers are turned off" notice and its offline-unlock fallback is blocked too (using the cached menu bundle setting). Clock in/out, sync and the iPads are **not** gated, so turning it off never strands queued sales.
+  - **Swap approval switch:** when off, a cash swap with the master safe needs no manager/lead PIN. This holds online (`/api/pos/till`), offline (`approvalOff` on the queued action) and at sync. The audit records `approvalNotRequired`, and `approved_by` is left blank. If the switch is turned back on before an offline swap syncs, the swap is still recorded (money already moved) but flagged as an exception. If the server says approval is needed, the register asks for the PIN again.
+  - **Keypad:** a "Keypad" button appears beside any typeable field on the register screen (both the iPad app and the browser). It opens an on-screen pad at the bottom: digits for number/money/PIN fields, letters (ABC/123) for text. The iPad keyboard stays down while it is open, and a field can opt out with `data-keypad="off"`.
+  - **Tests:** `register-switches-core` (22) and `register-keypad-core` (37) self-tests; `offline-till-core` floor raised to 34; `tests/compliance/d241-register-switches-keypad.test.ts`.
+
+## D242 (research; first filed as "D224", then "D241", renumbered because main used D224-D241) — Budalerts for the vendor menu feature: research, recon and strategy (2026-11-13, read-only round)
 
 Owner (verbatim): "thank you! I have found another great resource for us to include in our vendor menu feature. please go to this website and gather everything you need to include it in our menu builder. please first visit the site, get what you need, then recon the code, document your findings in a strategy roadmap report. report back with your strategy for including them in the vendor menu. no code edits yet please, just research, recon and reporting. thank you! https://budalerts.com/brands"
 
-- No code edits this round. Report: docs/sop-program/D241-budalerts-strategy.md.
+- No code edits this round. Report: docs/sop-program/D242-budalerts-strategy.md.
 - Key finding: Budalerts shows RETAIL dispensary shelf prices (from Weedmaps/Leafly/Jane), not wholesale vendor menus. The plan adds it as a separate "Retail market" layer and never counts it as a vendor menu.
-- Merge status: carried on branch `d241-budalerts-fetcher`, DO NOT MERGE until the owner says so.
+- Merge status: carried on branch `d241-budalerts-fetcher`, owner approved the merge on 2026-11-13.
 
-## D241 (build) — Budalerts fetcher on the Vendor Menus page (2026-11-13)
+## D242 (build) — Budalerts fetcher on the Vendor Menus page (2026-11-13)
 
 Owner (verbatim): "thank you. I have received permission from them to use their brand photos and descriptions and prices for the brands I carry currently. so long as we do not advertise or sell the info, we are fine to use it internally. we want the images and descriptions and prices. please build the fetcher so it is respectful with its scraping. I want all the product data for the remaining vendors we cant get data from on cultivera or growflow or leaflink. please build this so it will complete our internal records. we have the green light to build a fantastic fetcher to complement our vendor menu branch. if you are fine with this. please begin building it. I want everything to be included on the same vendor menu page, so its all in one place. vendors who are in the top table can be moved out to a done table after having gathered their data. if you agree with all of this and accept the permission given, then please begin building everything. push work often, but do not merge any slices, another agent is working. just get the work done and safely out of the sandbox. I will let you know when it is safe to merge. follow the standing rules. thank you."
 
@@ -3252,7 +3265,7 @@ Verified facts that shape the build:
 - The public brand, product and dispensary pages carry name, size, price, $/g, category, strain, store and image. They carry NO description text (checked on 3 product pages, a brand page and a strain page, 2026-11-13). A description column is kept and filled only when a page provides one; it is never invented.
 - Each brand page shows at most the 24 best-priced listings. The fetcher widens coverage by also reading the brand's per-category pages from the WA sitemap.
 
-Merge status: DO NOT MERGE. Another agent is working; the owner will say when it is safe.
+Merge status: owner said "Please merge. Make sure there are no collisions before doing so." (2026-11-13). Merged after renumbering D241 -> D242 (main had used D241 for register switches); migration 0364 is still the next free number on main.
 
 As built (branch d241-budalerts-fetcher, slices S1-S4):
 - S1 `src/lib/purchasing/budalerts-core.ts` (PURE, 81 self-tests, registered in run-pure-selftests): robots-allowed URL guard, 3 s gap, 7-day cache, stop on 429/503/403, brand/category/product/sitemap parsers checked against saved real pages, prices in cents, exact-slug suggestions only, the done rule, row board, media labels.

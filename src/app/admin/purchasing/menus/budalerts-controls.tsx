@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * D241 — Budalerts controls on the Vendor Menus page.
+ * D242 — Budalerts controls on the Vendor Menus page.
  *
  *   - BudalertsRowControls: on each "Still need a menu" / "Done" row — the
  *     linked Budalerts brands (Fetch / View listings / Unlink), exact-slug

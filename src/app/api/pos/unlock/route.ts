@@ -25,6 +25,8 @@ import { registerGateForEmployee } from "@/lib/staffing/handbook-ack-store";
 import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { offlineArmFor } from "@/lib/pos/offline-unlock-store";
+import { getRegisterSwitches } from "@/lib/pos/register-switches-store";
+import { registerClientFromOrigin, webRegisterUnlockGate } from "@/lib/pos/register-switches-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +56,23 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       { error: "This device is not bound to a register — a manager must assign one in the back office." },
       { status: 409 },
     );
+  }
+
+  // D241 — owner switch: browser (web) registers can be turned off so only
+  // the iPad app unlocks. Read from the Origin header (register-switches-core).
+  // Checked BEFORE the PIN, so a refused browser never spends a PIN try.
+  const client = registerClientFromOrigin(req.headers.get("origin"));
+  const webGate = webRegisterUnlockGate(await getRegisterSwitches(), client);
+  if (!webGate.ok) {
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-device:${auth.device.id}`,
+      action: "register.unlock_blocked_web",
+      entityType: "register",
+      entityId: auth.device.register_id,
+      after: { deviceId: auth.device.id, deviceName: auth.device.name, client },
+    });
+    return NextResponse.json({ error: webGate.error, code: "web_registers_off" }, { status: 403 });
   }
 
   const throttleScope = deviceThrottleScope(auth.device.id);
@@ -118,7 +137,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     action: "register.unlocked",
     entityType: "register",
     entityId: auth.device.register_id,
-    after: { employeeId: employee.id, deviceId: auth.device.id, deviceName: auth.device.name },
+    after: { employeeId: employee.id, deviceId: auth.device.id, deviceName: auth.device.name, client },
   });
 
   return NextResponse.json({

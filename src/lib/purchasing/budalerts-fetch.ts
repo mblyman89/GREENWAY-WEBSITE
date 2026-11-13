@@ -1,7 +1,7 @@
 /**
  * src/lib/purchasing/budalerts-fetch.ts
  *
- * D241 — the respectful Budalerts fetcher. Owner permission (recorded in
+ * D242 — the respectful Budalerts fetcher. Owner permission (recorded in
  * docs/verbatim): brand photos, descriptions and prices for the brands we
  * carry, INTERNAL USE ONLY — never advertised, never sold.
  *
