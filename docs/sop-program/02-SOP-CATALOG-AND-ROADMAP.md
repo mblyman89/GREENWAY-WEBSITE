@@ -191,6 +191,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.1 (D239, #1785):** N-9 curated reviews built: a Curated reviews list (quote, first name, Google link, permission tick) used by the canvas, the post editor and the Review spotlight; health wording held back (G-119, Q-22-2 (a)). No migration.
 
+**v2.2 (D239, #PN10):** N-10 help built: updated helpers on Blog & Newsletter and the Send Center, a Sunday checklist strip (Forms 8.1 and 8.2 in the app), concierge `blog-newsletter` corrected plus `newsletter-sunday` and `culture-posts` topics, Help Center answers corrected (G-120). No migration. Phase N complete.
+
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
 ---
@@ -221,7 +223,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half v1.0 … v1.9; Creative Studio, Banner Studio & Scheduling v2.0 as SOP-11b, D233)** |
 | **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
 | **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
-| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v2.1, D239; Phase N APPROVED, N-1 … N-9 BUILT)** |
+| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v2.2, D239; Phase N COMPLETE, N-1 … N-10 BUILT)** |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |

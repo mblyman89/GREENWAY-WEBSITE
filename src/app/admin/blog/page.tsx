@@ -13,6 +13,7 @@ import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 import { ThisWeekFeedCard } from "@/components/admin/blog/ThisWeekFeedCard";
 import { getThisWeekFeed, getLocalEvents } from "@/lib/cms/this-week-feed-server";
 import { saveBlogLocalEventsAction } from "./actions";
+import { SundayChecklistStrip } from "@/components/admin/blog/SundayChecklistStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -64,11 +65,13 @@ export default async function BlogAdminPage({
             id="blog"
             title="How blogging works"
             steps={[
-              "Start a new post and give it a title.",
-              "Write it yourself, or use the AI helper to draft sections.",
-              "Add a hero image and fill in the SEO fields.",
-              "Save as a draft, preview, then Publish when ready.",
-              "This week at Greenway (top of the page) lists new vendors, fresh drops, deals and dates ahead. Add local events under Local events.",
+              "Monday: read This week at Greenway (top of the page). It lists new vendors, fresh drops, deals and dates ahead. Add local events under Local events.",
+              "New post: pick a type under New post from\u2026 (new vendor, fresh drops, review spotlight, sale, vendor day, holiday, culture), pick this week's item and press Draft with AI. Culture posts come from the Culture news desk with their sources.",
+              "In the post, the Insert buttons add a heading, a picture from Digital Assets, a product card, a quote, a button or a source list. Insert a review adds a curated review.",
+              "Curated reviews (Quick links): add a review only after the customer says yes. First name only, word for word, with the Google link.",
+              "Pick a hero picture (Pick from Digital Assets) with alt text, fill the SEO fields, then Publish or use Schedule to pick a time.",
+              "Newsletter: Email Newsletter > New canvas newsletter. Fill from this week, use the AI studio, then send a test and press Ready for approval.",
+              "Before anything goes out, run the Sunday checklist below (the 12 checks).",
             ]}
           >
             <p className="mb-2">
@@ -111,6 +114,10 @@ export default async function BlogAdminPage({
             Curated reviews
           </Link>
           <span aria-hidden="true">·</span>
+          <a href="#sunday-checklist" className="text-[var(--admin-accent)] hover:underline">
+            Sunday checklist
+          </a>
+          <span aria-hidden="true">·</span>
           <a href="/blog" target="_blank" rel="noopener noreferrer" className="text-[var(--admin-accent)] hover:underline">
             View live blog ↗
           </a>
@@ -135,6 +142,8 @@ export default async function BlogAdminPage({
           localEvents={localEvents}
           saveEventsAction={saveBlogLocalEventsAction}
         />
+        {/* D239 N-10 (SOP-22 G-120): Forms 8.1 and 8.2 in the app. */}
+        <SundayChecklistStrip />
         <div className="grid gap-4 sm:grid-cols-4">
           <StatCard label="All posts" value={counts.total} accent="muted" href="/admin/blog" />
           <StatCard label="Published" value={counts.published} accent="green" href="/admin/blog?status=published" />
