@@ -191,7 +191,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.1 (D239, #1785):** N-9 curated reviews built: a Curated reviews list (quote, first name, Google link, permission tick) used by the canvas, the post editor and the Review spotlight; health wording held back (G-119, Q-22-2 (a)). No migration.
 
-**v2.2 (D239, #PN10):** N-10 help built: updated helpers on Blog & Newsletter and the Send Center, a Sunday checklist strip (Forms 8.1 and 8.2 in the app), concierge `blog-newsletter` corrected plus `newsletter-sunday` and `culture-posts` topics, Help Center answers corrected (G-120). No migration. Phase N complete.
+**v2.2 (D239, #1786):** N-10 help built: updated helpers on Blog & Newsletter and the Send Center, a Sunday checklist strip (Forms 8.1 and 8.2 in the app), concierge `blog-newsletter` corrected plus `newsletter-sunday` and `culture-posts` topics, Help Center answers corrected (G-120). No migration. Phase N complete.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
