@@ -120,7 +120,8 @@ export async function canvasEmailFor(
 
 // ── Image probing ─────────────────────────────────────────────────────────
 
-async function fetchCapped(url: string): Promise<{ buf: Buffer | null; mime: string | null; error?: string }> {
+/** Download a public https picture with a timeout and a 12 MB cap (also used by the N-8b AI studio). */
+export async function fetchCapped(url: string): Promise<{ buf: Buffer | null; mime: string | null; error?: string }> {
   if (!isProbeableUrl(url)) return { buf: null, mime: null, error: "not a public https link" };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
