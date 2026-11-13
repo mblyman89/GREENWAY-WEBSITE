@@ -534,7 +534,7 @@ function NeededTr({
 
 async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
   const cov = await loadVendorMenuCoverage(now);
-  // D243 — the same Budalerts lookup as "Still need a menu", to fill gaps for vendors found on Cultivera / GrowFlow / LeafLink.
+  // D244 — the same Budalerts lookup as "Still need a menu", to fill gaps for vendors found on Cultivera / GrowFlow / LeafLink.
   const board = await loadBudalertsBoard(now);
   const all = cov.searched;
   const rows = filterSortSearched(all, p);
@@ -651,7 +651,7 @@ function SearchedTr({
   logoUrl: string | null;
   linkOptions: VendorPickOption[];
   duplicateNames: Record<string, string>;
-  /** D243 — undefined: Budalerts not set up (no column); null: menu not linked to a vendor yet. */
+  /** D244 — undefined: Budalerts not set up (no column); null: menu not linked to a vendor yet. */
   budalerts?: BudalertsRowInfo | null;
 }) {
   const lu = r.latestUsable;

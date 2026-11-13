@@ -894,7 +894,7 @@ export function buildBudalertsRowInfo(
 }
 
 /**
- * D243 — which vendors get the Budalerts lookup on the Vendor Menus page:
+ * D244 — which vendors get the Budalerts lookup on the Vendor Menus page:
  * every "Still need a menu" vendor first, then every vendor on "Menus on
  * file" (menus found on Cultivera / GrowFlow / LeafLink / email), so the
  * owner can fill the remaining gaps there too. De-duplicated, order kept.
@@ -918,7 +918,7 @@ export function budalertsLookupVendorIds(
 }
 
 /**
- * D243 — the names used to suggest Budalerts slugs for each vendor: the
+ * D244 — the names used to suggest Budalerts slugs for each vendor: the
  * card's own names, plus (for "Menus on file") the seller names the
  * wholesale menus used. Exact-slug matching is unchanged — extra names
  * only give more exact chances, never a fuzzy guess.
@@ -1129,7 +1129,7 @@ export function __runBudalertsCoreTests(): { passed: number; failed: number } {
   ok(linkedBrandStatusLabel({ latestStatus: null, usableId: null, itemCount: 0 }) === "not fetched yet" && linkedBrandStatusLabel({ latestStatus: "empty", usableId: null, itemCount: 0 }) === "no listings on Budalerts", "status label: never / empty");
 
 
-  // D243 — lookup on "Menus on file" too
+  // D244 — lookup on "Menus on file" too
   const ids = budalertsLookupVendorIds(
     [{ vendor: { id: "v1" } }, { vendor: { id: "v2" } }],
     [{ vendorId: "v3" }, { vendorId: null }, { vendorId: "v1" }, { vendorId: "v4" }, { vendorId: "v3" }],

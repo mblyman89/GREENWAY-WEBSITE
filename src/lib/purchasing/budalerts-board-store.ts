@@ -7,7 +7,7 @@
  *
  *   - the coverage tables' `needed` rows, split into still-needed and done
  *     (a vendor is done once a linked Budalerts brand has a usable pull);
- *   - per-row link state and exact-slug suggestions (D243: for "Menus on
+ *   - per-row link state and exact-slug suggestions (D244: for "Menus on
  *     file" vendors too, not only "Still need a menu");
  *   - how many linked brands are due for a refetch.
  *
@@ -103,7 +103,7 @@ async function loadUncached(nowMs: number): Promise<BudalertsBoard> {
   const split = splitNeededByBudalerts(cov.needed, state);
 
   const brandNames = await readBrandNames(base.warnings);
-  // D243 — the lookup also runs on "Menus on file" rows (vendors found on
+  // D244 — the lookup also runs on "Menus on file" rows (vendors found on
   // Cultivera / GrowFlow / LeafLink), using the menus' seller names too.
   const vendorNames = budalertsVendorNames(cov.needed, cov.searched);
   const info = buildBudalertsRowInfo(

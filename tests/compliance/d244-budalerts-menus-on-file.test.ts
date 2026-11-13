@@ -1,5 +1,5 @@
 /**
- * D243 — the Budalerts lookup is on "Menus on file" too (vendors already
+ * D244 — the Budalerts lookup is on "Menus on file" too (vendors already
  * found on Cultivera / GrowFlow / LeafLink), same controls as "Still need a
  * menu". Those vendors keep their menu row (the Done table is unchanged).
  */
@@ -20,7 +20,7 @@ function searchedTable(): string {
   return page.slice(start, end);
 }
 
-describe("D243 Budalerts lookup on Menus on file", () => {
+describe("D244 Budalerts lookup on Menus on file", () => {
   it("the Menus on file table gets the same Budalerts column and controls", () => {
     const t = searchedTable();
     expect(t).toContain("await loadBudalertsBoard(now)");

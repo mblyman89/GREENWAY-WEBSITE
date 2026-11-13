@@ -2930,7 +2930,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("this-week-feed-core", __runThisWeekFeedCoreTests(), 44); // D237 N-4 (SOP-22 G-114, F-22-11): new vendors, fresh drops by vendor+type, deals now/next 14 days from the promotion, holidays + local events
   assertRan("newsletter-cadence-core", __runNewsletterCadenceCoreTests(), 43); // D237 N-3 (SOP-22 G-113, Q-22-4): Sunday cadence, approval stages, send-time checks, reminder dedupe
   assertRan("newsletter-batch-core", __runNewsletterBatchCoreTests(), 42); // D237 N-2 (SOP-22 G-112): batches of 100, idempotency keys, retry rules, progress, resume lease
-  assertRan("budalerts-core", __runBudalertsCoreTests(), 86); // D242 S1 + D243 (lookup on Menus on file): Budalerts fetcher (owner permission, internal use only): robots-allowed URLs only, 3 s gap, brand/product page parsers, minor-unit prices, exact-slug suggestions, done-table rule
+  assertRan("budalerts-core", __runBudalertsCoreTests(), 86); // D242 S1 + D244 (lookup on Menus on file): Budalerts fetcher (owner permission, internal use only): robots-allowed URLs only, 3 s gap, brand/product page parsers, minor-unit prices, exact-slug suggestions, done-table rule
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
