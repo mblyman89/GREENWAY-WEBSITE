@@ -35,6 +35,11 @@ import { VendorSearch } from "./vendor-search";
 import { FetchLogoButton, FetchAllLogosButton } from "./fetch-logo-button";
 import { LinkVendorButton, VendorPickList } from "./link-vendor-button";
 import type { VendorPickOption } from "@/lib/purchasing/vendor-menu-coverage-core";
+// D241 — Budalerts (internal use only): toolbar, per-row link/fetch, and the "done" table.
+import { loadBudalertsBoard } from "@/lib/purchasing/budalerts-board-store";
+import type { BudalertsRowInfo } from "@/lib/purchasing/budalerts-core";
+import { BudalertsToolbar, BudalertsDoneTable } from "./budalerts-sections";
+import { BudalertsRowControls } from "./budalerts-controls";
 
 export const dynamic = "force-dynamic";
 // D212: the logo-fetch actions search up to three marketplaces per vendor.
@@ -109,6 +114,7 @@ export default async function VendorMenusPage({ searchParams }: { searchParams: 
             "Still need a menu lists every vendor we have received product from with no usable menu on file. Vendors with stock on the shelf come first. Use 'Search' to look them up or 'Email' to ask for one.",
             "If a menu says 'not linked to a vendor', or is on the wrong vendor, click 'Link to vendor' and pick the right card. It is remembered for every future pull of that menu. Rows that show duplicate cards link to Merge vendors.",
             "'Fetch logo' pulls a vendor's logo from GrowFlow, Cultivera or LeafLink and attaches it, published, to the vendor and its brands so it shows on the website at once. 'Fetch all missing logos' does every vendor we carry that has none.",
+            "No wholesale menu anywhere? In the Budalerts column, link the vendor to its Budalerts brand (exact-name suggestions are offered) and fetch. Its photos and prices are saved for internal use only, and the vendor moves to the 'Done — data gathered from Budalerts' table.",
           ]}
         >
           <p>
@@ -143,9 +149,18 @@ export default async function VendorMenusPage({ searchParams }: { searchParams: 
           </Section>
         </section>
 
-        <section id="needed">
+        <section id="needed" className="space-y-3">
+          <Suspense fallback={null}>
+            <BudalertsToolbar now={now} />
+          </Suspense>
           <Suspense fallback={<TableSkeleton title="Still need a menu" />}>
             <NeededTable now={now} p={p} />
+          </Suspense>
+        </section>
+
+        <section id="budalerts-done">
+          <Suspense fallback={<TableSkeleton title="Done — data gathered from Budalerts" />}>
+            <BudalertsDoneTable now={now} />
           </Suspense>
         </section>
 
@@ -307,7 +322,9 @@ function Chip({ href, active, children }: { href: string; active: boolean; child
 
 async function NeededTable({ now, p }: { now: number; p: CoverageParams }) {
   const cov = await loadVendorMenuCoverage(now);
-  const all = cov.needed;
+  // D241 — vendors whose data came from Budalerts move to the "done" table below.
+  const board = await loadBudalertsBoard(now);
+  const all = board.stillNeeded;
   const rows = filterSortNeeded(all, p);
   const count = (g: NeedGroup | "tried") => (g === "tried" ? all.filter((r) => r.attempts.length > 0).length : all.filter((r) => r.group === g).length);
   const csvHref = `${BASE}/csv${coverageHref("", p, { find: "" })}${coverageHref("", p, { find: "" }).includes("?") ? "&" : "?"}table=needed`;
@@ -370,12 +387,20 @@ async function NeededTable({ now, p }: { now: number; p: CoverageParams }) {
                 <th className={`${TH} text-right`}>YTD accepted</th>
                 <th className={TH}>Where to look</th>
                 <th className={TH}>Contact</th>
+                {board.available && <th className={TH}>Budalerts</th>}
                 <th className={TH}>Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
               {rows.map((r) => (
-                <NeededTr key={r.vendor.id} r={r} p={p} now={now} logoUrl={cov.logos[r.vendor.id] ?? null} />
+                <NeededTr
+                  key={r.vendor.id}
+                  r={r}
+                  p={p}
+                  now={now}
+                  logoUrl={cov.logos[r.vendor.id] ?? null}
+                  budalerts={board.available ? board.rows[r.vendor.id] ?? { linked: [], suggestions: [] } : null}
+                />
               ))}
             </tbody>
           </table>
@@ -394,7 +419,19 @@ function needTone(g: NeedGroup): "danger" | "gold" | "neutral" {
   return "neutral";
 }
 
-function NeededTr({ r, p, now, logoUrl }: { r: NeededRow; p: CoverageParams; now: number; logoUrl: string | null }) {
+function NeededTr({
+  r,
+  p,
+  now,
+  logoUrl,
+  budalerts,
+}: {
+  r: NeededRow;
+  p: CoverageParams;
+  now: number;
+  logoUrl: string | null;
+  budalerts: BudalertsRowInfo | null;
+}) {
   const v = r.vendor;
   const searchName = (v.dba || v.display_name).trim();
   return (
@@ -468,6 +505,11 @@ function NeededTr({ r, p, now, logoUrl }: { r: NeededRow; p: CoverageParams; now
         ) : null}
         {!v.email && !v.phone && !v.website && <span className={FAINT}>no contact on file</span>}
       </td>
+      {budalerts && (
+        <td className={`${TD} min-w-[12rem]`}>
+          <BudalertsRowControls vendorId={v.id} vendorName={v.display_name} linked={budalerts.linked} suggestions={budalerts.suggestions} />
+        </td>
+      )}
       <td className={TD}>
         <div className="flex flex-col gap-1 text-xs font-medium">
           <Link href={coverageHref(BASE, p, { find: searchName }, "#find")} scroll={false} className={LINK}>

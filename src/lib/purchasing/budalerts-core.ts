@@ -835,6 +835,74 @@ export function budalertsMenuItemRef(itemId: string): string {
 }
 
 /* ------------------------------------------------------------------
+ * Per-row board (pure) — what each "Still need a menu" row shows
+ * ------------------------------------------------------------------ */
+
+export type BudalertsLinkedBrand = {
+  slug: string;
+  brandName: string | null;
+  /** Newest pull for this slug, any status (null = never fetched). */
+  latestId: string | null;
+  latestStatus: string | null;
+  latestAt: string | null;
+  /** Newest USABLE pull (what "View listings" opens). */
+  usableId: string | null;
+  itemCount: number;
+  imageCount: number;
+};
+
+export type BudalertsRowInfo = {
+  linked: BudalertsLinkedBrand[];
+  /** Exact-slug suggestions not already linked. */
+  suggestions: SlugSuggestion[];
+};
+
+export function buildBudalertsRowInfo(
+  vendorIds: readonly string[],
+  links: readonly (BudalertsLinkRow & { brandName?: string | null })[],
+  snaps: readonly BudalertsSnapshotRow[],
+  vendorNames: ReadonlyMap<string, readonly (string | null | undefined)[]>,
+  brandNames: ReadonlyMap<string, readonly (string | null | undefined)[]>,
+  knownSlugs: ReadonlySet<string>,
+): Map<string, BudalertsRowInfo> {
+  const newest = latestBySlug(snaps);
+  const newestUsable = latestBySlug(snaps.filter(isUsableBudalerts));
+  const out = new Map<string, BudalertsRowInfo>();
+  for (const id of vendorIds) {
+    const mine = links.filter((l) => l.vendorId === id);
+    const linked: BudalertsLinkedBrand[] = [];
+    for (const l of mine) {
+      if (linked.some((x) => x.slug === l.slug)) continue;
+      const n = newest.get(l.slug) ?? null;
+      const u = newestUsable.get(l.slug) ?? null;
+      linked.push({
+        slug: l.slug,
+        brandName: u?.brandName ?? n?.brandName ?? l.brandName ?? null,
+        latestId: n?.id ?? null,
+        latestStatus: n?.status ?? null,
+        latestAt: n?.fetchedAt ?? null,
+        usableId: u?.id ?? null,
+        itemCount: u?.itemCount ?? 0,
+        imageCount: u?.imageCount ?? 0,
+      });
+    }
+    const taken = new Set(linked.map((x) => x.slug));
+    const suggestions = suggestSlugs(vendorNames.get(id) ?? [], brandNames.get(id) ?? [], knownSlugs).filter((s) => !taken.has(s.slug));
+    out.set(id, { linked, suggestions });
+  }
+  return out;
+}
+
+/** "fetched 3 days ago" style status words for a linked brand (no clock inside). */
+export function linkedBrandStatusLabel(b: Pick<BudalertsLinkedBrand, "latestStatus" | "usableId" | "itemCount">): string {
+  if (!b.latestStatus) return "not fetched yet";
+  if (b.usableId && b.latestStatus !== "fetched" && b.latestStatus !== "partial") return `last try ${b.latestStatus}; ${b.itemCount} listings on file`;
+  if (b.latestStatus === "empty") return "no listings on Budalerts";
+  if (b.latestStatus === "error") return "last fetch failed";
+  return `${b.itemCount} listings`;
+}
+
+/* ------------------------------------------------------------------
  * Self-tests
  * ------------------------------------------------------------------ */
 
@@ -988,6 +1056,22 @@ export function __runBudalertsCoreTests(): { passed: number; failed: number } {
   ok(budalertsMediaTitle({ name: "Wedding Sunset", brand: "Phat Panda" }) === "Wedding Sunset — Phat Panda (Budalerts)", "media title");
   ok(budalertsMediaAlt({ name: "Wedding Sunset", brand: "Phat Panda", category: "Flower", size_label: "1/4oz" }) === "Phat Panda Wedding Sunset, Flower, 1/4oz", "media alt");
   ok(budalertsMenuItemRef("abc") === "budalerts:abc" && BUDALERTS_CREDIT.includes("internal"), "menu item ref + credit");
+
+  // row board
+  const board = buildBudalertsRowInfo(
+    ["v1", "v2", "v3"],
+    [{ vendorId: "v1", slug: "phat-panda", brandName: "Phat Panda" }, { vendorId: "v2", slug: "dank-czar" }],
+    snaps,
+    new Map([["v3", ["Fire Bros LLC"]], ["v1", ["Phat Panda"]]]),
+    new Map([["v2", ["Bacon's Buds"]]]),
+    known,
+  );
+  const b1 = board.get("v1");
+  ok(b1?.linked.length === 1 && b1.linked[0].usableId === "s1" && b1.linked[0].latestId === "s2" && b1.linked[0].itemCount === 80 && b1.suggestions.length === 0, "board: linked slug not re-suggested");
+  ok(board.get("v2")?.linked[0].latestStatus === "empty" && board.get("v2")?.suggestions[0]?.slug === "bacon-s-buds", "board: empty pull + brand suggestion");
+  ok(board.get("v3")?.linked.length === 0 && board.get("v3")?.suggestions[0]?.slug === "fire-bros", "board: suggestion from vendor name");
+  ok(linkedBrandStatusLabel(b1!.linked[0]) === "last try error; 80 listings on file", "status label: failed retry keeps data");
+  ok(linkedBrandStatusLabel({ latestStatus: null, usableId: null, itemCount: 0 }) === "not fetched yet" && linkedBrandStatusLabel({ latestStatus: "empty", usableId: null, itemCount: 0 }) === "no listings on Budalerts", "status label: never / empty");
 
   return { passed, failed };
 }
