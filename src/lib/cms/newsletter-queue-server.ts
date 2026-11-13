@@ -36,6 +36,7 @@ import {
   sendStatusFrom,
 } from "./newsletter-batch-core";
 import { listUnsubscribeHeaders, oneClickUnsubscribeUrl } from "./newsletter-email-core";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { buildNewsletterEmail, newsletterSendConfig, resendApiKey, siteUrl, unsubscribeUrl } from "./newsletter-send-store";
 
 const RESEND_BATCH_ENDPOINT = "https://api.resend.com/emails/batch";
@@ -316,17 +317,25 @@ export async function listOpenSendProgress(): Promise<SendProgress[]> {
 export async function retryFailedRecipients(sendId: string): Promise<{ ok: true; requeued: number } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "The database is not set up." };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("newsletter_send_recipients")
-    .select("id, round")
-    .eq("send_id", sendId)
-    .eq("status", "failed")
-    .limit(10000);
-  if (error) {
-    if (isMissingRecipientsTable(error)) return { ok: false, error: "Retry needs migration 0362 to be applied first." };
-    return { ok: false, error: error.message };
+  // Paged (SLICE 5C rule: never one .limit(N>=1000) read; PostgREST caps at 1,000).
+  let firstError: { code?: string; message?: string } | null = null;
+  const read = await pagedAllChecked<{ id: string; round: number }>(async (from, to) => {
+    const { data, error } = await admin
+      .from("newsletter_send_recipients")
+      .select("id, round")
+      .eq("send_id", sendId)
+      .eq("status", "failed")
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) firstError = firstError ?? error;
+    return { ok: !error, rows: (data as { id: string; round: number }[] | null) ?? [] };
+  });
+  const err = firstError as { code?: string; message?: string } | null;
+  if (err) {
+    if (isMissingRecipientsTable(err)) return { ok: false, error: "Retry needs migration 0362 to be applied first." };
+    return { ok: false, error: err.message ?? "Could not read the failed addresses." };
   }
-  const rows = (data as { id: string; round: number }[] | null) ?? [];
+  const rows = read.rows;
   if (rows.length === 0) return { ok: false, error: "There are no failed addresses on this send." };
   const byRound = new Map<number, string[]>();
   for (const r of rows) byRound.set(r.round, [...(byRound.get(r.round) ?? []), r.id]);
