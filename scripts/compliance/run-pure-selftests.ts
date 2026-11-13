@@ -1354,6 +1354,7 @@ import { __runNewsletterEmailCoreTests } from "../../src/lib/cms/newsletter-emai
 import { __runNewsletterBatchCoreTests } from "../../src/lib/cms/newsletter-batch-core";
 import { __runNewsletterCadenceCoreTests } from "../../src/lib/cms/newsletter-cadence-core";
 import { __runThisWeekFeedCoreTests } from "../../src/lib/cms/this-week-feed-core";
+import { __runPostTemplatesCoreTests } from "../../src/lib/cms/post-templates-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2904,6 +2905,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("studio-fonts-core", __runStudioFontsCoreTests(), 14); // D234 C-1 (SOP-11b G-94): studio = website Heading/Body fonts; System default warning
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   assertRan("newsletter-email-core", __runNewsletterEmailCoreTests(), 35); // D237 N-1 (SOP-22 G-108..G-111): four warnings at size, one-click unsubscribe, PDF kept, bounce/complaint suppression, owner/admin broadcast
+  assertRan("post-templates-core", __runPostTemplatesCoreTests(), 43); // D237 N-5 (SOP-22 G-115, Q-22-8, Q-22-9): 7 templates from the This-week facts, below-cost held back, price/date/superlative/link checks, 3 pictures
   assertRan("this-week-feed-core", __runThisWeekFeedCoreTests(), 44); // D237 N-4 (SOP-22 G-114, F-22-11): new vendors, fresh drops by vendor+type, deals now/next 14 days from the promotion, holidays + local events
   assertRan("newsletter-cadence-core", __runNewsletterCadenceCoreTests(), 43); // D237 N-3 (SOP-22 G-113, Q-22-4): Sunday cadence, approval stages, send-time checks, reminder dedupe
   assertRan("newsletter-batch-core", __runNewsletterBatchCoreTests(), 42); // D237 N-2 (SOP-22 G-112): batches of 100, idempotency keys, retry rules, progress, resume lease
