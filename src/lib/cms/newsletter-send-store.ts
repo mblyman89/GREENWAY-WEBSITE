@@ -35,6 +35,7 @@ import {
 import { batchNoFor, isMissingRecipientsTable } from "./newsletter-batch-core";
 import { canvasSettingKey, normalizeCanvas, checkCanvas } from "./newsletter-canvas-core";
 import { canvasEmailFor } from "./newsletter-canvas-server";
+import { applyMergeTags, cleanFirstName } from "./newsletter-polish-core";
 
 const MEDIA_BUCKET = "media";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -179,7 +180,8 @@ export async function getSendableNewsletter(id: string): Promise<SendableNewslet
 // ---------------------------------------------------------------------------
 
 export type RecipientStats = { total: number; sample: string[] };
-export type Recipient = { email: string; token: string | null };
+/** D243 E-6: firstName fills {{first_name}} (absent = the fallback). */
+export type Recipient = { email: string; token: string | null; firstName?: string };
 
 /**
  * Loyalty members eligible for marketing email: have a valid email + consent,
@@ -192,16 +194,16 @@ export async function getNewsletterRecipients(): Promise<Recipient[]> {
   const admin = createSupabaseAdminClient();
   const { data } = await admin
     .from("loyalty_signups")
-    .select("email, consent, status, email_opt_out, unsubscribe_token")
+    .select("email, first_name, consent, status, email_opt_out, unsubscribe_token")
     .eq("consent", true)
     .eq("email_opt_out", false)
     .in("status", ["new", "entered"]);
 
   const byEmail = new Map<string, Recipient>();
-  for (const r of (data as { email: string | null; unsubscribe_token: string | null }[] | null) ?? []) {
+  for (const r of (data as { email: string | null; first_name: string | null; unsubscribe_token: string | null }[] | null) ?? []) {
     const email = (r.email ?? "").trim().toLowerCase();
     if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !byEmail.has(email)) {
-      byEmail.set(email, { email, token: r.unsubscribe_token });
+      byEmail.set(email, { email, token: r.unsubscribe_token, firstName: cleanFirstName(r.first_name) });
     }
   }
   return Array.from(byEmail.values());
@@ -485,7 +487,7 @@ export async function sendNewsletter(params: {
     const results = await Promise.all(
       chunk.map((r) => {
         // Each recipient gets their own copy with a unique unsubscribe link.
-        const c = canvas ? canvas.render(unsubscribeUrl(r.token)) : null;
+        const c = canvas ? canvas.render(unsubscribeUrl(r.token), r.firstName) : null;
         const html = c
           ? c.html
           : buildNewsletterEmail({
@@ -498,7 +500,8 @@ export async function sendNewsletter(params: {
           apiKey,
           cfg.from!,
           [r.email],
-          subject,
+          // D243 E-6: {{first_name}} in the subject too (the send record keeps the tag).
+          applyMergeTags(subject, r.firstName, "text"),
           html,
           campaignTags,
           listUnsubscribeHeaders(oneClickUnsubscribeUrl(SITE_URL, r.token)),

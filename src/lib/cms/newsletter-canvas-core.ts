@@ -37,6 +37,7 @@ import { countdownImageUrl, formatEndsAt, pollContent, POLL_MAX_OPTIONS, POLL_MI
 import { cleanDesignFields, designDisplayWidth, designImageHtml, designIssues, productRowsHtml, productRowsText, type DesignSectionFields } from "./newsletter-design-core";
 import { cleanColumns, cleanOverlay, columnsHtml, columnsIssues, columnsText, columnWidth, overlayHtml, overlayIssues, overlayText, TEMPLATE_PLACEHOLDER, type ColumnsFields, type OverlayFields } from "./newsletter-layout-core";
 import { cleanSectionStyle, styleContrastIssue, styledColors, wrapStyled, type SectionStyle } from "./newsletter-style-core";
+import { applyMergeTags, mergeTagIssues, readabilityIssues } from "./newsletter-polish-core";
 
 // ── Limits ────────────────────────────────────────────────────────────────
 
@@ -422,6 +423,8 @@ export type RenderOpts = {
   phoneHref?: string;
   /** D243 E-3: preview only. Wraps each section with data-gw-block="id" so the editor can outline it. Never set when sending. */
   markBlocks?: boolean;
+  /** D243 E-6: the member's first name for {{first_name}} (absent = the fallback, e.g. "there"). */
+  firstName?: string | null;
 };
 
 /** D243 E-1: true when the brand frame wraps this email. */
@@ -571,6 +574,11 @@ function hostOf(url: string): string {
 
 /** The email HTML. The warnings and the unsubscribe link are always added here. */
 export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
+  // D243 E-6: {{first_name}} becomes the member's first name (or the fallback) so braces never reach an inbox.
+  return applyMergeTags(renderCanvasHtml(doc, o), o.firstName, "html");
+}
+
+function renderCanvasHtml(doc: CanvasDoc, o: RenderOpts): string {
   const t = THEMES[doc.theme];
   const unsub = o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL;
   const pre = doc.preheader
@@ -667,7 +675,7 @@ export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
   if (framed) out.push("", ...frameFooterText(o.frame!, o, o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL));
   else out.push("", warningsFooterText(), "", `${o.businessName} | ${o.address}`, "You're receiving this because you joined the Greenway loyalty program.", `Unsubscribe: ${o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL}`);
   if (o.webUrl) out.unshift(`View in your browser: ${o.webUrl}`, "");
-  return out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  return applyMergeTags(out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", o.firstName, "text");
 }
 
 // ── Send-readiness check ──────────────────────────────────────────────────
@@ -758,6 +766,9 @@ export function checkCanvas(doc: CanvasDoc, html: string, text: string, images?:
 
   // D243 E-3: a template's "Replace:" words must all be written before sending.
   if (JSON.stringify([doc.subject, doc.preheader, doc.blocks]).includes(TEMPLATE_PLACEHOLDER)) must("placeholder", `Some template words still start with "${TEMPLATE_PLACEHOLDER}". Write your own words there first.`, doc.blocks.find((b) => JSON.stringify(b).includes(TEMPLATE_PLACEHOLDER))?.id);
+
+  // D243 E-6: merge tags and readability.
+  for (const d of [...mergeTagIssues(doc), ...readabilityIssues(doc, THEMES[doc.theme])]) (d.level === "must-fix" ? must : warn)(d.code, d.text, d.blockId);
 
   for (const b of doc.blocks) {
     if (b.type === "design") for (const d of designIssues(b)) (d.level === "must-fix" ? must : warn)(d.code, d.text, b.id);

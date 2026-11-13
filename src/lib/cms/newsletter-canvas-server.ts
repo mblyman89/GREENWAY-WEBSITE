@@ -18,6 +18,7 @@ import { greenwayBusiness } from "@/content/business";
 import { uploadMedia, publicUrlForKey } from "@/lib/media/store";
 import { qrSvg } from "@/lib/printing/qr-core";
 import { getThisWeekFeed } from "./this-week-feed-server";
+import { docHasMergeTags } from "./newsletter-polish-core";
 import { frameContextFor } from "./newsletter-frame-server";
 import type { BrandFrame, FrameIssue } from "./newsletter-frame-core";
 import {
@@ -112,15 +113,17 @@ export function renderOptsFor(post: { slug: string } | null, unsubscribeUrl: str
  */
 export async function canvasEmailFor(
   postId: string | null,
-): Promise<{ doc: CanvasDoc; post: CanvasPostInfo; render: (unsubscribeUrl: string | null) => { html: string; text: string } } | null> {
+): Promise<{ doc: CanvasDoc; post: CanvasPostInfo; usesNames: boolean; render: (unsubscribeUrl: string | null, firstName?: string | null) => { html: string; text: string } } | null> {
   if (!postId) return null;
   const [doc, post, ctx] = await Promise.all([loadCanvas(postId), getCanvasPost(postId), frameContextFor(postId)]);
   if (!doc || !post || !doc.useForEmail || doc.blocks.length === 0) return null;
   return {
     doc,
     post,
-    render: (unsub) => {
-      const o = renderOptsFor(post, unsub, ctx);
+    // D243 E-6: only look members' first names up when {{first_name}} is used.
+    usesNames: docHasMergeTags(doc),
+    render: (unsub, firstName) => {
+      const o = { ...renderOptsFor(post, unsub, ctx), firstName: firstName ?? null };
       return { html: renderCanvasEmail(doc, o), text: canvasPlainText(doc, o) };
     },
   };

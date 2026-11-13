@@ -13,6 +13,8 @@
  *     turned into a picture (modern-screenshot), then stored in the Media
  *     Library as a new file. The email shows that picture with alt text and
  *     a link. A change after saving marks it "out of date" (send check).
+ *   • D243 E-6: Make it move (GIF): the design's entrances are drawn frame by
+ *     frame (the finished design first, for Outlook) and joined into a GIF.
  */
 import dynamic from "next/dynamic";
 import { useRef, useState, useTransition } from "react";
@@ -37,7 +39,8 @@ import {
   type EmailDesignShape,
 } from "@/lib/cms/newsletter-design-core";
 import { uploadCanvasImageAction } from "@/app/admin/newsletter/canvas/actions";
-import { saveDesignPictureAction, searchDesignProductsAction } from "@/app/admin/newsletter/canvas/design-actions";
+import { saveDesignGifAction, saveDesignPictureAction, searchDesignProductsAction } from "@/app/admin/newsletter/canvas/design-actions";
+import { DESIGN_GIF_W, designFrameAt, designGifPlan } from "@/lib/cms/newsletter-polish-core";
 
 const BannerStudio = dynamic(() => import("@/components/admin/banner-studio/BannerStudio"), {
   ssr: false,
@@ -78,6 +81,8 @@ export function DesignSectionEditor({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<DesignProduct[] | null>(null);
   const holder = useRef<HTMLDivElement>(null);
+  // D243 E-6: which items are hidden in the frame being drawn (null = the whole design).
+  const [frameHide, setFrameHide] = useState<string[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const set = (patch: Partial<DesignBlock>) => update({ ...b, ...patch });
@@ -122,6 +127,38 @@ export function DesignSectionEditor({
       }
     });
 
+  const gifPlan = designGifPlan(b.design);
+  const saveGif = () =>
+    run(async () => {
+      if (!gifPlan.ok) throw new Error(gifPlan.error);
+      setRendering(true);
+      try {
+        const { domToBlob } = await import("modern-screenshot");
+        const fd = new FormData();
+        const scale = Math.min(plan.scale, (DESIGN_GIF_W * 1.5) / plan.renderW);
+        for (let i = 0; i < gifPlan.frames.length; i++) {
+          setFrameHide(gifPlan.frames[i].hide);
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          if (document.fonts?.ready) await document.fonts.ready;
+          const node = holder.current?.firstElementChild as HTMLElement | null;
+          if (!node) throw new Error("Couldn't prepare the moving picture. Try again.");
+          const blob = await domToBlob(node, { width: plan.renderW, height: plan.renderH, scale, backgroundColor: "#000000", type: "image/jpeg", quality: 0.92, timeout: 20000 });
+          if (!blob || !blob.size) throw new Error("A frame came out empty. Try again.");
+          fd.set(`frame${i}`, new File([blob], `frame${i}.jpg`, { type: "image/jpeg" }));
+        }
+        fd.set("delays", JSON.stringify(gifPlan.frames.map((f) => f.ms)));
+        fd.set("title", b.alt || title);
+        fd.set("blockId", b.id);
+        const r = await saveDesignGifAction(fd);
+        if (!r.ok) throw new Error(r.error);
+        update({ ...b, src: r.src, w: r.w, h: r.h, hash: designHash(b), alt: b.alt || title });
+        setMsg({ tone: "ok", text: `Moving picture saved (${r.frames} frames, ${r.w}×${r.h}, ${Math.round(r.bytes / 1024)} KB). Outlook for Windows shows the first frame: the finished design. Save the newsletter to keep it.` });
+      } finally {
+        setFrameHide(null);
+        setRendering(false);
+      }
+    });
+
   const uploadBackground = (f: File | undefined) => {
     if (!f) return;
     run(async () => {
@@ -159,6 +196,9 @@ export function DesignSectionEditor({
           {!b.src ? <Badge tone="danger">no picture yet</Badge> : stale ? <Badge tone="danger">out of date</Badge> : <Badge tone="green">up to date</Badge>}
           <Button type="button" size="sm" variant="save" className="ml-auto" disabled={pending} onClick={savePicture}>
             {pending && rendering ? "Drawing…" : b.src ? "Update picture" : "Save picture"}
+          </Button>
+          <Button type="button" size="sm" variant="neutral" disabled={pending || !gifPlan.ok} onClick={saveGif} data-testid="design-save-gif" title={gifPlan.ok ? (gifPlan.animated ? "Plays the design's entrances as a moving GIF" : "No entrances set: the words build up in reading order") : gifPlan.error}>
+            Make it move (GIF)
           </Button>
         </div>
         {b.src ? <img src={b.src} alt={b.alt} className="w-full rounded" /> : (
@@ -275,7 +315,7 @@ export function DesignSectionEditor({
       {rendering ? (
         <div aria-hidden="true" style={{ position: "fixed", left: -20000, top: 0, pointerEvents: "none" }}>
           <div ref={holder} style={{ width: plan.renderW }}>
-            <DesignedBanner design={stillDesign(b.design)} imageSrc={b.image} imageAlt="" legacy={{}} frameClassName="" priority />
+            <DesignedBanner design={frameHide ? designFrameAt(stillDesign(b.design), frameHide) : stillDesign(b.design)} imageSrc={b.image} imageAlt="" legacy={{}} frameClassName="" priority />
           </div>
         </div>
       ) : null}

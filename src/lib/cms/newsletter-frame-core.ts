@@ -53,7 +53,7 @@ export type BrandFrame = {
   /** Off = the old look (the "Header" section prints the store name). */
   enabled: boolean;
   style: FrameStyle;
-  /** "wordmark" = the Greenway wordmark (white on dark, ink on light). */
+  /** "wordmark" = the Greenway wordmark (white on dark, ink on light; D243 E-6: with a dark-mode-safe outline). */
   logo: "wordmark" | "custom" | "none";
   /** Custom logo for dark emails (light artwork). https only. */
   logoUrl: string;
@@ -204,7 +204,10 @@ export function frameLogoSrc(f: BrandFrame, theme: "dark" | "light", siteUrl: st
   if (f.logo === "none") return "";
   if (f.logo === "custom" && f.logoUrl) return theme === "light" && f.logoUrlLight ? f.logoUrlLight : f.logoUrl;
   const base = siteUrl.replace(/\/$/, "");
-  return `${base}/brand/email/greenway-wordmark-${theme === "light" ? "ink" : "white"}.png`;
+  // D243 E-6: the wordmark carries a thin outline in the other colour, so it
+  // still reads when the Gmail app or Outlook forces dark mode (they flip the
+  // background but not the picture).
+  return `${base}/brand/email/greenway-wordmark-${theme === "light" ? "ink" : "white"}-halo.png`;
 }
 
 export function socialLinks(f: BrandFrame, siteUrl: string): { key: SocialKey; label: string; url: string; icon: string }[] {
@@ -371,8 +374,8 @@ export function __runNewsletterFrameCoreTests(): { passed: number; failed: numbe
   ok("issue none", issueLine({ ...d, showIssue: false, showDate: false }, { number: 2, date: "2026-06-07" }) === "");
 
   // Logos
-  ok("wordmark dark = white", frameLogoSrc(d, "dark", o.siteUrl).endsWith("/brand/email/greenway-wordmark-white.png"));
-  ok("wordmark light = ink", frameLogoSrc(d, "light", o.siteUrl).endsWith("/brand/email/greenway-wordmark-ink.png"));
+  ok("wordmark dark = white", frameLogoSrc(d, "dark", o.siteUrl).endsWith("/brand/email/greenway-wordmark-white-halo.png"));
+  ok("wordmark light = ink", frameLogoSrc(d, "light", o.siteUrl).endsWith("/brand/email/greenway-wordmark-ink-halo.png"));
   ok("custom light fallback", frameLogoSrc(normalizeFrame({ logo: "custom", logoUrl: "https://x.com/a.png" }), "light", o.siteUrl) === "https://x.com/a.png");
   ok("custom light own", frameLogoSrc(normalizeFrame({ logo: "custom", logoUrl: "https://x.com/a.png", logoUrlLight: "https://x.com/b.png" }), "light", o.siteUrl) === "https://x.com/b.png");
   ok("no logo", frameLogoSrc({ ...d, logo: "none" }, "dark", o.siteUrl) === "");
@@ -393,7 +396,7 @@ export function __runNewsletterFrameCoreTests(): { passed: number; failed: numbe
   ok("header no-logo shows name", frameHeaderHtml({ ...d, logo: "none" }, c, "dark", o, null).includes("Greenway Marijuana</p>"));
   ok("header escapes", frameHeaderHtml({ ...d, title: "<b>x</b>" }, c, "dark", o, null).includes("&lt;b&gt;x&lt;/b&gt;"));
   ok("bold uses accent band", frameHeaderHtml({ ...d, style: "bold", accent: "#ff8800" }, c, "dark", o, null).includes("background:#ff8800"));
-  ok("bold on light accent picks ink logo", frameHeaderHtml({ ...d, style: "bold" }, c, "dark", o, null).includes("greenway-wordmark-ink.png"));
+  ok("bold on light accent picks ink logo", frameHeaderHtml({ ...d, style: "bold" }, c, "dark", o, null).includes("greenway-wordmark-ink-halo.png"));
 
   // Footer always compliant
   const allOff = normalizeFrame({ showAddress: false, showHours: false, showPhone: false, showAgeBadge: false, social: { instagram: false, facebook: false, google: false, yelp: false, leafly: false } });

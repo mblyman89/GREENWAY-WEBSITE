@@ -9,6 +9,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { searchMenuProducts, storeDesignPicture, DESIGN_UPLOAD_MAX_BYTES } from "@/lib/cms/newsletter-design-server";
 import type { DesignProduct } from "@/lib/cms/newsletter-design-core";
+import { buildDesignGif } from "@/lib/cms/newsletter-motion-server";
+import { DESIGN_GIF_MAX_FRAMES } from "@/lib/cms/newsletter-polish-core";
 
 export type DesignPictureOut = { ok: true; src: string; w: number; h: number; bytes: number; mime: string } | { ok: false; error: string };
 
@@ -45,4 +47,44 @@ export async function searchDesignProductsAction(query: string): Promise<Product
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message.slice(0, 200) : "Could not search the menu." };
   }
+}
+
+export type DesignGifOut = { ok: true; src: string; w: number; h: number; bytes: number; frames: number } | { ok: false; error: string };
+
+/**
+ * D243 E-6 (G-126): store a moving design section. The browser uploads the
+ * frames of the design's entrance (frame0..frameN, PNG or JPEG) and their
+ * timings; the server joins them into a GIF in the Media Library.
+ */
+export async function saveDesignGifAction(formData: FormData): Promise<DesignGifOut> {
+  const session = await requirePermission("blog.manage");
+  const title = String(formData.get("title") ?? "").slice(0, 200);
+  const blockId = String(formData.get("blockId") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
+  let delays: unknown;
+  try {
+    delays = JSON.parse(String(formData.get("delays") ?? "[]"));
+  } catch {
+    return { ok: false, error: "The frame timings are missing." };
+  }
+  const frames: Buffer[] = [];
+  let total = 0;
+  for (let i = 0; i <= DESIGN_GIF_MAX_FRAMES; i++) {
+    const f = formData.get(`frame${i}`);
+    if (!(f instanceof File)) break;
+    if (f.type !== "image/png" && f.type !== "image/jpeg") return { ok: false, error: "Each frame must be a PNG or JPEG." };
+    total += f.size;
+    if (f.size === 0 || total > DESIGN_UPLOAD_MAX_BYTES * 2) return { ok: false, error: "The frames are empty or too big to store." };
+    frames.push(Buffer.from(await f.arrayBuffer()));
+  }
+  const r = await buildDesignGif({ frames, delays, title, uploadedBy: session.userId });
+  if (!r.ok) return r;
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "newsletter.design.gif",
+    entityType: "media_asset",
+    entityId: r.mediaId,
+    after: { blockId, src: r.url.slice(0, 300), w: r.width, h: r.height, bytes: r.bytes, frames: r.frames },
+  });
+  return { ok: true, src: r.url, w: r.width, h: r.height, bytes: r.bytes, frames: r.frames };
 }

@@ -53,8 +53,8 @@ describe("D243 E-1 brand frame core", () => {
         expect(codes).not.toContain("unsubscribe");
         expect(html).toContain("Issue 4");
         // Bold puts the logo on the colour band, so it picks the logo that reads on the band.
-        if (style !== "bold") expect(html).toContain(`greenway-wordmark-${theme === "light" ? "ink" : "white"}.png`);
-        else expect(html).toMatch(/greenway-wordmark-(ink|white)\.png/);
+        if (style !== "bold") expect(html).toContain(`greenway-wordmark-${theme === "light" ? "ink" : "white"}-halo.png`);
+        else expect(html).toMatch(/greenway-wordmark-(ink|white)-halo\.png/);
       }
     }
   });
@@ -75,6 +75,9 @@ describe("D243 E-1 brand frame core", () => {
   it("the email logos exist in public/", () => {
     expect(existsSync(join(root, "public/brand/email/greenway-wordmark-white.png"))).toBe(true);
     expect(existsSync(join(root, "public/brand/email/greenway-wordmark-ink.png"))).toBe(true);
+    // D243 E-6: the dark-mode-safe versions the frame now uses.
+    expect(existsSync(join(root, "public/brand/email/greenway-wordmark-white-halo.png"))).toBe(true);
+    expect(existsSync(join(root, "public/brand/email/greenway-wordmark-ink-halo.png"))).toBe(true);
     for (const k of ["instagram", "facebook", "google", "yelp", "leafly"]) expect(existsSync(join(root, `public/social/glyph-${k}.png`))).toBe(true);
   });
 });
