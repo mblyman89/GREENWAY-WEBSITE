@@ -153,5 +153,6 @@ export async function webVersionFor(slug: string): Promise<string | null> {
   const doc = await loadCanvas(post.id);
   if (!doc || !doc.useForEmail || doc.blocks.length === 0) return null;
   // No member token on the web copy: the unsubscribe page explains how to leave.
-  return renderCanvasEmail(doc, { ...renderOptsFor(post, `${SITE}/unsubscribe`), webUrl: null });
+  const { frameContextFor } = await import("./newsletter-frame-server");
+  return renderCanvasEmail(doc, { ...renderOptsFor(post, `${SITE}/unsubscribe`, await frameContextFor(post.id)), webUrl: null });
 }
