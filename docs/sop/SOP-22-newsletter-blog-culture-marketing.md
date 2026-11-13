@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.2 (N-10 help built, D239 #1786; Phase N complete; N-9 #1785; N-7 #1784; N-8c #1783; N-8b #1782; N-8a #1781; N-6 #1779; N-5 #1778; N-4 #1777; N-3 #1776; N-2 #1775; N-1 #1774; living document) |
+| **Version** | 2.3 (E-1 brand frame built, D243 #PE1; Phase E approved; N-10 #1786; Phase N complete; N-9 #1785; N-7 #1784; N-8c #1783; N-8b #1782; N-8a #1781; N-6 #1779; N-5 #1778; N-4 #1777; N-3 #1776; N-2 #1775; N-1 #1774; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Blog & Newsletter** (`/admin/blog`, nav MKTG & ADV, permission `blog.manage`, `src/components/admin/admin-nav-data.ts` L98). **Email Newsletter** Send Center (`/admin/newsletter`, `blog.manage`, L99). **Marketing & Advertising** hub (`/admin/marketing`, `content.edit`, L96). **Digital Assets** (`/admin/media`, `media.manage`, L95). **Blog wording** (`/admin/blog/content`, `content.edit`, L148). **Regulatory Watch** (`/admin/compliance/regulatory`, `reports.view`, L133). The public pages `/blog`, `/blog/[slug]` and `/unsubscribe` |
@@ -17,6 +17,8 @@
 > **Fixed in v1.1 (N-1):** every newsletter email now carries all four warnings at ≥10% of the largest type size; it carries one-click unsubscribe headers; saving a newsletter post keeps its PDF; hard bounces and spam complaints opt the address out automatically (audited); only the **owner or an admin** can send to the whole list. Items 1 and 3 below are kept for history and are no longer true.
 >
 > **Fixed in v1.2 (N-2):** a broadcast is now queued, one row per address, and sent in batches of 100 with an `Idempotency-Key`, in the background. A progress bar shows how many are sent; you can leave the page. Failed addresses can be retried without re-sending to anyone else. **Owner step:** apply migration `0362_newsletter_send_recipients.sql`; until then the send works the old way (one request, stay on the page).
+
+> **Fixed in v2.3 (E-1):** **Brand frame.** Every canvas newsletter now opens with the same header (the Greenway wordmark or your own logo, the newsletter title, a tagline, the issue number and the date) and ends with the same footer (social icons, address, hours, phone, a 21+ badge, an optional note, the four warnings and the unsubscribe link). Pick Classic, Bold or Minimal at Newsletter Send > Brand frame (`/admin/newsletter/frame`); only the owner or an admin can change it. The warnings and the unsubscribe link are always printed. With the frame on, the old Header section is hidden; with it off, the email is exactly as before (`src/lib/cms/newsletter-frame-core.ts`). **Owner step:** open Brand frame, check it, press Save frame. No migration.
 
 > **Fixed in v2.2 (N-10):** **Help.** Blog & Newsletter and the Send Center have updated helpers (How blogging works; How sending works) and a **Sunday checklist** strip that shows this SOP’s Form 8.1 (Monday brief, 10 rows) and Form 8.2 (the 12 pre-publish checks) word for word, with a link from each line to where it is done (`src/lib/cms/sunday-checklist-core.ts`, `SundayChecklistStrip.tsx`). On a post, checks 5 (four warnings) and 12 (test read on a phone) are marked newsletter only. The concierge `blog-newsletter` topic is corrected (the newsletter is built on the canvas and sent from the Send Center) and two topics are added: `newsletter-sunday` (start to send) and `culture-posts` (the news desk and the health rule). The Help Center answer that said to compose the email in Newsletter Send is corrected, with new answers for the checklist, culture posts and curated reviews. **Owner step:** none. No migration. **Phase N is complete (N-1 … N-10).**
 
@@ -552,6 +554,12 @@ Never edit a review. Never use a review that mentions effects or health (§4.5).
 | G-118 | Newsletter canvas (sections, AI fill, preview desktop/phone, preheader, plain text, PDF optional) | F-22-8 | N-8 |
 | G-119 | Reviews spotlight (per Q-22-2) | F-22-12 | N-9 |
 | G-120 | Help: helper, concierge topics corrected and added, "Sunday checklist" page | F-22-5 (concierge wording) | N-10 |
+| G-121 | Locked brand frame (header + footer, 3 styles, owner/admin) | (enhancement, D243) | E-1 |
+| G-122 | Banner Studio as an email Design section, saved as a hosted picture | (enhancement, D243) | E-2 |
+| G-123 | Full-page editor, layouts, templates, inbox previews | (enhancement, D243) | E-3 |
+| G-124 | AI picture tools (generate, remove bg, erase, extend, recolor, styles) | (enhancement, D243) | E-4 |
+| G-125 | Ask the canvas (vision, propose, Apply/Undo) | (enhancement, D243) | E-5 |
+| G-126 | Polish (GIF sections, dark-safe logos, contrast, size, merge tags) | (enhancement, D243) | E-6 |
 
 ### B.4 The roadmap strategy (Phase N, APPROVED D237)
 
@@ -578,6 +586,19 @@ Every slice keeps the rule that a person approves before anything is published o
 | **N-10** | **Help** · **BUILT (D239, #1786)** | Helper on Blog & Newsletter and the Send Center. Concierge `blog-newsletter` corrected, plus new `newsletter-sunday` and `culture-posts` topics. A "Sunday checklist" strip (Forms 8.1 and 8.2 in the app) | G-120 | after each slice |
 
 **Interim (until built):** follow §4.2–§4.7 by hand, put the four warnings in the Canva design, upload the PDF again on every save, publish by hand, and opt out bounces and complaints by hand.
+
+### B.5 Phase E "Email Studio" (APPROVED D243)
+
+Owner: *"I want the website editors plus all the above plus more."* The approved design: free-form design sections are saved as hosted pictures in the email; prices, dates, the four warnings and the footer stay live text; one locked brand frame for every newsletter; FLUX for erase and extend, GPT Image or Gemini for the other picture tools; "Ask the canvas" proposes changes and waits for Apply (with Undo). Order: E-1 brand frame · E-2 design sections · E-3 full-page editor · E-4 AI picture tools · E-5 Ask the canvas · E-6 polish. Every AI call keeps the WAC 314-55-155 checks and the monthly AI budget.
+
+| Slice | Status |
+|---|---|
+| E-1 Brand frame | **BUILT (D243, #PE1)** |
+| E-2 Design sections | PROPOSED |
+| E-3 Full-page editor | PROPOSED |
+| E-4 AI picture tools | PROPOSED |
+| E-5 Ask the canvas | PROPOSED |
+| E-6 Polish | PROPOSED |
 
 ## Appendix C: Owner questions
 
@@ -609,4 +630,5 @@ Every slice keeps the rule that a person approves before anything is published o
 | 2.0 | 2026-11-12 | **N-7 rich posts built (D239, #1784).** Pure core `src/lib/blog/blog-blocks-core.ts` (block model heading/paragraph/image/product/quote/button/sources parsed from and written back to the `text[]` paragraphs; link and image guards (site path or http(s); images https only); `blogBlockIssues`, `blogPlainText`, `blogGuardParagraphs`; `blogArticleSchema` + `jsonLdText`; `BLOG_VIEWS`/`filterPostsByView`/`viewFromHash`; `pickedHeroId`). `BlogBody.tsx` renders blocks on `/blog/[slug]` and in the editor preview; `BlogFilterGrid.tsx` puts the same-page chips on `/blog`; `BlogEditorClient.tsx` Insert toolbar and Digital Assets picker; `updatePostAction` takes `hero_media_pick` (checked as a library image). The culture guard ignores picture addresses. No migration (G-117; F-22-15, F-22-18, F-22-20 fixed). Test `tests/compliance/d237-newsletter-n7-rich-posts.test.ts`; self-test `__runBlogBlocksCoreTests` (70) |
 | 2.1 | 2026-11-12 | **N-9 curated reviews built (D239, #1785).** Pure core `src/lib/cms/curated-reviews-core.ts` (`firstNameOnly`, `googleReviewUrl` (https Google hosts only), `cleanReview`/`normalizeReviews` (cap 100), `reviewProblems`/`isUsable` (permission tick, first name, no therapeutic words), `usableChoices`, `upsertReview`/`removeReview`, `reviewToCanvas`, `reviewToBlogParagraph`, `reviewToNotes`, `quoteIsCurated`, `spotlightNotesProblem`); server `curated-reviews-server.ts` (site_settings `curated_reviews`). Page and actions `/admin/blog/reviews` (blog.manage; audited `blog.review.add`/`update`/`remove`). Pickers in `NewsletterCanvasEditor.tsx` (review block), `BlogEditorClient.tsx` and `NewPostFromPicker.tsx`; `draftFromTemplateAction` and `createPostFromDraftAction` refuse a review spotlight without a curated review. No migration (G-119; F-22-12 fixed). Test `tests/compliance/d237-newsletter-n9-curated-reviews.test.ts`; self-test `__runCuratedReviewsCoreTests` (41) |
 | 2.2 | 2026-11-12 | **N-10 help built (D239, #1786); Phase N complete.** Pure core `src/lib/cms/sunday-checklist-core.ts` (`MONDAY_BRIEF` = Form 8.1, `PRE_PUBLISH_CHECKS` = Form 8.2, `SUNDAY_STEPS`, `checksFor`, `checklistText`); server component `src/components/admin/blog/SundayChecklistStrip.tsx` on `/admin/blog` (with a Sunday checklist quick link) and `/admin/newsletter`; HelpPanel steps updated on both pages; concierge `blog-newsletter` corrected plus new `newsletter-sunday` and `culture-posts` topics (`concierge-kb.ts`); Help Center `blog-newsletter` answers corrected and three added (`help-content.ts`). No migration (G-120). Test `tests/compliance/d237-newsletter-n10-help.test.ts`; self-test `__runSundayChecklistCoreTests` (33) |
+| 2.3 | 2026-11-13 | **E-1 brand frame built (D243, #PE1); Phase E approved.** Pure core `src/lib/cms/newsletter-frame-core.ts` (`BrandFrame`, `normalizeFrame`, `frameHeaderHtml` in Classic/Bold/Minimal, `frameFooterHtml` that always prints the four warnings and the unsubscribe link, `issueLine`, `frameLogoSrc`, `inkOn`); `newsletter-frame-server.ts` (`site_settings` key `newsletter_brand_frame`, issue number = newsletters made up to this one); `renderCanvasEmail`/`canvasPlainText` wrap the body when `RenderOpts.frame` is on; every render path passes it; page `/admin/newsletter/frame` (owner/admin, audited `newsletter.frame.save`); email logos `public/brand/email/greenway-wordmark-{white,ink}.png`. No migration (G-121). Test `tests/compliance/d243-email-studio-e1-frame.test.ts`; self-test `__runNewsletterFrameCoreTests` (64) |
 | 1.2 | 2026-11-12 | **N-2 reliable sending built (D237, #1775).** Migration 0362 `newsletter_send_recipients` (one row per address, service role only, no FK, emptied with `newsletter_sends` by a TRUNCATE trigger) and the `sending` status + `claimed_at` lease on `newsletter_sends`. Resend batch endpoint, 100 per call, `Idempotency-Key` per batch and round; retry on 429/5xx/network up to 3 tries; worker started after Send and resumed by the 5-minute content-schedule cron (no new cron). Progress bar, auto-refresh, **Retry failed** (owner/admin, audited). Inline fallback until 0362 is applied (G-112, F-22-3). Test `tests/compliance/d237-newsletter-n2-reliable-sending.test.ts`; self-test `__runNewsletterBatchCoreTests` (42) |
