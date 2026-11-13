@@ -207,6 +207,7 @@ import { __runExceptionResolveTests } from "../../src/lib/pos/exception-resolve-
 // use for tabs, search, dates, totals, sort and paging. Pure: no I/O.
 import { __runOrdersPanelTests } from "../../src/lib/orders/order-panels-core";
 import { __runOrderSourceCoreTests } from "../../src/lib/orders/order-source-core";
+import { __runRegisterPickedUpFilterTests } from "../../src/lib/orders/register-picked-up-filter-core";
 import { __runLeaflyBridgeTests } from "../../src/lib/leafly/bridge-core";
 // SLICE L-2 -- the LAST GATE before a menu payload goes on the wire. Registered
 // here because every defect this slice repaired would have been caught by
@@ -2412,9 +2413,10 @@ __runLiquidVolumeTests();
   // SLICE L-40. Floor 88, from a measured 94. The owner asked for the Leafly
   // panel to "look and behave identically" to ours; this core is where that
   // behaviour is written down, so a drop means a behaviour stopped being proven.
-  assertRan("order-panels-core", __runOrdersPanelTests(), 112); // D226: +12 "Show" filter (online / register / both) URL tests. R73 S1: +6 three-panel URL tests
+  assertRan("order-panels-core", __runOrdersPanelTests(), 116); // D238: +4 collected-at-register copies file under Completed. D226: +12 "Show" filter (online / register / both) URL tests. R73 S1: +6 three-panel URL tests
   __runOrderSourceCoreTests(); // D226 ("thousands of orders in history ... not that many online orders"): one rule for "register sale", the board source filter
   console.log("order-source-core: self-tests passed");
+  assertRan("register-picked-up-filter-core", __runRegisterPickedUpFilterTests(), 16); // D238 ("I am not able to see completed online orders"): collected-at-register online orders file under Completed
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the

@@ -3202,3 +3202,19 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - `src/lib/cms/sunday-checklist-core.ts`, `src/components/admin/blog/SundayChecklistStrip.tsx`. Test `tests/compliance/d237-newsletter-n10-help.test.ts`; pure self-test `__runSundayChecklistCoreTests` (33). SOP-22 v2.2.
 - **Owner step:** none.
 - **Phase N complete:** N-1 … N-10 built (#1774, #1775, #1776, #1777, #1778, #1779, #1781, #1782, #1783, #1784, #1785, #1786).
+
+## D240 — Online orders: completed-at-the-register orders show under Completed; Evergreen manifest expiry (2026-11-12)
+
+> "Thank you. The online orders is still not right. I am not able to see completed online orders. I am only able to see total orders and canceled orders. Please fix this for me so I can filter to see online orders that were completed at the register. I have another agent running so push the fix but don't merge it until I tell you it's safe to do so. The other issue I need help with is, the most recent evergreen herbal invoice/ manifest that we received 2 days ago, was sent with a json that had the incorrect expiration date on it. They put October 4th 2026. It should be October 4th 2027. Please log in to supabase and fix the date issue so I can unlock them from the system and let me sell them. If this can be done with out merging to git, then please complete this task end to end for me. So that is, fix and push the online orders fix but don't merge it. Unlock the evergreen manifest by changing the date on the json. Follow the standing rules thank you!"
+
+### Findings (production, read only, 2026-11-12)
+
+- No online order has status `completed`. When an online order is rung up at the register, the register writes its own order (the sale of record) and closes the online order as `cancelled` on purpose (SLICE L-37), so revenue, excise, CCRS, the ledger, stock and points are never counted twice. The close writes an `order_events` row (`status_changed` → `cancelled`, note `PICKED UP AT THE REGISTER…`). The rows already read "Picked up (register)", but the status tabs and counts went by the stored status, so every collected order sat under Cancelled and Completed was always 0. Of the 15 cancelled online orders, 6 were collected at the register.
+
+### As built — online orders (PR, not merged per the owner)
+
+- New pure core `src/lib/orders/register-picked-up-filter-core.ts`. Board rule: **Completed** = status `completed` OR (status `cancelled` AND has the register pickup event). **Cancelled** = status `cancelled` AND no pickup event. The tab counts move the same way. The stored status is not changed, so reports that go by status are untouched.
+- `listOrdersPaged` reads the pickup event as a filtered PostgREST embed (`rpu:order_events(id)`), only on the Completed and Cancelled tabs, and strips it from the rows. `countRegisterPickedUpOrders` is one head count (never throws; 0 means the raw counts). `/admin/orders` folds it into the tab counts. The nav badge and the cockpit are unchanged.
+- The Leafly panel files collected copies under Completed (`toLeaflyPanelRows(..., pickedUpAtRegister)`).
+- Query shapes checked against a local PostgREST 12.2.3 (two pickup events on one order still count once; a true cancel stays Cancelled; a note on an open order is never claimed; the search box `or=` still ANDs).
+- No migration. Test `tests/compliance/d238-online-orders-picked-up-completed.test.ts`; pure self-test `__runRegisterPickedUpFilterTests` (16); `__runOrdersPanelTests` floor 112 → 116.

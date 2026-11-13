@@ -5,7 +5,14 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui/Button";
 import { formatMinorCurrency } from "@/lib/leafly/format";
-import { listOrdersPaged, getOrdersBoardSnapshot, registerPickedUpOrderIds, listOrdersByIds } from "@/lib/orders/orders-store";
+import {
+  listOrdersPaged,
+  getOrdersBoardSnapshot,
+  registerPickedUpOrderIds,
+  listOrdersByIds,
+  countRegisterPickedUpOrders,
+} from "@/lib/orders/orders-store";
+import { foldPickedUpIntoCompleted } from "@/lib/orders/register-picked-up-filter-core";
 import { BOARD_EXCLUDED_ORIGINS } from "@/lib/orders/order-board-split-core";
 import { REGISTER_PICKED_UP_LABEL } from "@/lib/pos/pickup-progress-core";
 import { listWindow, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
@@ -256,9 +263,14 @@ export default async function OrdersAdminPage({
     // rows under them agree. Leafly keeps its own badge on its own panel.
     // USAGE-3 — one grouped RPC (0233) instead of seven exact counts; falls
     // back to the seven until the migration is applied.
-    getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source }).then(
-      (s) => s.counts,
-    ),
+    // D238 - orders the customer collected at the register are filed under
+    // Completed (their stored status stays the non-revenue "cancelled"), so
+    // the Completed / Cancelled tab numbers match the rows those tabs list.
+    // The pickup count never throws (0 = the raw counts, as before D238).
+    Promise.all([
+      getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source }),
+      countRegisterPickedUpOrders({ excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source }),
+    ]).then(([s, pickedUp]) => foldPickedUpIntoCompleted(s.counts, pickedUp)),
     // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
     // pool / null settings when 0147 isn't applied or the printer isn't set up).
     //
