@@ -60,6 +60,9 @@ export default async function NewsletterCanvasPage({ params }: { params: Promise
             title="How the canvas works"
             steps={[
               "Add, move and edit sections on the left. The preview on the right is exactly what members get (switch Desktop, Phone or Plain text).",
+              "Full-page editor (D243 E-3): click or drag a section from the library onto the list; drag sections to reorder; ⧉ duplicates; Undo brings back any add, remove, move or template. Templates (Weekly, Sale, Vendor day, Holiday, 4/20) give a finished layout; write over every \"Replace:\" before sending (the send check blocks it until you do).",
+              "Section style: pick a background, words colour, links colour, space, rounded box or thin border for the selected section. The readability score should be 4.5:1 or more. Save as section keeps it to reuse in any newsletter (Saved in the library).",
+              "New sections: Columns (2 or 3 side by side; they stack on phones) and Picture with words over it (raise the shade if the words are hard to read). Preview tabs: Dark mode shows how the Gmail app and Outlook may invert colours; Inbox shows what Gmail and iPhone Mail show in the list.",
               "Fill from this week puts the fresh drops, new vendors, deals, blog posts and the culture pick into the empty card sections. Deals that fail the below-cost check are left out.",
               "QR code: type the link, press Make QR, scan the preview with your phone.",
               "Moving GIFs: upload a GIF on an Image section, or use the GIF maker (pick 2-10 pictures from Media; it makes an email-sized looping GIF). Outlook for Windows shows only the first frame, so put the key words in the first frame.",
