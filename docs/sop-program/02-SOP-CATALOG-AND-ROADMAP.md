@@ -183,7 +183,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.7 (D238, #1781):** N-8a newsletter canvas built: in-app sections, Fill from this week, QR codes, desktop/phone/plain-text preview, fixed warnings + unsubscribe footer, send check (Gmail 102 KB clip, image weight/format/width/alt) that blocks the send on must-fix items, and image compression into Media copies; the broadcast and the queue send the canvas (G-118, F-22-8). No migration.
 
-**v1.8 (D238, #PN8b):** N-8b canvas AI studio built: Draft the newsletter from this week's facts, Improve the selected section, Suggest 5 subjects (all checked for invented prices/links, superlatives, health claims and compliance before use), and a picture studio that edits or makes pictures with GPT Image, Gemini or FLUX, including Remove background; results saved to Media; budget-guarded, logged and audited (G-118). No migration.
+**v1.8 (D238, #1782):** N-8b canvas AI studio built: Draft the newsletter from this week's facts, Improve the selected section, Suggest 5 subjects (all checked for invented prices/links, superlatives, health claims and compliance before use), and a picture studio that edits or makes pictures with GPT Image, Gemini or FLUX, including Remove background; results saved to Media; budget-guarded, logged and audited (G-118). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
