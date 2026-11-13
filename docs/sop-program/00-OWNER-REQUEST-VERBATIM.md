@@ -3160,7 +3160,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - `src/lib/cms/newsletter-ai-core.ts`, `newsletter-ai-server.ts`, `src/app/admin/newsletter/canvas/ai-actions.ts`, `CanvasAiStudio.tsx`. No migration. Test `tests/compliance/d237-newsletter-n8b-ai-studio.test.ts`; pure self-test `__runNewsletterAiCoreTests` (60). SOP-22 v1.8.
 - **Owner step:** Optional, only for the picture studio: GPT Image uses `OPENAI_API_KEY` (or `AI_API_KEY` when it is an OpenAI key; model `AI_IMAGE_MODEL`, default `gpt-image-2`); Gemini pictures need `AI_GEMINI_API_KEY` (model `AI_GEMINI_IMAGE_MODEL`, default `gemini-nano-banana-2.1`); FLUX uses the key already in Settings > Integrations. Words need `AI_API_KEY` (already on the to-do list).
 
-### As built — N-8c moving and interactive canvas (#PN8c)
+### As built — N-8c moving and interactive canvas (#1783)
 
 - **"I want to be able to use moving elements":** the GIF maker joins 2-10 Media pictures into an email-sized looping GIF (saved to Media); the Live countdown section is a GIF drawn by our site each time the email is opened, so it always shows the real time left. Outlook for Windows shows the first frame, so the GIF maker keeps your first picture first and the countdown prints its end time.
 - **"interactive elements, other types of advanced marketing techniques":** the One-tap poll (each answer is a tracked link to our site; a tap is a vote), Clicks by section (which sections people tapped and the poll votes, from the provider's click events), and View in your browser now opening a hosted copy at `/newsletter-web/<slug>`.
