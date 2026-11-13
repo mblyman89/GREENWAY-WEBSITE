@@ -3110,3 +3110,13 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Test `tests/compliance/d237-newsletter-n4-this-week-feed.test.ts`; pure self-test `__runThisWeekFeedCoreTests` (44). SOP-22 v1.4.
 - **Owner step (optional):** type local events in the card's Local events box, one per line, `YYYY-MM-DD Name`.
 
+### As built — N-5 grounded AI content engine, "New post from…" (#PN5)
+
+- **F-22-10 / G-115:** `src/lib/cms/post-templates-core.ts` has the 7 templates (new vendor, fresh drops, review spotlight, sale, vendor day, holiday, culture). Each item carries only its own fact lines from the This-week feed (N-4). The server (`post-templates-server.ts`) re-reads the feed with the below-cost check on every draft and on save; the browser sends only the template, item id and notes.
+- The AI returns 5 headlines, an excerpt, 2 to 4 sections and a call to action (`generateJSON`, 1400 tokens). Up to 3 pictures from Digital Assets, same vendor first (`readLibraryPickerAssets`).
+- **F-22-16:** rule issues and `checkCompliance` flags show in the draft at once. Create draft post refuses must-fix items on the server.
+- **Q-22-8 (a):** prices and percents only in Sale and Vendor-day posts, and only the amounts in the promotion; below-cost deals are held back. **Q-22-9 (a):** superlatives are must-fix; links not in the facts are must-fix. **Q-22-2 (a):** a review spotlight uses the review staff paste. **Q-22-1 (a):** a culture post needs a source link (the news desk and the health guard are N-6).
+- Drafts only: `createPost` always makes a Draft; audited `blog.ai.template_draft` and `blog.create` (with the template). No migration.
+- Test `tests/compliance/d237-newsletter-n5-grounded-ai.test.ts`; pure self-test `__runPostTemplatesCoreTests` (43). SOP-22 v1.5.
+- **Owner step:** AI must be configured (`AI_API_KEY` or `OPENAI_API_KEY` on the deployment).
+
