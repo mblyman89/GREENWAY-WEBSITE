@@ -45,6 +45,7 @@ import {
   testSendCanvasAction,
 } from "@/app/admin/newsletter/canvas/actions";
 import { quoteIsCurated, reviewToCanvas, type CuratedReviewChoice } from "@/lib/cms/curated-reviews-core";
+import { DesignSectionEditor } from "./DesignSectionEditor";
 
 export type CanvasMediaChoice = { url: string; title: string };
 
@@ -264,7 +265,11 @@ export function NewsletterCanvasEditor({
           {selected ? (
             <div className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--admin-text)]">{BLOCK_LABEL[selected.type]}</p>
-              <BlockFields b={selected} update={update} media={media} pickFile={pickFile} makeQr={makeQr} pending={pending} reviews={reviews} />
+              {selected.type === "design" ? (
+                <DesignSectionEditor key={selected.id} b={selected} update={update} media={media} title={doc.subject || postTitle} />
+              ) : (
+                <BlockFields b={selected} update={update} media={media} pickFile={pickFile} makeQr={makeQr} pending={pending} reviews={reviews} />
+              )}
             </div>
           ) : null}
 
@@ -336,6 +341,7 @@ function summary(b: CanvasBlock): string {
     case "spacer": return `${b.height}px`;
     case "countdown": return b.endsAt ? `ends ${b.endsAt.slice(0, 16).replace("T", " ")} UTC` : "no end time";
     case "poll": return `${b.question.slice(0, 30)} · ${b.options.length} answers`;
+    case "design": return !b.src ? "no picture yet" : b.alt || "picture";
     default: return "";
   }
 }

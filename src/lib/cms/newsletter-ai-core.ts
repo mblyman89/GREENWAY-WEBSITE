@@ -248,6 +248,8 @@ export function editableWords(b: CanvasBlock): Record<string, string> | null {
       return { label: b.label };
     case "poll":
       return { question: b.question };
+    case "design":
+      return { alt: b.alt };
     default:
       return null; // review quotes are the customer's words; divider/spacer have none
   }
