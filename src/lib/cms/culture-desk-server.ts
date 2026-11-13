@@ -16,6 +16,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { generateJSON, generateWebSearch, isAiConfigured, aiModelId } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 import { looseParseLookupJson } from "@/lib/inventory/product-lookup-parse";
+import { blogGuardParagraphs } from "@/lib/blog/blog-blocks-core";
 import {
   CULTURE_EXTRA_RULES,
   buildFindNewsPrompt,
@@ -165,7 +166,8 @@ export function checkCultureDraft(
 /** The guard on a saved post (used before it goes live). Non-culture posts pass. */
 export function cultureGuardForPost(post: { category: string; title: string; excerpt: string | null; body: string[] }): GuardResult | null {
   if ((post.category ?? "").toUpperCase() !== "CULTURE") return null;
-  return guardCultureText([post.title, post.excerpt ?? "", ...(post.body ?? [])].join("\n"), { requireSource: true });
+  // D239 N-7: picture addresses in image blocks are not sources.
+  return guardCultureText([post.title, post.excerpt ?? "", ...blogGuardParagraphs(post.body ?? [])].join("\n"), { requireSource: true });
 }
 
 /** For the scheduled publish: read the post and run the guard. Returns a refusal reason or null. */

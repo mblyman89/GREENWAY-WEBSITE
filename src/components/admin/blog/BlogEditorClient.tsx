@@ -22,6 +22,11 @@ import { StickyActionBar, useToast } from "@/components/admin/ux";
 import { suggestHeroAltAction } from "@/app/admin/blog/actions";
 import { FONT_OPTIONS } from "@/lib/cms/fonts";
 import { TITLE_SIZE_OPTIONS } from "@/lib/blog/title-style";
+import { BlogBody } from "@/components/blog/BlogBody";
+import { BLOG_BLOCK_SNIPPETS, blogBlockIssues, blogPlainText } from "@/lib/blog/blog-blocks-core";
+
+/** D239 N-7 (F-22-15): a published image from Digital Assets. */
+export type BlogMediaChoice = { id: string; url: string; title: string; alt: string };
 
 export type BlogEditorInitial = {
   id: string;
@@ -52,6 +57,8 @@ type Props = {
   categories: readonly string[];
   aiEnabled: boolean;
   updateAction: (formData: FormData) => void | Promise<void>;
+  /** D239 N-7: published images from Digital Assets for the hero and inline images. */
+  media?: BlogMediaChoice[];
 };
 
 const fieldCls =
@@ -96,7 +103,7 @@ function CharCount({
   );
 }
 
-export function BlogEditorClient({ initial, categories, aiEnabled, updateAction }: Props) {
+export function BlogEditorClient({ initial, categories, aiEnabled, updateAction, media = [] }: Props) {
   const { toast } = useToast();
   const [aiPending, startAi] = useTransition();
 
@@ -118,6 +125,43 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
   // Local hero preview (object URL when a new file is picked).
   const [heroPreview, setHeroPreview] = useState<string | null>(initial.heroImageSrc);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // D239 N-7: Digital Assets picker (hero or an inline image block).
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const [picker, setPicker] = useState<null | "hero" | "inline">(null);
+  const [heroPick, setHeroPick] = useState("");
+  const [pickQuery, setPickQuery] = useState("");
+
+  function insertBlock(text: string) {
+    const el = bodyRef.current;
+    const at = el ? el.selectionEnd ?? body.length : body.length;
+    const before = body.slice(0, at).replace(/\s+$/, "");
+    const after = body.slice(at).replace(/^\s+/, "");
+    const next = [before, text, after].filter(Boolean).join("\n\n");
+    setBody(next);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      const pos = (before ? before.length + 2 : 0) + text.length;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  function choose(m: BlogMediaChoice) {
+    if (picker === "hero") {
+      setHeroPick(m.id);
+      setHeroPreview(m.url);
+      if (!heroAlt.trim() && m.alt) setHeroAlt(m.alt);
+      if (fileRef.current) fileRef.current.value = "";
+    } else {
+      insertBlock(`[image: ${m.url} | ${(m.alt || m.title).replace(/[|\]]/g, " ")}]`);
+    }
+    setPicker(null);
+  }
+
+  const shownMedia = useMemo(() => {
+    const q = pickQuery.trim().toLowerCase();
+    return (q ? media.filter((m) => `${m.title} ${m.alt}`.toLowerCase().includes(q)) : media).slice(0, 60);
+  }, [media, pickQuery]);
 
   const paragraphs = useMemo(
     () =>
@@ -130,7 +174,10 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
 
   function onPickHero(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) setHeroPreview(URL.createObjectURL(file));
+    if (file) {
+      setHeroPreview(URL.createObjectURL(file));
+      setHeroPick("");
+    }
   }
 
   function onSuggestAlt() {
@@ -150,6 +197,12 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
       }
     });
   }
+
+  const blockIssues = useMemo(() => blogBlockIssues(paragraphs), [paragraphs]);
+  const plainWords = useMemo(() => {
+    const t = blogPlainText(paragraphs).trim();
+    return t ? t.split(/\s+/).length : 0;
+  }, [paragraphs]);
 
   const previewDate = dateLabel || (initial.publishDate ? initial.publishDate.slice(0, 10) : "Draft");
 
@@ -233,7 +286,23 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
 
         <div>
           <label className={labelCls}>Body (paragraphs separated by a blank line)</label>
+          {/* D239 N-7 (G-117): insert blocks. Each block is its own paragraph, so old posts stay as they are. */}
+          <div className="mb-2 flex flex-wrap items-center gap-1.5" data-testid="blog-block-toolbar">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--admin-text-faint)]">Insert:</span>
+            {(Object.keys(BLOG_BLOCK_SNIPPETS) as (keyof typeof BLOG_BLOCK_SNIPPETS)[]).map((k) =>
+              k === "image" ? (
+                <Button key={k} type="button" size="sm" variant="neutral" onClick={() => setPicker(picker === "inline" ? null : "inline")}>
+                  Image from Digital Assets
+                </Button>
+              ) : (
+                <Button key={k} type="button" size="sm" variant="neutral" onClick={() => insertBlock(BLOG_BLOCK_SNIPPETS[k].text)}>
+                  {BLOG_BLOCK_SNIPPETS[k].label}
+                </Button>
+              ),
+            )}
+          </div>
           <textarea
+            ref={bodyRef}
             name="body"
             rows={10}
             value={body}
@@ -242,13 +311,26 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
           />
           <p className="mt-1 text-[0.7rem] text-[var(--admin-text-faint)]">
             {paragraphs.length} paragraph{paragraphs.length === 1 ? "" : "s"} ·{" "}
-            {body.trim() ? body.trim().split(/\s+/).length : 0} words
+            {plainWords} words · Blocks: ## Heading, {">"} Quote — Name, [image: …], [product: …], [button: Label | /link], Sources: https://…
           </p>
+          {blockIssues.length > 0 && (
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[0.7rem] text-[var(--admin-orange)]" data-testid="blog-block-issues">
+              {blockIssues.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelCls}>Hero image (upload)</label>
+            <div className="flex items-center justify-between">
+              <label className={labelCls}>Hero image (upload or pick)</label>
+              <Button type="button" size="sm" variant="neutral" onClick={() => setPicker(picker === "hero" ? null : "hero")}>
+                Pick from Digital Assets
+              </Button>
+            </div>
+            <input type="hidden" name="hero_media_pick" value={heroPick} />
             <input
               ref={fileRef}
               type="file"
@@ -257,6 +339,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               onChange={onPickHero}
               className="w-full text-xs text-[var(--admin-text-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--admin-surface-2)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--admin-text)] hover:file:bg-[var(--admin-surface-hover)]"
             />
+            {heroPick && <p className="mt-1 text-xs text-[var(--admin-accent)]">Picked from Digital Assets. Save to use it.</p>}
             {initial.heroImagePath && (
               <p className="mt-1 text-xs text-[var(--admin-text-faint)]">Current: {initial.heroImagePath}</p>
             )}
@@ -281,6 +364,43 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             </p>
           </div>
         </div>
+
+        {picker && (
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-surface)] p-4" data-testid="blog-media-picker">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--admin-text-muted)]">
+                Digital Assets · {picker === "hero" ? "pick the hero image" : "insert an image in the body"}
+              </h3>
+              <div className="flex items-center gap-2">
+                <input value={pickQuery} onChange={(e) => setPickQuery(e.target.value)} placeholder="Search by name" className={`${fieldCls} w-44`} />
+                <Button type="button" size="sm" variant="neutral" onClick={() => setPicker(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+            {shownMedia.length === 0 ? (
+              <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
+                No published images found. Upload pictures in Digital Assets (and publish them), then come back.
+              </p>
+            ) : (
+              <div className="mt-3 grid max-h-80 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
+                {shownMedia.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => choose(m)}
+                    title={m.title}
+                    className="group overflow-hidden rounded-[var(--admin-radius-md)] border border-[var(--admin-border)] text-left hover:border-[var(--admin-accent)]"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- library thumbnail */}
+                    <img src={m.url} alt={m.alt || m.title} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
+                    <span className="block truncate px-1.5 py-1 text-[0.65rem] text-[var(--admin-text-muted)] group-hover:text-[var(--admin-text)]">{m.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -520,7 +640,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               <div className="px-6 py-6">
                 <div className="space-y-4 text-sm leading-7 text-zinc-200">
                   {paragraphs.length > 0 ? (
-                    paragraphs.map((p, i) => <p key={i}>{p}</p>)
+                    <BlogBody paragraphs={paragraphs} compact />
                   ) : (
                     <p className="italic text-white/30">
                       Start writing the body — paragraphs appear here as you type.

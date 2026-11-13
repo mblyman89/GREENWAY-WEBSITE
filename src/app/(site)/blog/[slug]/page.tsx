@@ -10,6 +10,10 @@ import { formatBlogDate } from "@/lib/blog/format-date";
 import { resolveTitleStyle } from "@/lib/blog/title-style";
 import { getContentValues } from "@/lib/cms/render-content";
 import { resolveBlogCopy } from "@/lib/blog/blog-content-core";
+import { BlogBody } from "@/components/blog/BlogBody";
+import { blogArticleSchema, jsonLdText } from "@/lib/blog/blog-blocks-core";
+import { SITE_NAME, SITE_URL } from "@/lib/seo/seo";
+import { greenwayBusiness } from "@/content/business";
 
 type BlogArticlePageProps = {
   params: Promise<{
@@ -60,6 +64,21 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
     <main id="top" className="min-h-screen bg-black text-white">
       <Header />
       <Breadcrumbs items={[{ label: "Blog", href: "/blog" }, { label: post.title }]} />
+      {/* D239 N-7 (F-22-20): Article structured data for search engines. */}
+      <script
+        type="application/ld+json"
+        data-testid="article-jsonld"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdText(
+            blogArticleSchema(
+              { slug: post.slug, title: post.title, excerpt: post.excerpt, publishDate: post.publishDate, author: post.author, imageSrc: post.image.src, kind: post.kind },
+              SITE_URL,
+              SITE_NAME,
+              greenwayBusiness.assets.wordmark,
+            ),
+          ),
+        }}
+      />
 
       <article className="relative overflow-hidden bg-black text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_8%,rgba(126,217,87,0.14),transparent_18rem),radial-gradient(circle_at_86%_10%,rgba(255,127,0,0.14),transparent_22rem)]" />
@@ -125,9 +144,8 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
 
               <div className="px-5 py-7 md:px-9 md:py-10 lg:px-12">
                 <div className="mx-auto max-w-4xl space-y-6 text-base font-medium leading-8 text-zinc-200 md:text-lg md:leading-9">
-                  {post.content.map((paragraph) => (
-                    <p key={paragraph}>{paragraph}</p>
-                  ))}
+                  {/* D239 N-7 (G-117): block body; plain paragraphs render as before. */}
+                  <BlogBody paragraphs={post.content} />
                 </div>
               </div>
             </div>

@@ -1346,7 +1346,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-15 · CONFIRMED · GAP · S3 — Hero is upload-only (no Digital Assets picker, 4 MB); body is plain paragraphs (no headings, inline images, product cards, links)
 - **Pin:** `blog/actions.ts` L38, L166; `BlogEditorClient.tsx` L34; `[slug]/page.tsx` L128–129
-- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status FIXED (D239, N-7).
+- **Resolved (D239, N-7, #PN7):** block body (`blog-blocks-core.ts`, `BlogBody.tsx`) with an Insert toolbar and a Digital Assets picker for inline images and the hero (`hero_media_pick`), kept backward-compatible in `text[]`
 
 ### F-22-16 · CONFIRMED · WEAKNESS · S3 — Body/SEO AI compliance flags are computed but not shown at generate time
 - **Pin:** `ai-blog.ts` L86–94; `blog/actions.ts` L289–317
@@ -1360,7 +1361,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-18 · CONFIRMED · GAP · S3 — Public blog has no category filter or Culture section
 - **Pin:** `(site)/blog/page.tsx`
-- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status FIXED (D239, N-7).
+- **Resolved (D239, N-7, #PN7):** All / Store / Culture / Newsletters chips filter the cards on the same `/blog` page (`BlogFilterGrid.tsx`; Q-22-7)
 
 ### F-22-19 · CONFIRMED · WEAKNESS · S4 — Email config does not trim values; a misleading comment about recipients
 - **Pin:** `newsletter-send-store.ts` L41–47, L274–278
@@ -1369,7 +1371,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-20 · CONFIRMED · GAP · S3 — No Article structured data (JSON-LD) on blog posts
 - **Pin:** no `ld+json` under `src/app/(site)/blog`
-- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-117; status FIXED (D239, N-7).
+- **Resolved (D239, N-7, #PN7):** BlogPosting JSON-LD on every `/blog/[slug]` page (`blogArticleSchema`, `jsonLdText`)
 
 ### F-22-C · CONFIRMED · STRENGTH — What already works (B.2)
 - **Pin:** —
@@ -1393,7 +1396,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
 | SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
 | SOP-11b Creative Studio, Banner Design Studio & Scheduling (v2.0, D233) | 15 new (F-11-19…F-11-32 + F-11-C2; 0×S1, 5×S2 (F-11-19, 20, 21, 22, 29), 8×S3, 1×S4) | 15 | 0 |
-| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19; N-2 fixed F-22-3; N-3 fixed F-22-5, 9; N-4 fixed F-22-11; N-5 fixed F-22-10, 16; N-6 fixed F-22-13, 14; N-8a fixed F-22-8; N-8b AI studio; N-8c motion + interactive (G-118) | 21 | 0 |
+| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19; N-2 fixed F-22-3; N-3 fixed F-22-5, 9; N-4 fixed F-22-11; N-5 fixed F-22-10, 16; N-6 fixed F-22-13, 14; N-8a fixed F-22-8; N-8b AI studio; N-8c motion + interactive (G-118); N-7 fixed F-22-15, 18, 20 | 21 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 

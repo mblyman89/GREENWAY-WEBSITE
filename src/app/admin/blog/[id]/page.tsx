@@ -21,6 +21,8 @@ import {
 import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
 import { cultureGuardForPost } from "@/lib/cms/culture-desk-server";
 import { SchedulePanel } from "@/components/admin/SchedulePanel";
+import { listMedia, publicUrlForKey } from "@/lib/media/store";
+import type { BlogMediaChoice } from "@/components/admin/blog/BlogEditorClient";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,11 @@ export default async function BlogEditorPage({
   // D237 N-3 (F-22-5): blog posts are real schedule targets (5-minute cron).
   const sched = await openSchedulesByTarget("blog_post");
   const nowIso = new Date().toISOString();
+  // D239 N-7 (F-22-15): published images from Digital Assets for the picker.
+  const media: BlogMediaChoice[] = (await listMedia({ status: "published", limit: 200 }).catch(() => []))
+    .filter((a) => /^image\/(png|jpeg|gif|webp)$/.test(a.mime_type ?? ""))
+    .map((a) => ({ id: a.id, url: publicUrlForKey(a.storage_key) ?? a.public_url ?? "", title: a.title || a.filename || "Image", alt: a.alt_text ?? "" }))
+    .filter((m) => m.url);
 
   const initial: BlogEditorInitial = {
     id,
@@ -280,6 +287,7 @@ export default async function BlogEditorPage({
           categories={BLOG_CATEGORIES}
           aiEnabled={isAiConfigured}
           updateAction={updatePostAction}
+          media={media}
         />
       </div>
     </div>
