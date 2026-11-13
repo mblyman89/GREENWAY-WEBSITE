@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- previews of hosted email images (any host), not page images */
 
 /**
  * NewsletterCanvasEditor — D238 N-8a (SOP-22 G-118, F-22-8, Q-22-5 (a)).
