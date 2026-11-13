@@ -30,6 +30,7 @@ import {
 } from "@/lib/cms/newsletter-ai-core";
 import { NewsletterCanvasEditor, type CanvasMediaChoice } from "./NewsletterCanvasEditor";
 import { CanvasGifMaker } from "./CanvasGifMaker";
+import { CanvasPictureTools } from "./CanvasPictureTools";
 import { aiBuildCanvasAction, aiFluxPollAction, aiImageAction, aiImproveBlockAction, aiSubjectIdeasAction } from "@/app/admin/newsletter/canvas/ai-actions";
 
 type Api = { doc: CanvasDoc; setDoc: (d: CanvasDoc) => void; selected: CanvasBlock | null; update: (b: CanvasBlock) => void };
@@ -277,6 +278,7 @@ export function NewsletterCanvasWithAi(props: Omit<Parameters<typeof NewsletterC
       extraTools={(api) => (
         <>
           <CanvasAiStudio postId={rest.postId} aiConfigured={aiConfigured} engines={engines} api={api} />
+          <CanvasPictureTools postId={rest.postId} engines={engines} api={api} />
           <CanvasGifMaker media={media} api={api} />
         </>
       )}

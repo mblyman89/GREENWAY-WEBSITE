@@ -65,7 +65,7 @@ const IMAGE_TIMEOUT_MS = 150_000;
 type Actor = { actorId: string | null; actorEmail: string | null };
 type Fail = { ok: false; error: string };
 
-async function budgetBlock(): Promise<Fail | null> {
+export async function budgetBlock(): Promise<Fail | null> {
   const b = await getBudgetStatus();
   return b.blocked ? { ok: false, error: b.reason ?? "The monthly AI budget is used up." } : null;
 }
@@ -164,7 +164,7 @@ export async function imageEngines(): Promise<ImageEngine[]> {
 }
 
 /** Load a canvas picture and shrink it for the AI (PNG keeps transparency). */
-async function loadInput(url: string): Promise<{ buf: Buffer; mime: string } | Fail> {
+export async function loadInput(url: string): Promise<{ buf: Buffer; mime: string } | Fail> {
   if (!isProbeableUrl(url)) return { ok: false, error: "Pick a picture with a public https link first." };
   const r = await fetchCapped(url);
   if (!r.buf) return { ok: false, error: `The picture could not be loaded (${r.error ?? "error"}).` };
@@ -179,7 +179,7 @@ async function loadInput(url: string): Promise<{ buf: Buffer; mime: string } | F
   }
 }
 
-async function saveResult(b64: string, mime: string, title: string, engine: ImageEngine, uploadedBy: string | null): Promise<{ ok: true; url: string; mediaId: string } | Fail> {
+export async function saveResult(b64: string, mime: string, title: string, engine: ImageEngine | "local", uploadedBy: string | null): Promise<{ ok: true; url: string; mediaId: string } | Fail> {
   const buffer = Buffer.from(b64, "base64");
   if (buffer.length < 100) return { ok: false, error: "The AI returned an empty picture." };
   const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
@@ -221,16 +221,20 @@ export async function aiImage(p: {
   aspect: ImageAspectKey;
   removeBackground: boolean;
   postId: string;
+  /** D243 E-4: a prompt already checked and built by the picture tools (safety rules included). */
+  promptReady?: string;
+  /** D243 E-4: the usage-ledger feature name (default newsletter.ai.image.<engine>). */
+  feature?: string;
 } & Actor): Promise<ImageOut> {
-  const issues = checkImageAsk(p.ask);
+  const issues = p.promptReady ? [] : checkImageAsk(p.ask);
   const must = issues.filter((i) => i.level === "must-fix");
   if (must.length) return { ok: false, error: must.map((i) => i.text).join(" ") };
   const engines = await imageEngines();
   if (!engines.includes(p.engine)) return { ok: false, error: `${p.engine === "flux" ? "FLUX is not set up (Settings > Integrations)." : p.engine === "gemini" ? "Gemini is not set up (AI_GEMINI_API_KEY)." : "GPT Image needs an OpenAI key (OPENAI_API_KEY)."}` };
   const blocked = await budgetBlock();
   if (blocked) return blocked;
-  const prompt = fullImagePrompt(p.ask);
-  const ctx = { feature: `newsletter.ai.image.${p.engine}`, entityType: "blog_post", entityId: p.postId, actorId: p.actorId, actorEmail: p.actorEmail };
+  const prompt = p.promptReady ?? fullImagePrompt(p.ask);
+  const ctx = { feature: p.feature ?? `newsletter.ai.image.${p.engine}`, entityType: "blog_post", entityId: p.postId, actorId: p.actorId, actorEmail: p.actorEmail };
 
   if (p.engine === "flux") {
     if (p.removeBackground) return { ok: false, error: "FLUX cannot make a see-through background. Use GPT Image for Remove background." };
