@@ -893,6 +893,61 @@ export function buildBudalertsRowInfo(
   return out;
 }
 
+/**
+ * D243 — which vendors get the Budalerts lookup on the Vendor Menus page:
+ * every "Still need a menu" vendor first, then every vendor on "Menus on
+ * file" (menus found on Cultivera / GrowFlow / LeafLink / email), so the
+ * owner can fill the remaining gaps there too. De-duplicated, order kept.
+ * Rows with no vendor (menu not linked yet) are skipped: a Budalerts link
+ * always belongs to a vendor card.
+ */
+export function budalertsLookupVendorIds(
+  needed: readonly { vendor: { id: string } }[],
+  searched: readonly { vendorId: string | null }[],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (id: string | null | undefined) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
+  for (const r of needed) add(r.vendor.id);
+  for (const r of searched) add(r.vendorId);
+  return out;
+}
+
+/**
+ * D243 — the names used to suggest Budalerts slugs for each vendor: the
+ * card's own names, plus (for "Menus on file") the seller names the
+ * wholesale menus used. Exact-slug matching is unchanged — extra names
+ * only give more exact chances, never a fuzzy guess.
+ */
+export function budalertsVendorNames(
+  needed: readonly { vendor: { id: string; display_name: string; dba: string | null; legal_name: string | null } }[],
+  searched: readonly {
+    vendorId: string | null;
+    vendor: { display_name: string; dba: string | null; legal_name: string | null } | null;
+    menuNames: readonly string[];
+  }[],
+): Map<string, (string | null)[]> {
+  const out = new Map<string, (string | null)[]>();
+  const add = (id: string, names: readonly (string | null | undefined)[]) => {
+    const list = out.get(id) ?? [];
+    for (const n of names) {
+      const t = (n ?? "").trim();
+      if (t && !list.includes(t)) list.push(t);
+    }
+    out.set(id, list);
+  };
+  for (const r of needed) add(r.vendor.id, [r.vendor.display_name, r.vendor.dba, r.vendor.legal_name]);
+  for (const r of searched) {
+    if (!r.vendorId) continue;
+    add(r.vendorId, [r.vendor?.display_name, r.vendor?.dba, r.vendor?.legal_name, ...r.menuNames]);
+  }
+  return out;
+}
+
 /** "fetched 3 days ago" style status words for a linked brand (no clock inside). */
 export function linkedBrandStatusLabel(b: Pick<BudalertsLinkedBrand, "latestStatus" | "usableId" | "itemCount">): string {
   if (!b.latestStatus) return "not fetched yet";
@@ -1073,5 +1128,25 @@ export function __runBudalertsCoreTests(): { passed: number; failed: number } {
   ok(linkedBrandStatusLabel(b1!.linked[0]) === "last try error; 80 listings on file", "status label: failed retry keeps data");
   ok(linkedBrandStatusLabel({ latestStatus: null, usableId: null, itemCount: 0 }) === "not fetched yet" && linkedBrandStatusLabel({ latestStatus: "empty", usableId: null, itemCount: 0 }) === "no listings on Budalerts", "status label: never / empty");
 
+
+  // D243 — lookup on "Menus on file" too
+  const ids = budalertsLookupVendorIds(
+    [{ vendor: { id: "v1" } }, { vendor: { id: "v2" } }],
+    [{ vendorId: "v3" }, { vendorId: null }, { vendorId: "v1" }, { vendorId: "v4" }, { vendorId: "v3" }],
+  );
+  ok(ids.join(",") === "v1,v2,v3,v4", "lookup ids: needed first, then menus on file, de-duped, unlinked skipped");
+  ok(budalertsLookupVendorIds([], []).length === 0, "lookup ids: empty");
+  const names = budalertsVendorNames(
+    [{ vendor: { id: "v1", display_name: "Grow Op Farms", dba: null, legal_name: "Grow Op Farms LLC" } }],
+    [
+      { vendorId: "v3", vendor: { display_name: "PP Holdings", dba: "Phat Panda", legal_name: null }, menuNames: ["Phat Panda", "Fire Bros"] },
+      { vendorId: null, vendor: null, menuNames: ["Dank Czar"] },
+      { vendorId: "v1", vendor: { display_name: "Grow Op Farms", dba: null, legal_name: null }, menuNames: [" "] },
+    ],
+  );
+  ok(names.get("v3")?.join("|") === "PP Holdings|Phat Panda|Fire Bros", "names: card + menu seller names, de-duped");
+  ok(names.get("v1")?.join("|") === "Grow Op Farms|Grow Op Farms LLC" && !names.has(""), "names: blanks dropped, unlinked menus skipped");
+  const b3 = buildBudalertsRowInfo(["v3"], [], [], names, new Map(), known).get("v3");
+  ok(b3?.suggestions.map((x) => x.slug).join(",") === "phat-panda,fire-bros", "menu seller names give exact-slug suggestions");
   return { passed, failed };
 }

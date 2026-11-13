@@ -3274,3 +3274,13 @@ As built (branch d241-budalerts-fetcher, slices S1-S4):
 - S4 one page: on /admin/purchasing/menus a Budalerts toolbar ("Fetch all due brands", "Refresh brand list"), a Budalerts column on "Still need a menu" (link suggestions, Link by slug, Fetch, View listings, unlink), and a new "Done - data gathered from Budalerts" table. A vendor moves there once a linked brand has a pull with at least one listing. Listings browser /admin/purchasing/menus/budalerts/[id]: photo, retail price, $/g, size, strain, store, "Save photo" / "Save all photos". No purchase-order hand-off (these are retail prices at other stores, not wholesale).
 - Category pages are taken from the brand page's own category links (same set the sitemap lists), at most 8 per brand.
 - Owner steps: run 0364 in the Supabase SQL editor, open Vendor Menus, click "Load Budalerts brand list", then "Link + fetch" on the suggested rows.
+
+## D243 — Budalerts lookup on "Menus on file" (vendors already found on Cultivera / GrowFlow / LeafLink) (2026-11-13)
+
+Owner (verbatim): "thank you, that worked great. I want to use it on my vendors I already looked up on cultivera and growflow and leaflink so I can fill the remaining gaps. the bottom table needs the same lookup feature, I love the way it works currently for the ones I couldnt find menus for. follow the standing rules. thank you"
+
+- "The bottom table" = the "Menus on file" table (one row per vendor whose menu was pulled from Cultivera, GrowFlow, LeafLink or email). It gets the same Budalerts column as "Still need a menu": exact-name suggestions, "Link + fetch", link by slug, Fetch/Refetch, View listings, unlink.
+- Same rules as D242: internal use only, same polite fetcher (3 s gap, 7-day cache, robots-allowed pages), same audited actions. No new migration (0364 tables already hold any vendor's links).
+- These vendors keep their wholesale menu row; they do NOT move to the "Done" table (that table stays for vendors with no wholesale menu). The Budalerts data fills the gaps (photos, retail prices) next to the wholesale menu.
+- As built (branch `d243-budalerts-done-table`): pure helpers `budalertsLookupVendorIds` and `budalertsVendorNames` in budalerts-core.ts (self-test floor 70 -> 86). The board store builds row info for "Still need a menu" + "Menus on file" vendors; suggestions also use the seller names the wholesale menus used (still exact-slug only). "Menus on file" has a Budalerts column with the same BudalertsRowControls; rows whose menu is not linked to a vendor say "link a vendor first". The Done table rule is unchanged. No migration, no new actions. Test: tests/compliance/d243-budalerts-menus-on-file.test.ts.
+- Merge status: not merged; waiting for the owner.

@@ -7,7 +7,8 @@
  *
  *   - the coverage tables' `needed` rows, split into still-needed and done
  *     (a vendor is done once a linked Budalerts brand has a usable pull);
- *   - per-row link state and exact-slug suggestions;
+ *   - per-row link state and exact-slug suggestions (D243: for "Menus on
+ *     file" vendors too, not only "Still need a menu");
  *   - how many linked brands are due for a refetch.
  *
  * Reads are named-column and paged; decisions are in budalerts-core.ts.
@@ -22,7 +23,9 @@ import { dbErrorForStaff } from "@/lib/db/rpc-fallback-core";
 import { loadVendorMenuCoverage } from "@/lib/purchasing/vendor-menu-coverage-store";
 import type { NeededRow } from "@/lib/purchasing/vendor-menu-coverage-core";
 import {
+  budalertsLookupVendorIds,
   budalertsStateByVendor,
+  budalertsVendorNames,
   buildBudalertsRowInfo,
   pickDueSlugs,
   splitNeededByBudalerts,
@@ -100,10 +103,11 @@ async function loadUncached(nowMs: number): Promise<BudalertsBoard> {
   const split = splitNeededByBudalerts(cov.needed, state);
 
   const brandNames = await readBrandNames(base.warnings);
-  const vendorNames = new Map<string, (string | null)[]>();
-  for (const r of cov.needed) vendorNames.set(r.vendor.id, [r.vendor.display_name, r.vendor.dba, r.vendor.legal_name]);
+  // D243 — the lookup also runs on "Menus on file" rows (vendors found on
+  // Cultivera / GrowFlow / LeafLink), using the menus' seller names too.
+  const vendorNames = budalertsVendorNames(cov.needed, cov.searched);
   const info = buildBudalertsRowInfo(
-    cov.needed.map((r) => r.vendor.id),
+    budalertsLookupVendorIds(cov.needed, cov.searched),
     links,
     snaps,
     vendorNames,

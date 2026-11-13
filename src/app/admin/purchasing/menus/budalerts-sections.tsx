@@ -46,10 +46,12 @@ export async function BudalertsToolbar({ now }: { now: number }) {
             <Badge tone="gold">internal use only</Badge>
           </p>
           <p className="mt-1">
-            Link a vendor to its Budalerts brand on the rows below (exact-name suggestions are offered), then fetch. We read
+            Link a vendor to its Budalerts brand on the rows below (exact-name suggestions are offered), then fetch. The same
+            Budalerts column is on &ldquo;Menus on file&rdquo;, to fill photo and price gaps for vendors found on Cultivera,
+            GrowFlow or LeafLink. We read
             only the public brand and category pages robots.txt allows, one page every 3 seconds, and refetch a brand at most
-            every {BUDALERTS_CACHE_DAYS} days. Once a linked brand has listings, the vendor moves to the
-            &ldquo;Done — from Budalerts&rdquo; table. {board.linkedBrands} brand{board.linkedBrands === 1 ? "" : "s"} linked,{" "}
+            every {BUDALERTS_CACHE_DAYS} days. Once a linked brand has listings, a vendor with no wholesale menu moves to the
+            &ldquo;Done — from Budalerts&rdquo; table; a vendor on &ldquo;Menus on file&rdquo; keeps its menu row. {board.linkedBrands} brand{board.linkedBrands === 1 ? "" : "s"} linked,{" "}
             {board.dueBrands} due.
           </p>
           <p className={`mt-1 ${FAINT}`}>{BUDALERTS_INTERNAL_NOTE}</p>
