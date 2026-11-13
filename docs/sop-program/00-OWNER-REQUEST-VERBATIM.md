@@ -3243,3 +3243,34 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
   - **Swap approval switch:** when off, a cash swap with the master safe needs no manager/lead PIN. This holds online (`/api/pos/till`), offline (`approvalOff` on the queued action) and at sync. The audit records `approvalNotRequired`, and `approved_by` is left blank. If the switch is turned back on before an offline swap syncs, the swap is still recorded (money already moved) but flagged as an exception. If the server says approval is needed, the register asks for the PIN again.
   - **Keypad:** a "Keypad" button appears beside any typeable field on the register screen (both the iPad app and the browser). It opens an on-screen pad at the bottom: digits for number/money/PIN fields, letters (ABC/123) for text. The iPad keyboard stays down while it is open, and a field can opt out with `data-keypad="off"`.
   - **Tests:** `register-switches-core` (22) and `register-keypad-core` (37) self-tests; `offline-till-core` floor raised to 34; `tests/compliance/d241-register-switches-keypad.test.ts`.
+
+## D242 (research; first filed as "D224", then "D241", renumbered because main used D224-D241) — Budalerts for the vendor menu feature: research, recon and strategy (2026-11-13, read-only round)
+
+Owner (verbatim): "thank you! I have found another great resource for us to include in our vendor menu feature. please go to this website and gather everything you need to include it in our menu builder. please first visit the site, get what you need, then recon the code, document your findings in a strategy roadmap report. report back with your strategy for including them in the vendor menu. no code edits yet please, just research, recon and reporting. thank you! https://budalerts.com/brands"
+
+- No code edits this round. Report: docs/sop-program/D242-budalerts-strategy.md.
+- Key finding: Budalerts shows RETAIL dispensary shelf prices (from Weedmaps/Leafly/Jane), not wholesale vendor menus. The plan adds it as a separate "Retail market" layer and never counts it as a vendor menu.
+- Merge status: carried on branch `d241-budalerts-fetcher`, owner approved the merge on 2026-11-13.
+
+## D242 (build) — Budalerts fetcher on the Vendor Menus page (2026-11-13)
+
+Owner (verbatim): "thank you. I have received permission from them to use their brand photos and descriptions and prices for the brands I carry currently. so long as we do not advertise or sell the info, we are fine to use it internally. we want the images and descriptions and prices. please build the fetcher so it is respectful with its scraping. I want all the product data for the remaining vendors we cant get data from on cultivera or growflow or leaflink. please build this so it will complete our internal records. we have the green light to build a fantastic fetcher to complement our vendor menu branch. if you are fine with this. please begin building it. I want everything to be included on the same vendor menu page, so its all in one place. vendors who are in the top table can be moved out to a done table after having gathered their data. if you agree with all of this and accept the permission given, then please begin building everything. push work often, but do not merge any slices, another agent is working. just get the work done and safely out of the sandbox. I will let you know when it is safe to merge. follow the standing rules. thank you."
+
+Permission as stated by the owner, accepted and recorded:
+- Budalerts allows us to use brand photos, descriptions and prices for the brands Greenway currently carries.
+- Use is INTERNAL ONLY: never advertised, never sold.
+- The build enforces this. Budalerts data only shows in the back office, it is never sent to the public site, Leafly, Weedmaps or any feed, and the fetcher only fetches brands linked to a vendor we carry.
+
+Verified facts that shape the build:
+- The public brand, product and dispensary pages carry name, size, price, $/g, category, strain, store and image. They carry NO description text (checked on 3 product pages, a brand page and a strain page, 2026-11-13). A description column is kept and filled only when a page provides one; it is never invented.
+- Each brand page shows at most the 24 best-priced listings. The fetcher widens coverage by also reading the brand's per-category pages from the WA sitemap.
+
+Merge status: owner said "Please merge. Make sure there are no collisions before doing so." (2026-11-13). Merged after renumbering D241 -> D242 (main had used D241 for register switches); migration 0364 is still the next free number on main.
+
+As built (branch d241-budalerts-fetcher, slices S1-S4):
+- S1 `src/lib/purchasing/budalerts-core.ts` (PURE, 81 self-tests, registered in run-pure-selftests): robots-allowed URL guard, 3 s gap, 7-day cache, stop on 429/503/403, brand/category/product/sitemap parsers checked against saved real pages, prices in cents, exact-slug suggestions only, the done rule, row board, media labels.
+- S2 migration `0364_budalerts_menus.sql`: budalerts_brand_links, budalerts_brand_snapshots, budalerts_menu_items (price_minor, price_per_gram_minor), budalerts_fetch_state (shared request clock, one lease, brand-list cache). Service role only, RLS on. Rollback + pg-check + registers. Background fetching is OFF by default (auto_enabled false) and no Vercel cron was added.
+- S3 server: budalerts-store.ts (named columns, paged reads, "run migration 0364" message when the tables are missing), budalerts-fetch.ts (one request at a time, 3 s apart across all instances, honest User-Agent, 20 s / 2 MB caps, no redirects followed, at most 40 requests a run), budalerts-media.ts (photos saved as DRAFTS, platform "other" so they are never auto-published, tagged budalerts + internal-only, credited "Budalerts (internal use only)", NOT written to the product knowledge base that feeds public text), menus/budalerts-actions.ts (7 actions, all inventory.manage, all audited; kept out of menus/actions.ts).
+- S4 one page: on /admin/purchasing/menus a Budalerts toolbar ("Fetch all due brands", "Refresh brand list"), a Budalerts column on "Still need a menu" (link suggestions, Link by slug, Fetch, View listings, unlink), and a new "Done - data gathered from Budalerts" table. A vendor moves there once a linked brand has a pull with at least one listing. Listings browser /admin/purchasing/menus/budalerts/[id]: photo, retail price, $/g, size, strain, store, "Save photo" / "Save all photos". No purchase-order hand-off (these are retail prices at other stores, not wholesale).
+- Category pages are taken from the brand page's own category links (same set the sitemap lists), at most 8 per brand.
+- Owner steps: run 0364 in the Supabase SQL editor, open Vendor Menus, click "Load Budalerts brand list", then "Link + fetch" on the suggested rows.

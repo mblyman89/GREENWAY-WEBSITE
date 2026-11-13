@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /alerts
+Disallow: /favorites
+Disallow: /settings
+Disallow: /compare
+Disallow: /browse
+Disallow: /buy-again
+Disallow: /api/
+Disallow: /config.js
+
+Sitemap: https://budalerts.com/sitemap.xml
