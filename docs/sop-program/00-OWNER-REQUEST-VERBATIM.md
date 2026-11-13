@@ -3290,7 +3290,7 @@ Decisions (the recommendations the owner approved):
 
 Slices: E-1 brand frame (G-121) · E-2 Banner Studio as an email "Design section" (G-122) · E-3 full-page editor, layouts, templates and inbox previews (G-123) · E-4 AI picture tools (G-124) · E-5 Ask the canvas (G-125) · E-6 polish: animated sections as GIFs, dark-mode-safe logos, contrast, inbox size, first-name merge tags (G-126). Every AI call keeps the WAC 314-55-155 checks and the monthly AI budget. Old canvases keep working.
 
-### As built — E-1 brand frame (#PE1)
+### As built — E-1 brand frame (#1790)
 
 - **G-121:** Newsletter Send > **Brand frame** (`/admin/newsletter/frame`), owner or admin only (others see it read-only). One header and footer for every canvas newsletter, saved in `site_settings` key `newsletter_brand_frame` (no migration).
 - Header: the Greenway wordmark (white on the dark look, dark ink on the light look; new email-sized PNGs in `public/brand/email/`) or an uploaded logo (one for dark, one for light), the newsletter title, a tagline, the issue number (newsletters counted in the app plus "issues before the app") and the date. Three styles: Classic, Bold (colour band) and Minimal.

@@ -193,7 +193,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.2 (D239, #1786):** N-10 help built: updated helpers on Blog & Newsletter and the Send Center, a Sunday checklist strip (Forms 8.1 and 8.2 in the app), concierge `blog-newsletter` corrected plus `newsletter-sunday` and `culture-posts` topics, Help Center answers corrected (G-120). No migration. Phase N complete.
 
-**v2.3 (D243, #PE1):** Phase E "Email Studio" APPROVED (E-1 … E-6, G-121 … G-126). E-1 brand frame built: one locked header and footer for every newsletter (logo, title, issue number and date; socials, 21+, warnings, unsubscribe), three styles, owner/admin only, at Newsletter Send > Brand frame. No migration.
+**v2.3 (D243, #1790):** Phase E "Email Studio" APPROVED (E-1 … E-6, G-121 … G-126). E-1 brand frame built: one locked header and footer for every newsletter (logo, title, issue number and date; socials, 21+, warnings, unsubscribe), three styles, owner/admin only, at Newsletter Send > Brand frame. No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
