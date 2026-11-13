@@ -21,7 +21,9 @@
 --      media library (kept as a draft, never auto-published).
 --   4. public.budalerts_fetch_state: one row (id 1). The time of the last
 --      request to budalerts.com (the 3 second gap holds across servers), a
---      run lease so two runs never overlap, and the background switch.
+--      run lease so two runs never overlap, the background switch, and the
+--      Washington brand slugs read from the public brand sitemap (cached so
+--      the suggestions never fetch on a page load).
 --
 -- RESET. KEEP in the factory reset core. FKs only to vendors and media_assets
 -- (both KEEP) and to our own tables.
@@ -136,6 +138,8 @@ create table if not exists public.budalerts_fetch_state (
   auto_enabled     boolean not null default false,
   last_run_at      timestamptz,
   last_run_note    text,
+  known_slugs      jsonb not null default '[]'::jsonb,
+  known_slugs_at   timestamptz,
   updated_at       timestamptz not null default now(),
   constraint budalerts_fetch_state_one_row_chk check (id = 1),
   constraint budalerts_fetch_state_note_chk check (last_run_note is null or length(last_run_note) <= 1000)
@@ -148,6 +152,6 @@ revoke all on table public.budalerts_fetch_state from public, anon, authenticate
 grant select, insert, update, delete on table public.budalerts_fetch_state to service_role;
 
 comment on table public.budalerts_fetch_state is
-  'D241 (0364): one row. Last request time to budalerts.com (3 second gap across servers), run lease, background switch (off by default). Service role only.';
+  'D241 (0364): one row. Last request time to budalerts.com (3 second gap across servers), run lease, background switch (off by default), cached Washington brand slugs from the sitemap. Service role only.';
 
 notify pgrst, 'reload schema';
