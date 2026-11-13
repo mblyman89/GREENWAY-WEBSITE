@@ -342,6 +342,8 @@ function summary(b: CanvasBlock): string {
     case "countdown": return b.endsAt ? `ends ${b.endsAt.slice(0, 16).replace("T", " ")} UTC` : "no end time";
     case "poll": return `${b.question.slice(0, 30)} · ${b.options.length} answers`;
     case "design": return !b.src ? "no picture yet" : b.alt || "picture";
+    case "overlay": return b.heading || (b.src ? "picture" : "no picture yet");
+    case "columns": return `${b.items.length} columns`;
     default: return "";
   }
 }

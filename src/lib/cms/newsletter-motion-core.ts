@@ -204,6 +204,8 @@ function blockLabel(b: CanvasDoc["blocks"][number]): string {
     case "countdown": return `Countdown: ${b.label || "timer"}`;
     case "poll": return `Poll: ${b.question}`.slice(0, 80);
     case "design": return `Design: ${b.alt || "picture"}`.slice(0, 80);
+    case "overlay": return `Picture with words: ${b.heading || b.alt || "picture"}`.slice(0, 80);
+    case "columns": return `Columns: ${b.items.map((c) => c.title).filter(Boolean).join(", ") || "columns"}`.slice(0, 80);
     default: return b.type;
   }
 }
