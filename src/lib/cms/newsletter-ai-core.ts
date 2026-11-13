@@ -244,6 +244,10 @@ export function editableWords(b: CanvasBlock): Record<string, string> | null {
     }
     case "hours":
       return { note: b.note };
+    case "countdown":
+      return { label: b.label };
+    case "poll":
+      return { question: b.question };
     default:
       return null; // review quotes are the customer's words; divider/spacer have none
   }

@@ -93,7 +93,8 @@ export function renderOptsFor(post: { slug: string } | null, unsubscribeUrl: str
     siteUrl: SITE,
     hours: greenwayBusiness.hours.display,
     unsubscribeUrl,
-    webUrl: post ? `${SITE}/blog/${post.slug}` : null,
+    // N-8c: the hosted copy (falls back to the blog post when it is not a canvas).
+    webUrl: post ? `${SITE}/newsletter-web/${post.slug}` : null,
     campaign: post?.slug ?? "newsletter",
   };
 }

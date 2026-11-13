@@ -32,6 +32,7 @@ import {
   EMAIL_FONT_PX,
 } from "./newsletter-email-core";
 import type { ThisWeekFeed } from "./this-week-feed-core";
+import { countdownImageUrl, formatEndsAt, pollContent, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, COUNTDOWN_W } from "./newsletter-motion-core";
 
 // ── Limits ────────────────────────────────────────────────────────────────
 
@@ -86,11 +87,15 @@ export type CanvasBlock =
   | { id: string; type: "review"; quote: string; name: string; href: string }
   | { id: string; type: "hours"; note: string }
   | { id: string; type: "divider" }
-  | { id: string; type: "spacer"; height: number };
+  | { id: string; type: "spacer"; height: number }
+  /** N-8c: a live countdown GIF (drawn by our server when the email is opened). */
+  | { id: string; type: "countdown"; endsAt: string; label: string; href: string }
+  /** N-8c: a one-tap poll; each answer is a tracked link, so a tap is a vote. */
+  | { id: string; type: "poll"; question: string; options: string[]; href: string };
 
 export type CanvasBlockType = CanvasBlock["type"];
 export const BLOCK_TYPES: readonly CanvasBlockType[] = [
-  "header", "headline", "text", "image", "button", "qr", "cards", "review", "hours", "divider", "spacer",
+  "header", "headline", "text", "image", "button", "qr", "cards", "review", "hours", "divider", "spacer", "countdown", "poll",
 ];
 export const BLOCK_LABEL: Record<CanvasBlockType, string> = {
   header: "Header",
@@ -104,6 +109,8 @@ export const BLOCK_LABEL: Record<CanvasBlockType, string> = {
   hours: "Hours",
   divider: "Divider",
   spacer: "Spacer",
+  countdown: "Live countdown (moving)",
+  poll: "One-tap poll",
 };
 
 export type CanvasDoc = {
@@ -225,6 +232,14 @@ export function cleanBlock(raw: unknown, i = 0): CanvasBlock | null {
       return { id, type: "divider" };
     case "spacer":
       return { id, type: "spacer", height: num(r.height, 8, 80, 24) };
+    case "countdown": {
+      const ms = Date.parse(line(r.endsAt, 40));
+      return { id, type: "countdown", endsAt: Number.isFinite(ms) ? new Date(ms).toISOString() : "", label: line(r.label, 80), href: safeHref(r.href) };
+    }
+    case "poll": {
+      const options = (Array.isArray(r.options) ? r.options : []).map((o) => line(o, 60)).filter(Boolean).slice(0, POLL_MAX_OPTIONS);
+      return { id, type: "poll", question: line(r.question, 160), options, href: safeHref(r.href) };
+    }
     default:
       return null;
   }
@@ -262,6 +277,14 @@ export function blankBlock(type: CanvasBlockType, id: string = newBlockId(type))
   if (base.type === "text") base.text = "Write a short note to your members.";
   if (base.type === "button") base.label = "Shop the menu";
   if (base.type === "header") base.tagline = "Newsletter";
+  if (base.type === "countdown") {
+    base.endsAt = new Date(Date.now() + 3 * 86400_000).toISOString();
+    base.label = "The deal ends in";
+  }
+  if (base.type === "poll") {
+    base.question = "What should we stock more of?";
+    base.options = ["Option 1", "Option 2"];
+  }
   return base;
 }
 
@@ -382,7 +405,7 @@ function cardHtml(c: CanvasCard, t: ThemeColors, width: number, link: (h: string
   return `${img}${title}${text}${cta}`;
 }
 
-function blockHtml(b: CanvasBlock, t: ThemeColors, o: RenderOpts): string {
+function blockHtml(b: CanvasBlock, t: ThemeColors, o: RenderOpts, theme: CanvasTheme = "dark"): string {
   const link = (h: string) => withUtm(h, hostOf(o.siteUrl), o.campaign, b.id);
   const pad = "padding:12px 28px";
   switch (b.type) {
@@ -440,7 +463,30 @@ function blockHtml(b: CanvasBlock, t: ThemeColors, o: RenderOpts): string {
       return `<tr><td style="padding:8px 28px"><div style="height:1px;line-height:1px;font-size:1px;background:${t.border}">&nbsp;</div></td></tr>`;
     case "spacer":
       return `<tr><td style="height:${b.height}px;line-height:${b.height}px;font-size:1px">&nbsp;</td></tr>`;
+    case "countdown": {
+      const src = b.endsAt ? countdownImageUrl(o.siteUrl, b.endsAt, theme) : "";
+      if (!src) return "";
+      const img = imgTag(src, `${b.label || "Time left"}: ends ${formatEndsAt(b.endsAt)}`, COUNTDOWN_W, ";margin:0 auto;border-radius:14px");
+      const wrapped = b.href ? `<a href="${escapeHtml(link(b.href))}" style="text-decoration:none">${img}</a>` : img;
+      const label = b.label ? `<p style="margin:0 0 10px;color:${t.gold};font-size:${CANVAS_FONT_PX.small}px;font-weight:bold;text-transform:uppercase;letter-spacing:2px">${escapeHtml(b.label)}</p>` : "";
+      return `<tr><td align="center" style="${pad};text-align:center">${label}${wrapped}<p style="margin:8px 0 0;color:${t.muted};font-size:${CANVAS_FONT_PX.small}px">Ends ${escapeHtml(formatEndsAt(b.endsAt))} (Pacific)</p></td></tr>`;
+    }
+    case "poll": {
+      if (!b.question || b.options.length < POLL_MIN_OPTIONS) return "";
+      const target = pollTarget(b.href, o.siteUrl);
+      const opts = b.options
+        .map((label, i) => `<tr><td style="padding:0 0 8px"><a href="${escapeHtml(withUtm(target, hostOf(o.siteUrl), o.campaign, pollContent(b.id, i + 1)))}" style="display:block;padding:12px 16px;border:1px solid ${t.accent};border-radius:10px;color:${t.text};font-size:${CANVAS_FONT_PX.text}px;font-weight:bold;text-decoration:none;text-align:center">${escapeHtml(label)}</a></td></tr>`)
+        .join("");
+      return `<tr><td style="${pad}"><p style="margin:0 0 4px;color:${t.gold};font-size:${CANVAS_FONT_PX.small}px;font-weight:bold;text-transform:uppercase;letter-spacing:2px">Quick poll</p><p style="margin:0 0 12px;color:${t.text};font-size:17px;font-weight:bold;line-height:1.4">${escapeHtml(b.question)}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${opts}</table><p style="margin:4px 0 0;color:${t.muted};font-size:${CANVAS_FONT_PX.small}px">One tap is your vote.</p></td></tr>`;
+    }
   }
+}
+
+/** Poll answers must land on our own site, or the tap cannot be counted. */
+export function pollTarget(href: string, siteUrl: string): string {
+  const own = hostOf(siteUrl).replace(/^www\./, "").toLowerCase();
+  const host = hostOf(href).replace(/^www\./, "").toLowerCase();
+  return href && own && (host === own || host.endsWith(`.${own}`)) ? href : `${siteUrl.replace(/\/$/, "")}/`;
 }
 
 function hostOf(url: string): string {
@@ -461,7 +507,7 @@ export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
   const web = o.webUrl
     ? `<tr><td style="padding:0 0 10px;text-align:center"><a href="${escapeHtml(o.webUrl)}" style="color:#8a8a8a;font-size:${CANVAS_FONT_PX.small}px;text-decoration:underline">View in your browser</a></td></tr>`
     : "";
-  const body = doc.blocks.map((b) => blockHtml(b, t, o)).join("\n");
+  const body = doc.blocks.map((b) => blockHtml(b, t, o, doc.theme)).join("\n");
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="color-scheme" content="${doc.theme === "dark" ? "dark" : "light"}"/><title>${escapeHtml(doc.subject || o.businessName)}</title>
 <style>@media only screen and (max-width:620px){.gw-col{display:block!important;width:100%!important;padding:0 0 16px!important}}</style></head>
@@ -514,6 +560,16 @@ export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
         out.push("----");
         break;
       case "spacer":
+        break;
+      case "countdown":
+        if (b.endsAt) out.push(`${b.label || "Ends"}: ${formatEndsAt(b.endsAt)} (Pacific)${b.href ? ` ${b.href}` : ""}`);
+        break;
+      case "poll":
+        if (b.question && b.options.length >= POLL_MIN_OPTIONS) {
+          const target = pollTarget(b.href, o.siteUrl);
+          out.push(`QUICK POLL: ${b.question}`);
+          b.options.forEach((label, i) => out.push(`- ${label}: ${withUtm(target, hostOf(o.siteUrl), o.campaign, pollContent(b.id, i + 1))}`));
+        }
         break;
     }
   }
@@ -610,6 +666,11 @@ export function checkCanvas(doc: CanvasDoc, html: string, text: string, images?:
     if (b.type === "qr" && !b.src) must("qr", "A QR block has no code yet. Press Make QR.", b.id);
     if (b.type === "qr" && b.url && !/^https:\/\//i.test(b.url)) warn("qr-http", "Point QR codes at an https link.", b.id);
     if (b.type === "review" && b.quote && !b.name) warn("review-name", "Add the reviewer's first name (with their permission).", b.id);
+    if (b.type === "countdown" && !b.endsAt) must("countdown", "A countdown needs an end date and time.", b.id);
+    if (b.type === "countdown" && b.endsAt && Date.parse(b.endsAt) <= Date.now()) warn("countdown-ended", "This countdown has already ended; it will show 00:00:00:00.", b.id);
+    if (b.type === "countdown") warn("countdown-outlook", "Outlook for Windows shows the countdown as a still picture (the time left when it is opened). The end date is printed under it.", b.id);
+    if (b.type === "poll" && (!b.question || b.options.length < POLL_MIN_OPTIONS)) must("poll", `A poll needs a question and at least ${POLL_MIN_OPTIONS} answers.`, b.id);
+    if (b.type === "poll" && b.href && !/^https?:\/\/([a-z0-9-]+\.)*greenwaymarijuana\.com(\/|$)/i.test(b.href)) warn("poll-link", "Poll answers can only be counted on our own site; they will open the home page.", b.id);
   }
 
   return {
@@ -875,5 +936,17 @@ export function __runNewsletterCanvasCoreTests(): { passed: number; failed: numb
   ok("probe: ip refused", !isProbeableUrl("https://169.254.169.254/latest"));
   ok("probe: ipv6 refused", !isProbeableUrl("https://[::1]/x"));
   ok("probe: userinfo refused", !isProbeableUrl("https://a:b@x.example/x"));
+  // N-8c: countdown + poll
+  const mc = normalizeCanvas({ subject: "s", blocks: [{ id: "cd", type: "countdown", endsAt: "2027-01-01T08:00:00Z", label: "Sale ends" }, { id: "pl", type: "poll", question: "Next drop?", options: ["Gummies", "Pre-rolls", " ", ""], href: "https://evil.example/" }] });
+  ok("countdown clean", mc.blocks[0].type === "countdown" && mc.blocks[0].endsAt === "2027-01-01T08:00:00.000Z");
+  ok("poll options clean", mc.blocks[1].type === "poll" && mc.blocks[1].options.length === 2);
+  const mh = renderCanvasEmail(mc, o);
+  const mt = canvasPlainText(mc, o);
+  ok("countdown img", mh.includes("/api/newsletter/countdown?e=1798790400&amp;th=d"));
+  ok("poll votes tagged on our site", mh.includes("utm_content=pl-o1") && mh.includes("utm_content=pl-o2") && !mh.includes("evil.example"));
+  ok("poll text part", mt.includes("QUICK POLL: Next drop?") && mt.includes("utm_content=pl-o2"));
+  ok("countdown bad date must-fix", checkCanvas(normalizeCanvas({ subject: "s", blocks: [{ type: "countdown", endsAt: "x" }] }), mh, mt).issues.some((i) => i.code === "countdown" && i.level === "must-fix"));
+  ok("poll needs 2 answers", checkCanvas(normalizeCanvas({ subject: "s", blocks: [{ type: "poll", question: "q", options: ["a"] }] }), mh, mt).issues.some((i) => i.code === "poll"));
+  ok("blank poll + countdown are valid", blankBlock("poll").type === "poll" && blankBlock("countdown").type === "countdown" && Date.parse((blankBlock("countdown") as { endsAt: string }).endsAt) > Date.now());
   return { passed, failed };
 }
