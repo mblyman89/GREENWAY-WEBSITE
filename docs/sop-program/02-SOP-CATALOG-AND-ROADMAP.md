@@ -203,7 +203,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.7 (D243, #1794):** E-5 Ask the canvas built: the AI looks at a picture of the email and the section list, answers and proposes steps (words, style, look, sections, picture tools), checked against the copy and compliance rules; Apply then Undo. No migration.
 
-**v2.8 (D243, #PE6):** E-6 polish built: first-name merge tags, readability heads-ups, dark-mode-safe wordmark, inbox size list and moving (GIF) design sections. Phase E (E-1 to E-6) is complete. No migration.
+**v2.8 (D243, #1795):** E-6 polish built: first-name merge tags, readability heads-ups, dark-mode-safe wordmark, inbox size list and moving (GIF) design sections. Phase E (E-1 to E-6) is complete. No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
