@@ -44,6 +44,7 @@ import {
   uploadCanvasImageAction,
   testSendCanvasAction,
 } from "@/app/admin/newsletter/canvas/actions";
+import { quoteIsCurated, reviewToCanvas, type CuratedReviewChoice } from "@/lib/cms/curated-reviews-core";
 
 export type CanvasMediaChoice = { url: string; title: string };
 
@@ -69,12 +70,15 @@ export function NewsletterCanvasEditor({
   renderOpts,
   media,
   extraTools,
+  reviews = [],
 }: {
   postId: string;
   postTitle: string;
   initial: CanvasDoc;
   renderOpts: RenderOpts;
   media: CanvasMediaChoice[];
+  /** D239 N-9 (Q-22-2 (a)): curated reviews with the permission tick. */
+  reviews?: CuratedReviewChoice[];
   /** N-8b/N-8c slot: the AI studio and motion tools render here. */
   extraTools?: (api: { doc: CanvasDoc; setDoc: (d: CanvasDoc) => void; selected: CanvasBlock | null; update: (b: CanvasBlock) => void }) => ReactNode;
 }) {
@@ -260,7 +264,7 @@ export function NewsletterCanvasEditor({
           {selected ? (
             <div className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <p className="text-sm font-semibold text-[var(--admin-text)]">{BLOCK_LABEL[selected.type]}</p>
-              <BlockFields b={selected} update={update} media={media} pickFile={pickFile} makeQr={makeQr} pending={pending} />
+              <BlockFields b={selected} update={update} media={media} pickFile={pickFile} makeQr={makeQr} pending={pending} reviews={reviews} />
             </div>
           ) : null}
 
@@ -366,6 +370,7 @@ function BlockFields({
   pickFile,
   makeQr,
   pending,
+  reviews,
 }: {
   b: CanvasBlock;
   update: (b: CanvasBlock) => void;
@@ -373,6 +378,7 @@ function BlockFields({
   pickFile: (blockId: string, card?: number) => void;
   makeQr: (b: Extract<CanvasBlock, { type: "qr" }>) => void;
   pending: boolean;
+  reviews: CuratedReviewChoice[];
 }) {
   switch (b.type) {
     case "header":
@@ -446,6 +452,18 @@ function BlockFields({
     case "review":
       return (
         <>
+          {/* D239 N-9 (Q-22-2 (a)): pick from the Curated reviews list (permission ticked). */}
+          {reviews.length > 0 ? (
+            <Select value="" onChange={(e) => { const r = reviews.find((x) => x.id === e.target.value); if (r) update({ ...b, ...reviewToCanvas(r) }); }} data-testid="canvas-review-pick">
+              <option value="">Pick a curated review…</option>
+              {reviews.map((r) => <option key={r.id} value={r.id}>{`${r.firstName}: ${r.quote.slice(0, 70)}${r.quote.length > 70 ? "…" : ""}`}</option>)}
+            </Select>
+          ) : (
+            <p className="text-[11px] text-[var(--admin-text-faint)]">No curated reviews yet. Add them (with the customer&apos;s permission) in Blog &amp; Newsletter &gt; Curated reviews.</p>
+          )}
+          {b.quote.trim() && !quoteIsCurated(b.quote, reviews) ? (
+            <p className="text-[11px] text-[var(--admin-orange)]">This quote is not in the Curated reviews list. Only use a review the customer said we may quote.</p>
+          ) : null}
           <Row label="Quote (only with the reviewer's permission)"><Textarea rows={3} value={b.quote} onChange={(e) => update({ ...b, quote: e.target.value })} /></Row>
           <Row label="First name"><Input value={b.name} onChange={(e) => update({ ...b, name: e.target.value })} /></Row>
           <Row label="Google review link (optional)"><Input value={b.href} onChange={(e) => update({ ...b, href: e.target.value })} /></Row>

@@ -22,6 +22,7 @@ import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
 import { cultureGuardForPost } from "@/lib/cms/culture-desk-server";
 import { SchedulePanel } from "@/components/admin/SchedulePanel";
 import { listMedia, publicUrlForKey } from "@/lib/media/store";
+import { usableCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import type { BlogMediaChoice } from "@/components/admin/blog/BlogEditorClient";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,7 @@ export default async function BlogEditorPage({
     .filter((a) => /^image\/(png|jpeg|gif|webp)$/.test(a.mime_type ?? ""))
     .map((a) => ({ id: a.id, url: publicUrlForKey(a.storage_key) ?? a.public_url ?? "", title: a.title || a.filename || "Image", alt: a.alt_text ?? "" }))
     .filter((m) => m.url);
+  const reviews = await usableCuratedReviews();
 
   const initial: BlogEditorInitial = {
     id,
@@ -288,6 +290,7 @@ export default async function BlogEditorPage({
           aiEnabled={isAiConfigured}
           updateAction={updatePostAction}
           media={media}
+          reviews={reviews}
         />
       </div>
     </div>

@@ -6,6 +6,7 @@ import { BackLink } from "@/components/admin/ux";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { BlogIdeaAssistant } from "@/components/admin/blog/BlogIdeaAssistant";
 import { NewPostFromPicker } from "@/components/admin/blog/NewPostFromPicker";
+import { usableCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import { CultureNewsDesk } from "@/components/admin/blog/CultureNewsDesk";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
 import { createPostAction } from "../actions";
@@ -52,7 +53,7 @@ export default async function NewBlogPostPage({
       <div className="mx-auto w-full max-w-3xl space-y-6 px-5 py-6 sm:px-8">
         {/* D237 N-5 (SOP-22 G-115): grounded "New post from…" — facts from the This-week feed. */}
         <div id="from">
-          <NewPostFromPicker aiEnabled={isAiConfigured} />
+          <NewPostFromPicker aiEnabled={isAiConfigured} reviews={await usableCuratedReviews()} />
         </div>
 
         {/* D237 N-6 (SOP-22 G-116): culture news desk — cited news, health guard, Find news on demand. */}

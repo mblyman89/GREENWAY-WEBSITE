@@ -11,6 +11,8 @@
  * audited; must-fix items are refused on the server too).
  */
 import { useState, useTransition } from "react";
+import Link from "next/link";
+import { reviewToNotes, type CuratedReviewChoice } from "@/lib/cms/curated-reviews-core";
 import { Badge, Button, Textarea } from "@/components/admin/ui";
 import {
   loadTemplateItemsAction,
@@ -33,7 +35,7 @@ type DraftState = {
 const BOX = "rounded-[var(--admin-radius-xl)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5";
 const PILL = "rounded-full px-3.5 py-1.5 text-[0.7rem] font-black uppercase tracking-[0.1em] transition";
 
-export function NewPostFromPicker({ aiEnabled }: { aiEnabled: boolean }) {
+export function NewPostFromPicker({ aiEnabled, reviews = [] }: { aiEnabled: boolean; reviews?: CuratedReviewChoice[] }) {
   const [key, setKey] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [held, setHeld] = useState<{ label: string; reason: string }[]>([]);
@@ -174,6 +176,29 @@ export function NewPostFromPicker({ aiEnabled }: { aiEnabled: boolean }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--admin-text-faint)]">
             Notes {template.needsNotes ? "(needed)" : "(optional)"}
           </p>
+          {template.key === "review-spotlight" ? (
+            reviews.length > 0 ? (
+              <select
+                value=""
+                onChange={(e) => {
+                  const r = reviews.find((x) => x.id === e.target.value);
+                  if (r) setNotes(reviewToNotes(r));
+                }}
+                className="mb-2 mt-1 w-full rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)]"
+                data-testid="spotlight-review-pick"
+                aria-label="Pick a curated review"
+              >
+                <option value="">Pick a curated review (permission given)…</option>
+                {reviews.map((r) => (
+                  <option key={r.id} value={r.id}>{`${r.firstName}: ${r.quote.slice(0, 70)}${r.quote.length > 70 ? "…" : ""}`}</option>
+                ))}
+              </select>
+            ) : (
+              <p className="mb-2 mt-1 text-xs text-[var(--admin-text-faint)]">
+                No curated reviews yet. Add one with the customer&apos;s permission in <Link href="/admin/blog/reviews" className="text-[var(--admin-accent)] hover:underline">Curated reviews</Link>.
+              </p>
+            )
+          ) : null}
           <Textarea
             rows={3}
             value={notes}

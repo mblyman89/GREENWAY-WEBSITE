@@ -3187,3 +3187,10 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - **F-22-20:** each post page carries Article (BlogPosting) JSON-LD.
 - `src/lib/blog/blog-blocks-core.ts`, `src/components/blog/BlogBody.tsx`, `BlogFilterGrid.tsx`; editor and save in `BlogEditorClient.tsx` and `admin/blog/actions.ts`. Test `tests/compliance/d237-newsletter-n7-rich-posts.test.ts`; pure self-test `__runBlogBlocksCoreTests` (70). SOP-22 v2.0.
 - **Owner step:** none.
+
+### As built — N-9 curated reviews (#PN9)
+
+- **F-22-12 / G-119 (Q-22-2 (a) curated):** Blog & Newsletter > **Curated reviews** (`/admin/blog/reviews`): the quote word for word, first name only, the Google review link and a **Permission given** tick with a note of how the customer said yes. No live Google feed (Google does not allow copying its reviews without permission).
+- Only ticked reviews with a first name and no health-benefit wording (WAC 314-55-155) can be used: **Pick a curated review** in the canvas Customer review section, **Insert a review** in the post editor (an N-7 quote block) and the **Review spotlight** in New post from…, which refuses a review that is not on the list.
+- `src/lib/cms/curated-reviews-core.ts`, `curated-reviews-server.ts` (site_settings `curated_reviews`, no migration), `src/app/admin/blog/reviews/`. Test `tests/compliance/d237-newsletter-n9-curated-reviews.test.ts`; pure self-test `__runCuratedReviewsCoreTests` (41). SOP-22 v2.1.
+- **Owner step:** none (add reviews as customers agree).

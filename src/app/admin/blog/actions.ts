@@ -6,6 +6,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { uploadMedia, getMedia } from "@/lib/media/store";
 import { pickedHeroId } from "@/lib/blog/blog-blocks-core";
+import { spotlightNotesProblem } from "@/lib/cms/curated-reviews-core";
+import { usableCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import {
   createPost,
   updatePost,
@@ -548,6 +550,11 @@ export async function loadTemplateItemsAction(key: string): Promise<TemplateItem
 
 export async function draftFromTemplateAction(input: { key: string; itemId: string; notes: string }): Promise<TemplateDraftOut> {
   const session = await requirePermission("blog.manage");
+  // D239 N-9 (Q-22-2 (a)): a review spotlight quotes only a curated review with permission.
+  if (String(input?.key ?? "") === "review-spotlight") {
+    const why = spotlightNotesProblem(String(input?.notes ?? ""), await usableCuratedReviews());
+    if (why) return { ok: false, error: why };
+  }
   try {
     const res = await draftFromTemplate({
       key: String(input?.key ?? ""),
@@ -586,6 +593,10 @@ export async function createPostFromDraftAction(input: {
   const session = await requirePermission("blog.manage");
   const title = String(input?.title ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
   if (!title) return { ok: false, error: "Pick or type a headline first." };
+  if (String(input?.key ?? "") === "review-spotlight") {
+    const why = spotlightNotesProblem(String(input?.notes ?? ""), await usableCuratedReviews());
+    if (why) return { ok: false, error: why };
+  }
   const draft = normalizeDraft(input?.draft);
   const checked = { ...draft, headlines: [title] };
   const final = await checkFinalDraft(String(input?.key ?? ""), String(input?.itemId ?? ""), String(input?.notes ?? ""), checked);

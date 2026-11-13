@@ -5,6 +5,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui/Button";
 import { listMedia, publicUrlForKey } from "@/lib/media/store";
+import { usableCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import { starterCanvas } from "@/lib/cms/newsletter-canvas-core";
 import { getCanvasPost, loadCanvas, renderOptsFor } from "@/lib/cms/newsletter-canvas-server";
 import { type CanvasMediaChoice } from "@/components/admin/newsletter/NewsletterCanvasEditor";
@@ -31,6 +32,8 @@ export default async function NewsletterCanvasPage({ params }: { params: Promise
   const [saved, assets, engines] = await Promise.all([loadCanvas(id), listMedia({ status: "published", limit: 200 }).catch(() => []), imageEngines().catch(() => [])]);
   const initial = saved ?? starterCanvas(post.title);
   const clicks = await canvasClicksFor(post.id, saved);
+  // D239 N-9: curated reviews with the permission tick (Q-22-2 (a)).
+  const reviews = await usableCuratedReviews();
   const media: CanvasMediaChoice[] = assets
     .filter((a) => /^image\/(png|jpeg|gif|webp)$/.test(a.mime_type ?? ""))
     .map((a) => ({ url: publicUrlForKey(a.storage_key) ?? a.public_url ?? "", title: a.title || a.filename }))
@@ -64,13 +67,14 @@ export default async function NewsletterCanvasPage({ params }: { params: Promise
               "The footer with the four warnings and the unsubscribe link is always added and cannot be removed.",
               "AI studio (below the selected section): Draft the newsletter writes the headline, intro, notes, button, subject and preview text from this week's facts only. Improve rewrites the selected section. Suggest 5 subjects gives subject ideas. Anything that breaks the copy or compliance rules is not applied.",
               "Picture studio: pick an Image section and ask the AI to edit it (Remove background, Studio clean-up, Brighten, Banner, Seasonal) with GPT Image, Gemini or FLUX, or pick no picture to make a new one. Results are saved to Media as new files; originals are kept.",
+              "Customer review: pick one from Curated reviews (Blog & Newsletter > Curated reviews). Only reviews the customer said we may quote are listed.",
               "Send yourself a test, then publish the post and send it from the Send Center (or the Sunday approval).",
             ]}
           />
         }
       />
       <div className="px-5 py-6 sm:px-8">
-        <NewsletterCanvasWithAi postId={post.id} postTitle={post.title} initial={initial} renderOpts={renderOptsFor(post, null)} media={media} aiConfigured={isAiConfigured} engines={engines} />
+        <NewsletterCanvasWithAi postId={post.id} postTitle={post.title} initial={initial} renderOpts={renderOptsFor(post, null)} media={media} aiConfigured={isAiConfigured} engines={engines} reviews={reviews} />
         <CanvasClickReport report={clicks} />
       </div>
     </div>
