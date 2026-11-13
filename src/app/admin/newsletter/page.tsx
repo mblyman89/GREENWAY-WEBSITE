@@ -34,6 +34,7 @@ import { Button } from "@/components/admin/ui/Button";
 import { Input } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
 import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
+import { createCanvasNewsletterAction } from "./canvas/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -107,12 +108,13 @@ export default async function NewsletterSendPage({
   ]);
   // D237 N-3: newsletters that can go through the Sunday approval (a PDF is
   // uploaded and it is not archived). Approving covers publishing it.
-  const sundayCandidates = newsletters.filter((n) => n.pdfUrl && n.status !== "archived").slice(0, 8);
+  const sundayCandidates = newsletters.filter((n) => (n.pdfUrl || n.hasCanvas) && n.status !== "archived").slice(0, 8);
   const defaultSendAt = defaultSendLocal(cadence.sendTime);
   // D237 N-2: only queued broadcasts (rows in newsletter_send_recipients) have a bar.
   const openSends = openSendsAll.filter((o) => o.pending + o.sent + o.failed > 0);
 
-  const sendable = newsletters.filter((n) => n.status === "published" && n.pdfUrl);
+  // D238 N-8a: a newsletter built on the canvas is sendable without a PDF.
+  const sendable = newsletters.filter((n) => n.status === "published" && (n.pdfUrl || n.hasCanvas));
   const selected: SendableNewsletter | null =
     sendable.find((n) => n.id === sp.selected) ?? sendable[0] ?? null;
 
@@ -124,6 +126,11 @@ export default async function NewsletterSendPage({
         breadcrumbs={<Breadcrumbs items={[{ label: "Newsletter Send" }]} />}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {/* D238 N-8a: build the newsletter in the app (the canvas). */}
+            <form action={createCanvasNewsletterAction} className="flex items-center gap-2">
+              <Input name="title" placeholder="New newsletter title" className="w-48" aria-label="New newsletter title" />
+              <Button type="submit" variant="confirm">New canvas newsletter</Button>
+            </form>
             {/* SLICE 115: jump straight to Canva to design the newsletter. */}
             <CanvaButton />
             <Button href="/admin/blog" variant="neutral">
@@ -136,8 +143,8 @@ export default async function NewsletterSendPage({
             id="newsletter-send"
             title="How sending works"
             steps={[
-              "Design your newsletter in Canva and export a PDF.",
-              "Upload it under Blog & Newsletter (set type = Newsletter) and Publish.",
+              "Build the newsletter on the canvas (New canvas newsletter), or design it in Canva, export a PDF and upload it under Blog & Newsletter (type = Newsletter).",
+              "Publish it. A canvas newsletter is sent as the canvas; a PDF newsletter is sent as the announcement with a Read button.",
               "Come here, pick it, and send a Test to yourself first.",
               "Happy? The owner or an admin ticks the confirm box and sends it to the loyalty list.",
               "It goes out in batches of 100. A bar shows how many are sent; you can leave this page and it keeps going.",
@@ -253,7 +260,7 @@ export default async function NewsletterSendPage({
               {CADENCE_MIGRATION_HINT}
             </p>
           ) : sundayCandidates.length === 0 ? (
-            <p className="text-xs text-[var(--admin-text-muted)]">No newsletter with a PDF yet. Upload one under Blog &amp; Newsletter.</p>
+            <p className="text-xs text-[var(--admin-text-muted)]">No newsletter with a PDF or a canvas yet. Press New canvas newsletter, or upload a PDF under Blog &amp; Newsletter.</p>
           ) : (
             <div className="space-y-3">
               {sundayCandidates.map((n) => {
@@ -380,6 +387,9 @@ export default async function NewsletterSendPage({
                     <a href={selected.publicUrl} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
                       View public page ↗
                     </a>
+                    <Link href={`/admin/newsletter/canvas/${selected.id}`} className="text-[var(--admin-accent)] hover:underline">
+                      {selected.hasCanvas ? "Open the canvas (sent as the email)" : "Build on the canvas"}
+                    </Link>
                     {selected.pdfUrl ? (
                       <a href={selected.pdfUrl} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
                         Open PDF ↗

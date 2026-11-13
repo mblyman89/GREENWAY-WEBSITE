@@ -31,6 +31,7 @@ import {
   warningsSizeOk,
   EMAIL_FONT_PX,
 } from "./newsletter-email-core";
+import type { ThisWeekFeed } from "./this-week-feed-core";
 
 // ── Limits ────────────────────────────────────────────────────────────────
 
@@ -660,6 +661,51 @@ export function replaceImageUrl(doc: CanvasDoc, from: string, to: string): Canva
   };
 }
 
+// ── Fill from this week (no AI) ───────────────────────────────────────────
+
+export type FeedPostLink = { title: string; slug: string; excerpt: string; category: string; imageUrl: string };
+
+/**
+ * Cards from the N-4 This-week feed and recent posts. Deals that failed the
+ * below-cost check are held back (Q-22-8), exactly as the feed does.
+ */
+export function cardsFromFeed(kind: CardKind, feed: ThisWeekFeed, posts: FeedPostLink[], siteUrl: string): CanvasCard[] {
+  const site = siteUrl.replace(/\/$/, "");
+  const card = (title: string, text: string, href: string, cta: string, imageUrl = ""): CanvasCard => ({ title, text, imageUrl, imageAlt: imageUrl ? title : "", href, cta });
+  switch (kind) {
+    case "drops":
+      return feed.freshDrops.slice(0, 6).map((g) => card(g.vendorName, `New in: ${g.types.map((t) => t.type).join(", ")}.`, `${site}/menu`, "See the menu"));
+    case "vendor":
+      return feed.newVendors.slice(0, 3).map((v) => card(v.name, "New on our shelves this week.", `${site}/menu`, "Shop the brand"));
+    case "deals":
+      return [...feed.runningNow, ...feed.comingUp, ...feed.vendorDays]
+        .filter((d, i, all) => d.belowCost === 0 && all.findIndex((x) => x.id === d.id) === i)
+        .slice(0, 6)
+        .map((d) => card(d.title, `${d.offer}, ${d.when}.${d.bonusNote ? ` ${d.bonusNote}.` : ""}`, `${site}/specials`, "See the deal"));
+    case "blog":
+      return posts.filter((p) => p.category !== "CULTURE").slice(0, 3).map((p) => card(p.title, p.excerpt, `${site}/blog/${p.slug}`, "Read more", p.imageUrl));
+    case "culture":
+      return posts.filter((p) => p.category === "CULTURE").slice(0, 1).map((p) => card(p.title, p.excerpt, `${site}/blog/${p.slug}`, "Read the story", p.imageUrl));
+    default:
+      return [];
+  }
+}
+
+/** Only public https hosts are fetched for the size check (no local or private addresses). */
+export function isProbeableUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.username || u.password) return false;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(h) || h.includes(":")) return false;
+  return true;
+}
+
 // ── Self-test ─────────────────────────────────────────────────────────────
 
 export function __runNewsletterCanvasCoreTests(): { passed: number; failed: number } {
@@ -794,5 +840,40 @@ export function __runNewsletterCanvasCoreTests(): { passed: number; failed: numb
   const r = replaceImageUrl(fixed, "https://cdn.example/b.png", "https://cdn.example/b2.png");
   ok("replace: card image", imagesIn(r).some((x) => x.url === "https://cdn.example/b2.png"));
   ok("setting key", canvasSettingKey("p1") === "newsletter_canvas:p1");
+
+  // fill from the week
+  const feed: ThisWeekFeed = {
+    fromDay: "2026-11-09",
+    toDay: "2026-11-15",
+    newVendors: [{ id: "v1", name: "Cedar Farms", addedOn: "2026-11-10" }],
+    freshDrops: [{ vendorId: "v1", vendorName: "Cedar Farms", types: [{ type: "Flower", lots: 2 }, { type: "Pre-roll", lots: 1 }], lots: 3 }],
+    freshLotCount: 3,
+    runningNow: [
+      { id: "p1", title: "Flower Friday", when: "Fridays", offer: "20% off", bonusNote: null, markdown: false, belowCost: 0 },
+      { id: "p2", title: "Too Deep", when: "all month", offer: "$5.50 off", bonusNote: null, markdown: false, belowCost: 2 },
+    ],
+    comingUp: [],
+    vendorDays: [{ id: "p1", title: "Flower Friday", when: "Fridays", offer: "20% off", bonusNote: null, markdown: false, belowCost: 0 }],
+    calendar: [],
+  };
+  const posts: FeedPostLink[] = [
+    { title: "Rosin 101", slug: "rosin-101", excerpt: "How rosin is made.", category: "PRODUCTS", imageUrl: "https://cdn.example/r.jpg" },
+    { title: "WSLCB update", slug: "wslcb", excerpt: "New rule.", category: "CULTURE", imageUrl: "" },
+  ];
+  const site = "https://www.greenwaymarijuana.com";
+  ok("feed: drops", cardsFromFeed("drops", feed, posts, site)[0].text === "New in: Flower, Pre-roll.");
+  ok("feed: vendor", cardsFromFeed("vendor", feed, posts, site)[0].title === "Cedar Farms");
+  const deals = cardsFromFeed("deals", feed, posts, site);
+  ok("feed: below-cost deal held back, no duplicates", deals.length === 1 && deals[0].title === "Flower Friday");
+  ok("feed: blog skips culture", cardsFromFeed("blog", feed, posts, site).map((c) => c.title).join() === "Rosin 101");
+  ok("feed: blog image + alt", cardsFromFeed("blog", feed, posts, site)[0].imageAlt === "Rosin 101");
+  ok("feed: culture", cardsFromFeed("culture", feed, posts, site)[0].href === `${site}/blog/wslcb`);
+  ok("feed: custom empty", cardsFromFeed("custom", feed, posts, site).length === 0);
+  ok("probe: https host", isProbeableUrl("https://abc.supabase.co/storage/v1/object/public/media/x.jpg"));
+  ok("probe: http refused", !isProbeableUrl("http://abc.example/x.jpg"));
+  ok("probe: localhost refused", !isProbeableUrl("https://localhost/x"));
+  ok("probe: ip refused", !isProbeableUrl("https://169.254.169.254/latest"));
+  ok("probe: ipv6 refused", !isProbeableUrl("https://[::1]/x"));
+  ok("probe: userinfo refused", !isProbeableUrl("https://a:b@x.example/x"));
   return { passed, failed };
 }
