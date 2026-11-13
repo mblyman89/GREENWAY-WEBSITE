@@ -175,7 +175,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.3 (D237, #1776):** N-3 scheduling + Sunday cadence built: blog posts schedule through the 5-minute content-schedule cron; Ready for approval → Approve and schedule (owner/admin) → sends by itself; editing voids the approval; Friday reminder when nothing is ready (G-113, F-22-5, F-22-9). Owner steps: apply 0363, set the Sunday send time (Q-22-4).
 
-**v1.4 (D237, #PN4):** N-4 "This week at Greenway" facts feed built: a card on Blog & Newsletter with last week's new vendors and fresh drops, deals running and coming (below-cost flagged and kept from the AI), vendor days, and holidays, 4/20, 7/10 and local events (G-114, F-22-11). No migration; optional owner step: add local events.
+**v1.4 (D237, #1777):** N-4 "This week at Greenway" facts feed built: a card on Blog & Newsletter with last week's new vendors and fresh drops, deals running and coming (below-cost flagged and kept from the AI), vendor days, and holidays, 4/20, 7/10 and local events (G-114, F-22-11). No migration; optional owner step: add local events.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 

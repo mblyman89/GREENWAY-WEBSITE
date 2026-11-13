@@ -3101,7 +3101,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Test `tests/compliance/d237-newsletter-n3-schedule-cadence.test.ts`; pure self-test `__runNewsletterCadenceCoreTests` (43). SOP-22 v1.3.
 - **Owner steps:** (1) apply migration `supabase/migrations/0363_newsletter_approvals_blog_schedule.sql` (rollback in `supabase/rollbacks/`); until then the Sunday box shows a setup note and blog schedules cannot be saved. (2) In the Send Center, Sunday newsletter box, set the Sunday send time and check the reminder day, time and recipients.
 
-### As built — N-4 "This week at Greenway" facts feed (#PN4)
+### As built — N-4 "This week at Greenway" facts feed (#1777)
 
 - **F-22-11 / G-114:** pure core `src/lib/cms/this-week-feed-core.ts` and server reader `src/lib/cms/this-week-feed-server.ts`. Window: last 7 days for new vendors and received lots (fresh drops grouped by vendor and type); published promotions running now or starting in the next 14 days; dates in the next 30 days (US federal holidays, 4/20, 7/10, local events).
 - Card `src/components/admin/blog/ThisWeekFeedCard.tsx` at the top of `/admin/blog`. Read only, except the Local events box (`site_settings` `blog_calendar_events`, audited `blog.local_events_save`, Blog access).

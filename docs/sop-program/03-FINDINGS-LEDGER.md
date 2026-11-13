@@ -1326,7 +1326,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-11 · CONFIRMED · GAP · S2 — No "this week at Greenway" facts feed, although the data exists (vendors `created_at`, lot received date, promotions window, vendor-day flag)
 - **Pin:** `0003` L38, `0214`, `0006` L78–81, `PromotionForm.tsx` L281
 - **SOP impact:** SOP-22 Appendix B.1; gap G-114; status FIXED (D237, N-4).
-- **Resolved (D237, N-4, #PN4):** `this-week-feed-core.ts` + `this-week-feed-server.ts`; card `ThisWeekFeedCard.tsx` on `/admin/blog`; below-cost deals flagged and kept out of the AI facts
+- **Resolved (D237, N-4, #1777):** `this-week-feed-core.ts` + `this-week-feed-server.ts`; card `ThisWeekFeedCard.tsx` on `/admin/blog`; below-cost deals flagged and kept out of the AI facts
 
 ### F-22-12 · CONFIRMED · GAP · S3 — No Google reviews source; Google's terms forbid storing reviews
 - **Pin:** (no match in `src/`); Places policies
