@@ -3128,3 +3128,25 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - No migration. Test `tests/compliance/d237-newsletter-n6-culture-desk.test.ts`; pure self-test `__runCultureDeskCoreTests` (44). SOP-22 v1.6.
 - **Owner step:** none required beyond AI. Optional: for Google-grounded Find news set `AI_MODEL_HEAVY` to a Gemini model and `AI_GEMINI_API_KEY`. Each press is one AI web lookup inside the budget cap.
 
+## D238 — Newsletter canvas with advanced features; N-8a built (2026-11-12)
+
+### Owner request (verbatim)
+
+*"Thank you! Please continue working through another 3 slices. For the newsletter canvas, please add extra features the other editors don't have, like QR code generation, the ability to ask the ai to help with building the newsletter like how canva has its ai, you can select an image and ask it to manipulate it or remove the background and other such features. It'd be great if we could use our Gemini or gpt ai to interact with and help us customize and make professional content. Maybe have a feature that lets me use flux from the editor. Other such advanced features that will really let us go big on. I want to be able to use moving elements, interactive elements, other types of advanced marketing techniques. It will also need a way to make sure it can be sent without issues, a checks process to make sure it's not too big to send or a way to compress it if needed. Follow the standing rules. Thank you."*
+
+### Decisions
+
+- N-8 is split in three slices: **N-8a** canvas, send checks, compression and QR; **N-8b** AI studio (AI build/improve, image edit and background removal with GPT or Gemini, FLUX images); **N-8c** moving and interactive elements (animated GIFs, countdown, per-block click report).
+- Email cannot run scripts, so "interactive" means links, QR codes, buttons and per-block click tracking; "moving" means animated GIFs (Outlook on Windows shows only the first frame, so the first frame must carry the message).
+- Q-22-5 (a) stands: the canvas is the email; the Canva PDF stays optional.
+
+### As built — N-8a newsletter canvas, send checks, compression and QR (#PN8a)
+
+- **F-22-8 / G-118:** `src/lib/cms/newsletter-canvas-core.ts` + `newsletter-canvas-server.ts`; editor `NewsletterCanvasEditor.tsx` on `/admin/newsletter/canvas/[id]`; **New canvas newsletter** on Blog & Newsletter and **Open the canvas** on newsletter posts.
+- Sections: header, headline, text, image, button, QR code, card grids (fresh drops, new vendors, deals, from the blog, culture, custom), review, hours, divider, spacer. Fill from this week builds cards from the This week facts (below-cost deals held back).
+- **"a checks process to make sure it's not too big to send":** Run send check measures the email against Gmail's 102 KB clip (must-fix over 102 KB, heads-up over 90 KB), fetches every image (weight, width, WebP/SVG, alt text, https), and checks subject, preheader, buttons and QR links. Must-fix items block the test email and the real send (broadcast and queue).
+- **"or a way to compress it if needed":** Compress images makes email-sized copies (JPEG/PNG/GIF, max 1200 px wide) in Media and swaps them in; originals stay.
+- **"QR code generation":** Make QR turns any link into a QR PNG in Media, with a caption.
+- The four warnings and the unsubscribe link are a fixed footer that cannot be removed (F-22-1). Each block's link carries `utm_content=<block id>` for the click report in N-8c. Saving voids an approval (N-3).
+- No migration (stored in `site_settings`). Test `tests/compliance/d237-newsletter-n8a-canvas.test.ts`; pure self-test `__runNewsletterCanvasCoreTests` (82). SOP-22 v1.7.
+- **Owner step:** none.
