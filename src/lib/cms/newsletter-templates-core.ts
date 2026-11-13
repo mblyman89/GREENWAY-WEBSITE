@@ -43,7 +43,6 @@ function templateBlocks(id: TemplateId, title: string, siteUrl: string, endsAt: 
   const menu = site(siteUrl, "/menu");
   const specials = site(siteUrl, "/specials");
   const loyalty = site(siteUrl, "/loyalty");
-  const blog = site(siteUrl, "/blog");
   const quick = (n: 2 | 3) => ({
     id: "quick",
     type: "columns",
@@ -180,7 +179,7 @@ export function removeSavedSection(list: SavedSection[], id: string): SavedSecti
 }
 
 /** A saved section ready to drop into a canvas (new id, so two copies never clash). */
-export function useSavedSection(s: SavedSection, newId: string): CanvasBlock {
+export function savedSectionBlock(s: SavedSection, newId: string): CanvasBlock {
   return { ...(JSON.parse(JSON.stringify(s.block)) as CanvasBlock), id: newId };
 }
 
@@ -286,7 +285,7 @@ export function __runNewsletterTemplatesCoreTests(): { passed: number; failed: n
   ok(normalizeSavedSections([{ id: "ok", name: "A", block: blk }, { id: "ok", name: "B", block: blk }, { id: "bad", name: "C", block: { type: "nope" } }, "junk"]).length === 1, "normalize drops dupes and junk");
   ok(normalizeSavedSections({ items: [{ id: "i", name: "N", block: blk }] }).length === 1, "normalize accepts {items}");
   ok(removeSavedSection(full, "x0").length === SAVED_SECTIONS_MAX - 1, "remove");
-  const used = useSavedSection({ id: "s", name: "N", savedAt: "", block: blk }, "new1");
+  const used = savedSectionBlock({ id: "s", name: "N", savedAt: "", block: blk }, "new1");
   ok(used.id === "new1" && used.type === blk.type && used !== blk, "use gives new id, deep copy");
 
   // inbox

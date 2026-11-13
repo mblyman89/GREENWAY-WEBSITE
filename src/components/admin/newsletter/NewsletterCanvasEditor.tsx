@@ -14,14 +14,22 @@
  *
  * The footer (the four warnings + unsubscribe) is fixed: it is added by the
  * renderer and is not a block, so it cannot be removed or edited here.
+ *
+ * D243 E-3 (SOP-22 G-123): the full-page editor. Three panes: the section
+ * library (click or drag to add, templates, saved sections) with the
+ * section list (drag to reorder, duplicate); the inspector (the selected
+ * section's fields plus its style: background, words colour, padding,
+ * corners); the preview (desktop, phone, forced dark, inbox mockups, plain
+ * text) with the selected section outlined. Undo covers every structural
+ * change (add, remove, move, duplicate, template).
  */
-import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type DragEvent, type ReactNode } from "react";
 import { Badge, Button, Input, Textarea, Select } from "@/components/admin/ui";
 import {
   BLOCK_LABEL,
-  BLOCK_TYPES,
   CARD_KIND_LABEL,
   blankBlock,
+  newBlockId,
   canvasPlainText,
   checkCanvas,
   moveBlock,
@@ -46,6 +54,10 @@ import {
 } from "@/app/admin/newsletter/canvas/actions";
 import { quoteIsCurated, reviewToCanvas, type CuratedReviewChoice } from "@/lib/cms/curated-reviews-core";
 import { DesignSectionEditor } from "./DesignSectionEditor";
+import { ColumnsFieldsEditor, InboxMockups, OverlayFieldsEditor, SectionLibrary, StylePanel } from "./CanvasStudioParts";
+import { duplicateAt, moveBlockTo } from "@/lib/cms/newsletter-layout-core";
+import { forcedDarkHtml, inboxLines, previewHtml, savedSectionBlock as savedToBlock, type SavedSection, type TemplateId } from "@/lib/cms/newsletter-templates-core";
+import { deleteSectionAction, listSavedSectionsAction, saveSectionAction, templateCanvasAction } from "@/app/admin/newsletter/canvas/layout-actions";
 
 export type CanvasMediaChoice = { url: string; title: string };
 
@@ -85,12 +97,15 @@ export function NewsletterCanvasEditor({
 }) {
   const [doc, setDocRaw] = useState<CanvasDoc>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(initial.blocks[0]?.id ?? null);
-  const [view, setView] = useState<"desktop" | "phone" | "text">("desktop");
+  const [view, setView] = useState<"desktop" | "phone" | "dark" | "inbox" | "text">("desktop");
+  const [past, setPast] = useState<CanvasDoc[]>([]);
+  const [saved, setSaved] = useState<SavedSection[] | null>(null);
+  const [saveName, setSaveName] = useState("");
+  const [dragId, setDragId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [fullCheck, setFullCheck] = useState<CanvasCheck | null>(null);
   const [testTo, setTestTo] = useState("");
-  const [addType, setAddType] = useState<CanvasBlockType>("text");
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<{ blockId: string; card?: number } | null>(null);
@@ -102,8 +117,25 @@ export function NewsletterCanvasEditor({
     setDirty(true);
     setFullCheck(null);
   };
+  /** A structural change (add, remove, move, duplicate, template): Undo can bring the old one back. */
+  const commit = (d: CanvasDoc) => {
+    setPast((p) => [...p.slice(-29), doc]);
+    setDoc(d);
+  };
+  const undo = () => {
+    const prev = past[past.length - 1];
+    if (!prev) return;
+    setPast((p) => p.slice(0, -1));
+    setDoc(prev);
+    if (!prev.blocks.some((b) => b.id === selectedId)) setSelectedId(prev.blocks[0]?.id ?? null);
+  };
   const clean = useMemo(() => normalizeCanvas(doc), [doc]);
   const html = useMemo(() => renderCanvasEmail(clean, renderOpts), [clean, renderOpts]);
+  // Preview only: sections are marked so the selected one is outlined (never sent).
+  const previewDoc = useMemo(() => {
+    const marked = previewHtml(renderCanvasEmail(clean, { ...renderOpts, markBlocks: true }), selectedId);
+    return view === "dark" ? forcedDarkHtml(marked) : marked;
+  }, [clean, renderOpts, selectedId, view]);
   const text = useMemo(() => canvasPlainText(clean, renderOpts), [clean, renderOpts]);
   const live = useMemo(() => checkCanvas(clean, html, text), [clean, html, text]);
   const check = fullCheck ?? live;
@@ -111,17 +143,39 @@ export function NewsletterCanvasEditor({
 
   const update = (b: CanvasBlock) => setDoc({ ...doc, blocks: doc.blocks.map((x) => (x.id === b.id ? b : x)) });
   const remove = (id: string) => {
-    setDoc({ ...doc, blocks: doc.blocks.filter((b) => b.id !== id) });
+    commit({ ...doc, blocks: doc.blocks.filter((b) => b.id !== id) });
     if (selectedId === id) setSelectedId(null);
   };
-  const add = () => {
-    const b = blankBlock(addType);
-    const i = selected ? doc.blocks.findIndex((x) => x.id === selected.id) + 1 : doc.blocks.length;
+  const insert = (b: CanvasBlock, at?: number) => {
+    const i = at ?? (selected ? doc.blocks.findIndex((x) => x.id === selected.id) + 1 : doc.blocks.length);
     const blocks = doc.blocks.slice();
     blocks.splice(i, 0, b);
-    setDoc({ ...doc, blocks });
+    commit({ ...doc, blocks });
     setSelectedId(b.id);
   };
+  const add = (type: CanvasBlockType, at?: number) => insert(blankBlock(type), at);
+  const duplicate = (id: string) => {
+    const nid = newBlockId("copy");
+    commit({ ...doc, blocks: duplicateAt(doc.blocks, id, nid) });
+    setSelectedId(nid);
+  };
+  const onDropAt = (e: DragEvent, index: number) => {
+    e.preventDefault();
+    const fresh = e.dataTransfer.getData("text/gw-new") as CanvasBlockType;
+    if (fresh) return add(fresh, index);
+    if (dragId) {
+      const from = doc.blocks.findIndex((b) => b.id === dragId);
+      commit({ ...doc, blocks: moveBlockTo(doc.blocks, dragId, from < index ? index - 1 : index) });
+    }
+    setDragId(null);
+  };
+
+  // Saved sections are shared by every newsletter; load once.
+  useEffect(() => {
+    let live = true;
+    listSavedSectionsAction().then((r) => { if (live) setSaved(r.ok ? r.list : []); }).catch(() => { if (live) setSaved([]); });
+    return () => { live = false; };
+  }, []);
 
   const run = (fn: () => Promise<void>) => start(async () => {
     setMsg(null);
@@ -160,6 +214,34 @@ export function NewsletterCanvasEditor({
     setDoc(r.doc);
     setMsg({ tone: "ok", text: r.filled ? `Filled ${r.filled} section(s) from this week. Review, then Save.${r.partial ? " (Some of the week could not be read.)" : ""}` : "Nothing new to fill (only empty card sections are filled)." });
   });
+  const applyTemplate = (id: TemplateId) => {
+    if (doc.blocks.length > 0 && !window.confirm("Replace the sections with this template? Undo brings them back.")) return;
+    run(async () => {
+      const r = await templateCanvasAction(postId, id);
+      if (!r.ok) return setMsg({ tone: "err", text: r.error });
+      commit({ ...r.doc, useForEmail: doc.useForEmail, theme: doc.theme });
+      setSelectedId(r.doc.blocks[0]?.id ?? null);
+      setMsg({ tone: "ok", text: "Template in. Write over every \"Replace:\", then Save." });
+    });
+  };
+  const saveSection = () => {
+    if (!selected) return;
+    run(async () => {
+      const r = await saveSectionAction(saveName, selected);
+      if (!r.ok) return setMsg({ tone: "err", text: r.error });
+      setSaved(r.list);
+      setSaveName("");
+      setMsg({ tone: "ok", text: "Saved to your sections. Find it under Saved in the library." });
+    });
+  };
+  const deleteSaved = (x: SavedSection) => {
+    if (!window.confirm(`Delete the saved section "${x.name}"?`)) return;
+    run(async () => {
+      const r = await deleteSectionAction(x.id);
+      if (!r.ok) return setMsg({ tone: "err", text: r.error });
+      setSaved(r.list);
+    });
+  };
   const testSend = () => run(async () => {
     const r = await testSendCanvasAction(postId, doc, testTo);
     setMsg(r.ok ? { tone: "ok", text: `Test sent to ${testTo}.` } : { tone: "err", text: r.error });
@@ -184,7 +266,8 @@ export function NewsletterCanvasEditor({
       if (!r.ok) return setMsg({ tone: "err", text: r.error });
       const b = doc.blocks.find((x) => x.id === t.blockId);
       if (!b) return;
-      if (b.type === "image") update({ ...b, src: r.src });
+      if (b.type === "image" || b.type === "overlay") update({ ...b, src: r.src });
+      if (b.type === "columns" && t.card != null) update({ ...b, items: b.items.map((c, i) => (i === t.card ? { ...c, imageUrl: r.src } : c)) });
       if (b.type === "cards" && t.card != null) update({ ...b, cards: b.cards.map((c, i) => (i === t.card ? { ...c, imageUrl: r.src } : c)) });
       setMsg({ tone: "ok", text: r.mime === "image/gif" ? "Moving GIF added. Remember: Outlook for Windows shows only its first frame." : "Picture added." });
     });
@@ -193,6 +276,7 @@ export function NewsletterCanvasEditor({
   const mustFix = check.issues.filter((i) => i.level === "must-fix");
   const headsUp = check.issues.filter((i) => i.level === "heads-up");
   const pct = Math.min(100, Math.round((check.htmlBytes / GMAIL_CLIP_BYTES) * 100));
+  const inbox = inboxLines(clean, renderOpts.businessName, text);
 
   return (
     <div className="space-y-4" data-testid="newsletter-canvas">
@@ -201,6 +285,7 @@ export function NewsletterCanvasEditor({
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
         <Button type="button" variant="save" size="sm" onClick={save} disabled={pending}>{dirty ? "Save" : "Saved"}</Button>
+        <Button type="button" variant="neutral" size="sm" onClick={undo} disabled={pending || past.length === 0} data-testid="canvas-undo">Undo</Button>
         <Button type="button" variant="neutral" size="sm" onClick={fill} disabled={pending}>Fill from this week</Button>
         <Button type="button" variant="neutral" size="sm" onClick={runCheck} disabled={pending}>Run send check</Button>
         <Button type="button" variant="neutral" size="sm" onClick={compress} disabled={pending}>Compress images</Button>
@@ -213,8 +298,44 @@ export function NewsletterCanvasEditor({
         <p role="status" className={`rounded-[var(--admin-radius-md)] px-3 py-2 text-xs ${msg.tone === "ok" ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]"}`}>{msg.text}</p>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        {/* Left: settings, blocks, block editor */}
+      <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[260px_minmax(0,1fr)_minmax(0,1.1fr)]" data-testid="canvas-full-editor">
+        {/* Pane 1: library + section list */}
+        <div className="space-y-4">
+          <SectionLibrary onAdd={(t) => add(t)} onTemplate={applyTemplate} saved={saved} onUseSaved={(x) => insert(savedToBlock(x, newBlockId("saved")))} onDeleteSaved={deleteSaved} pending={pending} />
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3" data-testid="canvas-sections">
+            <p className="mb-2 text-sm font-semibold text-[var(--admin-text)]">Sections <span className="text-[11px] font-normal text-[var(--admin-text-faint)]">drag to reorder</span></p>
+            <ol className="space-y-1">
+              {doc.blocks.map((b, i) => (
+                <li
+                  key={b.id}
+                  draggable
+                  onDragStart={(e) => { setDragId(b.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => setDragId(null)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onDropAt(e, i)}
+                  className={`group flex items-center gap-1 rounded-[var(--admin-radius-md)] border px-2 py-1.5 text-xs ${b.id === selectedId ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)]" : "border-[var(--admin-border)]"} ${dragId === b.id ? "opacity-40" : ""}`}
+                >
+                  <span aria-hidden className="cursor-grab px-0.5 text-[var(--admin-text-faint)]">⋮⋮</span>
+                  <button type="button" className="min-w-0 flex-1 truncate text-left text-[var(--admin-text)]" onClick={() => setSelectedId(b.id)}>
+                    <span className="font-semibold">{BLOCK_LABEL[b.type].split(" (")[0]}</span>
+                    {b.style ? <span className="ml-1 text-[var(--admin-gold)]" title="Styled">●</span> : null}
+                    <span className="ml-1.5 text-[var(--admin-text-faint)]">{summary(b)}</span>
+                    {check.issues.some((x) => x.blockId === b.id && x.level === "must-fix") ? <Badge tone="danger" className="ml-1">fix</Badge> : null}
+                  </button>
+                  <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => commit({ ...doc, blocks: moveBlock(doc.blocks, b.id, -1) })} className="px-0.5 disabled:opacity-30">↑</button>
+                  <button type="button" aria-label="Move down" disabled={i === doc.blocks.length - 1} onClick={() => commit({ ...doc, blocks: moveBlock(doc.blocks, b.id, 1) })} className="px-0.5 disabled:opacity-30">↓</button>
+                  <button type="button" aria-label="Duplicate" title="Duplicate" onClick={() => duplicate(b.id)} className="px-0.5">⧉</button>
+                  <button type="button" aria-label="Remove" onClick={() => remove(b.id)} className="px-0.5 text-[var(--admin-orange)]">✕</button>
+                </li>
+              ))}
+              <li onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDropAt(e, doc.blocks.length)} className="rounded-[var(--admin-radius-md)] border border-dashed border-[var(--admin-border)] px-3 py-2 text-[11px] text-[var(--admin-text-faint)]">
+                Drop here to add at the end. Footer (fixed): the four required warnings and the unsubscribe link are always added and cannot be removed.
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        {/* Pane 2: settings + inspector */}
         <div className="space-y-4">
           <div className="grid gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4 sm:grid-cols-2">
             <Row label={`Subject (${doc.subject.length}/60 shows on phones)`}>
@@ -235,32 +356,6 @@ export function NewsletterCanvasEditor({
             </label>
           </div>
 
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-[var(--admin-text)]">Sections</p>
-              <Select value={addType} onChange={(e) => setAddType(e.target.value as CanvasBlockType)} className="ml-auto w-auto">
-                {BLOCK_TYPES.map((t) => <option key={t} value={t}>{BLOCK_LABEL[t]}</option>)}
-              </Select>
-              <Button type="button" size="sm" variant="neutral" onClick={add}>Add</Button>
-            </div>
-            <ol className="space-y-1.5">
-              {doc.blocks.map((b, i) => (
-                <li key={b.id} className={`flex items-center gap-2 rounded-[var(--admin-radius-md)] border px-3 py-2 text-xs ${b.id === selectedId ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)]" : "border-[var(--admin-border)]"}`}>
-                  <button type="button" className="flex-1 text-left text-[var(--admin-text)]" onClick={() => setSelectedId(b.id)}>
-                    <span className="font-semibold">{BLOCK_LABEL[b.type].split(" (")[0]}</span>
-                    <span className="ml-2 text-[var(--admin-text-faint)]">{summary(b)}</span>
-                    {check.issues.some((x) => x.blockId === b.id && x.level === "must-fix") ? <Badge tone="danger" className="ml-2">fix</Badge> : null}
-                  </button>
-                  <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => setDoc({ ...doc, blocks: moveBlock(doc.blocks, b.id, -1) })} className="px-1 disabled:opacity-30">↑</button>
-                  <button type="button" aria-label="Move down" disabled={i === doc.blocks.length - 1} onClick={() => setDoc({ ...doc, blocks: moveBlock(doc.blocks, b.id, 1) })} className="px-1 disabled:opacity-30">↓</button>
-                  <button type="button" aria-label="Remove" onClick={() => remove(b.id)} className="px-1 text-[var(--admin-orange)]">✕</button>
-                </li>
-              ))}
-              <li className="rounded-[var(--admin-radius-md)] border border-dashed border-[var(--admin-border)] px-3 py-2 text-xs text-[var(--admin-text-faint)]">
-                Footer (fixed): the four required warnings and the unsubscribe link. Always added; cannot be removed.
-              </li>
-            </ol>
-          </div>
 
           {selected ? (
             <div className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
@@ -270,30 +365,38 @@ export function NewsletterCanvasEditor({
               ) : (
                 <BlockFields b={selected} update={update} media={media} pickFile={pickFile} makeQr={makeQr} pending={pending} reviews={reviews} />
               )}
+              <StylePanel b={selected} update={update} theme={doc.theme} />
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-40 flex-1"><Row label="Save as a section (reuse in any newsletter)"><Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Weekly hero" /></Row></div>
+                <Button type="button" size="sm" variant="neutral" onClick={saveSection} disabled={pending || !saveName.trim()} data-testid="canvas-save-section">Save as section</Button>
+                <Button type="button" size="sm" variant="neutral" onClick={() => duplicate(selected.id)}>Duplicate</Button>
+              </div>
             </div>
           ) : null}
 
           {extraTools ? extraTools({ doc, setDoc, selected, update }) : null}
         </div>
 
-        {/* Right: preview + checks */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            {(["desktop", "phone", "text"] as const).map((v) => (
+        {/* Pane 3: preview + checks */}
+        <div className="space-y-3 xl:col-span-2 2xl:col-span-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {(["desktop", "phone", "dark", "inbox", "text"] as const).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)} className={`rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.1em] ${view === v ? "bg-[var(--admin-accent)] text-black" : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]"}`}>
-                {v === "text" ? "Plain text" : v}
+                {v === "text" ? "Plain text" : v === "dark" ? "Dark mode" : v === "inbox" ? "Inbox" : v}
               </button>
             ))}
-            <span className="ml-auto text-[11px] text-[var(--admin-text-faint)]">The preview shows a sample unsubscribe link.</span>
+            <span className="ml-auto text-[11px] text-[var(--admin-text-faint)]">{view === "dark" ? "How the Gmail app and Outlook may invert colours. " : ""}The selected section is outlined. The preview shows a sample unsubscribe link.</span>
           </div>
           <div className="flex justify-center rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3">
             {view === "text" ? (
               <pre className="max-h-[720px] w-full overflow-auto whitespace-pre-wrap p-3 text-xs text-[var(--admin-text-muted)]">{text}</pre>
+            ) : view === "inbox" ? (
+              <InboxMockups lines={inbox} />
             ) : (
               <iframe
                 title="Email preview"
                 sandbox=""
-                srcDoc={html}
+                srcDoc={previewDoc}
                 className="h-[720px] rounded-[var(--admin-radius-md)] border-0 bg-white"
                 style={{ width: view === "phone" ? 380 : "100%" }}
               />
@@ -457,6 +560,10 @@ function BlockFields({
       );
     case "cards":
       return <CardsFields b={b} update={update} media={media} pickFile={pickFile} pending={pending} />;
+    case "columns":
+      return <ColumnsFieldsEditor b={b} update={update} media={media} pickFile={pickFile} pending={pending} />;
+    case "overlay":
+      return <OverlayFieldsEditor b={b} update={update} media={media} pickFile={pickFile} pending={pending} />;
     case "review":
       return (
         <>
