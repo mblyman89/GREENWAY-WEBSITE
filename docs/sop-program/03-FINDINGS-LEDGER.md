@@ -1297,7 +1297,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-5 · CONFIRMED · BUG · S2 — Blog "Scheduled" status never publishes; `blog_post` is not a schedule target; the list and the concierge imply it works
 - **Pin:** `content-schedule-core.ts` L32–38, L295; `blog-store.ts` L193–203; `blog/page.tsx` L49, L116; `concierge-kb.ts` L278
-- **SOP impact:** SOP-22 Appendix B.1; gap G-113, G-120; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-113, G-120; status **FIXED (N-3, D237)**.
+- **Resolved (D237, N-3, #PN3):** `blog_post` schedule target (migration 0363 kind check, `applyBlogPostChange` in `content-schedule-server.ts`), Schedule panel on the post editor, bare Scheduled refused, concierge facts corrected
 
 ### F-22-6 · CONFIRMED · BUG · S2 — Saving a newsletter post without a new PDF erases `pdf_media_id` and `page_media_ids`; the post drops out of the Send Center
 - **Pin:** `blog/actions.ts` L201–226; `blog-store.ts` L215–233; `newsletter/page.tsx` L80
@@ -1315,7 +1316,8 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 
 ### F-22-9 · CONFIRMED · GAP · S2 — No Sunday cadence: no scheduled send, no reminder, no "ready for approval" state
 - **Pin:** (absence)
-- **SOP impact:** SOP-22 Appendix B.1; gap G-113; status OPEN (Phase N PROPOSED).
+- **SOP impact:** SOP-22 Appendix B.1; gap G-113; status **FIXED (N-3, D237)**.
+- **Resolved (D237, N-3, #PN3):** `newsletter_approvals` (0363), Ready → Approve and schedule → auto send by the 5-minute cron (`newsletter-cadence-server.ts` `runNewsletterCadenceTick`), reminder once a day; Sunday time is a setting (Q-22-4)
 
 ### F-22-10 · CONFIRMED · GAP · S2 — AI blog writer is ungrounded (title, category, topic only; "Do not mention price, stock, or specific inventory"; 500 tokens)
 - **Pin:** `ai-blog.ts` L35, L85; `blog/actions.ts` L296–300
@@ -1385,7 +1387,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 | SOP-08 New Hire Onboarding, System Access & Offboarding | **Fix 5:** F-08-2, F-08-3 (S2) FIXED (G-53, G-54). 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |
 | SOP-11 Merch Studio, Merch Inventory & greenwaymerch.com (merch half, D231) | 19 new (F-11-1…F-11-18 + F-11-C; 1×S1 (F-11-1 the feed redirect drops the token), 8×S2, 7×S3, 2×S4) | 19 | 0 |
 | SOP-11b Creative Studio, Banner Design Studio & Scheduling (v2.0, D233) | 15 new (F-11-19…F-11-32 + F-11-C2; 0×S1, 5×S2 (F-11-19, 20, 21, 22, 29), 8×S3, 1×S4) | 15 | 0 |
-| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19; N-2 fixed F-22-3 | 21 | 0 |
+| SOP-22 Newsletter, Blog, Culture & AI content (v1.0, D236) | 21 new (F-22-1…F-22-20 + F-22-C; 2×S1 (F-22-1 newsletter lacks the four warnings, F-22-14 medical claims), 10×S2, 7×S3, 1×S4); D237 N-1 fixed F-22-1, 2, 4, 6, 7, 17, 19; N-2 fixed F-22-3; N-3 fixed F-22-5, 9 | 21 | 0 |
 
 **Shift-end fix (owner message, D121–D124).** F-01-9 stays FIXED: two people still count every drawer, but the second count moved from the iPad to the office (Register Activity **Second count** card), and reconcile waits for it (D123). New observation, fixed in the same change: the register clock-out never reached the server (production: 4 register clock-ins, 0 clock-outs, no `timeclock.*` audit rows from the register), because the lock-screen punch went to the offline queue and showed success without the server's answer. Fixed by `/api/pos/clock` and the lock-screen **Clock in / Clock out** button (SOP-01 §4.2 v1.15).
 

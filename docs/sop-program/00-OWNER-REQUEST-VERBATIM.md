@@ -3092,3 +3092,12 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Test `tests/compliance/d237-newsletter-n2-reliable-sending.test.ts`; pure self-test `__runNewsletterBatchCoreTests` (42). SOP-22 v1.2.
 - **Owner step:** apply migration `supabase/migrations/0362_newsletter_send_recipients.sql` (rollback in `supabase/rollbacks/`). Until it is applied, broadcasts still use the old one-request send (stay on the page).
 
+### As built — N-3 scheduling + Sunday cadence (#PN3)
+
+- **F-22-5:** `blog_post` is a content-schedule target (`content-schedule-core.ts`, `content-schedule-server.ts` `applyBlogPostChange`). The post editor has the Schedule panel (`src/app/admin/blog/[id]/page.tsx`); a publish schedule sets the post to Scheduled, cancelling it returns it to Draft, and the 5-minute cron publishes it. The bare Scheduled button is refused with a pointer to the panel.
+- **F-22-9 / G-113:** table `newsletter_approvals` (migration 0363). Ready for approval (Blog access) → Approve and schedule with a Pacific time (owner/admin, `newsletter.broadcast`) → at that time the existing `/api/cron/content-schedule` tick publishes the post and sends it (claimed approved → sending first, so it sends once). Editing an approved newsletter voids the approval. A failure goes back to Ready with the reason; never retried by itself. No new cron.
+- **Q-22-4:** the owner named no Sunday time, so it is a setting that starts empty (`DEFAULT_CADENCE.sendTime = null`); nothing sends by itself until a time is picked. The reminder (on by default, Friday 9:00 AM Pacific, per the SOP-22 N-3 plan) emails once that day when nothing is ready (`compliance_reminder_log` dedupe), to the addresses set or the store staff list.
+- Factory reset: `newsletter_approvals` is KEEP (FK only to `blog_posts`, KEEP). Concierge `blog-newsletter` facts updated.
+- Test `tests/compliance/d237-newsletter-n3-schedule-cadence.test.ts`; pure self-test `__runNewsletterCadenceCoreTests` (43). SOP-22 v1.3.
+- **Owner steps:** (1) apply migration `supabase/migrations/0363_newsletter_approvals_blog_schedule.sql` (rollback in `supabase/rollbacks/`); until then the Sunday box shows a setup note and blog schedules cannot be saved. (2) In the Send Center, Sunday newsletter box, set the Sunday send time and check the reminder day, time and recipients.
+
