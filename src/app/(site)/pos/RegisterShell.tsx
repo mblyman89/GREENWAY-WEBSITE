@@ -18,7 +18,7 @@
  * an idle timeout so no sale can ride on someone else's PIN.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   buildEnvelope,
   applyAcks,
@@ -160,7 +160,8 @@ import {
   posStorageRemove,
   posStorageSet,
 } from "@/lib/pos/pos-storage";
-import { shouldRegisterServiceWorker } from "@/lib/pos/register-host-core";
+import { detectRegisterPlatform, shouldRegisterServiceWorker } from "@/lib/pos/register-host-core";
+import { normalizeRegisterSwitches, WEB_REGISTERS_OFF_MESSAGE } from "@/lib/pos/register-switches-core";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
 import {
@@ -348,6 +349,9 @@ import {
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
 import { rulesForSale, shouldAutoRefreshMenu } from "@/lib/pos/register-promo-day-core";
+
+// D241 — host platform never changes while the page is open.
+const noopSubscribe = () => () => {};
 
 // ---------------------------------------------------------------------------
 // Local storage keys (device-scoped; every durable fact lives server-side)
@@ -637,6 +641,15 @@ export function RegisterShell({
   // D145/D146 — the iPad's own status (native app only; null in a browser)
   // and the owner's lockdown policy (delivered on every heartbeat).
   const [nativeStatus, setNativeStatus] = useState<NativeStatus | null>(null);
+  // D241 — is this copy running in a web browser (not the iPad app)? Read
+  // after mount (window), same rule the service worker uses.
+  // D241 — the host never changes while the page is open, so a no-op subscribe
+  // is enough; the server snapshot is "not web" (nothing is gated before mount).
+  const isWebRegister = useSyncExternalStore(
+    noopSubscribe,
+    () => detectRegisterPlatform(window.location) === "web",
+    () => false,
+  );
   const [lockdownPolicy, setLockdownPolicy] = useState<IpadLockdownPolicy>(DEFAULT_LOCKDOWN_POLICY);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
@@ -2260,6 +2273,7 @@ export function RegisterShell({
           formatTime: (ms) => new Date(ms).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
         })}
         guidedAccessNotice={guidedAccessGate(lockdownPolicy, nativeStatus)}
+        webRegistersOff={isWebRegister && !normalizeRegisterSwitches(menuBundle?.registerSwitches).webRegistersAllowed}
         onForceRefresh={forceRefresh}
         onClearBanner={() => setBanner(null)}
         lookupBundle={effectiveBundle}
@@ -3486,6 +3500,7 @@ export function RegisterShell({
           standardFloatMinor={standardFloatMinor}
           drawerSessionId={drawer?.sessionId ?? null}
           atmDrop={normalizeAtmDropSettings(menuBundle?.atmDrop)}
+          swapApprovalRequired={normalizeRegisterSwitches(menuBundle?.registerSwitches).swapApprovalRequired}
           queueOffline={(payload, actorId) => enqueue("till_action", payload as unknown as Record<string, unknown>, actorId)}
           onClose={() => setTillMode(null)}
           onDone={(mode, drawerInfo, message, actorEmployeeId, closeSlipRaw) => {
@@ -3841,6 +3856,7 @@ function LockScreen({
   updateReady,
   versionVerdict,
   guidedAccessNotice,
+  webRegistersOff,
   onForceRefresh,
   onClearBanner,
   onUnlocked,
@@ -3862,6 +3878,12 @@ function LockScreen({
   versionVerdict: RegisterVersionVerdict;
   /** D146 — owner policy: Guided Access off on the native app. */
   guidedAccessNotice: ReturnType<typeof guidedAccessGate>;
+  /**
+   * D241 — this is a browser register and the cached owner setting says
+   * browser registers are off. Online, the server decides (always fresh);
+   * offline, this blocks the on-device unlock.
+   */
+  webRegistersOff: boolean;
   onForceRefresh: () => void;
   onClearBanner: () => void;
   /** The cached menu bundle the price lookup browses (null = not downloaded yet). */
@@ -3998,6 +4020,12 @@ function LockScreen({
       // D161 — no answer (offline, timeout, network) or a 5xx: check the PIN
       // on this iPad against the armed list.
       const reason = offlineReasonFor({ online, threw: r.threw, aborted: r.aborted, status: r.res?.status ?? null });
+      // D241 — browser registers off (cached owner setting): no offline unlock here.
+      if (webRegistersOff) {
+        setPin("");
+        setError(WEB_REGISTERS_OFF_MESSAGE);
+        return;
+      }
       const v = await verifyOfflinePin(typed);
       setPin("");
       if (!v.ok) {
@@ -4032,6 +4060,12 @@ function LockScreen({
       {/* D143 — owner: "Please add to the lock screen of the app something
           bold that says I am running the newest version and all is good." */}
       <VersionBanner verdict={versionVerdict} />
+      {webRegistersOff ? (
+        <div role="alert" className="mb-4 w-full max-w-xl rounded-2xl border-2 border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-5 py-3 text-center text-[var(--pos-danger)]">
+          <p className="text-base font-extrabold tracking-wide">BROWSER REGISTERS ARE TURNED OFF</p>
+          <p className="mt-1 text-sm">{WEB_REGISTERS_OFF_MESSAGE} Clock in / out still works here.</p>
+        </div>
+      ) : null}
       {guidedAccessNotice.show ? (
         <div role="alert" className="mb-4 w-full max-w-xl rounded-2xl border-2 border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-5 py-3 text-center text-[var(--pos-danger)]">
           <p className="text-base font-extrabold tracking-wide">{guidedAccessNotice.headline}</p>
@@ -8238,12 +8272,15 @@ function TillModal({
   standardFloatMinor,
   drawerSessionId,
   atmDrop,
+  swapApprovalRequired: swapApprovalFromBundle,
   queueOffline,
   onClose,
   onDone,
 }: {
   creds: DeviceCreds;
   mode: "open" | "drop" | "close" | "swap";
+  /** D241: the owner's swap dual-approval switch from the bundle (true when absent). */
+  swapApprovalRequired: boolean;
   /** D198: the owner's ATM-drop settings from the bundle (defaults when absent). */
   atmDrop: AtmDropSettings;
   employeeName: string;
@@ -8307,6 +8344,11 @@ function TillModal({
   const [tipPeople, setTipPeople] = useState(String(DEFAULT_TIP_POOL_PEOPLE));
   // Safe swap (mode "swap" only): a manager/lead approves with their PIN.
   const [approverPin, setApproverPin] = useState("");
+  // D241: the owner can turn swap approval off. The server has the last word:
+  // if it says approval is needed (the setting changed since this register's
+  // last menu download), the PIN box comes back.
+  const [approvalForced, setApprovalForced] = useState(false);
+  const swapNeedsApprover = swapApprovalFromBundle || approvalForced;
   // Fix Phase 2.7b (F-01-8, owner D3): the bills both ways. Big bills from
   // this till to the master till, and the change that comes back. The swap
   // amount IS the big bills' total, and the change must equal it.
@@ -8370,7 +8412,7 @@ function TillModal({
       : mode === "drop"
         ? amountMinor !== null && (atmWitness === null || atmWitness.allowed)
         : mode === "swap"
-          ? amountMinor !== null && swapOutMinor === swapInMinor && approverPin.length >= 4
+          ? amountMinor !== null && swapOutMinor === swapInMinor && (!swapNeedsApprover || approverPin.length >= 4)
           : tipsValid && (countedMinor > 0 || confirmEmpty));
 
   const TITLES = {
@@ -8530,7 +8572,7 @@ function TillModal({
       }
       witness = w.pin;
     }
-    if (mode === "swap") {
+    if (mode === "swap" && swapNeedsApprover) {
       const m = await proveOffline(approverPin, "approver", true);
       if (!m.ok) {
         setError(m.error);
@@ -8555,7 +8597,7 @@ function TillModal({
             ...(billsParse?.ok ? { bills: billsParse.bills } : {}),
           }
         : mode === "swap"
-          ? { action: "swap", drawerRef, reason, actor: a.pin, ...(approver ? { approver } : {}), amountMinor: amountMinor ?? 0, inDenoms: swapIn, outDenoms: swapOut, ...(notes.trim() ? { notes: notes.trim() } : {}) }
+          ? { action: "swap", drawerRef, reason, actor: a.pin, ...(approver ? { approver } : { approvalOff: true as const }), amountMinor: amountMinor ?? 0, inDenoms: swapIn, outDenoms: swapOut, ...(notes.trim() ? { notes: notes.trim() } : {}) }
           : mode === "close"
             ? {
                 action: "close",
@@ -8639,7 +8681,7 @@ function TillModal({
                 action: "swap",
                 pin,
                 amountMinor,
-                approverPin,
+                ...(swapNeedsApprover ? { approverPin } : {}),
                 inDenoms: swapIn,
                 outDenoms: swapOut,
                 ...(notes.trim() ? { notes: notes.trim() } : {}),
@@ -8710,6 +8752,8 @@ function TillModal({
           setPin("");
           return;
         }
+        // D241: swap approval was turned back on; show the approver PIN box.
+        if (mode === "swap" && !swapNeedsApprover && /approve the swap/i.test(msg)) setApprovalForced(true);
         setError(msg);
         setPin("");
         return;
@@ -9019,18 +9063,27 @@ function TillModal({
                       swapOutMinor > swapInMinor ? "change is" : "change is short"
                     } ${formatCents(Math.abs(swapOutMinor - swapInMinor))}${swapOutMinor > swapInMinor ? " more" : ""}).`}
             </p>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Manager or lead PIN (approval)
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
-              value={approverPin}
-              maxLength={6}
-              onChange={(e) => setApproverPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            />
+            {swapNeedsApprover ? (
+              <>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  Manager or lead PIN (approval)
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={approverPin}
+                  maxLength={6}
+                  onChange={(e) => setApproverPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                />
+              </>
+            ) : (
+              // D241: the owner turned swap approval off (Register Activity → Register switches).
+              <p className="mt-4 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-sm text-[var(--pos-text-muted)]">
+                No manager approval needed for swaps right now (owner setting). Your own PIN below records the swap.
+              </p>
+            )}
             <input
               className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
               placeholder="Notes (optional)…"

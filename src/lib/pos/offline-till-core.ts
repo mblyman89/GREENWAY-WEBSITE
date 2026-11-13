@@ -43,6 +43,12 @@ export type PosTillPayload = {
   actor: OfflineTillPin;
   witness?: OfflineTillPin;
   approver?: OfflineTillPin;
+  /**
+   * D241 — swap only: the iPad's cached owner setting said swap approval is
+   * OFF, so no approver PIN was asked for. Re-checked against the server's
+   * setting at sync (turned back on since = recorded and flagged for review).
+   */
+  approvalOff?: true;
   denoms?: DenomCounts;
   amountMinor?: number;
   window?: "afternoon" | "night" | "other";
@@ -104,8 +110,14 @@ export function validateTillPayload(
     else if (p.action !== "drop") errors.push("only a drop has a witness.");
     else if (pinOk(p.actor) && p.witness.employeeId === p.actor.employeeId) errors.push("A drop cannot witness itself — a second person must enter their PIN.");
   }
+  if (p.approvalOff !== undefined && (p.action !== "swap" || p.approvalOff !== true)) {
+    errors.push("approvalOff is only for a swap, and only as true.");
+  }
   if (p.action === "swap") {
-    if (!pinOk(p.approver)) errors.push("A manager or lead must approve the swap with their PIN.");
+    // D241: with the owner's approval switch off, a swap may carry no approver.
+    if (p.approver === undefined && p.approvalOff === true) {
+      // cashier's PIN only; nothing more to check here
+    } else if (!pinOk(p.approver)) errors.push("A manager or lead must approve the swap with their PIN.");
     else if (pinOk(p.actor) && p.approver.employeeId === p.actor.employeeId) errors.push("A swap cannot approve itself — a manager or lead must enter their PIN.");
   } else if (p.approver !== undefined) {
     errors.push("only a swap has an approver.");
@@ -135,13 +147,13 @@ export function validateTillPayload(
   }
   if (p.action === "swap") {
     body.amountMinor = p.amountMinor;
-    body.approverPin = "offline";
+    if (p.approver) body.approverPin = "offline";
     body.inDenoms = p.inDenoms;
     body.outDenoms = p.outDenoms;
     if (p.notes) body.notes = p.notes;
   }
   if (p.action === "pop" && p.popReason) body.reason = p.popReason;
-  const v = validateTillRequest(body);
+  const v = validateTillRequest(body, { swapApprovalRequired: !(p.action === "swap" && !p.approver && p.approvalOff === true) });
   if (!v.ok) return { ok: false, errors: [v.error] };
   if (p.action === "pop" && (p.popNumber ?? 1) > 1 && !(p.popReason && p.popReason.trim().length >= 3)) {
     return { ok: false, errors: ["Opening the drawer again needs a short reason (owner rule D131)."] };
@@ -237,6 +249,13 @@ export function __runOfflineTillCoreTests(): { passed: number; failed: number } 
   ok(!validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: change }).ok, "swap without approver refused");
   ok(!validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: change, approver: pin(A) }).ok, "self-approved swap refused");
   ok(!validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: { ...EMPTY_DENOMS, twenties: 4 }, approver: pin(B) }).ok, "unequal swap bills refused");
+  // D241: the owner's swap-approval switch, offline.
+  const noAppr = validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: change, approvalOff: true });
+  ok(noAppr.ok && noAppr.req.action === "swap" && noAppr.req.approverPin === "", "D241: approval off, swap with no approver passes");
+  ok(!validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: { ...EMPTY_DENOMS, twenties: 4 }, approvalOff: true }).ok, "D241: approval off still refuses unequal bills");
+  ok(!validateTillPayload({ ...base, action: "drop", amountMinor: 500, window: "night", approvalOff: true }).ok, "D241: approvalOff on a drop refused");
+  ok(!validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: change, approvalOff: "yes" }).ok, "D241: approvalOff must be literally true");
+  ok(!validateTillPayload({ ...base, action: "swap", amountMinor: 10000, inDenoms: bills, outDenoms: change, approvalOff: true, approver: pin(A) }).ok, "D241: a typed approver is still checked (no self-approval)");
   ok(!validateTillPayload({ ...base, action: "close", denoms: EMPTY_DENOMS, tipsMinor: 0 }).ok, "$0 close without confirm refused (D125)");
   ok(validateTillPayload({ ...base, action: "close", denoms: EMPTY_DENOMS, confirmEmpty: true, tipsMinor: 0 }).ok, "$0 close with confirm passes");
   const pooled = validateTillPayload({ ...base, action: "close", denoms: float, tipPool: { poolMinor: 1001, people: 2 } });

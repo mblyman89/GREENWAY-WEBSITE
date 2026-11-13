@@ -24,6 +24,7 @@ import { POP_AUDIT_ACTION } from "@/lib/registers/drawer-pop-store";
 import { businessDayFor } from "@/lib/staffing/time";
 import { offlineKeyId } from "./offline-unlock-core";
 import { getOfflinePolicy } from "./offline-unlock-store";
+import { getRegisterSwitches } from "./register-switches-store";
 import { judgeTillPins, offlineTillNote, validateTillPayload, type TillPinPerson } from "./offline-till-core";
 import type { PosEventEnvelope } from "./sale-event-core";
 
@@ -63,6 +64,13 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
   // drawer story must match the room) AND raises an exception for review.
   // Except the swap, whose approval IS the control — that one is refused.
   if (!verdict.ok && p.action === "swap") return { ok: false, reason: verdict.reason };
+  // D241: a swap the iPad did with no approver because its cached owner
+  // setting said approval was OFF. If the server's setting is ON now, the
+  // swap is still recorded (the cash moved) and raised for review.
+  const swapNoApprover = p.action === "swap" && !p.approver && p.approvalOff === true;
+  const approvalFlag = swapNoApprover && (await getRegisterSwitches()).swapApprovalRequired
+    ? "Offline swap was done with no manager approval (this iPad had swap approval off), but the setting is on now. Review it."
+    : null;
 
   const { data: session } = await admin
     .from("drawer_sessions")
@@ -194,11 +202,14 @@ export async function applyOfflineTill(admin: Admin, envelope: PosEventEnvelope)
         await audit("safe.swap", {
           amountMinor: req.amountMinor,
           approvedBy: p.approver?.employeeId ?? null,
+          // D241: true = no approver because the owner turned swap approval off.
+          approvalNotRequired: swapNoApprover,
           bills_in: req.inDenoms ? denomWords(req.inDenoms) : null,
           bills_out: req.outDenoms ? denomWords(req.outDenoms) : null,
         });
       }
     }
+    if (approvalFlag) return { ok: false, reason: approvalFlag };
     return verdict.ok ? { ok: true } : { ok: false, reason: verdict.reason };
   }
 

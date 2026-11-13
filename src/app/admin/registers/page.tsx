@@ -230,6 +230,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/cash-drawer`} variant="neutral" size="sm">
               Cash drawer & receipt
             </Button>
+            <Button href={`${BASE}/switches`} variant="neutral" size="sm">
+              Register switches
+            </Button>
           </>
         }
         help={

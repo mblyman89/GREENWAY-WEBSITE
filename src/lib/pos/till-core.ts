@@ -112,7 +112,10 @@ export type TillSwapRequest = {
    * but every trip into the safe leaves this record.
    */
   amountMinor: number;
-  /** Manager/lead approval PIN — verified and role-gated server-side. */
+  /**
+   * Manager/lead approval PIN — verified and role-gated server-side.
+   * D241: "" when the owner turned swap approval off and none was typed.
+   */
   approverPin: string;
   notes?: string;
   /**
@@ -215,7 +218,13 @@ export function sanitizeDenoms(raw: unknown): DenomCounts {
  * checked by the route with the shared isValidPin (same as /api/pos/unlock);
  * here we only require presence so this module stays free of staffing deps.
  */
-export function validateTillRequest(body: unknown): TillValidation {
+/**
+ * D241 — the owner's swap dual-approval switch. Absent = required (today's
+ * rule); only an explicit false lets a swap go through on the cashier's PIN.
+ */
+export type TillValidateOptions = { swapApprovalRequired?: boolean };
+
+export function validateTillRequest(body: unknown, opts: TillValidateOptions = {}): TillValidation {
   if (!body || typeof body !== "object") return { ok: false, error: "Body must be JSON." };
   const b = body as Record<string, unknown>;
 
@@ -326,7 +335,8 @@ export function validateTillRequest(body: unknown): TillValidation {
     const amount = validateSwapAmount(b.amountMinor);
     if (!amount.ok) return { ok: false, error: amount.error };
     const approverPin = typeof b.approverPin === "string" ? b.approverPin.trim() : "";
-    if (!approverPin) {
+    // D241: the PIN is required unless the owner turned swap approval off.
+    if (!approverPin && opts.swapApprovalRequired !== false) {
       return { ok: false, error: "A manager or lead must approve the swap with their PIN." };
     }
     const notesRaw = typeof b.notes === "string" ? b.notes.trim() : "";
@@ -504,6 +514,19 @@ export function __runTillCoreTests(): void {
     "swap: trimmed notes carried");
   ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000 }).ok,
     "swap: missing approver PIN rejected (every safe trip needs a manager)");
+  // D241: the owner's swap-approval switch.
+  const swapNoAppr = validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000 }, { swapApprovalRequired: false });
+  ok(swapNoAppr.ok && swapNoAppr.req.action === "swap" && swapNoAppr.req.approverPin === "",
+    "D241 swap: approval off accepts a swap with no approver PIN");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000 }, { swapApprovalRequired: true }).ok,
+    "D241 swap: approval on still needs the approver PIN");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000 }, {}).ok,
+    "D241 swap: no setting given keeps the approver PIN required");
+  const swapApprOffTyped = validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678" }, { swapApprovalRequired: false });
+  ok(swapApprOffTyped.ok && swapApprOffTyped.req.action === "swap" && swapApprOffTyped.req.approverPin === "5678",
+    "D241 swap: approval off still carries a PIN that was typed");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 0 }, { swapApprovalRequired: false }).ok,
+    "D241 swap: approval off still refuses a zero amount");
   ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 0, approverPin: "5678" }).ok,
     "swap: zero amount rejected");
   ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 200_001, approverPin: "5678" }).ok,

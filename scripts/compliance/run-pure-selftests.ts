@@ -208,6 +208,8 @@ import { __runExceptionResolveTests } from "../../src/lib/pos/exception-resolve-
 import { __runOrdersPanelTests } from "../../src/lib/orders/order-panels-core";
 import { __runOrderSourceCoreTests } from "../../src/lib/orders/order-source-core";
 import { __runRegisterPickedUpFilterTests } from "../../src/lib/orders/register-picked-up-filter-core";
+import { __runRegisterSwitchesTests } from "../../src/lib/pos/register-switches-core";
+import { __runRegisterKeypadTests } from "../../src/lib/pos/register-keypad-core";
 import { __runLeaflyBridgeTests } from "../../src/lib/leafly/bridge-core";
 // SLICE L-2 -- the LAST GATE before a menu payload goes on the wire. Registered
 // here because every defect this slice repaired would have been caught by
@@ -2417,6 +2419,8 @@ __runLiquidVolumeTests();
   __runOrderSourceCoreTests(); // D226 ("thousands of orders in history ... not that many online orders"): one rule for "register sale", the board source filter
   console.log("order-source-core: self-tests passed");
   assertRan("register-picked-up-filter-core", __runRegisterPickedUpFilterTests(), 16); // D240 ("I am not able to see completed online orders"): collected-at-register online orders file under Completed
+  assertRan("register-switches-core", __runRegisterSwitchesTests(), 22); // D241 ("turn off or disable use of the web browser registers" / "a toggle for dual approval on cash swaps"): switch defaults, iPad-app vs browser by Origin, unlock gate
+  assertRan("register-keypad-core", __runRegisterKeypadTests(), 37); // D241 ("Anytime something needs to be typed by hand, I want a keypad button"): which boxes get the keypad, number vs letter pad, caret-aware typing, maxLength
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the
@@ -2855,7 +2859,7 @@ __runLiquidVolumeTests();
   assertRan("register-fingerprint-core", __runRegisterFingerprintTests(), 20); // D143 ("add to the lock screen of the app something bold that says I am running the newest version and all is good"): source fingerprint shared by the iPad build and the server, green/red/grey verdict
   assertRan("ipad-setup-core", __runIpadSetupTests(), 30); // D145–D148 ("make the iPad behavior set in stone and something only I can undo"): checklist, owner lockdown policy, Guided Access gate, device health verdict
   assertRan("offline-unlock-core", __runOfflineUnlockCoreTests(), 93); // D161 ("allows my employees to unlock the ipad registers in offline mode"): per-device key, PBKDF2+HMAC verifiers, roster purge, throttle/wipe, clock-rollback + staleness gates, 4xx never falls back, offline_auth re-judged at sync
-  assertRan("offline-till-core", __runOfflineTillCoreTests(), 29); // D170 O1 ("finish all remaining offline mode tasks"): drawer count-in / drop / swap / pop / close offline — same till-core rules on the iPad and at sync, PINs re-judged by id, swap approver must still be a manager
+  assertRan("offline-till-core", __runOfflineTillCoreTests(), 34); // D241: +5 swap with approval off (approvalOff). D170 O1 ("finish all remaining offline mode tasks"): drawer count-in / drop / swap / pop / close offline — same till-core rules on the iPad and at sync, PINs re-judged by id, swap approver must still be a manager
   assertRan("lot-details-cache-core", __runLotDetailsCacheCoreTests(), 18); // D170 O11 ("fully operational while internet is down"): lot details saved on the iPad, bounded, never erased by a hiccup, labelled with their age offline
   assertRan("deferred-outbox-core", __runDeferredOutboxCoreTests(), 26); // D170 O7/O8: stock flags and emailed receipts made offline wait in a bounded outbox and are sent when the internet returns; refusals stay visible
   assertRan("fix-index-core", __runFixIndexCoreTests(), 22); // D170 O9: the Fix & sell lot index lets the register fix and sell an unknown package offline with the same decideFixAndSell the route runs
