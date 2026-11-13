@@ -3150,3 +3150,12 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - The four warnings and the unsubscribe link are a fixed footer that cannot be removed (F-22-1). Each block's link carries `utm_content=<block id>` for the click report in N-8c. Saving voids an approval (N-3).
 - No migration (stored in `site_settings`). Test `tests/compliance/d237-newsletter-n8a-canvas.test.ts`; pure self-test `__runNewsletterCanvasCoreTests` (82). SOP-22 v1.7.
 - **Owner step:** none.
+
+### As built — N-8b canvas AI studio (#PN8b)
+
+- **"the ability to ask the ai to help with building the newsletter like how canva has its ai":** the AI studio panel on the canvas. Draft the newsletter writes headline, intro, notes, button, subject and preview text from this week's facts only; Improve the selected section (presets or your own ask); Suggest 5 subjects.
+- **"you can select an image and ask it to manipulate it or remove the background":** the picture studio edits the selected Image section: Remove background, Studio clean-up, Brighten and sharpen, Wide email banner, Seasonal backdrop, or any ask. With no picture selected it makes a new one.
+- **"use our Gemini or gpt ai":** words use the site AI (GPT or Gemini); pictures use GPT Image or Gemini (Nano Banana). **"use flux from the editor":** FLUX is a third picture engine, polled from the browser like the FLUX studio.
+- Guard rails: AI words are not applied if they invent prices, percents or links, use superlatives or health claims, or fail the compliance check; review quotes are locked; picture asks are screened (WAC 314-55-155 themes) and carry a safety note; results are new Media files (originals kept); every call checks the AI budget, is logged and audited.
+- `src/lib/cms/newsletter-ai-core.ts`, `newsletter-ai-server.ts`, `src/app/admin/newsletter/canvas/ai-actions.ts`, `CanvasAiStudio.tsx`. No migration. Test `tests/compliance/d237-newsletter-n8b-ai-studio.test.ts`; pure self-test `__runNewsletterAiCoreTests` (60). SOP-22 v1.8.
+- **Owner step:** Optional, only for the picture studio: GPT Image uses `OPENAI_API_KEY` (or `AI_API_KEY` when it is an OpenAI key; model `AI_IMAGE_MODEL`, default `gpt-image-2`); Gemini pictures need `AI_GEMINI_API_KEY` (model `AI_GEMINI_IMAGE_MODEL`, default `gemini-nano-banana-2.1`); FLUX uses the key already in Settings > Integrations. Words need `AI_API_KEY` (already on the to-do list).
