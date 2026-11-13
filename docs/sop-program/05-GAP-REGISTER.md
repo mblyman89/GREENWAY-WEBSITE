@@ -145,6 +145,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-118 | **Newsletter canvas (sections, AI fill, preview desktop/phone, preheader, plain text, PDF optional)** | D236 | F-22-8 | SOP-22 App. B.3 | BUILT (N-8a, D238; AI studio N-8b; motion + interactive N-8c) |
 | G-119 | **Reviews spotlight (per Q-22-2)** | D236 | F-22-12 | SOP-22 App. B.3 | BUILT (N-9, D239; curated per Q-22-2 (a)) |
 | G-120 | **Help: helper, concierge topics corrected and added, "Sunday checklist" page** | D236 | F-22-5 (concierge wording) | SOP-22 App. B.3 | BUILT (N-10, D239) |
+| G-121 | **Locked newsletter brand frame: logo, title, issue number and date; footer with socials, 21+, warnings, unsubscribe; 3 styles; owner/admin only** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-1, D243, #1790) |
+| G-122 | **Banner Studio as an email "Design section" (all banner tools plus QR, countdown, menu product cards), saved as a hosted picture** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-2, D243, #1791) |
+| G-123 | **Full-page email editor: library + inspector, drag to reorder, columns, text over a picture, section styles, saved sections, templates, phone/desktop/dark and inbox previews** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-3, D243, #1792) |
+| G-124 | **AI picture tools: generate picture or GIF, remove background, erase (mask), extend, recolor, relight, upscale, variations, style looks, before/after** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-4, D243, #1793) |
+| G-125 | **Ask the canvas: a vision model looks at the canvas, proposes changes, Apply and Undo** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-5, D243, #1794) |
+| G-126 | **Polish: animated design sections as GIFs, dark-mode-safe logos, contrast and readability checks, inbox size check, first-name merge tags** | D243 | (enhancement) | SOP-22 App. B.5 | BUILT (E-6, D243, #1795) |
 
 ---
 
@@ -1136,3 +1142,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Why:** every action except sales and unlock refused offline (F-04-36); receipt twins and a 500-row void lookup (F-04-37); no long-outage warning (F-04-38).
 - **Built:** O1 drawers (`offline-till-core/store`, migration 0340); O2/O3 voids and returns (`offline-reversal-core/store`, migration 0341); O4 witness PIN; O6 provisional X (`day-tally-core`); O7/O8 send-later outbox; O9 Fix & sell index; O10 scan unlock; O11 lot details cache; O12 `outage-resilience-core`; O14 pickup book (`pickup-offline-core`); O15 member book (`member-book-core`). Encrypted storage keys registered in `pos-storage-core`. SOP-01 §4.32 / §4.40 / section 5; concierge entry.
 - **Owner action:** apply migrations 0340 and 0341 (0339 is already applied in production); set `POS_OFFLINE_SECRET` in Vercel if not set and redeploy; rebuild every iPad; run the outage drill. For new online orders during an outage, consider a cellular failover router.
+
+## G-121 … G-126 · Phase E "Email Studio", the newsletter editor upgraded (APPROVED; owner message D243) — S3
+
+- **Owner basis:** *"I like the idea of having a formatted header and footer and title and logo and such so every newsletter has the same format, with a customized body."* … *"I want the website editors plus all the above plus more."* … *"The website editor on steroids."*
+- **Why:** the N-8 canvas is a fixed list of sections with form fields; it has no free design, no shared brand frame, and the AI can only rewrite text or edit one picture.
+- **Requirements:** every email keeps the four warnings (≥10% type) and the unsubscribe link in live text; free design becomes hosted pictures with alt text; every AI call goes through the WAC 314-55-155 checks and the monthly AI budget; AI results are new Media files (originals are never changed); old canvases render as before.
+- **Built so far:** E-1 (G-121, #1790); E-2 (G-122, #1791); E-3 (G-123, #1792); E-4 (G-124, #1793); E-5 (G-125, #1794); E-6 (G-126, #1795).

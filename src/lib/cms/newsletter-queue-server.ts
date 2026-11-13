@@ -39,6 +39,7 @@ import { listUnsubscribeHeaders, oneClickUnsubscribeUrl } from "./newsletter-ema
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { buildNewsletterEmail, newsletterSendConfig, resendApiKey, siteUrl, unsubscribeUrl } from "./newsletter-send-store";
 import { canvasEmailFor } from "./newsletter-canvas-server";
+import { applyMergeTags, cleanFirstName } from "./newsletter-polish-core";
 
 const RESEND_BATCH_ENDPOINT = "https://api.resend.com/emails/batch";
 
@@ -65,6 +66,19 @@ type SendRow = {
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** D243 E-6: token -> cleaned first name for one batch (at most BATCH_SIZE tokens). A failed read = everyone gets the fallback. */
+async function firstNamesFor(tokens: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (tokens.length === 0) return out;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("loyalty_signups").select("unsubscribe_token, first_name").in("unsubscribe_token", tokens.slice(0, BATCH_SIZE));
+  if (error) return out;
+  for (const r of (data as { unsubscribe_token: string | null; first_name: string | null }[] | null) ?? []) {
+    if (r.unsubscribe_token) out.set(r.unsubscribe_token, cleanFirstName(r.first_name));
+  }
+  return out;
+}
 
 export async function countsFor(sendId: string): Promise<SendCounts> {
   const admin = createSupabaseAdminClient();
@@ -190,9 +204,13 @@ async function workSend(send: SendRow, deadlineMs: number): Promise<{ batches: n
       .limit(BATCH_SIZE);
     const rows = (rowsData as RecipientRow[] | null) ?? [];
     if (rows.length === 0) break;
+    // D243 E-6: first names for {{first_name}}, looked up by each row's unique
+    // unsubscribe token (one read per batch of 100, only when the tag is used).
+    const names = canvas?.usesNames ? await firstNamesFor(rows.map((r) => r.unsubscribe_token).filter((t): t is string => !!t)) : new Map<string, string>();
 
     const emails = rows.map((r) => {
-      const c = canvas ? canvas.render(unsubscribeUrl(r.unsubscribe_token)) : null;
+      const firstName = r.unsubscribe_token ? names.get(r.unsubscribe_token) ?? "" : "";
+      const c = canvas ? canvas.render(unsubscribeUrl(r.unsubscribe_token), firstName) : null;
       const html = c
         ? c.html
         : buildNewsletterEmail({
@@ -202,7 +220,7 @@ async function workSend(send: SendRow, deadlineMs: number): Promise<{ batches: n
             unsubscribeUrl: unsubscribeUrl(r.unsubscribe_token),
           }).html;
       const headers = listUnsubscribeHeaders(oneClickUnsubscribeUrl(siteUrl(), r.unsubscribe_token));
-      const e: Record<string, unknown> = { from: cfg.from, to: [r.email], subject: send.subject, html, tags };
+      const e: Record<string, unknown> = { from: cfg.from, to: [r.email], subject: applyMergeTags(send.subject, firstName, "text"), html, tags };
       if (c?.text) e.text = c.text;
       if (Object.keys(headers).length > 0) e.headers = headers;
       return e;

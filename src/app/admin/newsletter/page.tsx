@@ -134,6 +134,10 @@ export default async function NewsletterSendPage({
             </form>
             {/* SLICE 115: jump straight to Canva to design the newsletter. */}
             <CanvaButton />
+            {/* D243 E-1: the locked header and footer every newsletter shares. */}
+            <Button href="/admin/newsletter/frame" variant="neutral">
+              Brand frame
+            </Button>
             <Button href="/admin/blog" variant="neutral">
               Blog &amp; posts
             </Button>

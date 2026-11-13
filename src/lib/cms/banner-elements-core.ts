@@ -80,7 +80,8 @@ export const SHAPE_KEYWORDS: Partial<Record<ShapeKind, string>> = {
 };
 const SHAPE_IDS = SHAPE_KINDS.map((s) => s.id);
 
-export const ICON_PATH_MAX = 4000;
+/** D243 E-2: 16000 so a QR code (one icon path, up to version 10) fits. */
+export const ICON_PATH_MAX = 16000;
 /** R60: "anim" = a Lottie or Rive animation (settings in `anim`, banner-anim-core). */
 export type ElementKind = "shape" | "icon" | "anim";
 

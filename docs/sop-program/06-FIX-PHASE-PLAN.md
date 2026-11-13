@@ -149,6 +149,19 @@ The legal fixes go first (the four warnings, one-click unsubscribe, bounce suppr
 
 **Interim (until built):** follow §4.2–§4.7 by hand, put the four warnings in the Canva design, upload the PDF again on every save, publish by hand, and opt out bounces and complaints by hand.
 
+### Phase E — Email Studio: the newsletter editor upgraded (SOP-22, D243) · APPROVED (D243)
+
+Owner: *"Please give the newsletter editor a massive upgrade so it is fully capable and completely packed with useful and expert level features. The website editor on steroids."* Approved: *"I want to go with your recommendations."*
+
+| Order | Fix | Finding (03) | Gap | Depends on |
+|---|---|---|---|---|
+| E-1 | **BUILT (D243, #1790)** Brand frame: one locked header (logo, title, tagline, issue number, date) and footer (socials, address, hours, phone, 21+, note, the four warnings, unsubscribe) for every newsletter; Classic, Bold and Minimal; owner/admin only | (enhancement) | G-121 | — |
+| E-2 | **BUILT (D243, #1791)** Design section: the Banner Studio at email width (text boxes, fonts, effects, shapes, stickers, layers, brand kit, saved designs) plus QR, countdown and menu product cards; saved as a hosted PNG (or GIF) with alt text and a link | (enhancement) | G-122 | E-1 |
+| E-3 | **BUILT (D243, #1792)** Full-page editor: section library on the left, inspector on the right, drag to reorder, click to edit, 2/3 columns, text over a picture, per-section background, padding and colours, saved sections, templates (weekly, sale, vendor day, holiday, 4/20), phone/desktop/dark previews and Gmail/iPhone inbox mockups | (enhancement) | G-123 | E-2 |
+| E-4 | **BUILT (D243, #1793)** AI picture tools: generate a picture or GIF, remove background, erase (paint a mask, FLUX fill), extend (FLUX expand), recolor, relight, upscale, variations, style looks; before/after; results saved as new Media files | (enhancement) | G-124 | E-2 |
+| E-5 | **BUILT (D243, #1794)** Ask the canvas: a vision model reads a screenshot plus the canvas, proposes a list of changes, the user presses Apply (Undo keeps the old version) | (enhancement) | G-125 | E-3, E-4 |
+| E-6 | **BUILT (D243, #1795)** Polish: animated design sections exported as GIFs, dark-mode-safe logos, contrast and readability checks, inbox size check, first-name merge tags | (enhancement) | G-126 | E-5 |
+
 ### Phase 7 — Remaining S3/S4, then the next audits
 
 1. Readable errors, disposition housekeeping, destruction hold text, removal of the back-office customer-return wizard (G-46, G-49, G-50, G-45) — **BUILT as 7.1** (owner message 16) — plus the remaining S3/S4 findings in 03.

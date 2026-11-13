@@ -32,7 +32,12 @@ import {
   EMAIL_FONT_PX,
 } from "./newsletter-email-core";
 import type { ThisWeekFeed } from "./this-week-feed-core";
+import { defaultFrame, frameFooterHtml, frameFooterText, frameHeaderHtml, frameHeaderText, type BrandFrame, type FrameIssue } from "./newsletter-frame-core";
 import { countdownImageUrl, formatEndsAt, pollContent, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, COUNTDOWN_W } from "./newsletter-motion-core";
+import { cleanDesignFields, designDisplayWidth, designImageHtml, designIssues, productRowsHtml, productRowsText, type DesignSectionFields } from "./newsletter-design-core";
+import { cleanColumns, cleanOverlay, columnsHtml, columnsIssues, columnsText, columnWidth, overlayHtml, overlayIssues, overlayText, TEMPLATE_PLACEHOLDER, type ColumnsFields, type OverlayFields } from "./newsletter-layout-core";
+import { cleanSectionStyle, styleContrastIssue, styledColors, wrapStyled, type SectionStyle } from "./newsletter-style-core";
+import { applyMergeTags, mergeTagIssues, readabilityIssues } from "./newsletter-polish-core";
 
 // ── Limits ────────────────────────────────────────────────────────────────
 
@@ -76,7 +81,11 @@ export const CARD_KIND_LABEL: Record<CardKind, string> = {
 };
 export type CanvasCard = { title: string; text: string; imageUrl: string; imageAlt: string; href: string; cta: string };
 
-export type CanvasBlock =
+export type CanvasBlock = CanvasBlockBase & {
+  /** D243 E-3: optional section look (background, words colour, padding, corners). */
+  style?: SectionStyle;
+};
+type CanvasBlockBase =
   | { id: string; type: "header"; tagline: string }
   | { id: string; type: "headline"; text: string; sub: string; size: number }
   | { id: string; type: "text"; text: string; align: "left" | "center" }
@@ -91,11 +100,17 @@ export type CanvasBlock =
   /** N-8c: a live countdown GIF (drawn by our server when the email is opened). */
   | { id: string; type: "countdown"; endsAt: string; label: string; href: string }
   /** N-8c: a one-tap poll; each answer is a tracked link, so a tap is a vote. */
-  | { id: string; type: "poll"; question: string; options: string[]; href: string };
+  | { id: string; type: "poll"; question: string; options: string[]; href: string }
+  /** D243 E-2: a Banner Studio design, sent as a hosted picture (+ live timer and product rows). */
+  | ({ id: string; type: "design" } & DesignSectionFields)
+  /** D243 E-3: 2 or 3 columns side by side (stack on phones). */
+  | ({ id: string; type: "columns" } & ColumnsFields)
+  /** D243 E-3: words and a button over a picture. */
+  | ({ id: string; type: "overlay" } & OverlayFields);
 
 export type CanvasBlockType = CanvasBlock["type"];
 export const BLOCK_TYPES: readonly CanvasBlockType[] = [
-  "header", "headline", "text", "image", "button", "qr", "cards", "review", "hours", "divider", "spacer", "countdown", "poll",
+  "header", "headline", "text", "design", "overlay", "columns", "image", "button", "qr", "cards", "review", "hours", "divider", "spacer", "countdown", "poll",
 ];
 export const BLOCK_LABEL: Record<CanvasBlockType, string> = {
   header: "Header",
@@ -111,6 +126,9 @@ export const BLOCK_LABEL: Record<CanvasBlockType, string> = {
   spacer: "Spacer",
   countdown: "Live countdown (moving)",
   poll: "One-tap poll",
+  design: "Design section (Banner Studio)",
+  columns: "Columns (2 or 3)",
+  overlay: "Picture with words over it",
 };
 
 export type CanvasDoc = {
@@ -205,7 +223,13 @@ function cleanCard(raw: unknown): CanvasCard | null {
 export function cleanBlock(raw: unknown, i = 0): CanvasBlock | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const id = cleanId(r.id, i);
+  const b = cleanBlockBase(r, cleanId(r.id, i));
+  if (!b) return null;
+  const style = cleanSectionStyle(r.style);
+  return style ? { ...b, style } : b;
+}
+
+function cleanBlockBase(r: Record<string, unknown>, id: string): CanvasBlockBase | null {
   switch (r.type) {
     case "header":
       return { id, type: "header", tagline: line(r.tagline, 80) };
@@ -240,6 +264,12 @@ export function cleanBlock(raw: unknown, i = 0): CanvasBlock | null {
       const options = (Array.isArray(r.options) ? r.options : []).map((o) => line(o, 60)).filter(Boolean).slice(0, POLL_MAX_OPTIONS);
       return { id, type: "poll", question: line(r.question, 160), options, href: safeHref(r.href) };
     }
+    case "design":
+      return { id, type: "design", ...cleanDesignFields(r, { line, safeHref, safeImageSrc }) };
+    case "columns":
+      return { id, type: "columns", ...cleanColumns(r, { line, str, safeHref, safeImageSrc }) };
+    case "overlay":
+      return { id, type: "overlay", ...cleanOverlay(r, { line, str, safeHref, safeImageSrc }) };
     default:
       return null;
   }
@@ -284,6 +314,13 @@ export function blankBlock(type: CanvasBlockType, id: string = newBlockId(type))
   if (base.type === "poll") {
     base.question = "What should we stock more of?";
     base.options = ["Option 1", "Option 2"];
+  }
+  if (base.type === "overlay") {
+    base.heading = "Big news this week";
+    base.text = "One short line about it.";
+  }
+  if (base.type === "columns") {
+    base.items = base.items.map((c, n) => ({ ...c, text: `Column ${n + 1} words.` }));
   }
   return base;
 }
@@ -378,7 +415,22 @@ export type RenderOpts = {
   webUrl: string | null;
   /** utm_campaign value (the post slug). */
   campaign: string;
+  /** D243 E-1: the locked brand frame (null/off = the pre-E-1 look). */
+  frame?: BrandFrame | null;
+  /** D243 E-1: issue number and date for the frame header. */
+  issue?: FrameIssue | null;
+  phone?: string;
+  phoneHref?: string;
+  /** D243 E-3: preview only. Wraps each section with data-gw-block="id" so the editor can outline it. Never set when sending. */
+  markBlocks?: boolean;
+  /** D243 E-6: the member's first name for {{first_name}} (absent = the fallback, e.g. "there"). */
+  firstName?: string | null;
 };
+
+/** D243 E-1: true when the brand frame wraps this email. */
+export function frameOn(o: RenderOpts): o is RenderOpts & { frame: BrandFrame } {
+  return !!o.frame && o.frame.enabled;
+}
 
 /** The sample unsubscribe link used in previews and size checks (as long as a real one). */
 export const SAMPLE_UNSUBSCRIBE_URL = "https://www.greenwaymarijuana.com/unsubscribe?token=sample-0000000000000000000000000000000000000000000000000000000000000000";
@@ -479,7 +531,30 @@ function blockHtml(b: CanvasBlock, t: ThemeColors, o: RenderOpts, theme: CanvasT
         .join("");
       return `<tr><td style="${pad}"><p style="margin:0 0 4px;color:${t.gold};font-size:${CANVAS_FONT_PX.small}px;font-weight:bold;text-transform:uppercase;letter-spacing:2px">Quick poll</p><p style="margin:0 0 12px;color:${t.text};font-size:17px;font-weight:bold;line-height:1.4">${escapeHtml(b.question)}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${opts}</table><p style="margin:4px 0 0;color:${t.muted};font-size:${CANVAS_FONT_PX.small}px">One tap is your vote.</p></td></tr>`;
     }
+    case "design": {
+      // D243 decision 1: the design is a picture; the timer, prices and links stay live HTML.
+      const img = designImageHtml(b, link);
+      const timerSrc = b.timerEndsAt ? countdownImageUrl(o.siteUrl, b.timerEndsAt, theme) : "";
+      const timer = timerSrc
+        ? `<tr><td align="center" style="padding:14px 28px 0;text-align:center">${imgTag(timerSrc, `Time left: ends ${formatEndsAt(b.timerEndsAt)}`, COUNTDOWN_W, ";margin:0 auto;border-radius:14px")}<p style="margin:6px 0 0;color:${t.muted};font-size:${CANVAS_FONT_PX.small}px">Ends ${escapeHtml(formatEndsAt(b.timerEndsAt))} (Pacific)</p></td></tr>`
+        : "";
+      const rows = b.products.length ? `<tr><td style="padding:8px 28px 4px">${productRowsHtml(b.products, t, link)}</td></tr>` : "";
+      if (!img && !timer && !rows) return "";
+      const imgRow = img ? `<tr><td align="center" data-gw-design="${escapeHtml(b.id)}" style="${b.bleed ? "padding:0" : pad};text-align:center;line-height:0;font-size:0">${img}</td></tr>` : "";
+      return `${imgRow}${timer}${rows}`;
+    }
+    case "columns":
+      return columnsHtml(b, t, link, (x) => inlineHtml(x, t.accent, link));
+    case "overlay":
+      return overlayHtml(b, t, link, (x) => inlineHtml(x, t.accent, link));
   }
+}
+
+/** One section: its own colours when styled, wrapped in its look, marked on previews. */
+function sectionHtml(b: CanvasBlock, t: ThemeColors, o: RenderOpts, theme: CanvasTheme): string {
+  const rows = b.style ? wrapStyled(blockHtml(b, styledColors(t, b.style), o, theme), b.style, t) : blockHtml(b, t, o, theme);
+  if (!o.markBlocks || !rows) return rows;
+  return `<tr><td data-gw-block="${escapeHtml(b.id)}" style="padding:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></td></tr>`;
 }
 
 /** Poll answers must land on our own site, or the tap cannot be counted. */
@@ -499,6 +574,11 @@ function hostOf(url: string): string {
 
 /** The email HTML. The warnings and the unsubscribe link are always added here. */
 export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
+  // D243 E-6: {{first_name}} becomes the member's first name (or the fallback) so braces never reach an inbox.
+  return applyMergeTags(renderCanvasHtml(doc, o), o.firstName, "html");
+}
+
+function renderCanvasHtml(doc: CanvasDoc, o: RenderOpts): string {
   const t = THEMES[doc.theme];
   const unsub = o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL;
   const pre = doc.preheader
@@ -507,7 +587,12 @@ export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
   const web = o.webUrl
     ? `<tr><td style="padding:0 0 10px;text-align:center"><a href="${escapeHtml(o.webUrl)}" style="color:#8a8a8a;font-size:${CANVAS_FONT_PX.small}px;text-decoration:underline">View in your browser</a></td></tr>`
     : "";
-  const body = doc.blocks.map((b) => blockHtml(b, t, o, doc.theme)).join("\n");
+  const framed = frameOn(o);
+  // With the frame on, its header replaces the old "Header" section.
+  const body = (framed ? frameHeaderHtml(o.frame!, t, doc.theme, o, o.issue) + "\n" : "") + doc.blocks.filter((b) => !(framed && b.type === "header")).map((b) => sectionHtml(b, t, o, doc.theme)).join("\n");
+  const footer = framed
+    ? frameFooterHtml(o.frame!, t, o, unsub)
+    : `<tr><td data-gw-footer="fixed" style="padding:20px 28px 28px;border-top:1px solid ${t.border}">${warningsFooterHtml(EMAIL_FONT_PX.warnings)}<p style="margin:16px 0 0;color:#8a8a8a;font-size:${EMAIL_FONT_PX.warnings}px;line-height:1.6;text-align:center">${escapeHtml(o.businessName)} &middot; ${escapeHtml(o.address)}<br/>You're receiving this because you joined the Greenway loyalty program.<br/><a data-gw-unsubscribe="1" href="${escapeHtml(unsub)}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a></p></td></tr>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="color-scheme" content="${doc.theme === "dark" ? "dark" : "light"}"/><title>${escapeHtml(doc.subject || o.businessName)}</title>
 <style>@media only screen and (max-width:620px){.gw-col{display:block!important;width:100%!important;padding:0 0 16px!important}}</style></head>
@@ -516,16 +601,19 @@ export function renderCanvasEmail(doc: CanvasDoc, o: RenderOpts): string {
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">${web}</table>
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${t.card};border:1px solid ${t.border};border-radius:16px">
 ${body}
-<tr><td data-gw-footer="fixed" style="padding:20px 28px 28px;border-top:1px solid ${t.border}">${warningsFooterHtml(EMAIL_FONT_PX.warnings)}<p style="margin:16px 0 0;color:#8a8a8a;font-size:${EMAIL_FONT_PX.warnings}px;line-height:1.6;text-align:center">${escapeHtml(o.businessName)} &middot; ${escapeHtml(o.address)}<br/>You're receiving this because you joined the Greenway loyalty program.<br/><a data-gw-unsubscribe="1" href="${escapeHtml(unsub)}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a></p></td></tr>
+${footer}
 </table></td></tr></table></body></html>`;
 }
 
 /** The plain-text part (sent with the HTML; also read by some spam filters). */
 export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
   const out: string[] = [];
+  const framed = frameOn(o);
+  if (framed) out.push(...frameHeaderText(o.frame!, o, o.issue));
   for (const b of doc.blocks) {
     switch (b.type) {
       case "header":
+        if (framed) break;
         out.push(o.businessName.toUpperCase() + (b.tagline ? ` | ${b.tagline}` : ""));
         break;
       case "headline":
@@ -571,16 +659,28 @@ export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
           b.options.forEach((label, i) => out.push(`- ${label}: ${withUtm(target, hostOf(o.siteUrl), o.campaign, pollContent(b.id, i + 1))}`));
         }
         break;
+      case "design":
+        if (b.src && (b.alt || b.href)) out.push(`[${b.alt || "Picture"}]${b.href ? ` ${withUtm(b.href, hostOf(o.siteUrl), o.campaign, b.id)}` : ""}`);
+        if (b.timerEndsAt) out.push(`Ends: ${formatEndsAt(b.timerEndsAt)} (Pacific)`);
+        if (b.products.length) out.push(productRowsText(b.products).join("\n"));
+        break;
+      case "columns":
+        out.push(...columnsText(b, inlineText));
+        break;
+      case "overlay":
+        out.push(...overlayText(b, inlineText));
+        break;
     }
   }
-  out.push("", warningsFooterText(), "", `${o.businessName} | ${o.address}`, "You're receiving this because you joined the Greenway loyalty program.", `Unsubscribe: ${o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL}`);
+  if (framed) out.push("", ...frameFooterText(o.frame!, o, o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL));
+  else out.push("", warningsFooterText(), "", `${o.businessName} | ${o.address}`, "You're receiving this because you joined the Greenway loyalty program.", `Unsubscribe: ${o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL}`);
   if (o.webUrl) out.unshift(`View in your browser: ${o.webUrl}`, "");
-  return out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  return applyMergeTags(out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", o.firstName, "text");
 }
 
 // ── Send-readiness check ──────────────────────────────────────────────────
 
-export type CanvasImageRef = { blockId: string; url: string; alt: string; displayWidth: number; role: "image" | "card" | "qr" };
+export type CanvasImageRef = { blockId: string; url: string; alt: string; displayWidth: number; role: "image" | "card" | "qr" | "design" | "overlay" | "column" };
 export type ImageInfo = { bytes: number | null; mime: string | null; width: number | null; error?: string };
 export type CanvasIssue = { level: "must-fix" | "heads-up"; code: string; text: string; blockId?: string };
 export type CanvasCheck = {
@@ -600,7 +700,10 @@ export function imagesIn(doc: CanvasDoc): CanvasImageRef[] {
   for (const b of doc.blocks) {
     if (b.type === "image" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.alt, displayWidth: b.width, role: "image" });
     if (b.type === "qr" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.caption || "QR code", displayWidth: b.size, role: "qr" });
+    if (b.type === "design" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.alt, displayWidth: designDisplayWidth(b), role: "design" });
     if (b.type === "cards") for (const c of b.cards) if (c.imageUrl) out.push({ blockId: b.id, url: c.imageUrl, alt: c.imageAlt || c.title, displayWidth: b.columns === 2 ? 266 : 544, role: "card" });
+    if (b.type === "overlay" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.alt || b.heading, displayWidth: 544, role: "overlay" });
+    if (b.type === "columns") for (const c of b.items) if (c.imageUrl) out.push({ blockId: b.id, url: c.imageUrl, alt: c.imageAlt || c.title, displayWidth: columnWidth(b.items.length), role: "column" });
   }
   return out;
 }
@@ -661,7 +764,18 @@ export function checkCanvas(doc: CanvasDoc, html: string, text: string, images?:
   }
   if (imageBytes > TOTAL_IMAGES_WARN_BYTES) warn("images-total", `All the images together are ${kb(imageBytes)}. Readers on phone data wait for that; compress or remove some.`);
 
+  // D243 E-3: a template's "Replace:" words must all be written before sending.
+  if (JSON.stringify([doc.subject, doc.preheader, doc.blocks]).includes(TEMPLATE_PLACEHOLDER)) must("placeholder", `Some template words still start with "${TEMPLATE_PLACEHOLDER}". Write your own words there first.`, doc.blocks.find((b) => JSON.stringify(b).includes(TEMPLATE_PLACEHOLDER))?.id);
+
+  // D243 E-6: merge tags and readability.
+  for (const d of [...mergeTagIssues(doc), ...readabilityIssues(doc, THEMES[doc.theme])]) (d.level === "must-fix" ? must : warn)(d.code, d.text, d.blockId);
+
   for (const b of doc.blocks) {
+    if (b.type === "design") for (const d of designIssues(b)) (d.level === "must-fix" ? must : warn)(d.code, d.text, b.id);
+    if (b.type === "overlay") for (const d of overlayIssues(b)) (d.level === "must-fix" ? must : warn)(d.code, d.text, b.id);
+    if (b.type === "columns") for (const d of columnsIssues(b)) (d.level === "must-fix" ? must : warn)(d.code, d.text, b.id);
+    const sc = styleContrastIssue(b.style, THEMES[doc.theme]);
+    if (sc) warn(sc.code, sc.text, b.id);
     if (b.type === "button" && (!b.label || !b.href)) must("button", "A button needs both words and a link.", b.id);
     if (b.type === "qr" && !b.src) must("qr", "A QR block has no code yet. Press Make QR.", b.id);
     if (b.type === "qr" && b.url && !/^https:\/\//i.test(b.url)) warn("qr-http", "Point QR codes at an https link.", b.id);
@@ -716,6 +830,9 @@ export function replaceImageUrl(doc: CanvasDoc, from: string, to: string): Canva
     blocks: doc.blocks.map((b) => {
       if (b.type === "image" && b.src === from) return { ...b, src: to };
       if (b.type === "qr" && b.src === from) return { ...b, src: to };
+      if (b.type === "design" && b.src === from) return { ...b, src: to };
+      if (b.type === "overlay" && b.src === from) return { ...b, src: to };
+      if (b.type === "columns") return { ...b, items: b.items.map((c) => (c.imageUrl === from ? { ...c, imageUrl: to } : c)) };
       if (b.type === "cards") return { ...b, cards: b.cards.map((c) => (c.imageUrl === from ? { ...c, imageUrl: to } : c)) };
       return b;
     }),
@@ -948,5 +1065,72 @@ export function __runNewsletterCanvasCoreTests(): { passed: number; failed: numb
   ok("countdown bad date must-fix", checkCanvas(normalizeCanvas({ subject: "s", blocks: [{ type: "countdown", endsAt: "x" }] }), mh, mt).issues.some((i) => i.code === "countdown" && i.level === "must-fix"));
   ok("poll needs 2 answers", checkCanvas(normalizeCanvas({ subject: "s", blocks: [{ type: "poll", question: "q", options: ["a"] }] }), mh, mt).issues.some((i) => i.code === "poll"));
   ok("blank poll + countdown are valid", blankBlock("poll").type === "poll" && blankBlock("countdown").type === "countdown" && Date.parse((blankBlock("countdown") as { endsAt: string }).endsAt) > Date.now());
+  // D243 E-1: the brand frame wraps the body
+  const e1d = starterCanvas("Week 1");
+  const e1o: RenderOpts = { ...o, frame: defaultFrame(), issue: { number: 7, date: "2026-06-07" }, phone: "360-BUY-WEED", phoneHref: "tel:+13604436988" };
+  const e1h = renderCanvasEmail(e1d, e1o);
+  const e1t = canvasPlainText(e1d, e1o);
+  ok("frame: header once", e1h.split('data-gw-frame="header"').length === 2);
+  ok("frame: old header section hidden", !e1h.includes(">Newsletter</p>"));
+  ok("frame: footer has warnings + unsubscribe", e1h.includes('data-gw-frame="footer"') && e1h.includes('data-gw-unsubscribe="1" href="https://www.greenwaymarijuana.com/unsubscribe?token=abc"'));
+  ok("frame: issue in text part", e1t.includes("Issue 7") && e1t.includes("Keep out of the reach of children."));
+  ok("frame: check passes compliance", !checkCanvas(e1d, e1h, e1t).issues.some((i) => ["warnings", "warnings-size", "unsubscribe"].includes(i.code)));
+  const e1off = renderCanvasEmail(e1d, { ...e1o, frame: { ...defaultFrame(), enabled: false } });
+  ok("frame off: old look", !e1off.includes("data-gw-frame") && e1off.includes('data-gw-footer="fixed"'));
+  ok("frame null: same as before", renderCanvasEmail(e1d, o) === renderCanvasEmail(e1d, { ...o, frame: null }));
+  // D243 E-2: design sections
+  const e2b = blankBlock("design", "dz");
+  ok("design: blank block", e2b.type === "design" && e2b.design.enabled && e2b.src === "");
+  const e2d = normalizeCanvas({ subject: "S", preheader: "P", blocks: [{ ...e2b, src: "https://x.supabase.co/storage/v1/object/public/media/d.png", w: 1200, h: 600, alt: "Weekly look", href: "https://www.greenwaymarijuana.com/menu", products: [{ id: "p1", name: "Blue Dream", brand: "Fairwinds", priceCents: 2500, href: "https://www.greenwaymarijuana.com/menu/products/p1" }] }] });
+  const e2h = renderCanvasEmail(e2d, o);
+  ok("design: picture in email", e2h.includes('data-gw-design="dz"') && e2h.includes('alt="Weekly look"'));
+  ok("design: utm on picture link", e2h.includes("utm_content=dz"));
+  ok("design: live price row", e2h.includes("$25.00") && e2h.includes('data-gw-live="products"'));
+  ok("design: plain text", canvasPlainText(e2d, o).includes("[Weekly look]") && canvasPlainText(e2d, o).includes("Blue Dream (Fairwinds) $25.00"));
+  ok("design: image ref", imagesIn(e2d).some((r) => r.role === "design" && r.displayWidth === 600));
+  const e2c = checkCanvas(e2d, e2h, canvasPlainText(e2d, o));
+  ok("design: stale picture is a must-fix", e2c.issues.some((i) => i.code === "design-stale" && i.blockId === "dz"));
+  ok("design: none until made", !renderCanvasEmail(normalizeCanvas({ blocks: [e2b] }), o).includes("data-gw-design"));
+  ok("design: replace url", (replaceImageUrl(e2d, "https://x.supabase.co/storage/v1/object/public/media/d.png", "https://y.example/e.png").blocks[0] as { src: string }).src === "https://y.example/e.png");
+  ok("design: old canvases unchanged", renderCanvasEmail(e1d, o) === renderCanvasEmail(normalizeCanvas(JSON.parse(JSON.stringify(e1d))), o));
+  // D243 E-3: columns, picture with words, section styles, placeholders, preview markers
+  const e3 = normalizeCanvas({
+    subject: "S",
+    preheader: "P",
+    blocks: [
+      { id: "ov", type: "overlay", src: "https://x.example/hero.jpg", alt: "Store front", heading: "Big week", text: "New **drops**", label: "Shop", href: "https://www.greenwaymarijuana.com/menu", shade: 50 },
+      { id: "co", type: "columns", items: [{ title: "A", text: "a", imageUrl: "https://x.example/a.jpg", imageAlt: "A pic" }, { title: "B", text: "b" }, { title: "C", text: "c" }] },
+      { id: "st", type: "text", text: "Styled", align: "left", style: { bg: "#ffffff", pad: "l", round: true } },
+      { id: "pl", type: "text", text: "Plain", align: "left", style: { bg: "", text: "", accent: "", pad: "none", round: false, border: false } },
+    ],
+  });
+  ok("e3: overlay kept", e3.blocks[0].type === "overlay");
+  ok("e3: columns kept (3)", e3.blocks[1].type === "columns" && e3.blocks[1].items.length === 3);
+  ok("e3: style kept", e3.blocks[2].style?.bg === "#ffffff" && e3.blocks[2].style?.pad === "l");
+  ok("e3: plain style dropped", e3.blocks[3].style === undefined);
+  const e3h = renderCanvasEmail(e3, o);
+  ok("e3: overlay rendered", e3h.includes("data-gw-overlay") && e3h.includes("utm_content=ov"));
+  ok("e3: columns stack class", (e3h.match(/class="gw-col" width="33%"/g) ?? []).length === 3);
+  ok("e3: styled section wrapped", e3h.includes('data-gw-style="1"') && e3h.includes('bgcolor="#ffffff"'));
+  ok("e3: styled words switch to dark ink", /color:#000000;font-size:15px[^>]*>Styled/.test(e3h));
+  ok("e3: no preview markers when sending", !e3h.includes("data-gw-block"));
+  const e3p = renderCanvasEmail(e3, { ...o, markBlocks: true });
+  ok("e3: preview markers", e3p.includes('data-gw-block="ov"') && e3p.includes('data-gw-block="co"'));
+  const e3t = canvasPlainText(e3, o);
+  ok("e3: plain text", e3t.includes("Big week") && e3t.includes("- A: a") && e3t.includes("New drops"));
+  ok("e3: image refs", imagesIn(e3).some((r) => r.role === "overlay") && imagesIn(e3).some((r) => r.role === "column" && r.displayWidth === 170));
+  const e3c = checkCanvas(e3, e3h, e3t);
+  ok("e3: overlay outlook heads-up", e3c.issues.some((i) => i.code === "overlay-outlook" && i.blockId === "ov"));
+  ok("e3: no placeholder issue", !e3c.issues.some((i) => i.code === "placeholder"));
+  const e3r = { ...e3, subject: `${TEMPLATE_PLACEHOLDER} the sale` };
+  ok("e3: placeholder is a must-fix", checkCanvas(e3r, e3h, e3t).issues.some((i) => i.code === "placeholder" && i.level === "must-fix"));
+  const lowc = normalizeCanvas({ subject: "S", blocks: [{ id: "lc", type: "text", text: "x", style: { bg: "#777777", text: "#888888" } }] });
+  ok("e3: contrast heads-up", checkCanvas(lowc, renderCanvasEmail(lowc, o), "").issues.some((i) => i.code === "style-contrast" && i.blockId === "lc"));
+  const e3x = replaceImageUrl(e3, "https://x.example/a.jpg", "https://x.example/a2.jpg");
+  ok("e3: replace column image", imagesIn(e3x).some((r) => r.url === "https://x.example/a2.jpg"));
+  ok("e3: replace overlay image", (replaceImageUrl(e3, "https://x.example/hero.jpg", "https://x.example/h2.jpg").blocks[0] as { src: string }).src === "https://x.example/h2.jpg");
+  ok("e3: blank overlay", blankBlock("overlay", "bo").type === "overlay");
+  ok("e3: blank columns", (() => { const b = blankBlock("columns", "bc"); return b.type === "columns" && b.items.length === 2; })());
+  ok("e3: old canvases byte for byte", renderCanvasEmail(e2d, o) === renderCanvasEmail(normalizeCanvas(JSON.parse(JSON.stringify(e2d))), o) && !renderCanvasEmail(e2d, o).includes("data-gw-style"));
   return { passed, failed };
 }

@@ -29,6 +29,7 @@ import {
   type CountdownTheme,
 } from "./newsletter-motion-core";
 import { greenwayBusiness } from "@/content/business";
+import { checkGifFrames, DESIGN_GIF_W } from "./newsletter-polish-core";
 
 const SITE = greenwayBusiness.website.replace(/\/$/, "");
 
@@ -101,6 +102,73 @@ export async function buildCanvasGif(p: {
 // ── Live countdown ──────────────────────────────────────────────────────────
 
 /** The countdown GIF as it looks right now (plays once through one minute, then stops). */
+/**
+ * D243 E-6 (G-126): a moving design section. The browser draws each frame of
+ * the design's entrance (newsletter-polish-core designGifPlan: the finished
+ * design first, for Outlook) and uploads them; this joins them into one GIF
+ * at email width, shrinking colours then width until it is light enough.
+ */
+export async function buildDesignGif(p: {
+  frames: Buffer[];
+  delays: unknown;
+  title: string;
+  uploadedBy: string | null;
+}): Promise<{ ok: true; url: string; mediaId: string; bytes: number; frames: number; width: number; height: number } | { ok: false; error: string }> {
+  const checked = checkGifFrames(p.frames.length, p.delays);
+  if (!checked.ok) return checked;
+  const sharp = (await import("sharp")).default;
+  let first: { width?: number; height?: number };
+  try {
+    first = await sharp(p.frames[0], { limitInputPixels: 8192 * 8192 }).metadata();
+  } catch {
+    return { ok: false, error: "A frame is not a picture the GIF maker can read." };
+  }
+  if (!first.width || !first.height) return { ok: false, error: "A frame came out empty. Try again." };
+  const ratio = first.height / first.width;
+  let size = { width: DESIGN_GIF_W, height: Math.round(DESIGN_GIF_W * ratio), colours: 128 };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let frames: Buffer[];
+    try {
+      frames = await Promise.all(
+        p.frames.map((b) =>
+          sharp(b, { limitInputPixels: 8192 * 8192 })
+            .resize({ width: size.width, height: size.height, fit: "fill" })
+            .flatten({ background: "#000000" })
+            .png()
+            .toBuffer(),
+        ),
+      );
+    } catch {
+      return { ok: false, error: "A frame is not a picture the GIF maker can read." };
+    }
+    const gif = await sharp(frames, { join: { animated: true } })
+      .gif({ delay: checked.delays, loop: 0, colours: size.colours, effort: 7, dither: 0.6 })
+      .toBuffer();
+    const next = gifRetry(gif.length, GIF_WARN_BYTES, size);
+    if (next && attempt < 4) {
+      size = next;
+      continue;
+    }
+    if (gif.length > GIF_WARN_BYTES * 3) return { ok: false, error: "The moving picture is still too heavy for email. Use fewer entrances or a simpler background." };
+    const asset = await uploadMedia({
+      buffer: gif,
+      filename: `newsletter-design-gif-${Date.now().toString(36)}.gif`,
+      mimeType: "image/gif",
+      usageType: "newsletter",
+      tags: ["newsletter", "gif", "design-section"],
+      title: `Newsletter moving design: ${(p.title || "section").slice(0, 100)}`,
+      altText: p.title.slice(0, 200),
+      uploadedBy: p.uploadedBy,
+      status: "published",
+      optimize: false,
+    });
+    const url = publicUrlForKey(asset.storage_key) ?? asset.public_url;
+    if (!url) return { ok: false, error: "The GIF was saved but has no public link." };
+    return { ok: true, url, mediaId: asset.id, bytes: gif.length, frames: frames.length, width: size.width, height: size.height };
+  }
+  return { ok: false, error: "The moving picture could not be made light enough for email." };
+}
+
 export async function countdownGif(endSec: number, theme: CountdownTheme, nowSec: number): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
   const secs = countdownFrameSeconds(endSec - nowSec);
@@ -153,5 +221,6 @@ export async function webVersionFor(slug: string): Promise<string | null> {
   const doc = await loadCanvas(post.id);
   if (!doc || !doc.useForEmail || doc.blocks.length === 0) return null;
   // No member token on the web copy: the unsubscribe page explains how to leave.
-  return renderCanvasEmail(doc, { ...renderOptsFor(post, `${SITE}/unsubscribe`), webUrl: null });
+  const { frameContextFor } = await import("./newsletter-frame-server");
+  return renderCanvasEmail(doc, { ...renderOptsFor(post, `${SITE}/unsubscribe`, await frameContextFor(post.id)), webUrl: null });
 }
