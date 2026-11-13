@@ -32,7 +32,7 @@ import { suggestBrandName } from "@/lib/cms/studio-help-core";
  * one (replaces this design, still needs Save draft) or save this design to
  * the brand kit's library.
  */
-function BrandBannersRow({ design, imageSrc, onPick }: { design: BannerDesign; imageSrc: string; onPick: (d: BannerDesign) => void }) {
+export function BrandBannersRow({ design, imageSrc, onPick }: { design: BannerDesign; imageSrc: string; onPick: (d: BannerDesign) => void }) {
   const [list, setList] = useState<BrandSaved[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);

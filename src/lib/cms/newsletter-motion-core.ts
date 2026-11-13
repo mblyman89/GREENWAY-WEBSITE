@@ -203,6 +203,7 @@ function blockLabel(b: CanvasDoc["blocks"][number]): string {
     case "cards": return `Cards: ${b.heading}`;
     case "countdown": return `Countdown: ${b.label || "timer"}`;
     case "poll": return `Poll: ${b.question}`.slice(0, 80);
+    case "design": return `Design: ${b.alt || "picture"}`.slice(0, 80);
     default: return b.type;
   }
 }

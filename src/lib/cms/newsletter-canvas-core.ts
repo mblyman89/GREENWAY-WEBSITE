@@ -34,6 +34,7 @@ import {
 import type { ThisWeekFeed } from "./this-week-feed-core";
 import { defaultFrame, frameFooterHtml, frameFooterText, frameHeaderHtml, frameHeaderText, type BrandFrame, type FrameIssue } from "./newsletter-frame-core";
 import { countdownImageUrl, formatEndsAt, pollContent, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, COUNTDOWN_W } from "./newsletter-motion-core";
+import { cleanDesignFields, designDisplayWidth, designImageHtml, designIssues, productRowsHtml, productRowsText, type DesignSectionFields } from "./newsletter-design-core";
 
 // ── Limits ────────────────────────────────────────────────────────────────
 
@@ -92,11 +93,13 @@ export type CanvasBlock =
   /** N-8c: a live countdown GIF (drawn by our server when the email is opened). */
   | { id: string; type: "countdown"; endsAt: string; label: string; href: string }
   /** N-8c: a one-tap poll; each answer is a tracked link, so a tap is a vote. */
-  | { id: string; type: "poll"; question: string; options: string[]; href: string };
+  | { id: string; type: "poll"; question: string; options: string[]; href: string }
+  /** D243 E-2: a Banner Studio design, sent as a hosted picture (+ live timer and product rows). */
+  | ({ id: string; type: "design" } & DesignSectionFields);
 
 export type CanvasBlockType = CanvasBlock["type"];
 export const BLOCK_TYPES: readonly CanvasBlockType[] = [
-  "header", "headline", "text", "image", "button", "qr", "cards", "review", "hours", "divider", "spacer", "countdown", "poll",
+  "header", "headline", "text", "design", "image", "button", "qr", "cards", "review", "hours", "divider", "spacer", "countdown", "poll",
 ];
 export const BLOCK_LABEL: Record<CanvasBlockType, string> = {
   header: "Header",
@@ -112,6 +115,7 @@ export const BLOCK_LABEL: Record<CanvasBlockType, string> = {
   spacer: "Spacer",
   countdown: "Live countdown (moving)",
   poll: "One-tap poll",
+  design: "Design section (Banner Studio)",
 };
 
 export type CanvasDoc = {
@@ -241,6 +245,8 @@ export function cleanBlock(raw: unknown, i = 0): CanvasBlock | null {
       const options = (Array.isArray(r.options) ? r.options : []).map((o) => line(o, 60)).filter(Boolean).slice(0, POLL_MAX_OPTIONS);
       return { id, type: "poll", question: line(r.question, 160), options, href: safeHref(r.href) };
     }
+    case "design":
+      return { id, type: "design", ...cleanDesignFields(r, { line, safeHref, safeImageSrc }) };
     default:
       return null;
   }
@@ -491,6 +497,18 @@ function blockHtml(b: CanvasBlock, t: ThemeColors, o: RenderOpts, theme: CanvasT
         .join("");
       return `<tr><td style="${pad}"><p style="margin:0 0 4px;color:${t.gold};font-size:${CANVAS_FONT_PX.small}px;font-weight:bold;text-transform:uppercase;letter-spacing:2px">Quick poll</p><p style="margin:0 0 12px;color:${t.text};font-size:17px;font-weight:bold;line-height:1.4">${escapeHtml(b.question)}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${opts}</table><p style="margin:4px 0 0;color:${t.muted};font-size:${CANVAS_FONT_PX.small}px">One tap is your vote.</p></td></tr>`;
     }
+    case "design": {
+      // D243 decision 1: the design is a picture; the timer, prices and links stay live HTML.
+      const img = designImageHtml(b, link);
+      const timerSrc = b.timerEndsAt ? countdownImageUrl(o.siteUrl, b.timerEndsAt, theme) : "";
+      const timer = timerSrc
+        ? `<tr><td align="center" style="padding:14px 28px 0;text-align:center">${imgTag(timerSrc, `Time left: ends ${formatEndsAt(b.timerEndsAt)}`, COUNTDOWN_W, ";margin:0 auto;border-radius:14px")}<p style="margin:6px 0 0;color:${t.muted};font-size:${CANVAS_FONT_PX.small}px">Ends ${escapeHtml(formatEndsAt(b.timerEndsAt))} (Pacific)</p></td></tr>`
+        : "";
+      const rows = b.products.length ? `<tr><td style="padding:8px 28px 4px">${productRowsHtml(b.products, t, link)}</td></tr>` : "";
+      if (!img && !timer && !rows) return "";
+      const imgRow = img ? `<tr><td align="center" data-gw-design="${escapeHtml(b.id)}" style="${b.bleed ? "padding:0" : pad};text-align:center;line-height:0;font-size:0">${img}</td></tr>` : "";
+      return `${imgRow}${timer}${rows}`;
+    }
   }
 }
 
@@ -591,6 +609,11 @@ export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
           b.options.forEach((label, i) => out.push(`- ${label}: ${withUtm(target, hostOf(o.siteUrl), o.campaign, pollContent(b.id, i + 1))}`));
         }
         break;
+      case "design":
+        if (b.src && (b.alt || b.href)) out.push(`[${b.alt || "Picture"}]${b.href ? ` ${withUtm(b.href, hostOf(o.siteUrl), o.campaign, b.id)}` : ""}`);
+        if (b.timerEndsAt) out.push(`Ends: ${formatEndsAt(b.timerEndsAt)} (Pacific)`);
+        if (b.products.length) out.push(productRowsText(b.products).join("\n"));
+        break;
     }
   }
   if (framed) out.push("", ...frameFooterText(o.frame!, o, o.unsubscribeUrl ?? SAMPLE_UNSUBSCRIBE_URL));
@@ -601,7 +624,7 @@ export function canvasPlainText(doc: CanvasDoc, o: RenderOpts): string {
 
 // ── Send-readiness check ──────────────────────────────────────────────────
 
-export type CanvasImageRef = { blockId: string; url: string; alt: string; displayWidth: number; role: "image" | "card" | "qr" };
+export type CanvasImageRef = { blockId: string; url: string; alt: string; displayWidth: number; role: "image" | "card" | "qr" | "design" };
 export type ImageInfo = { bytes: number | null; mime: string | null; width: number | null; error?: string };
 export type CanvasIssue = { level: "must-fix" | "heads-up"; code: string; text: string; blockId?: string };
 export type CanvasCheck = {
@@ -621,6 +644,7 @@ export function imagesIn(doc: CanvasDoc): CanvasImageRef[] {
   for (const b of doc.blocks) {
     if (b.type === "image" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.alt, displayWidth: b.width, role: "image" });
     if (b.type === "qr" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.caption || "QR code", displayWidth: b.size, role: "qr" });
+    if (b.type === "design" && b.src) out.push({ blockId: b.id, url: b.src, alt: b.alt, displayWidth: designDisplayWidth(b), role: "design" });
     if (b.type === "cards") for (const c of b.cards) if (c.imageUrl) out.push({ blockId: b.id, url: c.imageUrl, alt: c.imageAlt || c.title, displayWidth: b.columns === 2 ? 266 : 544, role: "card" });
   }
   return out;
@@ -683,6 +707,7 @@ export function checkCanvas(doc: CanvasDoc, html: string, text: string, images?:
   if (imageBytes > TOTAL_IMAGES_WARN_BYTES) warn("images-total", `All the images together are ${kb(imageBytes)}. Readers on phone data wait for that; compress or remove some.`);
 
   for (const b of doc.blocks) {
+    if (b.type === "design") for (const d of designIssues(b)) (d.level === "must-fix" ? must : warn)(d.code, d.text, b.id);
     if (b.type === "button" && (!b.label || !b.href)) must("button", "A button needs both words and a link.", b.id);
     if (b.type === "qr" && !b.src) must("qr", "A QR block has no code yet. Press Make QR.", b.id);
     if (b.type === "qr" && b.url && !/^https:\/\//i.test(b.url)) warn("qr-http", "Point QR codes at an https link.", b.id);
@@ -737,6 +762,7 @@ export function replaceImageUrl(doc: CanvasDoc, from: string, to: string): Canva
     blocks: doc.blocks.map((b) => {
       if (b.type === "image" && b.src === from) return { ...b, src: to };
       if (b.type === "qr" && b.src === from) return { ...b, src: to };
+      if (b.type === "design" && b.src === from) return { ...b, src: to };
       if (b.type === "cards") return { ...b, cards: b.cards.map((c) => (c.imageUrl === from ? { ...c, imageUrl: to } : c)) };
       return b;
     }),
@@ -982,5 +1008,20 @@ export function __runNewsletterCanvasCoreTests(): { passed: number; failed: numb
   const e1off = renderCanvasEmail(e1d, { ...e1o, frame: { ...defaultFrame(), enabled: false } });
   ok("frame off: old look", !e1off.includes("data-gw-frame") && e1off.includes('data-gw-footer="fixed"'));
   ok("frame null: same as before", renderCanvasEmail(e1d, o) === renderCanvasEmail(e1d, { ...o, frame: null }));
+  // D243 E-2: design sections
+  const e2b = blankBlock("design", "dz");
+  ok("design: blank block", e2b.type === "design" && e2b.design.enabled && e2b.src === "");
+  const e2d = normalizeCanvas({ subject: "S", preheader: "P", blocks: [{ ...e2b, src: "https://x.supabase.co/storage/v1/object/public/media/d.png", w: 1200, h: 600, alt: "Weekly look", href: "https://www.greenwaymarijuana.com/menu", products: [{ id: "p1", name: "Blue Dream", brand: "Fairwinds", priceCents: 2500, href: "https://www.greenwaymarijuana.com/menu/products/p1" }] }] });
+  const e2h = renderCanvasEmail(e2d, o);
+  ok("design: picture in email", e2h.includes('data-gw-design="dz"') && e2h.includes('alt="Weekly look"'));
+  ok("design: utm on picture link", e2h.includes("utm_content=dz"));
+  ok("design: live price row", e2h.includes("$25.00") && e2h.includes('data-gw-live="products"'));
+  ok("design: plain text", canvasPlainText(e2d, o).includes("[Weekly look]") && canvasPlainText(e2d, o).includes("Blue Dream (Fairwinds) $25.00"));
+  ok("design: image ref", imagesIn(e2d).some((r) => r.role === "design" && r.displayWidth === 600));
+  const e2c = checkCanvas(e2d, e2h, canvasPlainText(e2d, o));
+  ok("design: stale picture is a must-fix", e2c.issues.some((i) => i.code === "design-stale" && i.blockId === "dz"));
+  ok("design: none until made", !renderCanvasEmail(normalizeCanvas({ blocks: [e2b] }), o).includes("data-gw-design"));
+  ok("design: replace url", (replaceImageUrl(e2d, "https://x.supabase.co/storage/v1/object/public/media/d.png", "https://y.example/e.png").blocks[0] as { src: string }).src === "https://y.example/e.png");
+  ok("design: old canvases unchanged", renderCanvasEmail(e1d, o) === renderCanvasEmail(normalizeCanvas(JSON.parse(JSON.stringify(e1d))), o));
   return { passed, failed };
 }
