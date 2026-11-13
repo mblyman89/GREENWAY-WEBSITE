@@ -230,7 +230,7 @@ describe("L-22 — the history is genuinely combined (verified, not assumed)", (
       STORE.indexOf("export async function listOrdersPaged"),
       STORE.indexOf("export async function listOrders("),
     );
-    // D238: the Completed / Cancelled tabs add a filtered order_events embed
+    // D240: the Completed / Cancelled tabs add a filtered order_events embed
     // (the register pickup event); every other tab still selects "*".
     expect(q).toContain('admin.from("orders").select(pickedPlan ? PICKED_UP_SELECT : "*", { count: "exact" })');
     expect(q).not.toMatch(/\.eq\("origin"/);

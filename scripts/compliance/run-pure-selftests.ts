@@ -2413,10 +2413,10 @@ __runLiquidVolumeTests();
   // SLICE L-40. Floor 88, from a measured 94. The owner asked for the Leafly
   // panel to "look and behave identically" to ours; this core is where that
   // behaviour is written down, so a drop means a behaviour stopped being proven.
-  assertRan("order-panels-core", __runOrdersPanelTests(), 116); // D238: +4 collected-at-register copies file under Completed. D226: +12 "Show" filter (online / register / both) URL tests. R73 S1: +6 three-panel URL tests
+  assertRan("order-panels-core", __runOrdersPanelTests(), 116); // D240: +4 collected-at-register copies file under Completed. D226: +12 "Show" filter (online / register / both) URL tests. R73 S1: +6 three-panel URL tests
   __runOrderSourceCoreTests(); // D226 ("thousands of orders in history ... not that many online orders"): one rule for "register sale", the board source filter
   console.log("order-source-core: self-tests passed");
-  assertRan("register-picked-up-filter-core", __runRegisterPickedUpFilterTests(), 16); // D238 ("I am not able to see completed online orders"): collected-at-register online orders file under Completed
+  assertRan("register-picked-up-filter-core", __runRegisterPickedUpFilterTests(), 16); // D240 ("I am not able to see completed online orders"): collected-at-register online orders file under Completed
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the
