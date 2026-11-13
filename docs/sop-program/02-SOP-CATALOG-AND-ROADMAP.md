@@ -181,7 +181,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.6 (D237, #1779):** N-6 culture news desk built: Regulatory Watch, Find news (on demand only) and Vendor wins into CULTURE drafts with their source links; health-topic guard (therapeutic wording blocked; health needs a source, the provider line and no product/deal links) on draft, save, Publish and scheduled publish (G-116, F-22-13, F-22-14). No migration.
 
-**v1.7 (D238, #PN8a):** N-8a newsletter canvas built: in-app sections, Fill from this week, QR codes, desktop/phone/plain-text preview, fixed warnings + unsubscribe footer, send check (Gmail 102 KB clip, image weight/format/width/alt) that blocks the send on must-fix items, and image compression into Media copies; the broadcast and the queue send the canvas (G-118, F-22-8). No migration.
+**v1.7 (D238, #1781):** N-8a newsletter canvas built: in-app sections, Fill from this week, QR codes, desktop/phone/plain-text preview, fixed warnings + unsubscribe footer, send check (Gmail 102 KB clip, image weight/format/width/alt) that blocks the send on must-fix items, and image compression into Media copies; the broadcast and the queue send the canvas (G-118, F-22-8). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 

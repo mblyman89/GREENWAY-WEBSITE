@@ -1313,7 +1313,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-8 · CONFIRMED · GAP · S2 — No newsletter canvas: the email body is a fixed sentence + button; no sections, preheader or plain-text part; Canva PDF is the only design path
 - **Pin:** L204–242; `newsletter/page.tsx` L104
 - **SOP impact:** SOP-22 Appendix B.1; gap G-118; status FIXED (D238, N-8a).
-- **Resolved (D238, N-8a, #PN8a):** newsletter canvas (`newsletter-canvas-core.ts`, `newsletter-canvas-server.ts`, `NewsletterCanvasEditor.tsx`): sections, preheader, plain-text part, desktop/phone preview, send check and compression; the broadcast and the queue send it; Canva PDF optional
+- **Resolved (D238, N-8a, #1781):** newsletter canvas (`newsletter-canvas-core.ts`, `newsletter-canvas-server.ts`, `NewsletterCanvasEditor.tsx`): sections, preheader, plain-text part, desktop/phone preview, send check and compression; the broadcast and the queue send it; Canva PDF optional
 
 ### F-22-9 · CONFIRMED · GAP · S2 — No Sunday cadence: no scheduled send, no reminder, no "ready for approval" state
 - **Pin:** (absence)

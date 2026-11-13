@@ -3140,7 +3140,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Email cannot run scripts, so "interactive" means links, QR codes, buttons and per-block click tracking; "moving" means animated GIFs (Outlook on Windows shows only the first frame, so the first frame must carry the message).
 - Q-22-5 (a) stands: the canvas is the email; the Canva PDF stays optional.
 
-### As built — N-8a newsletter canvas, send checks, compression and QR (#PN8a)
+### As built — N-8a newsletter canvas, send checks, compression and QR (#1781)
 
 - **F-22-8 / G-118:** `src/lib/cms/newsletter-canvas-core.ts` + `newsletter-canvas-server.ts`; editor `NewsletterCanvasEditor.tsx` on `/admin/newsletter/canvas/[id]`; **New canvas newsletter** on Blog & Newsletter and **Open the canvas** on newsletter posts.
 - Sections: header, headline, text, image, button, QR code, card grids (fresh drops, new vendors, deals, from the blog, culture, custom), review, hours, divider, spacer. Fill from this week builds cards from the This week facts (below-cost deals held back).
