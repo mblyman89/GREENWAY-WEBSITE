@@ -33,6 +33,8 @@ import {
   warningsFooterHtml,
 } from "./newsletter-email-core";
 import { batchNoFor, isMissingRecipientsTable } from "./newsletter-batch-core";
+import { canvasSettingKey, normalizeCanvas, checkCanvas } from "./newsletter-canvas-core";
+import { canvasEmailFor } from "./newsletter-canvas-server";
 
 const MEDIA_BUCKET = "media";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -78,6 +80,8 @@ export type SendableNewsletter = {
   pdfUrl: string | null;
   publicUrl: string;
   lastSentAt: string | null;
+  /** D238 N-8a: an in-app canvas is switched on for the email (no PDF needed). */
+  hasCanvas: boolean;
 };
 
 function publicMediaUrl(key: string): string | null {
@@ -102,7 +106,7 @@ export async function listSendableNewsletters(): Promise<SendableNewsletter[]> {
   const ids = rows.map((r) => r.id);
 
   // Resolve PDF urls (newsletter_assets) and last-send timestamps in bulk.
-  const [{ data: assets }, { data: sends }] = await Promise.all([
+  const [{ data: assets }, { data: sends }, { data: canvases }] = await Promise.all([
     admin.from("newsletter_assets").select("post_id, pdf_media_id, pdf_path").in("post_id", ids),
     admin
       .from("newsletter_sends")
@@ -110,7 +114,14 @@ export async function listSendableNewsletters(): Promise<SendableNewsletter[]> {
       .in("post_id", ids)
       .eq("send_kind", "broadcast")
       .order("created_at", { ascending: false }),
+    // D238 N-8a: newsletters built on the in-app canvas.
+    admin.from("site_settings").select("key, value_json").in("key", ids.map(canvasSettingKey)),
   ]);
+  const canvasOn = new Set<string>();
+  for (const c of (canvases as { key: string; value_json: unknown }[] | null) ?? []) {
+    const doc = normalizeCanvas(c.value_json);
+    if (doc.useForEmail && doc.blocks.length > 0) canvasOn.add(c.key);
+  }
 
   const assetByPost = new Map<string, { pdf_media_id: string | null; pdf_path: string | null }>();
   for (const a of (assets as { post_id: string; pdf_media_id: string | null; pdf_path: string | null }[] | null) ?? []) {
@@ -153,6 +164,7 @@ export async function listSendableNewsletters(): Promise<SendableNewsletter[]> {
       pdfUrl,
       publicUrl: `${SITE_URL}/blog/${r.slug}`,
       lastSentAt: lastSendByPost.get(r.id) ?? null,
+      hasCanvas: canvasOn.has(canvasSettingKey(r.id)),
     };
   });
 }
@@ -298,9 +310,12 @@ async function resendBatch(
   tags?: { name: string; value: string }[],
   // G-109 (N-1): RFC 8058 one-click unsubscribe headers for this recipient.
   emailHeaders?: Record<string, string>,
+  // D238 N-8a: the plain-text part of a canvas email.
+  text?: string,
 ): Promise<boolean> {
   try {
     const payload: Record<string, unknown> = { from, to, subject, html };
+    if (text) payload.text = text;
     if (tags && tags.length > 0) payload.tags = tags;
     if (emailHeaders && Object.keys(emailHeaders).length > 0) payload.headers = emailHeaders;
     const res = await fetch(RESEND_ENDPOINT, {
@@ -341,6 +356,22 @@ export async function sendNewsletter(params: {
 
   const isTest = Boolean(params.testEmail);
 
+  // D238 N-8a (G-118): a newsletter built on the canvas is sent as the canvas
+  // (HTML + plain text). It must pass the send check first: under Gmail's
+  // 102 KB clip, warnings + unsubscribe present, buttons complete, no
+  // scripts or pasted-in images. Without a canvas the PDF announcement goes.
+  const canvas = await canvasEmailFor(n.id);
+  if (canvas) {
+    const sample = canvas.render(null);
+    const check = checkCanvas(canvas.doc, sample.html, sample.text);
+    const blocking = check.issues.filter((i) => i.level === "must-fix");
+    if (blocking.length > 0) {
+      return { ok: false, error: `The canvas is not ready to send: ${blocking.map((b) => b.text).join(" ")}` };
+    }
+  } else if (!n.pdfUrl) {
+    return { ok: false, error: "This newsletter has no PDF and no canvas yet. Upload a PDF or build it on the canvas." };
+  }
+
   // S-20 double-send guard: a BROADCAST of the same newsletter within the
   // cooldown window is refused (double-click, impatient re-submit, or two
   // staff sending simultaneously). Tests are exempt. Deliberate re-sends are
@@ -374,7 +405,7 @@ export async function sendNewsletter(params: {
 
   // Subject is constant; the HTML body varies per recipient (unique unsubscribe
   // link). We build the subject once and the body inside the send loop.
-  const { subject } = buildNewsletterEmail(n);
+  const subject = canvas?.doc.subject.trim() || buildNewsletterEmail(n).subject;
   const admin = createSupabaseAdminClient();
 
   // Open a send record.
@@ -454,12 +485,15 @@ export async function sendNewsletter(params: {
     const results = await Promise.all(
       chunk.map((r) => {
         // Each recipient gets their own copy with a unique unsubscribe link.
-        const { html } = buildNewsletterEmail({
-          title: n.title,
-          publicUrl: n.publicUrl,
-          pdfUrl: n.pdfUrl,
-          unsubscribeUrl: unsubscribeUrl(r.token),
-        });
+        const c = canvas ? canvas.render(unsubscribeUrl(r.token)) : null;
+        const html = c
+          ? c.html
+          : buildNewsletterEmail({
+              title: n.title,
+              publicUrl: n.publicUrl,
+              pdfUrl: n.pdfUrl,
+              unsubscribeUrl: unsubscribeUrl(r.token),
+            }).html;
         return resendBatch(
           apiKey,
           cfg.from!,
@@ -468,6 +502,7 @@ export async function sendNewsletter(params: {
           html,
           campaignTags,
           listUnsubscribeHeaders(oneClickUnsubscribeUrl(SITE_URL, r.token)),
+          c?.text,
         );
       }),
     );

@@ -38,6 +38,7 @@ import {
 import { listUnsubscribeHeaders, oneClickUnsubscribeUrl } from "./newsletter-email-core";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { buildNewsletterEmail, newsletterSendConfig, resendApiKey, siteUrl, unsubscribeUrl } from "./newsletter-send-store";
+import { canvasEmailFor } from "./newsletter-canvas-server";
 
 const RESEND_BATCH_ENDPOINT = "https://api.resend.com/emails/batch";
 
@@ -162,6 +163,8 @@ async function workSend(send: SendRow, deadlineMs: number): Promise<{ batches: n
       publicUrl = `${siteUrl()}/blog/${(post as { slug: string }).slug}`;
     }
   }
+  // D238 N-8a: a canvas newsletter is sent as the canvas (HTML + plain text).
+  const canvas = await canvasEmailFor(send.post_id);
   const tags = [{ name: SEND_ID_TAG, value: send.id }, ...(send.post_id ? [{ name: POST_ID_TAG, value: send.post_id }] : [])];
 
   while (Date.now() < deadlineMs) {
@@ -189,14 +192,18 @@ async function workSend(send: SendRow, deadlineMs: number): Promise<{ batches: n
     if (rows.length === 0) break;
 
     const emails = rows.map((r) => {
-      const { html } = buildNewsletterEmail({
-        title,
-        publicUrl,
-        pdfUrl: send.pdf_url,
-        unsubscribeUrl: unsubscribeUrl(r.unsubscribe_token),
-      });
+      const c = canvas ? canvas.render(unsubscribeUrl(r.unsubscribe_token)) : null;
+      const html = c
+        ? c.html
+        : buildNewsletterEmail({
+            title,
+            publicUrl,
+            pdfUrl: send.pdf_url,
+            unsubscribeUrl: unsubscribeUrl(r.unsubscribe_token),
+          }).html;
       const headers = listUnsubscribeHeaders(oneClickUnsubscribeUrl(siteUrl(), r.unsubscribe_token));
       const e: Record<string, unknown> = { from: cfg.from, to: [r.email], subject: send.subject, html, tags };
+      if (c?.text) e.text = c.text;
       if (Object.keys(headers).length > 0) e.headers = headers;
       return e;
     });

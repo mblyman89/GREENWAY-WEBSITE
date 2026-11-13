@@ -88,6 +88,11 @@ export default async function BlogEditorPage({
         subtitle={`/${post.slug} · ${post.category} · ${post.kind} · ${post.status}`}
         action={
           <div className="flex items-center gap-3">
+            {post.kind === "newsletter" ? (
+              <Link href={`/admin/newsletter/canvas/${post.id}`} className="text-sm text-[var(--admin-accent)] hover:brightness-110">
+                Open the canvas
+              </Link>
+            ) : null}
             {post.status === "published" && (
               <Link
                 href={`/blog/${post.slug}`}
