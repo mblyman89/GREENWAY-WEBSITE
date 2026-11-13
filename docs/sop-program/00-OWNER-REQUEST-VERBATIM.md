@@ -3299,7 +3299,7 @@ Slices: E-1 brand frame (G-121) · E-2 Banner Studio as an email "Design section
 - `src/lib/cms/newsletter-frame-core.ts` (pure, 64 self-tests), `newsletter-frame-server.ts`, `src/app/admin/newsletter/frame/{page,actions}.ts(x)`, `src/components/admin/newsletter/BrandFrameEditor.tsx`. Test `tests/compliance/d243-email-studio-e1-frame.test.ts`. Concierge fact added. SOP-22 v2.3.
 - **Owner step:** open Newsletter Send > Brand frame, pick a style, check the title and tagline, set "Issues before the app" if any went out before, press Save frame.
 
-### As built — E-2 design sections (#PE2)
+### As built — E-2 design sections (#1791)
 
 - **G-122:** a new canvas section, **Design section (Banner Studio)**. It opens the same Banner Studio the website banners use (text boxes, fonts, effects, shapes, icons, layers, brand kit, saved designs) in a full-screen editor, at email shapes: wide, banner, strip, square and tall.
 - **Save picture** turns the design into one picture (rendered in the browser at 1200 px, saved to the Media Library as PNG or JPEG, whichever is smaller; tags `newsletter`, `design-section`), shown in the email with alt text and a link (decision 1). A fingerprint of the design is kept; an edit after saving is a must-fix “out of date” until **Update picture** is pressed.

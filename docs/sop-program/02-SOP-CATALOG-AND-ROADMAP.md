@@ -195,7 +195,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.3 (D243, #1790):** Phase E "Email Studio" APPROVED (E-1 … E-6, G-121 … G-126). E-1 brand frame built: one locked header and footer for every newsletter (logo, title, issue number and date; socials, 21+, warnings, unsubscribe), three styles, owner/admin only, at Newsletter Send > Brand frame. No migration.
 
-**v2.4 (D243, #PE2):** E-2 design sections built: the Banner Studio inside the newsletter canvas, saved as a hosted picture with alt text and a link; QR on the design, live menu product rows and countdown under it; out-of-date, alt, ad-rule, text-size, price and date checks. No migration.
+**v2.4 (D243, #1791):** E-2 design sections built: the Banner Studio inside the newsletter canvas, saved as a hosted picture with alt text and a link; QR on the design, live menu product rows and countdown under it; out-of-date, alt, ad-rule, text-size, price and date checks. No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
