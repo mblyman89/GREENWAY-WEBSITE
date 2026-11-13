@@ -197,7 +197,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.4 (D243, #1791):** E-2 design sections built: the Banner Studio inside the newsletter canvas, saved as a hosted picture with alt text and a link; QR on the design, live menu product rows and countdown under it; out-of-date, alt, ad-rule, text-size, price and date checks. No migration.
 
-**v2.5 (D243, #PE3):** E-3 full-page editor built: three panes (library with templates and saved sections, inspector with per-section style, preview with dark-mode and inbox mockups), drag to reorder, duplicate, undo; Columns and Picture-with-words sections; "Replace:" template words block the send. No migration.
+**v2.5 (D243, #1792):** E-3 full-page editor built: three panes (library with templates and saved sections, inspector with per-section style, preview with dark-mode and inbox mockups), drag to reorder, duplicate, undo; Columns and Picture-with-words sections; "Replace:" template words block the send. No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
