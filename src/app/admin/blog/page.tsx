@@ -10,13 +10,16 @@ import { Button } from "@/components/admin/ui/Button";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
 import { withBackParam } from "@/lib/admin/back-link-core";
 import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
+import { ThisWeekFeedCard } from "@/components/admin/blog/ThisWeekFeedCard";
+import { getThisWeekFeed, getLocalEvents } from "@/lib/cms/this-week-feed-server";
+import { saveBlogLocalEventsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function BlogAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; category?: string }>;
+  searchParams: Promise<{ status?: string; category?: string; error?: string; saved?: string }>;
 }) {
   await requirePermission("blog.manage");
   const sp = await searchParams;
@@ -37,7 +40,8 @@ export default async function BlogAdminPage({
     );
   }
 
-  const all = await listPosts();
+  // D237 N-4: the "This week at Greenway" facts feed (G-114).
+  const [all, weekFeed, localEvents] = await Promise.all([listPosts(), getThisWeekFeed(), getLocalEvents()]);
   let posts = all;
   if (status) posts = posts.filter((p) => p.status === status);
   if (category) posts = posts.filter((p) => p.category === category);
@@ -64,6 +68,7 @@ export default async function BlogAdminPage({
               "Write it yourself, or use the AI helper to draft sections.",
               "Add a hero image and fill in the SEO fields.",
               "Save as a draft, preview, then Publish when ready.",
+              "This week at Greenway (top of the page) lists new vendors, fresh drops, deals and dates ahead. Add local events under Local events.",
             ]}
           >
             <p className="mb-2">
@@ -109,6 +114,23 @@ export default async function BlogAdminPage({
       </div>
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {sp.error ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
+            {sp.error}
+          </div>
+        ) : null}
+        {sp.saved === "events" ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
+            Local events saved.
+          </div>
+        ) : null}
+        <ThisWeekFeedCard
+          feed={weekFeed.feed}
+          partial={weekFeed.partial}
+          belowCostChecked={weekFeed.belowCostChecked}
+          localEvents={localEvents}
+          saveEventsAction={saveBlogLocalEventsAction}
+        />
         <div className="grid gap-4 sm:grid-cols-4">
           <StatCard label="All posts" value={counts.total} accent="muted" href="/admin/blog" />
           <StatCard label="Published" value={counts.published} accent="green" href="/admin/blog?status=published" />

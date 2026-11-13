@@ -36,6 +36,8 @@ import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
 import { voidApprovalOnEdit } from "@/lib/cms/newsletter-cadence-server";
 import { APPROVAL_VOIDED_MESSAGE } from "@/lib/cms/newsletter-cadence-core";
+import { parseLocalEventsText } from "@/lib/cms/this-week-feed-core";
+import { saveLocalEvents } from "@/lib/cms/this-week-feed-server";
 
 const MAX_IMG_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -481,4 +483,23 @@ export async function rejectBlogSuggestionAction(formData: FormData): Promise<vo
   await reviewBlogSuggestion(suggestionId, "rejected", session.userId);
   revalidatePath(`/admin/blog/${id}`);
   redirect(`/admin/blog/${id}`);
+}
+
+// ── D237 N-4 (SOP-22 G-114): local events for the "This week" feed ──────────
+
+export async function saveBlogLocalEventsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("blog.manage");
+  const events = parseLocalEventsText(String(formData.get("events") ?? ""));
+  const res = await saveLocalEvents(events, session.userId);
+  if (res.error) redirect(`/admin/blog?error=${encodeURIComponent(res.error)}#this-week`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "blog.local_events_save",
+    entityType: "site_settings",
+    entityId: "blog_calendar_events",
+    after: { count: events.length },
+  });
+  revalidatePath("/admin/blog");
+  redirect(`/admin/blog?saved=events#this-week`);
 }
