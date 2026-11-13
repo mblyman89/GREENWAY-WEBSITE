@@ -56,6 +56,7 @@ import { quoteIsCurated, reviewToCanvas, type CuratedReviewChoice } from "@/lib/
 import { DesignSectionEditor } from "./DesignSectionEditor";
 import { ColumnsFieldsEditor, InboxMockups, OverlayFieldsEditor, SectionLibrary, StylePanel } from "./CanvasStudioParts";
 import { duplicateAt, moveBlockTo } from "@/lib/cms/newsletter-layout-core";
+import { FIRST_NAME_TAG, frameDarkIssues, inboxSizeReport } from "@/lib/cms/newsletter-polish-core";
 import { forcedDarkHtml, inboxLines, previewHtml, savedSectionBlock as savedToBlock, type SavedSection, type TemplateId } from "@/lib/cms/newsletter-templates-core";
 import { deleteSectionAction, listSavedSectionsAction, saveSectionAction, templateCanvasAction } from "@/app/admin/newsletter/canvas/layout-actions";
 
@@ -274,7 +275,9 @@ export function NewsletterCanvasEditor({
   };
 
   const mustFix = check.issues.filter((i) => i.level === "must-fix");
-  const headsUp = check.issues.filter((i) => i.level === "heads-up");
+  // D243 E-6: a custom frame logo may flip in forced dark mode.
+  const headsUp = [...check.issues.filter((i) => i.level === "heads-up"), ...frameDarkIssues(renderOpts.frame)];
+  const inboxSize = inboxSizeReport(check, !!fullCheck);
   const pct = Math.min(100, Math.round((check.htmlBytes / GMAIL_CLIP_BYTES) * 100));
   const inbox = inboxLines(clean, renderOpts.businessName, text);
 
@@ -341,6 +344,7 @@ export function NewsletterCanvasEditor({
             <Row label={`Subject (${doc.subject.length}/60 shows on phones)`}>
               <Input value={doc.subject} onChange={(e) => setDoc({ ...doc, subject: e.target.value })} placeholder={`Greenway Marijuana: ${postTitle}`} />
             </Row>
+            <p className="text-[11px] text-[var(--admin-text-faint)]">Tip: type {FIRST_NAME_TAG} (or {"{{first_name|friend}}"}) in the subject or any words to greet each member by first name. Previews and test sends show the fallback.</p>
             <Row label="Preheader (grey line after the subject)">
               <Input value={doc.preheader} onChange={(e) => setDoc({ ...doc, preheader: e.target.value })} placeholder="Fresh drops, two deals and our hours" />
             </Row>
@@ -418,10 +422,19 @@ export function NewsletterCanvasEditor({
                 <div className={`h-full ${pct >= 100 ? "bg-[var(--admin-danger,#e5484d)]" : pct >= 88 ? "bg-[var(--admin-gold)]" : "bg-[var(--admin-accent)]"}`} style={{ width: `${pct}%` }} />
               </div>
             </div>
+            {/* D243 E-6: inbox size check */}
+            <ul className="space-y-0.5 text-[11px]" data-testid="canvas-inbox-size">
+              {inboxSize.rows.map((r) => (
+                <li key={r.key} className="flex justify-between gap-2">
+                  <span className="text-[var(--admin-text-faint)]">{r.label}</span>
+                  <span className={r.tone === "bad" ? "text-[var(--admin-orange)]" : r.tone === "warn" ? "text-[var(--admin-gold)]" : "text-[var(--admin-text-muted)]"}>{r.value}</span>
+                </li>
+              ))}
+            </ul>
             <ul className="space-y-1 text-xs">
               {mustFix.map((i, k) => <li key={`m${k}`} className="text-[var(--admin-orange)]">Must fix: {i.text}</li>)}
               {headsUp.map((i, k) => <li key={`h${k}`} className="text-[var(--admin-text-muted)]">Heads-up: {i.text}</li>)}
-              {check.issues.length === 0 ? <li className="text-[var(--admin-accent)]">No problems found.</li> : null}
+              {mustFix.length + headsUp.length === 0 ? <li className="text-[var(--admin-accent)]">No problems found.</li> : null}
             </ul>
           </div>
         </div>
