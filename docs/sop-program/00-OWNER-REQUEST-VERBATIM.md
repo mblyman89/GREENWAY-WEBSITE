@@ -3120,7 +3120,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - Test `tests/compliance/d237-newsletter-n5-grounded-ai.test.ts`; pure self-test `__runPostTemplatesCoreTests` (43). SOP-22 v1.5.
 - **Owner step:** AI must be configured (`AI_API_KEY` or `OPENAI_API_KEY` on the deployment).
 
-### As built — N-6 culture news desk + health-topic guard (#PN6)
+### As built — N-6 culture news desk + health-topic guard (#1779)
 
 - **F-22-13 / G-116:** `src/lib/cms/culture-desk-core.ts` + `culture-desk-server.ts`; `CultureNewsDesk.tsx` on `/admin/blog/new`. Sources: Regulatory Watch (WSLCB items with a link), Find news (grounded web search) and Vendor wins. Drafts are category CULTURE, so they show on the existing CULTURE card (Q-22-7).
 - **Q-22-6 (a):** Find news runs only when a person presses it. Results are shown with their sources (and the Google search suggestions, never stored); an item is kept only if its link is one the live search cited; the audit stores counts only.

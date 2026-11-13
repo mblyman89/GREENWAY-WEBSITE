@@ -179,7 +179,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v1.5 (D237, #1778):** N-5 grounded AI built: "New post from…" on New post with 7 templates fed only by this week's facts; 5 headlines, excerpt, sectioned body, 3 Digital Assets pictures; rule and compliance flags shown at once; prices only in Sale/Vendor-day from the promotion, below-cost held back, no superlatives; drafts only (G-115, F-22-10, F-22-16). No migration.
 
-**v1.6 (D237, #PN6):** N-6 culture news desk built: Regulatory Watch, Find news (on demand only) and Vendor wins into CULTURE drafts with their source links; health-topic guard (therapeutic wording blocked; health needs a source, the provider line and no product/deal links) on draft, save, Publish and scheduled publish (G-116, F-22-13, F-22-14). No migration.
+**v1.6 (D237, #1779):** N-6 culture news desk built: Regulatory Watch, Find news (on demand only) and Vendor wins into CULTURE drafts with their source links; health-topic guard (therapeutic wording blocked; health needs a source, the provider line and no product/deal links) on draft, save, Publish and scheduled publish (G-116, F-22-13, F-22-14). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 

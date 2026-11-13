@@ -1336,12 +1336,12 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-13 · CONFIRMED · GAP · S2 — No news desk for culture posts; WSLCB feed and grounded web search exist but aren't wired to the blog
 - **Pin:** `regulatory-ingest.ts`; `provider.ts` L991; `ai-blog-ideas.ts` L74
 - **SOP impact:** SOP-22 Appendix B.1; gap G-116; status FIXED (D237, N-6).
-- **Resolved (D237, N-6, #PN6):** Culture news desk (`culture-desk-core.ts`, `culture-desk-server.ts`, `CultureNewsDesk.tsx`): Regulatory Watch items and on-demand grounded Find news / Vendor wins into CULTURE drafts with their links
+- **Resolved (D237, N-6, #1779):** Culture news desk (`culture-desk-core.ts`, `culture-desk-server.ts`, `CultureNewsDesk.tsx`): Regulatory Watch items and on-demand grounded Find news / Vendor wins into CULTURE drafts with their links
 
 ### F-22-14 · CONFIRMED · RISK · S1 — "Medical benefits" content collides with WAC 314-55-155(2)(a)(vii); no health-topic guard beyond the general check
 - **Pin:** WAC; `compliance.ts`
 - **SOP impact:** SOP-22 Appendix B.1; gap G-116; status FIXED (D237, N-6).
-- **Resolved (D237, N-6, #PN6):** health-topic guard `guardCultureText`: therapeutic wording blocked; health needs a cited source, the provider line, no product/deal links; enforced on draft, save, Publish and scheduled publish
+- **Resolved (D237, N-6, #1779):** health-topic guard `guardCultureText`: therapeutic wording blocked; health needs a cited source, the provider line, no product/deal links; enforced on draft, save, Publish and scheduled publish
 
 ### F-22-15 · CONFIRMED · GAP · S3 — Hero is upload-only (no Digital Assets picker, 4 MB); body is plain paragraphs (no headings, inline images, product cards, links)
 - **Pin:** `blog/actions.ts` L38, L166; `BlogEditorClient.tsx` L34; `[slug]/page.tsx` L128–129
