@@ -3218,3 +3218,15 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - The Leafly panel files collected copies under Completed (`toLeaflyPanelRows(..., pickedUpAtRegister)`).
 - Query shapes checked against a local PostgREST 12.2.3 (two pickup events on one order still count once; a true cancel stays Cancelled; a note on an open order is never claimed; the search box `or=` still ANDs).
 - No migration. Test `tests/compliance/d238-online-orders-picked-up-completed.test.ts`; pure self-test `__runRegisterPickedUpFilterTests` (16); `__runOrdersPanelTests` floor 112 → 116.
+
+### Evergreen manifest M07825652483: owner's decision and what was done (2026-11-12)
+
+> "Thank you. I only looked at the one, and assumed. Please set the dates to be one year from each lot's own date. Also activate them all again as me so we can sell them. Leave the code changes unmerged for now. Still not safe. Thank you!"
+
+- **Found (read only):** all 19 lots (228 units, Solid/Liquid Edible) carried 2026 expiration dates from Sep 26 to Oct 28. Each date equals the lot's COA release date, so the vendor put the COA date in the expiration field. On 2026-11-12 the nightly expired-stock job (`cron:expired-quarantine`, D36/D44) moved all 19 from Active to Quarantine.
+- **Done in production (one SQL transaction, run in the Supabase SQL editor; no code change, no migration):**
+  - `inventory_lots`: each `expires_on` set to one year after its own date (2027-09-26 … 2027-10-28). `expires_on_source='owner_entered'`; `expires_on_set_by` and `updated_by` set to the owner (michael@greenwaymarijuana.com); `status` changed from quarantine to active.
+  - `lab_results`: each lot's own `coa_expire_date` moved one year forward (19 rows, none shared with other lots).
+  - `inbound_manifests.raw_payload`: the 19 `lab_result_list[].coa_expire_date` values changed from 2026 to 2027.
+- **Checks before the change:** all 19 lots pass the go-live gate (CCRS ID, linked lab result, lab passed). There are no open destruction events and no recall hold on these products.
+- **Undo trail:** 39 `audit_logs` rows as the owner: 19 `inventory_lot.expires_on_corrected` (before/after values), 19 `inventory_lot.status_changed`, and 1 `inbound_manifest.raw_payload_corrected` (holds the full original JSON).
