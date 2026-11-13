@@ -1352,6 +1352,7 @@ import { __runScheduleEverywhereCoreTests } from "../../src/lib/cms/schedule-eve
 import { __runAdCheckCoreTests } from "../../src/lib/marketing/ad-check-core";
 import { __runNewsletterEmailCoreTests } from "../../src/lib/cms/newsletter-email-core";
 import { __runNewsletterBatchCoreTests } from "../../src/lib/cms/newsletter-batch-core";
+import { __runNewsletterCadenceCoreTests } from "../../src/lib/cms/newsletter-cadence-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2739,7 +2740,7 @@ __runLiquidVolumeTests();
   assertRan("file-signature-core", __runFileSignatureCoreTests(), 61); // R45-S2: magic-byte + SVG active-content check (WHATWG + OWASP); R60 .riv/.lottie/Lottie JSON
   assertRan("banner-anim-core", __runBannerAnimTests(), 37); // R60-S2 Lottie + Rive animation layers
   assertRan("edit-conflict-core", __runEditConflictCoreTests(), 28); // R45-S2: optimistic locking on content_blocks.updated_at
-  assertRan("content-schedule-core", __runContentScheduleCoreTests(), 61); // R46-S1: scheduled publish/unpublish (Pacific -> UTC, 5-min grid, due selection)
+  assertRan("content-schedule-core", __runContentScheduleCoreTests(), 64); // R46-S1: scheduled publish/unpublish (Pacific -> UTC, 5-min grid, due selection)
   assertRan("content-release-core", __runContentReleaseCoreTests(), 30); // R46-S2: releases (bundle of changes that go live together)
   assertRan("seo-override-core", __runSeoOverrideCoreTests(), 32); // R46-S2: SEO Editor values reach public pages + sitemap
   assertRan("menu-facets-core", __runMenuFacetsCoreTests(), 18); // R49 S1: strain-name facet
@@ -2902,6 +2903,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("studio-fonts-core", __runStudioFontsCoreTests(), 14); // D234 C-1 (SOP-11b G-94): studio = website Heading/Body fonts; System default warning
   assertRan("ccrs-resend-refused-core", __runCcrsResendRefusedCoreTests(), 15); // D227 S4 ("one-click resend of refused rows"): only `rejected` rows, rebuilt by today's exporter, each checked against the excise identity [G L1374, L1377] [FAQ L0153-L0160]
   assertRan("newsletter-email-core", __runNewsletterEmailCoreTests(), 35); // D237 N-1 (SOP-22 G-108..G-111): four warnings at size, one-click unsubscribe, PDF kept, bounce/complaint suppression, owner/admin broadcast
+  assertRan("newsletter-cadence-core", __runNewsletterCadenceCoreTests(), 43); // D237 N-3 (SOP-22 G-113, Q-22-4): Sunday cadence, approval stages, send-time checks, reminder dedupe
   assertRan("newsletter-batch-core", __runNewsletterBatchCoreTests(), 42); // D237 N-2 (SOP-22 G-112): batches of 100, idempotency keys, retry rules, progress, resume lease
   console.log("ALL PURE SELF-TESTS PASSED");
 }

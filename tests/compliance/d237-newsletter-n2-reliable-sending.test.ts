@@ -84,7 +84,7 @@ describe("D237 N-2 reliable newsletter sending", () => {
     expect(a).toContain("after(");
     expect(a).toContain("retryFailedNewsletterAction");
     expect(a).toContain('"newsletter.retry_failed"');
-    expect(a.match(/can\(session\.profile\.role, "newsletter\.broadcast"\)/g)?.length).toBe(2);
+    expect(a.match(/can\(session\.profile\.role, "newsletter\.broadcast"\)/g)?.length).toBe(4); // D237 N-3 added the approve and Sunday-settings gates
     const p = read("src/app/admin/newsletter/page.tsx");
     expect(p).toContain("listOpenSendProgress");
     expect(p).toContain("progressLine");

@@ -13,7 +13,18 @@ import {
   listSendHistory,
   type SendableNewsletter,
 } from "@/lib/cms/newsletter-send-store";
-import { testSendNewsletterAction, broadcastNewsletterAction, retryFailedNewsletterAction } from "./actions";
+import {
+  testSendNewsletterAction,
+  broadcastNewsletterAction,
+  retryFailedNewsletterAction,
+  markNewsletterReadyAction,
+  approveNewsletterAction,
+  newsletterBackToDraftAction,
+  saveNewsletterCadenceAction,
+} from "./actions";
+import { getCadence, listApprovals, CADENCE_MIGRATION_HINT } from "@/lib/cms/newsletter-cadence-server";
+import { stageOf, STAGE_LABEL, WEEKDAYS, formatHhmm, nextSundaySendUtc } from "@/lib/cms/newsletter-cadence-core";
+import { utcToPacificLocal } from "@/lib/cms/content-schedule-core";
 import { listOpenSendProgress } from "@/lib/cms/newsletter-queue-server";
 import { progressLine } from "@/lib/cms/newsletter-batch-core";
 import { NewsletterSendAutoRefresh } from "@/components/admin/marketing/NewsletterSendAutoRefresh";
@@ -37,6 +48,12 @@ function engagementWindow(): { fromISO: string; toISO: string } {
     fromISO: new Date(nowMs - 90 * 24 * 60 * 60 * 1000).toISOString(),
     toISO: new Date(nowMs).toISOString(),
   };
+}
+
+/** D237 N-3: the default "Approve and schedule" time = next Sunday at the set time. */
+function defaultSendLocal(sendTime: string | null): string {
+  const iso = nextSundaySendUtc(new Date().toISOString(), sendTime);
+  return iso ? utcToPacificLocal(iso) : "";
 }
 
 function fmtDate(iso: string | null): string {
@@ -79,13 +96,19 @@ export default async function NewsletterSendPage({
   // Engagement window: trailing 90 days. Reuses the same stats engine that
   // powers Reports → Customers → Newsletter Statistics (no new tracking).
   const { fromISO: engagementFromISO, toISO: engagementToISO } = engagementWindow();
-  const [newsletters, recipients, history, engagement, openSendsAll] = await Promise.all([
+  const [newsletters, recipients, history, engagement, openSendsAll, cadence, approvals] = await Promise.all([
     listSendableNewsletters(),
     getRecipientStats(),
     listSendHistory(20),
     getNewsletterStats(engagementFromISO, engagementToISO),
     listOpenSendProgress(),
+    getCadence(),
+    listApprovals(),
   ]);
+  // D237 N-3: newsletters that can go through the Sunday approval (a PDF is
+  // uploaded and it is not archived). Approving covers publishing it.
+  const sundayCandidates = newsletters.filter((n) => n.pdfUrl && n.status !== "archived").slice(0, 8);
+  const defaultSendAt = defaultSendLocal(cadence.sendTime);
   // D237 N-2: only queued broadcasts (rows in newsletter_send_recipients) have a bar.
   const openSends = openSendsAll.filter((o) => o.pending + o.sent + o.failed > 0);
 
@@ -119,6 +142,8 @@ export default async function NewsletterSendPage({
               "Happy? The owner or an admin ticks the confirm box and sends it to the loyalty list.",
               "It goes out in batches of 100. A bar shows how many are sent; you can leave this page and it keeps going.",
               "If some addresses failed, the owner or an admin can press Retry failed on that send. Only those addresses get it again.",
+              "Sunday newsletter: when it is finished, press Ready for approval. The owner or an admin presses Approve and schedule and picks the time. It publishes and sends by itself at that time.",
+              "Editing an approved newsletter takes the approval back. It must be approved again.",
             ]}
           >
             <p className="mb-2">
@@ -210,6 +235,102 @@ export default async function NewsletterSendPage({
             stats={engagement}
             exportHref="/admin/reports/customers/newsletter-export"
           />
+        </section>
+
+
+        {/* D237 N-3 (G-113, Q-22-4): the Sunday newsletter. */}
+        <section id="sunday" className="space-y-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5" data-testid="newsletter-sunday-cadence">
+          <div>
+            <p className="text-sm font-semibold text-[var(--admin-text)]">Sunday newsletter</p>
+            <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+              {cadence.sendTime
+                ? `Approved newsletters send on Sunday at ${formatHhmm(cadence.sendTime)} Pacific unless you pick another time.`
+                : "No Sunday send time is set yet. Nothing sends by itself until the owner sets a time below or picks one when approving."}
+            </p>
+          </div>
+          {!approvals.ready ? (
+            <p className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-xs text-[var(--admin-gold)]">
+              {CADENCE_MIGRATION_HINT}
+            </p>
+          ) : sundayCandidates.length === 0 ? (
+            <p className="text-xs text-[var(--admin-text-muted)]">No newsletter with a PDF yet. Upload one under Blog &amp; Newsletter.</p>
+          ) : (
+            <div className="space-y-3">
+              {sundayCandidates.map((n) => {
+                const a = approvals.byPost[n.id] ?? null;
+                const stage = stageOf(a);
+                return (
+                  <div key={n.id} className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3 text-xs text-[var(--admin-text-muted)]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-[var(--admin-text)]">{n.title}</span>
+                      <StatusPill status={stage}>{STAGE_LABEL[stage]}</StatusPill>
+                      {n.status !== "published" ? <span className="text-[var(--admin-text-faint)]">(not published yet; approving publishes it when it sends)</span> : null}
+                    </div>
+                    {a?.send_at && (stage === "scheduled" || stage === "sending") ? (
+                      <p className="mt-1">Sends {fmtDate(a.send_at)} (Pacific).</p>
+                    ) : null}
+                    {a?.error ? <p className="mt-1 text-[var(--admin-orange)]">Last try failed: {a.error}</p> : null}
+                    <div className="mt-2 flex flex-wrap items-end gap-2">
+                      {stage === "draft" || stage === "sent" ? (
+                        <form action={markNewsletterReadyAction}>
+                          <input type="hidden" name="post_id" value={n.id} />
+                          <Button type="submit" variant="neutral" size="sm">Ready for approval</Button>
+                        </form>
+                      ) : null}
+                      {canBroadcast && (stage === "ready" || stage === "approved" || stage === "scheduled") ? (
+                        <form action={approveNewsletterAction} className="flex flex-wrap items-end gap-2">
+                          <input type="hidden" name="post_id" value={n.id} />
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[11px] text-[var(--admin-text-faint)]">Send at (Pacific)</span>
+                            <Input type="datetime-local" name="send_at" step={300} defaultValue={a?.send_at ? utcToPacificLocal(a.send_at) : defaultSendAt} required />
+                          </label>
+                          <Button type="submit" size="sm">{stage === "ready" ? "Approve and schedule" : "Change send time"}</Button>
+                        </form>
+                      ) : null}
+                      {stage === "ready" || stage === "approved" || stage === "scheduled" ? (
+                        <form action={newsletterBackToDraftAction}>
+                          <input type="hidden" name="post_id" value={n.id} />
+                          <Button type="submit" variant="neutral" size="sm">Back to draft</Button>
+                        </form>
+                      ) : null}
+                    </div>
+                    {!canBroadcast && stage === "ready" ? <p className="mt-1">Waiting for the owner or an admin to approve.</p> : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {canBroadcast ? (
+            <form action={saveNewsletterCadenceAction} className="grid gap-3 border-t border-[var(--admin-border)] pt-4 text-xs text-[var(--admin-text-muted)] sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span>Sunday send time (Pacific). Leave empty for none.</span>
+                <Input type="time" name="send_time" step={300} defaultValue={cadence.sendTime ?? ""} />
+              </label>
+              <label className="flex items-center gap-2 self-end">
+                <input type="checkbox" name="remind_enabled" defaultChecked={cadence.remindEnabled} className="h-4 w-4 accent-[var(--admin-accent)]" />
+                Email a reminder when nothing is ready
+              </label>
+              <label className="flex flex-col gap-1">
+                <span>Reminder day</span>
+                <select name="remind_day" defaultValue={String(cadence.remindDay)} className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2 text-sm text-[var(--admin-text)]">
+                  {WEEKDAYS.map((d, i) => (
+                    <option key={d} value={i}>{d}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span>Reminder time (Pacific)</span>
+                <Input type="time" name="remind_time" step={300} defaultValue={cadence.remindTime} />
+              </label>
+              <label className="flex flex-col gap-1 sm:col-span-2">
+                <span>Reminder goes to (comma separated). Empty = the store staff list.</span>
+                <Input name="remind_emails" defaultValue={cadence.remindEmails.join(", ")} placeholder="owner@example.com" />
+              </label>
+              <div className="sm:col-span-2">
+                <Button type="submit" variant="neutral" size="sm">Save Sunday settings</Button>
+              </div>
+            </form>
+          ) : null}
         </section>
 
         {sendable.length === 0 ? (

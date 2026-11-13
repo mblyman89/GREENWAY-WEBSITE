@@ -923,6 +923,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   // newsletter_sends, which is WIPE; no FK, and its own AFTER TRUNCATE
   // trigger on newsletter_sends empties it in the same reset, so the pinned
   // WIPE list in 0240 is not reopened (the 0344 product_latest_facts pattern).
+  // newsletter_approvals (0363, D237 N-3): the Sunday approval state per
+  // newsletter post. Its only FK is post_id -> blog_posts (KEEP); send_id is a
+  // plain uuid with no FK into newsletter_sends (WIPE).
+  { table: "newsletter_approvals", disposition: "KEEP", because: "The Sunday newsletter approval per newsletter post (ready, approved with a send time, sent). It belongs with the kept blog posts." },
   { table: "newsletter_send_recipients", disposition: "KEEP", because: "The per-address list of a queued newsletter send. It is emptied automatically together with the newsletter send history by its own trigger, so the reset function's pinned WIPE list (0240) is not reopened." },
   // product_image_memory (0279, R51): which library photo a person attached
   // to which product on onboarding, by identity key. KEEP with the media it
