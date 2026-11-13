@@ -1,10 +1,10 @@
 /**
- * src/lib/orders/register-picked-up-filter-core.ts  (D238)
+ * src/lib/orders/register-picked-up-filter-core.ts  (D240)
  *
  * ONLINE ORDERS THE CUSTOMER COLLECTED AT THE REGISTER ARE "COMPLETED" ON THE
  * ORDERS BOARD.
  *
- * Owner (verbatim, D238): "The online orders is still not right. I am not
+ * Owner (verbatim, D240): "The online orders is still not right. I am not
  * able to see completed online orders. I am only able to see total orders and
  * canceled orders. Please fix this for me so I can filter to see online
  * orders that were completed at the register."

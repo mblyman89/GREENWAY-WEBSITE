@@ -423,7 +423,7 @@ export async function listOrdersPaged(
   // search OR clause with or without display_name. Factored so we can retry
   // without display_name if the column doesn't exist yet (migration 0147).
   const runQuery = async (withDisplayName: boolean) => {
-    // D238 - the Completed and Cancelled tabs file an online order the
+    // D240 - the Completed and Cancelled tabs file an online order the
     // customer collected at the register under Completed (its stored status
     // stays the non-revenue "cancelled"; register-picked-up-filter-core).
     // Those two tabs read the pickup event as a filtered embed; every other
@@ -772,11 +772,11 @@ export async function getOrderStatusCounts(
  * caller (and the tests) which path answered.
  */
 /**
- * D238 - how many orders (in this source / origin view) are "cancelled" only
+ * D240 - how many orders (in this source / origin view) are "cancelled" only
  * because the customer collected them at the register. One exact head count
  * through the filtered inner embed; an order with two pickup events still
  * counts once. Never throws: on any error, 0 (the counts fall back to the raw
- * statuses, which is what the board showed before D238).
+ * statuses, which is what the board showed before D240).
  */
 export async function countRegisterPickedUpOrders(
   opts: { excludeOrigins?: readonly string[]; source?: OrderSource } = {},

@@ -443,7 +443,7 @@ export function toLeaflyPanelRows<O extends LeaflyPanelSource, L extends LeaflyP
   orders: readonly O[],
   linked?: ReadonlyMap<string, L> | null,
   /**
-   * D238 - local copies the customer collected at the register. Their stored
+   * D240 - local copies the customer collected at the register. Their stored
    * status stays the non-revenue "cancelled", but the panel files them under
    * Completed (tabs, counts) exactly like the Greenway panel does.
    */
@@ -861,19 +861,19 @@ export function __runOrdersPanelTests(): { passed: number; failed: number } {
   );
   ok("unknown columns are reported unsupported", !sortColumnSupported("martian"));
   ok("rows with no linked read degrade to Leafly's status", toLeaflyPanelRows([src[1]], new Map())[0].status === "acknowledged");
-  // D238 - a copy collected at the register files under Completed.
+  // D240 - a copy collected at the register files under Completed.
   {
     const lid = src.find((o) => o.local_order_id && linked.has(o.local_order_id));
     if (lid && lid.local_order_id) {
       const cancelledCopy = new Map([[lid.local_order_id, { ...linked.get(lid.local_order_id)!, status: "cancelled" }]]);
       const picked = toLeaflyPanelRows([lid], cancelledCopy, new Set([lid.local_order_id]))[0];
       const plain = toLeaflyPanelRows([lid], cancelledCopy)[0];
-      ok("D238: collected copy files under Completed", picked.status === "completed");
-      ok("D238: a true cancel stays Cancelled", plain.status === "cancelled");
-      ok("D238: Completed tab lists the collected copy", buildLeaflyPanelView([picked], { ...parseOrdersPanelQuery({}, "leafly"), status: "completed" }).total === 1);
-      ok("D238: Cancelled tab does not", buildLeaflyPanelView([picked], { ...parseOrdersPanelQuery({}, "leafly"), status: "cancelled" }).total === 0);
+      ok("D240: collected copy files under Completed", picked.status === "completed");
+      ok("D240: a true cancel stays Cancelled", plain.status === "cancelled");
+      ok("D240: Completed tab lists the collected copy", buildLeaflyPanelView([picked], { ...parseOrdersPanelQuery({}, "leafly"), status: "completed" }).total === 1);
+      ok("D240: Cancelled tab does not", buildLeaflyPanelView([picked], { ...parseOrdersPanelQuery({}, "leafly"), status: "cancelled" }).total === 0);
     } else {
-      ok("D238: fixture has a linked order", false);
+      ok("D240: fixture has a linked order", false);
     }
   }
   ok("unaccepted needs a person", rows.find((r) => r.order.id === "u1")!.needsPerson);

@@ -263,10 +263,10 @@ export default async function OrdersAdminPage({
     // rows under them agree. Leafly keeps its own badge on its own panel.
     // USAGE-3 — one grouped RPC (0233) instead of seven exact counts; falls
     // back to the seven until the migration is applied.
-    // D238 - orders the customer collected at the register are filed under
+    // D240 - orders the customer collected at the register are filed under
     // Completed (their stored status stays the non-revenue "cancelled"), so
     // the Completed / Cancelled tab numbers match the rows those tabs list.
-    // The pickup count never throws (0 = the raw counts, as before D238).
+    // The pickup count never throws (0 = the raw counts, as before D240).
     Promise.all([
       getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source }),
       countRegisterPickedUpOrders({ excludeOrigins: BOARD_EXCLUDED_ORIGINS, source: gq.source }),

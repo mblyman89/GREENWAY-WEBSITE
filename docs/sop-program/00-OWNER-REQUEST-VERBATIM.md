@@ -3217,7 +3217,7 @@ Owner (verbatim): *"I have properly set the "MERCH_HEALTH_TOKEN" in both project
 - `listOrdersPaged` reads the pickup event as a filtered PostgREST embed (`rpu:order_events(id)`), only on the Completed and Cancelled tabs, and strips it from the rows. `countRegisterPickedUpOrders` is one head count (never throws; 0 means the raw counts). `/admin/orders` folds it into the tab counts. The nav badge and the cockpit are unchanged.
 - The Leafly panel files collected copies under Completed (`toLeaflyPanelRows(..., pickedUpAtRegister)`).
 - Query shapes checked against a local PostgREST 12.2.3 (two pickup events on one order still count once; a true cancel stays Cancelled; a note on an open order is never claimed; the search box `or=` still ANDs).
-- No migration. Test `tests/compliance/d238-online-orders-picked-up-completed.test.ts`; pure self-test `__runRegisterPickedUpFilterTests` (16); `__runOrdersPanelTests` floor 112 → 116.
+- No migration. Test `tests/compliance/d240-online-orders-picked-up-completed.test.ts`; pure self-test `__runRegisterPickedUpFilterTests` (16); `__runOrdersPanelTests` floor 112 → 116.
 
 ### Evergreen manifest M07825652483: owner's decision and what was done (2026-11-12)
 

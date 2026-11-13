@@ -1,7 +1,7 @@
 /**
  * tests/compliance/d238-online-orders-picked-up-completed.test.ts
  *
- * D238 - "I am not able to see completed online orders. I am only able to
+ * D240 - "I am not able to see completed online orders. I am only able to
  * see total orders and canceled orders. Please fix this for me so I can
  * filter to see online orders that were completed at the register."
  *
@@ -16,7 +16,7 @@
  *   3. the board page folds the pickup count into Completed; the nav badge /
  *      cockpit callers are untouched;
  *   4. the register still closes the online order as "cancelled" (no revenue
- *      double count) - D238 changes the board, never the stored status;
+ *      double count) - D240 changes the board, never the stored status;
  *   5. no migration.
  */
 import { describe, it, expect } from "vitest";
@@ -36,7 +36,7 @@ import { REGISTER_PICKED_UP_NOTE_PREFIX } from "@/lib/pos/pickup-progress-core";
 const ROOT = path.resolve(__dirname, "../..");
 const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8");
 
-describe("D238 pure core", () => {
+describe("D240 pure core", () => {
   it("self-tests pass", () => {
     const r = __runRegisterPickedUpFilterTests();
     expect(r.failed).toBe(0);
@@ -69,7 +69,7 @@ describe("D238 pure core", () => {
   });
 });
 
-describe("D238 wiring", () => {
+describe("D240 wiring", () => {
   const store = read("src/lib/orders/orders-store.ts");
   const page = read("src/app/admin/orders/page.tsx");
   const leafly = read("src/components/admin/orders/LeaflyOrdersPanel.tsx");
@@ -107,6 +107,6 @@ describe("D238 wiring", () => {
   });
   it("adds no migration", () => {
     const names = readdirSync(path.join(ROOT, "supabase/migrations"));
-    expect(names.some((n) => /d238|picked_up_completed/i.test(n))).toBe(false);
+    expect(names.some((n) => /d240|picked_up_completed/i.test(n))).toBe(false);
   });
 });
