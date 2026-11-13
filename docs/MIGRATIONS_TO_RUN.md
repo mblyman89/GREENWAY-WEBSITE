@@ -4201,3 +4201,26 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0359_orders_register_origin_backfill.rollback.sql` (puts
   `greenway` back on exactly the listed rows, then drops the list table).
+
+- [ ] **`supabase/migrations/0364_budalerts_menus.sql`** — D241 Budalerts brand menus (owner: "please build the
+  fetcher so it is respectful with its scraping ... I want all the product data for the remaining vendors we cant get
+  data from on cultivera or growflow or leaflink"). Run it AFTER 0363. Four new tables, service role only, RLS on:
+  `budalerts_brand_links` (Budalerts brand page to vendor, linked by a person), `budalerts_brand_snapshots` (one polite
+  pull of one brand), `budalerts_menu_items` (the listings, prices in cents, photo link once saved) and
+  `budalerts_fetch_state` (one row: the 3 second gap between requests, the run lease, the background switch, OFF by
+  default). Internal use only (Budalerts gave permission for our own records). Until it is applied the Budalerts
+  controls on the Vendor Menus page say the migration is missing; nothing else changes.
+
+  Safe to re-run. Paste the file as is (its comments have no apostrophes or semicolons). If the editor shows
+  "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select table_name from information_schema.tables where table_name like 'budalerts%' order by 1;
+  -- budalerts_brand_links, budalerts_brand_snapshots, budalerts_fetch_state, budalerts_menu_items
+  select id, auto_enabled from public.budalerts_fetch_state;  -- 1, false
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0364_budalerts_menus.rollback.sql` (drops the four tables;
+  photos already saved to the media library stay there as drafts).
