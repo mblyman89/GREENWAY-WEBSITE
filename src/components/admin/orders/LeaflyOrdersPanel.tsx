@@ -182,7 +182,11 @@ export function LeaflyOrdersPanel({
   // The same tabs, search, dates, totals, sort and paging as our panel,
   // applied in memory to the Leafly orders the board loaded.
   const q = query ?? parseOrdersPanelQuery(searchParams, "leafly");
-  const rows = toLeaflyPanelRows<WorkflowRow, OrderRow>(board.orders.map(toWorkflowRow), linkedOrders);
+  const rows = toLeaflyPanelRows<WorkflowRow, OrderRow>(
+    board.orders.map(toWorkflowRow),
+    linkedOrders,
+    pickedUpAtRegister,
+  );
   const view = buildLeaflyPanelView(rows, q);
   // SLICE L-28's guarantee, kept: a view may never SILENTLY hide an order a
   // person has to act on.

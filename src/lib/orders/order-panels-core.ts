@@ -66,6 +66,7 @@ import {
 import { buildBoardView, isLiveBucket, parseBoardSearch } from "@/lib/leafly/board-view-core";
 import { leaflySearchTerms } from "./order-board-split-core";
 import { DEFAULT_ORDER_SOURCE, parseOrderSource, type OrderSource } from "./order-source-core";
+import { boardStatus } from "./register-picked-up-filter-core";
 
 // ============================================================================
 // 1. THE TABS
@@ -441,6 +442,12 @@ const NEEDS_PERSON: readonly LeaflyWorkflowBucket[] = ["accept_now", "needs_atte
 export function toLeaflyPanelRows<O extends LeaflyPanelSource, L extends LeaflyPanelLocal>(
   orders: readonly O[],
   linked?: ReadonlyMap<string, L> | null,
+  /**
+   * D238 - local copies the customer collected at the register. Their stored
+   * status stays the non-revenue "cancelled", but the panel files them under
+   * Completed (tabs, counts) exactly like the Greenway panel does.
+   */
+  pickedUpLocalIds?: ReadonlySet<string> | null,
 ): LeaflyPanelRow<O, L>[] {
   return orders.map((order) => {
     const local = order.local_order_id ? (linked?.get(order.local_order_id) ?? null) : null;
@@ -458,7 +465,10 @@ export function toLeaflyPanelRows<O extends LeaflyPanelSource, L extends LeaflyP
     return {
       order,
       local,
-      status: leaflyPanelStatus(order, local),
+      status: boardStatus(
+        leaflyPanelStatus(order, local),
+        Boolean(local && order.local_order_id && pickedUpLocalIds?.has(order.local_order_id)),
+      ),
       placement,
       bucket,
       needsPerson: NEEDS_PERSON.includes(bucket) && isLiveBucket(bucket),
@@ -851,6 +861,21 @@ export function __runOrdersPanelTests(): { passed: number; failed: number } {
   );
   ok("unknown columns are reported unsupported", !sortColumnSupported("martian"));
   ok("rows with no linked read degrade to Leafly's status", toLeaflyPanelRows([src[1]], new Map())[0].status === "acknowledged");
+  // D238 - a copy collected at the register files under Completed.
+  {
+    const lid = src.find((o) => o.local_order_id && linked.has(o.local_order_id));
+    if (lid && lid.local_order_id) {
+      const cancelledCopy = new Map([[lid.local_order_id, { ...linked.get(lid.local_order_id)!, status: "cancelled" }]]);
+      const picked = toLeaflyPanelRows([lid], cancelledCopy, new Set([lid.local_order_id]))[0];
+      const plain = toLeaflyPanelRows([lid], cancelledCopy)[0];
+      ok("D238: collected copy files under Completed", picked.status === "completed");
+      ok("D238: a true cancel stays Cancelled", plain.status === "cancelled");
+      ok("D238: Completed tab lists the collected copy", buildLeaflyPanelView([picked], { ...parseOrdersPanelQuery({}, "leafly"), status: "completed" }).total === 1);
+      ok("D238: Cancelled tab does not", buildLeaflyPanelView([picked], { ...parseOrdersPanelQuery({}, "leafly"), status: "cancelled" }).total === 0);
+    } else {
+      ok("D238: fixture has a linked order", false);
+    }
+  }
   ok("unaccepted needs a person", rows.find((r) => r.order.id === "u1")!.needsPerson);
   ok("accepted without a copy needs a person", rows.find((r) => r.order.id === "n1")!.needsPerson);
   ok("work in progress does not 'need a person'", !rows.find((r) => r.order.id === "k1")!.needsPerson);

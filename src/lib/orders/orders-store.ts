@@ -35,6 +35,15 @@ import { evaluateOrderTransition } from "./order-lifecycle-core";
 import { excludedOriginsFilter } from "./order-board-split-core";
 import { orderSourceFilter, snapshotSourceArg, type OrderSource } from "./order-source-core";
 import {
+  COMPLETED_WITH_PICKED_UP_OR,
+  PICKED_UP_COUNT_SELECT,
+  PICKED_UP_EMBED,
+  PICKED_UP_EMBED_FILTERS,
+  PICKED_UP_SELECT,
+  pickedUpTabPlan,
+  stripPickedUpEmbed,
+} from "./register-picked-up-filter-core";
+import {
   EXPIRABLE_STATUS,
   RESERVATION_SWEEP_ACTOR,
   computeReservationExpiresAt,
@@ -414,11 +423,24 @@ export async function listOrdersPaged(
   // search OR clause with or without display_name. Factored so we can retry
   // without display_name if the column doesn't exist yet (migration 0147).
   const runQuery = async (withDisplayName: boolean) => {
-    let q = admin.from("orders").select("*", { count: "exact" });
+    // D238 - the Completed and Cancelled tabs file an online order the
+    // customer collected at the register under Completed (its stored status
+    // stays the non-revenue "cancelled"; register-picked-up-filter-core).
+    // Those two tabs read the pickup event as a filtered embed; every other
+    // tab runs the exact query it always did.
+    const pickedPlan = pickedUpTabPlan(filter.status);
+    let q = admin.from("orders").select(pickedPlan ? PICKED_UP_SELECT : "*", { count: "exact" });
     const notOrigins = filter.excludeOrigins ? excludedOriginsFilter(filter.excludeOrigins) : null;
     if (notOrigins) q = q.not("origin", "in", notOrigins);
     q = applySource(q, filter.source);
-    if (filter.status && filter.status !== "all") {
+    if (pickedPlan) {
+      for (const f of PICKED_UP_EMBED_FILTERS) q = f.op === "like" ? q.like(f.column, f.value) : q.eq(f.column, f.value);
+      if (pickedPlan.kind === "completed_or_picked_up") {
+        q = q.or(COMPLETED_WITH_PICKED_UP_OR);
+      } else {
+        q = q.eq("status", "cancelled").is(PICKED_UP_EMBED, null);
+      }
+    } else if (filter.status && filter.status !== "all") {
       if (filter.status === "active") {
         q = q.in("status", ["new", "acknowledged", "preparing", "ready"]);
       } else {
@@ -447,7 +469,8 @@ export async function listOrdersPaged(
     displayNameSearchable = false;
     ({ data, count } = await runQuery(false));
   }
-  return { rows: (data as OrderRow[]) ?? [], total: count ?? 0 };
+  const rows = ((data as Record<string, unknown>[] | null) ?? []).map((r) => stripPickedUpEmbed(r) as unknown as OrderRow);
+  return { rows, total: count ?? 0 };
 }
 
 export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRow[]> {
@@ -748,6 +771,35 @@ export async function getOrderStatusCounts(
  * the dashboard never changes behaviour — only cost. `usedRpc` tells the
  * caller (and the tests) which path answered.
  */
+/**
+ * D238 - how many orders (in this source / origin view) are "cancelled" only
+ * because the customer collected them at the register. One exact head count
+ * through the filtered inner embed; an order with two pickup events still
+ * counts once. Never throws: on any error, 0 (the counts fall back to the raw
+ * statuses, which is what the board showed before D238).
+ */
+export async function countRegisterPickedUpOrders(
+  opts: { excludeOrigins?: readonly string[]; source?: OrderSource } = {},
+): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  try {
+    const admin = createSupabaseAdminClient();
+    let q = admin
+      .from("orders")
+      .select(PICKED_UP_COUNT_SELECT, { count: "exact", head: true })
+      .eq("status", "cancelled");
+    for (const f of PICKED_UP_EMBED_FILTERS) q = f.op === "like" ? q.like(f.column, f.value) : q.eq(f.column, f.value);
+    const notOrigins = opts.excludeOrigins ? excludedOriginsFilter(opts.excludeOrigins) : null;
+    if (notOrigins) q = q.not("origin", "in", notOrigins);
+    q = applySource(q, opts.source);
+    const { count, error } = await q;
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export type OrdersBoardSnapshot = {
   counts: Record<OrderStatus, number>;
   arrivals: OrderArrivalRow[];
