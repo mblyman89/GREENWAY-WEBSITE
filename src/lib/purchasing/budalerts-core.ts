@@ -804,6 +804,37 @@ export function pickDueSlugs(
 }
 
 /* ------------------------------------------------------------------
+ * Media labels (pure) — what a saved Budalerts photo is called
+ * ------------------------------------------------------------------ */
+
+export const BUDALERTS_CREDIT = "Budalerts (internal use only)";
+
+/** Library tags: always "budalerts" + "product-image" + "internal-only", then the brand. */
+export function budalertsMediaTags(brandLabel: string | null | undefined): string[] {
+  const tags = ["budalerts", "product-image", "internal-only"];
+  const b = budalertsSlug(brandLabel ?? "");
+  if (b && !tags.includes(b)) tags.push(b);
+  return tags;
+}
+
+/** "Wedding Sunset — Phat Panda (Budalerts)". */
+export function budalertsMediaTitle(item: { name: string; brand: string | null }): string {
+  const name = (item.name || "Product").trim().slice(0, 160);
+  return item.brand ? `${name} — ${item.brand.trim()} (Budalerts)` : `${name} (Budalerts)`;
+}
+
+/** "Phat Panda Wedding Sunset, Flower, 1/4oz". */
+export function budalertsMediaAlt(item: { name: string; brand: string | null; category: string | null; size_label: string | null }): string {
+  const head = [item.brand, item.name].filter(Boolean).join(" ").trim() || "Product photo";
+  return [head, item.category, item.size_label].filter(Boolean).join(", ").slice(0, 300);
+}
+
+/** The library's menu-row reference for a saved photo. */
+export function budalertsMenuItemRef(itemId: string): string {
+  return `budalerts:${itemId}`;
+}
+
+/* ------------------------------------------------------------------
  * Self-tests
  * ------------------------------------------------------------------ */
 
@@ -950,6 +981,13 @@ export function __runBudalertsCoreTests(): { passed: number; failed: number } {
   const due = pickDueSlugs([{ vendorId: "v1", slug: "phat-panda" }, { vendorId: "v2", slug: "dank-czar" }, { vendorId: "v3", slug: "fire-bros" }, { vendorId: "v4", slug: "Bad Slug" }], snaps, NOW, 5);
   ok(due[0] === "fire-bros" && !due.includes("Bad Slug") && !due.includes("dank-czar") && !due.includes("phat-panda"), "pickDueSlugs: never-fetched first, cache honoured");
   ok(pickDueSlugs([{ vendorId: "v3", slug: "fire-bros" }], [], NOW, 0).length === 0, "pickDueSlugs max 0");
+
+  // media labels
+  ok(budalertsMediaTags("Phat Panda").join(",") === "budalerts,product-image,internal-only,phat-panda", "media tags");
+  ok(budalertsMediaTags(null).length === 3, "media tags without brand");
+  ok(budalertsMediaTitle({ name: "Wedding Sunset", brand: "Phat Panda" }) === "Wedding Sunset — Phat Panda (Budalerts)", "media title");
+  ok(budalertsMediaAlt({ name: "Wedding Sunset", brand: "Phat Panda", category: "Flower", size_label: "1/4oz" }) === "Phat Panda Wedding Sunset, Flower, 1/4oz", "media alt");
+  ok(budalertsMenuItemRef("abc") === "budalerts:abc" && BUDALERTS_CREDIT.includes("internal"), "menu item ref + credit");
 
   return { passed, failed };
 }
