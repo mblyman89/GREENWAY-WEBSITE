@@ -115,6 +115,7 @@ export default async function VendorMenusPage({ searchParams }: { searchParams: 
             "If a menu says 'not linked to a vendor', or is on the wrong vendor, click 'Link to vendor' and pick the right card. It is remembered for every future pull of that menu. Rows that show duplicate cards link to Merge vendors.",
             "'Fetch logo' pulls a vendor's logo from GrowFlow, Cultivera or LeafLink and attaches it, published, to the vendor and its brands so it shows on the website at once. 'Fetch all missing logos' does every vendor we carry that has none.",
             "No wholesale menu anywhere? In the Budalerts column, link the vendor to its Budalerts brand (exact-name suggestions are offered) and fetch. Its photos and prices are saved for internal use only, and the vendor moves to the 'Done — data gathered from Budalerts' table.",
+            "Have a wholesale menu but it is missing photos or prices? 'Menus on file' has the same Budalerts column: link and fetch to fill the gaps. Those vendors keep their menu row (they don't move to the Done table), and the Budalerts data stays internal use only.",
           ]}
         >
           <p>
@@ -533,6 +534,8 @@ function NeededTr({
 
 async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
   const cov = await loadVendorMenuCoverage(now);
+  // D244 — the same Budalerts lookup as "Still need a menu", to fill gaps for vendors found on Cultivera / GrowFlow / LeafLink.
+  const board = await loadBudalertsBoard(now);
   const all = cov.searched;
   const rows = filterSortSearched(all, p);
   const qs = coverageHref("", p, { find: "" });
@@ -594,7 +597,7 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
         <EmptyState icon="🔎" title="No menus match these filters" description="Clear the filters to see every vendor." />
       ) : (
         <div className={TABLE_SHELL}>
-          <table className="w-full min-w-[86rem] text-sm">
+          <table className="w-full min-w-[98rem] text-sm">
             <thead className={THEAD}>
               <tr>
                 <th className={TH}>Vendor</th>
@@ -608,6 +611,7 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
                 <th className={`${TH} text-right`}>Our stock</th>
                 <th className={TH}>History</th>
                 <th className={TH}>Logo</th>
+                {board.available && <th className={TH}>Budalerts</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
@@ -619,6 +623,7 @@ async function SearchedTable({ now, p }: { now: number; p: CoverageParams }) {
                   logoUrl={r.vendorId ? cov.logos[r.vendorId] ?? null : null}
                   linkOptions={cov.linkOptions}
                   duplicateNames={cov.duplicateNames}
+                  budalerts={board.available ? (r.vendorId ? board.rows[r.vendorId] ?? { linked: [], suggestions: [] } : null) : undefined}
                 />
               ))}
             </tbody>
@@ -639,12 +644,15 @@ function SearchedTr({
   logoUrl,
   linkOptions,
   duplicateNames,
+  budalerts,
 }: {
   r: SearchedRow;
   now: number;
   logoUrl: string | null;
   linkOptions: VendorPickOption[];
   duplicateNames: Record<string, string>;
+  /** D244 — undefined: Budalerts not set up (no column); null: menu not linked to a vendor yet. */
+  budalerts?: BudalertsRowInfo | null;
 }) {
   const lu = r.latestUsable;
   const f = r.facts;
@@ -787,6 +795,17 @@ function SearchedTr({
           </span>
         )}
       </td>
+      {budalerts !== undefined && (
+        <td className={`${TD} min-w-[12rem]`}>
+          {budalerts && r.vendorId && r.vendor ? (
+            <BudalertsRowControls vendorId={r.vendorId} vendorName={r.vendor.display_name} linked={budalerts.linked} suggestions={budalerts.suggestions} />
+          ) : (
+            <span className={FAINT} title="A Budalerts brand is linked to a vendor card, so link this menu to a vendor first">
+              link a vendor first
+            </span>
+          )}
+        </td>
+      )}
     </tr>
   );
 }
