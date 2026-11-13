@@ -203,6 +203,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.7 (D243, #1794):** E-5 Ask the canvas built: the AI looks at a picture of the email and the section list, answers and proposes steps (words, style, look, sections, picture tools), checked against the copy and compliance rules; Apply then Undo. No migration.
 
+**v2.8 (D243, #PE6):** E-6 polish built: first-name merge tags, readability heads-ups, dark-mode-safe wordmark, inbox size list and moving (GIF) design sections. Phase E (E-1 to E-6) is complete. No migration.
+
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
 ---
@@ -233,7 +235,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-11** | Creative & Merch Studio | Owner resumed SOPs for it (D231); merch first | M · **DONE (merch half v1.0 … v1.9; Creative Studio, Banner Studio & Scheduling v2.0 as SOP-11b, D233)** |
 | **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
 | **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
-| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v2.7, D243; Phase N COMPLETE; Phase E APPROVED, E-1 … E-5 BUILT)** |
+| **SOP-22** | Newsletter, Blog, Culture & AI content | Owner asked next (D236) | M · **DONE (v2.8, D243; Phase N COMPLETE; Phase E APPROVED, E-1 … E-6 BUILT)** |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |

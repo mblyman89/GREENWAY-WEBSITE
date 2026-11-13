@@ -160,7 +160,7 @@ Owner: *"Please give the newsletter editor a massive upgrade so it is fully capa
 | E-3 | **BUILT (D243, #1792)** Full-page editor: section library on the left, inspector on the right, drag to reorder, click to edit, 2/3 columns, text over a picture, per-section background, padding and colours, saved sections, templates (weekly, sale, vendor day, holiday, 4/20), phone/desktop/dark previews and Gmail/iPhone inbox mockups | (enhancement) | G-123 | E-2 |
 | E-4 | **BUILT (D243, #1793)** AI picture tools: generate a picture or GIF, remove background, erase (paint a mask, FLUX fill), extend (FLUX expand), recolor, relight, upscale, variations, style looks; before/after; results saved as new Media files | (enhancement) | G-124 | E-2 |
 | E-5 | **BUILT (D243, #1794)** Ask the canvas: a vision model reads a screenshot plus the canvas, proposes a list of changes, the user presses Apply (Undo keeps the old version) | (enhancement) | G-125 | E-3, E-4 |
-| E-6 | Polish: animated design sections exported as GIFs, dark-mode-safe logos, contrast and readability checks, inbox size check, first-name merge tags | (enhancement) | G-126 | E-5 |
+| E-6 | **BUILT (D243, #PE6)** Polish: animated design sections exported as GIFs, dark-mode-safe logos, contrast and readability checks, inbox size check, first-name merge tags | (enhancement) | G-126 | E-5 |
 
 ### Phase 7 — Remaining S3/S4, then the next audits
 

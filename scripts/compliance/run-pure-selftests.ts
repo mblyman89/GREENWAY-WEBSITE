@@ -1373,6 +1373,7 @@ import { __runNewsletterLayoutCoreTests } from "../../src/lib/cms/newsletter-lay
 import { __runNewsletterTemplatesCoreTests } from "../../src/lib/cms/newsletter-templates-core";
 import { __runNewsletterPictureCoreTests } from "../../src/lib/cms/newsletter-picture-core";
 import { __runNewsletterAskCoreTests } from "../../src/lib/cms/newsletter-ask-core";
+import { __runNewsletterPolishCoreTests } from "../../src/lib/cms/newsletter-polish-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2939,6 +2940,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("newsletter-templates-core", __runNewsletterTemplatesCoreTests(), 54); // D243 E-3 (SOP-22 G-123): 5 templates with "Replace:" placeholders, saved sections (max 40), Gmail/iPhone inbox lines, preview-only outline and forced-dark preview
   assertRan("newsletter-picture-core", __runNewsletterPictureCoreTests(), 58); // D243 E-4 (SOP-22 G-124): 12 AI picture tools (make, edit, remove background, erase/replace with a painted mask via FLUX Fill, extend via FLUX Expand, recolour, relight, style, variations, enlarge 2×, AI GIF), padding and mask limits, compliance-checked prompts, undoable swap
   assertRan("newsletter-ask-core", __runNewsletterAskCoreTests(), 60); // D243 E-5 (SOP-22 G-125): Ask the canvas: strict step parser (unknown sections/fields, review quotes, mask tools, over 12 steps dropped), plain-English proposal lines, pure apply with picture steps handed to the E-4 tools, screenshot gate
+  assertRan("newsletter-polish-core", __runNewsletterPolishCoreTests(), 80); // D243 E-6 (SOP-22 G-126): polish: first-name merge tags (cleaned, escaped, fallback, unknown tags and tags on pictures blocked), button/paragraph/caps readability, custom-logo dark-mode heads-up, per-inbox size report, design-entrance GIF frame plan (finished design first for Outlook)
   assertRan("sunday-checklist-core", __runSundayChecklistCoreTests(), 33); // D239 N-10 (SOP-22 G-120): Sunday checklist strip: Form 8.1 (10 rows) and Form 8.2 (12 checks) word for word, newsletter-only rows, admin-route links
   assertRan("post-templates-core", __runPostTemplatesCoreTests(), 43); // D237 N-5 (SOP-22 G-115, Q-22-8, Q-22-9): 7 templates from the This-week facts, below-cost held back, price/date/superlative/link checks, 3 pictures
   assertRan("this-week-feed-core", __runThisWeekFeedCoreTests(), 44); // D237 N-4 (SOP-22 G-114, F-22-11): new vendors, fresh drops by vendor+type, deals now/next 14 days from the promotion, holidays + local events

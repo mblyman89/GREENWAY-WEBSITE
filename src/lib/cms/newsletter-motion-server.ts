@@ -110,7 +110,7 @@ export async function buildCanvasGif(p: {
  */
 export async function buildDesignGif(p: {
   frames: Buffer[];
-  delays: number[];
+  delays: unknown;
   title: string;
   uploadedBy: string | null;
 }): Promise<{ ok: true; url: string; mediaId: string; bytes: number; frames: number; width: number; height: number } | { ok: false; error: string }> {
