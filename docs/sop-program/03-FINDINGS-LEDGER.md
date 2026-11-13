@@ -1333,7 +1333,7 @@ Owner request D236 (2026-11-12). Read-only recon; no code changed. External rule
 ### F-22-12 · CONFIRMED · GAP · S3 — No Google reviews source; Google's terms forbid storing reviews
 - **Pin:** (no match in `src/`); Places policies
 - **SOP impact:** SOP-22 Appendix B.1; gap G-119; status FIXED (D239, N-9).
-- **Resolved (D239, N-9, #PN9):** Curated reviews list (`curated-reviews-core.ts`, `/admin/blog/reviews`) per Q-22-2 (a): permission tick, first name only, Google link; only usable reviews reach the canvas, the post editor and the Review spotlight; nothing is copied from Google
+- **Resolved (D239, N-9, #1785):** Curated reviews list (`curated-reviews-core.ts`, `/admin/blog/reviews`) per Q-22-2 (a): permission tick, first name only, Google link; only usable reviews reach the canvas, the post editor and the Review spotlight; nothing is copied from Google
 
 ### F-22-13 · CONFIRMED · GAP · S2 — No news desk for culture posts; WSLCB feed and grounded web search exist but aren't wired to the blog
 - **Pin:** `regulatory-ingest.ts`; `provider.ts` L991; `ai-blog-ideas.ts` L74

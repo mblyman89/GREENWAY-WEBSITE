@@ -189,7 +189,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.0 (D239, #1784):** N-7 rich posts built: block body (heading, image from Digital Assets, product card, quote, button, source list) kept in the same paragraphs, a library picker for the hero, All/Store/Culture/Newsletters chips on the same `/blog` page (Q-22-7) and Article JSON-LD (G-117). No migration.
 
-**v2.1 (D239, #PN9):** N-9 curated reviews built: a Curated reviews list (quote, first name, Google link, permission tick) used by the canvas, the post editor and the Review spotlight; health wording held back (G-119, Q-22-2 (a)). No migration.
+**v2.1 (D239, #1785):** N-9 curated reviews built: a Curated reviews list (quote, first name, Google link, permission tick) used by the canvas, the post editor and the Review spotlight; health wording held back (G-119, Q-22-2 (a)). No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
