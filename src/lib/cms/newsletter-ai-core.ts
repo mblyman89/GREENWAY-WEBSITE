@@ -250,6 +250,17 @@ export function editableWords(b: CanvasBlock): Record<string, string> | null {
       return { question: b.question };
     case "design":
       return { alt: b.alt };
+    case "overlay":
+      return { heading: b.heading, text: b.text, label: b.label, alt: b.alt };
+    case "columns": {
+      const out: Record<string, string> = {};
+      b.items.forEach((c, i) => {
+        out[`col${i + 1}_title`] = c.title;
+        out[`col${i + 1}_text`] = c.text;
+        out[`col${i + 1}_cta`] = c.cta;
+      });
+      return out;
+    }
     default:
       return null; // review quotes are the customer's words; divider/spacer have none
   }
@@ -302,6 +313,15 @@ export function applyImproved(b: CanvasBlock, raw: unknown): { block: CanvasBloc
       cta: next[`card${i + 1}_cta`] ?? c.cta,
     }));
     return { block: { ...b, heading: next.heading ?? b.heading, cards }, changed, text };
+  }
+  if (b.type === "columns") {
+    const items = b.items.map((c, i) => ({
+      ...c,
+      title: next[`col${i + 1}_title`] ?? c.title,
+      text: next[`col${i + 1}_text`] ?? c.text,
+      cta: next[`col${i + 1}_cta`] ?? c.cta,
+    }));
+    return { block: { ...b, items }, changed, text };
   }
   return { block: { ...b, ...next } as CanvasBlock, changed, text };
 }

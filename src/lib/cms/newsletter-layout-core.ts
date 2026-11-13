@@ -125,7 +125,8 @@ export function columnsText(f: ColumnsFields, plain: Inline): string[] {
 
 /** A URL made safe to sit inside url("...") in a style attribute. */
 export function cssUrl(src: string): string {
-  return src.replace(/["\\\n\r()]/g, (ch) => encodeURIComponent(ch));
+  const map: Record<string, string> = { '"': "%22", "\\": "%5C", "\n": "", "\r": "", "(": "%28", ")": "%29", "'": "%27" };
+  return src.replace(/["\\\n\r()']/g, (ch) => map[ch] ?? "");
 }
 
 /** Words (and a button) over a picture, with a dark shade so white words stay readable. */
