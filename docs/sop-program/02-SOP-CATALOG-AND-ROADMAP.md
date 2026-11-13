@@ -199,7 +199,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 **v2.5 (D243, #1792):** E-3 full-page editor built: three panes (library with templates and saved sections, inspector with per-section style, preview with dark-mode and inbox mockups), drag to reorder, duplicate, undo; Columns and Picture-with-words sections; "Replace:" template words block the send. No migration.
 
-**v2.6 (D243, #PE4):** E-4 AI picture tools built: make, edit, remove background, erase/replace a painted area (FLUX Fill), extend (FLUX Expand), recolour, relight, style, variations, enlarge 2×, AI GIF; new Media files, before/after slider, undoable swap. No migration.
+**v2.6 (D243, #1793):** E-4 AI picture tools built: make, edit, remove background, erase/replace a painted area (FLUX Fill), extend (FLUX Expand), recolour, relight, style, variations, enlarge 2×, AI GIF; new Media files, before/after slider, undoable swap. No migration.
 
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
