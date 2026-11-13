@@ -19,6 +19,7 @@ import {
   rejectBlogSuggestionAction,
 } from "../actions";
 import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
+import { cultureGuardForPost } from "@/lib/cms/culture-desk-server";
 import { SchedulePanel } from "@/components/admin/SchedulePanel";
 
 export const dynamic = "force-dynamic";
@@ -114,6 +115,30 @@ export default async function BlogEditorPage({
             Saved.
           </div>
         )}
+        {(() => {
+          // D237 N-6 (F-22-14, Q-22-1): the culture health guard, live on the saved post.
+          const g = cultureGuardForPost(post);
+          if (!g) return null;
+          return (
+            <div
+              id="culture-guard"
+              data-testid="culture-guard"
+              className={`rounded-lg border px-4 py-2 text-sm ${g.blocking.length ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"}`}
+            >
+              <p className="font-semibold">
+                Culture health guard: {g.blocking.length ? `${g.blocking.length} thing${g.blocking.length === 1 ? "" : "s"} to fix before it can go live` : "passes"}
+                {g.health ? " (this post touches health)" : ""}
+              </p>
+              {g.blocking.length ? (
+                <ul className="mt-1 list-disc pl-5 text-xs">
+                  {g.blocking.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })()}
         {scheduled && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             {scheduled}

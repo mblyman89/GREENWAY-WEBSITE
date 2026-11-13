@@ -6,6 +6,7 @@ import { BackLink } from "@/components/admin/ux";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { BlogIdeaAssistant } from "@/components/admin/blog/BlogIdeaAssistant";
 import { NewPostFromPicker } from "@/components/admin/blog/NewPostFromPicker";
+import { CultureNewsDesk } from "@/components/admin/blog/CultureNewsDesk";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
 import { createPostAction } from "../actions";
 
@@ -52,6 +53,11 @@ export default async function NewBlogPostPage({
         {/* D237 N-5 (SOP-22 G-115): grounded "New post from…" — facts from the This-week feed. */}
         <div id="from">
           <NewPostFromPicker aiEnabled={isAiConfigured} />
+        </div>
+
+        {/* D237 N-6 (SOP-22 G-116): culture news desk — cited news, health guard, Find news on demand. */}
+        <div id="culture">
+          <CultureNewsDesk aiEnabled={isAiConfigured} />
         </div>
 
         {/* GPT-4o idea / headline / trend assistant (local focus) */}

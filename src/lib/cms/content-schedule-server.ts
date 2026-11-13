@@ -25,6 +25,7 @@ import { publishSection } from "./page-sections-store";
 import { publishFaqItem } from "./faq-store";
 import { publishContentBlock } from "./content-store";
 import { setPostStatus } from "./blog-store";
+import { cultureGuardRefusal } from "./culture-desk-server";
 import {
   selectDue,
   statusAfterFailure,
@@ -297,6 +298,9 @@ async function applyBlogPostChange(id: string, action: ScheduleAction, actorId: 
   if (!row) return "That post no longer exists.";
   if (action === "publish") {
     if (row.status === "published") return null; // already live: nothing to do
+    // D237 N-6 (F-22-14): a CULTURE post that fails the health guard is not published.
+    const refused = await cultureGuardRefusal(id);
+    if (refused) return refused;
     await setPostStatus(id, "published", actorId);
     return null;
   }

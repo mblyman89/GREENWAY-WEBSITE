@@ -40,6 +40,8 @@ import { parseLocalEventsText } from "@/lib/cms/this-week-feed-core";
 import { saveLocalEvents } from "@/lib/cms/this-week-feed-server";
 import { loadTemplateItems, draftFromTemplate, checkFinalDraft, type TemplateItemsOut, type TemplateDraftOut } from "@/lib/cms/post-templates-server";
 import { normalizeDraft, draftToParagraphs, type DraftIssue } from "@/lib/cms/post-templates-core";
+import { listDeskNews, findNews, draftCultureFromNews, checkCultureDraft, cultureGuardForPost, type FindNewsOut, type CultureDraftOut } from "@/lib/cms/culture-desk-server";
+import { cleanNewsItem, type NewsItem } from "@/lib/cms/culture-desk-core";
 
 const MAX_IMG_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -275,6 +277,23 @@ export async function setPostStatusAction(formData: FormData): Promise<void> {
   // Schedule panel; it sets this status and the 5-minute cron publishes it.
   if (status === "scheduled") {
     redirect(`/admin/blog/${id}?error=${encodeURIComponent("Use \u201cSchedule this to go live\u201d below and pick a Pacific time. The post then shows as Scheduled and goes live by itself.")}#schedule`);
+  }
+  // D237 N-6 (F-22-14, Q-22-1): a CULTURE post goes live only when it passes
+  // the health-topic guard (cited source; on health, the provider line and no
+  // product or deal links; therapeutic wording blocked outright).
+  if (status === "published") {
+    const g = cultureGuardForPost(post);
+    if (g && g.blocking.length > 0) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "blog.culture_guard_refused",
+        entityType: "blog_post",
+        entityId: id,
+        after: { blocking: g.blocking.length, health: g.health },
+      }).catch(() => {});
+      redirect(`/admin/blog/${id}?error=${encodeURIComponent(`Not published. Culture health guard: ${g.blocking.join(" ")}`)}#culture-guard`);
+    }
   }
 
   await setPostStatus(id, status, session.userId);
@@ -589,6 +608,96 @@ export async function createPostFromDraftAction(input: {
     entityType: "blog_post",
     entityId: post.id,
     after: { slug, title, category: final.t.category, kind: "article", fromTemplate: final.t.key, item: input?.itemId, hero, headsUp: final.issues.length + final.complianceFlags.length },
+  });
+  revalidateBlog(slug);
+  return { ok: true, id: post.id };
+}
+
+// ---------------------------------------------------------------------------
+// D237 N-6 (SOP-22 G-116; F-22-13, F-22-14): the culture news desk.
+// Find news is on demand only (Q-22-6 (a)); nothing from a search is stored.
+// ---------------------------------------------------------------------------
+export async function listDeskNewsAction(): Promise<{ items: NewsItem[]; note: string | null }> {
+  await requirePermission("blog.manage");
+  try {
+    return await listDeskNews();
+  } catch {
+    return { items: [], note: "Regulatory Watch could not be read." };
+  }
+}
+
+export async function findNewsAction(kind: string, topic: string): Promise<FindNewsOut> {
+  const session = await requirePermission("blog.manage");
+  const k = kind === "vendor" ? "vendor" : "web";
+  try {
+    const res = await findNews({ kind: k, topic: String(topic ?? "").slice(0, 160), actorId: session.userId, actorEmail: session.email });
+    // Counts only: no found text, links or suggestion HTML are stored.
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "blog.culture.find_news",
+      entityType: "blog_post",
+      after: res.ok ? { kind: k, items: res.items.length, sources: res.sources.length, usedWebSearch: res.usedWebSearch } : { kind: k, error: true },
+    }).catch(() => {});
+    return res;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Find news failed." };
+  }
+}
+
+export async function draftCultureAction(input: { news: unknown; notes: string }): Promise<CultureDraftOut> {
+  const session = await requirePermission("blog.manage");
+  const news = cleanNewsItem(input?.news);
+  if (!news) return { ok: false, error: "Pick a news item with a source link first." };
+  try {
+    const res = await draftCultureFromNews({ news, notes: String(input?.notes ?? ""), actorId: session.userId, actorEmail: session.email });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "blog.culture.draft",
+      entityType: "blog_post",
+      after: res.ok ? { kind: news.kind, health: res.guard.health, blocking: res.guard.blocking.length, issues: res.issues.length } : { kind: news.kind, error: res.error },
+    }).catch(() => {});
+    return res;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI draft failed." };
+  }
+}
+
+export async function createCulturePostAction(input: { news: unknown; notes: string; title: string; draft: unknown }): Promise<CreateFromDraftOut> {
+  const session = await requirePermission("blog.manage");
+  const news = cleanNewsItem(input?.news);
+  if (!news) return { ok: false, error: "Pick a news item with a source link first." };
+  const title = String(input?.title ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+  if (!title) return { ok: false, error: "Pick or type a headline first." };
+  const draft = normalizeDraft(input?.draft);
+  const c = checkCultureDraft(news, String(input?.notes ?? ""), draft, title);
+  const blocking = [
+    ...c.issues.filter((i) => i.level === "must-fix").map((i) => i.text),
+    ...c.guard.blocking,
+    ...c.complianceFlags.filter((f) => f.endsWith("(must fix)")),
+  ];
+  if (blocking.length > 0) return { ok: false, error: "Fix the must-fix items before creating the draft.", blocking, issues: c.issues };
+  let slug = slugify(title);
+  if (!slug) return { ok: false, error: "That headline does not make a usable web address. Use some letters or numbers." };
+  if (!(await isSlugAvailable(slug))) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
+  const post = await createPost({
+    slug,
+    title,
+    category: "CULTURE",
+    kind: "article",
+    excerpt: draft.excerpt || null,
+    author: "Greenway Team",
+    body: c.body,
+    createdBy: session.userId,
+  });
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "blog.create",
+    entityType: "blog_post",
+    entityId: post.id,
+    after: { slug, title, category: "CULTURE", kind: "article", fromDesk: news.kind, source: news.url, health: c.guard.health },
   });
   revalidateBlog(slug);
   return { ok: true, id: post.id };
