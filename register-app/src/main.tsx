@@ -21,6 +21,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { RegisterShell } from "@/app/(site)/pos/RegisterShell";
+import { RegisterKeypad } from "@/app/(site)/pos/RegisterKeypad";
 import { resolveRegisterHostConfig } from "@/lib/pos/register-host-core";
 
 import "./register.css";
@@ -93,6 +94,8 @@ if (!container) {
           apiBase={config.apiBase}
           appFingerprint={__REGISTER_FINGERPRINT__ || null}
         />
+        {/* D241 — the on-screen keypad for every hand-typed box. */}
+        <RegisterKeypad />
       </StrictMode>,
     );
   }

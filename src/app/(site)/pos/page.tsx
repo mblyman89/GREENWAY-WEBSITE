@@ -11,6 +11,7 @@
 import type { Metadata, Viewport } from "next";
 import { resolveBuildVersion } from "@/lib/pos/sw-core";
 import { RegisterShell } from "./RegisterShell";
+import { RegisterKeypad } from "./RegisterKeypad";
 
 export const metadata: Metadata = {
   title: "Register",
@@ -60,10 +61,14 @@ export default function PosPage() {
   // D143 — the browser register is always built from the live deploy, so its
   // fingerprint IS the server's (next.config.ts env REGISTER_FINGERPRINT).
   return (
-    <RegisterShell
-      buildVersion={resolveBuildVersion(process.env)}
-      apiBase=""
-      appFingerprint={process.env.REGISTER_FINGERPRINT || null}
-    />
+    <>
+      <RegisterShell
+        buildVersion={resolveBuildVersion(process.env)}
+        apiBase=""
+        appFingerprint={process.env.REGISTER_FINGERPRINT || null}
+      />
+      {/* D241 — the on-screen keypad for every hand-typed box. */}
+      <RegisterKeypad />
+    </>
   );
 }

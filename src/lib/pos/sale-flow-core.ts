@@ -250,6 +250,12 @@ export type PosMenuBundle = {
    */
   atmDrop?: unknown;
   /**
+   * D241 — the owner's register switches (browser registers, swap approval).
+   * Optional so an older cached bundle still parses; the register normalizes
+   * a missing block to today's behaviour (normalizeRegisterSwitches).
+   */
+  registerSwitches?: unknown;
+  /**
    * Loyalty program facts the device needs OFFLINE (POS B14): the earn rate
    * for the receipt's points ESTIMATE (authoritative accrual happens
    * server-side at completion via orders.customer_id — never on-device).
