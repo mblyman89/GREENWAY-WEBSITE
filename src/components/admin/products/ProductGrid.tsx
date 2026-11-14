@@ -28,6 +28,8 @@ export type ProductGridCard = {
   viaProduct?: boolean;
   /** D244 E-2: the card has its own enrichment row (a bulk status change can flip it). */
   hasOwnRecord?: boolean;
+  /** D244 E-1a: units on hand summed over the card's lots; null/absent = not read. */
+  onHandQty?: number | null;
 };
 
 /**
@@ -152,6 +154,11 @@ export function ProductGrid({
                   title="No enrichment of its own yet: the published record of the same product (an earlier lot) serves this card."
                 >
                   Uses product record
+                </p>
+              )}
+              {typeof c.onHandQty === "number" && (
+                <p className="mt-0.5 text-[0.65rem] text-white/45" data-testid="card-onhand">
+                  {c.onHandQty} on hand
                 </p>
               )}
               {c.receivedFrom && (
