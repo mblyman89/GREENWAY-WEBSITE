@@ -14,6 +14,10 @@ import {
   parseKitGroupBy,
 } from "@/lib/enrichment/vendor-kit-core";
 import { kitApplyAction, kitCheckAction } from "./actions";
+import { getMedia } from "@/lib/media/store";
+import { RemoveTextQueue, type QueuePhoto } from "@/components/admin/products/RemoveTextQueue";
+import { mediaPublicUrl, textEraseReady } from "@/lib/enrichment/text-erase-server";
+import { FACTS_FIRST_HINT } from "@/lib/enrichment/text-erase-core";
 
 export const dynamic = "force-dynamic";
 // "Ask the AI" runs up to KIT_AI_CHECK_MAX vision calls inside the request.
@@ -55,6 +59,8 @@ export default async function VendorKitsPage({
             "Open a group. The products with no photo are listed first and ticked for you.",
             "The photos are ranked for a generic, on-brand picture: this vendor's own photos, product or package shots, the same type, and no single strain name printed on it.",
             `Press “Ask the AI” to have the photo reader look at the top ${KIT_AI_CHECK_MAX} photos and say which ones name one product. It only looks; it never attaches.`,
+            "Photos with a strain name printed on them? Under the photos, tick several, drag a box over the text on each, and press Remove text once: FLUX cleans them one after the next. Press \u201cUse as the kit photo\u201d on the clean one.",
+            "Facts and AI first, photo last: a product with a photo goes live and leaves the worklists (by design). Attach any facts, or run the AI drafts, before you press Apply.",
             "Pick the photo, check the ticks, and press Apply. Each product gets the photo (as the cover when it has none), and a product with a photo goes live.",
           ]}
         />
@@ -111,7 +117,13 @@ export default async function VendorKitsPage({
   );
 
   const g = s.group;
-  const selected = g ? (s.photos.find((p) => p.id === sp.photo) ?? s.photos[0] ?? null) : null;
+  // D244 R-11: a photo just cleaned by the Remove-text queue may not rank yet; read it directly.
+  const photoId = typeof sp.photo === "string" && /^[0-9a-f-]{8,64}$/i.test(sp.photo) ? sp.photo : "";
+  const fresh = g && photoId && !s.photos.some((p) => p.id === photoId) ? await getMedia(photoId).catch(() => null) : null;
+  const freshPick = fresh ? { id: fresh.id, url: mediaPublicUrl(fresh), label: fresh.title || fresh.filename || "Cleaned photo", reasons: ["Cleaned with Remove text."] } : null;
+  const selected: { id: string; url: string | null; label: string; reasons: string[] } | null = g ? (freshPick ?? s.photos.find((p) => p.id === photoId) ?? s.photos[0] ?? null) : null;
+  const ready = g ? await textEraseReady() : { vision: false, flux: false };
+  const queuePhotos: QueuePhoto[] = s.photos.filter((p): p is typeof p & { url: string } => Boolean(p.url)).slice(0, 12).map((p) => ({ mediaId: p.id, url: p.url, label: p.label }));
   const ctxHidden = (
     <>
       <input type="hidden" name="vendor" value={s.vendorId} />
@@ -204,6 +216,19 @@ export default async function VendorKitsPage({
                     </Link>
                   ))}
                 </div>
+              ) : null}
+              {s.photos.length ? (
+                <div className="mt-4">
+                  <RemoveTextQueue
+                    scope={{ kind: "vendor", id: s.vendorId }}
+                    photos={queuePhotos}
+                    product={{ name: `${s.vendorLabel} ${g.label}`.trim(), brand: s.vendorLabel || null, strainName: null, vendor: s.vendorLabel || null, category: g.label || null }}
+                    visionReady={ready.vision}
+                    fluxReady={ready.flux}
+                    pickHref={kitUrl({ vendor: s.vendorId, by, group: g.key, photo: "__MEDIA__", chk, hash: "products" })}
+                    pickLabel="Use as the kit photo"
+                  />
+                </div>
               ) : (
                 <p className="text-sm text-white/50">
                   No photo of this vendor fits yet. Upload the vendor&rsquo;s generic picture on Content → Media and file it under this vendor, then come back.
@@ -212,6 +237,9 @@ export default async function VendorKitsPage({
             </section>
 
             <section id="products" data-testid="kit-products" aria-label="Products to apply to">
+              <p className="mb-2 rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-3 py-2 text-xs text-[var(--admin-gold)]" data-testid="facts-first-hint">
+                {FACTS_FIRST_HINT}
+              </p>
               <form action={kitApplyAction} className="space-y-3 rounded-lg border border-white/10 p-3">
                 {ctxHidden}
                 <input type="hidden" name="mediaId" value={selected?.id ?? ""} />

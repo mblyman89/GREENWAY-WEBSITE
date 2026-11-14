@@ -22,6 +22,10 @@ import {
 } from "@/lib/enrichment/copilot-core";
 import { CopilotChat } from "@/components/admin/products/CopilotChat";
 import { CopilotKeys } from "@/components/admin/products/CopilotKeys";
+import { RemoveTextQueue, type QueuePhoto } from "@/components/admin/products/RemoveTextQueue";
+import { textEraseReady } from "@/lib/enrichment/text-erase-server";
+import { FACTS_FIRST_HINT, type EraseProduct } from "@/lib/enrichment/text-erase-core";
+import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import {
   copilotAcceptAllAction,
   copilotAcceptDraftAction,
@@ -64,7 +68,9 @@ export default async function CopilotPage({
           title="How the Copilot works"
           steps={[
             "Pick a vendor. The session holds that vendor’s on-hand products (at least 1 unit in a lot) that are not published yet, the ones with no photo first.",
+            "Facts and AI first, photo last: attaching a photo publishes the product and it leaves this session (by design). So attach any facts, or press D and A, before the photo.",
             "Attach a photo (press 1-9 for a recommended photo). A product goes live once it has a photo; the words can come later.",
+            "Photo has the wrong text on it? Under the photos, tick several, drag a box over the text on each, and press Remove text once: FLUX fixes them one after the next. Then Attach the clean one.",
             `Press D to draft every field now, then A to accept every draft at ${ACCEPT_ALL_THRESHOLD}% or better (best guesses too, flagged for a closer look).`,
             "Talk to the copilot on the right: ask for a shorter description, the strain type and potency from the lab certificate, or which photo is this product. It only suggests; Use this saves through the same compliance check.",
             "Press P to publish and go to the next card, N for next, S to skip (the card moves to the back).",
@@ -158,6 +164,19 @@ export default async function CopilotPage({
   const hasImage = c.photos.length > 0;
   const blocked = publishBlockReason(hasImage);
   const choices = copilotPhotoChoices(c.recommend.tiles);
+  // D244 R-11: the Remove-text queue offers the card's photos and the recommended ones.
+  const ready = await textEraseReady();
+  const queuePhotos: QueuePhoto[] = [];
+  for (const p of [...c.photos.map((x, n) => ({ id: x.id, url: x.url, label: `On this card ${n + 1}` })), ...choices.map((x) => ({ id: x.id, url: x.url, label: `Photo ${x.n}` }))]) {
+    if (p.url && !queuePhotos.some((q) => q.mediaId === p.id)) queuePhotos.push({ mediaId: p.id, url: p.url, label: p.label });
+  }
+  const queueProduct: EraseProduct = {
+    name: c.item.product_name?.trim() || c.item.name,
+    brand: c.item.brand_name || null,
+    strainName: c.item.strain_name ?? null,
+    vendor: c.item.vendor_name ?? null,
+    category: formatWebsiteCategory(c.item.category) || c.item.category || null,
+  };
   const drafts = (c.pending ?? []).filter((d) => isDraftFieldKey(d.field_key));
   const eligible = drafts.filter((d) => Math.round((d.confidence ?? 0) * 100) >= ACCEPT_ALL_THRESHOLD || parseEvidenceSource(d.source).bestGuess).length;
   const pos = s.queue.todo.indexOf(c.key) + 1;
@@ -247,6 +266,9 @@ export default async function CopilotPage({
 
           {/* 2. Photos and drafts */}
           <section className="space-y-4 rounded-lg border border-white/10 p-3">
+            <p className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-3 py-2 text-xs text-[var(--admin-gold)]" data-testid="facts-first-hint">
+              {FACTS_FIRST_HINT}
+            </p>
             <div data-testid="copilot-photos">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-white/50">On this card</h3>
               {c.photos.length ? (
@@ -291,6 +313,16 @@ export default async function CopilotPage({
                 <p className="text-xs text-white/40">{c.recommend.emptyText ?? "No library photo looks like this product yet. Use the full product page to search or import one."}</p>
               )}
             </div>
+
+            <RemoveTextQueue
+              scope={{ kind: "product", id: c.key }}
+              photos={queuePhotos}
+              product={queueProduct}
+              visionReady={ready.vision}
+              fluxReady={ready.flux}
+              attachAction={copilotAttachPhotoAction}
+              hidden={{ key: c.key, vendor: s.vendorId, skip, nextKey: next, identityKey: c.recommend.identityKey }}
+            />
 
             <div id="drafts" data-testid="copilot-drafts">
               <div className="mb-2 flex flex-wrap items-center gap-2">

@@ -28,6 +28,7 @@ import { draftAllFieldsForProduct } from "@/lib/enrichment/ai-draft-v2-server";
 import { acceptAllMessage, acceptDraftWithEdit, acceptHighConfidenceForKey } from "@/lib/enrichment/accept-drafts-server";
 import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
 import { cleanKey } from "@/lib/enrichment/detail-nav-core";
+import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
 import { askCopilot, inspectPhoto, fileCopilotProposal } from "@/lib/enrichment/copilot-server";
 import {
   COPILOT_MESSAGE_MAX_CHARS,
@@ -152,7 +153,10 @@ export async function copilotUseProposalAction(formData: FormData): Promise<void
   redirect(back(c, ok(`Saved the copilot's ${field.replace(/_/g, " ")}.`), c.key, "chat"));
 }
 
-/** Attach a recommended photo (keys 1-9). The cover when the card has none; then the photo-publish rule. */
+/**
+ * Attach a recommended photo (keys 1-9). The cover when the card has none; then the photo-publish rule.
+ * D244 R-11: the Remove-text queue's "Attach as cover" sends cover=1 (always the cover).
+ */
 export async function copilotAttachPhotoAction(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const c = ctx(formData);
@@ -163,7 +167,8 @@ export async function copilotAttachPhotoAction(formData: FormData): Promise<void
   await ensureEnrichment(c.key, {}, session.userId);
   const current = await getEnrichment(c.key);
   const merge = attachImageToGallery({ image_media_ids: current?.image_media_ids ?? [], primary_media_id: current?.primary_media_id ?? null }, mediaId);
-  const cover = !merge.primary_media_id ? setPrimaryImage(merge, mediaId) : null;
+  const asCover = parseCoverIntent(formData.get("cover"));
+  const cover = asCover || !merge.primary_media_id ? setPrimaryImage(merge, mediaId) : null;
   if (!merge.alreadyPresent || cover?.changed) {
     await updateEnrichment(
       c.key,
@@ -182,7 +187,7 @@ export async function copilotAttachPhotoAction(formData: FormData): Promise<void
     action: "product.match_image_attached",
     entityType: "product",
     entityId: c.key,
-    after: { mediaId, source: "copilot", becamePrimary: merge.becamePrimary || Boolean(cover?.changed), identityKey: identityKey || null, remembered: remembered.ok },
+    after: { mediaId, source: asCover ? "copilot-text-removed" : "copilot", becamePrimary: merge.becamePrimary || Boolean(cover?.changed), identityKey: identityKey || null, remembered: remembered.ok },
   });
   const pub = await publishOnPhoto(c.key, session);
   touched(c.key);

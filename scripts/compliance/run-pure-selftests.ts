@@ -2977,7 +2977,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("enrich-model-core", __runEnrichModelCoreTests(), 16); // D244 R-1: enrichment model pin (AI_ENRICH_MODEL), provider + effort clamp, Gemini 32K floor
   assertRan("product-identity-core", __runProductIdentityTests(), 26); // D244 R-7: identity header rows, form of a category, type words, form match, prompt lines
   assertRan("vendor-kit-core", __runVendorKitCoreTests(), 36); // D244 R-8: vendor kits - like-kind groups, product-specific words, generic photo ranking, apply plan, AI verdicts in the URL
-  assertRan("text-erase-core", __runTextEraseCoreTests(), 45); // D244 R-9: remove text - drag boxes, FLUX Fill mask, AI find-the-text keep/remove advice, other-name hint
+  assertRan("text-erase-core", __runTextEraseCoreTests(), 54); // D244 R-9/R-11: remove text - drag boxes, FLUX Fill mask, AI find-the-text keep/remove advice, other-name hint, multi-photo queue
   assertRan("copilot-core", __runCopilotCoreTests(), 55); // D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   console.log("ALL PURE SELF-TESTS PASSED");
 }

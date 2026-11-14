@@ -340,6 +340,68 @@ export function removeTextUrl(key: string, mediaId: string, back?: string | null
 }
 
 // ---------------------------------------------------------------------------
+// D244 R-11: the multi-photo queue (Copilot + Vendor kits)
+// Owner (round 4): "I want to draw a box on all product images, then click the
+// remove text button. that way I can quickly queue up several images to feed
+// to flux to fix one after the next."
+// ---------------------------------------------------------------------------
+
+/** Most photos one queue holds (FLUX runs them one after the next). */
+export const ERASE_QUEUE_MAX = 12;
+
+export type QueueState = "idle" | "waiting" | "working" | "ready" | "failed";
+export type QueueEntry = { mediaId: string; boxesOn: number; state: QueueState };
+
+/** The photos one press of "Remove text" sends, in order: boxes drawn and not already done. */
+export function eraseQueuePlan(entries: readonly QueueEntry[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of entries) {
+    if (!e.mediaId || seen.has(e.mediaId)) continue;
+    seen.add(e.mediaId);
+    if (e.boxesOn > 0 && e.state !== "ready" && e.state !== "working") out.push(e.mediaId);
+    if (out.length >= ERASE_QUEUE_MAX) break;
+  }
+  return out;
+}
+
+/** "2 done · 1 working · 3 waiting · 1 failed" (empty parts left out). */
+export function queueSummary(states: readonly QueueState[]): string {
+  const n = (s: QueueState) => states.filter((x) => x === s).length;
+  const parts = [
+    n("ready") ? `${n("ready")} done` : "",
+    n("working") ? `${n("working")} working` : "",
+    n("waiting") ? `${n("waiting")} waiting` : "",
+    n("failed") ? `${n("failed")} failed` : "",
+  ].filter(Boolean);
+  return parts.join(" \u00b7 ");
+}
+
+/** The queue button's words. */
+export function queueButtonLabel(photos: number, boxes: number): string {
+  if (photos === 0) return "Draw a box on a photo first";
+  return `\u2702 Remove text from ${photos} photo${photos === 1 ? "" : "s"} (${boxes} box${boxes === 1 ? "" : "es"})`;
+}
+
+/** Who a queue works for: one product card, or one vendor's kit. */
+export type QueueScope = { kind: "product" | "vendor"; id: string };
+export function cleanQueueScope(raw: unknown): QueueScope | null {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const kind = r.kind === "vendor" ? "vendor" : r.kind === "product" ? "product" : null;
+  const id = typeof r.id === "string" ? r.id.trim() : "";
+  if (!kind || !id || id.length > 300 || /[\u0000-\u001f]/.test(id)) return null;
+  return { kind, id };
+}
+
+/**
+ * Owner (round 4): "please also add helper text on the page that lets me know
+ * that if there are facts to attach, do that first, because the product goes
+ * away after the photo is attached, by design".
+ */
+export const FACTS_FIRST_HINT =
+  "Facts and AI first, photo last. Attaching a photo publishes the product, and it leaves this list \u2014 by design. So if there are facts to attach, attach them first, or run the AI (Draft now / Accept) first, then attach the photo.";
+
+// ---------------------------------------------------------------------------
 // Self-test
 // ---------------------------------------------------------------------------
 
@@ -417,6 +479,24 @@ export function __runTextEraseCoreTests(): { passed: number; failed: number } {
   ok(otherNameOnPhoto("PHAT PANDA BLUE DREAM", P) === null, "names this product: no hint");
   ok(otherNameOnPhoto(null, P) === null, "no text: no hint");
   ok(removeTextUrl("k 1", "m1", "/admin/products?x=1") === "/admin/products/k%201/remove-text?media=m1&back=%2Fadmin%2Fproducts%3Fx%3D1", "editor URL");
+
+  // R-11 queue
+  const Q: QueueEntry[] = [
+    { mediaId: "a", boxesOn: 2, state: "idle" },
+    { mediaId: "b", boxesOn: 0, state: "idle" },
+    { mediaId: "c", boxesOn: 1, state: "ready" },
+    { mediaId: "d", boxesOn: 1, state: "failed" },
+    { mediaId: "a", boxesOn: 1, state: "idle" },
+  ];
+  ok(eraseQueuePlan(Q).join(",") === "a,d", "queue: boxed, not done, failed retried, no repeats, in order");
+  ok(eraseQueuePlan([]).length === 0, "queue: empty");
+  ok(eraseQueuePlan(Array.from({ length: 20 }, (_, i) => ({ mediaId: `m${i}`, boxesOn: 1, state: "idle" as const }))).length === ERASE_QUEUE_MAX, "queue: capped");
+  ok(queueSummary(["ready", "ready", "working", "failed", "idle"]) === "2 done \u00b7 1 working \u00b7 1 failed", "queue summary");
+  ok(queueSummary([]) === "", "queue summary empty");
+  ok(queueButtonLabel(3, 5) === "\u2702 Remove text from 3 photos (5 boxes)" && queueButtonLabel(1, 1).includes("1 photo (1 box)"), "queue button words");
+  ok(queueButtonLabel(0, 0).startsWith("Draw a box"), "queue button idle");
+  ok(cleanQueueScope({ kind: "vendor", id: " v1 " })?.id === "v1" && cleanQueueScope({ kind: "x", id: "a" }) === null && cleanQueueScope({ kind: "product", id: "" }) === null, "queue scope");
+  ok(FACTS_FIRST_HINT.includes("by design") && FACTS_FIRST_HINT.includes("first"), "facts-first hint");
 
   return { passed, failed };
 }

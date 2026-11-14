@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { findTextAction, pollEraseAction, startEraseAction } from "./actions";
 import { attachMatchedMedia } from "../../actions";
-import { foundSummary, type EraseBox, type EraseProduct, type FoundText } from "@/lib/enrichment/text-erase-core";
+import { FACTS_FIRST_HINT, foundSummary, type EraseBox, type EraseProduct, type FoundText } from "@/lib/enrichment/text-erase-core";
 
 type Box = EraseBox & { id: number; text?: string; why?: string; advice?: FoundText["advice"]; on: boolean; ai: boolean };
 
@@ -239,6 +239,9 @@ export function RemoveTextEditor(props: {
                 After
               </button>
             </div>
+            <p className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-2 text-[11px] text-[var(--admin-gold)]" data-testid="facts-first-hint">
+              {FACTS_FIRST_HINT}
+            </p>
             <p className="text-xs text-emerald-300">Saved to the media library{result.published ? "." : " as a draft (the original was a draft or its rights are pending)."}</p>
             <form action={attachMatchedMedia}>
               <input type="hidden" name="key" value={productKey} />
