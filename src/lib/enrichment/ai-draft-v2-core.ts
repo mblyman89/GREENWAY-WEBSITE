@@ -317,8 +317,8 @@ export type SuggestionLite = {
   id: string;
   field_key: string;
   status: string;
-  confidence: number | null;
-  source: string | null;
+  confidence?: number | null;
+  source?: string | null;
   created_at: string;
 };
 
@@ -344,6 +344,22 @@ export function acceptAllEligible(rows: SuggestionLite[], threshold = ACCEPT_ALL
     if (pct >= threshold) out.push(r.id);
   }
   return out;
+}
+
+/** A stored sensory JSON value as one readable line ("" when unreadable/empty). */
+export function sensoryText(value: string | null | undefined): string {
+  try {
+    const v = JSON.parse(String(value ?? "")) as Record<string, unknown>;
+    const list = (k: string) => (Array.isArray(v?.[k]) ? (v[k] as unknown[]).map(String).filter(Boolean) : []);
+    const parts = [
+      list("aroma_notes").length ? `Aroma: ${list("aroma_notes").join(", ")}` : "",
+      list("flavor_notes").length ? `Flavor: ${list("flavor_notes").join(", ")}` : "",
+      list("terpenes").length ? `Terpenes: ${list("terpenes").join(", ")}` : "",
+    ].filter(Boolean);
+    return parts.join(" · ");
+  } catch {
+    return "";
+  }
 }
 
 /** Compare a proposed value with what is on record. */
@@ -449,6 +465,9 @@ export function __runAiDraftV2Tests(): { passed: number; failed: number } {
   eq(acceptAllEligible(rows), ["a", "f"], "accept-all picks newest, >=85, not best guess, v2 only");
   eq(acceptAllEligible(rows, 80), ["a", "f", "b"], "threshold param (ALL_FIELDS order)");
   eq([fieldDiff("", "x"), fieldDiff("Hello  world", "hello world"), fieldDiff("a", "b")], ["new", "same", "changed"], "diff");
+
+  eq(sensoryText('{"aroma_notes":["citrus"],"flavor_notes":[],"terpenes":["limonene"]}'), "Aroma: citrus · Terpenes: limonene", "sensory text");
+  eq([sensoryText("nope"), sensoryText(null)], ["", ""], "sensory text junk");
 
   return { passed, failed };
 }

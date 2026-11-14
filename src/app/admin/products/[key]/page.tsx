@@ -46,7 +46,19 @@ import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/m
 import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
 import { confidenceText, parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
 import { loadRecommendPanel } from "@/lib/enrichment/image-recommend-v3-server";
+import { currentFields } from "@/lib/enrichment/ai-draft-v2-server";
 import { recommendPanelSummary } from "@/lib/enrichment/image-recommend-v3-core";
+import {
+  ACCEPT_ALL_THRESHOLD,
+  FIELD_LABEL,
+  acceptAllEligible,
+  evidenceLabel,
+  fieldDiff,
+  isDraftFieldKey,
+  parseEvidenceSource,
+  sensoryText,
+  type SuggestionLite,
+} from "@/lib/enrichment/ai-draft-v2-core";
 import { logMediaSearch } from "@/lib/media/library-v2-server";
 import type { PickerImageSearch } from "./MediaLibraryPicker";
 import { fallbackSourceLabel, MENU_CARD_FALLBACK_PAGE } from "@/lib/menu/menu-card-fallback-core";
@@ -55,6 +67,7 @@ import {
   setEnrichmentStatus,
   generateProductAi,
   acceptSuggestion,
+  acceptAllHighConfidence,
   rejectSuggestion,
   attachKbMatchFacts,
   applyMatchedText,
@@ -157,6 +170,12 @@ export default async function ProductEditorPage({
   // they get their own visual review block instead of the plain-text one.
   const researchImageDrafts = allSuggestions.filter((s) => s.field_key === RESEARCH_IMAGES_FIELD);
   const suggestions = allSuggestions.filter((s) => s.field_key !== RESEARCH_IMAGES_FIELD);
+  // D244 E-4: what each all-fields draft would change (sensory/effects have
+  // no column, so they show no diff), and the "Accept all >= 85%" set.
+  const onRecord = currentFields(enrichment);
+  delete onRecord.sensory;
+  delete onRecord.effects;
+  const acceptAllIds = acceptAllEligible(suggestions as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
   const crawlerOn = isCrawlerConfigured();
   const searchUrl = buildWebSearchUrl(item.name, item.brand_name);
   // SLICE 78 \u2014 the in-page Gemini look-up starts from a sharpened query:
@@ -822,7 +841,18 @@ export default async function ProductEditorPage({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[var(--admin-gold)]">AI assist {isAiConfigured ? "" : "(disabled)"}</p>
             {isAiConfigured && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {/* D244 E-4: one call drafts every field; facts (vendor, photos)
+                    are read on the server, so only the key is posted. */}
+                <form action={generateProductAi}>
+                  <input type="hidden" name="key" value={key} />
+                  {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
+                  <input type="hidden" name="kind" value="all" />
+                  <input type="hidden" name="posName" value={item.name} />
+                  <Button type="submit" variant="confirm" size="sm" data-testid="ai-draft-all">
+                    Enrich this product (all fields)
+                  </Button>
+                </form>
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
                   {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
@@ -890,10 +920,26 @@ export default async function ProductEditorPage({
             <p className="mt-2 text-xs text-white/45">Set an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> env var to enable one-click drafting. All AI output is a draft you approve.</p>
           )}
 
+          {acceptAllIds.length > 0 ? (
+            <form action={acceptAllHighConfidence} className="mt-4 flex flex-wrap items-center gap-2" data-testid="ai-accept-all">
+              <input type="hidden" name="key" value={key} />
+              {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
+              <Button type="submit" variant="confirm" size="sm">
+                Accept all ≥ {ACCEPT_ALL_THRESHOLD}% ({acceptAllIds.length})
+              </Button>
+              <span className="text-[11px] text-white/45">
+                Newest draft per field at or above {ACCEPT_ALL_THRESHOLD}%. Best guesses are never included. Each one is still compliance-checked.
+              </span>
+            </form>
+          ) : null}
+
           {suggestions.length > 0 ? (
             <ul className="mt-4 space-y-3">
               {suggestions.map((s) => {
                 const seoText = s.field_key === SEO_FIELD_KEY ? seoSuggestionDisplay(s.suggested_value) : null;
+                const ev = parseEvidenceSource(s.source);
+                const shownValue = s.field_key === "sensory" ? sensoryText(s.suggested_value) || s.suggested_value : seoText ?? s.suggested_value;
+                const diff = ev.v2 && isDraftFieldKey(s.field_key) && s.field_key !== "sensory" && s.field_key !== "effects" ? fieldDiff(onRecord[s.field_key], shownValue) : null;
                 const flags =
                   s.field_key === "description" || s.field_key === SEO_FIELD_KEY
                     ? checkCompliance(seoText ?? s.suggested_value ?? "").flags
@@ -901,7 +947,19 @@ export default async function ProductEditorPage({
                 return (
                   <li key={s.id} className="rounded-lg border border-white/10 bg-black p-3">
                     <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
-                      <span className="rounded bg-white/10 px-1.5 py-0.5 uppercase">{s.field_key}</span>
+                      <span className="rounded bg-white/10 px-1.5 py-0.5 uppercase">
+                        {ev.v2 && isDraftFieldKey(s.field_key) ? FIELD_LABEL[s.field_key] : s.field_key}
+                      </span>
+                      {ev.bestGuess ? (
+                        <span data-testid="ai-best-guess" className="rounded bg-[var(--admin-orange-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-orange)]" title="Inferred from category or strain-family norms, not stated for this exact product. Never auto-accepted.">
+                          Best guess
+                        </span>
+                      ) : null}
+                      {diff ? (
+                        <span data-testid="ai-diff" className="rounded bg-white/5 px-1.5 py-0.5">
+                          {diff === "new" ? "New - nothing on record" : diff === "same" ? "Same as on record" : "Changes what is on record"}
+                        </span>
+                      ) : null}
                       {typeof s.confidence === "number" && (
                         <span
                           className={`rounded px-1.5 py-0.5 font-semibold ${s.confidence >= 0.75 ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : s.confidence >= 0.45 ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]" : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]"}`}
@@ -914,8 +972,23 @@ export default async function ProductEditorPage({
                       <span>· {new Date(s.created_at).toLocaleString()}</span>
                     </div>
                     <p className="text-sm text-white/85 whitespace-pre-wrap" data-testid={seoText ? "ai-seo-suggestion" : undefined}>
-                      {seoText ?? s.suggested_value}
+                      {shownValue}
                     </p>
+                    {diff === "changed" ? (
+                      <p className="mt-1 text-[11px] text-white/45">On record now: {String(onRecord[s.field_key as keyof typeof onRecord] ?? "").slice(0, 240)}</p>
+                    ) : null}
+                    {ev.v2 ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-1" data-testid="ai-evidence">
+                        <span className="text-[10px] text-white/40">Based on:</span>
+                        {ev.evidence.length > 0 ? (
+                          ev.evidence.map((id) => (
+                            <span key={id} className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60">{evidenceLabel(id)}</span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] text-[var(--admin-orange)]">no evidence cited</span>
+                        )}
+                      </div>
+                    ) : null}
                     {flags.length > 0 && (
                       <p className="mt-2 rounded bg-[var(--admin-orange)]/10 px-2 py-1 text-[11px] text-[var(--admin-orange)]">
                         ⚠ Compliance check flagged: {flags.join(", ")}. Review carefully before accepting.
