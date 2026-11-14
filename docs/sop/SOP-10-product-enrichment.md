@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (D244 R-10; adds owner round 3: R-7 identity #1811, R-8 vendor kits #1812, R-9 remove text #1813; 1.0 was D244 R-6; living document) |
+| **Version** | 1.2 (D244 R-13; adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -70,6 +70,7 @@ Not in scope: prices and stock (the POS owns them and enrichment never changes t
 2. Check the photo is this product: the brand, the strain name, the pack size.
 3. Press **Attach as cover** (or **Attach**).
 4. The card publishes by itself when it was a draft and the photo is published in the library. The page says so. An archived card stays archived.
+   **Facts and AI first, photo last.** Once the card publishes it leaves the worklist and the Copilot session (by design). If there are facts to attach, attach them first, or run the AI (Draft now, then Accept) first, and attach the photo last. The Copilot, Vendor kits and the Remove text editor all show this reminder in gold.
 5. The photo is remembered, so the next card of the same product is offered it first.
 
 If no recommendation is right, upload a photo on the product page, or find one in **Digital Assets** with the search box (it searches by meaning as well as by name).
@@ -120,6 +121,7 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 2. Per product: **Accept all ≥ 80%**, or **Accept all ≥ 80% & publish** (publish needs a photo; the flash says why when it does not).
 3. Any single draft can be edited in place: change the text, press **Save & accept**. The edited text is re-checked (SEO cleaned, tags kept to the allowed list, effects checked, strain type and potency parsed) and passes the compliance gate.
 4. The **failure list** names each product the AI could not draft and why. **Cancel** stops the live queue.
+5. **Many at once (R-12).** Owner (round 4): *"to be able to select one or all drafts waiting for me to approve. I want this page to auto approve the ones that are over 80%."* Every product in the list has a tick box, and so does every draft. Tick them (or **Select all**) and press **Approve selected**: a ticked product accepts its drafts at 80% or better (best guesses too, flagged); a ticked single draft is accepted as it is. Or press **⚡ Approve every draft at 80%+** and confirm: every product that has one is done in one press. The page works through them a few at a time (8 products per step) and shows *Approving… 40 of 250 products*, then a total. Every draft still passes the compliance re-scan; a blocked one stays for you. Approving never publishes.
 
 ### 4.8 Needs a closer look (best guesses)
 
@@ -169,6 +171,17 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 5. Compare **Before** and **After**. If it looks right, press **Attach as cover** (or **Attach to gallery**). If not, press **Try again with different boxes**.
 6. The original photo is never changed. The new one is saved in Digital Assets as "… (text removed)". It is a draft when the original was a draft or its rights are pending; publish it there before it can go live.
 
+### 4.14 Remove text from several photos at once (Copilot and Vendor kits)
+
+Owner (round 4): *"I want to draw a box on all product images, then click the remove text button. that way I can quickly queue up several images to feed to flux to fix one after the next."*
+
+1. On the **Copilot** (under the photos) or on **Vendor kits** (under the generic photos), find **✂ Remove text from several photos**.
+2. Tick the photos to fix (up to 12). Each opens below with its own picture.
+3. On each one, drag a box over the text, or press **✨ Find the text**. Optional: say what is under the text once for all of them.
+4. Press **✂ Remove text from N photos** once. FLUX Fill fixes them one after the next; each says *Waiting…*, then *FLUX is removing the text*, then *Done*, with a running total.
+5. Compare **Before** and **After** on each. On the Copilot press **Attach as cover** or **Attach**. On Vendor kits press **Use as the kit photo**, check the ticks, then **Apply**.
+6. Remember 4.2: facts and AI first, photo last — attaching publishes the product and it leaves the list.
+
 ## 5. Messages: "If you see this message"
 
 | Message (or what you see) | What it means | What to do |
@@ -182,6 +195,9 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 | "FLUX is not set up (Settings → Integrations), so text cannot be removed yet." | No FLUX key | Owner step: add the BFL key in Settings → Integrations |
 | "The boxes cover most of the picture. Draw them tighter around the text." | The boxes cover more than 60% of the photo | Draw smaller boxes around the words only |
 | "Saved to the media library as a draft" after Remove text | The original photo was a draft or its rights are pending | Publish the new photo in Digital Assets once the rights are clear |
+| A queue photo says *Failed* with a reason | FLUX refused or timed out on that one photo | Press **✂ Remove text** again; only the failed and unfinished photos are sent |
+| "Skipped N (compliance re-scan or unreadable) — review those by hand." after Approve | Those drafts did not pass the compliance re-scan | Open the product, edit the draft, then Save & accept |
+| The product vanished from the Copilot right after a photo | It published (by design) | Open it from Product Enrichment to add facts later |
 | An orange **Vendor** in the identity strip | No vendor could be found for this card | Set the vendor on the brand or vendor card |
 
 ## 6. Exceptions & escalation
@@ -200,6 +216,7 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 5. **Photo first.** A published card needs a published photo, so shoppers never see a broken picture.
 6. **Edited photos are new photos.** Remove text never changes the original. The copy records where it came from (`text-removed:<id>`), keeps the original's rights status, and is audited (product.remove_text_found / _started / _saved).
 7. **Vendor kits re-check the vendor.** Apply only touches cards that belong to the chosen vendor, never duplicates a photo, and writes one audit row per card plus product.vendor_kit_applied.
+8. **Bulk approve is a person's press.** Select and approve never runs on its own (no cron). It uses the same 80% rule and compliance gate as one-by-one Accept, writes an audit row per product (`via: "bulk-select"`), and never publishes.
 
 ## 8. Checklists & forms
 
@@ -212,7 +229,7 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 | Vendor kits: each like-kind group with a generic photo applied | ☐ |
 | Copilot: every photo-less card has a photo or is skipped with a note | ☐ |
 | Live or overnight drafts queued for the rest | ☐ |
-| Accept all ≥ 80% run per product | ☐ |
+| Accept all ≥ 80% run per product (or ⚡ Approve every draft at 80%+ on Bulk AI) | ☐ |
 | Vendor at 100% → Next vendor | ☐ |
 
 ### 8.2 Weekly (Monday) closer look
@@ -233,7 +250,9 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 
 **⚡ Live** = minutes, normal price. **🌙 Overnight** = within 24 h, about half price.
 
-**Same photo for many?** Vendor kits → vendor → group → Ask the AI → Apply. **Wrong name on a photo?** ✂ Remove text → Find the text → Remove text → Attach as cover.
+**Same photo for many?** Vendor kits → vendor → group → Ask the AI → Apply. **Wrong name on a photo?** ✂ Remove text → Find the text → Remove text → Attach as cover. **Many photos?** Tick them → box each → ✂ Remove text once.
+
+**Facts and AI first, photo last** (a photo publishes and the product leaves the list). **250 drafts at 85%?** Bulk AI → ⚡ Approve every draft at 80%+.
 
 ## 10. Glossary
 
@@ -265,6 +284,8 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 | Models | `src/lib/ai/enrich-model-core.ts`, `src/lib/ai/enrich-model.ts` |
 | Identity strip and type evidence | `src/lib/enrichment/product-identity-core.ts` |
 | Vendor kits | `src/lib/enrichment/vendor-kit-core.ts`, `src/lib/enrichment/vendor-kit-server.ts`, `src/app/admin/products/vendor-kits/page.tsx` |
+| Remove text queue (several photos) | `src/components/admin/products/RemoveTextQueue.tsx`, `src/components/admin/products/remove-text-queue-actions.ts` |
+| Bulk approve (select one / all, 80%+) | `src/lib/enrichment/bulk-approve-core.ts`, `src/app/admin/products/bulk-ai/BulkApproveBar.tsx`, `src/app/admin/products/bulk-ai/approve-actions.ts` |
 | Remove text (vision finds, FLUX Fill removes) | `src/lib/enrichment/text-erase-core.ts`, `src/lib/enrichment/text-erase-server.ts`, `src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx` |
 
 ## Appendix B: Settings the owner can change
@@ -285,3 +306,4 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 |---|---|---|
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
+| 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
