@@ -1,0 +1,422 @@
+/**
+ * src/lib/enrichment/text-erase-core.ts  (D244 round 3, slice R-9)
+ *
+ * Owner (verbatim): "I need a way to remove text on a product picture. I want
+ * to drag a box over the text, then click a button to remove it. Maybe on the
+ * product image card in the main enrichment table, that has the attach and
+ * attach as cover buttons, add a remove text button. If there is the perfect
+ * image for a product, but it has a different name on it, I want the ai to
+ * help recommend the name to be removed from the image. Can we use flux for
+ * this or is one of the other ai models we use."
+ *
+ * Pure: boxes (fractions of the picture, 0..1), the black/white mask FLUX
+ * Fill paints into (white = redraw), the AI "find the text" prompt and its
+ * parser, and the keep/remove advice for each piece of text against THIS
+ * product (a different strain name or size is advised for removal; this
+ * product's own name, the brand and required warnings are kept).
+ *
+ * Nothing here writes. The editor shows the advice; a person draws/accepts
+ * the boxes and presses "Remove text"; the result is a NEW library photo
+ * (the original is never changed) that a person then attaches.
+ */
+import { tokenize } from "@/lib/media/product-link-core";
+
+// ---------------------------------------------------------------------------
+// Boxes
+// ---------------------------------------------------------------------------
+
+/** A rectangle as fractions of the picture (0..1), top-left origin. */
+export type EraseBox = { x: number; y: number; w: number; h: number };
+
+export const ERASE_BOXES_MAX = 12;
+/** Smaller than 0.5% of a side is a stray click, not a box. */
+export const ERASE_BOX_MIN = 0.005;
+/** Grow each box by 1.5% of the side so letter edges are inside the mask. */
+export const ERASE_BOX_PAD = 0.015;
+/** More than 60% of the picture is not "remove some text". */
+export const ERASE_AREA_MAX = 0.6;
+
+const num = (v: unknown): number => (typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN);
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/** One box, clamped to the picture; null when it is not a usable box. */
+export function cleanBox(raw: unknown): EraseBox | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  let x = num(r.x);
+  let y = num(r.y);
+  let w = num(r.w);
+  let h = num(r.h);
+  if (![x, y, w, h].every(Number.isFinite)) return null;
+  if (w < 0) {
+    x += w;
+    w = -w;
+  }
+  if (h < 0) {
+    y += h;
+    h = -h;
+  }
+  const x0 = clamp01(x);
+  const y0 = clamp01(y);
+  const x1 = clamp01(x + w);
+  const y1 = clamp01(y + h);
+  if (x1 - x0 < ERASE_BOX_MIN || y1 - y0 < ERASE_BOX_MIN) return null;
+  return { x: round4(x0), y: round4(y0), w: round4(x1 - x0), h: round4(y1 - y0) };
+}
+
+/** The boxes a form posted (JSON array), cleaned and capped. */
+export function parseEraseBoxes(raw: unknown): EraseBox[] {
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      arr = JSON.parse(raw.slice(0, 8000));
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: EraseBox[] = [];
+  for (const b of arr) {
+    const c = cleanBox(b);
+    if (c) out.push(c);
+    if (out.length >= ERASE_BOXES_MAX) break;
+  }
+  return out;
+}
+
+/** Grow a box a little (letters' edges must be inside the mask). */
+export function padBox(b: EraseBox, pad: number = ERASE_BOX_PAD): EraseBox {
+  return cleanBox({ x: b.x - pad, y: b.y - pad, w: b.w + 2 * pad, h: b.h + 2 * pad }) ?? b;
+}
+
+/** Share of the picture the boxes cover (overlaps counted on a 100×100 grid). */
+export function boxesArea(boxes: readonly EraseBox[]): number {
+  const N = 100;
+  const grid = new Uint8Array(N * N);
+  for (const b of boxes) {
+    const x0 = Math.floor(b.x * N);
+    const y0 = Math.floor(b.y * N);
+    const x1 = Math.min(N, Math.ceil((b.x + b.w) * N));
+    const y1 = Math.min(N, Math.ceil((b.y + b.h) * N));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) grid[y * N + x] = 1;
+  }
+  let n = 0;
+  for (const v of grid) n += v;
+  return n / (N * N);
+}
+
+export type EraseCheck = { ok: true; boxes: EraseBox[] } | { ok: false; error: string };
+
+/** Ready to send? Pads the boxes and refuses empty / whole-picture masks. */
+export function checkEraseBoxes(boxes: readonly EraseBox[]): EraseCheck {
+  if (boxes.length === 0) return { ok: false, error: "Drag a box over the text first (or press “Find the text”)." };
+  const padded = boxes.slice(0, ERASE_BOXES_MAX).map((b) => padBox(b));
+  if (boxesArea(padded) > ERASE_AREA_MAX) return { ok: false, error: "The boxes cover most of the picture. Draw them tighter around the text." };
+  return { ok: true, boxes: padded };
+}
+
+/** Pixel rectangle of a box on a w×h picture (whole pixels, inside the picture). */
+export function boxPixels(b: EraseBox, width: number, height: number): { left: number; top: number; width: number; height: number } {
+  const left = Math.max(0, Math.floor(b.x * width));
+  const top = Math.max(0, Math.floor(b.y * height));
+  const right = Math.min(width, Math.ceil((b.x + b.w) * width));
+  const bottom = Math.min(height, Math.ceil((b.y + b.h) * height));
+  return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+}
+
+/** The FLUX Fill mask as SVG: black picture, white boxes (white = redraw). */
+export function eraseMaskSvg(width: number, height: number, boxes: readonly EraseBox[]): string {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  const rects = boxes
+    .map((b) => {
+      const p = boxPixels(b, w, h);
+      return `<rect x="${p.left}" y="${p.top}" width="${p.width}" height="${p.height}" fill="#fff"/>`;
+    })
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#000"/>${rects}</svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// FLUX Fill prompt and the saved result
+// ---------------------------------------------------------------------------
+
+export const ERASE_MODEL = "flux-pro-1.0-fill";
+
+/** What FLUX Fill is asked to paint into the white boxes. */
+export function erasePrompt(opts: { surface?: string | null } = {}): string {
+  const surface = (opts.surface ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  return [
+    "Remove all printed text and lettering inside the masked area.",
+    `Fill it with the surrounding ${surface || "packaging"} surface so it looks untouched: the same colour, texture, gradient, lighting and edges.`,
+    "No letters, no words, no numbers, no logos, no stickers, no smudges.",
+  ].join(" ");
+}
+
+export const ERASE_TAGS = ["text-removed", "flux-fill"] as const;
+
+/** Title of the new library photo ("… (text removed)"), never doubled. */
+export function erasedTitle(original: string | null | undefined): string {
+  const base = (original ?? "").replace(/\s*\(text removed\)\s*$/i, "").replace(/\s+/g, " ").trim().slice(0, 140) || "Product photo";
+  return `${base} (text removed)`;
+}
+
+/** The new photo's `source` points back at the original. */
+export function erasedSource(originalId: string): string {
+  return `text-removed:${originalId}`;
+}
+
+/** The new photo's status: published only when the original is published with clear rights. */
+export function erasedStatus(original: { status: string | null; license_status: string | null }): "draft" | "published" {
+  return original.status === "published" && original.license_status !== "pending-review" ? "published" : "draft";
+}
+
+// ---------------------------------------------------------------------------
+// AI "find the text" + keep/remove advice
+// ---------------------------------------------------------------------------
+
+export type TextKind = "product-name" | "brand" | "size" | "warning" | "other";
+export type TextAdvice = "remove" | "keep" | "unsure";
+
+export type FoundText = {
+  box: EraseBox;
+  text: string;
+  kind: TextKind;
+  advice: TextAdvice;
+  why: string;
+};
+
+export type EraseProduct = {
+  name: string;
+  brand: string | null;
+  strainName: string | null;
+  vendor: string | null;
+  category: string | null;
+};
+
+export const TEXT_FIND_MAX = 10;
+
+export const TEXT_FIND_SYSTEM = [
+  "You read the printed text on a cannabis product photo for a store's menu.",
+  "Find every separate piece of readable text (a product or strain name, a brand or logo word, a size or weight, a warning or compliance line, anything else).",
+  "For each, give its bounding box as fractions of the picture: x and y of the top-left corner, w and h, all between 0 and 1. Make the box cover the whole word or line, a little generously.",
+  'Answer JSON only: {"texts":[{"text":"exact words","kind":"product-name|brand|size|warning|other","x":0.1,"y":0.2,"w":0.3,"h":0.05}]}',
+  `At most ${TEXT_FIND_MAX} items, largest first. If there is no text, answer {"texts":[]}.`,
+].join("\n");
+
+export function textFindUserPrompt(p: EraseProduct): string {
+  const lines = [
+    `This photo may be used for: ${p.name}`,
+    p.brand ? `Brand: ${p.brand}` : "",
+    p.strainName ? `Strain: ${p.strainName}` : "",
+    p.vendor ? `Vendor: ${p.vendor}` : "",
+    p.category ? `Type: ${p.category}` : "",
+    "List the text you can read on the photo.",
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+const KINDS: readonly TextKind[] = ["product-name", "brand", "size", "warning", "other"];
+
+const SIZE_RE = /(\d+(?:\.\d+)?)\s*(mg|g|gram|grams|ml|oz|pk|pack|ct)\b/gi;
+function sizesIn(s: string): string[] {
+  const out: string[] = [];
+  for (const m of s.toLowerCase().matchAll(SIZE_RE)) {
+    const u = m[2].replace(/^grams?$/, "g").replace(/^pack$/, "pk").replace(/^ct$/, "pk");
+    out.push(`${Number(m[1])}${u}`);
+  }
+  return out;
+}
+
+const NOISE = new Set([
+  "flower", "cart", "carts", "cartridge", "vape", "disposable", "pre", "roll", "rolls", "preroll", "prerolls", "infused", "live", "resin", "rosin",
+  "distillate", "gummies", "gummy", "edible", "edibles", "pack", "indica", "sativa", "hybrid", "cbd", "thc", "the", "and", "with", "strain", "premium",
+]);
+const words = (s: string | null | undefined) => tokenize(s).filter((t) => t.length >= 3 && !NOISE.has(t) && !/^\d/.test(t));
+
+/**
+ * Keep or remove one piece of text, judged against THIS product. Removing is
+ * only ADVISED; the person decides. Required warnings are always kept.
+ */
+export function adviseText(text: string, kind: TextKind, p: EraseProduct): { advice: TextAdvice; why: string } {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (kind === "warning") return { advice: "keep", why: "Warning or compliance text — keep it." };
+  const brandWords = new Set([...words(p.brand), ...words(p.vendor)]);
+  const mine = new Set([...words(p.name), ...words(p.strainName)].filter((w) => !brandWords.has(w)));
+  const tw = words(t);
+  if (kind === "size") {
+    const have = sizesIn(`${p.name}`);
+    const says = sizesIn(t);
+    if (says.length === 0 || have.length === 0) return { advice: "unsure", why: "A size; check it matches this product." };
+    return says.some((s) => have.includes(s)) ? { advice: "keep", why: "Same size as this product." } : { advice: "remove", why: `Says ${says[0]}; this product is ${have[0]}.` };
+  }
+  if (tw.length === 0) return { advice: "unsure", why: "Could not tell what this text is." };
+  const onlyBrand = tw.every((w) => brandWords.has(w));
+  if (onlyBrand) return { advice: "keep", why: "The brand — keep it (it is on brand)." };
+  const hitsMine = tw.some((w) => mine.has(w));
+  if (hitsMine) return { advice: "keep", why: "This product’s own name — keep it." };
+  if (kind === "brand") {
+    return brandWords.size > 0 ? { advice: "remove", why: `“${t.slice(0, 40)}” is not this product’s brand.` } : { advice: "unsure", why: "A brand word; this card has no brand to compare." };
+  }
+  if (kind === "product-name") return { advice: "remove", why: `Names “${t.slice(0, 40)}”, not this product (${p.name.slice(0, 60)}).` };
+  return { advice: "unsure", why: "Other text — remove it only if it does not fit this product." };
+}
+
+/** Normalise a box the model gave (0..1, 0..100 or 0..1000 scales). */
+function modelBox(r: Record<string, unknown>): EraseBox | null {
+  const xs = [num(r.x), num(r.y), num(r.w), num(r.h)];
+  if (!xs.every(Number.isFinite)) return null;
+  const max = Math.max(...xs);
+  const scale = max > 100 ? 1000 : max > 1.5 ? 100 : 1;
+  return cleanBox({ x: xs[0] / scale, y: xs[1] / scale, w: xs[2] / scale, h: xs[3] / scale });
+}
+
+/** The model's answer → found texts with advice (bad rows dropped). */
+export function parseTextFind(content: string, p: EraseProduct): FoundText[] | null {
+  let j: unknown;
+  try {
+    j = JSON.parse(content);
+  } catch {
+    const m = content.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+      j = JSON.parse(m[0]);
+    } catch {
+      return null;
+    }
+  }
+  const list = (j as { texts?: unknown })?.texts;
+  if (!Array.isArray(list)) return null;
+  const out: FoundText[] = [];
+  for (const raw of list) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const text = typeof r.text === "string" ? r.text.replace(/\s+/g, " ").trim().slice(0, 120) : "";
+    const box = modelBox(r);
+    if (!text || !box) continue;
+    const kind = KINDS.includes(r.kind as TextKind) ? (r.kind as TextKind) : "other";
+    const a = adviseText(text, kind, p);
+    out.push({ box, text, kind, advice: a.advice, why: a.why });
+    if (out.length >= TEXT_FIND_MAX) break;
+  }
+  return out;
+}
+
+/** One line over the editor after "Find the text". */
+export function foundSummary(found: readonly FoundText[]): string {
+  if (found.length === 0) return "No readable text found. Drag a box over anything you want gone.";
+  const rm = found.filter((f) => f.advice === "remove");
+  const head = `Found ${found.length} piece${found.length === 1 ? "" : "s"} of text.`;
+  if (rm.length === 0) return `${head} Nothing looks wrong for this product; tick any you still want removed.`;
+  return `${head} ${rm.length} ${rm.length === 1 ? "looks" : "look"} wrong for this product and ${rm.length === 1 ? "is" : "are"} ticked to remove: ${rm.map((f) => `“${f.text.slice(0, 30)}”`).join(", ")}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Library hint: "this perfect photo names another product"
+// ---------------------------------------------------------------------------
+
+/**
+ * From the text already read off a library photo (visible_text), the words
+ * that name a DIFFERENT product than this one, or null. Used for the tile chip
+ * "Names Gelato — remove text?" so the AI points at the fix.
+ */
+export function otherNameOnPhoto(visibleText: string | null | undefined, p: EraseProduct): string | null {
+  const vt = (visibleText ?? "").replace(/\s+/g, " ").trim();
+  if (!vt) return null;
+  const brandWords = new Set([...words(p.brand), ...words(p.vendor)]);
+  const mine = new Set([...words(p.name), ...words(p.strainName)]);
+  const extra = words(vt).filter((w) => !brandWords.has(w) && !mine.has(w));
+  if (extra.length === 0) return null;
+  const uniq = [...new Set(extra)].slice(0, 3);
+  return uniq.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** The editor's address. */
+export function removeTextUrl(key: string, mediaId: string, back?: string | null): string {
+  const q = [`media=${encodeURIComponent(mediaId)}`];
+  if (back) q.push(`back=${encodeURIComponent(back)}`);
+  return `/admin/products/${encodeURIComponent(key)}/remove-text?${q.join("&")}`;
+}
+
+// ---------------------------------------------------------------------------
+// Self-test
+// ---------------------------------------------------------------------------
+
+export function __runTextEraseCoreTests(): { passed: number; failed: number } {
+  let passed = 0;
+  let failed = 0;
+  const ok = (c: boolean, name: string) => {
+    if (c) passed += 1;
+    else {
+      failed += 1;
+      console.error(`text-erase-core FAIL: ${name}`);
+    }
+  };
+  const P: EraseProduct = { name: "Phat Panda Blue Dream 3.5g", brand: "Phat Panda", strainName: "Blue Dream", vendor: "Hollingsworth", category: "Flower" };
+
+  // boxes
+  ok(cleanBox({ x: 0.1, y: 0.1, w: 0.2, h: 0.1 })?.w === 0.2, "clean box keeps a good box");
+  ok(cleanBox({ x: 0.5, y: 0.5, w: -0.2, h: -0.1 })?.x === 0.3, "negative drag flips");
+  ok(cleanBox({ x: 0.9, y: 0.9, w: 0.5, h: 0.5 })?.w === 0.1, "clamped to the picture");
+  ok(cleanBox({ x: 0.1, y: 0.1, w: 0.001, h: 0.2 }) === null, "a stray click is no box");
+  ok(cleanBox({ x: "a" }) === null && cleanBox(null) === null, "junk is no box");
+  ok(parseEraseBoxes('[{"x":0.1,"y":0.1,"w":0.2,"h":0.1},{"x":1}]').length === 1, "form JSON parsed, junk dropped");
+  ok(parseEraseBoxes("not json").length === 0 && parseEraseBoxes({}).length === 0, "bad form value is empty");
+  ok(parseEraseBoxes(Array.from({ length: 30 }, () => ({ x: 0, y: 0, w: 0.1, h: 0.1 }))).length === ERASE_BOXES_MAX, "boxes capped");
+  const pb = padBox({ x: 0.1, y: 0.1, w: 0.2, h: 0.1 });
+  ok(pb.x === 0.085 && pb.w === 0.23, "padding grows the box");
+  ok(padBox({ x: 0, y: 0, w: 0.1, h: 0.1 }).x === 0, "padding stays inside the picture");
+  ok(Math.abs(boxesArea([{ x: 0, y: 0, w: 0.5, h: 0.5 }, { x: 0, y: 0, w: 0.5, h: 0.5 }]) - 0.25) < 0.001, "overlaps counted once");
+  ok(!checkEraseBoxes([]).ok, "no boxes refused");
+  ok(!checkEraseBoxes([{ x: 0, y: 0, w: 0.9, h: 0.9 }]).ok, "whole-picture mask refused");
+  const ck = checkEraseBoxes([{ x: 0.1, y: 0.1, w: 0.2, h: 0.1 }]);
+  ok(ck.ok && ck.boxes[0].w > 0.2, "checked boxes are padded");
+  const px = boxPixels({ x: 0.1, y: 0.2, w: 0.5, h: 0.25 }, 1000, 800);
+  ok(px.left === 100 && px.top === 160 && px.width === 500 && px.height === 200, "box to pixels");
+  const svg = eraseMaskSvg(1000, 800, [{ x: 0.1, y: 0.2, w: 0.5, h: 0.25 }]);
+  ok(svg.includes('fill="#000"') && svg.includes('<rect x="100" y="160" width="500" height="200" fill="#fff"/>'), "mask is black with white boxes");
+  ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="800"'), "mask is the picture's size");
+
+  // prompt + saved result
+  ok(erasePrompt().includes("No letters") && erasePrompt().includes("packaging"), "prompt asks for no letters");
+  ok(erasePrompt({ surface: "jar label" }).includes("jar label"), "prompt names the surface");
+  ok(erasedTitle("Gelato cart") === "Gelato cart (text removed)", "title marked");
+  ok(erasedTitle("Gelato cart (text removed)") === "Gelato cart (text removed)", "title never doubled");
+  ok(erasedTitle(null) === "Product photo (text removed)", "blank title");
+  ok(erasedSource("abc") === "text-removed:abc", "source points at the original");
+  ok(ERASE_MODEL === "flux-pro-1.0-fill", "FLUX Fill is the remover");
+  ok(erasedStatus({ status: "published", license_status: null }) === "published", "published original: published copy");
+  ok(erasedStatus({ status: "published", license_status: "pending-review" }) === "draft" && erasedStatus({ status: "draft", license_status: null }) === "draft", "rights pending or draft: draft copy");
+
+  // advice
+  ok(adviseText("GELATO", "product-name", P).advice === "remove", "another strain name: remove");
+  ok(adviseText("GELATO", "product-name", P).why.includes("not this product"), "says why");
+  ok(adviseText("Blue Dream", "product-name", P).advice === "keep", "this product's name: keep");
+  ok(adviseText("PHAT PANDA", "brand", P).advice === "keep", "the brand: keep");
+  ok(adviseText("Seattle Bubble Works", "brand", P).advice === "remove", "another brand: remove");
+  ok(adviseText("1g", "size", P).advice === "remove" && adviseText("3.5 g", "size", P).advice === "keep", "size compared");
+  ok(adviseText("Warning: This product has intoxicating effects", "warning", P).advice === "keep", "warnings always kept");
+  ok(adviseText("$$$", "other", P).advice === "unsure", "unreadable is unsure");
+
+  // parse
+  const found = parseTextFind(
+    '{"texts":[{"text":"GELATO","kind":"product-name","x":0.2,"y":0.3,"w":0.4,"h":0.1},{"text":"Phat Panda","kind":"brand","x":100,"y":50,"w":300,"h":60},{"text":"x","kind":"weird","x":"bad"}]}',
+    P,
+  );
+  ok(found !== null && found.length === 2, "model answer parsed, bad rows dropped");
+  ok(found?.[0].advice === "remove" && found?.[1].advice === "keep", "advice attached");
+  ok(found?.[1].box.x === 0.1 && found?.[1].box.w === 0.3, "0..1000 boxes normalised");
+  ok(parseTextFind("no", P) === null && parseTextFind('{"x":1}', P) === null, "unusable answer is null");
+  ok(parseTextFind('Sure! {"texts":[]}', P)?.length === 0, "JSON inside chatter");
+  ok(foundSummary([]).startsWith("No readable text"), "summary: none");
+  ok(found !== null && foundSummary(found).includes("“GELATO”"), "summary names the text to remove");
+
+  // library hint
+  ok(otherNameOnPhoto("PHAT PANDA GELATO 3.5g", P) === "Gelato", "names another product");
+  ok(otherNameOnPhoto("PHAT PANDA BLUE DREAM", P) === null, "names this product: no hint");
+  ok(otherNameOnPhoto(null, P) === null, "no text: no hint");
+  ok(removeTextUrl("k 1", "m1", "/admin/products?x=1") === "/admin/products/k%201/remove-text?media=m1&back=%2Fadmin%2Fproducts%3Fx%3D1", "editor URL");
+
+  return { passed, failed };
+}
