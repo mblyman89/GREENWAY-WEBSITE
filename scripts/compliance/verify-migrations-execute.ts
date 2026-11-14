@@ -122,6 +122,7 @@ export function explainRelationError(message: string): string | null {
  * allowed to edit .github/workflows.
  */
 export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] = [
+  { file: "scripts/recon/media-embeddings-0365-pg-check.sql", mustPrint: "MEDIA EMBEDDINGS 0365 CHECK PASSED" }, // D244 R-4 hybrid semantic photo search (with and without pgvector)
   { file: "scripts/recon/budalerts-menus-0364-pg-check.sql", mustPrint: "BUDALERTS MENUS 0364 CHECK PASSED" }, // D242 Budalerts brand menus (internal use only)
   { file: "scripts/recon/orders-source-0358-0359-pg-check.sql", mustPrint: "ORDERS SOURCE 0358 0359 CHECK PASSED" },
   { file: "scripts/recon/ccrs-adopt-reopen-0357-pg-check.sql", mustPrint: "CCRS 0357 CHECK PASSED" },

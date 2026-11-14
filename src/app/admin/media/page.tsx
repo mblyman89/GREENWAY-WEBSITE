@@ -20,6 +20,9 @@ import { Input, Select } from "@/components/admin/ui/Field";
 import { EmptyState } from "@/components/admin/ux";
 import { MediaGrid } from "@/components/admin/media/MediaGrid";
 import { MediaAiPanel } from "@/components/admin/media/MediaAiPanel";
+import { MediaEmbedPanel } from "@/components/admin/media/MediaEmbedPanel";
+import { loadEmbedPanel } from "@/lib/media/media-embed-server";
+import { setMediaEmbedPausedAction, retryFailedEmbeddingsAction } from "./embed-actions";
 import { loadDescribePanel } from "@/lib/media/media-describe-store";
 import { startDescribeRunAction, setDescribeRunStatusAction, retryFailedDescribesAction } from "./ai-actions";
 import { setAutoPublishAction, bulkLibraryV2Action } from "./library-actions";
@@ -65,7 +68,7 @@ export default async function MediaPage({
   // PARALLEL (they used to be three serial steps).
   const sourcesPromise = loadMediaUseSources();
   sourcesPromise.catch(() => undefined);
-  const [counts, everything, aiPanel, vendorRead, collRead, searchSummary, members] = await Promise.all([
+  const [counts, everything, aiPanel, vendorRead, collRead, searchSummary, members, embedPanel] = await Promise.all([
     countMedia(),
     listAllMedia(),
     loadDescribePanel(),
@@ -73,6 +76,7 @@ export default async function MediaPage({
     loadCollections(),
     loadSearchSummary(30),
     facetFilters.coll ? loadCollectionMemberIds(facetFilters.coll) : Promise.resolve({ ids: new Set<string>(), error: null }),
+    loadEmbedPanel(),
   ]);
   const uses = await buildMediaUses(everything, sourcesPromise);
   const index = folderIndex(everything, uses);
@@ -184,6 +188,9 @@ export default async function MediaPage({
 
         {/* D221 M4: the AI closer look run + the M3 review queue link */}
         <MediaAiPanel panel={aiPanel} startAction={startDescribeRunAction} statusAction={setDescribeRunStatusAction} retryAction={retryFailedDescribesAction} />
+
+        {/* D244 R-4: semantic photo search index (pgvector) — status, pause, retry */}
+        <MediaEmbedPanel panel={embedPanel} pauseAction={setMediaEmbedPausedAction} retryAction={retryFailedEmbeddingsAction} />
 
         {/* D221 M5 + M7: health dashboard, undo auto-publish, top searches */}
         <MediaHealthDashboard health={aiPanel.health} searches={searchSummary.rows} autoPublishAction={setAutoPublishAction} returnTo={withListParams("/admin/media", listParams)} />

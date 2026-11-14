@@ -47,6 +47,11 @@
  * "Draft with AI" on the Bulk AI page (runBulkAiV2, 540 s budget, its own
  * lease in site_settings).
  *
+ * D244 R-4 (no new cron). A minute whose enrichment drafted nothing then
+ * indexes photos for semantic search (runMediaEmbedTick, its own lease,
+ * 120 s; an idle state is one site_settings read). The 540 s live budget
+ * counts from before the overnight tick, so live + index stay inside 800 s.
+ *
  * D244 R-3 (no new cron). On the same idle tick, the OVERNIGHT enrichment
  * batch (runEnrichBatchTick, 420 s budget, its own lease) polls Google,
  * saves finished drafts and sends queued products as one Gemini batch. A
@@ -72,11 +77,15 @@ import { runBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
 import { BULK_AI_V2_BUDGET_MS } from "@/lib/enrichment/bulk-ai-v2-core";
 import { runEnrichBatchTick } from "@/lib/enrichment/enrich-batch-server";
 import { ENRICH_BATCH_TICK_BUDGET_MS } from "@/lib/enrichment/enrich-batch-core";
+import { runMediaEmbedTick } from "@/lib/media/media-embed-server";
+import { MEDIA_EMBED_TICK_BUDGET_MS } from "@/lib/media/media-embed-core";
 
 export const dynamic = "force-dynamic";
 
 /** = LOOKUP_TICK_MAX_DURATION_S in lookup-job-core.ts (pinned equal by tests). */
 export const maxDuration = 800;
+/** D244 R-4: the photo indexer only uses time left before this mark (20 s headroom under maxDuration). */
+const ROUTE_END_MS = 780_000;
 
 async function authorize(req: NextRequest): Promise<NextResponse | null> {
   const secret = process.env.CRON_SECRET ?? "";
@@ -104,6 +113,7 @@ async function authorize(req: NextRequest): Promise<NextResponse | null> {
 export async function GET(req: NextRequest) {
   const denied = await authorize(req);
   if (denied) return denied;
+  const routeStart = Date.now();
 
   // Never throws. A product that fails is recorded on its own row and the
   // batch carries on; only a broken run (database unreadable) is a 500, so
@@ -142,7 +152,13 @@ export async function GET(req: NextRequest) {
   if (idle && !batchWorked && liveBudgetMs > 0) {
     bulkAi = await runBulkAiV2({ budgetMs: liveBudgetMs, trigger: "worker" });
   }
-  return NextResponse.json({ ...result, batch, autoStart, mailRead, enrichBatch, bulkAi }, { status: result.ok ? 200 : 500 });
+  // D244 R-4: a minute whose enrichment drafted nothing indexes photos for semantic search. No new
+  // cron. Its own lease means one run at a time; an idle state costs one read of one site_settings row.
+  const enrichWorked = batchWorked || Boolean(bulkAi?.ok && !bulkAi.skipped && (bulkAi.drafted > 0 || bulkAi.failed > 0));
+  let mediaEmbed: Awaited<ReturnType<typeof runMediaEmbedTick>> | null = null;
+  const embedBudgetMs = Math.min(MEDIA_EMBED_TICK_BUDGET_MS, ROUTE_END_MS - (Date.now() - routeStart));
+  if (idle && !enrichWorked && embedBudgetMs >= 30_000) mediaEmbed = await runMediaEmbedTick({ budgetMs: embedBudgetMs });
+  return NextResponse.json({ ...result, batch, autoStart, mailRead, enrichBatch, bulkAi, mediaEmbed }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.

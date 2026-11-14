@@ -32,6 +32,7 @@
 import { isPickableImage, type LibraryPickerAsset } from "@/lib/media/library-picker-core";
 import { tokenize } from "@/lib/media/product-link-core";
 import { productSourceOf } from "@/lib/media/folders-core";
+import { SEMANTIC_AGREE_BOOST, semanticConfidence } from "@/lib/media/media-embed-core";
 
 /**
  * R65: provenance boost. A name-matched photo that came straight from the
@@ -105,6 +106,13 @@ export type ImageRecommendInput = {
   /** Asset ids already in the gallery this draft attaches to. */
   galleryIds?: readonly string[];
   limit?: number;
+  /**
+   * D244 R-4: semantic evidence - best cosine similarity per asset id from
+   * the embedding search (media-embed-core). Calibrated by
+   * semanticConfidence (never "High" on meaning alone); when the name match
+   * agrees, a small lift. Absent = word evidence only (unchanged behaviour).
+   */
+  semantic?: ReadonlyMap<string, { similarity: number; kind: "text" | "image" }>;
 };
 
 export type ImageRecommendation = {
@@ -330,6 +338,20 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
         name.reasons.push(prov.reason!);
       }
     }
+    // D244 R-4: meaning (embeddings) as calibrated evidence beside the words.
+    const sem = input.semantic?.get(id);
+    const semConf = sem ? semanticConfidence(sem.similarity) : 0;
+    if (sem && semConf > 0) {
+      const what = sem.kind === "image" ? "The picture itself" : "Its description";
+      const pct = Math.round(Math.max(0, Math.min(1, sem.similarity)) * 100);
+      if (name.confidence > 0) {
+        name.confidence = Math.min(NAME_MATCH_MAX, Math.max(name.confidence, semConf) + SEMANTIC_AGREE_BOOST);
+        name.reasons.push(`${what} also matches this product by meaning (${pct}% similar).`);
+      } else {
+        name.confidence = semConf;
+        name.reasons = [`${what} matches this product by meaning (${pct}% similar), though no product-name word is in its text.`];
+      }
+    }
     // D221 M6: a logo / banner is not a product photo.
     const role = (a.role ?? "").toLowerCase();
     if (name.confidence > 0 && NOT_PRODUCT_ROLES.has(role)) {
@@ -364,7 +386,7 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
       confidence,
       band: confidenceBand(confidence),
       reasons: reasons.filter((r, i) => r && reasons.indexOf(r) === i),
-      chips: recommendChips(a, input.product, { remembered, onRecord: isOnRecord }),
+      chips: [...recommendChips(a, input.product, { remembered, onRecord: isOnRecord }), ...(semConf > 0 ? ["Matches by meaning"] : [])],
       remembered,
       onRecord: isOnRecord,
       attached,
@@ -572,5 +594,19 @@ export function __runImageRecommendCoreTests(): { passed: number; failed: number
   ok(sr.length === 2 && sr[0]!.id === "s1" && sr[0]!.confidence === 0, "search results keep the pool order, no floor, de-duplicated, pickable only");
   ok(sr[0]!.chips[0] === "Same strain" && sr[1]!.attached, "search results carry extra chips + attached flag");
   ok(parseImageSearchScope("brand") === "brand" && parseImageSearchScope("x") === "vendor", "search scope parse");
+  // D244 R-4: semantic evidence.
+  {
+    const P = { name: "Blue Dream 3.5g", brand: "Phat Panda", category: "flower" };
+    const sem = new Map([["s1", { similarity: 0.9, kind: "image" as const }], ["s2", { similarity: 0.4, kind: "text" as const }], ["n1", { similarity: 0.7, kind: "text" as const }]]);
+    const v = recommendImages({ assets: [A("s1"), A("s2"), A("n1", { title: "Blue Dream" })], product: P, semantic: sem });
+    const s1 = v.items.find((x) => x.id === "s1");
+    ok(Boolean(s1) && s1!.confidence === 74 && s1!.band === "medium", "meaning alone: shown, capped below High");
+    ok(Boolean(s1?.chips.includes("Matches by meaning")) && Boolean(s1?.reasons[0]?.includes("picture itself")), "meaning chip + reason");
+    ok(!v.items.some((x) => x.id === "s2"), "weak similarity is noise");
+    const n1 = v.items.find((x) => x.id === "n1");
+    const plain = recommendImages({ assets: [A("n1", { title: "Blue Dream" })], product: P }).items[0];
+    ok(Boolean(n1) && n1!.confidence > plain.confidence && n1!.confidence <= NAME_MATCH_MAX, "name + meaning agree: lifted, never past the name ceiling");
+    ok(recommendImages({ assets: [A("s1")], product: P }).items.length === 0, "no semantic map: unchanged");
+  }
   return { passed, failed };
 }

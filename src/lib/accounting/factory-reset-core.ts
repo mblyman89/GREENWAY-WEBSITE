@@ -894,6 +894,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   // media library - model, cost, progress. KEEP with the media it describes;
   // it holds no money, stock or customer data.
   { table: "media_ai_runs", disposition: "KEEP", because: "The AI passes that described and tagged your photo library, with their cost." },
+  // media_embeddings (0365, D244 R-4): the meaning fingerprint (768 numbers)
+  // of each library photo for semantic search. KEEP with the media it indexes;
+  // derived, rebuildable, no money, stock or customer data.
+  { table: "media_embeddings", disposition: "KEEP", because: "The search index that lets the photo library find pictures by meaning." },
   // media_collections / media_collection_items (0354, D221 M7): named groups of
   // library photos a person built (e.g. "Holiday 2025"). KEEP with the media.
   { table: "media_collections", disposition: "KEEP", because: "Named groups of library photos you built." },
