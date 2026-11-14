@@ -423,6 +423,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "Yes. On a product page, every Recommended photo and every gallery photo has a Remove text button. Drag a box over the text, or press Find the text and the AI photo reader boxes each piece of text and ticks the ones that name a different product, size or brand (it keeps this product's own name, the brand and any warning). Press Remove text: FLUX Fill repaints only inside the boxes to match the packaging. Compare Before and After, then Attach as cover. The original photo is never changed; the new one is saved in the media library. When a photo's label already reads another product's name, its tile says so in orange.",
       },
       {
+        q: "Can I remove text from several photos at once (Copilot or Vendor kits)?",
+        a: "Yes. On the Copilot and on Vendor kits, under the photos, is Remove text from several photos. Tick the photos, drag a box over the text on each one (or press Find the text on each), then press Remove text once: FLUX Fill fixes them one after the next, and each shows Before and After as it finishes. On the Copilot press Attach or Attach as cover; on Vendor kits press Use as the kit photo, then Apply. Nothing is attached until you press. Facts and AI first, photo last: attaching a photo publishes the product and it leaves the list, by design.",
+        href: "/admin/products/copilot",
+      },
+      {
         q: "When does a product go live on the menu?",
         a: "As soon as it has a photo. When a person attaches a published photo to a draft product, it publishes by itself; descriptions and facts can come later. The full daily routine is SOP-10 (Product Enrichment) in the SOP Library.",
         href: "/admin/staffing/sop-library/sop-10",
