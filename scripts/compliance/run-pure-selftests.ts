@@ -1374,6 +1374,7 @@ import { __runNewsletterTemplatesCoreTests } from "../../src/lib/cms/newsletter-
 import { __runNewsletterPictureCoreTests } from "../../src/lib/cms/newsletter-picture-core";
 import { __runNewsletterAskCoreTests } from "../../src/lib/cms/newsletter-ask-core";
 import { __runNewsletterPolishCoreTests } from "../../src/lib/cms/newsletter-polish-core";
+import { __runChatPayloadCoreTests } from "../../src/lib/ai/chat-payload-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2947,6 +2948,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("newsletter-cadence-core", __runNewsletterCadenceCoreTests(), 43); // D237 N-3 (SOP-22 G-113, Q-22-4): Sunday cadence, approval stages, send-time checks, reminder dedupe
   assertRan("newsletter-batch-core", __runNewsletterBatchCoreTests(), 42); // D237 N-2 (SOP-22 G-112): batches of 100, idempotency keys, retry rules, progress, resume lease
   assertRan("budalerts-core", __runBudalertsCoreTests(), 86); // D242 S1 + D244 (lookup on Menus on file): Budalerts fetcher (owner permission, internal use only): robots-allowed URLs only, 3 s gap, brand/product page parsers, minor-unit prices, exact-slug suggestions, done-table rule
+  assertRan("chat-payload-core", __runChatPayloadCoreTests(), 30); // D244 E-0: reasoning-model params (max_completion_tokens, no temperature, effort), 400 auto-repair, friendly error
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

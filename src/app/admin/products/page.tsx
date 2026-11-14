@@ -12,6 +12,8 @@ import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identit
 import { fillMenuSensoryAction, linkEnrichmentsToProducts, linkMenuCardsToKbAction } from "./actions";
 import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { aiHeavyModelId, aiLightModelId, aiMode } from "@/lib/ai/router";
+import { isReasoningModel } from "@/lib/ai/chat-payload-core";
 import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
@@ -383,6 +385,14 @@ export default async function ProductsPage({
                 <Button href="/admin/products/bulk-ai" variant="neutral" size="sm">
                   ✨ Bulk-draft with AI →
                 </Button>
+              )}
+              {isAiConfigured && (
+                <p className="text-[11px] leading-snug text-[var(--admin-text-muted)]" data-testid="ai-model-line">
+                  AI models: light <span className="font-mono">{aiLightModelId}</span>
+                  {isReasoningModel(aiLightModelId) ? " (reasoning)" : ""} · heavy{" "}
+                  <span className="font-mono">{aiHeavyModelId}</span>
+                  {isReasoningModel(aiHeavyModelId) ? " (reasoning)" : ""} · {aiMode} mode
+                </p>
               )}
               <Link
                 href="/admin/knowledge-base"
