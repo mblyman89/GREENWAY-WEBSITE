@@ -1,6 +1,6 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH for the WA I-502 compliance regex scan. Consumed by BOTH src/lib/ai/compliance.ts (TypeScript, new RegExp(pattern, flags)) and crawler/app/compliance.py (Python, re.compile). The crawler ships a byte-identical copy at crawler/app/compliance_patterns.json; parity tests (scripts/compliance/check-pattern-parity.ts and crawler/tests/test_compliance_parity.py) fail when the two files drift. Patterns MUST stay valid in both JS RegExp and Python re syntax: no lookbehind, no named groups, no JS-only or Python-only constructs.",
-  "patternsVersion": 3,
+  "patternsVersion": 4,
   "patterns": [
     {
       "pattern": "\\b(cure|cures|cured|curing|heal|heals|healed|healing|treat|treats|treated|treating|remedy|remedies|prevent|prevents|preventing|diagnose|diagnoses)\\b",
@@ -92,5 +92,558 @@
       "label": "price/discount mention",
       "severity": "warn"
     }
-  ]
+  ],
+  "contextRules": {
+    "$comment": "D244 R-14 (owner: \"cannabis is dried and then cured. it is called the cure process... so it cant block us... looking at the words before and after\"). A BLOCK-pattern hit on a single word listed in a family below is judged by the words around it. Medical window: the sentence, `window.before` words before and `window.after` words after; any medicalWords there keeps the block (except a medical word right after medicalNeutralBefore, e.g. 'low stress', or right before medicalNeutralAfter, e.g. 'disease-free'). Reach checks look only inside the same clause (commas split clauses). default 'allow' (the cure family): warn-only unless a medicalBefore/medicalAfter word is within reach, medicalAfterAtEnd ends the clause ('a cure-all'), or 'for' follows without a time ('cured for 21 days' ok, 'a cure for a bad day' blocks). default 'block': still blocks unless a benignBefore/benignAfter word is within reach. An allowed hit becomes a heads-up flag, never silent. Consumed by src/lib/ai/compliance-context-core.ts and crawler/app/compliance.py (same algorithm); `examples` are run by BOTH sides' tests.",
+    "window": {
+      "before": 4,
+      "after": 5
+    },
+    "medicalWords": [
+      "pain",
+      "pains",
+      "painful",
+      "ache",
+      "aches",
+      "aching",
+      "anxiety",
+      "anxious",
+      "depression",
+      "depressed",
+      "insomnia",
+      "sleeplessness",
+      "ptsd",
+      "cancer",
+      "tumor",
+      "tumors",
+      "arthritis",
+      "migraine",
+      "migraines",
+      "headache",
+      "headaches",
+      "nausea",
+      "seizure",
+      "seizures",
+      "epilepsy",
+      "glaucoma",
+      "adhd",
+      "inflammation",
+      "inflammatory",
+      "stress",
+      "disease",
+      "diseases",
+      "illness",
+      "illnesses",
+      "ailment",
+      "ailments",
+      "ails",
+      "ailing",
+      "symptom",
+      "symptoms",
+      "disorder",
+      "disorders",
+      "sickness",
+      "cramps",
+      "spasms",
+      "medical",
+      "medically",
+      "medicine",
+      "medicinal",
+      "doctor",
+      "doctors",
+      "physician",
+      "therapeutic",
+      "injury",
+      "injuries",
+      "wound",
+      "wounds",
+      "addiction",
+      "hangover",
+      "hangovers",
+      "cold",
+      "flu"
+    ],
+    "medicalNeutralBefore": [
+      "low",
+      "no"
+    ],
+    "medicalNeutralAfter": [
+      "free",
+      "resistant",
+      "resistance"
+    ],
+    "forSkipWords": [
+      "a",
+      "an",
+      "at",
+      "up",
+      "to",
+      "over",
+      "around",
+      "about",
+      "roughly",
+      "approximately",
+      "nearly",
+      "almost",
+      "more",
+      "than",
+      "no",
+      "less",
+      "not"
+    ],
+    "forTimeWords": [
+      "minimum",
+      "least",
+      "several",
+      "few",
+      "couple",
+      "full",
+      "week",
+      "weeks",
+      "month",
+      "months",
+      "day",
+      "days",
+      "hour",
+      "hours",
+      "one",
+      "two",
+      "three",
+      "four",
+      "five",
+      "six",
+      "seven",
+      "eight",
+      "nine",
+      "ten",
+      "eleven",
+      "twelve",
+      "fourteen",
+      "fifteen",
+      "twenty",
+      "thirty",
+      "forty",
+      "sixty",
+      "ninety"
+    ],
+    "families": [
+      {
+        "id": "cure",
+        "words": [
+          "cure",
+          "cures",
+          "cured",
+          "curing"
+        ],
+        "default": "allow",
+        "why": "the drying-and-curing process",
+        "medicalBefore": {
+          "reach": 1,
+          "words": [
+            "miracle",
+            "wonder",
+            "magic"
+          ]
+        },
+        "medicalAfter": {
+          "reach": 1,
+          "words": [
+            "you",
+            "your",
+            "yourself",
+            "ya",
+            "everything",
+            "anything",
+            "whatever",
+            "what",
+            "ills",
+            "ailments"
+          ]
+        },
+        "forNeedsTime": true,
+        "medicalAfterAtEnd": [
+          "all"
+        ]
+      },
+      {
+        "id": "treat",
+        "words": [
+          "treat",
+          "treats"
+        ],
+        "default": "block",
+        "why": "a treat / treat yourself",
+        "benignBefore": {
+          "reach": 2,
+          "words": [
+            "a",
+            "an",
+            "sweet",
+            "tasty",
+            "real",
+            "little",
+            "special",
+            "perfect",
+            "rare",
+            "true",
+            "delicious",
+            "weekend",
+            "savory",
+            "flavorful",
+            "fruity",
+            "such"
+          ]
+        },
+        "benignAfter": {
+          "reach": 2,
+          "words": [
+            "yourself",
+            "yo",
+            "self",
+            "senses",
+            "palate",
+            "tastebuds",
+            "taste"
+          ]
+        }
+      },
+      {
+        "id": "prevent",
+        "words": [
+          "prevent",
+          "prevents",
+          "preventing"
+        ],
+        "default": "block",
+        "why": "protecting the product",
+        "benignAfter": {
+          "reach": 4,
+          "words": [
+            "mold",
+            "mildew",
+            "oxidation",
+            "degradation",
+            "moisture",
+            "light",
+            "uv",
+            "crushing",
+            "leaks",
+            "leaking",
+            "clogging",
+            "clogs",
+            "spills",
+            "burning",
+            "harshness",
+            "sticking",
+            "residue",
+            "contamination",
+            "tampering",
+            "loss",
+            "breakage",
+            "drying"
+          ]
+        }
+      },
+      {
+        "id": "therapy",
+        "words": [
+          "therapy"
+        ],
+        "default": "block",
+        "why": "retail therapy",
+        "benignBefore": {
+          "reach": 1,
+          "words": [
+            "retail"
+          ]
+        }
+      },
+      {
+        "id": "safe",
+        "words": [
+          "safe"
+        ],
+        "default": "block",
+        "why": "safe storage",
+        "benignBefore": {
+          "reach": 1,
+          "words": [
+            "food"
+          ]
+        },
+        "benignAfter": {
+          "reach": 1,
+          "words": [
+            "place",
+            "places",
+            "spot",
+            "storage",
+            "location",
+            "container",
+            "keeping",
+            "distance"
+          ]
+        }
+      },
+      {
+        "id": "healthy",
+        "words": [
+          "healthy"
+        ],
+        "default": "block",
+        "why": "healthy plants and soil",
+        "benignAfter": {
+          "reach": 2,
+          "words": [
+            "plants",
+            "plant",
+            "soil",
+            "roots",
+            "root",
+            "grow",
+            "crop",
+            "crops",
+            "garden",
+            "canopy",
+            "microbes",
+            "microbial",
+            "ecosystem",
+            "harvest",
+            "trichomes",
+            "buds",
+            "genetics",
+            "mothers",
+            "clones",
+            "living",
+            "cultivation"
+          ]
+        }
+      },
+      {
+        "id": "minors",
+        "words": [
+          "kid",
+          "kids",
+          "children"
+        ],
+        "default": "block",
+        "why": "the required keep-out-of-reach warning",
+        "benignBefore": {
+          "reach": 4,
+          "words": [
+            "reach",
+            "away"
+          ]
+        }
+      },
+      {
+        "id": "alcohol",
+        "words": [
+          "alcohol",
+          "tobacco",
+          "nicotine"
+        ],
+        "default": "block",
+        "why": "a cleaning, extraction or do-not-mix note",
+        "benignBefore": {
+          "reach": 3,
+          "words": [
+            "isopropyl",
+            "iso",
+            "rubbing",
+            "ethyl",
+            "no",
+            "not",
+            "never",
+            "without",
+            "avoid",
+            "dont",
+            "don't"
+          ]
+        },
+        "benignAfter": {
+          "reach": 1,
+          "words": [
+            "free",
+            "extraction",
+            "extracted",
+            "wash",
+            "wipes",
+            "cleaning",
+            "cleaner"
+          ]
+        }
+      }
+    ],
+    "examples": [
+      {
+        "text": "Hang-dried and slow cured for 21 days.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Our cure process takes four weeks in glass jars.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Properly cured flower with a smooth burn.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "We dry and cure every harvest by hand.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Cured resin, small batch.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Cured for a minimum of 14 days.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "This strain cures anxiety.",
+        "ok": false
+      },
+      {
+        "text": "The cure for insomnia.",
+        "ok": false
+      },
+      {
+        "text": "It cures your blues.",
+        "ok": false
+      },
+      {
+        "text": "A miracle cure.",
+        "ok": false
+      },
+      {
+        "text": "Cures everything.",
+        "ok": false
+      },
+      {
+        "text": "A cure for a bad day.",
+        "ok": false
+      },
+      {
+        "text": "Slow cured and great for chronic pain.",
+        "ok": false
+      },
+      {
+        "text": "A sweet treat for the weekend.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Treat yourself.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "This strain treats stress.",
+        "ok": false
+      },
+      {
+        "text": "Treats nausea fast.",
+        "ok": false
+      },
+      {
+        "text": "Nitrogen-sealed to prevent oxidation.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Helps prevent migraines.",
+        "ok": false
+      },
+      {
+        "text": "Keep out of reach of children.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Kids love it.",
+        "ok": false
+      },
+      {
+        "text": "Store in a safe place.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "It is safe.",
+        "ok": false
+      },
+      {
+        "text": "Grown in healthy living soil.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "A healthy choice.",
+        "ok": false
+      },
+      {
+        "text": "Clean your glass with isopropyl alcohol.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Pairs well with alcohol.",
+        "ok": false
+      },
+      {
+        "text": "A bright citrus aroma and a smooth finish.",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "text": "Low-stress trained, hang dried and cured.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Cured for at least 3 weeks.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "A cure-all.",
+        "ok": false
+      },
+      {
+        "text": "We cured all of our flower in glass.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Cured, you can taste the difference.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "The cure for the common cold.",
+        "ok": false
+      },
+      {
+        "text": "Disease-free clones, grown in healthy soil.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Don’t mix with alcohol.",
+        "ok": true,
+        "warn": true
+      },
+      {
+        "text": "Cured for a patient, slow finish.",
+        "ok": false
+      }
+    ]
+  }
 }

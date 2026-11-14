@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (D244 R-13; adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
+| **Version** | 1.3 (D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -182,6 +182,26 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 5. Compare **Before** and **After** on each. On the Copilot press **Attach as cover** or **Attach**. On Vendor kits press **Use as the kit photo**, check the ticks, then **Apply**.
 6. Remember 4.2: facts and AI first, photo last — attaching publishes the product and it leaves the list.
 
+### 4.15 "Cure", "cured" and other words read in context (the cure process)
+
+Owner (round 5): *"I need the word "cure", "cured", and others like it to be a warn only, and the system should allow me to attach facts that use that word. Why? because cannabis is dried and then cured. it is called the cure process."* and *"if we can make the system smarter by looking at the words before and after the word cure, or any of the blocked words for that matter, so it will allow the words if used not in a medical way."*
+
+The compliance check now reads the words around a blocked word before it blocks. It looks at the same sentence, about 4 words before and 5 after.
+
+1. **The cure process is allowed, as a heads-up.** "Hang-dried and slow cured for 21 days", "our cure process", "properly cured flower", "cured resin", "dry and cure". Accept, Save & accept, Approve and Attach facts all go through. The draft shows a heads-up such as *allowed in context: "cured" (the drying-and-curing process)*, so a person still reads it.
+2. **A medical use still blocks.** "Cures anxiety", "the cure for insomnia", "cures your blues", "a miracle cure", "cures everything", "a cure-all", "a cure for a bad day". A medical word near "cured" still blocks too: "slow cured and great for chronic pain".
+3. **"Cured for" needs a length of time.** "Cured for 21 days" and "cured for at least 3 weeks" pass. "Cured for a patient" blocks.
+4. **The same check covers other blocked words** when they are used in an everyday way:
+   - "a sweet treat" and "treat yourself"
+   - "keep out of reach of children"
+   - "store in a safe place"
+   - "grown in healthy living soil"
+   - "sealed to prevent oxidation"
+   - "clean with isopropyl alcohol" and "don't mix with alcohol"
+
+   "Treats stress", "kids love it", "it is safe", "a healthy choice" and "pairs well with alcohol" still block.
+5. **If a sentence you need is still blocked,** reword it so the medical word is not in the same sentence. Or tell the owner the exact sentence, so the word list in `src/lib/ai/compliance-patterns.json` (`contextRules`) can be updated.
+
 ## 5. Messages: "If you see this message"
 
 | Message (or what you see) | What it means | What to do |
@@ -197,6 +217,8 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 | "Saved to the media library as a draft" after Remove text | The original photo was a draft or its rights are pending | Publish the new photo in Digital Assets once the rights are clear |
 | A queue photo says *Failed* with a reason | FLUX refused or timed out on that one photo | Press **✂ Remove text** again; only the failed and unfinished photos are sent |
 | "Skipped N (compliance re-scan or unreadable) — review those by hand." after Approve | Those drafts did not pass the compliance re-scan | Open the product, edit the draft, then Save & accept |
+| *allowed in context: "cured" (the drying-and-curing process)* (heads-up) | The word is used in its everyday sense (4.15) | Read it, then accept; nothing is blocked |
+| "Blocked by the WA I-502 compliance re-scan" on a draft that only says "cured" | A medical word is in the same sentence, or "cure for" has no length of time (4.15) | Move the medical word out of that sentence, or say "cured for 21 days" |
 | The product vanished from the Copilot right after a photo | It published (by design) | Open it from Product Enrichment to add facts later |
 | An orange **Vendor** in the identity strip | No vendor could be found for this card | Set the vendor on the brand or vendor card |
 
@@ -217,6 +239,7 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 6. **Edited photos are new photos.** Remove text never changes the original. The copy records where it came from (`text-removed:<id>`), keeps the original's rights status, and is audited (product.remove_text_found / _started / _saved).
 7. **Vendor kits re-check the vendor.** Apply only touches cards that belong to the chosen vendor, never duplicates a photo, and writes one audit row per card plus product.vendor_kit_applied.
 8. **Bulk approve is a person's press.** Select and approve never runs on its own (no cron). It uses the same 80% rule and compliance gate as one-by-one Accept, writes an audit row per product (`via: "bulk-select"`), and never publishes.
+9. **Words are read in context (D244 R-14).** A blocked word used in its everyday sense, such as the cure process, becomes a heads-up. The word is never hidden, and a medical word in the same sentence still blocks. The site and the crawler run the same word lists from one file (`src/lib/ai/compliance-patterns.json`, patterns version 4).
 
 ## 8. Checklists & forms
 
@@ -252,7 +275,7 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 
 **Same photo for many?** Vendor kits → vendor → group → Ask the AI → Apply. **Wrong name on a photo?** ✂ Remove text → Find the text → Remove text → Attach as cover. **Many photos?** Tick them → box each → ✂ Remove text once.
 
-**Facts and AI first, photo last** (a photo publishes and the product leaves the list). **250 drafts at 85%?** Bulk AI → ⚡ Approve every draft at 80%+.
+**"Cured" is fine** (the cure process, a heads-up). "Cures anxiety" still blocks. **Facts and AI first, photo last** (a photo publishes and the product leaves the list). **250 drafts at 85%?** Bulk AI → ⚡ Approve every draft at 80%+.
 
 ## 10. Glossary
 
@@ -284,6 +307,7 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 | Models | `src/lib/ai/enrich-model-core.ts`, `src/lib/ai/enrich-model.ts` |
 | Identity strip and type evidence | `src/lib/enrichment/product-identity-core.ts` |
 | Vendor kits | `src/lib/enrichment/vendor-kit-core.ts`, `src/lib/enrichment/vendor-kit-server.ts`, `src/app/admin/products/vendor-kits/page.tsx` |
+| Words read in context (cure process) | `src/lib/ai/compliance-context-core.ts`, `src/lib/ai/compliance-patterns.json` (`contextRules`), `src/lib/ai/compliance.ts`, `crawler/app/compliance.py` |
 | Remove text queue (several photos) | `src/components/admin/products/RemoveTextQueue.tsx`, `src/components/admin/products/remove-text-queue-actions.ts` |
 | Bulk approve (select one / all, 80%+) | `src/lib/enrichment/bulk-approve-core.ts`, `src/app/admin/products/bulk-ai/BulkApproveBar.tsx`, `src/app/admin/products/bulk-ai/approve-actions.ts` |
 | Remove text (vision finds, FLUX Fill removes) | `src/lib/enrichment/text-erase-core.ts`, `src/lib/enrichment/text-erase-server.ts`, `src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx` |
@@ -307,3 +331,4 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
 | 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
+| 1.3 | D244 R-14 | Owner round 5: "cure", "cured" and other blocked words are read in context (4.15). The cure process is a heads-up, not a block; a medical use still blocks. New messages, control 9, quick-reference line and source map row |

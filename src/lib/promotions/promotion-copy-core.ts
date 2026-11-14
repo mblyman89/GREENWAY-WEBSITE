@@ -35,6 +35,7 @@
  * Pure (no React, no DB, no server-only) so the same checks run live in the
  * form (client island) and on the server (promotion page + list).
  */
+import { claimHits } from "@/lib/ai/compliance-context-core";
 
 export type CopyField = "title" | "description" | "bonus_note";
 
@@ -282,8 +283,9 @@ export function checkPromotionCopy(i: CopyCheckInput): CopyFinding[] {
   // 1. Wording rules.
   for (const { field, text } of texts) {
     for (const r of WORD_RULES) {
-      const m = text.match(r.re);
-      if (m) push({ kind: r.kind, field, label: r.label, found: m[0], why: r.why, suggest: r.suggest, cite: r.cite });
+      // D244 R-14: "slow cured" is the curing process; only a claim is a finding.
+      const m = r.label === "Health or medical claim" ? claimHits(text, r.re).slice(0, 1) : text.match(r.re);
+      if (m && m.length) push({ kind: r.kind, field, label: r.label, found: m[0], why: r.why, suggest: r.suggest, cite: r.cite });
     }
   }
 
@@ -533,6 +535,8 @@ export function __runPromotionCopyTests(): { passed: number; failed: number } {
   ok("candy flagged", has(checkPromotionCopy({ title: "Candy land edibles" }), "Could appeal to people under 21"));
   ok("kids flagged", has(checkPromotionCopy({ title: "Kids eat free" }), "Could appeal to people under 21"));
   ok("pain flagged", has(checkPromotionCopy({ title: "Pain relief Tuesday" }), "Health or medical claim"));
+  ok("R-14: slow cured is not a health claim", !has(checkPromotionCopy({ title: "Slow cured flower, 20% off" }), "Health or medical claim"));
+  ok("R-14: cures still is", has(checkPromotionCopy({ title: "Cures your Monday" }), "Health or medical claim"));
   ok("safe flagged", has(checkPromotionCopy({ title: "Safe and healthy" }), "Safety or health-benefit claim"));
   ok("get high flagged", has(checkPromotionCopy({ title: "Get high for less" }), "Encourages over-consumption"));
   ok("beer flagged", has(checkPromotionCopy({ title: "Beer and buds" }), "Alcohol or tobacco association"));

@@ -140,7 +140,7 @@ export const SOP_CATALOG: readonly SopMeta[] = [
     audience: ["Owner", "Admin", "Managers", "Content editors"],
     summary:
       "Getting every on-hand product a photo (a photo publishes the card), AI drafts with the 80% rule and flagged best guesses, the Enrichment Copilot, live vs overnight drafting, editing drafts on the grid, potency from the lab certificate, semantic photo search, the identity strip, vendor kits (one generic photo for like-kind products), removing text from one or several photos with FLUX Fill, facts and AI before the photo, and approving every Bulk AI draft at 80%+ in one press.",
-    keywords: ["enrich", "enrichment", "photo", "picture", "image", "description", "copilot", "bulk ai", "overnight", "batch", "best guess", "confidence", "accept all", "potency", "strain type", "coa", "semantic", "embedding", "publish", "on hand", "vendor kit", "generic photo", "remove text", "flux", "identity", "approve all", "select all", "bulk approve", "queue"],
+    keywords: ["enrich", "enrichment", "photo", "picture", "image", "description", "copilot", "bulk ai", "overnight", "batch", "best guess", "confidence", "accept all", "potency", "strain type", "coa", "semantic", "embedding", "publish", "on hand", "vendor kit", "generic photo", "remove text", "flux", "identity", "approve all", "select all", "bulk approve", "queue", "cure", "cured", "cure process", "compliance"],
   },
   {
     file: "SOP-06-cycle-counts-audits-daily-checklists.md",

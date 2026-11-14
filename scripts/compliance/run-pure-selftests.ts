@@ -1390,6 +1390,7 @@ import { __runProductIdentityTests } from "../../src/lib/enrichment/product-iden
 import { __runVendorKitCoreTests } from "../../src/lib/enrichment/vendor-kit-core";
 import { __runTextEraseCoreTests } from "../../src/lib/enrichment/text-erase-core";
 import { __runBulkApproveCoreTests } from "../../src/lib/enrichment/bulk-approve-core";
+import { __runComplianceContextTests } from "../../src/lib/ai/compliance-context-core";
 import { __runMediaEmbedTests } from "../../src/lib/media/media-embed-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
@@ -2979,6 +2980,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("product-identity-core", __runProductIdentityTests(), 26); // D244 R-7: identity header rows, form of a category, type words, form match, prompt lines
   assertRan("vendor-kit-core", __runVendorKitCoreTests(), 36); // D244 R-8: vendor kits - like-kind groups, product-specific words, generic photo ranking, apply plan, AI verdicts in the URL
   assertRan("text-erase-core", __runTextEraseCoreTests(), 54); // D244 R-9/R-11: remove text - drag boxes, FLUX Fill mask, AI find-the-text keep/remove advice, other-name hint, multi-photo queue
+  assertRan("compliance-context-core", __runComplianceContextTests(), 76); // D244 R-14: "cure"/"cured" (the cure process) read in context, a heads-up; medical uses still block
   assertRan("bulk-approve-core", __runBulkApproveCoreTests(), 17); // D244 R-12: Bulk AI select one/all + approve every draft at 80%+, chunked (8 products / 40 drafts per call), totals, never publishes
   assertRan("copilot-core", __runCopilotCoreTests(), 55); // D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   console.log("ALL PURE SELF-TESTS PASSED");

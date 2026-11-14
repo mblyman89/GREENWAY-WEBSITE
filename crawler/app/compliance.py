@@ -53,6 +53,122 @@ def _load_patterns() -> tuple[int, list[_Pattern]]:
 
 PATTERNS_VERSION, _RISKY_PATTERNS = _load_patterns()
 
+# -----------------------------------------------------------------------------
+# D244 R-14 — read the words around a blocked word before blocking it.
+# Owner: "cannabis is dried and then cured. it is called the cure process ...
+# so it cant block us ... looking at the words before and after the word cure,
+# or any of the blocked words for that matter".
+# A faithful mirror of src/lib/ai/compliance-context-core.ts (same fixture
+# `contextRules`, same algorithm; both sides run the fixture `examples`).
+# -----------------------------------------------------------------------------
+CONTEXT_RULES: dict = json.loads(_PATTERNS_FILE.read_text("utf-8"))["contextRules"]
+_TOK_RE = re.compile(r"[A-Za-z0-9\u2019']+|[,:()\u2014\u2013]|[.!?;\n]")
+
+
+def _tokens(text: str) -> list[tuple[str, int, str]]:
+    out: list[tuple[str, int, str]] = []
+    for m in _TOK_RE.finditer(text or ""):
+        raw, start = m.group(0), m.start()
+        if re.fullmatch(r"[.!?;\n]", raw):
+            prev = text[start - 1] if start > 0 else ""
+            nxt = text[start + 1] if start + 1 < len(text) else ""
+            if raw == "." and prev.isdigit() and nxt.isdigit():
+                continue
+            out.append((raw, start, "s"))
+        elif re.fullmatch(r"[,:()\u2014\u2013]", raw):
+            out.append((raw, start, "c"))
+        else:
+            out.append((raw.lower().replace("\u2019", "'").strip("'"), start, "w"))
+    return out
+
+
+def _family(word: str, rules: dict) -> dict | None:
+    w = (word or "").strip().lower()
+    if not w or re.search(r"\s", w):
+        return None
+    for f in rules["families"]:
+        if w in f["words"]:
+            return f
+    return None
+
+
+def _side(toks, i: int, d: int, n: int, clause_only: bool) -> list[str]:
+    out: list[str] = []
+    j = i + d
+    while 0 <= j < len(toks) and len(out) < n:
+        t, _, kind = toks[j]
+        if kind == "s":
+            break
+        if kind == "c":
+            if clause_only:
+                break
+            j += d
+            continue
+        out.append(t)
+        j += d
+    return out
+
+
+def _medical_near(toks, i: int, rules: dict) -> str | None:
+    med, nb, na = set(rules["medicalWords"]), set(rules["medicalNeutralBefore"]), set(rules["medicalNeutralAfter"])
+    wb, wa = rules["window"]["before"], rules["window"]["after"]
+    before = list(reversed(_side(toks, i, -1, wb + 1, False)))
+    after = _side(toks, i, 1, wa + 1, False)
+
+    def check(words: list[str], lo: int, hi: int) -> str | None:
+        for k in range(lo, hi):
+            w = words[k]
+            if w not in med:
+                continue
+            if k > 0 and words[k - 1] in nb:
+                continue
+            if k + 1 < len(words) and words[k + 1] in na:
+                continue
+            return w
+        return None
+
+    return check(before, max(0, len(before) - wb), len(before)) or check(after, 0, min(len(after), wa))
+
+
+def judge_hit(text: str, start: int, word: str, rules: dict = CONTEXT_RULES) -> bool:
+    """True when the hit at `start` reads as everyday (non-medical) use."""
+    fam = _family(word, rules)
+    if not fam:
+        return False
+    toks = _tokens(text)
+    idx = next((k for k, t in enumerate(toks) if t[2] == "w" and t[1] == start), -1)
+    if idx < 0 or _medical_near(toks, idx, rules):
+        return False
+    before = _side(toks, idx, -1, 6, True)
+    after = _side(toks, idx, 1, 8, True)
+
+    def within(words: list[str], r: dict | None) -> bool:
+        return bool(r) and any(w in r["words"] for w in words[: r["reach"]])
+
+    if fam["default"] == "allow":
+        if within(before, fam.get("medicalBefore")) or within(after, fam.get("medicalAfter")):
+            return False
+        end = fam.get("medicalAfterAtEnd") or []
+        if len(after) == 1 and after[0] in end:
+            return False
+        if fam.get("forNeedsTime") and after[:1] == ["for"]:
+            k = 1
+            while k < len(after) and after[k] in rules["forSkipWords"]:
+                k += 1
+            first = after[k] if k < len(after) else None
+            if not first or not (first in rules["forTimeWords"] or first.isdigit()):
+                return False
+        return True
+    return within(before, fam.get("benignBefore")) or within(after, fam.get("benignAfter"))
+
+
+def pattern_blocks(text: str, pattern: re.Pattern[str], rules: dict = CONTEXT_RULES) -> bool:
+    """A BLOCK pattern blocks when ANY of its hits is not everyday use."""
+    for m in pattern.finditer(text or ""):
+        if not judge_hit(text, m.start(), m.group(0), rules):
+            return True
+    return False
+
 
 @dataclass
 class ComplianceResult:
@@ -71,19 +187,27 @@ def check_compliance(text: str, extra_banned: list[str] | None = None) -> Compli
     blocking: list[str] = []
 
     for p in _RISKY_PATTERNS:
-        if p.pattern.search(text):
-            flags.append(f"{p.label} (must fix)" if p.severity == "block" else f"{p.label} (heads-up)")
-            if p.severity == "block":
-                blocking.append(p.label)
+        if not p.pattern.search(text):
+            continue
+        if p.severity != "block":
+            flags.append(f"{p.label} (heads-up)")
+        elif pattern_blocks(text, p.pattern):
+            flags.append(f"{p.label} (must fix)")
+            blocking.append(p.label)
+        else:  # D244 R-14: everyday use (e.g. the cure process) is a heads-up
+            flags.append(f"{p.label} \u2014 allowed in context (heads-up)")
 
     for phrase in extra_banned or []:
         trimmed = phrase.strip()
         if not trimmed:
             continue
-        re_phrase = re.compile(rf"(^|\W){re.escape(trimmed)}(\W|$)", re.I)
+        re_phrase = re.compile(rf"(?:^|(?<=\W)){re.escape(trimmed)}(?=\W|$)", re.I)
         if re_phrase.search(text):
             label = f'banned phrase: "{trimmed}"'
-            flags.append(f"{label} (must fix)")  # owner phrases default to blocking
-            blocking.append(label)
+            if pattern_blocks(text, re_phrase):
+                flags.append(f"{label} (must fix)")  # owner phrases default to blocking
+                blocking.append(label)
+            else:
+                flags.append(f"{label} \u2014 allowed in context (heads-up)")
 
     return ComplianceResult(ok=len(blocking) == 0, flags=flags, blocking_flags=blocking)

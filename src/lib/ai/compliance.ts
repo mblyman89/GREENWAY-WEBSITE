@@ -21,6 +21,7 @@ import "server-only";
 // test_compliance_parity.py on the crawler side) fail when the site fixture and
 // the crawler's copy drift. Edit the JSON, not this file.
 import compliancePatternsJson from "./compliance-patterns.json";
+import { judgePattern } from "./compliance-context-core";
 
 // Bump when the system rules change so we can A/B accept-rate by prompt_version.
 export const PROMPT_VERSION = "v2-grounded";
@@ -66,6 +67,9 @@ EFFECTS (allowed as EXPERIENTIAL descriptors ONLY):
   "cures insomnia", "helps you sleep", "treats pain".
 - NEVER pair an effect with a medical condition, symptom, or the words cure/
   treat/heal/relieve/prevent/diagnose/remedy/therapy/medicine.
+- The CURING PROCESS is fine to describe: "hang-dried and slow cured for 21
+  days", "a careful cure", "properly cured flower". Never use cure as a claim
+  ("cures", "a cure for").
 
 STYLE:
 - Describe aroma, flavor, format, lineage/strain type, craftsmanship, and (when
@@ -137,20 +141,40 @@ function escapeRegExp(s: string): string {
 export function checkCompliance(text: string, extra: ExtraBannedPhrase[] = []): ComplianceResult {
   const flags: string[] = [];
   const blockingFlags: string[] = [];
+  // D244 R-14: a BLOCK hit is read in context first (compliance-context-core).
+  // "slow cured for 21 days" is the curing process, so it becomes a heads-up;
+  // "cures anxiety" still blocks. An allowed hit is never silent.
+  const allowedNote = (why: string[]) => `allowed in context: ${why.join("; ")}`;
   for (const { pattern, label, severity } of RISKY_PATTERNS) {
-    if (pattern.test(text)) {
-      flags.push(severity === "block" ? `${label} (must fix)` : `${label} (heads-up)`);
-      if (severity === "block") blockingFlags.push(label);
+    if (!pattern.test(text)) continue;
+    if (severity !== "block") {
+      flags.push(`${label} (heads-up)`);
+      continue;
+    }
+    const j = judgePattern(text, pattern);
+    if (j.blocked) {
+      flags.push(`${label} (must fix)`);
+      blockingFlags.push(label);
+    } else {
+      flags.push(`${label} — ${allowedNote(j.allowedWhy)} (heads-up)`);
     }
   }
   for (const { phrase, severity } of extra) {
     const trimmed = phrase.trim();
     if (!trimmed) continue;
-    const re = new RegExp(`(^|\\W)${escapeRegExp(trimmed)}(\\W|$)`, "i");
-    if (re.test(text)) {
-      const label = `banned phrase: "${trimmed}"`;
-      flags.push(severity === "block" ? `${label} (must fix)` : `${label} (heads-up)`);
-      if (severity === "block") blockingFlags.push(label);
+    const re = new RegExp(`(?:^|(?<=\\W))${escapeRegExp(trimmed)}(?=\\W|$)`, "i");
+    if (!re.test(text)) continue;
+    const label = `banned phrase: "${trimmed}"`;
+    if (severity !== "block") {
+      flags.push(`${label} (heads-up)`);
+      continue;
+    }
+    const j = judgePattern(text, re);
+    if (j.blocked) {
+      flags.push(`${label} (must fix)`);
+      blockingFlags.push(label);
+    } else {
+      flags.push(`${label} — ${allowedNote(j.allowedWhy)} (heads-up)`);
     }
   }
   return { ok: blockingFlags.length === 0, flags, blockingFlags };

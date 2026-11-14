@@ -19,6 +19,7 @@
  *
  * Pure: no server imports.
  */
+import { claimHits } from "@/lib/ai/compliance-context-core";
 
 export const PROVIDER_LINE =
   "This post reports news and research; it is not medical advice. Talk to your healthcare provider about any health question.";
@@ -76,7 +77,8 @@ export function touchesHealth(text: string): boolean {
 }
 
 export function therapeuticWords(text: string): string[] {
-  return [...new Set((text.match(THERAPEUTIC_RE) ?? []).map((m) => m.toLowerCase()))];
+  // D244 R-14: "slow cured" is the curing process, not a claim (context read).
+  return claimHits(text, THERAPEUTIC_RE);
 }
 
 /** Same-site relative links like "/menu" or "/deals" also count as selling. */
@@ -289,6 +291,8 @@ export function __runCultureDeskCoreTests(): { passed: number; failed: number } 
 
   ok("therapeutic: treats", therapeuticWords("It treats pain").includes("treats"));
   ok("therapeutic: relieves", therapeuticWords("relieves stress").length === 1);
+  ok("therapeutic: cure process is not a claim (R-14)", therapeuticWords("Hand-trimmed and slow cured for 21 days.").length === 0);
+  ok("therapeutic: cures anxiety still is (R-14)", therapeuticWords("It cures anxiety.").includes("cures"));
   ok("therapeutic: helps with sleep", therapeuticWords("it helps with sleep").length === 1);
   ok("therapeutic: medical benefits", therapeuticWords("the medical benefits of THC").length === 1);
   ok("therapeutic: reduces anxiety", therapeuticWords("reduces anxiety").length === 1);

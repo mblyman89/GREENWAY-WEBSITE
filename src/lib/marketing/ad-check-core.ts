@@ -24,6 +24,7 @@
  * banner".
  */
 import patternsJson from "@/lib/ai/compliance-patterns.json";
+import { judgeHit } from "@/lib/ai/compliance-context-core";
 import { UNIVERSAL_CONTENT_BANS } from "@/lib/marketing/campaign-rules-core";
 import { resolveBoxText, type BannerDesign } from "@/lib/cms/banner-design-core";
 
@@ -62,10 +63,13 @@ export function checkAdText(texts: readonly (string | null | undefined)[]): AdFi
       for (const m of t.matchAll(rule.re)) {
         const found = m[0].trim().toLowerCase();
         if (!found) continue;
-        const k = `${rule.label}|${found}`;
+        // D244 R-14: a rule word used in an everyday way ("slow cured",
+        // "keep out of reach of children") is shown as a second look, not a break.
+        const kind = rule.kind === "rule" && judgeHit(t, m.index ?? 0, m[0]).allowed ? ("review" as const) : rule.kind;
+        const k = `${rule.label}|${found}|${kind}`;
         if (seen.has(k)) continue;
         seen.add(k);
-        out.push({ kind: rule.kind, label: rule.label, found });
+        out.push({ kind, label: rule.label, found });
       }
     }
   }
@@ -256,13 +260,13 @@ export function __runAdCheckCoreTests(): { passed: number; failed: number } {
   const kid = checkAdText(["Candy-sweet gummies the kids will love"]);
   ok(kid.some((f) => f.kind === "rule" && f.label === "appeal-to-minors language" && f.found === "candy"), "candy -> minors rule");
   ok(kid.some((f) => f.found === "kids"), "kids found too");
-  ok(checkAdText(["Cures your anxiety"]).some((f) => f.kind === "rule" && f.label.startsWith("medical claim")), "cure -> medical claim");
+  ok(checkAdText(["Cures your anxiety"]).some((f) => f.kind === "rule" && f.label.startsWith("medical claim")) && checkAdText(["Slow cured, hand trimmed"]).every((f) => f.kind === "review"), "cure -> medical claim; R-14: the cure process is a second look");
   ok(checkAdText(["Best flower in town"]).some((f) => f.kind === "review" && f.found === "best"), "best -> review");
   ok(checkAdText(["20% off sale, $5 deal"]).length === 0, "prices and sales are not flagged");
   ok(checkAdText(["Fresh Friday drops", "", null, undefined]).length === 0, "clean words, no findings");
   const twice = checkAdText(["kids", "KIDS"]);
   ok(twice.filter((f) => f.found === "kids").length === 1, "one finding per word");
-  const order = checkAdText(["best", "cure"]);
+  const order = checkAdText(["best", "cures pain"]);
   ok(order[0].kind === "rule" && order[order.length - 1].kind === "review", "rule breaks listed first");
   ok(adFindingMessage(kid[0]).includes("WAC 314-55-155"), "message cites the rule");
   ok(adPromptWarnings("a cartoon mascot holding a joint").length >= 1, "prompt: cartoon/mascot warned");
