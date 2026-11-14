@@ -49,6 +49,25 @@ import {
   receivedFromLabel,
   sinceLabel,
 } from "@/lib/enrichment/enrichment-manifest-core";
+// D244 E-1a: vendor-first, on-hand-first worklist (true vendor, qty, progress, pages).
+import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
+import { readOnHandLots, readWorklistVendorData } from "@/lib/enrichment/worklist-server";
+import {
+  NO_VENDOR_LABEL,
+  WORKLIST_PAGE_SIZE,
+  isOnHandStatus,
+  matchesVendor,
+  nextVendor,
+  onHandByCard,
+  pageWindow,
+  parseWorklistStock,
+  parseWorklistVendor,
+  resolveCardVendor,
+  sortByOnHand,
+  vendorOptionLabel,
+  vendorPercent,
+  vendorProgress,
+} from "@/lib/enrichment/worklist-core";
 
 function fmtMoney(minor: number | null): string {
   if (minor == null) return "—";
@@ -62,7 +81,7 @@ export const maxDuration = 300;
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; ok?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string; linked?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; ok?: string; vv?: string; page?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string; linked?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
@@ -71,6 +90,13 @@ export default async function ProductsPage({
   const sort = parseEnrichmentSort(sp.sort);
   const statusFilter = parseEnrichmentStatusFilter(sp.status);
   const stockFilter = parseEnrichmentStockFilter(sp.stock);
+  // D244 E-1a (F-51): "on hand" (in + low stock) is the DEFAULT focus;
+  // ?stock=all includes sold-out cards. The exact values stay stockFilter.
+  const stockFocus = parseWorklistStock(sp.stock);
+  // D244 E-1a (F-50): ?vv= is the card's TRUE vendor (enrichment -> lot ->
+  // brand -> POS vendor name), independent of S22's delivery ?vendor=.
+  const vv = parseWorklistVendor(sp.vv);
+  const sortOnHand = sp.sort === "onhand";
   // S22: ?manifest= (a delivery uuid or "cultivera"), ?since= (days), ?vendor= (uuid).
   const mf = parseEnrichmentManifestParams(sp);
   const manifestValue = manifestParamValue(mf.manifest);
@@ -180,6 +206,11 @@ export default async function ProductsPage({
   const keys = items.map((i) => i.source_item_id);
   // S22: the lot -> delivery attribution runs beside the enrichment read
   // (two bounded, named-column reads; null = unavailable, filters off).
+  // D244 E-1a: vendor lookups + on-hand quantities (both best-effort, null = unavailable).
+  const worklistReads = Promise.all([
+    readWorklistVendorData(),
+    readOnHandLots(Array.from(new Set(items.flatMap((i) => cardLotKeys(i))))),
+  ]);
   const [ownEnrichments, attribution] = await Promise.all([
     getEnrichmentsForKeys(keys),
     readEnrichmentAttribution(items),
@@ -192,6 +223,25 @@ export default async function ProductsPage({
   );
   const attrs = attribution?.attrs ?? null;
   const now = new Date();
+  const [vendorData, onHandLots] = await worklistReads;
+  const onHandQty = onHandLots ? onHandByCard(items.map((i) => ({ posKey: i.source_item_id, lotKeys: cardLotKeys(i) })), onHandLots) : null;
+  const cardVendor = new Map<string, string | null>();
+  if (vendorData) {
+    for (const i of items) {
+      cardVendor.set(
+        i.source_item_id,
+        resolveCardVendor(
+          {
+            ownVendorId: enrichments.get(i.source_item_id)?.vendor_id ?? null,
+            attrVendorIds: attrs?.get(i.source_item_id)?.vendorIds ?? null,
+            brandName: i.brand_name,
+            posVendorName: i.vendor_name,
+          },
+          vendorData,
+        ).vendorId,
+      );
+    }
+  }
 
   const gaps: GapFlags[] = items.map((i) =>
     computeGaps(i, enrichments.get(i.source_item_id) ?? null, attrs?.get(i.source_item_id) ?? null),
@@ -214,10 +264,28 @@ export default async function ProductsPage({
   else if (gap === "ready") filtered = filtered.filter((g) => isReadyToPublish(g));
   filtered = filterByEnrichmentStatus(filtered, statusFilter);
   filtered = filterByStock(filtered, stockFilter);
+  if (stockFocus === "on-hand") filtered = filtered.filter((g) => isOnHandStatus(g.inventoryStatus));
+  if (vendorData && vv) filtered = filtered.filter((g) => matchesVendor(cardVendor.get(g.posKey) ?? null, vv));
   // S22: invoice/manifest, received-since and vendor filters (pure).
   const manifestFiltered = applyManifestFilters(filtered, mf, attrs, now);
   filtered = manifestFiltered.rows;
   filtered = sortEnrichmentList(filtered, sort);
+  if (sortOnHand && onHandQty) filtered = sortByOnHand(filtered, onHandQty);
+  // D244 E-1a (F-52): every vendor with its on-hand progress (over ALL live cards).
+  const vendorList = vendorData
+    ? vendorProgress(
+        gaps.map((g) => ({
+          vendorId: cardVendor.get(g.posKey) ?? null,
+          inventoryStatus: g.inventoryStatus,
+          enrichmentStatus: g.enrichmentStatus,
+          hasImage: g.hasImage,
+          hasDescription: g.hasDescription,
+        })),
+        vendorData.labels,
+      )
+    : [];
+  const currentVendor = vv ? vendorList.find((p) => p.id === vv) ?? null : null;
+  const upNext = vendorData ? nextVendor(vendorList, vv) : null;
   const pickerOptions = attrs && attribution ? manifestPickerOptions(attribution.manifests, attrs, now, mf.manifest) : [];
   const focusSentence = manifestFiltered.applied ? manifestFocusSentence(mf.manifest, pickerOptions) : null;
   // Vendor choices: every vendor on a delivery with live cards (no extra read).
@@ -252,7 +320,9 @@ export default async function ProductsPage({
   const gapInsights = productGapInsights(stats);
 
   // Resolve thumbnails for the visual grid (batch — no N+1).
-  const shown = filtered.slice(0, 300);
+  // D244 E-1a (F-42): pages of WORKLIST_PAGE_SIZE instead of a hard 300 cap.
+  const pw = pageWindow(filtered.length, sp.page);
+  const shown = filtered.slice(pw.start, pw.end);
   const thumbIds: string[] = [];
   for (const g of shown) {
     const e = enrichments.get(g.posKey);
@@ -280,6 +350,7 @@ export default async function ProductsPage({
       // S20: served from the product's record (an earlier lot), not its own.
       viaProduct: viaIdentity.has(g.posKey),
       hasOwnRecord: ownEnrichments.has(g.posKey),
+      onHandQty: onHandQty ? onHandQty.get(g.posKey) ?? 0 : null,
     };
   });
 
@@ -294,6 +365,21 @@ export default async function ProductsPage({
   if (manifestValue) baseQs.set("manifest", manifestValue);
   if (mf.sinceDays !== null) baseQs.set("since", String(mf.sinceDays));
   if (mf.vendorId) baseQs.set("vendor", mf.vendorId);
+  if (sortOnHand) baseQs.set("sort", "onhand");
+  if (stockFocus === "all") baseQs.set("stock", "all");
+  if (vv) baseQs.set("vv", vv);
+  const listHref = (patch: Record<string, string | null>) => {
+    const qs = new URLSearchParams(baseQs);
+    if (view) qs.set("view", view);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null) qs.delete(k);
+      else qs.set(k, v);
+    }
+    const t = qs.toString();
+    return `/admin/products${t ? `?${t}` : ""}#worklist`;
+  };
+  const vendorHref = (id: string) => listHref({ vv: id, page: null });
+  const pageHref = (n: number) => listHref({ page: n > 1 ? String(n) : null });
   const gridHref = `/admin/products?${baseQs.toString()}`;
   const tableQs = new URLSearchParams(baseQs);
   tableQs.set("view", "table");
@@ -475,7 +561,7 @@ export default async function ProductsPage({
               published products show on the menu. Open the list, press &ldquo;Select every card matching this
               filter&rdquo;, then Publish.
             </p>
-            <Button href="/admin/products?gap=ready#worklist" variant="confirm" size="sm">
+            <Button href="/admin/products?gap=ready&stock=all#worklist" variant="confirm" size="sm">
               Show the {readyToPublish} ready to publish →
             </Button>
           </div>
@@ -508,10 +594,21 @@ export default async function ProductsPage({
             filter a link just applied. */}
         <form
           id="worklist"
-          key={`${q ?? ""}|${category ?? ""}|${brandFilter}|${gap ?? ""}|${statusFilter}|${stockFilter}|${sort}|${manifestValue}|${mf.sinceDays ?? ""}|${mf.vendorId ?? ""}`}
+          key={`${q ?? ""}|${category ?? ""}|${brandFilter}|${gap ?? ""}|${statusFilter}|${stockFilter}|${stockFocus}|${vv}|${sort}${sortOnHand ? "+onhand" : ""}|${manifestValue}|${mf.sinceDays ?? ""}|${mf.vendorId ?? ""}`}
           className="scroll-mt-24 flex flex-wrap items-center gap-3"
           method="get"
         >
+          {/* D244 E-1a (F-50): every vendor with counts, from the card's true vendor. */}
+          {vendorList.length > 0 && (
+            <Select name="vv" defaultValue={vv} className="w-72 text-xs" aria-label="Vendor">
+              <option value="">Every vendor</option>
+              {vendorList.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {vendorOptionLabel(p)}
+                </option>
+              ))}
+            </Select>
+          )}
           {/* S22 (bible S22.4): the invoice/manifest picker, S14's label. */}
           {pickerOptions.length > 0 && (
             <label className="flex items-center gap-2 text-xs font-semibold text-[var(--admin-text-faint)]">
@@ -586,13 +683,15 @@ export default async function ProductsPage({
             <option value="archived">Archived</option>
           </Select>
           {/* SLICE 72 — stock filter: fix what shoppers can BUY first. */}
-          <Select name="stock" defaultValue={stockFilter} className="w-auto">
-            <option value="">Any stock</option>
+          {/* D244 E-1a: "On hand" is the default; "Include sold-out" shows every card. */}
+          <Select name="stock" defaultValue={stockFocus === "on-hand" ? "" : stockFocus} className="w-auto">
+            <option value="">On hand (in + low stock)</option>
+            <option value="all">Include sold-out (every card)</option>
             <option value="in-stock">In stock</option>
             <option value="low-stock">Low stock</option>
             <option value="unavailable">Sold out</option>
           </Select>
-          <Select name="sort" defaultValue={sort} className="w-auto">
+          <Select name="sort" defaultValue={sortOnHand ? "onhand" : sort} className="w-auto">
             <option value="gaps">Sort: most gaps first</option>
             <option value="priority">Sort: smart priority (sellable + broken first)</option>
             <option value="name">Sort: name A–Z</option>
@@ -602,11 +701,12 @@ export default async function ProductsPage({
             <option value="priceHigh">Sort: price high → low</option>
             <option value="priceLow">Sort: price low → high</option>
             <option value="newest">Sort: newest from receiving</option>
+            {onHandQty && <option value="onhand">Sort: most on hand first</option>}
           </Select>
           <Button type="submit" variant="neutral">
             Filter
           </Button>
-          {(q || category || brandFilter || gap || statusFilter || stockFilter || hasManifestFilters(mf)) && (
+          {(q || category || brandFilter || gap || statusFilter || vv || stockFocus === "all" || stockFilter || hasManifestFilters(mf)) && (
             <Link
               href={view ? `/admin/products?view=${view}` : "/admin/products"}
               className="text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
@@ -731,11 +831,67 @@ export default async function ProductsPage({
           </div>
         )}
 
+        {/* D244 E-1a (F-52): the vendor you are working through, and who is next. */}
+        {currentVendor && (
+          <div
+            data-testid="vendor-progress"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-3"
+          >
+            <div className="text-sm text-[var(--admin-text-muted)]">
+              <p>
+                <span className="font-bold text-[var(--admin-accent)]">{currentVendor.label}</span>
+                {": "}
+                {currentVendor.onHandPublished} of {currentVendor.onHand} on-hand card{currentVendor.onHand === 1 ? "" : "s"} published (
+                {vendorPercent(currentVendor)}%) · {currentVendor.onHandReady} ready to publish ·{" "}
+                {currentVendor.onHandMissingCopy} missing a real description · {currentVendor.onHandMissingPhoto} missing a photo ·{" "}
+                {currentVendor.total} live card{currentVendor.total === 1 ? "" : "s"} in all.
+              </p>
+              <div className="mt-2 h-1.5 w-64 max-w-full overflow-hidden rounded-full bg-black/30" aria-hidden="true">
+                <div className="h-full bg-[var(--admin-accent)]" style={{ width: `${vendorPercent(currentVendor)}%` }} />
+              </div>
+            </div>
+            {upNext ? (
+              <Button href={vendorHref(upNext.id)} variant="neutral" size="sm">
+                Next vendor: {upNext.label} →
+              </Button>
+            ) : (
+              <span className="text-xs font-semibold text-[var(--admin-accent)]">Every vendor&apos;s on-hand cards are published.</span>
+            )}
+          </div>
+        )}
+        {vendorData && !vv && upNext && (
+          <p className="text-xs text-[var(--admin-text-faint)]" data-testid="vendor-start">
+            Work one vendor at a time:{" "}
+            <Link href={vendorHref(upNext.id)} className="font-semibold text-[var(--admin-accent)] hover:underline">
+              start with {upNext.label} →
+            </Link>
+          </p>
+        )}
+        {vv === "none" && vendorData && (
+          <p className="text-xs text-[var(--admin-text-faint)]">
+            {NO_VENDOR_LABEL}: no enrichment vendor, no vendor on a received lot, no brand linked to a vendor, and the POS vendor name
+            matches no vendor or alias. Set the brand&apos;s vendor under Brands to file them.
+          </p>
+        )}
+        {!vendorData && (
+          <p className="text-xs text-[var(--admin-gold)]" data-testid="vendor-unavailable">
+            The vendor list could not be read just now, so the vendor filter is off. Every other filter still works.
+          </p>
+        )}
+        {!onHandQty && (
+          <p className="text-xs text-[var(--admin-gold)]" data-testid="onhand-unavailable">
+            On-hand quantities could not be read just now, so the quantity column and sort are off. The stock filter still
+            works (it uses the menu&apos;s stock status).
+          </p>
+        )}
+
         {/* SLICE 72 — honest result count so filtering feels responsive. */}
         <p className="text-xs text-[var(--admin-text-faint)]">
-          Showing <span className="font-semibold text-[var(--admin-text-muted)]">{Math.min(filtered.length, 300)}</span> of{" "}
+          Showing <span className="font-semibold text-[var(--admin-text-muted)]">{shown.length === 0 ? 0 : `${pw.start + 1}–${pw.end}`}</span> of{" "}
           <span className="font-semibold text-[var(--admin-text-muted)]">{filtered.length}</span> matching products
-          {filtered.length !== gaps.length ? ` (${gaps.length} total on the live menu)` : ""}.
+          {stockFocus === "on-hand" ? " on hand" : ""}
+          {filtered.length !== gaps.length ? ` (${gaps.length} total on the live menu)` : ""}
+          {pw.pages > 1 ? ` · page ${pw.page} of ${pw.pages}` : ""}.
         </p>
 
         {filtered.length > 0 && (
@@ -774,6 +930,7 @@ export default async function ProductsPage({
                 <th className="px-4 py-3">From delivery</th>
                 <th className="px-4 py-3 text-right">Price</th>
                 <th className="px-4 py-3 text-center">Stock</th>
+                {onHandQty && <th className="px-4 py-3 text-right">On hand</th>}
                 <th className="px-4 py-3 text-center">Desc</th>
                 <th className="px-4 py-3 text-center">Image</th>
                 <th className="px-4 py-3 text-center">Brand link</th>
@@ -782,7 +939,7 @@ export default async function ProductsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
-              {filtered.slice(0, 300).map((g) => (
+              {shown.map((g) => (
                 <tr key={g.posKey} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
                   <td className="px-3 py-3">
                     <BulkCheckbox
@@ -823,6 +980,9 @@ export default async function ProductsPage({
                       <span className="text-[var(--admin-text-faint)]">○</span>
                     )}
                   </td>
+                  {onHandQty && (
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--admin-text-muted)]">{onHandQty.get(g.posKey) ?? 0}</td>
+                  )}
                   <td className="px-4 py-3 text-center">
                     {g.hasDescription ? (
                       "✅"
@@ -848,8 +1008,26 @@ export default async function ProductsPage({
           </table>
         </div>
         )}
-        {filtered.length > 300 && (
-          <p className="text-xs text-[var(--admin-text-faint)]">Showing first 300 of {filtered.length}. Use search/filters to narrow.</p>
+        {pw.pages > 1 && (
+          <nav className="flex flex-wrap items-center gap-3 text-xs" aria-label="Pages" data-testid="worklist-pager">
+            {pw.page > 1 ? (
+              <Link href={pageHref(pw.page - 1)} className="font-semibold text-[var(--admin-accent)] hover:underline">
+                ← Previous {WORKLIST_PAGE_SIZE}
+              </Link>
+            ) : (
+              <span className="text-[var(--admin-text-faint)]">← Previous</span>
+            )}
+            <span className="text-[var(--admin-text-faint)]">
+              Page {pw.page} of {pw.pages}
+            </span>
+            {pw.page < pw.pages ? (
+              <Link href={pageHref(pw.page + 1)} className="font-semibold text-[var(--admin-accent)] hover:underline">
+                Next {WORKLIST_PAGE_SIZE} →
+              </Link>
+            ) : (
+              <span className="text-[var(--admin-text-faint)]">Next →</span>
+            )}
+          </nav>
         )}
         {isTable && filtered.length === 0 && (
           <EmptyState
