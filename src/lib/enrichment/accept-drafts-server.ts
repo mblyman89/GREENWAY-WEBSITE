@@ -146,13 +146,15 @@ export async function acceptHighConfidenceForKey(key: string, userId: string, th
  * D244 R-18: every product key with a pending all-fields (v2) draft, read in
  * pages by id so it is not capped at what the review grid shows.
  */
-export async function listPendingDraftKeys(maxPages = 60): Promise<string[]> {
+const PENDING_KEYS_PAGE = 500; // under the PostgREST row cap, so a short page really means the end
+
+export async function listPendingDraftKeys(maxPages = 120): Promise<string[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
   const keys = new Set<string>();
   let cursor = "";
   for (let page = 0; page < maxPages; page++) {
-    let q = admin.from("ai_suggestions").select("id,entity_id,source").eq("entity_type", "product").eq("status", "pending").order("id", { ascending: true }).limit(1000);
+    let q = admin.from("ai_suggestions").select("id,entity_id,source").eq("entity_type", "product").eq("status", "pending").order("id", { ascending: true }).limit(PENDING_KEYS_PAGE);
     if (cursor) q = q.gt("id", cursor);
     const { data, error } = await q;
     if (error || !data || data.length === 0) break;
@@ -160,7 +162,7 @@ export async function listPendingDraftKeys(maxPages = 60): Promise<string[]> {
       if (parseEvidenceSource(r.source).v2 && r.entity_id) keys.add(r.entity_id);
     }
     cursor = (data[data.length - 1] as { id: string }).id;
-    if (data.length < 1000) break;
+    if (data.length < PENDING_KEYS_PAGE) break;
   }
   return [...keys];
 }
