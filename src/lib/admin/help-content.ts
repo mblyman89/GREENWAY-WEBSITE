@@ -414,6 +414,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/products/copilot",
       },
       {
+        q: "A vendor uses the same photo for all its carts (or gummies). Can I add it to all of them at once?",
+        a: "Yes, with Vendor kits. Pick the vendor, and its products are sorted into like-kind groups by category, or by the POS category the vendor uses. Open a group: the products with no photo come first and are ticked for you. The photos are ranked for a generic, on-brand picture (this vendor's own photos, the same type, no single strain name printed on it), and Ask the AI has the photo reader check the top ones. Pick the photo and press Apply. Each product gets it, as the cover when it has none, and a product with a photo goes live.",
+        href: "/admin/products/vendor-kits",
+      },
+      {
         q: "When does a product go live on the menu?",
         a: "As soon as it has a photo. When a person attaches a published photo to a draft product, it publishes by itself; descriptions and facts can come later. The full daily routine is SOP-10 (Product Enrichment) in the SOP Library.",
         href: "/admin/staffing/sop-library/sop-10",

@@ -57,6 +57,7 @@ import {
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import { readOnHandLots, readWorklistVendorData } from "@/lib/enrichment/worklist-server";
 import { copilotUrl } from "@/lib/enrichment/copilot-core";
+import { kitUrl } from "@/lib/enrichment/vendor-kit-core";
 import {
   NO_VENDOR_LABEL,
   WORKLIST_PAGE_SIZE,
@@ -818,6 +819,9 @@ export default async function ProductsPage({
               <Button href="/admin/products/copilot" variant="neutral" size="sm">
                 Open the Copilot →
               </Button>
+              <Button href="/admin/products/vendor-kits" variant="neutral" size="sm" data-testid="open-vendor-kits">
+                Vendor kits (one photo, many products) →
+              </Button>
               <Button href="/admin/products/bulk-ai" variant="save" size="sm">
                 Open bulk AI review →
               </Button>
@@ -868,6 +872,10 @@ export default async function ProductsPage({
             {/* D244 R-5: the same vendor, one card at a time, with the copilot. */}
             <Button href={copilotUrl({ vendor: currentVendor.id })} variant="save" size="sm" data-testid="vendor-copilot">
               Open Copilot session →
+            </Button>
+            {/* D244 R-8: one generic on-brand photo for this vendor's like-kind products. */}
+            <Button href={kitUrl({ vendor: currentVendor.id })} variant="neutral" size="sm" data-testid="vendor-kits">
+              Vendor kit photos →
             </Button>
             {upNext ? (
               <Button href={vendorHref(upNext.id)} variant="neutral" size="sm">
