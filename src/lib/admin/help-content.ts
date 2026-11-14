@@ -400,18 +400,23 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Can AI write product descriptions for me?",
-        a: "Yes. Use the AI helper on a product to draft a description, tags, or alt-text. Review and edit it, then save. It's always a draft until you approve it.",
+        a: "Yes. On a product press ⚡ Enrich now (live, all fields): the AI drafts the name, descriptions, strain type, potency, aroma, flavor, terpenes, effects, tags and search text from the POS, the vendor, the photo, the lots and the lab certificate. Accept, edit in the box and Save & accept, or Reject. Accept all takes every draft at 80% or better plus best guesses, which are flagged in Needs a closer look. Nothing changes until you accept.",
         href: "/admin/products",
       },
       {
         q: "Can I enrich lots of products at once?",
-        a: "Yes — Bulk AI drafts descriptions and details across many products in one pass, and you approve them together. Still drafts-first, always.",
+        a: "Yes. On Bulk AI pick a vendor or tick products, then choose ⚡ Draft now (live, minutes, normal price) or 🌙 Add to the overnight batch (within 24 hours, about half price). Review on the grid, edit any draft in its box, and Accept all per product. Still drafts-first, always.",
         href: "/admin/products/bulk-ai",
       },
       {
         q: "What is the Enrichment Copilot?",
         a: "A one-vendor work session: the products you have on hand, one card at a time, the ones with no photo first. Press 1-9 to attach a recommended photo, D to draft every field, A to accept the drafts at 80% or better, P to publish and go to the next card. The chat on the right suggests changes (shorter description, strain type and potency from the lab certificate, which photo is the product); you press Use this, and it still passes the compliance check.",
         href: "/admin/products/copilot",
+      },
+      {
+        q: "When does a product go live on the menu?",
+        a: "As soon as it has a photo. When a person attaches a published photo to a draft product, it publishes by itself; descriptions and facts can come later. The full daily routine is SOP-10 (Product Enrichment) in the SOP Library.",
+        href: "/admin/staffing/sop-library/sop-10",
       },
       {
         q: "What is Product Mastering?",

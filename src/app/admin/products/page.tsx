@@ -3,6 +3,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
+import { sopForStage } from "@/lib/catalog/sop-core";
+import { sopLibraryHref } from "@/lib/sop-library/catalog-core";
 import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { StatCard } from "@/components/admin/StatCard";
@@ -136,7 +138,7 @@ export default async function ProductsPage({
               "Publish a menu: import your POS export under Menu Imports and publish it.",
               "Products then appear here automatically — your POS only provides names and prices.",
               "Open a product to add a photo, description, tags, and strain type.",
-              "Use the AI helper to draft copy, then edit and approve it. Price & stock stay POS-controlled.",
+              "Attach a photo: a product goes live once it has one. The AI drafts the words for you to accept. Price & stock stay POS-controlled.",
             ]}
           >
             <p>
@@ -182,8 +184,8 @@ export default async function ProductsPage({
               "Publish a menu first: import your POS export under Menu Imports and publish it.",
               "Products then appear here automatically — your POS only provides names and prices.",
               "Open a product to add a photo, description, tags, and strain type.",
-              "Use the AI helper to draft a description or alt-text, then edit and approve it.",
-              "Save — the richer info shows on your public product page. Price & stock stay POS-controlled.",
+              "Attach a photo: a product goes live once it has one. The AI drafts the words for you to accept.",
+              "The words follow as you accept them. Price & stock stay POS-controlled.",
             ]}
           >
             <p>
@@ -400,12 +402,7 @@ export default async function ProductsPage({
           <HelpPanel
             id="products"
             title="How product enrichment works"
-            steps={[
-              "Products come in automatically when you receive and approve them (or, one time, from the initial Cultivera menu upload).",
-              "Open a product to add a photo, description, and tags.",
-              "Use the AI helper to draft a description or alt-text, then edit it.",
-              "Save — the richer info shows on your public product page.",
-            ]}
+            steps={[...sopForStage("enrich").steps]}
           >
             <p>
               Your POS only provides names and prices. Everything that makes a
@@ -413,6 +410,13 @@ export default async function ProductsPage({
               here. The AI helper only writes drafts; you always approve.
             </p>
             <SopSheetLink slug="enrich" />
+            <p className="text-xs text-[var(--admin-text-muted)]" data-testid="sop10-link">
+              The whole procedure, step by step:{" "}
+              <Link href={sopLibraryHref("sop-10")} className="text-[var(--admin-accent)] hover:underline">
+                SOP-10 Product Enrichment
+              </Link>
+              .
+            </p>
           </HelpPanel>
         }
       />
