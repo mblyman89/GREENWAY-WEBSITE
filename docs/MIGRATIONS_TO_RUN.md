@@ -4224,3 +4224,26 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0364_budalerts_menus.rollback.sql` (drops the four tables;
   photos already saved to the media library stay there as drafts).
+
+- [ ] **`supabase/migrations/0365_media_embeddings.sql`** — D244 R-4 semantic photo search (owner: "for the embeddings
+  question, I am not sure. is this the professional enterprise grade solution? please use your expert judgement to
+  implement this properly, the right way, not the easy way."). Run it AFTER 0364. One new table, service role only,
+  RLS on: `media_embeddings` (the meaning fingerprint of each library photo, text and image), plus four functions.
+  It turns on the `vector` extension itself (Supabase has it; you can also switch it on under Database →
+  Extensions → vector). If the extension is not available the file still applies and search keeps using names
+  only; re-run the file after enabling it. Until it is applied the Semantic photo search panel on `/admin/media`
+  says the migration is missing; nothing else changes. Needs `AI_GEMINI_API_KEY`.
+
+  Safe to re-run. Paste the comment-free copy `supabase/migrations/editor-safe/0365_media_embeddings.EDITOR_SAFE.sql`
+  (the original has comments with apostrophes). If the editor shows "Potential issue detected", click
+  **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select public.media_embedding_capability();  -- vector_installed true, column_ready true
+  select public.media_embedding_health();      -- live_images, text_done, image_done ... (counts grow over a few hours)
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0365_media_embeddings.rollback.sql` (drops the table and the four
+  functions; the vector extension stays installed; photos are untouched).

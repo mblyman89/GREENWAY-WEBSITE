@@ -7,11 +7,17 @@
  *   of the whole library. The vendor is the enrichment's own vendor card,
  *   else the same resolution the worklist uses (brand's vendor, POS vendor
  *   name) — never a guess beyond those links.
+ *   D244 R-4: plus the semantic hits (embedding search on the product's
+ *   name / brand / category, text AND picture rows). Their similarity is
+ *   passed to the recommender as calibrated evidence (never "High" alone).
+ *   Off / not indexed = [] and the panel is exactly the word-based one.
  */
 import "server-only";
 import { readLibraryAssetsByIds, readLibraryPickerAssets, readSearchHitAssets } from "@/lib/media/library-picker-server";
 import { loadImageMemory, loadOnRecordImageIds } from "@/lib/catalog/image-memory-server";
 import { recommendImages } from "@/lib/catalog/image-recommend-core";
+import { semanticSearch } from "@/lib/media/media-embed-server";
+import { bestSimilarity, productSemanticQuery } from "@/lib/media/media-embed-core";
 import { enrichmentIdentityForItem } from "./enrichment-identity-core";
 import { readWorklistVendorData } from "./worklist-server";
 import { resolveCardVendor } from "./worklist-core";
@@ -76,6 +82,8 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
     };
     const full = recommendFullQuery(name);
     const wordQs = recommendSearchWords(product);
+    const semQ = productSemanticQuery({ name, brand: item.brand_name, category: item.category });
+    const semP = semQ ? semanticSearch(semQ, 40).catch(() => []) : Promise.resolve([]);
     const [memory, onRecord, shelf, fullHits, ...wordHits] = await Promise.all([
       loadImageMemory(keys),
       loadOnRecordImageIds(keys),
@@ -85,8 +93,13 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
     ]);
     const rememberedIds = memory.rows.map((r) => r.media_asset_id);
     const onRecordIds = keys.flatMap((k) => onRecord.get(k) ?? []);
-    const picked = await readLibraryAssetsByIds([...rememberedIds, ...onRecordIds]);
-    const pool = mergeRecommendPools([picked, fullHits, ...wordHits, shelf.assets]);
+    const semRows = await semP;
+    const semantic = bestSimilarity(semRows);
+    const [picked, semHits] = await Promise.all([
+      readLibraryAssetsByIds([...rememberedIds, ...onRecordIds]),
+      semantic.size ? readLibraryAssetsByIds([...semantic.keys()]) : Promise.resolve([]),
+    ]);
+    const pool = mergeRecommendPools([picked, fullHits, ...wordHits, semHits, shelf.assets]);
     const view = recommendImages({
       assets: pool,
       product,
@@ -94,6 +107,7 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
       onRecordIds,
       galleryIds: enrichment?.image_media_ids ?? [],
       limit: RECOMMEND_WIDE_LIMIT,
+      semantic,
     });
     const panel = orderRecommendPanel(view, pool, name);
     return { ...panel, libraryOk: shelf.ok, memoryMissing: memory.missing, identityKey: keys[0] ?? "", vendorId };

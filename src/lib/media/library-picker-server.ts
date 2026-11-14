@@ -25,6 +25,8 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { publicUrlForKey } from "./store";
 import { LIBRARY_READ_LIMIT, type LibraryPickerAsset, type LibraryScope } from "./library-picker-core";
 import { isMissingColumn } from "./provenance-core";
+import { semanticNeighbors, semanticSearch } from "./media-embed-server";
+import { rrfFuse } from "./media-embed-core";
 
 const BASE_COLUMNS =
   "id, storage_key, public_url, filename, title, alt_text, tags, usage_type, status, mime_type, license_status, created_at";
@@ -290,6 +292,15 @@ export async function readImageSearch(req: ImageSearchRequest): Promise<ImageSea
         ids.push(r.media_id);
         chips.set(r.media_id, (r.reasons ?? []).map((x) => SIMILAR_LABEL[x] ?? x));
       }
+      // D244 R-4: photos that READ or LOOK like it (embeddings), fused by RRF.
+      const near = await semanticNeighbors(similarTo, 48);
+      if (near.length) {
+        const textNear = near.filter((r) => r.kind === "text").map((r) => r.media_id);
+        const imageNear = near.filter((r) => r.kind === "image").map((r) => r.media_id);
+        for (const id of textNear) chips.set(id, [...(chips.get(id) ?? []), "Similar description"]);
+        for (const id of imageNear) chips.set(id, [...(chips.get(id) ?? []), "Looks alike"]);
+        ids = rrfFuse([ids, imageNear, textNear]).map((h) => h.id).slice(0, 72);
+      }
     } else {
       const q = (req.query ?? "").trim();
       if (q.length >= 2) {
@@ -301,6 +312,16 @@ export async function readImageSearch(req: ImageSearchRequest): Promise<ImageSea
         });
         if (error) return empty(/does not exist|could not find|schema cache/i.test(error.message) ? "Search needs the 0352 database update." : error.message, false);
         ids = ((data as { media_id: string }[] | null) ?? []).map((r) => r.media_id).filter(Boolean);
+        // D244 R-4: hybrid search - the word hits and the meaning hits (text and
+        // picture embeddings) fused by Reciprocal Rank Fusion. Off = words only.
+        const sem = await semanticSearch(q, 40);
+        if (sem.length) {
+          const words = new Set(ids);
+          const semText = sem.filter((r) => r.kind === "text").map((r) => r.media_id);
+          const semImage = sem.filter((r) => r.kind === "image").map((r) => r.media_id);
+          for (const id of new Set([...semText, ...semImage])) if (!words.has(id)) chips.set(id, ["Matches by meaning"]);
+          ids = rrfFuse([ids, semText, semImage]).map((h) => h.id).slice(0, SEARCH_HITS);
+        }
       } else if ((req.scope === "vendor" && vendorId) || (req.scope === "brand" && brandId)) {
         const rows = await readScoped(admin, req.usage ?? "all", req.scope === "vendor" && vendorId ? [vendorId] : [], req.scope === "brand" && brandId ? [brandId] : []);
         ids = rows.map((r) => r.id);
@@ -322,6 +343,8 @@ export async function readImageSearch(req: ImageSearchRequest): Promise<ImageSea
       if (!r || r.status === "archived") continue;
       if (req.usage === "product" && r.usage_type !== "product") continue;
       if (!similarTo && req.scope === "brand" && brandId && (r.brand_id ?? "") !== brandId) continue;
+      // D244 R-4: meaning hits come from the whole library; keep the vendor scope.
+      if (!similarTo && req.scope === "vendor" && vendorId && (r.vendor_id ?? "") !== vendorId) continue;
       assets.push(toAsset(r));
     }
     return { ok: true, assets, chips, note: null };
