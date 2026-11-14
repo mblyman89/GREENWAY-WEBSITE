@@ -24,6 +24,8 @@ import {
   type BulkRow,
 } from "@/lib/enrichment/bulk-publish-core";
 import { backHref } from "@/lib/admin/back-link-core";
+// D244 E-1b (F-40): every detail redirect keeps the list's `back`.
+import { cleanBack, cleanKey, detailUrl, parseStatusIntent } from "@/lib/enrichment/detail-nav-core";
 import {
   generateProductDescription,
   generateProductTags,
@@ -193,6 +195,7 @@ export async function fillMenuSensoryAction(): Promise<void> {
 export async function updateProductEnrichment(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
 
   // Lazy-init the row so we can always update by key.
@@ -232,10 +235,10 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
   const image = formData.get("image");
   if (image instanceof File && image.size > 0) {
     if (!IMAGE_MIME.has(image.type)) {
-      redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Image must be PNG, JPG, WEBP, or GIF."));
+      redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Image must be PNG, JPG, WEBP, or GIF.")));
     }
     if (image.size > MAX_IMG_BYTES) {
-      redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Image exceeds 4 MB (the upload limit)."));
+      redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Image exceeds 4 MB (the upload limit).")));
     }
     const buffer = Buffer.from(await image.arrayBuffer());
     const asset = await uploadMedia({
@@ -272,7 +275,7 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
   // no_inventory). Write the live rows, audit each change, refresh the site.
   const visResult = await applyProductVisibility(key, vis);
   if (!visResult.ok) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(visResult.error));
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(visResult.error)));
   }
   if (visResult.changed.length > 0) {
     await recordAudit({
@@ -289,15 +292,19 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  // D244 E-1b (F-41): "Save & next" opens the next card in the same list.
+  const nextKey = formData.get("then") === "next" ? cleanKey(formData.get("nextKey")) : "";
+  if (nextKey && nextKey !== key) redirect(detailUrl(nextKey, listBack, "?saved=1"));
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 /** Publish / unpublish / archive the enrichment. */
 export async function setEnrichmentStatus(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
-  const raw = String(formData.get("status") ?? "draft");
-  const status = raw === "published" ? "published" : raw === "archived" ? "archived" : "draft";
+  const listBack = cleanBack(formData.get("back"));
+  // D244 E-1b: "published:next" = Publish & next.
+  const { status, andNext } = parseStatusIntent(formData.get("status") ?? "draft");
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
 
   await ensureEnrichment(key, {}, session.userId);
@@ -322,7 +329,9 @@ export async function setEnrichmentStatus(formData: FormData): Promise<void> {
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   revalidatePath("/menu");
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  const nextKey = andNext ? cleanKey(formData.get("nextKey")) : "";
+  if (nextKey && nextKey !== key) redirect(detailUrl(nextKey, listBack, "?saved=1"));
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 /**
@@ -417,6 +426,7 @@ export async function bulkSetEnrichmentStatusAction(formData: FormData): Promise
 export async function generateProductAi(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const kind = String(formData.get("kind") ?? "description");
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
 
@@ -456,7 +466,7 @@ export async function generateProductAi(formData: FormData): Promise<void> {
       await generateProductDescription(key, facts, session.userId);
     }
   } catch (err) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent((err as Error).message));
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent((err as Error).message)));
   }
 
   await recordAudit({
@@ -469,7 +479,7 @@ export async function generateProductAi(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?ai=1#ai`);
+  redirect(detailUrl(key, listBack, "?ai=1", "#ai"));
 }
 
 /** Accept an AI suggestion: apply its value to the enrichment, mark accepted. */
@@ -477,10 +487,11 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const id = String(formData.get("id") ?? "");
   const key = String(formData.get("key") ?? "");
-  if (!id || !key) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing suggestion."));
+  const listBack = cleanBack(formData.get("back"));
+  if (!id || !key) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing suggestion.")));
 
   const sugg = await getSuggestion(id);
-  if (!sugg) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Suggestion not found."));
+  if (!sugg) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Suggestion not found.")));
 
   // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
   const gate = await acceptWithComplianceGate(sugg!);
@@ -493,7 +504,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
       entityId: key,
       after: { field: sugg!.field_key, ...gate.audit },
     });
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(gate.message) + "#ai");
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(gate.message), "#ai"));
   }
 
   await ensureEnrichment(key, {}, session.userId);
@@ -511,7 +522,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
     // so a row edited in the database can never exceed the length rules.
     const seo = parseSeoSuggestion(sugg!.suggested_value);
     if (!seo) {
-      redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("That SEO draft could not be read. Draft it again.") + "#ai");
+      redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("That SEO draft could not be read. Draft it again."), "#ai"));
     }
     await updateEnrichment(key, { seo_title: seo!.title, seo_description: seo!.description }, session.userId);
   }
@@ -534,7 +545,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1#ai`);
+  redirect(detailUrl(key, listBack, "?saved=1", "#ai"));
 }
 
 /** Reject an AI suggestion (discard, mark rejected). */
@@ -542,11 +553,12 @@ export async function rejectSuggestion(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const id = String(formData.get("id") ?? "");
   const key = String(formData.get("key") ?? "");
-  if (!id) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing suggestion."));
+  const listBack = cleanBack(formData.get("back"));
+  if (!id) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing suggestion.")));
 
   await reviewSuggestion(id, "rejected", session.userId);
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?#ai`);
+  redirect(detailUrl(key, listBack, "", "#ai"));
 }
 
 // ---------------------------------------------------------------------------
@@ -561,20 +573,20 @@ const APPLYABLE_TEXT_FIELDS = new Set(["description", "short_description"]);
 export async function applyMatchedText(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const field = String(formData.get("field") ?? "");
   const value = String(formData.get("value") ?? "").trim();
   const source = String(formData.get("source") ?? "match");
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   if (!APPLYABLE_TEXT_FIELDS.has(field) || !value) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Nothing to apply."));
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Nothing to apply.")));
   }
 
   // Compliance gate: blocking flags refuse the apply (warn-only passes).
   const scan = checkCompliance(value);
   if (scan.blockingFlags.length > 0) {
     redirect(
-      `/admin/products/${encodeURIComponent(key)}?error=` +
-        encodeURIComponent(`Blocked by compliance check: ${scan.blockingFlags.join(", ")}.`),
+      detailUrl(key, listBack, "?error=" + encodeURIComponent(`Blocked by compliance check: ${scan.blockingFlags.join(", ")}.`)),
     );
   }
 
@@ -591,7 +603,7 @@ export async function applyMatchedText(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 /**
@@ -603,11 +615,12 @@ export async function applyMatchedText(formData: FormData): Promise<void> {
 export async function attachKbMatchFacts(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "").trim();
+  const listBack = cleanBack(formData.get("back"));
   const kbId = String(formData.get("kbId") ?? "").trim();
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   const res = await attachKbMatchFactsServer({ posKey: key, kbId, actor: { userId: session.userId } });
   if (!res.ok) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(res.error) + "#matches");
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(res.error), "#matches"));
   }
   // Promote the newly-accepted facts into the KB (drafts-only, best-effort),
   // exactly as accepting an AI suggestion does.
@@ -627,21 +640,22 @@ export async function attachKbMatchFacts(formData: FormData): Promise<void> {
     },
   });
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1&note=` + encodeURIComponent(res.message) + "#matches");
+  redirect(detailUrl(key, listBack, "?saved=1&note=" + encodeURIComponent(res.message), "#matches"));
 }
 
 /** Attach an EXISTING media-library asset (KB image / library match) to the gallery. */
 export async function attachMatchedMedia(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const mediaId = String(formData.get("mediaId") ?? "").trim();
   const source = String(formData.get("source") ?? "match");
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
-  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+  if (!mediaId) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing media id.")));
 
   const asset = await getMedia(mediaId);
   if (!asset) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("That media asset no longer exists."));
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("That media asset no longer exists.")));
   }
 
   await ensureEnrichment(key, {}, session.userId);
@@ -654,7 +668,7 @@ export async function attachMatchedMedia(formData: FormData): Promise<void> {
     mediaId,
   );
   if (merge.alreadyPresent) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+    redirect(detailUrl(key, listBack, "?saved=1"));
   }
   await updateEnrichment(
     key,
@@ -673,18 +687,19 @@ export async function attachMatchedMedia(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 /** Import a VENDOR-hosted image (Cultivera/GrowFlow menu line) then attach it. */
 export async function importVendorImage(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const imageUrl = String(formData.get("imageUrl") ?? "").trim();
   const label = String(formData.get("label") ?? "Product").trim() || "Product";
   const platform = String(formData.get("platform") ?? "vendor");
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
-  if (!imageUrl) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing image URL."));
+  if (!imageUrl) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing image URL.")));
 
   let assetId: string;
   try {
@@ -699,7 +714,7 @@ export async function importVendorImage(formData: FormData): Promise<void> {
     assetId = asset.id;
   } catch (err) {
     const msg = err instanceof HarvestImageError ? err.message : "Could not import that vendor image.";
-    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(msg));
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(msg)));
     return;
   }
 
@@ -731,7 +746,7 @@ export async function importVendorImage(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 // ---------------------------------------------------------------------------
@@ -755,9 +770,10 @@ export async function importVendorImage(formData: FormData): Promise<void> {
 export async function removeProductImage(boundMediaId: string, formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const mediaId = (boundMediaId || String(formData.get("removeImage") ?? formData.get("mediaId") ?? "")).trim();
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
-  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+  if (!mediaId) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing media id.")));
 
   const current = await getEnrichment(key);
   const edit = detachImageFromGallery(
@@ -768,7 +784,7 @@ export async function removeProductImage(boundMediaId: string, formData: FormDat
     mediaId,
   );
   if (!edit.changed) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+    redirect(detailUrl(key, listBack, "?saved=1"));
   }
 
   await ensureEnrichment(key, {}, session.userId);
@@ -798,7 +814,7 @@ export async function removeProductImage(boundMediaId: string, formData: FormDat
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   revalidatePath("/menu");
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 /**
@@ -808,9 +824,10 @@ export async function removeProductImage(boundMediaId: string, formData: FormDat
 export async function setProductPrimaryImage(boundMediaId: string, formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const mediaId = (boundMediaId || String(formData.get("primaryImage") ?? formData.get("mediaId") ?? "")).trim();
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
-  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+  if (!mediaId) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing media id.")));
 
   const current = await getEnrichment(key);
   const edit = setPrimaryImage(
@@ -821,7 +838,7 @@ export async function setProductPrimaryImage(boundMediaId: string, formData: For
     mediaId,
   );
   if (!edit.changed) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+    redirect(detailUrl(key, listBack, "?saved=1"));
   }
 
   await ensureEnrichment(key, {}, session.userId);
@@ -841,7 +858,7 @@ export async function setProductPrimaryImage(boundMediaId: string, formData: For
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   revalidatePath("/menu");
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 /**
@@ -851,13 +868,14 @@ export async function setProductPrimaryImage(boundMediaId: string, formData: For
 export async function moveProductImage(boundPacked: string, formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const packed = (boundPacked || String(formData.get("moveImage") ?? "")).trim();
   const sep = packed.lastIndexOf("|");
   const mediaId = sep >= 0 ? packed.slice(0, sep).trim() : String(formData.get("mediaId") ?? "").trim();
   const rawDir = sep >= 0 ? packed.slice(sep + 1) : String(formData.get("direction") ?? "");
   const direction = rawDir === "left" ? "left" : "right";
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
-  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+  if (!mediaId) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing media id.")));
 
   const current = await getEnrichment(key);
   const edit = moveImageInGallery(
@@ -869,7 +887,7 @@ export async function moveProductImage(boundPacked: string, formData: FormData):
     direction,
   );
   if (!edit.changed) {
-    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+    redirect(detailUrl(key, listBack, "?saved=1"));
   }
 
   await ensureEnrichment(key, {}, session.userId);
@@ -886,7 +904,7 @@ export async function moveProductImage(boundPacked: string, formData: FormData):
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   revalidatePath("/menu");
-  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }
 
 // ---------------------------------------------------------------------------
@@ -906,16 +924,17 @@ export async function moveProductImage(boundPacked: string, formData: FormData):
 export async function researchProductAction(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const name = String(formData.get("posName") ?? "").trim() || "Product";
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   const back = `/admin/products/${encodeURIComponent(key)}`;
 
   const check = validateResearchUrl(String(formData.get("url") ?? ""));
-  if (!check.ok) redirect(`${back}?error=${encodeURIComponent(check.reason)}#research`);
+  if (!check.ok) redirect(detailUrl(key, listBack, `?error=${encodeURIComponent(check.reason)}`, "#research"));
   if (!isCrawlerConfigured()) {
-    redirect(`${back}?error=` + encodeURIComponent(
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(
       "Crawler isn't set up yet (CRAWLER_BASE_URL / CRAWLER_SHARED_SECRET).",
-    ) + "#research");
+    ), "#research"));
   }
 
   const url = (check as { ok: true; url: string }).url;
@@ -976,24 +995,25 @@ export async function researchProductAction(formData: FormData): Promise<void> {
       err instanceof CrawlerNotConfiguredError
         ? "Crawler isn't set up yet."
         : `Research failed: ${err instanceof Error ? err.message : "please try again"}`;
-    redirect(`${back}?error=${encodeURIComponent(msg)}#research`);
+    redirect(detailUrl(key, listBack, `?error=${encodeURIComponent(msg)}`, "#research"));
     return;
   }
 
   revalidatePath(back);
-  redirect(`${back}?research=${encodeURIComponent(outcome)}#ai`);
+  redirect(detailUrl(key, listBack, `?research=${encodeURIComponent(outcome)}`, "#ai"));
 }
 
 /** Import ONE researched image URL into the media library + this product's gallery. */
 export async function importResearchImage(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
+  const listBack = cleanBack(formData.get("back"));
   const label = String(formData.get("label") ?? "Product").trim() || "Product";
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   const back = `/admin/products/${encodeURIComponent(key)}`;
 
   const check = validateResearchUrl(String(formData.get("imageUrl") ?? ""));
-  if (!check.ok) redirect(`${back}?error=${encodeURIComponent(check.reason)}#ai`);
+  if (!check.ok) redirect(detailUrl(key, listBack, `?error=${encodeURIComponent(check.reason)}`, "#ai"));
   const imageUrl = (check as { ok: true; url: string }).url;
 
   let assetId: string;
@@ -1009,7 +1029,7 @@ export async function importResearchImage(formData: FormData): Promise<void> {
     assetId = asset.id;
   } catch (err) {
     const msg = err instanceof HarvestImageError ? err.message : "Could not import that image.";
-    redirect(`${back}?error=${encodeURIComponent(msg)}#ai`);
+    redirect(detailUrl(key, listBack, `?error=${encodeURIComponent(msg)}`, "#ai"));
     return;
   }
 
@@ -1042,5 +1062,5 @@ export async function importResearchImage(formData: FormData): Promise<void> {
 
   revalidatePath(back);
   revalidatePath("/menu");
-  redirect(`${back}?saved=1`);
+  redirect(detailUrl(key, listBack, "?saved=1"));
 }

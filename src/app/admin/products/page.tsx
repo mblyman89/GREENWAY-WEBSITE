@@ -17,6 +17,8 @@ import { isReasoningModel } from "@/lib/ai/chat-payload-core";
 import { BulkCheckbox, ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
 // D244 E-2: tick cards (or every card matching the filter) and publish at once.
 import { BulkStatusBar } from "@/components/admin/products/BulkStatusBar";
+// D244 E-1b: the list order for Prev / Next on the detail page.
+import { WorklistOrderRecorder } from "@/components/admin/products/WorklistNav";
 import { BULK_FORM_ID, BULK_STATUS_MAX, bulkPreflight, isReadyToPublish } from "@/lib/enrichment/bulk-publish-core";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
@@ -904,6 +906,8 @@ export default async function ProductsPage({
             matching={matchingPreflight}
           />
         )}
+
+        <WorklistOrderRecorder back={listQs} keys={filtered.slice(0, 2000).map((g) => g.posKey)} />
 
         {/* Visual grid (default) */}
         {!isTable && <ProductGrid cards={gridCards} hrefFor={detailHref} selectFormId={BULK_FORM_ID} />}

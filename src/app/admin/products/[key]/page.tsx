@@ -39,6 +39,9 @@ import { liveVisibilityText } from "@/lib/enrichment/product-visibility-core";
 import { EnrichmentAiLookupPanel } from "./EnrichmentAiLookupPanel";
 // Round 21 (C): library-first photo picker (upload becomes the secondary path).
 import { MediaLibraryPicker } from "./MediaLibraryPicker";
+// D244 E-1b: keep my place (back on every form) + Prev / Next / Save & next.
+import { DetailNav } from "@/components/admin/products/WorklistNav";
+import { DETAIL_EDITOR_FORM_ID, DETAIL_PUBLISH_FORM_ID, cleanBack } from "@/lib/enrichment/detail-nav-core";
 import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/media/library-picker-core";
 import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
 import { parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
@@ -88,6 +91,7 @@ export default async function ProductEditorPage({
   // R23: the one-line receipt a KB "Use these facts" click redirects with
   // (React escapes it; clamped so a crafted link cannot flood the page).
   const savedNote = typeof note === "string" ? note.trim().slice(0, 400) : "";
+  const listBack = cleanBack(back);
 
   // PERF-S11: everything that only needs the POS key (enrichment, brands,
   // lots, suggestions, the library picker) now starts IMMEDIATELY and runs in
@@ -226,6 +230,7 @@ export default async function ProductEditorPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <DetailNav posKey={key} back={listBack} position="top" />
         {saved && (
           <div data-testid="saved-banner" className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             {savedNote ? `Saved. ${savedNote}` : "Saved."}
@@ -489,6 +494,7 @@ export default async function ProductEditorPage({
                       {!enrichment?.description && (
                         <form action={applyMatchedText}>
                           <input type="hidden" name="key" value={key} />
+                          {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                           <input type="hidden" name="field" value="description" />
                           <input type="hidden" name="value" value={center.knowledge.description} />
                           <input type="hidden" name="source" value={`kb:${center.knowledge.source}`} />
@@ -503,6 +509,7 @@ export default async function ProductEditorPage({
                       {!enrichment?.short_description && (
                         <form action={applyMatchedText}>
                           <input type="hidden" name="key" value={key} />
+                          {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                           <input type="hidden" name="field" value="short_description" />
                           <input type="hidden" name="value" value={center.knowledge.shortDescription} />
                           <input type="hidden" name="source" value={`kb:${center.knowledge.source}`} />
@@ -586,6 +593,7 @@ export default async function ProductEditorPage({
                         ) : (
                           <form action={attachKbMatchFacts}>
                             <input type="hidden" name="key" value={key} />
+                            {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                             <input type="hidden" name="kbId" value={m.candidate.id} />
                             <Button type="submit" variant={m.action.kind === "use" ? "confirm" : "neutral"} size="sm" data-testid="kb-match-use">
                               {m.action.label}
@@ -595,6 +603,7 @@ export default async function ProductEditorPage({
                         {m.primaryMediaId && !center.gaps.hasImage && (
                           <form action={attachMatchedMedia}>
                             <input type="hidden" name="key" value={key} />
+                            {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                             <input type="hidden" name="mediaId" value={m.primaryMediaId} />
                             <input type="hidden" name="source" value="kb-product" />
                             <Button type="submit" variant="confirm" size="sm">Use image</Button>
@@ -603,6 +612,7 @@ export default async function ProductEditorPage({
                         {m.description && !enrichment?.description && (
                           <form action={applyMatchedText}>
                             <input type="hidden" name="key" value={key} />
+                            {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                             <input type="hidden" name="field" value="description" />
                             <input type="hidden" name="value" value={m.description} />
                             <input type="hidden" name="source" value="kb-product" />
@@ -637,6 +647,7 @@ export default async function ProductEditorPage({
                       </div>
                       <form action={attachMatchedMedia}>
                         <input type="hidden" name="key" value={key} />
+                        {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                         <input type="hidden" name="mediaId" value={m.candidate.id} />
                         <input type="hidden" name="source" value="media-library" />
                         <Button type="submit" variant="confirm" size="sm">Attach image</Button>
@@ -671,6 +682,7 @@ export default async function ProductEditorPage({
                         {m.candidate.media_asset_id ? (
                           <form action={attachMatchedMedia}>
                             <input type="hidden" name="key" value={key} />
+                            {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                             <input type="hidden" name="mediaId" value={m.candidate.media_asset_id} />
                             <input type="hidden" name="source" value={`vendor:${m.candidate.platform}`} />
                             <Button type="submit" variant="confirm" size="sm">Use saved image</Button>
@@ -678,6 +690,7 @@ export default async function ProductEditorPage({
                         ) : m.candidate.image_url ? (
                           <form action={importVendorImage}>
                             <input type="hidden" name="key" value={key} />
+                            {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                             <input type="hidden" name="imageUrl" value={m.candidate.image_url} />
                             <input type="hidden" name="label" value={m.candidate.name ?? item.name} />
                             <input type="hidden" name="platform" value={m.candidate.platform} />
@@ -687,6 +700,7 @@ export default async function ProductEditorPage({
                         {m.candidate.description && !enrichment?.description && (
                           <form action={applyMatchedText}>
                             <input type="hidden" name="key" value={key} />
+                            {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                             <input type="hidden" name="field" value="description" />
                             <input type="hidden" name="value" value={m.candidate.description} />
                             <input type="hidden" name="source" value={`vendor:${m.candidate.platform}`} />
@@ -755,6 +769,7 @@ export default async function ProductEditorPage({
           {crawlerOn ? (
             <form action={researchProductAction} className="mt-3 flex flex-wrap items-center gap-2">
               <input type="hidden" name="key" value={key} />
+              {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
               <input type="hidden" name="posName" value={item.name} />
               <input
                 id="research-url"
@@ -798,6 +813,7 @@ export default async function ProductEditorPage({
                         </a>
                         <form action={importResearchImage} className="p-1.5">
                           <input type="hidden" name="key" value={key} />
+                          {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                           <input type="hidden" name="imageUrl" value={u} />
                           <input type="hidden" name="label" value={item.name} />
                           <Button type="submit" variant="confirm" size="sm" className="w-full">
@@ -810,6 +826,7 @@ export default async function ProductEditorPage({
                   <form action={rejectSuggestion} className="mt-2">
                     <input type="hidden" name="id" value={s.id} />
                     <input type="hidden" name="key" value={key} />
+                    {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                     <Button type="submit" variant="neutral" size="sm">Dismiss these candidates</Button>
                   </form>
                 </div>
@@ -826,6 +843,7 @@ export default async function ProductEditorPage({
               <div className="flex gap-2">
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
+                  {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                   <input type="hidden" name="kind" value="description" />
                   <input type="hidden" name="posName" value={item.name} />
                   <input type="hidden" name="posBrand" value={item.brand_name} />
@@ -840,6 +858,7 @@ export default async function ProductEditorPage({
                 </form>
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
+                  {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                   <input type="hidden" name="kind" value="tags" />
                   <input type="hidden" name="posName" value={item.name} />
                   <input type="hidden" name="posCategory" value={item.category} />
@@ -851,6 +870,7 @@ export default async function ProductEditorPage({
                 </form>
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
+                  {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                   <input type="hidden" name="kind" value="sensory" />
                   <input type="hidden" name="posName" value={item.name} />
                   <input type="hidden" name="posBrand" value={item.brand_name} />
@@ -867,6 +887,7 @@ export default async function ProductEditorPage({
                     grounded on the server in this card's own description. */}
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
+                  {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                   <input type="hidden" name="kind" value="seo" />
                   <input type="hidden" name="posName" value={enrichment?.display_name || item.name} />
                   <input type="hidden" name="posBrand" value={item.brand_name} />
@@ -922,11 +943,13 @@ export default async function ProductEditorPage({
                       <form action={acceptSuggestion}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="key" value={key} />
+                        {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                         <Button type="submit" variant="confirm" size="sm">Accept</Button>
                       </form>
                       <form action={rejectSuggestion}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="key" value={key} />
+                        {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                         <Button type="submit" variant="neutral" size="sm">Reject</Button>
                       </form>
                     </div>
@@ -953,8 +976,9 @@ export default async function ProductEditorPage({
         />
 
         {/* Editor form */}
-        <form action={updateProductEnrichment} encType="multipart/form-data" className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <form action={updateProductEnrichment} id={DETAIL_EDITOR_FORM_ID} encType="multipart/form-data" className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <input type="hidden" name="key" value={key} />
+          {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
           <input type="hidden" name="posName" value={item.name} />
           <input type="hidden" name="posBrand" value={item.brand_name} />
           <input type="hidden" name="posCategory" value={item.category} />
@@ -1166,8 +1190,9 @@ export default async function ProductEditorPage({
         </form>
 
         {/* Publish controls */}
-        <form action={setEnrichmentStatus} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+        <form action={setEnrichmentStatus} id={DETAIL_PUBLISH_FORM_ID} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
           <input type="hidden" name="key" value={key} />
+          {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
           <span className="text-xs font-medium text-white/50">
             Enrichment status: <span className="font-semibold text-white/80">{enrichment?.status ?? "none"}</span> · controlled by {session.profile.full_name}
           </span>
@@ -1176,6 +1201,7 @@ export default async function ProductEditorPage({
             <Button type="submit" name="status" value="draft" variant="neutral" size="sm">Unpublish (draft)</Button>
           </div>
         </form>
+        <DetailNav posKey={key} back={listBack} position="bottom" />
       </div>
     </div>
   );

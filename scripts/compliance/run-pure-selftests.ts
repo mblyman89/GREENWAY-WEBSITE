@@ -1377,6 +1377,7 @@ import { __runNewsletterPolishCoreTests } from "../../src/lib/cms/newsletter-pol
 import { __runChatPayloadCoreTests } from "../../src/lib/ai/chat-payload-core";
 import { __runBulkPublishCoreTests } from "../../src/lib/enrichment/bulk-publish-core";
 import { __runWorklistCoreTests } from "../../src/lib/enrichment/worklist-core";
+import { __runDetailNavCoreTests } from "../../src/lib/enrichment/detail-nav-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2953,7 +2954,8 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("chat-payload-core", __runChatPayloadCoreTests(), 30); // D244 E-0: reasoning-model params (max_completion_tokens, no temperature, effort), 400 auto-repair, friendly error
   assertRan("bulk-publish-core", __runBulkPublishCoreTests(), 34); // D244 E-2: bulk publish/unpublish/archive plan, ready-to-publish (draft + photo), pre-flight counts, key scope + cap, outcome sentence
   assertRan("worklist-core", __runWorklistCoreTests(), 36); // D244 E-1a vendor-first, on-hand-first worklist
-console.log("ALL PURE SELF-TESTS PASSED");
+  assertRan("detail-nav-core", __runDetailNavCoreTests(), 32); // D244 E-1b keep my place: back on every detail redirect, Prev / Next / Save & next
+  console.log("ALL PURE SELF-TESTS PASSED");
 }
 
 main().catch((err) => {
