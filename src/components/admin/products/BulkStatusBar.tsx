@@ -14,9 +14,7 @@
  * the owner is not limited to the 300 cards drawn on screen.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { BulkPreflight } from "@/lib/enrichment/bulk-publish-core";
-
-export const BULK_FORM_ID = "bulk-status-form";
+import { BULK_FORM_ID, type BulkPreflight } from "@/lib/enrichment/bulk-publish-core";
 
 type Counts = { ticked: number; ready: number; readyCopy: number; noPhoto: number; noCopy: number; noRecord: number };
 
