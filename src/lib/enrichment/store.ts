@@ -255,6 +255,33 @@ export async function updateEnrichment(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * D244 E-2: set the status of MANY own enrichment rows in chunked UPDATEs
+ * (one round trip per 200 keys instead of one per product). Returns the keys
+ * that were actually updated. Throws on the first database error.
+ */
+export async function setEnrichmentStatusForKeys(
+  posProductKeys: string[],
+  status: "draft" | "published" | "archived",
+  actorId: string | null,
+): Promise<string[]> {
+  if (!isSupabaseServiceConfigured || posProductKeys.length === 0) return [];
+  const admin = createSupabaseAdminClient();
+  const done: string[] = [];
+  const CHUNK = 200;
+  for (let i = 0; i < posProductKeys.length; i += CHUNK) {
+    const slice = posProductKeys.slice(i, i + CHUNK);
+    const { data, error } = await admin
+      .from("product_enrichments")
+      .update({ status, updated_by: actorId })
+      .in("pos_product_key", slice)
+      .select("pos_product_key");
+    if (error) throw new Error(error.message);
+    for (const row of (data as { pos_product_key: string }[] | null) ?? []) done.push(row.pos_product_key);
+  }
+  return done;
+}
+
 /** Resolve media asset ids to public URLs (only published assets serve publicly). */
 export async function mediaUrlsForIds(ids: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();

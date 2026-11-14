@@ -9,18 +9,21 @@ import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, resolveEnrichmentsForItems, computeGaps, type GapFlags } from "@/lib/enrichment/store";
 import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identity-server";
-import { fillMenuSensoryAction, linkEnrichmentsToProducts, linkMenuCardsToKbAction } from "./actions";
+import { bulkSetEnrichmentStatusAction, fillMenuSensoryAction, linkEnrichmentsToProducts, linkMenuCardsToKbAction } from "./actions";
 import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { aiHeavyModelId, aiLightModelId, aiMode } from "@/lib/ai/router";
 import { isReasoningModel } from "@/lib/ai/chat-payload-core";
-import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
+import { BulkCheckbox, ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
+// D244 E-2: tick cards (or every card matching the filter) and publish at once.
+import { BULK_FORM_ID, BulkStatusBar } from "@/components/admin/products/BulkStatusBar";
+import { BULK_STATUS_MAX, bulkPreflight, isReadyToPublish } from "@/lib/enrichment/bulk-publish-core";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
 import { computeProductStats, productGapInsights } from "@/lib/insight/products";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
-import { withBackParam } from "@/lib/admin/back-link-core";
+import { currentQueryString, withBackParam } from "@/lib/admin/back-link-core";
 import { DistributionBars } from "@/components/admin/insight/DistributionBars";
 import {
   parseEnrichmentSort,
@@ -53,11 +56,13 @@ function fmtMoney(minor: number | null): string {
 }
 
 export const dynamic = "force-dynamic";
+// D244 E-2: a bulk publish (chunked update + KB write-back) can run for minutes.
+export const maxDuration = 300;
 
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string; linked?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; ok?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string; linked?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
@@ -205,6 +210,8 @@ export default async function ProductsPage({
   else if (gap === "brand") filtered = filtered.filter((g) => !g.hasBrandLink);
   else if (gap === "tags") filtered = filtered.filter((g) => !g.hasTags);
   else if (gap === "any") filtered = filtered.filter((g) => !g.hasDescription || !g.hasImage || !g.hasBrandLink || !g.hasTags);
+  // D244 E-2 (F-23): a draft WITH a photo is invisible to shoppers until published.
+  else if (gap === "ready") filtered = filtered.filter((g) => isReadyToPublish(g));
   filtered = filterByEnrichmentStatus(filtered, statusFilter);
   filtered = filterByStock(filtered, stockFilter);
   // S22: invoice/manifest, received-since and vendor filters (pure).
@@ -223,6 +230,20 @@ export default async function ProductsPage({
   const missingImg = gaps.filter((g) => !g.hasImage).length;
   const missingTags = gaps.filter((g) => !g.hasTags).length;
   const enriched = gaps.filter((g) => g.enrichmentStatus === "published").length;
+  // D244 E-2: drafts that already have a photo (the "image, but drafts" backlog).
+  const readyToPublish = gaps.filter((g) => isReadyToPublish(g)).length;
+  const bulkRowsFor = (list: GapFlags[]) =>
+    list.map((g) => ({
+      posKey: g.posKey,
+      hasImage: g.hasImage,
+      hasDescription: g.hasDescription,
+      descriptionPlaceholder: g.descriptionPlaceholder,
+      enrichmentStatus: g.enrichmentStatus,
+      hasOwnRecord: ownEnrichments.has(g.posKey),
+    }));
+  const matchingPreflight = bulkPreflight(bulkRowsFor(filtered.slice(0, BULK_STATUS_MAX)));
+  const matchingKeys = filtered.slice(0, BULK_STATUS_MAX).map((g) => g.posKey);
+  const listQs = currentQueryString(sp);
   const categories = Array.from(new Set(gaps.map((g) => g.category))).sort();
   const brandOptions = Array.from(new Set(gaps.map((g) => g.brand).filter(Boolean))).sort();
 
@@ -258,6 +279,7 @@ export default async function ProductsPage({
       receivedFrom: attrs ? receivedFromLabel(attrs.get(g.posKey) ?? null, now) : null,
       // S20: served from the product's record (an earlier lot), not its own.
       viaProduct: viaIdentity.has(g.posKey),
+      hasOwnRecord: ownEnrichments.has(g.posKey),
     };
   });
 
@@ -312,6 +334,11 @@ export default async function ProductsPage({
         {sp.error && (
           <div role="alert" className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
             {sp.error}
+          </div>
+        )}
+        {sp.ok && (
+          <div role="status" data-testid="bulk-status-ok" className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
+            {sp.ok}
           </div>
         )}
         {/* R36: the one-time catch-up buttons sit further down this page (below
@@ -436,6 +463,24 @@ export default async function ProductsPage({
           <StatCard label="Missing brand link" value={stats.missing.brandLink} accent="orange" href="/admin/products?gap=brand#worklist" />
         </div>
 
+        {/* D244 E-2 (F-20/F-23): drafts with a photo show NOTHING on the menu. */}
+        {readyToPublish > 0 && (
+          <div
+            data-testid="ready-to-publish-callout"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-3"
+          >
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              <span className="font-bold text-[var(--admin-accent)]">Ready to publish: {readyToPublish}</span> draft
+              {readyToPublish === 1 ? " has" : "s have"} a photo but {readyToPublish === 1 ? "is" : "are"} not live yet. Only
+              published products show on the menu. Open the list, press &ldquo;Select every card matching this
+              filter&rdquo;, then Publish.
+            </p>
+            <Button href="/admin/products?gap=ready#worklist" variant="confirm" size="sm">
+              Show the {readyToPublish} ready to publish →
+            </Button>
+          </div>
+        )}
+
         {/* What's missing + distributions */}
         <div className="grid gap-4 lg:grid-cols-2">
           <MissingInsight
@@ -531,6 +576,7 @@ export default async function ProductsPage({
             <option value="image">Missing image</option>
             <option value="brand">Missing brand link</option>
             <option value="tags">Missing tags</option>
+            <option value="ready">Ready to publish (draft + photo)</option>
           </Select>
           <Select name="status" defaultValue={statusFilter} className="w-auto">
             <option value="">Any enrichment status</option>
@@ -692,8 +738,19 @@ export default async function ProductsPage({
           {filtered.length !== gaps.length ? ` (${gaps.length} total on the live menu)` : ""}.
         </p>
 
+        {filtered.length > 0 && (
+          <BulkStatusBar
+            action={bulkSetEnrichmentStatusAction}
+            back={listQs}
+            matchingKeys={matchingKeys}
+            matchingTotal={filtered.length}
+            shownCount={shown.length}
+            matching={matchingPreflight}
+          />
+        )}
+
         {/* Visual grid (default) */}
-        {!isTable && <ProductGrid cards={gridCards} hrefFor={detailHref} />}
+        {!isTable && <ProductGrid cards={gridCards} hrefFor={detailHref} selectFormId={BULK_FORM_ID} />}
         {!isTable && filtered.length === 0 && (
           <EmptyState
             icon="🔍"
@@ -708,6 +765,9 @@ export default async function ProductsPage({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
               <tr>
+                <th className="w-8 px-3 py-3">
+                  <span className="sr-only">Select</span>
+                </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Brand</th>
                 <th className="px-4 py-3">Category</th>
@@ -724,6 +784,17 @@ export default async function ProductsPage({
             <tbody className="divide-y divide-[var(--admin-border)]">
               {filtered.slice(0, 300).map((g) => (
                 <tr key={g.posKey} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
+                  <td className="px-3 py-3">
+                    <BulkCheckbox
+                      formId={BULK_FORM_ID}
+                      posKey={g.posKey}
+                      name={g.name}
+                      ready={isReadyToPublish(g)}
+                      hasImage={g.hasImage}
+                      hasDescription={g.hasDescription}
+                      hasOwnRecord={ownEnrichments.has(g.posKey)}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={detailHref(g.posKey)} className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
                       {g.name}
