@@ -20,6 +20,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { dashedSlug } from "@/lib/catalog/slug-core";
+import { kbProductSlugCandidates, strainMatchFromText } from "@/lib/enrichment/ai-draft-v2-core";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
@@ -531,8 +532,10 @@ async function loadKbProductFact(facts: ProductFacts): Promise<{ row: KbProductF
   const productName = facts.name?.trim();
   if (!productName) return null;
   const brandSlug = facts.brand ? slugifyDashed(facts.brand) : "";
-  const productSlug = slugifyDashed(productName);
-  if (!productSlug) return null;
+  // D244 E-4 (F-09b): try the exact slug first, then the name without the pack
+  // size and without the brand prefix - the earliest candidate that matches wins.
+  const slugs = kbProductSlugCandidates(productName, facts.brand, facts.vendor);
+  if (slugs.length === 0) return null;
   // Full column set includes the potency (0084) + cannabinoids (0083) columns.
   // If those migrations aren't applied yet, PostgREST errors on the unknown
   // columns, so we fall back to the base column set (pre-migration safe).
@@ -543,17 +546,22 @@ async function loadKbProductFact(facts: ProductFacts): Promise<{ row: KbProductF
   try {
     const admin = createSupabaseAdminClient();
     const runQuery = async (cols: string) => {
-      let q = admin.from("kb_products").select(cols).eq("product_slug", productSlug);
+      let q = admin.from("kb_products").select(`${cols},product_slug`).in("product_slug", slugs);
       if (brandSlug) q = q.eq("brand_slug", brandSlug);
-      return q.limit(5);
+      return q.limit(20);
     };
     let { data, error } = await runQuery(FULL_COLS);
     if (error) ({ data, error } = await runQuery(BASE_COLS));
     if (error || !data || data.length === 0) return null;
-    const rows = data as unknown as KbProductFactRow[];
-    const published = rows.find((r) => r.status === "published");
-    if (published) return { row: published, draft: false };
-    return { row: rows[0], draft: true };
+    const all = data as unknown as (KbProductFactRow & { product_slug: string })[];
+    for (const slug of slugs) {
+      const rows = all.filter((r) => r.product_slug === slug);
+      if (rows.length === 0) continue;
+      const published = rows.find((r) => r.status === "published");
+      if (published) return { row: published, draft: false };
+      return { row: rows[0], draft: true };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -603,15 +611,9 @@ async function loadKbProductCategory(category: string | null | undefined): Promi
 
 /** Find the best strain match from the product name + explicit strain field. */
 function matchStrain(strains: SeedStrainRich[], facts: ProductFacts): SeedStrainRich | null {
-  const haystack = `${norm(facts.strainName)} ${norm(facts.name)}`;
-  if (!haystack.trim()) return null;
-  // Prefer longer names first so "blue dream" wins over a stray "dream".
-  const sorted = [...strains].sort((a, b) => b.name.length - a.name.length);
-  for (const s of sorted) {
-    const candidates = [s.slug, s.name, ...(s.aliases ?? [])].map(norm).filter(Boolean);
-    if (candidates.some((c) => c.length >= 3 && haystack.includes(c))) return s;
-  }
-  return null;
+  // D244 E-4 (F-09): whole-word name hits (longest first), long aliases, then
+  // a strict fuzzy fallback - no more "dream" found inside "Daydreamer".
+  return strainMatchFromText(strains, { strainName: facts.strainName, name: facts.name })?.strain ?? null;
 }
 
 export type GroundedFacts = {
