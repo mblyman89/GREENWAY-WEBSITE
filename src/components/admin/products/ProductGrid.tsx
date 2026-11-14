@@ -26,7 +26,49 @@ export type ProductGridCard = {
   receivedFrom?: string | null;
   /** S20: true = no own enrichment; the product's published record serves this card. */
   viaProduct?: boolean;
+  /** D244 E-2: the card has its own enrichment row (a bulk status change can flip it). */
+  hasOwnRecord?: boolean;
 };
+
+/**
+ * D244 E-2: the bulk-select checkbox for one card. It joins the sticky bulk
+ * bar's form through the `form` attribute (no nesting), and carries the
+ * pre-flight facts the bar counts live.
+ */
+export function BulkCheckbox({
+  formId,
+  posKey,
+  name,
+  ready,
+  hasImage,
+  hasDescription,
+  hasOwnRecord,
+  className,
+}: {
+  formId: string;
+  posKey: string;
+  name: string;
+  ready: boolean;
+  hasImage: boolean;
+  hasDescription: boolean;
+  hasOwnRecord: boolean;
+  className?: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      form={formId}
+      name="keys"
+      value={posKey}
+      aria-label={`Select ${name}`}
+      data-ready={ready ? "1" : "0"}
+      data-photo={hasImage ? "1" : "0"}
+      data-copy={hasDescription ? "1" : "0"}
+      data-own={hasOwnRecord ? "1" : "0"}
+      className={className ?? "h-4 w-4 accent-[var(--admin-accent)]"}
+    />
+  );
+}
 
 function StatusPill({ status }: { status: string | null }) {
   const map: Record<string, string> = {
@@ -58,17 +100,21 @@ function GapBadge({ ok, label, why }: { ok: boolean; label: string; why?: string
 export function ProductGrid({
   cards,
   hrefFor,
+  selectFormId,
 }: {
   cards: ProductGridCard[];
   /** GW-029: page supplies a state-carrying href builder (falls back to the bare editor route). */
   hrefFor?: (posKey: string) => string;
+  /** D244 E-2: when set, each card gets a bulk-select checkbox joined to this form. */
+  selectFormId?: string;
 }) {
   if (cards.length === 0) {
     return <p className="text-sm text-white/50">No products match your filter.</p>;
   }
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {cards.map((c) => (
+      {cards.map((c) => {
+        const link = (
         <Link
           key={c.posKey}
           href={hrefFor ? hrefFor(c.posKey) : `/admin/products/${encodeURIComponent(c.posKey)}`}
@@ -125,7 +171,28 @@ export function ProductGrid({
             </div>
           </div>
         </Link>
-      ))}
+        );
+        if (!selectFormId) return link;
+        return (
+          <div key={c.posKey} className="relative">
+            {link}
+            <label
+              className="absolute left-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-black/70 ring-1 ring-white/20"
+              title="Select for bulk publish"
+            >
+              <BulkCheckbox
+                formId={selectFormId}
+                posKey={c.posKey}
+                name={c.name}
+                ready={c.enrichmentStatus === "draft" && c.hasImage}
+                hasImage={c.hasImage}
+                hasDescription={c.hasDescription}
+                hasOwnRecord={c.hasOwnRecord === true}
+              />
+            </label>
+          </div>
+        );
+      })}
     </div>
   );
 }

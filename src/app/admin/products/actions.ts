@@ -5,7 +5,25 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { uploadMedia, recordUsage, clearUsage } from "@/lib/media/store";
-import { ensureEnrichment, updateEnrichment, getEnrichment } from "@/lib/enrichment/store";
+import {
+  ensureEnrichment,
+  updateEnrichment,
+  getEnrichment,
+  getEnrichmentsForKeys,
+  computeGaps,
+  setEnrichmentStatusForKeys,
+} from "@/lib/enrichment/store";
+import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
+import {
+  BULK_STATUS_MAX,
+  bulkOutcomeMessage,
+  parseBulkPublishMode,
+  parseBulkStatus,
+  planBulkStatus,
+  resolveBulkKeys,
+  type BulkRow,
+} from "@/lib/enrichment/bulk-publish-core";
+import { backHref } from "@/lib/admin/back-link-core";
 import {
   generateProductDescription,
   generateProductTags,
@@ -305,6 +323,94 @@ export async function setEnrichmentStatus(formData: FormData): Promise<void> {
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   revalidatePath("/menu");
   redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+/**
+ * D244 E-2: bulk Publish / Unpublish / Archive from the worklist. The owner
+ * ticks cards (or "every card matching this filter") and presses one button.
+ * bulk-publish-core decides which cards change (publish defaults to drafts
+ * WITH a photo) and why the rest are skipped. One chunked UPDATE, one summary
+ * audit row (with every key), one public-menu revalidation. KB write-back
+ * runs per published card, best-effort, inside a time budget so the request
+ * finishes (maxDuration 300 on the page).
+ */
+export async function bulkSetEnrichmentStatusAction(formData: FormData): Promise<void> {
+  const started = Date.now();
+  const session = await requirePermission("products.enrich");
+  const listUrl = backHref("/admin/products", String(formData.get("back") ?? ""));
+  const withFlash = (k: "ok" | "error", msg: string) =>
+    `${listUrl}${listUrl.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(msg)}#worklist`;
+
+  const status = parseBulkStatus(formData.get("status"));
+  if (!status) redirect(withFlash("error", "Pick Publish, Unpublish or Archive."));
+  const mode = parseBulkPublishMode(formData.get("mode"));
+  const { keys, capped } = resolveBulkKeys(formData.getAll("keys"), formData.get("matchingKeys"), formData.get("scope"));
+  if (keys.length === 0) redirect(withFlash("error", "Tick at least one product first."));
+
+  const published = await getPublishedVersion();
+  if (!published) redirect(withFlash("error", "There is no live menu yet."));
+  const items = await getVersionItems(published!.id);
+  const want = new Set(keys);
+  const picked = items.filter((i) => want.has(i.source_item_id));
+  const own = await getEnrichmentsForKeys(picked.map((i) => i.source_item_id));
+  const rows: BulkRow[] = picked.map((i) => {
+    const e = own.get(i.source_item_id) ?? null;
+    const g = computeGaps(i, e);
+    return {
+      posKey: g.posKey,
+      hasImage: g.hasImage,
+      hasDescription: g.hasDescription,
+      descriptionPlaceholder: g.descriptionPlaceholder,
+      enrichmentStatus: g.enrichmentStatus,
+      hasOwnRecord: e !== null,
+    };
+  });
+  const plan = planBulkStatus(rows, status!, mode);
+
+  let changed: string[] = [];
+  try {
+    changed = await setEnrichmentStatusForKeys(plan.apply, status!, session.userId);
+  } catch (err) {
+    redirect(withFlash("error", `Bulk change failed: ${(err as Error).message}`));
+  }
+
+  // KB write-back: best-effort, 4 at a time, stop starting new ones at 200 s.
+  let writebackDone = 0;
+  let writebackLeft = 0;
+  if (status === "published" && changed.length > 0) {
+    const BUDGET_MS = 200_000;
+    for (let i = 0; i < changed.length; i += 4) {
+      if (Date.now() - started > BUDGET_MS) {
+        writebackLeft = changed.length - i;
+        break;
+      }
+      const batch = changed.slice(i, i + 4);
+      await Promise.all(batch.map((k) => writeBackOnPublish(k, session.userId).catch(() => null)));
+      writebackDone += batch.length;
+    }
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: `product.bulk_${status}`,
+    entityType: "product",
+    after: {
+      requested: keys.length,
+      changed: changed.length,
+      mode: status === "published" ? mode : undefined,
+      skipped: plan.skipped,
+      capped,
+      keys: changed,
+      kb_writeback: status === "published" ? { done: writebackDone, left: writebackLeft } : undefined,
+    },
+  });
+
+  revalidatePath("/admin/products");
+  if (changed.length > 0) revalidatePublicMenuSurfaces();
+  redirect(
+    withFlash("ok", bulkOutcomeMessage(status!, changed.length, plan.skipped, { capped, cap: BULK_STATUS_MAX, writebackDone, writebackLeft })),
+  );
 }
 
 /** Generate an AI draft (description or tags) for a product. */
