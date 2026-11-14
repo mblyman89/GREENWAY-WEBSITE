@@ -22,6 +22,7 @@
  */
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
+import { adjustPayloadFor400, buildChatPayload, isReasoningModel, type ChatPayload } from "./chat-payload-core";
 import { extractCitations, extractSearchSuggestions, type WebCitation } from "./grounding-core";
 import { buildGeminiInteractionBody, shouldRetryWithoutSchema, thinkingLevelFor } from "./gemini-request-core";
 import {
@@ -209,6 +210,38 @@ async function record(
 }
 
 /**
+ * D244 E-0: POST a chat-completions body built by buildChatPayload. On a 400
+ * that names a parameter (max_tokens, temperature, reasoning_effort,
+ * response_format…) it fixes THAT parameter and retries — up to 3 sends — so
+ * a reasoning-class AI_MODEL never dead-ends on a parameter mismatch.
+ */
+async function postChat(
+  payload: ChatPayload,
+  timeoutMs?: number,
+): Promise<{ ok: true; res: Response } | { ok: false; status: number; text: string }> {
+  let body = payload;
+  let last = { status: 0, text: "" };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const init: RequestInit = {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_API_KEY}` },
+      body: JSON.stringify(body),
+    };
+    const res = timeoutMs
+      ? await fetchWithTimeout(`${AI_BASE_URL}/chat/completions`, init, timeoutMs)
+      : await fetch(`${AI_BASE_URL}/chat/completions`, init);
+    if (res.ok) return { ok: true, res };
+    const text = await res.text().catch(() => "");
+    last = { status: res.status, text };
+    if (res.status !== 400 || attempt === 2) break;
+    const fixed = adjustPayloadFor400(body, text);
+    if (!fixed) break;
+    body = fixed;
+  }
+  return { ok: false, ...last };
+}
+
+/**
  * Generate text from the configured model. Returns the trimmed completion.
  * Throws AiNotConfiguredError when no key is set.
  */
@@ -217,28 +250,22 @@ export async function generate(opts: GenerateOptions): Promise<string> {
   const promptText = `${opts.system}\n${opts.user}`;
 
   try {
-    const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${AI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
+    const sent = await postChat(
+      buildChatPayload(AI_MODEL, {
         temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 400,
+        maxTokens: opts.maxTokens ?? 400,
         messages: [
           { role: "system", content: opts.system },
           { role: "user", content: opts.user },
         ],
       }),
-    });
+    );
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      await record(opts.context, AI_MODEL, promptText, "", undefined, false, `HTTP ${res.status}`);
-      throw new Error(`AI request failed (${res.status}): ${text.slice(0, 300)}`);
+    if (!sent.ok) {
+      await record(opts.context, AI_MODEL, promptText, "", undefined, false, `HTTP ${sent.status}`);
+      throw new Error(`AI request failed (${sent.status}): ${sent.text.slice(0, 300)}`);
     }
+    const res = sent.res;
 
     const json = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
@@ -298,29 +325,23 @@ export async function generateJSON<T>(opts: GenerateOptions): Promise<T> {
   if (!isAiConfigured) throw new AiNotConfiguredError();
   const promptText = `${opts.system}\n${opts.user}`;
 
-  const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${AI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
+  const sent = await postChat(
+    buildChatPayload(AI_MODEL, {
       temperature: opts.temperature ?? 0.4,
-      max_tokens: opts.maxTokens ?? 600,
-      response_format: { type: "json_object" },
+      maxTokens: opts.maxTokens ?? 600,
+      responseFormat: { type: "json_object" },
       messages: [
         { role: "system", content: `${opts.system}\n\nRespond ONLY with valid JSON. No prose, no code fences.` },
         { role: "user", content: opts.user },
       ],
     }),
-  });
+  );
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    await record(opts.context, AI_MODEL, promptText, "", undefined, false, `HTTP ${res.status}`);
-    throw new Error(`AI JSON request failed (${res.status}): ${text.slice(0, 300)}`);
+  if (!sent.ok) {
+    await record(opts.context, AI_MODEL, promptText, "", undefined, false, `HTTP ${sent.status}`);
+    throw new Error(`AI JSON request failed (${sent.status}): ${sent.text.slice(0, 300)}`);
   }
+  const res = sent.res;
 
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -359,26 +380,21 @@ async function chatRaw(
   user: string,
   opts: { temperature?: number; maxTokens?: number; responseFormat?: unknown },
 ): Promise<{ content: string; usage?: ChatUsage }> {
-  const body: Record<string, unknown> = {
-    model,
-    temperature: opts.temperature ?? 0.2,
-    max_tokens: opts.maxTokens ?? 600,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-  };
-  if (opts.responseFormat) body.response_format = opts.responseFormat;
-
-  const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_API_KEY}` },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`AI request failed (${res.status}): ${text.slice(0, 300)}`);
+  const sent = await postChat(
+    buildChatPayload(model, {
+      temperature: opts.temperature ?? 0.2,
+      maxTokens: opts.maxTokens ?? 600,
+      responseFormat: opts.responseFormat,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  );
+  if (!sent.ok) {
+    throw new Error(`AI request failed (${sent.status}): ${sent.text.slice(0, 300)}`);
   }
+  const res = sent.res;
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
     usage?: ChatUsage;
@@ -438,9 +454,13 @@ export async function generateStructured<T>(opts: StructuredOptions<T>): Promise
       userMsg = `${opts.user}${shapeHint}\n\nYour previous answer had these problems:\n${lastErr}\nFix them and return ONLY the corrected JSON object.`;
     } catch (err) {
       if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
-      lastErr = String(err).slice(0, 200);
-      await record(opts.context, model, promptText, "", undefined, false, lastErr);
-      // network/HTTP error — retry once
+      lastErr = String(err).slice(0, 400);
+      await record(opts.context, model, promptText, "", undefined, false, lastErr.slice(0, 200));
+      // D244 E-0: postChat already repaired parameter 400s; a remaining 4xx
+      // (bad key, unknown model, still-rejected param) will not heal by
+      // re-sending the same body — stop now and surface the real reason.
+      if (/AI request failed \(4\d\d\)/.test(lastErr)) break;
+      // network / 5xx error — retry once
     }
   }
 
@@ -466,16 +486,10 @@ export async function generateVision(opts: VisionOptions): Promise<string> {
   if (!isAiConfigured) throw new AiNotConfiguredError();
   const promptText = `${opts.system}\n${opts.user}`;
 
-  const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${AI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: AI_VISION_MODEL,
+  const sent = await postChat(
+    buildChatPayload(AI_VISION_MODEL, {
       temperature: opts.temperature ?? 0.4,
-      max_tokens: opts.maxTokens ?? 200,
+      maxTokens: opts.maxTokens ?? 200,
       messages: [
         { role: "system", content: opts.system },
         {
@@ -487,13 +501,13 @@ export async function generateVision(opts: VisionOptions): Promise<string> {
         },
       ],
     }),
-  });
+  );
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    await record({ ...opts.context, feature: opts.context?.feature ?? "ai.vision" }, AI_VISION_MODEL, promptText, "", undefined, false, `HTTP ${res.status}`);
-    throw new Error(`AI vision request failed (${res.status}): ${text.slice(0, 300)}`);
+  if (!sent.ok) {
+    await record({ ...opts.context, feature: opts.context?.feature ?? "ai.vision" }, AI_VISION_MODEL, promptText, "", undefined, false, `HTTP ${sent.status}`);
+    throw new Error(`AI vision request failed (${sent.status}): ${sent.text.slice(0, 300)}`);
   }
+  const res = sent.res;
 
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -520,11 +534,6 @@ export type VisionJsonResult = {
   model: string;
   usage: { promptTokens: number; cachedTokens: number; completionTokens: number; real: boolean };
 };
-
-/** Reasoning-class ids take max_completion_tokens and may refuse temperature. */
-function isReasoningModel(model: string): boolean {
-  return /^(o\d|gpt-5|gpt-6)/i.test(model);
-}
 
 /**
  * D221 M4: image-aware completion that returns a JSON object plus the real
@@ -625,29 +634,26 @@ export async function* generateStream(opts: GenerateOptions): AsyncGenerator<str
   if (!isAiConfigured) throw new AiNotConfiguredError();
   const promptText = `${opts.system}\n${opts.user}`;
 
-  const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${AI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
+  const sent = await postChat(
+    buildChatPayload(AI_MODEL, {
       temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 600,
+      maxTokens: opts.maxTokens ?? 600,
       stream: true,
       messages: [
         { role: "system", content: opts.system },
         { role: "user", content: opts.user },
       ],
     }),
-  });
+  );
 
-  if (!res.ok || !res.body) {
-    const text = res.ok ? "" : await res.text().catch(() => "");
-    await record(opts.context, AI_MODEL, promptText, "", undefined, false, `HTTP ${res.status}`);
-    throw new Error(`AI stream request failed (${res.status}): ${text.slice(0, 300)}`);
+  if (!sent.ok || !sent.res.body) {
+    const status = sent.ok ? sent.res.status : sent.status;
+    const text = sent.ok ? "" : sent.text;
+    await record(opts.context, AI_MODEL, promptText, "", undefined, false, `HTTP ${status}`);
+    throw new Error(`AI stream request failed (${status}): ${text.slice(0, 300)}`);
   }
+  const res = sent.res;
+  if (!res.body) throw new Error("AI stream request failed: empty body");
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

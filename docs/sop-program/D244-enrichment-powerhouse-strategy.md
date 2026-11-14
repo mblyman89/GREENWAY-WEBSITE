@@ -319,6 +319,12 @@ A focused split-screen **work session** for one vendor, on-hand first:
 
 ---
 
+## 8b. Progress
+
+| Slice | PR | Status | What shipped |
+|---|---|---|---|
+| E-0 | PRNUM_E0 | merged | `src/lib/ai/chat-payload-core.ts` (pure: `isReasoningModel`, `buildChatPayload`, `adjustPayloadFor400`, `friendlyAiError`, 30 self-tests). `provider.ts` `postChat()` now builds every OpenAI-style body (generate, generateJSON, chatRaw → generateStructured, generateVision, generateStream). Reasoning models get `max_completion_tokens = max(4 × budget, 2000)`, no temperature, `reasoning_effort: "low"`. A 400 naming a parameter is repaired and resent (≤ 3 sends). generateStructured no longer re-sends an identical failing 4xx. Bulk AI shows the first failure reason and the drafting model; `/admin/products` shows light/heavy model ids and "(reasoning)". `geminiChatFallback` keeps `max_tokens` on purpose (Gemini accepts it; R66 pins it). `generateVisionJson` keeps its own (already-correct) loop. Vendor was NOT added to bulk facts: published menu items carry no vendor field (needs E-1's vendor resolver). |
+
 ## 9. Owner decisions needed
 
 1. **Models.** Which model is set as `AI_MODEL` / `AI_MODEL_HEAVY` / `AI_VISION_MODEL` in Vercel? (It is

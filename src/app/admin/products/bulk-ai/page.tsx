@@ -9,6 +9,8 @@ import { getEnrichmentsForKeys, computeGaps } from "@/lib/enrichment/store";
 import { listPendingByType } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { aiHeavyModelId, aiLightModelId, aiMode } from "@/lib/ai/router";
+import { isReasoningModel } from "@/lib/ai/chat-payload-core";
 import {
   bulkGenerateDescriptionsAction,
   bulkAcceptSuggestionAction,
@@ -16,15 +18,18 @@ import {
 } from "./actions";
 
 export const dynamic = "force-dynamic";
+// D244 E-0: a 25-product batch on a reasoning model can run for minutes.
+export const maxDuration = 300;
 
 export default async function BulkAiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ generated?: string; failed?: string; accepted?: string; error?: string; back?: string }>;
+  searchParams: Promise<{ generated?: string; failed?: string; reason?: string; accepted?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
-  const { generated, failed, accepted, error, back } = sp;
+  const { generated, failed, reason, accepted, error, back } = sp;
+  const draftModel = aiMode === "sprint" ? aiHeavyModelId : aiLightModelId;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -103,7 +108,18 @@ export default async function BulkAiPage({
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             Drafted {generated} description{generated === "1" ? "" : "s"}
             {failed && failed !== "0" ? ` (${failed} failed)` : ""}. Review them below.
+            {failed && failed !== "0" && reason ? (
+              <span className="mt-1 block text-xs text-amber-200">First failure: {reason}</span>
+            ) : null}
           </div>
+        )}
+        {isAiConfigured && (
+          <p className="text-xs text-white/50">
+            Drafting model: <span className="font-mono text-white/70">{draftModel}</span> ({aiMode} mode)
+            {isReasoningModel(draftModel)
+              ? " — reasoning-class model: requests use max_completion_tokens and default temperature automatically."
+              : ""}
+          </p>
         )}
         {accepted && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">

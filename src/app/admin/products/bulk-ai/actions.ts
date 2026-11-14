@@ -15,6 +15,7 @@ import {
 import { isAiConfigured } from "@/lib/ai/provider";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
+import { friendlyAiError } from "@/lib/ai/chat-payload-core";
 
 /**
  * Bulk AI: generate draft DESCRIPTIONS for a set of selected products in one
@@ -42,6 +43,9 @@ export async function bulkGenerateDescriptionsAction(formData: FormData): Promis
 
   let generated = 0;
   let failed = 0;
+  // D244 E-0: keep the FIRST failure reason so the page can say WHY
+  // ("Unsupported parameter: max_tokens…") instead of a bare count.
+  let firstError = "";
   for (const key of batch) {
     const item = byKey.get(key);
     if (!item) continue;
@@ -57,8 +61,9 @@ export async function bulkGenerateDescriptionsAction(formData: FormData): Promis
     try {
       await generateProductDescription(key, facts, session.userId);
       generated += 1;
-    } catch {
+    } catch (err) {
       failed += 1;
+      if (!firstError) firstError = friendlyAiError(err);
     }
   }
 
@@ -67,11 +72,12 @@ export async function bulkGenerateDescriptionsAction(formData: FormData): Promis
     actorEmail: session.email,
     action: "product.bulk_ai_generated",
     entityType: "product",
-    after: { requested: batch.length, generated, failed },
+    after: { requested: batch.length, generated, failed, firstError: firstError || null },
   });
 
   revalidatePath("/admin/products/bulk-ai");
-  redirect(`/admin/products/bulk-ai?generated=${generated}&failed=${failed}#review`);
+  const reason = failed > 0 && firstError ? `&reason=${encodeURIComponent(firstError)}` : "";
+  redirect(`/admin/products/bulk-ai?generated=${generated}&failed=${failed}${reason}#review`);
 }
 
 /** Accept one pending description suggestion from the bulk grid. */
