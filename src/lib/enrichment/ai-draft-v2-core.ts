@@ -76,6 +76,9 @@ export const ALL_FIELDS = [
   "sensory",
   "effects",
   "tags",
+  // D244 R-2 (owner: "draft strain type and potency from the lot/ coa"):
+  "strain_type",
+  "potency",
 ] as const;
 export type DraftFieldKey = (typeof ALL_FIELDS)[number];
 
@@ -87,7 +90,17 @@ export const FIELD_LABEL: Record<DraftFieldKey, string> = {
   sensory: "Aroma / flavor / terpenes",
   effects: "Effects",
   tags: "Tags",
+  strain_type: "Strain type",
+  potency: "Potency (THC / CBD)",
 };
+
+/**
+ * D244 R-2: label facts. Potency is printed on the card next to the price,
+ * so a guessed number is never taken by "Accept all"; a person accepts it
+ * (or types the right one on the grid). Strain type best guesses follow the
+ * owner's round-2 rule (accepted, flagged).
+ */
+export const NEVER_AUTO_GUESS: ReadonlySet<string> = new Set(["potency"]);
 
 export function isDraftFieldKey(v: unknown): v is DraftFieldKey {
   return typeof v === "string" && (ALL_FIELDS as readonly string[]).includes(v);
@@ -263,7 +276,10 @@ export function isDirectEvidence(id: string): boolean {
     id === "vendor" ||
     id.startsWith("photo:") ||
     id.startsWith("kb:product:") ||
-    id.startsWith("kb:brand")
+    id.startsWith("kb:brand") ||
+    // D244 R-2: this product's own lots and lab certificates.
+    id.startsWith("lot:") ||
+    id.startsWith("coa:")
   );
 }
 
@@ -321,15 +337,23 @@ export function encodeEvidenceSource(meta: Pick<DraftMeta, "evidence" | "bestGue
 /** Flags after the evidence list: `|best-guess` (from the draft), `|checked` (a person looked). */
 export const CHECKED_FLAG = "checked";
 
-export function parseEvidenceSource(source: string | null | undefined): { v2: boolean; evidence: string[]; bestGuess: boolean; checked: boolean } {
+export function parseEvidenceSource(source: string | null | undefined): {
+  v2: boolean;
+  evidence: string[];
+  bestGuess: boolean;
+  checked: boolean;
+  /** D244 R-2: a person typed over the draft before accepting it. */
+  edited: boolean;
+} {
   const s = String(source ?? "");
-  if (!s.startsWith("ai2:")) return { v2: false, evidence: [], bestGuess: false, checked: false };
+  if (!s.startsWith("ai2:")) return { v2: false, evidence: [], bestGuess: false, checked: false, edited: false };
   const [list, ...flags] = s.slice(4).split("|");
   return {
     v2: true,
     evidence: (list ?? "").split(",").map((x) => x.trim()).filter(Boolean),
     bestGuess: flags.includes("best-guess"),
     checked: flags.includes(CHECKED_FLAG),
+    edited: flags.includes("edited"),
   };
 }
 
@@ -352,6 +376,8 @@ export function evidenceLabel(id: string): string {
   if (id === "pos") return "POS record";
   if (id === "vendor") return "Vendor";
   if (id.startsWith("photo:")) return `Photo ${id.slice(6)}`;
+  if (id.startsWith("lot:")) return `Lot ${id.slice(4)}`;
+  if (id.startsWith("coa:")) return `Lab certificate ${id.slice(4)}`;
   if (id.startsWith("kb:product:")) return id.endsWith("draft") ? "KB product (draft)" : "KB product";
   if (id.startsWith("kb:brand")) return "KB brand";
   if (id.startsWith("kb:strain:")) return `Strain: ${id.slice(10)}`;
@@ -381,13 +407,13 @@ export type SuggestionLite = {
  * unless the caller turns that off; anything else needs >= threshold%.
  */
 export function isAcceptAllCandidate(
-  r: { confidence?: number | null; source?: string | null },
+  r: { confidence?: number | null; source?: string | null; field_key?: string },
   threshold = ACCEPT_ALL_THRESHOLD,
   opts: { bestGuesses?: boolean } = {},
 ): boolean {
   const ev = parseEvidenceSource(r.source);
   if (!ev.v2) return false;
-  if (ev.bestGuess) return opts.bestGuesses !== false;
+  if (ev.bestGuess) return opts.bestGuesses !== false && !NEVER_AUTO_GUESS.has(String(r.field_key ?? ""));
   return Math.round((r.confidence ?? 0) * 100) >= threshold;
 }
 
@@ -520,15 +546,23 @@ export function __runAiDraftV2Tests(): { passed: number; failed: number } {
   eq(normalizeDraftField("seo", { confidence: 250, evidence: ["pos"] }, offered).confidence, 100, "clamp high");
   eq(normalizeDraftField("seo", { confidence: "x", evidence: "pos" }, offered).confidence, 0, "junk input");
   eq(encodeEvidenceSource({ evidence: ["pos", "photo:1"], bestGuess: true }), "ai2:pos,photo:1|best-guess", "encode");
-  eq(parseEvidenceSource("ai2:pos,photo:1|best-guess"), { v2: true, evidence: ["pos", "photo:1"], bestGuess: true, checked: false }, "parse");
-  eq(parseEvidenceSource("ai"), { v2: false, evidence: [], bestGuess: false, checked: false }, "parse legacy");
-  eq(parseEvidenceSource("ai2:pos|best-guess|checked"), { v2: true, evidence: ["pos"], bestGuess: true, checked: true }, "parse checked");
+  eq(parseEvidenceSource("ai2:pos,photo:1|best-guess"), { v2: true, evidence: ["pos", "photo:1"], bestGuess: true, checked: false, edited: false }, "parse");
+  eq(parseEvidenceSource("ai"), { v2: false, evidence: [], bestGuess: false, checked: false, edited: false }, "parse legacy");
+  eq(parseEvidenceSource("ai2:pos|best-guess|checked"), { v2: true, evidence: ["pos"], bestGuess: true, checked: true, edited: false }, "parse checked");
   eq([markCheckedSource("ai2:pos|best-guess"), markCheckedSource("ai2:pos|best-guess|checked"), markCheckedSource("ai")], ["ai2:pos|best-guess|checked", "ai2:pos|best-guess|checked", null], "mark checked idempotent");
   eq(
     [needsCloserLook({ status: "accepted", source: "ai2:pos|best-guess" }), needsCloserLook({ status: "pending", source: "ai2:pos|best-guess" }), needsCloserLook({ status: "accepted", source: "ai2:pos|best-guess|checked" }), needsCloserLook({ status: "accepted", source: "ai2:pos" })],
     [true, false, false, false],
     "needs a closer look = accepted + best guess + not checked",
   );
+  // D244 R-2: lots + lab certificates are direct evidence; a guessed potency is never auto-accepted.
+  ok(isDirectEvidence("lot:1") && isDirectEvidence("coa:2"), "R-2 lot/coa direct");
+  eq([evidenceLabel("lot:1"), evidenceLabel("coa:2")], ["Lot 1", "Lab certificate 2"], "R-2 lot/coa labels");
+  ok(!isAcceptAllCandidate({ field_key: "potency", confidence: 0.7, source: "ai2:kb:category:flower|best-guess" }), "R-2 guessed potency not auto");
+  ok(isAcceptAllCandidate({ field_key: "potency", confidence: 0.9, source: "ai2:coa:1" }), "R-2 lab potency auto at 90");
+  ok(isAcceptAllCandidate({ field_key: "strain_type", confidence: 0.6, source: "ai2:kb:strain:x|best-guess" }), "R-2 strain-type guess follows owner rule");
+  ok(parseEvidenceSource("ai2:pos|best-guess|checked|edited").edited && !needsCloserLook({ status: "accepted", source: "ai2:pos|best-guess|checked|edited" }), "R-2 edited = checked");
+  eq(ALL_FIELDS.slice(-2), ["strain_type", "potency"], "R-2 fields");
   eq([evidenceLabel("pos"), evidenceLabel("photo:2"), evidenceLabel("kb:strain:blue dream"), evidenceLabel("kb:product:draft")], ["POS record", "Photo 2", "Strain: blue dream", "KB product (draft)"], "labels");
 
   // accept-all

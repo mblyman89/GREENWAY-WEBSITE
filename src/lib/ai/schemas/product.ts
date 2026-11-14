@@ -10,6 +10,7 @@
  */
 import { defineSchema } from "../schema";
 import { ALLOWED_EFFECTS } from "../compliance";
+import { strainTypeValues } from "@/lib/menu/strain-taxonomy";
 
 /** The fixed merchandising tag vocabulary (mirrors enrichment ProductTag). */
 export const ALLOWED_PRODUCT_TAGS = [
@@ -193,6 +194,10 @@ export type ProductAllFieldsResult = {
   sensory: DraftMetaRaw & { aroma_notes: string[]; flavor_notes: string[]; terpenes: string[] };
   effects: DraftMetaRaw & { values: string[] };
   tags: DraftMetaRaw & { values: string[] };
+  /** D244 R-2: from the lot / lab certificate / POS / strain library. */
+  strain_type: DraftMetaRaw & { value: string };
+  /** D244 R-2: copied from the lab certificate / lot / POS only ("" when none). */
+  potency: DraftMetaRaw & { thc: string; cbd: string };
 };
 
 export const productAllFieldsSchema = defineSchema<ProductAllFieldsResult>("product_all_fields", {
@@ -254,6 +259,30 @@ export const productAllFieldsSchema = defineSchema<ProductAllFieldsResult>("prod
     kind: "object",
     fields: {
       values: { kind: "stringArray", description: "0-3 merchandising tags from the allowed list only.", allowed: ALLOWED_PRODUCT_TAGS, maxItems: 3 },
+      ...draftMeta,
+    },
+  },
+  strain_type: {
+    kind: "object",
+    fields: {
+      value: {
+        kind: "enum",
+        values: strainTypeValues,
+        description:
+          "The product's strain type. Prefer the lab certificate / lot ([coa:N] / [lot:N]), then [pos], then the strain library. Use unknown when nothing says.",
+      },
+      ...draftMeta,
+    },
+  },
+  potency: {
+    kind: "object",
+    fields: {
+      thc: {
+        kind: "string",
+        description: 'Total THC COPIED from [coa:N], [lot:N] or [pos], like "24.5%" (flower, carts, concentrates) or "100mg" (edibles, drinks, tinctures). "" when no evidence states it. Never estimate.',
+        maxLength: 20,
+      },
+      cbd: { kind: "string", description: 'Total CBD, copied the same way. "" when no evidence states it.', maxLength: 20 },
       ...draftMeta,
     },
   },

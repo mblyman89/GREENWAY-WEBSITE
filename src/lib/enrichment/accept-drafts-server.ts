@@ -33,6 +33,12 @@ import {
   parseEvidenceSource,
   type SuggestionLite,
 } from "@/lib/enrichment/ai-draft-v2-core";
+import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
+import { parsePotencyText, potencyCardPatch } from "@/lib/enrichment/lot-evidence-core";
+import { writeCardFacts } from "@/lib/enrichment/card-facts-write-server";
+import { resolveDraftEdit } from "@/lib/enrichment/draft-edit-core";
+import { checkEffects } from "@/lib/ai/compliance";
+import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
 
 const TAGS = new Set<string>(ALLOWED_PRODUCT_TAGS);
 
@@ -53,6 +59,20 @@ export async function applyAcceptedValue(
     await ensureEnrichment(key, {}, userId);
     await updateEnrichment(key, { seo_title: seo.title, seo_description: seo.description }, userId);
     return null;
+  }
+  // D244 R-2: strain type + potency are CARD facts (menu_items), stamped
+  // "reviewer" because a person accepted them.
+  if (sugg.field_key === "strain_type") {
+    const t = canonicalStrainType(sugg.suggested_value);
+    if (t === "unknown") return "That strain type draft could not be read. Draft it again.";
+    const w = await writeCardFacts(key, { strain_type: t });
+    return w.ok ? null : w.error;
+  }
+  if (sugg.field_key === "potency") {
+    const p = parsePotencyText(sugg.suggested_value);
+    if (!p.ok) return p.error;
+    const w = await writeCardFacts(key, potencyCardPatch(p.value));
+    return w.ok ? null : w.error;
   }
   await ensureEnrichment(key, {}, userId);
   if (sugg.field_key === "description") {
@@ -119,6 +139,53 @@ export async function acceptHighConfidenceForKey(key: string, userId: string): P
   }
   const writeback = accepted.length ? await writeBackOnPublish(key, userId) : null;
   return { ok: true, eligible: ids.length, accepted, blocked, flagged, writeback };
+}
+
+/** Source flag: a person typed over the draft before accepting it (D244 R-2). */
+export const EDITED_FLAG = "edited";
+
+export type EditAcceptOutcome =
+  | { ok: false; error: string; audit?: Record<string, unknown> }
+  | { ok: true; key: string; field: string; edited: boolean; audit: Record<string, unknown> };
+
+/**
+ * D244 R-2: accept ONE pending draft, optionally with the person's typed
+ * edit (bulk grid and product page). The typed text is read back into the
+ * field's stored shape (resolveDraftEdit), then the SAME gates as Accept:
+ * compliance re-scan on the final text, effects re-gated, then
+ * applyAcceptedValue. An edited row stores the person's text and gets
+ * `|edited|checked` (a person looked at it, so it is not left in "Needs a
+ * closer look"); the AI's original is kept in the audit. Status stays
+ * "accepted" so every reader of accepted facts (KB writeback, sensory) sees it.
+ */
+export async function acceptDraftWithEdit(id: string, editedRaw: FormDataEntryValue | null, userId: string): Promise<EditAcceptOutcome> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("ai_suggestions").select("*").eq("id", id).maybeSingle();
+  if (error || !data) return { ok: false, error: "That draft could not be found." };
+  const row = data as AiSuggestion;
+  if (row.status !== "pending") return { ok: false, error: "That draft was already reviewed. Refresh the page." };
+  const r = resolveDraftEdit(row.field_key, row.suggested_value, editedRaw, { allowedTags: ALLOWED_PRODUCT_TAGS });
+  if (r.error) return { ok: false, error: r.error };
+  let value = r.value;
+  if (r.edited && row.field_key === "effects") {
+    const gate = checkEffects(value.split(",").map((x) => x.trim()).filter(Boolean), await loadBannedPhrases().catch(() => []));
+    if (gate.rejected.length) return { ok: false, error: `Not allowed as an effect: ${gate.rejected.map((x) => `"${x.effect}" (${x.reason})`).join(", ")}.` };
+    value = gate.allowed.join(", ");
+  }
+  const gate = await acceptWithComplianceGate({ field_key: row.field_key, suggested_value: value });
+  const audit = { suggestionId: id, field: row.field_key, edited: r.edited, ...(r.edited ? { original: row.suggested_value, value } : {}), ...gate.audit };
+  if (!gate.ok) return { ok: false, error: gate.message, audit };
+  const err = await applyAcceptedValue(row.entity_id, { field_key: row.field_key, suggested_value: value }, userId);
+  if (err) return { ok: false, error: err, audit };
+  if (r.edited) {
+    const src = String(row.source ?? "");
+    const next = src.startsWith("ai2:") ? `${markCheckedSource(src)}|${EDITED_FLAG}` : src || null;
+    const up = await admin.from("ai_suggestions").update({ suggested_value: value, source: next }).eq("id", id);
+    if (up.error) return { ok: false, error: "The edit was applied but the draft row did not save. Refresh and check.", audit };
+  }
+  await reviewSuggestion(id, "accepted", userId);
+  return { ok: true, key: row.entity_id, field: row.field_key, edited: r.edited, audit };
 }
 
 export function acceptAllMessage(accepted: string[], blocked: string[], flagged: string[] = []): string {

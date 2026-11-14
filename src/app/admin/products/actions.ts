@@ -44,7 +44,7 @@ import { rememberImageAttach } from "@/lib/catalog/image-memory-server";
 import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
 import { draftAllFieldsForProduct } from "@/lib/enrichment/ai-draft-v2-server";
 import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
-import { acceptAllMessage, acceptHighConfidenceForKey, applyAcceptedValue, markBestGuessChecked } from "@/lib/enrichment/accept-drafts-server";
+import { acceptAllMessage, acceptDraftWithEdit, acceptHighConfidenceForKey, applyAcceptedValue, markBestGuessChecked } from "@/lib/enrichment/accept-drafts-server";
 import { publishOnPhoto } from "@/lib/enrichment/publish-on-photo-server";
 import {
   attachImageToGallery,
@@ -517,6 +517,25 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
   const key = String(formData.get("key") ?? "");
   const listBack = cleanBack(formData.get("back"));
   if (!id || !key) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing suggestion.")));
+
+  // D244 R-2: the all-fields drafts carry an edit box; a typed edit is read
+  // back into the field's shape and gated the same way (acceptDraftWithEdit).
+  if (formData.has("editedValue")) {
+    const out = await acceptDraftWithEdit(id, formData.get("editedValue"), session.userId);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: out.ok ? "product.ai_accepted" : "product.ai_accept_blocked",
+      entityType: "product",
+      entityId: key,
+      after: out.ok ? out.audit : { error: out.error, ...(out.audit ?? {}) },
+    });
+    if (!out.ok) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(out.error), "#ai"));
+    await writeBackOnPublish(key, session.userId).catch(() => null);
+    if (out.field === "strain_type" || out.field === "potency") revalidatePublicMenuSurfaces();
+    revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+    redirect(detailUrl(key, listBack, "?saved=1", "#ai"));
+  }
 
   const sugg = await getSuggestion(id);
   if (!sugg) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Suggestion not found.")));
