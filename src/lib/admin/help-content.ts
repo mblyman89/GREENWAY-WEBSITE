@@ -423,6 +423,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "Yes. On a product page, every Recommended photo and every gallery photo has a Remove text button. Drag a box over the text, or press Find the text and the AI photo reader boxes each piece of text and ticks the ones that name a different product, size or brand (it keeps this product's own name, the brand and any warning). Press Remove text: FLUX Fill repaints only inside the boxes to match the packaging. Compare Before and After, then Attach as cover. The original photo is never changed; the new one is saved in the media library. When a photo's label already reads another product's name, its tile says so in orange.",
       },
       {
+        q: "Can I approve every waiting AI draft, not only the 80%+ ones?",
+        a: "Yes (D244 R-18). On Bulk AI press ✅ Approve every draft (any confidence, all pages). It finds every product with a draft waiting, not only the ones on screen, asks you to confirm, then accepts them a few at a time with a running total and a Stop button. Every draft still goes through the compliance re-scan (a flagged one stays for you), and a potency best guess is never auto-accepted. The older description drafts further down have their own ✅ Accept all button. Nothing is published: a product still goes live when it gets a photo.",
+        href: "/admin/products/bulk-ai",
+      },
+      {
         q: "Can I approve many AI drafts at once on Bulk AI?",
         a: "Yes. On Bulk AI, every product in the review list has a tick box, and so does every draft. Tick the ones you want (or Select all) and press Approve selected: a ticked product accepts its drafts at 80% or better (best guesses too, flagged for a closer look); a ticked single draft is accepted as it is. Or press \u26a1 Approve every draft at 80%+ to do every product that has one in one press. It works through them a few at a time and shows a running total. Every draft goes through the compliance re-scan, and a blocked one stays for you. Approving never publishes: a product goes live when it gets a photo.",
         href: "/admin/products/bulk-ai",
@@ -957,6 +962,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "What is the Knowledge Base?",
         a: "A library of cannabis reference details (strains, effects, terms) the system draws on to help write accurate product descriptions and answer shopper questions.",
         href: "/admin/knowledge-base",
+      },
+      {
+        q: "How do I approve thousands of KB drafts at once?",
+        a: "On Knowledge Base → Data pipeline (or the Review inbox), use Publish every draft that passes (D244 R-19). Pick a quality bar (Good or better, 65+, is the default) and a source, press Check first to see how many would publish (nothing changes), then press ✅ Publish every draft that passes and confirm. It works 500 at a time, so 20,000 records take about 40 steps, with a running total and a Stop button. Each record must also pass the WA compliance scan, including your banned-phrase list; the rest stay drafts for you, with the reason counted. You can archive any record later.",
+        href: "/admin/knowledge-base/pipeline",
       },
     ],
   },

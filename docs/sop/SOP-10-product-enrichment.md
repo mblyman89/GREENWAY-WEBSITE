@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
+| **Version** | 1.4 (D244 R-18; adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -124,6 +124,7 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 3. Any single draft can be edited in place: change the text, press **Save & accept**. The edited text is re-checked (SEO cleaned, tags kept to the allowed list, effects checked, strain type and potency parsed) and passes the compliance gate.
 4. The **failure list** names each product the AI could not draft and why. **Cancel** stops the live queue.
 5. **Many at once (R-12).** Owner (round 4): *"to be able to select one or all drafts waiting for me to approve. I want this page to auto approve the ones that are over 80%."* Every product in the list has a tick box, and so does every draft. Tick them (or **Select all**) and press **Approve selected**: a ticked product accepts its drafts at 80% or better (best guesses too, flagged); a ticked single draft is accepted as it is. Or press **⚡ Approve every draft at 80%+** and confirm: every product that has one is done in one press. The page works through them a few at a time (8 products per step) and shows *Approving… 40 of 250 products*, then a total. Every draft still passes the compliance re-scan; a blocked one stays for you. Approving never publishes.
+6. **Every draft, any confidence (R-18).** Owner (round 6): *"I need a way to select many/ all and approve many/ all drafts awaiting my review on the bulk ai draft page in enrichment."* Press **✅ Approve every draft (any confidence, all pages)**. It finds every product with a draft waiting (not only the ones on screen; the grid shows up to 3,000 drafts), tells you how many, and asks you to confirm. It then accepts every waiting draft on each product, 8 products per step, with a running total and a **Stop** button. Every draft still passes the compliance re-scan (a blocked one stays for you), and a potency best guess is never auto-accepted (potency comes from the lot or certificate). The older description drafts under *Drafts awaiting your review* have their own **✅ Accept all** button. Approving never publishes.
 
 ### 4.8 Needs a closer look (best guesses)
 
@@ -205,6 +206,16 @@ The compliance check now reads the words around a blocked word before it blocks.
 
    "Treats stress", "kids love it", "it is safe", "a healthy choice" and "pairs well with alcohol" still block.
 5. **If a sentence you need is still blocked,** reword it so the medical word is not in the same sentence. Or tell the owner the exact sentence, so the word list in `src/lib/ai/compliance-patterns.json` (`contextRules`) can be updated.
+
+### 4.16 Knowledge Base: publish every draft that passes (D244 R-19)
+
+Owner (round 6): *"I need a way to approve all of the 20,000 records awaiting me in the kb data pipeline. The bronze, silver, gold page. The majority of it is good data, but too much of it to go through one by one with system wait time from thinking and such. We need a more practical way to manage this."*
+
+1. Open **Knowledge Base → Data pipeline** (or the **Review inbox**). The **Publish every draft that passes** box shows how many drafts are waiting.
+2. Pick a **Quality bar**. It uses the same score as each review card: Any, Fair or better (40+), **Good or better (65+, default)** or Excellent only (85+). Pick a **Source** if you only want one kind of intake, such as CCRS state data.
+3. Press **Check first (changes nothing)**. It walks every draft and says, for example, *Checked 20,000 drafts: 19,000 records would publish. Would stay drafts for you: 800 below the quality bar, 200 with a compliance flag.*
+4. Press **✅ Publish every draft that passes** and confirm. It works 500 drafts per step (20,000 takes about 40 steps; no AI call, so there is no thinking wait), with a running total and a **Stop** button. Press it again to carry on after a Stop.
+5. Each record must have a name, meet the bar and pass the WA compliance scan of its words (name, description, summary, effects), including your banned-phrase list. The rest stay drafts in the Review inbox with the reason counted, for you to look at one by one. Every step that publishes writes an audit row (`kb.bulk.publish_passing`). Any published record can be archived later.
 
 ## 5. Messages: "If you see this message"
 
@@ -335,4 +346,5 @@ The compliance check now reads the words around a blocked word before it blocks.
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
 | 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
+| 1.4 | D244 R-18 | Owner round 6: ✅ Approve every draft (any confidence, all pages) and ✅ Accept all description drafts on Bulk AI (4.7 step 6); Knowledge Base publish every draft that passes, with Check first, a quality bar and a source filter (4.16) |
 | 1.3 | D244 R-14 | Owner round 5: "cure", "cured" and other blocked words are read in context (4.15). The cure process is a heads-up, not a block; a medical use still blocks. New messages, control 9, quick-reference line and source map row |

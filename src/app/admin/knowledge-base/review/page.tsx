@@ -27,6 +27,7 @@ import {
 import { scoreProduct, labelForField } from "@/lib/ai/kb/quality";
 import { QualityBadge } from "../QualityBadge";
 import { KbFlash } from "../KbFlash";
+import { KbBulkPublishBar } from "../KbBulkPublishBar";
 import {
   reviewKbProductAction,
   reviewKbBrandAction,
@@ -79,6 +80,9 @@ export default async function KbReviewPage({
           awaiting review. Nothing here is authoritative until you publish it
           (drafts-only rule).
         </p>
+
+        {/* D244 R-19: publish every draft that passes, 500 at a time. */}
+        {draftCount > 0 ? <KbBulkPublishBar drafts={draftCount} /> : null}
 
         {/* Bulk actions for CCRS-enrichment drafts (Slice B). Only DRAFT rows
             whose source starts with 'ccrs:' move — curated data never does. */}

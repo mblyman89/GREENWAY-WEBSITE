@@ -11,10 +11,17 @@
  * and the ticked single drafts. "Approve every draft at 80%+" does every
  * product that has one, in one press. The browser sends small chunks one
  * after the next and shows a running total; the page refreshes at the end.
+ *
+ * D244 R-18 (owner: "I need a way to select many/ all and approve many/ all
+ * drafts awaiting my review"): "Approve every draft (any confidence)" reads
+ * every product with a pending draft (not only the ones on screen) and accepts
+ * them all, still through the compliance re-scan; a potency best guess is
+ * never auto-accepted. A Stop button ends it between chunks.
  */
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { approveDraftsChunkAction, approveProductsChunkAction } from "./approve-actions";
+import { approveEveryDraftChunkAction, listEveryPendingDraftKeyAction } from "./approve-all-actions";
 import {
   BULK_APPROVE_CHUNK,
   BULK_APPROVE_IDS_CHUNK,
@@ -61,7 +68,8 @@ export function BulkApproveBar(props: { autoKeys: string[]; threshold: number; p
     document.dispatchEvent(new Event("change"));
   };
 
-  const run = async (keys: string[], drafts: string[]) => {
+  const run = async (keys: string[], drafts: string[], every = false) => {
+    cancelled.current = false;
     setRunning(true);
     setSummary(null);
     let t = emptyTotals();
@@ -71,7 +79,8 @@ export function BulkApproveBar(props: { autoKeys: string[]; threshold: number; p
       for (const c of keyChunks) {
         if (cancelled.current) break;
         setProgress(approveProgress(done, keys.length));
-        t = addTotals(t, await approveProductsChunkAction(c).catch(() => ({ failed: c.length, products: c.length })));
+        const send = every ? approveEveryDraftChunkAction : approveProductsChunkAction;
+        t = addTotals(t, await send(c).catch(() => ({ failed: c.length, products: c.length })));
         done += c.length;
       }
       for (const c of chunkList(drafts, BULK_APPROVE_IDS_CHUNK)) {
@@ -100,6 +109,27 @@ export function BulkApproveBar(props: { autoKeys: string[]; threshold: number; p
     void run(autoKeys, []);
   };
 
+  const approveEveryDraft = async () => {
+    setRunning(true);
+    setSummary(null);
+    setProgress("Finding every product with a draft waiting\u2026");
+    let keys: string[] = [];
+    try {
+      keys = await listEveryPendingDraftKeyAction();
+    } catch {
+      keys = [];
+    }
+    setRunning(false);
+    setProgress(null);
+    if (keys.length === 0) {
+      setSummary("No drafts are waiting.");
+      return;
+    }
+    const msg = `Accept EVERY waiting draft, at any confidence, on ${keys.length} product${keys.length === 1 ? "" : "s"}? Each one still goes through the compliance re-scan (a flagged one stays for you), and a potency best guess is never auto-accepted. Nothing is published. You can press Stop.`;
+    if (!window.confirm(msg)) return;
+    await run(keys, [], true);
+  };
+
   return (
     <div className="sticky top-0 z-10 mb-3 space-y-2 rounded-xl border border-[var(--admin-accent)]/30 bg-black/90 p-3 backdrop-blur" data-testid="bulk-approve-bar">
       <div className="flex flex-wrap items-center gap-2">
@@ -126,6 +156,20 @@ export function BulkApproveBar(props: { autoKeys: string[]; threshold: number; p
         >
           {"\u26a1"} Approve every draft at {threshold}%+ ({autoKeys.length} product{autoKeys.length === 1 ? "" : "s"})
         </button>
+        <button
+          type="button"
+          data-testid="bulk-approve-every"
+          onClick={() => void approveEveryDraft()}
+          disabled={running}
+          className="rounded-lg border border-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/10 disabled:opacity-40"
+        >
+          {"\u2705"} Approve every draft (any confidence, all pages)
+        </button>
+        {running ? (
+          <button type="button" data-testid="bulk-approve-stop" disabled={!running} onClick={() => (cancelled.current = true)} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10">
+            Stop
+          </button>
+        ) : null}
         {progress ? <span className="text-xs text-white/70" role="status">{progress}</span> : null}
       </div>
       {summary ? (
@@ -134,7 +178,7 @@ export function BulkApproveBar(props: { autoKeys: string[]; threshold: number; p
         </p>
       ) : null}
       <p className="text-[0.65rem] text-white/45">
-        A ticked product accepts its drafts at {threshold}% or better (best guesses too, flagged for a closer look). A ticked single draft is accepted as it is. Every draft goes through the compliance re-scan; a blocked one stays for you. Approving never publishes: a product goes live when it gets a photo.
+        A ticked product accepts its drafts at {threshold}% or better (best guesses too, flagged for a closer look). A ticked single draft is accepted as it is. Every draft goes through the compliance re-scan; a blocked one stays for you. &ldquo;Approve every draft&rdquo; takes every waiting product (not only this screen) at any confidence, except potency best guesses. Approving never publishes: a product goes live when it gets a photo.
       </p>
     </div>
   );
