@@ -114,8 +114,9 @@ export function enqueueBulk(
   reqs: QueueRequest[],
   actorId: string | null,
   nowIso: string,
-): { state: BulkAiV2State; added: number; already: number; capped: boolean } {
+): { state: BulkAiV2State; added: number; already: number; capped: boolean; addedKeys: string[] } {
   const items = s.items.map((i) => ({ ...i }));
+  const addedKeys: string[] = [];
   const byKey = new Map(items.map((i) => [i.key, i] as const));
   let added = 0;
   let already = 0;
@@ -141,6 +142,7 @@ export function enqueueBulk(
       byKey.set(key, row);
     }
     added += 1;
+    addedKeys.push(key);
   }
   // Trim old finished rows (keep open ones always).
   const finished = items.filter((i) => i.status !== "queued" && i.status !== "running");
@@ -150,6 +152,7 @@ export function enqueueBulk(
     added,
     already,
     capped,
+    addedKeys,
   };
 }
 

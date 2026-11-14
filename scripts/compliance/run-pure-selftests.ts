@@ -1382,6 +1382,8 @@ import { __runImageRecommendV3Tests } from "../../src/lib/enrichment/image-recom
 import { __runAiDraftV2Tests } from "../../src/lib/enrichment/ai-draft-v2-core";
 import { __runBulkAiV2Tests } from "../../src/lib/enrichment/bulk-ai-v2-core";
 import { __runEnrichBatchTests } from "../../src/lib/enrichment/enrich-batch-core";
+import { __runBatchAnswerTests } from "../../src/lib/enrichment/batch-answer-core";
+import { __runVendorPickTests } from "../../src/lib/enrichment/vendor-pick-core";
 import { __runLotEvidenceTests } from "../../src/lib/enrichment/lot-evidence-core";
 import { __runDraftEditTests } from "../../src/lib/enrichment/draft-edit-core";
 import { __runEnrichModelCoreTests } from "../../src/lib/ai/enrich-model-core";
@@ -2980,6 +2982,8 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("product-identity-core", __runProductIdentityTests(), 26); // D244 R-7: identity header rows, form of a category, type words, form match, prompt lines
   assertRan("vendor-kit-core", __runVendorKitCoreTests(), 36); // D244 R-8: vendor kits - like-kind groups, product-specific words, generic photo ranking, apply plan, AI verdicts in the URL
   assertRan("text-erase-core", __runTextEraseCoreTests(), 54); // D244 R-9/R-11: remove text - drag boxes, FLUX Fill mask, AI find-the-text keep/remove advice, other-name hint, multi-photo queue
+  assertRan("vendor-pick-core", __runVendorPickTests(), 17); // D244 R-16: many vendors / every vendor in one press, vendors named in the flash, overnight per-vendor breakdown + when it leaves, retry failed
+  assertRan("batch-answer-core", __runBatchAnswerTests(), 20); // D244 R-15: overnight answers read tolerantly (wrappers, flat fields, long text) + responseSchema in the Batch API docs' form
   assertRan("compliance-context-core", __runComplianceContextTests(), 76); // D244 R-14: "cure"/"cured" (the cure process) read in context, a heads-up; medical uses still block
   assertRan("bulk-approve-core", __runBulkApproveCoreTests(), 17); // D244 R-12: Bulk AI select one/all + approve every draft at 80%+, chunked (8 products / 40 drafts per call), totals, never publishes
   assertRan("copilot-core", __runCopilotCoreTests(), 55); // D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect

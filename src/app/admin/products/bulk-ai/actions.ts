@@ -21,7 +21,8 @@ import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
 import { BULK_AI_V2_MAX_QUEUE, type QueueRequest } from "@/lib/enrichment/bulk-ai-v2-core";
 import { cancelBulkAiV2, queueBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
-import { cancelEnrichBatch, enrichBatchConfigured, queueEnrichBatch } from "@/lib/enrichment/enrich-batch-server";
+import { cancelEnrichBatch, enrichBatchConfigured, queueEnrichBatch, requeueFailedEnrichBatch } from "@/lib/enrichment/enrich-batch-server";
+import { pickByVendors, pickIsEmpty, pickSummary } from "@/lib/enrichment/vendor-pick-core";
 import { ENRICH_BATCH_MAX_QUEUE } from "@/lib/enrichment/enrich-batch-core";
 import { acceptAllMessage, acceptDraftWithEdit, acceptHighConfidenceForKey } from "@/lib/enrichment/accept-drafts-server";
 
@@ -163,19 +164,27 @@ function gridUrl(formData: FormData, flash: string, hash = "#review"): string {
   return `${BULK_URL}${base ? `?${base}` : ""}${hash}`;
 }
 
-/** The ticked products, or every live product from one vendor (live menu rows only). */
+/**
+ * The ticked products, plus every live product from each picked vendor
+ * (D244 R-16: any number of vendors - the "vendor" select and the
+ * "vendors" checkboxes - or "every vendor"). Live menu rows only.
+ */
 async function pickedProducts(formData: FormData): Promise<QueueRequest[]> {
-  const ticked = new Set(formData.getAll("keys").map((k) => String(k).trim()).filter(Boolean));
-  const vendor = String(formData.get("vendor") ?? "").trim();
-  if (ticked.size === 0 && !vendor) {
+  const pick = {
+    ticked: formData.getAll("keys").map((k) => String(k)),
+    vendors: [...formData.getAll("vendor"), ...formData.getAll("vendors")].map((v) => String(v)),
+    allVendors: String(formData.get("all_vendors") ?? "") === "1",
+  };
+  if (pickIsEmpty(pick)) {
     redirect(`${BULK_URL}?error=` + encodeURIComponent("Tick at least one product, or pick a vendor.") + "#queue");
   }
   const published = await getPublishedVersion();
   if (!published) redirect(`${BULK_URL}?error=` + encodeURIComponent("There is no live menu yet.") + "#queue");
   const items = await getVersionItems(published!.id);
-  const reqs: QueueRequest[] = items
-    .filter((i) => ticked.has(i.source_item_id) || (vendor !== "" && (i.vendor_name ?? "").trim() === vendor))
-    .map((i) => ({ key: i.source_item_id, name: i.name, vendor: (i.vendor_name ?? "").trim() || null }));
+  const reqs: QueueRequest[] = pickByVendors(
+    items.map((i) => ({ key: i.source_item_id, name: i.name, vendor: i.vendor_name })),
+    pick,
+  );
   if (reqs.length === 0) redirect(`${BULK_URL}?error=` + encodeURIComponent("None of those products is on the live menu.") + "#queue");
   return reqs;
 }
@@ -193,8 +202,8 @@ export async function queueBulkAiV2Action(formData: FormData): Promise<void> {
   }
   revalidatePath(BULK_URL);
   const parts = [`⚡ Queued ${out!.added} product${out!.added === 1 ? "" : "s"} for a live all-fields AI draft.`];
-  if (out!.already) parts.push(`${out!.already} already waiting.`);
-  if (out!.capped) parts.push(`Only the first ${BULK_AI_V2_MAX_QUEUE} were added; queue the rest after these finish.`);
+  // D244 R-16: name the vendors and how many from each.
+  parts.push(pickSummary(reqs, out!.addedKeys ?? [], { already: out!.already, capped: out!.capped, cap: BULK_AI_V2_MAX_QUEUE, mode: "live" }).replace(/^⚡ Added \d+ products? from /, "From "));
   parts.push("The worker starts within a minute; you can close this tab.");
   redirect(`${BULK_URL}?queued=` + encodeURIComponent(parts.join(" ")) + "#queue");
 }
@@ -218,9 +227,10 @@ export async function queueOvernightBatchAction(formData: FormData): Promise<voi
   }
   revalidatePath(BULK_URL);
   const parts = [`🌙 Overnight: added ${out!.added} product${out!.added === 1 ? "" : "s"} to the overnight batch.`];
+  // D244 R-16: name the vendors and how many from each; say when it leaves.
+  parts.push(pickSummary(reqs, out!.addedKeys ?? [], { already: 0, capped: out!.capped, cap: ENRICH_BATCH_MAX_QUEUE, mode: "overnight" }).replace(/^🌙 Added \d+ products? from /, "From "));
   if (out!.already) parts.push(`${out!.already} already in it.`);
-  if (out!.capped) parts.push(`Only the first ${ENRICH_BATCH_MAX_QUEUE} were added.`);
-  parts.push("They go to Google within a few minutes; the drafts are back within 24 hours (usually a few). You can close this tab.");
+  parts.push("It does not start the instant you press: presses within two minutes are gathered into one batch, the background worker sends it on its next free minute, and Google answers within 24 hours (usually a few). You can close this tab.");
   redirect(`${BULK_URL}?queued=` + encodeURIComponent(parts.join(" ")) + "#queue");
 }
 
@@ -235,6 +245,22 @@ export async function cancelOvernightBatchAction(): Promise<void> {
   }
   revalidatePath(BULK_URL);
   redirect(`${BULK_URL}?queued=` + encodeURIComponent(`🌙 Took ${n} product${n === 1 ? "" : "s"} out of the overnight batch (any already at Google are still saved when Google answers).`) + "#queue");
+}
+
+/** 🌙 D244 R-16: put every failed overnight product back in line (fresh tries). */
+export async function retryFailedOvernightAction(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  if (!enrichBatchConfigured()) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent("The overnight batch needs a Gemini key (AI_GEMINI_API_KEY in Vercel).") + "#queue");
+  }
+  let n = 0;
+  try {
+    n = await requeueFailedEnrichBatch(session.userId);
+  } catch (err) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent((err as Error).message) + "#queue");
+  }
+  revalidatePath(BULK_URL);
+  redirect(`${BULK_URL}?queued=` + encodeURIComponent(n ? `🌙 Put ${n} failed product${n === 1 ? "" : "s"} back in the overnight batch. They go to Google with the next batch.` : "🌙 No failed overnight products to retry.") + "#queue");
 }
 
 /** Cancel everything still waiting (a product already drafting finishes). */

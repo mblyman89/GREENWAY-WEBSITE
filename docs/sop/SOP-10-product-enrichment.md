@@ -115,6 +115,8 @@ Open from the vendor strip (**Open Copilot session →**), the Bulk AI banner, a
 
 Both use the same prompt and the same checks; only the speed and price differ. Overnight work runs on the existing background worker (no new scheduled job).
 
+**When does the overnight batch start? (D244 R-16)** Not the instant you press. Presses within two minutes of each other are gathered into one batch; the every-minute background worker then sends it on its next free minute (up to 200 products per batch, at most 3 batches open at Google). Google answers within 24 hours, usually a few. The queue box shows the vendors in the batch and how many from each, and when it will leave. To pick many vendors at once, open **Or tick several vendors** and tick them, or tick **Every vendor**. If answers fail, **🌙 Retry the failed in the next overnight batch** puts them back in the queue.
+
 ### 4.7 Bulk AI: accept, edit and publish on the grid
 
 1. Open **Bulk AI** (`/admin/products/bulk-ai`). Filter by **vendor** and **Confidence at least** (Any / 50 / 70 / 80 / 90).

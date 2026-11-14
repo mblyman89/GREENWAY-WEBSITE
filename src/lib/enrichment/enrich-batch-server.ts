@@ -36,7 +36,9 @@ import { parseBatchOperation, parseJsonl, isFinalBatchState, batchModelPath, bui
 import { explainGemini } from "@/lib/ai/gemini-batch-explain-core";
 import { clampThinkingLevel, effectiveMaxOutputTokens, parseThinkingWanted, resolveGeminiModel } from "@/lib/ai/gemini-models-core";
 import { enrichModel } from "@/lib/ai/enrich-model";
-import { toResponseFormat, validate, formatErrors } from "@/lib/ai/schema";
+import { describeShape, validate, formatErrors } from "@/lib/ai/schema";
+import { requeueFailed } from "@/lib/enrichment/vendor-pick-core";
+import { batchShapeHint, fitToShape, normalizeAllFieldsAnswer, toGeminiResponseSchema } from "@/lib/enrichment/batch-answer-core";
 import { productAllFieldsSchema, type ProductAllFieldsResult } from "@/lib/ai/schemas/product";
 import { ALL_FIELDS_ANSWER_TOKENS, storeAllFieldsResult } from "@/lib/ai/all-fields-draft";
 import { buildAllFieldsRequestForProduct, type DraftItem } from "@/lib/enrichment/ai-draft-v2-server";
@@ -124,18 +126,33 @@ async function mutate<R>(admin: Admin, actorId: string | null, change: (s: Enric
   throw new Error("The overnight batch kept changing while it was being saved. Try again.");
 }
 
-export type EnrichBatchQueueOutcome = { added: number; already: number; capped: boolean };
+export type EnrichBatchQueueOutcome = { added: number; already: number; capped: boolean; addedKeys?: string[] };
 
 export async function queueEnrichBatch(reqs: BatchQueueRequest[], actorId: string | null, deps: { admin?: Admin; nowIso?: string } = {}): Promise<EnrichBatchQueueOutcome> {
   const admin = deps.admin ?? createSupabaseAdminClient();
   const nowIso = deps.nowIso ?? new Date().toISOString();
   const out = await mutate(admin, actorId, (cur) => {
     const r = enqueueEnrichBatch(cur, reqs, actorId, nowIso);
-    return { next: r.state, out: { added: r.added, already: r.already, capped: r.capped } };
+    return { next: r.state, out: { added: r.added, already: r.already, capped: r.capped, addedKeys: r.addedKeys } };
   });
-  const o = out ?? { added: 0, already: 0, capped: false };
-  await recordAudit({ actorId, action: ENRICH_BATCH_AUDIT.queued, entityType: "product", entityId: reqs.length === 1 ? reqs[0]!.key : null, after: { ...o, keys: reqs.slice(0, 50).map((r) => r.key) } }).catch(() => {});
-  return o;
+  const full = out ?? { added: 0, already: 0, capped: false, addedKeys: [] as string[] };
+  const o = { added: full.added, already: full.already, capped: full.capped };
+  const k = new Set(full.addedKeys);
+  const vendors = [...new Set(reqs.filter((r) => k.has(r.key)).map((r) => (r.vendor ?? "").trim() || "No vendor"))].slice(0, 60);
+  await recordAudit({ actorId, action: ENRICH_BATCH_AUDIT.queued, entityType: "product", entityId: reqs.length === 1 ? reqs[0]!.key : null, after: { ...o, vendors, keys: reqs.slice(0, 50).map((r) => r.key) } }).catch(() => {});
+  return { ...o, addedKeys: full.addedKeys };
+}
+
+/** D244 R-16: put every failed overnight product back in line (a person's click). */
+export async function requeueFailedEnrichBatch(actorId: string | null, deps: { admin?: Admin; nowIso?: string } = {}): Promise<number> {
+  const admin = deps.admin ?? createSupabaseAdminClient();
+  const nowIso = deps.nowIso ?? new Date().toISOString();
+  const n = (await mutate(admin, actorId, (cur) => {
+    const r = requeueFailed(cur.items, nowIso);
+    return r.requeued ? { next: { ...cur, items: r.items, queuedBy: actorId ?? cur.queuedBy }, out: r.requeued } : null;
+  })) ?? 0;
+  if (n) await recordAudit({ actorId, action: ENRICH_BATCH_AUDIT.queued, entityType: "product", entityId: null, after: { requeuedFailed: n } }).catch(() => {});
+  return n;
 }
 
 export async function cancelEnrichBatch(actorId: string | null, deps: { admin?: Admin } = {}): Promise<number> {
@@ -187,7 +204,11 @@ function readAnswer(a: KeyedAnswer | undefined): { ok: true; value: ProductAllFi
   if (a.truncated) return { ok: false, error: "Google's answer was cut off (too long)." };
   const json = parseAnswerJson(a.text);
   if (json === null) return { ok: false, error: "Google's answer was not readable JSON." };
-  const v = validate(productAllFieldsSchema, json);
+  // D244 R-15: read the answer tolerantly first (wrapper keys, flat fields,
+  // over-long text), then the same strict check as a live draft.
+  const n = normalizeAllFieldsAnswer(json);
+  if (!n.ok) return { ok: false, error: n.error };
+  const v = validate(productAllFieldsSchema, fitToShape(productAllFieldsSchema.shape, n.value));
   return v.ok ? { ok: true, value: v.value } : { ok: false, error: `Google's answer did not fit the draft form: ${formatErrors(v.errors).slice(0, 160)}` };
 }
 
@@ -323,7 +344,8 @@ export async function runEnrichBatchTick(
         const model = enrichBatchModel();
         const profile = resolveGeminiModel(model);
         const level = clampThinkingLevel(profile, parseThinkingWanted(process.env.AI_ENRICH_REASONING_EFFORT) ?? "medium");
-        const jsonSchema = toResponseFormat(productAllFieldsSchema).json_schema.schema;
+        const responseSchema = toGeminiResponseSchema(productAllFieldsSchema.shape);
+        const shapeHint = batchShapeHint(describeShape(productAllFieldsSchema));
         const built = new Map<string, BatchItemReq>();
         const entries: { key: string; request: Record<string, unknown> }[] = [];
         for (const key of pick.keys) {
@@ -331,7 +353,7 @@ export async function runEnrichBatchTick(
           try {
             const r = await build(key);
             built.set(key, r.req);
-            entries.push({ key, request: buildEnrichBatchRequest({ system: r.system, user: r.user, jsonSchema, maxOutputTokens: effectiveMaxOutputTokens(profile, ALL_FIELDS_ANSWER_TOKENS), thinkingLevel: level }) });
+            entries.push({ key, request: buildEnrichBatchRequest({ system: r.system, user: `${r.user}${shapeHint}`, responseSchema, maxOutputTokens: effectiveMaxOutputTokens(profile, ALL_FIELDS_ANSWER_TOKENS), thinkingLevel: level }) });
           } catch (err) {
             await mutate(admin, null, (s) => (mine(s) ? { next: failBeforeSend(s, key, short(err)), out: true } : null));
           }
