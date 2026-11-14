@@ -48,6 +48,7 @@ import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-pi
 import { confidenceText, parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
 import { loadRecommendPanel } from "@/lib/enrichment/image-recommend-v3-server";
 import { productIdentityRows } from "@/lib/enrichment/product-identity-core";
+import { removeTextUrl } from "@/lib/enrichment/text-erase-core";
 import { readWorklistVendorData } from "@/lib/enrichment/worklist-server";
 import { cardFacts, currentFields } from "@/lib/enrichment/ai-draft-v2-server";
 import { enrichBatchConfigured, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
@@ -1212,6 +1213,17 @@ export default async function ProductEditorPage({
                       </form>
                     </div>
                   )}
+                  {/* D244 R-9: owner — "on the product image card … that has the attach and attach as cover buttons, add a remove text button." */}
+                  {recommend.otherNames[t.id] ? (
+                    <p data-testid="remove-text-hint" className="mt-1.5 text-[11px] text-[var(--admin-orange)]">AI: the label names &ldquo;{recommend.otherNames[t.id]}&rdquo; — not this product. Remove that text?</p>
+                  ) : null}
+                  <Link
+                    href={removeTextUrl(key, t.id, listBack || null)}
+                    data-testid="remove-text-open"
+                    className={`mt-1.5 inline-block rounded border px-2 py-1 text-center text-[11px] font-semibold hover:bg-white/10 ${recommend.otherNames[t.id] ? "border-[var(--admin-orange)] text-[var(--admin-orange)]" : "border-white/20 text-white/75"}`}
+                  >
+                    ✂ Remove text
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -1359,6 +1371,14 @@ export default async function ProductEditorPage({
                             </button>
                           </div>
                           <div className="flex items-center gap-1">
+                            <Link
+                              href={removeTextUrl(key, id, listBack || null)}
+                              data-testid="gallery-remove-text"
+                              title="Remove text from this photo (makes a new copy; this one is kept)"
+                              className="rounded px-1 text-[10px] font-semibold text-white/70 hover:text-white"
+                            >
+                              ✂ Text
+                            </Link>
                             {!isCover && (
                               <button
                                 type="submit"

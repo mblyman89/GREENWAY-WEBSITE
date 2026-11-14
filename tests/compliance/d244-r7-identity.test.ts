@@ -89,7 +89,7 @@ describe("D244 R-7 recommender uses the type", () => {
     expect(s).toContain("form: formOfCategory(item.category),");
     expect(s).toContain("typeWords: identityTypeWords(typeIn),");
     expect(s).toContain("category: identitySemanticCategory(typeIn) || item.category");
-    expect(s).toContain("vendorVia };");
+    expect(s).toContain("vendorId, vendorVia, otherNames };"); // R-9 adds the remove-text hint
   });
 });
 

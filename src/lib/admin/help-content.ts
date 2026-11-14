@@ -419,6 +419,10 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/products/vendor-kits",
       },
       {
+        q: "The perfect photo has the wrong name (or size) printed on it. Can I remove the text?",
+        a: "Yes. On a product page, every Recommended photo and every gallery photo has a Remove text button. Drag a box over the text, or press Find the text and the AI photo reader boxes each piece of text and ticks the ones that name a different product, size or brand (it keeps this product's own name, the brand and any warning). Press Remove text: FLUX Fill repaints only inside the boxes to match the packaging. Compare Before and After, then Attach as cover. The original photo is never changed; the new one is saved in the media library. When a photo's label already reads another product's name, its tile says so in orange.",
+      },
+      {
         q: "When does a product go live on the menu?",
         a: "As soon as it has a photo. When a person attaches a published photo to a draft product, it publishes by itself; descriptions and facts can come later. The full daily routine is SOP-10 (Product Enrichment) in the SOP Library.",
         href: "/admin/staffing/sop-library/sop-10",

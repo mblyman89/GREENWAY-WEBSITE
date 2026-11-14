@@ -13,6 +13,7 @@
  *   Off / not indexed = [] and the panel is exactly the word-based one.
  */
 import "server-only";
+import { otherNameOnPhoto } from "@/lib/enrichment/text-erase-core";
 import { readLibraryAssetsByIds, readLibraryPickerAssets, readSearchHitAssets } from "@/lib/media/library-picker-server";
 import { loadImageMemory, loadOnRecordImageIds } from "@/lib/catalog/image-memory-server";
 import { recommendImages } from "@/lib/catalog/image-recommend-core";
@@ -39,6 +40,8 @@ export type RecommendPanelRead = RecommendPanel & {
   vendorId: string | null;
   /** D244 R-7: how the vendor was found (null = not linked). */
   vendorVia: VendorVia | null;
+  /** D244 R-9: tile id → the other product's name its label reads ("Gelato"), for the "Remove text" hint. */
+  otherNames: Record<string, string>;
 };
 
 export type RecommendPanelInput = {
@@ -51,6 +54,8 @@ export type RecommendPanelInput = {
     /** D244 R-7: the POS's own type words (menu_items), when the caller has them. */
     pos_inventory_type?: string | null;
     pos_inventory_category?: string | null;
+    /** D244 R-9: the strain, so a label naming THIS strain is not flagged. */
+    strain_name?: string | null;
   };
   enrichment: {
     vendor_id?: string | null;
@@ -71,7 +76,7 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
   const name = item.product_name?.trim() || item.name;
   const keys = cardIdentityKeys(input);
   const empty = (libraryOk: boolean): RecommendPanelRead => ({
-    tiles: [], considered: 0, matched: 0, emptyText: null, libraryOk, memoryMissing: false, identityKey: keys[0] ?? "", vendorId: null, vendorVia: null,
+    tiles: [], considered: 0, matched: 0, emptyText: null, libraryOk, memoryMissing: false, identityKey: keys[0] ?? "", vendorId: null, vendorVia: null, otherNames: {},
   });
   try {
     let vendorId = (enrichment?.vendor_id ?? "").trim() || null;
@@ -129,7 +134,17 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
       semantic,
     });
     const panel = orderRecommendPanel(view, pool, name);
-    return { ...panel, libraryOk: shelf.ok, memoryMissing: memory.missing, identityKey: keys[0] ?? "", vendorId, vendorVia };
+    // D244 R-9: a near-perfect photo whose label names another product gets
+    // a "Remove text" hint (owner: "I want the ai to help recommend the name
+    // to be removed from the image").
+    const byId = new Map(pool.map((a) => [a.id, a] as const));
+    const eraseProduct = { name, brand: item.brand_name ?? null, strainName: item.strain_name ?? null, vendor: item.vendor_name ?? null, category: item.category ?? null };
+    const otherNames: Record<string, string> = {};
+    for (const t of panel.tiles) {
+      const o = otherNameOnPhoto(byId.get(t.id)?.visible_text, eraseProduct);
+      if (o) otherNames[t.id] = o;
+    }
+    return { ...panel, libraryOk: shelf.ok, memoryMissing: memory.missing, identityKey: keys[0] ?? "", vendorId, vendorVia, otherNames };
   } catch {
     return empty(false);
   }
