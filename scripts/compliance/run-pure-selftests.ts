@@ -1381,6 +1381,8 @@ import { __runDetailNavCoreTests } from "../../src/lib/enrichment/detail-nav-cor
 import { __runImageRecommendV3Tests } from "../../src/lib/enrichment/image-recommend-v3-core";
 import { __runAiDraftV2Tests } from "../../src/lib/enrichment/ai-draft-v2-core";
 import { __runBulkAiV2Tests } from "../../src/lib/enrichment/bulk-ai-v2-core";
+import { __runLotEvidenceTests } from "../../src/lib/enrichment/lot-evidence-core";
+import { __runDraftEditTests } from "../../src/lib/enrichment/draft-edit-core";
 import { __runEnrichModelCoreTests } from "../../src/lib/ai/enrich-model-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
@@ -2960,8 +2962,10 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("worklist-core", __runWorklistCoreTests(), 39); // D244 E-1a vendor-first, on-hand-first worklist
   assertRan("detail-nav-core", __runDetailNavCoreTests(), 32); // D244 E-1b keep my place: back on every detail redirect, Prev / Next / Save & next
   assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 33); // D244 E-3
-  assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 53); // D244 E-4 + R-1 calibration / best-guess / checked
+  assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 60); // D244 E-4 + R-1 calibration / best-guess / checked + R-2 lot/coa/potency/edited
   assertRan("bulk-ai-v2-core", __runBulkAiV2Tests(), 38); // D244 E-5
+  assertRan("lot-evidence-core", __runLotEvidenceTests(), 26); // D244 R-2 lot / COA evidence + potency check
+  assertRan("draft-edit-core", __runDraftEditTests(), 21); // D244 R-2 edit a draft on the grid
   assertRan("enrich-model-core", __runEnrichModelCoreTests(), 16); // D244 R-1: enrichment model pin (AI_ENRICH_MODEL), provider + effort clamp, Gemini 32K floor
   console.log("ALL PURE SELF-TESTS PASSED");
 }

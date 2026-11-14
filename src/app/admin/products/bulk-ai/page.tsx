@@ -22,7 +22,10 @@ import {
   queueBulkAiV2Action,
   cancelBulkAiV2Action,
   bulkAcceptAllForProductAction,
+  bulkAcceptEditedAction,
+  bulkRejectDraftAction,
 } from "./actions";
+import { EDIT_HINT, editKind, editText } from "@/lib/enrichment/draft-edit-core";
 import { SEO_FIELD_KEY, seoSuggestionDisplay } from "@/lib/enrichment/seo-draft-core";
 import {
   ACCEPT_ALL_THRESHOLD,
@@ -143,7 +146,7 @@ export default async function BulkAiPage({
             steps={[
               "Pick the products you want descriptions for (we pre-list ones missing copy).",
               "Click Draft — the AI writes a compliant draft for each.",
-              "Review each draft below and Accept or Reject it.",
+              "Review each draft below. Type over any draft right in its box, then press Save & accept (or Reject).",
               "Accept all takes every draft at 80% or better plus the AI’s best guesses; best guesses are flagged in “Needs a closer look”.",
               "Accepted copy saves to the product. A product goes live on its own once a person attaches a published photo.",
             ]}
@@ -152,6 +155,12 @@ export default async function BulkAiPage({
               The AI never publishes anything by itself. Drafts become live only when you accept them, and a product
               publishes only after a person attaches a photo. Best guesses are accepted but flagged &mdash; click
               &ldquo;Looks right&rdquo; in &ldquo;Needs a closer look&rdquo; once you have checked one.
+            </p>
+            <p className="mt-2">
+              Strain type and potency are drafted from the product&rsquo;s own lots and lab certificates first (chips
+              &ldquo;Lot 1&rdquo;, &ldquo;Lab certificate 1&rdquo;), with lots that are in stock ahead of sold-out ones.
+              A potency number that no lab, lot or POS record states is thrown away, and a guessed potency is never
+              taken by Accept all. Accepting one updates the website card.
             </p>
           </HelpPanel>
         }
@@ -359,7 +368,7 @@ export default async function BulkAiPage({
           ) : (
             <div className="space-y-4">
               {groups.map((g) => (
-                <div key={g.key} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4" data-testid="bulk-v2-group">
+                <div key={g.key} id={`product-${encodeURIComponent(g.key)}`} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4" data-testid="bulk-v2-group">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-white">
                       {nameByKey.get(g.key) ?? g.key}
@@ -424,7 +433,33 @@ export default async function BulkAiPage({
                               </span>
                             ))}
                           </div>
-                          <p className="mt-1 whitespace-pre-wrap text-white/80">{shown}</p>
+                          {/* D244 R-2: edit right here, then Save & accept (same compliance gate as Accept). */}
+                          <form action={bulkAcceptEditedAction} className="mt-1" id={`draft-${r.id}`} data-testid="bulk-v2-edit-form">
+                            <input type="hidden" name="id" value={r.id} />
+                            <input type="hidden" name="key" value={g.key} />
+                            <input type="hidden" name="vendor_filter" value={vendorFilter} />
+                            <input type="hidden" name="min" value={String(minFilter)} />
+                            <label className="sr-only" htmlFor={`edit-${r.id}`}>
+                              Edit {isDraftFieldKey(r.field_key) ? FIELD_LABEL[r.field_key] : r.field_key}
+                            </label>
+                            <textarea
+                              id={`edit-${r.id}`}
+                              name="editedValue"
+                              defaultValue={editText(r.field_key, r.suggested_value)}
+                              rows={editKind(r.field_key) === "text" && String(r.suggested_value ?? "").length > 120 ? 3 : editKind(r.field_key) === "seo" ? 2 : 1}
+                              className="w-full resize-y rounded border border-white/15 bg-white/5 px-2 py-1 text-sm text-white/85 focus:border-[var(--admin-accent)] focus:outline-none"
+                              data-testid="bulk-v2-edit"
+                            />
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <button type="submit" className={CHIP_ACTION} data-testid="bulk-v2-save-accept">
+                                Save & accept
+                              </button>
+                              <button type="submit" formAction={bulkRejectDraftAction} className={CHIP_NEUTRAL} data-testid="bulk-v2-reject">
+                                Reject
+                              </button>
+                              <span className="text-[0.65rem] text-white/40">{EDIT_HINT[editKind(r.field_key)]}</span>
+                            </div>
+                          </form>
                         </li>
                       );
                     })}

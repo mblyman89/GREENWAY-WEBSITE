@@ -21,7 +21,7 @@ import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
 import { BULK_AI_V2_MAX_QUEUE, type QueueRequest } from "@/lib/enrichment/bulk-ai-v2-core";
 import { cancelBulkAiV2, queueBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
-import { acceptAllMessage, acceptHighConfidenceForKey } from "@/lib/enrichment/accept-drafts-server";
+import { acceptAllMessage, acceptDraftWithEdit, acceptHighConfidenceForKey } from "@/lib/enrichment/accept-drafts-server";
 
 /**
  * Bulk AI: generate draft DESCRIPTIONS for a set of selected products in one
@@ -271,4 +271,44 @@ export async function bulkAcceptAllForProductAction(formData: FormData): Promise
   }
   const msg = acceptAllMessage(accepted, blocked, flagged) + publishNote;
   redirect(gridUrl(formData, (accepted.length ? "accepted_note=" : "error=") + encodeURIComponent(msg)));
+}
+
+/**
+ * D244 R-2 (owner: "the ability to edit a draft directly on the bulk grid"):
+ * accept ONE draft from the grid, with whatever the person typed over it.
+ * The edit is read back into the field's shape and goes through the same
+ * compliance gate as any accept (acceptDraftWithEdit). Untouched text is a
+ * plain Accept.
+ */
+export async function bulkAcceptEditedAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) redirect(gridUrl(formData, "error=" + encodeURIComponent("Missing draft.")));
+  const out = await acceptDraftWithEdit(id, formData.get("editedValue"), session.userId);
+  const key = out.ok ? out.key : String(formData.get("key") ?? "").trim();
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: out.ok ? "product.bulk_ai_accepted" : "product.bulk_ai_accept_blocked",
+    entityType: "product",
+    entityId: key || null,
+    after: out.ok ? { via: "grid", ...out.audit } : { via: "grid", error: out.error, ...(out.audit ?? {}) },
+  });
+  if (!out.ok) redirect(gridUrl(formData, "error=" + encodeURIComponent(out.error), `#draft-${id}`));
+  const writeback = await writeBackOnPublish(out.key, session.userId).catch(() => null);
+  void writeback;
+  revalidatePath(BULK_URL);
+  revalidatePath(`/admin/products/${encodeURIComponent(out.key)}`);
+  if (out.field === "strain_type" || out.field === "potency") revalidatePublicMenuSurfaces();
+  const label = out.edited ? "Saved your edit and accepted it" : "Accepted";
+  redirect(gridUrl(formData, "accepted_note=" + encodeURIComponent(`${label} (${out.field}).`), `#product-${encodeURIComponent(out.key)}`));
+}
+
+/** D244 R-2: reject ONE all-fields draft from the grid (keeps the filters). */
+export async function bulkRejectDraftAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "").trim();
+  if (id) await reviewSuggestion(id, "rejected", session.userId);
+  revalidatePath(BULK_URL);
+  redirect(gridUrl(formData, "accepted_note=" + encodeURIComponent("Rejected the draft.")));
 }

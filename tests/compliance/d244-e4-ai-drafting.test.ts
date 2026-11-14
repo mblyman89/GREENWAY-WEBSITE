@@ -156,13 +156,13 @@ beforeEach(() => {
 });
 
 describe("D244 E-4 ai-draft-v2-core", () => {
-  it("runs exactly 53 assertions, none failing, registered at that floor", () => {
-    expect(__runAiDraftV2Tests()).toEqual({ passed: 53, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 53); // D244 E-4');
+  it("runs exactly 60 assertions (R-2 added 7), none failing, registered at that floor", () => {
+    expect(__runAiDraftV2Tests()).toEqual({ passed: 60, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 60); // D244 E-4');
   });
   it("Q3 is one constant (80, owner R-1); Q4 accepts best guesses and flags them", () => {
     expect(ACCEPT_ALL_THRESHOLD).toBe(80);
-    expect(read("src/lib/enrichment/ai-draft-v2-core.ts")).toContain("if (ev.bestGuess) return opts.bestGuesses !== false;");
+    expect(read("src/lib/enrichment/ai-draft-v2-core.ts")).toContain('if (ev.bestGuess) return opts.bestGuesses !== false && !NEVER_AUTO_GUESS.has(String(r.field_key ?? ""));');
   });
 });
 

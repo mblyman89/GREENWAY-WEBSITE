@@ -16,6 +16,57 @@ import type { ProductEnrichment } from "@/lib/enrichment/types";
 import { generateProductAllFields, type AllFieldsCurrent, type AllFieldsOutcome } from "@/lib/ai/all-fields-draft";
 import type { ProductFacts } from "@/lib/ai/suggestions";
 import { MAX_PHOTOS, sensoryText, type PhotoFacts } from "@/lib/enrichment/ai-draft-v2-core";
+import { buildLotEvidence, type LotEvidence, type LotEvidenceLab, type LotEvidenceLot } from "@/lib/enrichment/lot-evidence-core";
+import { readStoredCoaExtract } from "@/lib/inventory/coa-facts-core";
+
+/** Most lots read per product (newest first; the core keeps in-stock first). */
+const LOT_READ_LIMIT = 12;
+
+/** Top lab-measured terpenes from a stored certificate read (JSON first, then PDF). */
+function coaTerpenes(raw: unknown): { terpenes: string[]; thc: number | null; cbd: number | null } {
+  const x = readStoredCoaExtract(raw);
+  if (!x) return { terpenes: [], thc: null, cbd: null };
+  const fromJson = (x.json?.terpenes ?? []).filter((t) => t.ppm > 0).sort((a, b) => b.ppm - a.ppm).map((t) => t.name);
+  const fromPdf = (x.pdf?.terpeneSummary.top ?? []).map((t) => t.name);
+  return {
+    terpenes: (fromJson.length ? fromJson : fromPdf).slice(0, 4),
+    thc: x.json?.totals["total-thc"] ?? x.pdf?.summary.totalThcPct ?? null,
+    cbd: x.json?.totals["total-cbd"] ?? x.pdf?.summary.totalCbdPct ?? null,
+  };
+}
+
+/**
+ * D244 R-2: this product's lots and their lab certificates, as [lot:N] /
+ * [coa:N] evidence. null on any read failure (the draft runs without it and
+ * says so in the input summary) - never a partial guess.
+ */
+export async function readLotEvidence(key: string): Promise<LotEvidence | null> {
+  if (!isSupabaseServiceConfigured || !key) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select("*")
+      .eq("pos_product_key", key)
+      .order("created_at", { ascending: false })
+      .limit(LOT_READ_LIMIT);
+    if (error) return null;
+    const lots = ((data ?? []) as (LotEvidenceLot & { lab_result_id?: string | null })[]).filter((l) => l && l.id);
+    const labIds = [...new Set(lots.map((l) => l.lab_result_id).filter((x): x is string => typeof x === "string" && x.length > 0))];
+    const labs = new Map<string, LotEvidenceLab>();
+    if (labIds.length) {
+      const res = await admin.from("lab_results").select("*").in("id", labIds);
+      if (res.error) return null;
+      for (const r of (res.data ?? []) as (LotEvidenceLab & { id: string; coa_extract_json?: unknown })[]) {
+        const c = coaTerpenes(r.coa_extract_json);
+        labs.set(r.id, { ...r, coa: { terpenes: c.terpenes, totalThcPct: c.thc, totalCbdPct: c.cbd } });
+      }
+    }
+    return buildLotEvidence(lots.map((l) => ({ ...l, lab: l.lab_result_id ? (labs.get(l.lab_result_id) ?? null) : null })));
+  } catch {
+    return null;
+  }
+}
 
 export type DraftItem = {
   name: string;
@@ -78,6 +129,13 @@ export function currentFields(e: ProductEnrichment | null, sensory?: string | nu
   };
 }
 
+/** D244 R-2: strain type + potency already on the card (for "on record" and the diff). */
+export function cardFacts(item: Pick<DraftItem, "strain_type" | "thc" | "cbd">): AllFieldsCurrent {
+  const t = (item.strain_type ?? "").trim();
+  const pot = [item.thc ? `THC ${item.thc}` : "", item.cbd ? `CBD ${item.cbd}` : ""].filter(Boolean).join(" · ");
+  return { strain_type: t && t !== "unknown" ? t : null, potency: pot || null };
+}
+
 /** Latest ACCEPTED sensory/effects suggestion text, for "on record" (they have no column). */
 async function acceptedFacts(key: string): Promise<{ sensory: string | null; effects: string | null }> {
   if (!isSupabaseServiceConfigured) return { sensory: null, effects: null };
@@ -106,12 +164,13 @@ export async function draftAllFieldsForProduct(
   key: string,
   item: DraftItem,
   actorId: string | null,
-): Promise<AllFieldsOutcome & { photos: number; vendor: string | null }> {
+): Promise<AllFieldsOutcome & { photos: number; vendor: string | null; lots: number }> {
   const enrichment = await getEnrichment(key).catch(() => null);
-  const [vendor, photos, accepted] = await Promise.all([
+  const [vendor, photos, accepted, lots] = await Promise.all([
     vendorName(enrichment, item),
     readAttachedPhotoFacts(enrichment),
     acceptedFacts(key),
+    readLotEvidence(key),
   ]);
   const facts: ProductFacts = {
     name: item.name || item.product_name || "Product",
@@ -127,8 +186,9 @@ export async function draftAllFieldsForProduct(
     key,
     facts,
     photos,
-    currentFields(enrichment, accepted.sensory, accepted.effects),
+    { ...currentFields(enrichment, accepted.sensory, accepted.effects), ...cardFacts(item) },
     actorId,
+    lots,
   );
-  return { ...out, photos: Math.min(photos.length, MAX_PHOTOS), vendor };
+  return { ...out, photos: Math.min(photos.length, MAX_PHOTOS), vendor, lots: lots ? lots.ids.filter((i) => i.startsWith("lot:")).length : 0 };
 }

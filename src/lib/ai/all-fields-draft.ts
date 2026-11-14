@@ -8,6 +8,10 @@
  * re-clamped by ai-draft-v2-core (evidence filtered to ids we offered, best
  * guesses capped, no-evidence capped), compliance-scanned, effects re-gated,
  * SEO re-cleaned, and stored as ONE pending ai_suggestions row per field.
+ * D244 R-2: the product's own lots and lab certificates are evidence too
+ * ([lot:N] / [coa:N], lot-evidence-core); strain type and potency are
+ * drafted from them, and a potency number that matches no evidence number
+ * is dropped before it is filed (checkPotencyDraft).
  * Nothing is applied here - a person accepts (acceptWithComplianceGate).
  */
 import "server-only";
@@ -27,6 +31,13 @@ import {
   type DraftFieldKey,
   type PhotoFacts,
 } from "@/lib/enrichment/ai-draft-v2-core";
+import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
+import {
+  checkPotencyDraft,
+  posPotencyNumbers,
+  potencyText,
+  type LotEvidence,
+} from "@/lib/enrichment/lot-evidence-core";
 
 export type AllFieldsCurrent = Partial<Record<DraftFieldKey, string | null>>;
 
@@ -54,12 +65,15 @@ export function allFieldsPrompt(input: {
   groundedBlock: string;
   groundedSources: string[];
   current: AllFieldsCurrent;
+  /** D244 R-2: [lot:N] / [coa:N] lines (lot-evidence-core). */
+  lotLines?: string[];
 }): string {
   const { facts } = input;
   const evidence: string[] = [];
   for (const l of posLines(facts)) evidence.push(`[pos] ${l}`);
   if (facts.vendor) evidence.push(`[vendor] Vendor (who we buy it from): ${facts.vendor}`);
   evidence.push(...input.photoLines);
+  evidence.push(...(input.lotLines ?? []));
   const kb = input.groundedSources.length
     ? `KNOWLEDGE BASE (cite these ids: ${input.groundedSources.map((s) => `[${s}]`).join(" ")}):\n${input.groundedBlock}`
     : "";
@@ -73,6 +87,8 @@ export function allFieldsPrompt(input: {
     "CONFIDENCE CALIBRATION: confidence is how sure you are the value is CORRECT for this exact product, not how creative it is. When the value is stated directly by [pos], [vendor], a [photo:N] label or a [kb:product...] / [kb:brand] fact, say 90-100 - do not be modest about facts you copied from the evidence. 70-89 = well supported but partly worded by you. Below 50 only when you genuinely doubt it.",
     `SEO title at most ${SEO_TITLE_MAX} characters, product name first, no store name. Meta description 120-${SEO_META_MAX} characters, mentions in-store pickup.`,
     `Effects only from the allowed experiential list; tags only from: ${ALLOWED_PRODUCT_TAGS.join(", ")}. Return empty lists when nothing fits.`,
+    "STRAIN TYPE: take it from a [coa:N] or [lot:N] line first, then [pos], then a [kb:strain:...] fact; unknown when none says. Cite the ids you used.",
+    "POTENCY: copy total THC / CBD exactly as a [coa:N], [lot:N] or [pos] line states it, with its unit (% or mg); prefer the newest in-stock lot's lab certificate. Leave it empty when no line states it - never estimate a number.",
     "Never mention price, stock, discounts, health or medical claims, or anything that appeals to minors.",
     "",
     `EVIDENCE:\n${evidence.join("\n")}`,
@@ -93,17 +109,19 @@ export async function generateProductAllFields(
   photos: PhotoFacts[],
   current: AllFieldsCurrent,
   generatedBy: string | null,
+  lots: LotEvidence | null = null,
 ): Promise<AllFieldsOutcome> {
   const grounded = await buildGroundedFacts(facts);
   const banned = await loadBannedPhrases();
   const photo = photoFactLines(photos);
-  const offered = ["pos", ...(facts.vendor ? ["vendor"] : []), ...photo.ids, ...grounded.sources];
+  const offered = ["pos", ...(facts.vendor ? ["vendor"] : []), ...photo.ids, ...(lots?.ids ?? []), ...grounded.sources];
   const user = allFieldsPrompt({
     facts,
     photoLines: photo.lines,
     groundedBlock: grounded.block,
     groundedSources: grounded.sources,
     current,
+    lotLines: lots?.lines ?? [],
   });
   const result = await generateStructured({
     system: COMPLIANCE_SYSTEM,
@@ -114,7 +132,7 @@ export async function generateProductAllFields(
     // independent of AI_MODE, with its reasoning effort / Gemini 32K floor.
     model: enrichModel.model,
     reasoningEffort: enrichModel.effort,
-    maxTokens: enrichMaxTokens(enrichModel, 1100),
+    maxTokens: enrichMaxTokens(enrichModel, 1300),
     context: { feature: "product.all_fields", entityType: "product", entityId: posProductKey, actorId: generatedBy },
   });
 
@@ -170,6 +188,26 @@ export async function generateProductAllFields(
 
   const tagSet = new Set<string>(ALLOWED_PRODUCT_TAGS);
   await store("tags", result.tags.values.filter((t) => tagSet.has(t)).join(", "), result.tags, []);
+
+  // D244 R-2: strain type (canonical; "unknown" is not a draft).
+  if (result.strain_type) {
+    const t = canonicalStrainType(result.strain_type.value);
+    await store("strain_type", t === "unknown" ? null : t, result.strain_type, []);
+  }
+  // D244 R-2: potency - only numbers an evidence line actually carries.
+  if (result.potency) {
+    const pos = posPotencyNumbers(facts.thc, facts.cbd);
+    const numbers = { thc: [...pos.thc, ...(lots?.numbers.thc ?? [])], cbd: [...pos.cbd, ...(lots?.numbers.cbd ?? [])] };
+    const checked = checkPotencyDraft(result.potency, numbers);
+    const text = potencyText(checked.value);
+    await store(
+      "potency",
+      text,
+      result.potency,
+      checked.dropped.map((d) => `${d}: no lab, lot or POS number says so`),
+      checked.dropped.length ? ` | dropped (no evidence number): ${checked.dropped.join(", ")}` : "",
+    );
+  }
 
   return out;
 }

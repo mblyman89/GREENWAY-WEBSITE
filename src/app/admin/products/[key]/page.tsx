@@ -46,7 +46,7 @@ import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/m
 import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
 import { confidenceText, parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
 import { loadRecommendPanel } from "@/lib/enrichment/image-recommend-v3-server";
-import { currentFields } from "@/lib/enrichment/ai-draft-v2-server";
+import { cardFacts, currentFields } from "@/lib/enrichment/ai-draft-v2-server";
 import { recommendPanelSummary } from "@/lib/enrichment/image-recommend-v3-core";
 import {
   ACCEPT_ALL_THRESHOLD,
@@ -59,6 +59,7 @@ import {
   sensoryText,
   type SuggestionLite,
 } from "@/lib/enrichment/ai-draft-v2-core";
+import { EDIT_HINT, editKind, editText } from "@/lib/enrichment/draft-edit-core";
 import { logMediaSearch } from "@/lib/media/library-v2-server";
 import { listNeedsCloserLook } from "@/lib/enrichment/accept-drafts-server";
 import { enrichModel } from "@/lib/ai/enrich-model";
@@ -180,7 +181,7 @@ export default async function ProductEditorPage({
   // D244 E-4: what each all-fields draft would change (sensory/effects have
   // no column, so they show no diff), and the "Accept all >= 80%" set
   // (D244 R-1: best guesses are included and flagged for a closer look).
-  const onRecord = currentFields(enrichment);
+  const onRecord = { ...currentFields(enrichment), ...cardFacts(item) };
   delete onRecord.sensory;
   delete onRecord.effects;
   const acceptAllIds = acceptAllEligible(suggestions as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
@@ -1040,12 +1041,25 @@ export default async function ProductEditorPage({
                         ⚠ Compliance check flagged: {flags.join(", ")}. Review carefully before accepting.
                       </p>
                     )}
-                    <div className="mt-2 flex gap-2">
-                      <form action={acceptSuggestion}>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <form action={acceptSuggestion} className={ev.v2 ? "w-full" : undefined} data-testid={ev.v2 ? "ai-edit-form" : undefined}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="key" value={key} />
                         {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
-                        <Button type="submit" variant="confirm" size="sm">Accept</Button>
+                        {ev.v2 ? (
+                          <>
+                            {/* D244 R-2: type over the draft, then Accept (same compliance gate). */}
+                            <textarea
+                              name="editedValue"
+                              aria-label={`Edit ${isDraftFieldKey(s.field_key) ? FIELD_LABEL[s.field_key] : s.field_key}`}
+                              defaultValue={editText(s.field_key, s.suggested_value)}
+                              rows={editKind(s.field_key) === "text" && String(s.suggested_value ?? "").length > 120 ? 3 : editKind(s.field_key) === "seo" ? 2 : 1}
+                              className="mb-1 w-full resize-y rounded border border-white/15 bg-white/5 px-2 py-1 text-sm text-white/85"
+                            />
+                            <p className="mb-1 text-[10px] text-white/40">{EDIT_HINT[editKind(s.field_key)]}</p>
+                          </>
+                        ) : null}
+                        <Button type="submit" variant="confirm" size="sm">{ev.v2 ? "Save & accept" : "Accept"}</Button>
                       </form>
                       <form action={rejectSuggestion}>
                         <input type="hidden" name="id" value={s.id} />
