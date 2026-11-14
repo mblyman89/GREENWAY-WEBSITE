@@ -29,6 +29,9 @@ export type ProductFacts = {
   brand?: string | null;
   vendor?: string | null;
   category?: string | null;
+  /** D244 R-7: the POS's own inventory type / category (menu_items), never guessed. */
+  inventoryType?: string | null;
+  inventoryCategory?: string | null;
   strainType?: string | null;
   strainName?: string | null;
   thc?: string | null;

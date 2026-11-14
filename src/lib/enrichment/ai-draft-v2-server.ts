@@ -76,6 +76,9 @@ export type DraftItem = {
   brand_name: string | null;
   vendor_name: string | null;
   category: string | null;
+  /** D244 R-7: the POS's own type words (optional: older callers omit them). */
+  pos_inventory_type?: string | null;
+  pos_inventory_category?: string | null;
   strain_type: string | null;
   strain_name: string | null;
   thc: string | null;
@@ -178,6 +181,8 @@ export async function prepareAllFields(
     brand: item.brand_name || null,
     vendor,
     category: item.category || null,
+    inventoryType: item.pos_inventory_type || null,
+    inventoryCategory: item.pos_inventory_category || null,
     strainType: item.strain_type || null,
     strainName: item.strain_name || null,
     thc: item.thc || null,

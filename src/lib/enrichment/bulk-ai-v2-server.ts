@@ -158,6 +158,8 @@ async function draftFromMenu(key: string, actorId: string | null): Promise<{ sav
     brand_name: row.brand_name,
     vendor_name: row.vendor_name,
     category: row.category,
+    pos_inventory_type: row.pos_inventory_type,
+    pos_inventory_category: row.pos_inventory_category,
     strain_type: row.strain_type,
     strain_name: row.strain_name,
     thc: row.thc,

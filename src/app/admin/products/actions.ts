@@ -490,7 +490,7 @@ export async function generateProductAi(formData: FormData): Promise<void> {
       const out = await draftAllFieldsForProduct(
         key,
         row
-          ? { name: row.name, product_name: row.product_name, brand_name: row.brand_name, vendor_name: row.vendor_name, category: row.category, strain_type: row.strain_type, strain_name: row.strain_name, thc: row.thc, cbd: row.cbd }
+          ? { name: row.name, product_name: row.product_name, brand_name: row.brand_name, vendor_name: row.vendor_name, category: row.category, pos_inventory_type: row.pos_inventory_type, pos_inventory_category: row.pos_inventory_category, strain_type: row.strain_type, strain_name: row.strain_name, thc: row.thc, cbd: row.cbd }
           : { name: facts.name, brand_name: facts.brand ?? null, vendor_name: null, category: facts.category ?? null, strain_type: facts.strainType ?? null, strain_name: facts.strainName ?? null, thc: facts.thc ?? null, cbd: facts.cbd ?? null },
         session.userId,
       );

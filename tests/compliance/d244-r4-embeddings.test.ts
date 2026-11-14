@@ -141,9 +141,9 @@ describe("D244 R-4 media-embed-core (pure)", () => {
     expect(__runMediaEmbedTests()).toEqual({ passed: 55, failed: 0 });
     expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("media-embed-core", __runMediaEmbedTests(), 55); // D244 R-4');
   });
-  it("image-recommend-core grew by 5 semantic tests, registered at 40", () => {
-    expect(__runImageRecommendCoreTests()).toEqual({ passed: 40, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain("__runImageRecommendCoreTests(), 40);");
+  it("image-recommend-core grew by 5 semantic tests (40), then R-7's 7 type tests (47)", () => {
+    expect(__runImageRecommendCoreTests()).toEqual({ passed: 47, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain("__runImageRecommendCoreTests(), 47);");
   });
   it("task-prefixed text for queries and documents (asymmetric retrieval)", () => {
     expect(embedQueryText("purple jar")).toBe("task: search result | query: purple jar");

@@ -20,6 +20,7 @@ import type { AiSuggestion, ProductEnrichment } from "@/lib/enrichment/types";
 import { readEnrichmentAttribution } from "@/lib/enrichment/enrichment-manifest";
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import { readOnHandLots, readWorklistVendorData } from "@/lib/enrichment/worklist-server";
+import { identityPromptLines } from "@/lib/enrichment/product-identity-core";
 import { onHandByCard, resolveCardVendor, vendorProgress, type VendorProgress } from "@/lib/enrichment/worklist-core";
 import { listSuggestions, persistSuggestion } from "@/lib/ai/suggestions";
 import { resolveMediaUrls } from "@/lib/media/store";
@@ -92,6 +93,8 @@ const itemFacts = (i: MenuItemWithVariants): DraftItem => ({
   brand_name: i.brand_name,
   vendor_name: i.vendor_name,
   category: i.category,
+  pos_inventory_type: i.pos_inventory_type,
+  pos_inventory_category: i.pos_inventory_category,
   strain_type: i.strain_type,
   strain_name: i.strain_name,
   thc: i.thc,
@@ -245,6 +248,7 @@ export async function askCopilot(input: {
     prep.facts.brand ? `Brand (POS): ${prep.facts.brand}` : "",
     prep.vendor ? `Vendor: ${prep.vendor}` : "",
     prep.facts.category ? `Category (POS): ${prep.facts.category}` : "",
+    ...identityPromptLines({ category: prep.facts.category, posInventoryType: prep.facts.inventoryType, posInventoryCategory: prep.facts.inventoryCategory }),
     prep.facts.strainName ? `Strain (POS): ${prep.facts.strainName}` : "",
     ...Object.entries(prep.current)
       .filter(([, v]) => typeof v === "string" && v.trim())
@@ -297,6 +301,7 @@ export async function inspectPhoto(input: { key: string; mediaId: string; actorI
     `Product name (POS): ${item.product_name || item.name}`,
     item.brand_name ? `Brand (POS): ${item.brand_name}` : "",
     item.category ? `Category (POS): ${item.category}` : "",
+    ...identityPromptLines({ category: item.category, posInventoryType: item.pos_inventory_type, posInventoryCategory: item.pos_inventory_category }),
   ].filter(Boolean);
   try {
     const out = await generateVisionJson({

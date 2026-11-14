@@ -33,6 +33,7 @@ import { isPickableImage, type LibraryPickerAsset } from "@/lib/media/library-pi
 import { tokenize } from "@/lib/media/product-link-core";
 import { productSourceOf } from "@/lib/media/folders-core";
 import { SEMANTIC_AGREE_BOOST, semanticConfidence } from "@/lib/media/media-embed-core";
+import { FORM_LABEL, FORM_MATCH_BOOST, FORM_MISMATCH_PENALTY, formMatch, type ProductForm } from "@/lib/enrichment/product-identity-core";
 
 /**
  * R65: provenance boost. A name-matched photo that came straight from the
@@ -98,6 +99,14 @@ export type ImageRecommendInput = {
     /** D221: the vendor / brand cards, for the same-vendor boost. */
     vendorId?: string | null;
     brandId?: string | null;
+    /**
+     * D244 R-7: the product's TYPE (product-identity-core). typeWords join
+     * the category word match (POS inventory type / category words); form
+     * lifts a picture whose text names this type and drops one that names
+     * a DIFFERENT type (a cart photo on a flower card).
+     */
+    typeWords?: readonly string[] | null;
+    form?: ProductForm | null;
   };
   /** Memory rows for THIS identity key. */
   memory?: readonly ImageMemoryRow[];
@@ -220,7 +229,7 @@ export function nameMatchScore(
     score += 0.2;
     reasons.push(`Brand/vendor: ${brandHit.join(", ")}.`);
   }
-  const cat = idTokens(product.category ?? "");
+  const cat = [...idTokens(product.category ?? ""), ...(product.typeWords ?? [])];
   if (cat.length > 0 && cat.some((t) => words.has(t))) {
     score += 0.05;
     reasons.push("Category word matches.");
@@ -249,6 +258,23 @@ export function nameMatchScore(
  * past pick (remembered / on record) is never penalised.
  */
 export const ROLE_PENALTY = 25;
+
+/**
+ * D244 R-7: apply the type evidence to a name-match confidence (mutates
+ * nothing; returns the new confidence and the reason, if any). PURE.
+ */
+export function applyFormEvidence(
+  a: LibraryPickerAsset,
+  product: ImageRecommendInput["product"],
+  confidence: number,
+): { confidence: number; reason: string | null; kind: "same" | "other" | "unknown" } {
+  const fm = formMatch(product.form ?? null, assetWords(a));
+  if (confidence <= 0 || fm.kind === "unknown") return { confidence, reason: null, kind: fm.kind };
+  const mine = FORM_LABEL[product.form!];
+  if (fm.kind === "same") return { confidence: Math.min(NAME_MATCH_MAX, confidence + FORM_MATCH_BOOST), reason: `Its text names this product's type (${mine}).`, kind: "same" };
+  const theirs = fm.named.map((f) => FORM_LABEL[f]).join(" / ");
+  return { confidence: Math.max(0, confidence - FORM_MISMATCH_PENALTY), reason: `Its text names a different type (${theirs}, this product is a ${mine}), so it ranks lower.`, kind: "other" };
+}
 export const NOT_PRODUCT_ROLES = new Set(["logo", "banner", "menu", "coa", "marketing"]);
 
 const SIZE_RE = /(\d+(?:\.\d+)?)\s*(mg|g|ml|oz|pk|ct|pack)\b/gi;
@@ -288,6 +314,11 @@ export function recommendChips(
     const same = want.filter((w) => have.has(w));
     if (same.length) chips.push(`Pack ${same[0]}`);
     else if (have.size) chips.push(`Pack ${[...have][0]} (product ${want[0]})`);
+  }
+  if (product.form) {
+    const fm = formMatch(product.form, assetWords(a));
+    if (fm.kind === "same") chips.push(`Same type (${FORM_LABEL[product.form]})`);
+    else if (fm.kind === "other") chips.push(`Different type (${fm.named.map((f) => FORM_LABEL[f]).join(" / ")})`);
   }
   const role = (a.role ?? "").toLowerCase();
   if (role && NOT_PRODUCT_ROLES.has(role)) chips.push(role === "logo" ? "Logo, not a product photo" : `A ${role}, not a product photo`);
@@ -357,6 +388,11 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
     if (name.confidence > 0 && NOT_PRODUCT_ROLES.has(role)) {
       name.confidence = Math.max(0, name.confidence - ROLE_PENALTY);
       name.reasons.push(`Classified as a ${role}, not a product photo, so it ranks lower.`);
+    }
+    const typeEv = applyFormEvidence(a, input.product, name.confidence);
+    if (typeEv.reason) {
+      name.confidence = typeEv.confidence;
+      name.reasons.push(typeEv.reason);
     }
     const reasons: string[] = [];
     let confidence = name.confidence;
@@ -439,6 +475,8 @@ export function rankSearchResults(
     const role = (a.role ?? "").toLowerCase();
     let confidence = name.confidence;
     if (confidence > 0 && NOT_PRODUCT_ROLES.has(role)) confidence = Math.max(0, confidence - ROLE_PENALTY);
+    const typeEv = applyFormEvidence(a, product, confidence);
+    confidence = typeEv.confidence;
     const label = (a.title ?? "").trim() || (a.filename ?? "").trim() || "(untitled image)";
     const chips = [...(opts.extraChips?.get(id) ?? []), ...recommendChips(a, product, { remembered: false, onRecord: false })];
     out.push({
@@ -448,7 +486,7 @@ export function rankSearchResults(
       alt: (a.alt_text ?? "").trim() || label,
       confidence,
       band: confidenceBand(confidence),
-      reasons: name.reasons,
+      reasons: typeEv.reason ? [...name.reasons, typeEv.reason] : name.reasons,
       chips: chips.filter((c, i) => chips.indexOf(c) === i),
       remembered: false,
       onRecord: false,
@@ -607,6 +645,26 @@ export function __runImageRecommendCoreTests(): { passed: number; failed: number
     const plain = recommendImages({ assets: [A("n1", { title: "Blue Dream" })], product: P }).items[0];
     ok(Boolean(n1) && n1!.confidence > plain.confidence && n1!.confidence <= NAME_MATCH_MAX, "name + meaning agree: lifted, never past the name ceiling");
     ok(recommendImages({ assets: [A("s1")], product: P }).items.length === 0, "no semantic map: unchanged");
+  }
+  // D244 R-7: type evidence (a cart photo is not a flower photo).
+  {
+    const F = { name: "Blue Dream 3.5g", brand: "Phat Panda", category: "flower", form: "flower" as const, typeWords: ["usable", "marijuana"] };
+    const cart = A("c1", { title: "Blue Dream 1g Cartridge" });
+    const bud = A("f1", { title: "Blue Dream Flower" });
+    const plainF = A("p1", { title: "Blue Dream" });
+    const v = recommendImages({ assets: [cart, bud, plainF], product: F });
+    const c = v.items.find((x) => x.id === "c1");
+    const f = v.items.find((x) => x.id === "f1");
+    const pl = v.items.find((x) => x.id === "p1");
+    ok(Boolean(f && pl && c) && f!.confidence > pl!.confidence && pl!.confidence > c!.confidence, "same type > no type words > different type");
+    ok(Boolean(c?.chips.includes("Different type (vape)")) && Boolean(f?.chips.includes("Same type (flower)")), "type chips");
+    ok(Boolean(c?.reasons.some((r) => r.includes("different type"))), "different-type reason");
+    const nf = recommendImages({ assets: [cart], product: { ...F, form: null, typeWords: null } }).items[0];
+    ok(Boolean(nf) && nf!.confidence > c!.confidence && !nf!.chips.some((x) => x.includes("type")), "no form: unchanged");
+    ok(nameMatchScore(A("u1", { title: "Blue Dream usable" }), F).reasons.includes("Category word matches."), "POS type words join the category match");
+    ok(applyFormEvidence(cart, F, 0).confidence === 0, "never lifts a zero");
+    const rs = rankSearchResults([cart], F)[0];
+    ok(Boolean(rs?.chips.includes("Different type (vape)")) && rs!.confidence === c!.confidence, "search results carry type evidence");
   }
   return { passed, failed };
 }

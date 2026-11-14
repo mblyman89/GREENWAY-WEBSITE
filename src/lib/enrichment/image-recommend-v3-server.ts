@@ -20,7 +20,8 @@ import { semanticSearch } from "@/lib/media/media-embed-server";
 import { bestSimilarity, productSemanticQuery } from "@/lib/media/media-embed-core";
 import { enrichmentIdentityForItem } from "./enrichment-identity-core";
 import { readWorklistVendorData } from "./worklist-server";
-import { resolveCardVendor } from "./worklist-core";
+import { resolveCardVendor, type VendorVia } from "./worklist-core";
+import { formOfCategory, identitySemanticCategory, identityTypeWords } from "./product-identity-core";
 import {
   RECOMMEND_WIDE_LIMIT,
   mergeRecommendPools,
@@ -36,10 +37,21 @@ export type RecommendPanelRead = RecommendPanel & {
   /** The identity key an Attach remembers under ("" = not enough identity). */
   identityKey: string;
   vendorId: string | null;
+  /** D244 R-7: how the vendor was found (null = not linked). */
+  vendorVia: VendorVia | null;
 };
 
 export type RecommendPanelInput = {
-  item: { name: string; product_name: string | null; brand_name: string | null; vendor_name: string | null; category: string };
+  item: {
+    name: string;
+    product_name: string | null;
+    brand_name: string | null;
+    vendor_name: string | null;
+    category: string;
+    /** D244 R-7: the POS's own type words (menu_items), when the caller has them. */
+    pos_inventory_type?: string | null;
+    pos_inventory_category?: string | null;
+  };
   enrichment: {
     vendor_id?: string | null;
     brand_id?: string | null;
@@ -59,19 +71,23 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
   const name = item.product_name?.trim() || item.name;
   const keys = cardIdentityKeys(input);
   const empty = (libraryOk: boolean): RecommendPanelRead => ({
-    tiles: [], considered: 0, matched: 0, emptyText: null, libraryOk, memoryMissing: false, identityKey: keys[0] ?? "", vendorId: null,
+    tiles: [], considered: 0, matched: 0, emptyText: null, libraryOk, memoryMissing: false, identityKey: keys[0] ?? "", vendorId: null, vendorVia: null,
   });
   try {
     let vendorId = (enrichment?.vendor_id ?? "").trim() || null;
+    let vendorVia: VendorVia | null = vendorId ? "enrichment" : null;
     if (!vendorId) {
       const lookups = await readWorklistVendorData().catch(() => null);
       if (lookups) {
-        vendorId = resolveCardVendor(
+        const r = resolveCardVendor(
           { ownVendorId: null, attrVendorIds: [], brandName: item.brand_name, posVendorName: item.vendor_name },
           lookups,
-        ).vendorId;
+        );
+        vendorId = r.vendorId;
+        vendorVia = r.via;
       }
     }
+    const typeIn = { category: item.category, posInventoryType: item.pos_inventory_type ?? null, posInventoryCategory: item.pos_inventory_category ?? null };
     const product = {
       name,
       brand: item.brand_name ?? null,
@@ -79,10 +95,13 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
       category: item.category ?? null,
       vendorId,
       brandId: enrichment?.brand_id ?? null,
+      // D244 R-7: the type (form + POS type words) the owner asked the AI to use.
+      form: formOfCategory(item.category),
+      typeWords: identityTypeWords(typeIn),
     };
     const full = recommendFullQuery(name);
     const wordQs = recommendSearchWords(product);
-    const semQ = productSemanticQuery({ name, brand: item.brand_name, category: item.category });
+    const semQ = productSemanticQuery({ name, brand: item.brand_name, category: identitySemanticCategory(typeIn) || item.category });
     const semP = semQ ? semanticSearch(semQ, 40).catch(() => []) : Promise.resolve([]);
     const [memory, onRecord, shelf, fullHits, ...wordHits] = await Promise.all([
       loadImageMemory(keys),
@@ -110,7 +129,7 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
       semantic,
     });
     const panel = orderRecommendPanel(view, pool, name);
-    return { ...panel, libraryOk: shelf.ok, memoryMissing: memory.missing, identityKey: keys[0] ?? "", vendorId };
+    return { ...panel, libraryOk: shelf.ok, memoryMissing: memory.missing, identityKey: keys[0] ?? "", vendorId, vendorVia };
   } catch {
     return empty(false);
   }
