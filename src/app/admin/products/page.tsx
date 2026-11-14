@@ -54,6 +54,7 @@ import {
 // D244 E-1a: vendor-first, on-hand-first worklist (true vendor, qty, progress, pages).
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import { readOnHandLots, readWorklistVendorData } from "@/lib/enrichment/worklist-server";
+import { copilotUrl } from "@/lib/enrichment/copilot-core";
 import {
   NO_VENDOR_LABEL,
   WORKLIST_PAGE_SIZE,
@@ -806,11 +807,17 @@ export default async function ProductsPage({
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/25 bg-[var(--admin-gold-soft)] px-4 py-3">
             <p className="text-sm text-[var(--admin-text-muted)]">
               <span className="font-bold text-[var(--admin-gold)]">✨ Bulk AI:</span> draft descriptions for many
-              products at once, then review & approve them in a grid.
+              products at once, then review & approve them in a grid. Or work one vendor card by card with the{" "}
+              <span className="font-bold text-[var(--admin-gold)]">Copilot</span> (photo, drafts, chat, keyboard).
             </p>
-            <Button href="/admin/products/bulk-ai" variant="save" size="sm">
-              Open bulk AI review →
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button href="/admin/products/copilot" variant="neutral" size="sm">
+                Open the Copilot →
+              </Button>
+              <Button href="/admin/products/bulk-ai" variant="save" size="sm">
+                Open bulk AI review →
+              </Button>
+            </div>
           </div>
         )}
 
@@ -854,6 +861,10 @@ export default async function ProductsPage({
                 <div className="h-full bg-[var(--admin-accent)]" style={{ width: `${vendorPercent(currentVendor)}%` }} />
               </div>
             </div>
+            {/* D244 R-5: the same vendor, one card at a time, with the copilot. */}
+            <Button href={copilotUrl({ vendor: currentVendor.id })} variant="save" size="sm" data-testid="vendor-copilot">
+              Open Copilot session →
+            </Button>
             {upNext ? (
               <Button href={vendorHref(upNext.id)} variant="neutral" size="sm">
                 Next vendor: {upNext.label} →

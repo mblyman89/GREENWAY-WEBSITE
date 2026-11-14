@@ -41,6 +41,7 @@ import { EnrichmentAiLookupPanel } from "./EnrichmentAiLookupPanel";
 import { MediaLibraryPicker } from "./MediaLibraryPicker";
 // D244 E-1b: keep my place (back on every form) + Prev / Next / Save & next.
 import { DetailNav } from "@/components/admin/products/WorklistNav";
+import { copilotUrl } from "@/lib/enrichment/copilot-core";
 import { DETAIL_EDITOR_FORM_ID, DETAIL_PUBLISH_FORM_ID, cleanBack } from "@/lib/enrichment/detail-nav-core";
 import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/media/library-picker-core";
 import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
@@ -275,6 +276,15 @@ export default async function ProductEditorPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <DetailNav posKey={key} back={listBack} position="top" />
+        {/* D244 R-5: this card inside its vendor's Copilot session. */}
+        {recommend && (
+          <p className="text-xs text-white/50" data-testid="detail-copilot-link">
+            Faster for a whole vendor:{" "}
+            <Link href={copilotUrl({ vendor: recommend.vendorId ?? "none", key })} className="font-semibold text-[var(--admin-accent)] hover:underline">
+              open this card in the Copilot session →
+            </Link>
+          </p>
+        )}
         {saved && (
           <div data-testid="saved-banner" className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             {savedNote ? `Saved. ${savedNote}` : "Saved."}
