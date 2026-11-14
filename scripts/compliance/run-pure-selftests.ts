@@ -1394,6 +1394,7 @@ import { __runTextEraseCoreTests } from "../../src/lib/enrichment/text-erase-cor
 import { __runBulkApproveCoreTests } from "../../src/lib/enrichment/bulk-approve-core";
 import { __runComplianceContextTests } from "../../src/lib/ai/compliance-context-core";
 import { __runMediaEmbedTests } from "../../src/lib/media/media-embed-core";
+import { __runKbBulkReviewTests } from "../../src/lib/ai/kb/kb-bulk-review-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2986,6 +2987,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("batch-answer-core", __runBatchAnswerTests(), 20); // D244 R-15: overnight answers read tolerantly (wrappers, flat fields, long text) + responseSchema in the Batch API docs' form
   assertRan("compliance-context-core", __runComplianceContextTests(), 76); // D244 R-14: "cure"/"cured" (the cure process) read in context, a heads-up; medical uses still block
   assertRan("bulk-approve-core", __runBulkApproveCoreTests(), 17); // D244 R-12: Bulk AI select one/all + approve every draft at 80%+, chunked (8 products / 40 drafts per call), totals, never publishes
+  assertRan("kb-bulk-review-core", __runKbBulkReviewTests(), 17); // D244 R-19: KB pipeline "Publish every draft that passes" (quality bar + compliance, 500 per page, Check first)
   assertRan("copilot-core", __runCopilotCoreTests(), 55); // D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   console.log("ALL PURE SELF-TESTS PASSED");
 }

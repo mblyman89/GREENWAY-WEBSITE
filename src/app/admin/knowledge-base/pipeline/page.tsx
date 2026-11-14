@@ -23,6 +23,7 @@ import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui/Button";
 import { getKbPipelineCounts } from "@/lib/ai/kb/store";
 import { KbFlash } from "../KbFlash";
+import { KbBulkPublishBar } from "../KbBulkPublishBar";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,9 @@ export default async function KbPipelinePage({
             suggestions will flow through these stages.
           </div>
         ) : null}
+
+        {/* D244 R-19: publish every draft that passes, 500 at a time. */}
+        {counts.migrated && counts.draft > 0 ? <KbBulkPublishBar drafts={counts.draft} /> : null}
 
         {/* Medallion flow */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">

@@ -1577,6 +1577,43 @@ export async function bulkReviewKbDraftsBySource(
   return { products, brands };
 }
 
+/**
+ * D244 R-19: one page of KB product drafts by id (keyset), for "Publish every
+ * draft that passes". Only the columns the quality score and the compliance
+ * scan need.
+ */
+export async function listKbDraftPage(
+  cursor: string,
+  limit: number,
+): Promise<{ rows: import("./kb-bulk-review-core").KbDraftLite[]; error: string | null }> {
+  if (!isSupabaseServiceConfigured) return { rows: [], error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  let q = admin
+    .from("kb_products")
+    .select("id, display_name, category, aroma_notes, flavor_notes, terpenes, effects, description, short_description, summary, source, sources, confidence")
+    .eq("status", "draft")
+    .order("id", { ascending: true })
+    .limit(Math.max(1, Math.min(1000, limit)));
+  if (cursor) q = q.gt("id", cursor);
+  const { data, error } = await q;
+  if (error) return { rows: [], error: error.message };
+  return { rows: (data ?? []) as import("./kb-bulk-review-core").KbDraftLite[], error: null };
+}
+
+/** D244 R-19: publish these drafts (only rows still draft change). Returns how many changed. */
+export async function publishKbDraftIds(ids: string[], actorId: string | null): Promise<number> {
+  if (!isSupabaseServiceConfigured || ids.length === 0) return 0;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("kb_products")
+    .update({ status: "published", active: true, updated_by: actorId })
+    .eq("status", "draft")
+    .in("id", ids)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
 export type KbBannedRow = { id: string; phrase: string; severity: string; reason: string | null; active: boolean };
 
 export async function listKbBanned(limit = 500): Promise<KbBannedRow[]> {

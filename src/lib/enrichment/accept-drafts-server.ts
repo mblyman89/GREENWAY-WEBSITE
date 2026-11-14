@@ -113,10 +113,11 @@ export type AcceptAllOutcome =
  * compliance gate. Never throws for a single field: a blocked or unreadable
  * one is named in blocked.
  */
-export async function acceptHighConfidenceForKey(key: string, userId: string): Promise<AcceptAllOutcome> {
+export async function acceptHighConfidenceForKey(key: string, userId: string, threshold: number = ACCEPT_ALL_THRESHOLD): Promise<AcceptAllOutcome> {
   const pending = await listSuggestions("product", key, "pending").catch(() => null);
   if (!pending) return { ok: false, error: "The drafts could not be read just now. Nothing was accepted." };
-  const ids = acceptAllEligible(pending as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
+  // D244 R-18: a person may choose a lower bar ("approve every draft"); potency best guesses never auto-accept.
+  const ids = acceptAllEligible(pending as SuggestionLite[], Math.max(0, Math.min(100, Math.round(threshold))));
   const byId = new Map(pending.map((p) => [p.id, p] as const));
   const accepted: string[] = [];
   const blocked: string[] = [];
@@ -139,6 +140,29 @@ export async function acceptHighConfidenceForKey(key: string, userId: string): P
   }
   const writeback = accepted.length ? await writeBackOnPublish(key, userId) : null;
   return { ok: true, eligible: ids.length, accepted, blocked, flagged, writeback };
+}
+
+/**
+ * D244 R-18: every product key with a pending all-fields (v2) draft, read in
+ * pages by id so it is not capped at what the review grid shows.
+ */
+export async function listPendingDraftKeys(maxPages = 60): Promise<string[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const keys = new Set<string>();
+  let cursor = "";
+  for (let page = 0; page < maxPages; page++) {
+    let q = admin.from("ai_suggestions").select("id,entity_id,source").eq("entity_type", "product").eq("status", "pending").order("id", { ascending: true }).limit(1000);
+    if (cursor) q = q.gt("id", cursor);
+    const { data, error } = await q;
+    if (error || !data || data.length === 0) break;
+    for (const r of data as { id: string; entity_id: string; source: string | null }[]) {
+      if (parseEvidenceSource(r.source).v2 && r.entity_id) keys.add(r.entity_id);
+    }
+    cursor = (data[data.length - 1] as { id: string }).id;
+    if (data.length < 1000) break;
+  }
+  return [...keys];
 }
 
 /** Source flag: a person typed over the draft before accepting it (D244 R-2). */

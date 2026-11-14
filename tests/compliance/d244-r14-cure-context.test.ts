@@ -146,7 +146,7 @@ describe("the crawler mirrors it", () => {
 describe("docs", () => {
   it("SOP-10 v1.3 §4.15 quotes the owner; Help, Concierge, strategy row", () => {
     const sop = read("docs/sop/SOP-10-product-enrichment.md");
-    expect(sop).toContain("| **Version** | 1.3 (D244 R-14");
+    expect(sop).toMatch(/\| \*\*Version\*\* \| 1\.\d+ \(D244 R-\d+;.*1\.3 was D244 R-14|\| \*\*Version\*\* \| 1\.3 \(D244 R-14/);
     expect(sop).toContain("### 4.15");
     expect(sop).toContain("because cannabis is dried and then cured. it is called the cure process.");
     expect(read("src/lib/admin/help-content.ts")).toContain("Why is the word cured allowed now?");
