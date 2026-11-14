@@ -195,6 +195,47 @@ export async function readLibraryPickerAssets(
 }
 
 // ---------------------------------------------------------------------------
+// D244 E-3: the detail page's recommender pool helpers.
+// ---------------------------------------------------------------------------
+
+/** Pictures by id (remembered / on-record picks), archived dropped. [] on any failure. */
+export async function readLibraryAssetsByIds(ids: readonly (string | null | undefined)[]): Promise<LibraryPickerAsset[]> {
+  const clean = cleanIds(ids);
+  if (clean.length === 0 || !isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const byIds = (cols: string) => admin.from("media_assets").select(cols).in("id", clean).range(0, 199);
+    let r = await byIds(LIBRARY_PICKER_COLUMNS);
+    if (r.error && isMissingColumn(r.error)) r = await byIds(BASE_COLUMNS);
+    if (r.error) return [];
+    return (((r.data as unknown) as Row[] | null) ?? []).filter((x) => x?.id && x.status !== "archived").map(toAsset);
+  } catch {
+    return [];
+  }
+}
+
+/** The media_search hits for one query, as assets (whole library). [] before 0352 or on failure. */
+export async function readSearchHitAssets(query: string, limit = 60): Promise<LibraryPickerAsset[]> {
+  if (!isSupabaseServiceConfigured || (query ?? "").trim().length < 2) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.rpc("media_search", { p_query: query.trim(), p_vendor_id: null, p_limit: Math.min(SEARCH_HITS, Math.max(1, limit)), p_offset: 0 });
+    if (error || !Array.isArray(data)) return [];
+    const order = (data as { media_id: string }[]).map((r) => r.media_id).filter(Boolean);
+    if (order.length === 0) return [];
+    const { data: rows, error: rowsErr } = await admin.from("media_assets").select(LIBRARY_PICKER_COLUMNS).in("id", order).range(0, 199);
+    if (rowsErr) return [];
+    const byId = new Map((((rows as unknown) as Row[] | null) ?? []).map((r) => [r.id, r] as const));
+    return order.flatMap((id) => {
+      const r = byId.get(id);
+      return r && r.status !== "archived" ? [toAsset(r)] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // D221 M6: "Search for a better picture" and "Find similar"
 // ---------------------------------------------------------------------------
 
