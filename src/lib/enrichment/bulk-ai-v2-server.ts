@@ -220,16 +220,18 @@ export async function runBulkAiV2(
   let failed = 0;
   let ran = 0;
   let stoppedBecause: string | null = null;
+  const tried = new Set<string>();
   try {
     while (canStartAnother(t0, now(), ran, budget)) {
       const key = await mutate(admin, actorId, (cur) => {
-        const it = nextBulkItem(cur);
+        const it = nextBulkItem(cur, tried);
         if (!it) return null;
         const next = claimBulkItem(cur, it.key, token);
         return next ? { next, out: it.key } : null;
       });
       if (!key) break; // queue empty, canceled, or the lease was lost
       ran += 1;
+      tried.add(key);
       let outcome: { ok: true; saved: number } | { ok: false; error: string };
       try {
         const r = await draftOne(key, actorId);

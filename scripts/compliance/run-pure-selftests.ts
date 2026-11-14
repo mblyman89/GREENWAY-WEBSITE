@@ -1380,6 +1380,7 @@ import { __runWorklistCoreTests } from "../../src/lib/enrichment/worklist-core";
 import { __runDetailNavCoreTests } from "../../src/lib/enrichment/detail-nav-core";
 import { __runImageRecommendV3Tests } from "../../src/lib/enrichment/image-recommend-v3-core";
 import { __runAiDraftV2Tests } from "../../src/lib/enrichment/ai-draft-v2-core";
+import { __runBulkAiV2Tests } from "../../src/lib/enrichment/bulk-ai-v2-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2959,6 +2960,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("detail-nav-core", __runDetailNavCoreTests(), 32); // D244 E-1b keep my place: back on every detail redirect, Prev / Next / Save & next
   assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 33); // D244 E-3
   assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 44); // D244 E-4
+  assertRan("bulk-ai-v2-core", __runBulkAiV2Tests(), 38); // D244 E-5
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

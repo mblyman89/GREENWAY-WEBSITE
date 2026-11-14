@@ -187,9 +187,13 @@ export function takeBulkLease(s: BulkAiV2State, token: string, nowMs: number, bu
   return { ...s, items, leaseToken: token, leaseUntil: new Date(nowMs + budgetMs + BULK_AI_V2_LEASE_SLACK_MS).toISOString() };
 }
 
-/** The next queued product (queue order), or null. */
-export function nextBulkItem(s: BulkAiV2State): BulkItem | null {
-  return s.items.find((i) => i.status === "queued") ?? null;
+/**
+ * The next queued product (queue order), or null. `skip` = keys this run
+ * already tried: a product that failed waits for the NEXT run (a rate limit
+ * or outage is not retried seconds later).
+ */
+export function nextBulkItem(s: BulkAiV2State, skip?: ReadonlySet<string>): BulkItem | null {
+  return s.items.find((i) => i.status === "queued" && !skip?.has(i.key)) ?? null;
 }
 
 /** May a run START another product now? */
@@ -363,6 +367,7 @@ export function __runBulkAiV2Tests(): { passed: number; failed: number } {
 
   // claim + finish
   eq(nextBulkItem(st)?.key, "a", "next is queue order");
+  eq(nextBulkItem(st, new Set(["a"]))?.key, "b", "a product tried this run waits for the next run");
   eq(claimBulkItem(st, "a", "other"), null, "claim needs lease");
   st = claimBulkItem(st, "a", "t1")!;
   eq([st.items[0].status, st.items[0].attempts], ["running", 1], "claimed");
