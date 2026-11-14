@@ -44,7 +44,9 @@ import { DetailNav } from "@/components/admin/products/WorklistNav";
 import { DETAIL_EDITOR_FORM_ID, DETAIL_PUBLISH_FORM_ID, cleanBack } from "@/lib/enrichment/detail-nav-core";
 import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/media/library-picker-core";
 import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
-import { parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
+import { confidenceText, parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
+import { loadRecommendPanel } from "@/lib/enrichment/image-recommend-v3-server";
+import { recommendPanelSummary } from "@/lib/enrichment/image-recommend-v3-core";
 import { logMediaSearch } from "@/lib/media/library-v2-server";
 import type { PickerImageSearch } from "./MediaLibraryPicker";
 import { fallbackSourceLabel, MENU_CARD_FALLBACK_PAGE } from "@/lib/menu/menu-card-fallback-core";
@@ -139,6 +141,10 @@ export default async function ProductEditorPage({
   // Command center needs the item; gallery URLs need the enrichment.
   const centerP = getEnrichmentCommandCenter({ item });
   centerP.catch(() => undefined);
+  // D244 E-3: the one "Recommended photos" panel (memory, on-record, vendor
+  // shelf, name searches), in parallel with the command center.
+  const recommendP = enrichmentP.then((e) => loadRecommendPanel({ item, enrichment: e }));
+  recommendP.catch(() => undefined);
   const [enrichment, brands, productLots, allSuggestions] = await Promise.all([
     enrichmentP,
     brandsP,
@@ -163,6 +169,7 @@ export default async function ProductEditorPage({
     strainName: item.strain_name ?? "",
   });
   const center = await centerP;
+  const recommend = await recommendP.catch(() => null);
   // SLICE 75 — the guidance panel is permanent; this flips it to its green
   // "fully enriched" state when every checklist row is done.
   const checklistDone = checklistComplete(center.checklist);
@@ -627,35 +634,10 @@ export default async function ProductEditorPage({
             )}
 
             {center.mediaSuggestions.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">From the media library</p>
-                <ul className="mt-2 space-y-2">
-                  {center.mediaSuggestions.map((m) => (
-                    <li key={m.candidate.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black p-3">
-                      {m.url && (
-                        <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img loading="lazy" decoding="async" src={m.url} alt={m.candidate.alt_text ?? ""} className="h-full w-full object-cover" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white/85">
-                          {m.candidate.title || "(untitled image)"}
-                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">{Math.round(m.score * 100)}% match</span>
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-white/45">{m.reasons.join(" ")}</p>
-                      </div>
-                      <form action={attachMatchedMedia}>
-                        <input type="hidden" name="key" value={key} />
-                        {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
-                        <input type="hidden" name="mediaId" value={m.candidate.id} />
-                        <input type="hidden" name="source" value="media-library" />
-                        <Button type="submit" variant="confirm" size="sm">Attach image</Button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <p className="mt-4 text-xs text-white/55">
+                Library photos for this product are in{" "}
+                <a href="#recommended-photos" className="underline underline-offset-2 hover:text-white">Recommended photos</a> below.
+              </p>
             )}
 
             {center.vendorSuggestions.length > 0 && (
@@ -960,6 +942,68 @@ export default async function ProductEditorPage({
           ) : (
             isAiConfigured && <p className="mt-3 text-xs text-white/45">No pending suggestions. Use the buttons above to draft copy.</p>
           )}
+        </div>
+
+        {/* D244 E-3: Recommended photos — outside every form (no nesting). */}
+        <div id="recommended-photos" data-testid="recommended-photos" className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <p className="text-sm font-semibold text-white">Recommended photos</p>
+          <p className="mt-1 text-[11px] text-white/45">
+            {recommend
+              ? recommendPanelSummary(recommend, recommend.memoryMissing)
+              : "Recommendations could not be read just now. Refresh the page, or pick from the library below."}{" "}
+            Every photo says why it was picked. Nothing is attached until you click.
+          </p>
+          {recommend && !recommend.libraryOk ? (
+            <p className="mt-2 text-xs text-amber-300">The media library could not be fully read, so this list may be short.</p>
+          ) : null}
+          {recommend && recommend.tiles.length > 0 ? (
+            <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {recommend.tiles.map((t) => (
+                <li key={t.id} data-testid="recommended-photo" className="flex flex-col rounded-lg border border-white/10 bg-black p-2">
+                  <div className="aspect-square w-full overflow-hidden rounded border border-white/10 bg-white/5">
+                    {t.url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img loading="lazy" decoding="async" src={t.url} alt={t.alt} className="h-full w-full object-cover" />
+                    ) : null}
+                  </div>
+                  <p className="mt-2 truncate text-xs text-white/85" title={t.label}>{t.label}</p>
+                  <p className="mt-0.5 text-[11px] text-white/60" title={t.reasons.join(" ")}>{confidenceText(t)}</p>
+                  {t.chips.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {t.chips.slice(0, 4).map((c) => (
+                        <span key={c} className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60">{c}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {t.attached ? (
+                    <p className="mt-2 text-[11px] text-emerald-300">Already in this product&apos;s photos.</p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <form action={attachMatchedMedia}>
+                        <input type="hidden" name="key" value={key} />
+                        {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
+                        <input type="hidden" name="mediaId" value={t.id} />
+                        <input type="hidden" name="source" value="recommended" />
+                        <input type="hidden" name="identityKey" value={recommend.identityKey} />
+                        <Button type="submit" variant="confirm" size="sm">Attach</Button>
+                      </form>
+                      <form action={attachMatchedMedia}>
+                        <input type="hidden" name="key" value={key} />
+                        {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
+                        <input type="hidden" name="mediaId" value={t.id} />
+                        <input type="hidden" name="source" value="recommended" />
+                        <input type="hidden" name="identityKey" value={recommend.identityKey} />
+                        <input type="hidden" name="cover" value="1" />
+                        <Button type="submit" variant="neutral" size="sm">Attach as cover</Button>
+                      </form>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : recommend ? (
+            <p className="mt-3 text-xs text-white/55">{recommend.emptyText ?? "No library photo looks like this product yet."}</p>
+          ) : null}
         </div>
 
         {/* Round 21 (C): library first. Outside the editor's multipart form

@@ -40,6 +40,8 @@ import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getMedia } from "@/lib/media/store";
+import { rememberImageAttach } from "@/lib/catalog/image-memory-server";
+import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
 import {
   attachImageToGallery,
   detachImageFromGallery,
@@ -650,6 +652,8 @@ export async function attachMatchedMedia(formData: FormData): Promise<void> {
   const listBack = cleanBack(formData.get("back"));
   const mediaId = String(formData.get("mediaId") ?? "").trim();
   const source = String(formData.get("source") ?? "match");
+  // D244 E-3: "Attach as cover" on the Recommended photos panel.
+  const asCover = parseCoverIntent(formData.get("cover"));
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   if (!mediaId) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("Missing media id.")));
 
@@ -667,15 +671,22 @@ export async function attachMatchedMedia(formData: FormData): Promise<void> {
     },
     mediaId,
   );
-  if (merge.alreadyPresent) {
+  const cover = asCover ? setPrimaryImage(merge, mediaId) : null;
+  if (merge.alreadyPresent && !cover?.changed) {
     redirect(detailUrl(key, listBack, "?saved=1"));
   }
   await updateEnrichment(
     key,
-    { image_media_ids: merge.image_media_ids, primary_media_id: merge.primary_media_id },
+    { image_media_ids: merge.image_media_ids, primary_media_id: cover?.changed ? cover.primary_media_id : merge.primary_media_id },
     session.userId,
   );
-  await recordUsage(mediaId, "product", key, "image");
+  if (!merge.alreadyPresent) await recordUsage(mediaId, "product", key, "image");
+  // D244 E-3: the pick is remembered under the product identity, so the next
+  // card of this product (any size, any re-import) is offered it first.
+  const identityKey = (current?.identity_key ?? "").trim() || String(formData.get("identityKey") ?? "").trim().slice(0, 300);
+  const remembered = identityKey
+    ? await rememberImageAttach({ identityKey, mediaId, posProductKey: key, source: "library", actorId: session.userId }).catch(() => ({ ok: false, missing: false }))
+    : { ok: false, missing: false };
 
   await recordAudit({
     actorId: session.userId,
@@ -683,7 +694,7 @@ export async function attachMatchedMedia(formData: FormData): Promise<void> {
     action: "product.match_image_attached",
     entityType: "product",
     entityId: key,
-    after: { mediaId, source, becamePrimary: merge.becamePrimary },
+    after: { mediaId, source, becamePrimary: merge.becamePrimary || Boolean(cover?.changed), identityKey: identityKey || null, remembered: remembered.ok },
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
