@@ -321,8 +321,11 @@ describe("D244 E-5 - review grid: accept all >= 80% (and publish) per product", 
 describe("D244 E-5 wiring", () => {
   it("the every-minute worker drafts only when it had nothing else to do; no new cron", () => {
     const s = read("src/app/api/cron/lookup-jobs/route.ts");
-    expect(s).toContain("if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run) && !(mailRead?.ok && !mailRead.skipped)) {");
-    expect(s).toContain('runBulkAiV2({ budgetMs: BULK_AI_V2_BUDGET_MS, trigger: "worker" })');
+    // D244 R-3: the idle test became a named `idle`; the overnight batch tick runs first and the live
+    // run gets the time it left (never more than BULK_AI_V2_BUDGET_MS).
+    expect(s).toContain("const idle = result.ok && result.skipped && !(autoStart?.ok && autoStart.run) && !(mailRead?.ok && !mailRead.skipped);");
+    expect(s).toContain("const liveBudgetMs = Math.max(0, BULK_AI_V2_BUDGET_MS - (Date.now() - enrichStart));");
+    expect(s).toContain('runBulkAiV2({ budgetMs: liveBudgetMs, trigger: "worker" })');
     expect(s).toContain("const batch = await runGeminiBatchTick({ budgetMs: 180_000 });");
     const v = JSON.parse(read("vercel.json")) as { crons: unknown[] };
     expect(v.crons).toHaveLength(23); // 23 since D232 M-6; this worker added none

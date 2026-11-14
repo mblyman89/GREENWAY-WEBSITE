@@ -22,6 +22,9 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { geminiApiKey, aiWebSearchModelId } from "@/lib/ai/provider";
+import { gemini, listGoogleBatches, GEMINI_API_ORIGIN } from "@/lib/ai/gemini-http";
+// D244 R-3: the two plain HTTP helpers live in gemini-http.ts; re-exported so existing imports keep working.
+export { gemini, listGoogleBatches };
 import { logAiUsage } from "@/lib/ai/usage";
 import { resolveGeminiModel, effectiveMaxOutputTokens } from "@/lib/ai/gemini-models-core";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
@@ -44,7 +47,6 @@ import {
   explainGemini,
   googleBatchRow,
   googleStateKey,
-  parseBatchList,
   sendDecision,
   type GoogleBatchRow,
 } from "@/lib/ai/gemini-batch-explain-core";
@@ -71,7 +73,7 @@ import {
 } from "@/lib/ai/gemini-batch-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
-const API = "https://generativelanguage.googleapis.com";
+const API = GEMINI_API_ORIGIN;
 const LEASE_MS = 10 * 60_000;
 
 export function batchEngineOn(): boolean {
@@ -80,23 +82,6 @@ export function batchEngineOn(): boolean {
 
 export type BatchTickResult = { ok: boolean; skipped?: string; submitted: number; families: number; items: number; polled: number; ingested: number; error?: string };
 
-/** One call to the Gemini API. Never throws: a network failure is status 0. */
-export async function gemini(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
-  try {
-    const res = await fetch(`${API}/${path}`, { ...init, headers: { "x-goog-api-key": geminiApiKey(), "content-type": "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(120_000) });
-    const text = await res.text();
-    let json: unknown = null;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-    return { ok: res.ok, status: res.status, json, text };
-  } catch (err) {
-    const text = err instanceof Error ? err.message : String(err);
-    return { ok: false, status: 0, json: null, text };
-  }
-}
 
 type Actor = { userId: string | null; email: string | null };
 type QueuedItem = { id: string; job_id: string; draft_id: string; attempts: number | null; result_json: unknown };
@@ -496,25 +481,6 @@ export async function checkBatchesNow(): Promise<BatchTickResult> {
   }
 }
 
-/** R74 S41: every page of GET v1beta/batches (Google's own list). */
-export async function listGoogleBatches(maxPages = 10): Promise<{ ok: boolean; status: number; rows: GoogleBatchRow[]; raw: string; error: string | null }> {
-  const rows: GoogleBatchRow[] = [];
-  let token: string | null = null;
-  let raw = "";
-  for (let p = 0; p < maxPages; p += 1) {
-    const res = await gemini(`v1beta/batches?pageSize=100${token ? `&pageToken=${encodeURIComponent(token)}` : ""}`);
-    if (p === 0) raw = res.text;
-    if (!res.ok) {
-      const x = explainGemini(res.status, res.json ?? res.text);
-      return { ok: false, status: res.status, rows, raw: res.text, error: `${x.title}. ${x.fix}` };
-    }
-    const page = parseBatchList(res.json);
-    rows.push(...page.rows);
-    token = page.nextPageToken;
-    if (!token) break;
-  }
-  return { ok: true, status: 200, rows, raw, error: null };
-}
 
 /**
  * R74 S41: one cron minute. Poll every open batch (always, even when paused:

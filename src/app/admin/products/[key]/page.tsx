@@ -47,6 +47,8 @@ import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-pi
 import { confidenceText, parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
 import { loadRecommendPanel } from "@/lib/enrichment/image-recommend-v3-server";
 import { cardFacts, currentFields } from "@/lib/enrichment/ai-draft-v2-server";
+import { enrichBatchConfigured, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
+import { ENRICH_MODES, productBatchLine } from "@/lib/enrichment/enrich-batch-core";
 import { recommendPanelSummary } from "@/lib/enrichment/image-recommend-v3-core";
 import {
   ACCEPT_ALL_THRESHOLD,
@@ -70,6 +72,7 @@ import {
   updateProductEnrichment,
   setEnrichmentStatus,
   generateProductAi,
+  queueProductOvernightAction,
   acceptSuggestion,
   acceptAllHighConfidence,
   markBestGuessCheckedAction,
@@ -182,6 +185,10 @@ export default async function ProductEditorPage({
   // no column, so they show no diff), and the "Accept all >= 80%" set
   // (D244 R-1: best guesses are included and flagged for a closer look).
   const onRecord = { ...currentFields(enrichment), ...cardFacts(item) };
+  // D244 R-3: where this product is in the overnight batch (if at all).
+  const overnightStatus = isAiConfigured ? await loadEnrichBatchStatus() : null;
+  const overnightLine = overnightStatus?.ok ? productBatchLine(overnightStatus.state, key) : null;
+  const overnightOn = enrichBatchConfigured();
   delete onRecord.sensory;
   delete onRecord.effects;
   const acceptAllIds = acceptAllEligible(suggestions as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
@@ -860,8 +867,16 @@ export default async function ProductEditorPage({
                   {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
                   <input type="hidden" name="kind" value="all" />
                   <input type="hidden" name="posName" value={item.name} />
-                  <Button type="submit" variant="confirm" size="sm" data-testid="ai-draft-all">
-                    Enrich this product (all fields)
+                  <Button type="submit" variant="confirm" size="sm" data-testid="ai-draft-all" title={`${ENRICH_MODES.live.speed} ${ENRICH_MODES.live.price}`}>
+                    ⚡ Enrich now (live, all fields)
+                  </Button>
+                </form>
+                {/* D244 R-3: the same draft through the overnight Gemini batch. */}
+                <form action={queueProductOvernightAction}>
+                  <input type="hidden" name="key" value={key} />
+                  {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
+                  <Button type="submit" variant="neutral" size="sm" disabled={!overnightOn} data-testid="ai-draft-overnight" title={`${ENRICH_MODES.overnight.speed} ${ENRICH_MODES.overnight.price}`}>
+                    🌙 Add to the overnight batch
                   </Button>
                 </form>
                 <form action={generateProductAi}>
@@ -926,6 +941,20 @@ export default async function ProductEditorPage({
               </div>
             )}
           </div>
+
+          {isAiConfigured && (
+            <p className="mt-2 text-[11px] text-white/50" data-testid="ai-mode-explainer">
+              <b className="text-white/70">⚡ Enrich now</b> drafts every field in about a minute at the normal price.{" "}
+              <b className="text-white/70">🌙 Overnight batch</b> sends it to Google with other products for about half the price; the
+              drafts appear here within 24 hours (usually a few).{" "}
+              {overnightOn ? "" : "The overnight batch needs a Gemini key (AI_GEMINI_API_KEY)."}
+            </p>
+          )}
+          {overnightLine ? (
+            <p className="mt-1 rounded border border-indigo-400/30 bg-indigo-500/10 px-2 py-1 text-xs text-indigo-100" data-testid="ai-overnight-status">
+              {overnightLine}
+            </p>
+          ) : null}
 
           {!isAiConfigured && (
             <p className="mt-2 text-xs text-white/45">Set an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> env var to enable one-click drafting. All AI output is a draft you approve.</p>

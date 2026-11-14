@@ -47,6 +47,12 @@
  * "Draft with AI" on the Bulk AI page (runBulkAiV2, 540 s budget, its own
  * lease in site_settings).
  *
+ * D244 R-3 (no new cron). On the same idle tick, the OVERNIGHT enrichment
+ * batch (runEnrichBatchTick, 420 s budget, its own lease) polls Google,
+ * saves finished drafts and sends queued products as one Gemini batch. A
+ * tick where it sent or saved something leaves the live drafts for the
+ * next minute (both budgets together would not fit the 800 s route).
+ *
  * AUTH. The same fail-closed preamble as /api/cron/leafly-ack-sweep (copied,
  * not shared, for the reason recorded there):
  *   - CRON_SECRET set            -> Bearer must match, else staff session.
@@ -64,6 +70,8 @@ import { runMailReadBg } from "@/lib/pos/cultivera-mail-read-bg";
 import { MAIL_READ_BG_BUDGET_MS } from "@/lib/pos/cultivera-mail-read-bg-core";
 import { runBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
 import { BULK_AI_V2_BUDGET_MS } from "@/lib/enrichment/bulk-ai-v2-core";
+import { runEnrichBatchTick } from "@/lib/enrichment/enrich-batch-server";
+import { ENRICH_BATCH_TICK_BUDGET_MS } from "@/lib/enrichment/enrich-batch-core";
 
 export const dynamic = "force-dynamic";
 
@@ -123,11 +131,18 @@ export async function GET(req: NextRequest) {
   // D244 E-5: a tick with no lookup, no automatic start and no background reading drafts queued
   // products with AI ("Draft with AI" on the Bulk AI page). No new cron. Its own lease means one
   // run at a time; an empty queue costs one read of one site_settings row.
+  const idle = result.ok && result.skipped && !(autoStart?.ok && autoStart.run) && !(mailRead?.ok && !mailRead.skipped);
+  let enrichBatch: Awaited<ReturnType<typeof runEnrichBatchTick>> | null = null;
+  const enrichStart = Date.now();
+  if (idle) enrichBatch = await runEnrichBatchTick({ budgetMs: ENRICH_BATCH_TICK_BUDGET_MS });
+  // D244 R-3: the live run gets only what the overnight tick left, so both stay inside the 800 s route.
+  const liveBudgetMs = Math.max(0, BULK_AI_V2_BUDGET_MS - (Date.now() - enrichStart));
+  const batchWorked = Boolean(enrichBatch?.ok && !enrichBatch.skipped && (enrichBatch.sent > 0 || enrichBatch.stored > 0 || enrichBatch.failedAnswers > 0));
   let bulkAi: Awaited<ReturnType<typeof runBulkAiV2>> | null = null;
-  if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run) && !(mailRead?.ok && !mailRead.skipped)) {
-    bulkAi = await runBulkAiV2({ budgetMs: BULK_AI_V2_BUDGET_MS, trigger: "worker" });
+  if (idle && !batchWorked && liveBudgetMs > 0) {
+    bulkAi = await runBulkAiV2({ budgetMs: liveBudgetMs, trigger: "worker" });
   }
-  return NextResponse.json({ ...result, batch, autoStart, mailRead, bulkAi }, { status: result.ok ? 200 : 500 });
+  return NextResponse.json({ ...result, batch, autoStart, mailRead, enrichBatch, bulkAi }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.

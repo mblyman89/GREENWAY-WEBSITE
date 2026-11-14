@@ -21,6 +21,8 @@ import {
   bulkRejectSuggestionAction,
   queueBulkAiV2Action,
   cancelBulkAiV2Action,
+  queueOvernightBatchAction,
+  cancelOvernightBatchAction,
   bulkAcceptAllForProductAction,
   bulkAcceptEditedAction,
   bulkRejectDraftAction,
@@ -44,6 +46,8 @@ import {
   reviewGroups,
 } from "@/lib/enrichment/bulk-ai-v2-core";
 import { loadBulkAiV2Status } from "@/lib/enrichment/bulk-ai-v2-server";
+import { enrichBatchConfigured, enrichBatchModel, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
+import { ENRICH_MODES, batchCounts, batchProgressText, batchRecordLine } from "@/lib/enrichment/enrich-batch-core";
 
 export const dynamic = "force-dynamic";
 // D244 E-0: a 25-product batch on a reasoning model can run for minutes.
@@ -116,6 +120,11 @@ export default async function BulkAiPage({
 
   // D244 E-5: the background queue + the grouped review grid.
   const bulk = await loadBulkAiV2Status();
+  // D244 R-3: the overnight Gemini batch (the other way to draft).
+  const overnight = await loadEnrichBatchStatus();
+  const overnightCounts = overnight.ok ? batchCounts(overnight.state) : null;
+  const overnightOn = enrichBatchConfigured();
+  const overnightModel = enrichBatchModel();
   const vendorByKey = new Map(items.map((i) => [i.source_item_id, (i.vendor_name ?? "").trim() || null] as const));
   const vendors = [...new Set(items.map((i) => (i.vendor_name ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const vendorCount = new Map<string, number>();
@@ -144,8 +153,8 @@ export default async function BulkAiPage({
             id="bulk-ai"
             title="How bulk AI works"
             steps={[
-              "Pick the products you want descriptions for (we pre-list ones missing copy).",
-              "Click Draft — the AI writes a compliant draft for each.",
+              "Pick a vendor or tick products, then choose ⚡ Draft now (live, minutes, normal price) or 🌙 Add to the overnight batch (Google, within 24 hours, about half price).",
+              "The AI writes a compliant draft of every field for each product (live: within minutes; overnight: by tomorrow).",
               "Review each draft below. Type over any draft right in its box, then press Save & accept (or Reject).",
               "Accept all takes every draft at 80% or better plus the AI’s best guesses; best guesses are flagged in “Needs a closer look”.",
               "Accepted copy saves to the product. A product goes live on its own once a person attaches a published photo.",
@@ -214,16 +223,48 @@ export default async function BulkAiPage({
           </div>
         )}
 
-        {/* D244 E-5: background all-fields drafts (queue + progress) */}
+        {/* D244 E-5 + R-3: draft every field with AI - choose LIVE or OVERNIGHT */}
         <section id="queue" className="rounded-xl border border-[var(--admin-accent)]/30 bg-[#0a0a0a] p-4" data-testid="bulk-v2-queue">
-          <h2 className="text-sm font-bold text-white">Draft every field with AI, in the background</h2>
+          <h2 className="text-sm font-bold text-white">Draft every field with AI &mdash; choose how</h2>
           <p className="mt-1 text-xs text-white/60">
-            Each product gets the same all-fields draft as its page&apos;s &ldquo;Enrich this product (all fields)&rdquo; button: display name,
-            descriptions, SEO, aroma/flavor/terpenes, effects and tags, each with a confidence and the evidence it used. The
-            worker drafts about a dozen products a run, every minute, after you close this tab. Nothing is saved to a product
-            until a person accepts it below.
+            Both ways write the same all-fields draft as a product page&apos;s &ldquo;Enrich this product&rdquo; button: display name,
+            descriptions, SEO, aroma/flavor/terpenes, effects, tags, strain type and potency, each with a confidence and the evidence it
+            used. Both land in the same review grid below. Nothing is saved to a product until a person accepts it.
           </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2" data-testid="enrich-mode-chooser">
+            {(["live", "overnight"] as const).map((m) => (
+              <div
+                key={m}
+                className={`rounded-lg border p-3 ${m === "live" ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5" : "border-indigo-400/40 bg-indigo-500/5"}`}
+                data-testid={`enrich-mode-${m}`}
+              >
+                <p className="text-sm font-bold text-white">
+                  {ENRICH_MODES[m].icon} {ENRICH_MODES[m].name}
+                </p>
+                <p className="mt-1 text-xs text-white/70">{ENRICH_MODES[m].when}</p>
+                <ul className="mt-1 space-y-0.5 text-[0.7rem] text-white/55">
+                  <li>Speed: {ENRICH_MODES[m].speed}</li>
+                  <li>Price: {ENRICH_MODES[m].price}</li>
+                  <li>
+                    Model:{" "}
+                    <span className="font-mono">{m === "live" ? enrichModel.model : overnightModel}</span>
+                  </li>
+                </ul>
+                <ol className="mt-2 list-decimal space-y-0.5 pl-4 text-[0.7rem] text-white/60">
+                  {ENRICH_MODES[m].how.map((h) => (
+                    <li key={h}>{h}</li>
+                  ))}
+                </ol>
+                {m === "overnight" && !overnightOn ? (
+                  <p className="mt-2 text-[0.7rem] text-amber-200">Needs a Gemini key: set AI_GEMINI_API_KEY in Vercel, then this button works.</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          {/* LIVE status */}
           <div className="mt-3 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white/80" data-testid="bulk-v2-progress">
+            <span className="mr-1 font-semibold text-white">⚡ Live:</span>
             {bulk.ok ? bulkProgressText(bulk.state) : <span className="text-red-300">The background queue could not be read: {bulk.error}</span>}
             {bulk.ok && bulk.state.lastNote ? (
               <span className="mt-1 block text-xs text-white/50">
@@ -258,10 +299,55 @@ export default async function BulkAiPage({
           {counts && counts.queued > 0 && (
             <form action={cancelBulkAiV2Action} className="mt-2">
               <button type="submit" className={CHIP_NEUTRAL} data-testid="bulk-v2-cancel">
-                Cancel the {counts.queued} waiting
+                Cancel the {counts.queued} waiting (live)
               </button>
             </form>
           )}
+
+          {/* OVERNIGHT status */}
+          <div className="mt-3 rounded-lg border border-indigo-400/20 bg-black px-3 py-2 text-sm text-white/80" data-testid="bulk-batch-progress">
+            <span className="mr-1 font-semibold text-white">🌙 Overnight:</span>
+            {overnight.ok ? batchProgressText(overnight.state) : <span className="text-red-300">The overnight batch could not be read: {overnight.error}</span>}
+            {overnight.ok && overnight.state.lastNote ? (
+              <span className="mt-1 block text-xs text-white/50">
+                Last check{overnight.state.lastRunAt ? ` (${new Date(overnight.state.lastRunAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })})` : ""}: {overnight.state.lastNote}
+              </span>
+            ) : null}
+            {overnight.ok && overnight.state.batches.length > 0 ? (
+              <ul className="mt-1 space-y-0.5 text-xs text-white/60" data-testid="bulk-batch-records">
+                {[...overnight.state.batches].reverse().slice(0, 6).map((b) => (
+                  <li key={b.id}>{batchRecordLine(b, overnight.readAtMs)}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          {overnight.ok && overnight.state.items.some((i) => i.status === "failed") && (
+            <details className="mt-2 text-xs text-amber-200" data-testid="bulk-batch-failures">
+              <summary className="cursor-pointer">{overnight.state.items.filter((i) => i.status === "failed").length} overnight product(s) failed - see why</summary>
+              <ul className="mt-1 space-y-0.5 pl-4">
+                {overnight.state.items
+                  .filter((i) => i.status === "failed")
+                  .slice(0, 50)
+                  .map((i) => (
+                    <li key={i.key}>
+                      <Link href={`/admin/products/${encodeURIComponent(i.key)}`} className="underline">
+                        {i.name}
+                      </Link>
+                      : {i.error ?? "no reason recorded"}
+                    </li>
+                  ))}
+              </ul>
+            </details>
+          )}
+          {overnightCounts && overnightCounts.queued > 0 && (
+            <form action={cancelOvernightBatchAction} className="mt-2">
+              <button type="submit" className={CHIP_NEUTRAL} data-testid="bulk-batch-cancel">
+                Take the {overnightCounts.queued} not yet sent out of the overnight batch
+              </button>
+            </form>
+          )}
+
+          {/* ONE picker, TWO buttons */}
           <form action={queueBulkAiV2Action} className="mt-4 space-y-3">
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-xs text-white/70">
@@ -276,11 +362,18 @@ export default async function BulkAiPage({
                 </select>
               </label>
               <Button type="submit" variant="special" size="sm" data-testid="bulk-v2-draft">
-                ✨ Draft with AI (all fields, background)
+                {ENRICH_MODES.live.button}
+              </Button>
+              <Button type="submit" variant="neutral" size="sm" formAction={queueOvernightBatchAction} disabled={!overnightOn} data-testid="bulk-batch-draft">
+                {ENRICH_MODES.overnight.button}
               </Button>
             </div>
+            <p className="text-[0.7rem] text-white/45">
+              Same products, your choice: ⚡ drafts them now at the normal price; 🌙 sends them to Google tonight at about half price and
+              the drafts are here tomorrow.
+            </p>
             <details className="text-xs text-white/60">
-              <summary className="cursor-pointer">Or tick products ({pickable.length} live products listed; up to {BULK_AI_V2_MAX_QUEUE} queue per press)</summary>
+              <summary className="cursor-pointer">Or tick products ({pickable.length} live products listed; up to {BULK_AI_V2_MAX_QUEUE} per live press)</summary>
               <div className="mt-2 grid max-h-72 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
                 {pickable.map((g) => (
                   <label key={g.posKey} className="flex items-center gap-2 rounded border border-white/10 bg-black px-2 py-1 text-white/80">

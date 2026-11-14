@@ -21,6 +21,8 @@ import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
 import { BULK_AI_V2_MAX_QUEUE, type QueueRequest } from "@/lib/enrichment/bulk-ai-v2-core";
 import { cancelBulkAiV2, queueBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
+import { cancelEnrichBatch, enrichBatchConfigured, queueEnrichBatch } from "@/lib/enrichment/enrich-batch-server";
+import { ENRICH_BATCH_MAX_QUEUE } from "@/lib/enrichment/enrich-batch-core";
 import { acceptAllMessage, acceptDraftWithEdit, acceptHighConfidenceForKey } from "@/lib/enrichment/accept-drafts-server";
 
 /**
@@ -161,10 +163,8 @@ function gridUrl(formData: FormData, flash: string, hash = "#review"): string {
   return `${BULK_URL}${base ? `?${base}` : ""}${hash}`;
 }
 
-/** Queue the ticked products, or every live product from one vendor. */
-export async function queueBulkAiV2Action(formData: FormData): Promise<void> {
-  const session = await requirePermission("products.enrich");
-  if (!isAiConfigured) redirect(`${BULK_URL}?error=` + encodeURIComponent("AI is not configured.") + "#queue");
+/** The ticked products, or every live product from one vendor (live menu rows only). */
+async function pickedProducts(formData: FormData): Promise<QueueRequest[]> {
   const ticked = new Set(formData.getAll("keys").map((k) => String(k).trim()).filter(Boolean));
   const vendor = String(formData.get("vendor") ?? "").trim();
   if (ticked.size === 0 && !vendor) {
@@ -177,6 +177,14 @@ export async function queueBulkAiV2Action(formData: FormData): Promise<void> {
     .filter((i) => ticked.has(i.source_item_id) || (vendor !== "" && (i.vendor_name ?? "").trim() === vendor))
     .map((i) => ({ key: i.source_item_id, name: i.name, vendor: (i.vendor_name ?? "").trim() || null }));
   if (reqs.length === 0) redirect(`${BULK_URL}?error=` + encodeURIComponent("None of those products is on the live menu.") + "#queue");
+  return reqs;
+}
+
+/** ⚡ LIVE: queue the ticked products, or every live product from one vendor. */
+export async function queueBulkAiV2Action(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  if (!isAiConfigured) redirect(`${BULK_URL}?error=` + encodeURIComponent("AI is not configured.") + "#queue");
+  const reqs = await pickedProducts(formData);
   let out: Awaited<ReturnType<typeof queueBulkAiV2>>;
   try {
     out = await queueBulkAiV2(reqs, session.userId);
@@ -184,11 +192,49 @@ export async function queueBulkAiV2Action(formData: FormData): Promise<void> {
     redirect(`${BULK_URL}?error=` + encodeURIComponent((err as Error).message) + "#queue");
   }
   revalidatePath(BULK_URL);
-  const parts = [`Queued ${out!.added} product${out!.added === 1 ? "" : "s"} for an all-fields AI draft.`];
+  const parts = [`⚡ Queued ${out!.added} product${out!.added === 1 ? "" : "s"} for a live all-fields AI draft.`];
   if (out!.already) parts.push(`${out!.already} already waiting.`);
   if (out!.capped) parts.push(`Only the first ${BULK_AI_V2_MAX_QUEUE} were added; queue the rest after these finish.`);
   parts.push("The worker starts within a minute; you can close this tab.");
   redirect(`${BULK_URL}?queued=` + encodeURIComponent(parts.join(" ")) + "#queue");
+}
+
+/**
+ * 🌙 OVERNIGHT (D244 R-3): the same products go to Google's Gemini Batch API
+ * as one batch (about half price; answers within 24 h). The drafts land in
+ * the same review grid as live drafts.
+ */
+export async function queueOvernightBatchAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  if (!enrichBatchConfigured()) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent("The overnight batch needs a Gemini key (AI_GEMINI_API_KEY in Vercel). Use ⚡ Draft now (live) until it is set.") + "#queue");
+  }
+  const reqs = await pickedProducts(formData);
+  let out: Awaited<ReturnType<typeof queueEnrichBatch>>;
+  try {
+    out = await queueEnrichBatch(reqs, session.userId);
+  } catch (err) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent((err as Error).message) + "#queue");
+  }
+  revalidatePath(BULK_URL);
+  const parts = [`🌙 Overnight: added ${out!.added} product${out!.added === 1 ? "" : "s"} to the overnight batch.`];
+  if (out!.already) parts.push(`${out!.already} already in it.`);
+  if (out!.capped) parts.push(`Only the first ${ENRICH_BATCH_MAX_QUEUE} were added.`);
+  parts.push("They go to Google within a few minutes; the drafts are back within 24 hours (usually a few). You can close this tab.");
+  redirect(`${BULK_URL}?queued=` + encodeURIComponent(parts.join(" ")) + "#queue");
+}
+
+/** 🌙 Take back every product not yet sent to Google. */
+export async function cancelOvernightBatchAction(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  let n = 0;
+  try {
+    n = await cancelEnrichBatch(session.userId);
+  } catch (err) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent((err as Error).message) + "#queue");
+  }
+  revalidatePath(BULK_URL);
+  redirect(`${BULK_URL}?queued=` + encodeURIComponent(`🌙 Took ${n} product${n === 1 ? "" : "s"} out of the overnight batch (any already at Google are still saved when Google answers).`) + "#queue");
 }
 
 /** Cancel everything still waiting (a product already drafting finishes). */

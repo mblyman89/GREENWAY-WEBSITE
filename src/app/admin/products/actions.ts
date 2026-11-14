@@ -26,6 +26,7 @@ import {
 import { backHref } from "@/lib/admin/back-link-core";
 // D244 E-1b (F-40): every detail redirect keeps the list's `back`.
 import { cleanBack, cleanKey, detailUrl, parseStatusIntent } from "@/lib/enrichment/detail-nav-core";
+import { enrichBatchConfigured, queueEnrichBatch } from "@/lib/enrichment/enrich-batch-server";
 import {
   generateProductDescription,
   generateProductTags,
@@ -432,6 +433,32 @@ export async function bulkSetEnrichmentStatusAction(formData: FormData): Promise
   redirect(
     withFlash("ok", bulkOutcomeMessage(status!, changed.length, plan.skipped, { capped, cap: BULK_STATUS_MAX, writebackDone, writebackLeft })),
   );
+}
+
+/**
+ * D244 R-3: 🌙 put this product in the overnight Gemini batch (about half
+ * price; the drafts come back within 24 h into the same AI panel).
+ */
+export async function queueProductOvernightAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "").trim();
+  const listBack = cleanBack(formData.get("back"));
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!enrichBatchConfigured()) {
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("The overnight batch needs a Gemini key (AI_GEMINI_API_KEY in Vercel). Use ⚡ Enrich now (live)."), "#ai"));
+  }
+  const published = await getPublishedVersion();
+  const row = published ? await getItemBySourceKey(published.id, key) : null;
+  if (!row) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("This product is not on the live menu, so it cannot go in the overnight batch."), "#ai"));
+  let msg = "";
+  try {
+    const out = await queueEnrichBatch([{ key, name: row!.name, vendor: (row!.vendor_name ?? "").trim() || null }], session.userId);
+    msg = out.added ? "🌙 Added to the overnight batch. The drafts appear in the AI panel within 24 hours (usually a few)." : "🌙 This product is already in the overnight batch.";
+  } catch (err) {
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent((err as Error).message), "#ai"));
+  }
+  revalidatePath(`/admin/products/${key}`);
+  redirect(detailUrl(key, listBack, "?saved=1&note=" + encodeURIComponent(msg), "#ai"));
 }
 
 /** Generate an AI draft (description or tags) for a product. */
