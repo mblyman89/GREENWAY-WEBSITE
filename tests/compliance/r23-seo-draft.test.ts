@@ -276,6 +276,10 @@ describe("R23 fix 4 - the public product page serves the accepted SEO", () => {
     expect(page).toContain("seoSuggestionDisplay(s.suggested_value)");
     const actions = read("src/app/admin/products/actions.ts");
     // The SEO accept still runs through the shared compliance gate first.
-    expect(actions.indexOf("acceptWithComplianceGate(sugg!)")).toBeLessThan(actions.indexOf("sugg!.field_key === SEO_FIELD_KEY"));
+    // D244 E-4: the field writes moved into the shared applyAcceptedValue
+    // (also used by "Accept all"); the gate still runs before it.
+    expect(actions).toContain("if (sugg.field_key === SEO_FIELD_KEY) {");
+    expect(actions.indexOf("acceptWithComplianceGate(sugg!)")).toBeGreaterThan(-1);
+    expect(actions.indexOf("acceptWithComplianceGate(sugg!)")).toBeLessThan(actions.indexOf("await applyAcceptedValue(key, sugg!, session.userId)"));
   });
 });
