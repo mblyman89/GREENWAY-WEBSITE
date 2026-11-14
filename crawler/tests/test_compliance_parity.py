@@ -76,6 +76,23 @@ def test_owner_banned_phrase_blocks():
     assert r.ok is False
 
 
+def test_r14_cure_process_is_heads_up_not_block():
+    r = check_compliance("Hang-dried and slow cured for 21 days.", extra_banned=["cure", "cured"])
+    assert r.ok is True
+    assert len(r.flags) > 0  # never silent: a heads-up
+    assert check_compliance("This strain cures anxiety.").ok is False
+    assert check_compliance("A miracle cure.").ok is False
+
+
+def test_r14_fixture_examples_match_the_site():
+    from app.compliance import CONTEXT_RULES, pattern_blocks
+
+    blocks = [p.pattern for p in _RISKY_PATTERNS if p.severity == "block"]
+    for ex in CONTEXT_RULES["examples"]:
+        blocked = any(pat.search(ex["text"]) and pattern_blocks(ex["text"], pat) for pat in blocks)
+        assert blocked is (not ex["ok"]), ex["text"]
+
+
 if __name__ == "__main__":
     import traceback
 

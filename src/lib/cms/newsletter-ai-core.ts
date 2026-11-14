@@ -25,6 +25,7 @@
  * Maybe have a feature that lets me use flux from the editor."
  */
 import type { ThisWeekFeed } from "./this-week-feed-core";
+import { claimHits } from "@/lib/ai/compliance-context-core";
 import {
   newBlockId,
   normalizeCanvas,
@@ -85,7 +86,7 @@ export function checkAiCopy(text: string, facts: string): AiIssue[] {
   if (bad.length) issues.push({ level: "must-fix", text: `These amounts are not in this week's deals (Q-22-8): ${[...new Set(bad)].join(", ")}.` });
   const links = [...new Set(text.match(URL_RE) ?? [])].filter((u) => !facts.includes(u));
   if (links.length) issues.push({ level: "must-fix", text: `Links the AI made up: ${links.join(", ")}.` });
-  const health = [...new Set((text.match(HEALTH_RE) ?? []).map((m) => m.toLowerCase()))];
+  const health = claimHits(text, HEALTH_RE); // D244 R-14: "slow cured" is the curing process
   if (health.length) issues.push({ level: "must-fix", text: `Health or medical wording is not allowed in the newsletter: ${health.join(", ")}.` });
   return issues;
 }

@@ -428,6 +428,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/products/bulk-ai",
       },
       {
+        q: "Why is the word cured allowed now? Will cure block my description?",
+        a: "Cured is fine. Cannabis is dried and then cured, so the compliance check reads the words before and after a blocked word, in the same sentence. The cure process (slow cured for 21 days, our cure process, properly cured flower, cured resin) shows a heads-up and never blocks Accept, Approve or Attach facts. A medical use still blocks: cures anxiety, a cure for insomnia, a miracle cure, cures everything, a cure-all, or a medical word in the same sentence. The same goes for other everyday uses, such as a sweet treat, keep out of reach of children, a safe place, healthy living soil and isopropyl alcohol. SOP-10 section 4.15.",
+        href: "/admin/staffing/sop-library/sop-10",
+      },
+      {
         q: "Can I remove text from several photos at once (Copilot or Vendor kits)?",
         a: "Yes. On the Copilot and on Vendor kits, under the photos, is Remove text from several photos. Tick the photos, drag a box over the text on each one (or press Find the text on each), then press Remove text once: FLUX Fill fixes them one after the next, and each shows Before and After as it finishes. On the Copilot press Attach or Attach as cover; on Vendor kits press Use as the kit photo, then Apply. Nothing is attached until you press. Facts and AI first, photo last: attaching a photo publishes the product and it leaves the list, by design.",
         href: "/admin/products/copilot",
