@@ -7,13 +7,15 @@
  * fields already on record (for the diff + the prompt). Then runs one
  * generateProductAllFields call. Shared by the detail-page button (E-4) and
  * the bulk background job (E-5). Never throws on the reads; says so instead.
+ * D244 R-3: prepareAllFields is the ONE reader; the overnight Gemini batch
+ * builds its request from it too (buildAllFieldsRequestForProduct).
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getEnrichment } from "@/lib/enrichment/store";
 import type { ProductEnrichment } from "@/lib/enrichment/types";
-import { generateProductAllFields, type AllFieldsCurrent, type AllFieldsOutcome } from "@/lib/ai/all-fields-draft";
+import { buildAllFieldsRequest, generateProductAllFields, type AllFieldsCurrent, type AllFieldsOutcome, type AllFieldsRequest } from "@/lib/ai/all-fields-draft";
 import type { ProductFacts } from "@/lib/ai/suggestions";
 import { MAX_PHOTOS, sensoryText, type PhotoFacts } from "@/lib/enrichment/ai-draft-v2-core";
 import { buildLotEvidence, type LotEvidence, type LotEvidenceLab, type LotEvidenceLot } from "@/lib/enrichment/lot-evidence-core";
@@ -159,12 +161,11 @@ async function acceptedFacts(key: string): Promise<{ sensory: string | null; eff
   }
 }
 
-/** Run the all-fields draft for one product. Throws only on the AI call. */
-export async function draftAllFieldsForProduct(
+/** Everything the all-fields draft reads about one product (live and overnight share it). */
+export async function prepareAllFields(
   key: string,
   item: DraftItem,
-  actorId: string | null,
-): Promise<AllFieldsOutcome & { photos: number; vendor: string | null; lots: number }> {
+): Promise<{ facts: ProductFacts; photos: PhotoFacts[]; current: AllFieldsCurrent; lots: LotEvidence | null; vendor: string | null }> {
   const enrichment = await getEnrichment(key).catch(() => null);
   const [vendor, photos, accepted, lots] = await Promise.all([
     vendorName(enrichment, item),
@@ -182,13 +183,23 @@ export async function draftAllFieldsForProduct(
     thc: item.thc || null,
     cbd: item.cbd || null,
   };
-  const out = await generateProductAllFields(
-    key,
-    facts,
-    photos,
-    { ...currentFields(enrichment, accepted.sensory, accepted.effects), ...cardFacts(item) },
-    actorId,
-    lots,
-  );
+  const current = { ...currentFields(enrichment, accepted.sensory, accepted.effects), ...cardFacts(item) };
+  return { facts, photos, current, lots, vendor };
+}
+
+/** D244 R-3: the overnight batch's request for one product (same prompt + evidence as live). */
+export async function buildAllFieldsRequestForProduct(key: string, item: DraftItem): Promise<AllFieldsRequest> {
+  const p = await prepareAllFields(key, item);
+  return buildAllFieldsRequest(p.facts, p.photos, p.current, p.lots);
+}
+
+/** Run the all-fields draft for one product. Throws only on the AI call. */
+export async function draftAllFieldsForProduct(
+  key: string,
+  item: DraftItem,
+  actorId: string | null,
+): Promise<AllFieldsOutcome & { photos: number; vendor: string | null; lots: number }> {
+  const { facts, photos, current, lots, vendor } = await prepareAllFields(key, item);
+  const out = await generateProductAllFields(key, facts, photos, current, actorId, lots);
   return { ...out, photos: Math.min(photos.length, MAX_PHOTOS), vendor, lots: lots ? lots.ids.filter((i) => i.startsWith("lot:")).length : 0 };
 }
