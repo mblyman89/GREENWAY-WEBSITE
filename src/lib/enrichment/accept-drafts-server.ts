@@ -2,24 +2,37 @@
  * src/lib/enrichment/accept-drafts-server.ts  (D244 E-5)
  *
  * The ONE place an accepted AI draft is written to a product. Shared by the
- * product page (Accept, "Accept all >= 85%", D244 E-4) and the Bulk AI review
- * grid (per-product "Accept all >= 85%" and "Accept all >= 85% & publish",
+ * product page (Accept, "Accept all >= 80%", D244 E-4) and the Bulk AI review
+ * grid (per-product "Accept all >= 80%" and "Accept all >= 80% & publish",
  * D244 E-5), so a fix to one fixes both. Moved here unchanged from
  * src/app/admin/products/actions.ts (a "use server" file may only export
  * actions, and the grid needs the same writer).
  *
- * Every accept still goes through acceptWithComplianceGate first; best
- * guesses never count (owner Q4 open); the bar is ACCEPT_ALL_THRESHOLD (owner
- * Q3, 85 vs 90, open).
+ * Every accept still goes through acceptWithComplianceGate first. Round 2
+ * owner answers (verbatim): Q3 "lets drop it to 80%."; Q4 "best guesses
+ * should auto accepted, but flagged so we can take a closer look once we
+ * have time to." An accepted best guess keeps `|best-guess` on its row, so
+ * listNeedsCloserLook finds it until a person presses "Looks right"
+ * (markBestGuessChecked adds `|checked`).
  */
 import "server-only";
 import { ensureEnrichment, updateEnrichment } from "@/lib/enrichment/store";
 import { listSuggestions, reviewSuggestion } from "@/lib/ai/suggestions";
+import type { AiSuggestion } from "@/lib/enrichment/types";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 import { ALLOWED_PRODUCT_TAGS } from "@/lib/ai/schemas/product";
 import { SEO_FIELD_KEY, parseSeoSuggestion } from "@/lib/enrichment/seo-draft-core";
-import { ACCEPT_ALL_THRESHOLD, acceptAllEligible, type SuggestionLite } from "@/lib/enrichment/ai-draft-v2-core";
+import {
+  ACCEPT_ALL_THRESHOLD,
+  acceptAllEligible,
+  markCheckedSource,
+  needsCloserLook,
+  parseEvidenceSource,
+  type SuggestionLite,
+} from "@/lib/enrichment/ai-draft-v2-core";
 
 const TAGS = new Set<string>(ALLOWED_PRODUCT_TAGS);
 
@@ -64,12 +77,21 @@ export async function applyAcceptedValue(
 
 export type AcceptAllOutcome =
   | { ok: false; error: string }
-  | { ok: true; eligible: number; accepted: string[]; blocked: string[]; writeback: Awaited<ReturnType<typeof writeBackOnPublish>> };
+  | {
+      ok: true;
+      eligible: number;
+      accepted: string[];
+      blocked: string[];
+      /** Accepted fields that were best guesses (flagged for a closer look). */
+      flagged: string[];
+      writeback: Awaited<ReturnType<typeof writeBackOnPublish>>;
+    };
 
 /**
- * Accept every eligible draft (newest per field, >= ACCEPT_ALL_THRESHOLD, not
- * a best guess) for ONE product, each through the compliance gate. Never
- * throws for a single field: a blocked or unreadable one is named in blocked.
+ * Accept every eligible draft (newest per field, >= ACCEPT_ALL_THRESHOLD, or
+ * a best guess - accepted but flagged) for ONE product, each through the
+ * compliance gate. Never throws for a single field: a blocked or unreadable
+ * one is named in blocked.
  */
 export async function acceptHighConfidenceForKey(key: string, userId: string): Promise<AcceptAllOutcome> {
   const pending = await listSuggestions("product", key, "pending").catch(() => null);
@@ -78,6 +100,7 @@ export async function acceptHighConfidenceForKey(key: string, userId: string): P
   const byId = new Map(pending.map((p) => [p.id, p] as const));
   const accepted: string[] = [];
   const blocked: string[] = [];
+  const flagged: string[] = [];
   for (const id of ids) {
     const sugg = byId.get(id)!;
     const gate = await acceptWithComplianceGate(sugg);
@@ -92,11 +115,65 @@ export async function acceptHighConfidenceForKey(key: string, userId: string): P
     }
     await reviewSuggestion(id, "accepted", userId);
     accepted.push(sugg.field_key);
+    if (parseEvidenceSource(sugg.source).bestGuess) flagged.push(sugg.field_key);
   }
   const writeback = accepted.length ? await writeBackOnPublish(key, userId) : null;
-  return { ok: true, eligible: ids.length, accepted, blocked, writeback };
+  return { ok: true, eligible: ids.length, accepted, blocked, flagged, writeback };
 }
 
-export function acceptAllMessage(accepted: string[], blocked: string[]): string {
-  return `Accepted ${accepted.length} draft${accepted.length === 1 ? "" : "s"} at or above ${ACCEPT_ALL_THRESHOLD}%${accepted.length ? ` (${accepted.join(", ")})` : ""}.${blocked.length ? ` Skipped ${blocked.join(", ")} - review those by hand.` : ""}`;
+export function acceptAllMessage(accepted: string[], blocked: string[], flagged: string[] = []): string {
+  return `Accepted ${accepted.length} draft${accepted.length === 1 ? "" : "s"} (${ACCEPT_ALL_THRESHOLD}% or better, plus best guesses)${accepted.length ? `: ${accepted.join(", ")}` : ""}.${flagged.length ? ` ${flagged.length} best guess${flagged.length === 1 ? " is" : "es are"} live and flagged for a closer look (${flagged.join(", ")}).` : ""}${blocked.length ? ` Skipped ${blocked.join(", ")} - review those by hand.` : ""}`;
+}
+
+/** Most accepted rows scanned for the "Needs a closer look" list. */
+export const CLOSER_LOOK_SCAN = 2000;
+
+/**
+ * Accepted best guesses nobody has checked yet, newest first. `entityId`
+ * narrows to one product. Reads accepted product rows and filters in code
+ * (the flag lives inside `source`). Returns null when the read fails, so a
+ * page can say so instead of showing "nothing to check".
+ */
+export async function listNeedsCloserLook(opts: { entityId?: string; limit?: number } = {}): Promise<AiSuggestion[] | null> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    let q = admin
+      .from("ai_suggestions")
+      .select("*")
+      .eq("entity_type", "product")
+      .eq("status", "accepted")
+      .not("source", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(CLOSER_LOOK_SCAN);
+    if (opts.entityId) q = q.eq("entity_id", opts.entityId);
+    const { data, error } = await q;
+    if (error) return null;
+    const rows = ((data as AiSuggestion[] | null) ?? []).filter((r) => needsCloserLook(r));
+    return opts.limit ? rows.slice(0, opts.limit) : rows;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Looks right": a person checked an accepted best guess. Adds `|checked` to
+ * its source (it leaves the list; the badge and evidence stay) and stamps
+ * reviewed_by / reviewed_at. Returns the product key, or an error sentence.
+ */
+export async function markBestGuessChecked(id: string, userId: string): Promise<{ ok: true; key: string; field: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("ai_suggestions").select("id, entity_id, field_key, status, source").eq("id", id).maybeSingle();
+  if (error || !data) return { ok: false, error: "That draft could not be found." };
+  const row = data as { id: string; entity_id: string; field_key: string; status: string; source: string | null };
+  if (row.status !== "accepted") return { ok: false, error: "Only an accepted draft can be marked as checked." };
+  const next = markCheckedSource(row.source);
+  if (!next) return { ok: false, error: "That is not an all-fields draft." };
+  const { error: upErr } = await admin
+    .from("ai_suggestions")
+    .update({ source: next, reviewed_by: userId, reviewed_at: new Date().toISOString() })
+    .eq("id", id);
+  if (upErr) return { ok: false, error: upErr.message };
+  return { ok: true, key: row.entity_id, field: row.field_key };
 }

@@ -16,7 +16,7 @@
  * Owner Q6 (Batch API) is OPEN: this slice uses the live call only.
  * Pure: no I/O, no clock (now is passed in). Self-tests at the bottom.
  */
-import { ACCEPT_ALL_THRESHOLD, isDraftFieldKey, parseEvidenceSource } from "./ai-draft-v2-core";
+import { isAcceptAllCandidate, isDraftFieldKey, parseEvidenceSource } from "./ai-draft-v2-core";
 
 export const BULK_AI_V2_KEY = "enrichment_bulk_ai_v2";
 export const BULK_AI_V2_LABEL = "Product enrichment: background all-fields AI drafts (D244 E-5)";
@@ -279,11 +279,13 @@ export function bulkRunNote(r: { drafted: number; failed: number; left: number; 
 // Review grid v2 (filter + group)
 // ---------------------------------------------------------------------------
 
-export type ReviewMinConfidence = 0 | 50 | 70 | 85;
+export type ReviewMinConfidence = 0 | 50 | 70 | 80 | 90;
 
 export function parseReviewMin(raw: unknown): ReviewMinConfidence {
   const n = Number(raw);
-  return n === 50 || n === 70 || n === 85 ? n : 0;
+  // 85 was the old accept bar (round 1); a saved link with it now means 80.
+  if (n === 85) return 80;
+  return n === 50 || n === 70 || n === 80 || n === 90 ? n : 0;
 }
 
 export type ReviewRow = {
@@ -303,23 +305,26 @@ export type ReviewRow = {
 export function reviewGroups<T extends ReviewRow>(
   rows: T[],
   opts: { vendorByKey: Map<string, string | null>; vendor: string; min: ReviewMinConfidence },
-): { key: string; vendor: string | null; rows: T[]; eligible: number }[] {
+): { key: string; vendor: string | null; rows: T[]; eligible: number; bestGuesses: number }[] {
   const newest = new Map<string, T>();
   for (const r of rows) {
     const k = `${r.entity_id}\u0000${r.field_key}`;
     const cur = newest.get(k);
     if (!cur || r.created_at > cur.created_at) newest.set(k, r);
   }
-  const groups = new Map<string, { key: string; vendor: string | null; rows: T[]; eligible: number }>();
+  const groups = new Map<string, { key: string; vendor: string | null; rows: T[]; eligible: number; bestGuesses: number }>();
   for (const r of newest.values()) {
     const vendor = opts.vendorByKey.get(r.entity_id) ?? null;
     if (opts.vendor && (vendor ?? "") !== opts.vendor) continue;
     const pct = Math.round((r.confidence ?? 0) * 100);
     if (pct < opts.min) continue;
-    const g = groups.get(r.entity_id) ?? { key: r.entity_id, vendor, rows: [], eligible: 0 };
+    const g = groups.get(r.entity_id) ?? { key: r.entity_id, vendor, rows: [], eligible: 0, bestGuesses: 0 };
     g.rows.push(r);
-    const ev = parseEvidenceSource(r.source);
-    if (ev.v2 && !ev.bestGuess && isDraftFieldKey(r.field_key) && pct >= ACCEPT_ALL_THRESHOLD) g.eligible += 1;
+    // Same rule as Accept all (round 2: >= 80%, best guesses included + flagged).
+    if (isDraftFieldKey(r.field_key) && isAcceptAllCandidate(r)) {
+      g.eligible += 1;
+      if (parseEvidenceSource(r.source).bestGuess) g.bestGuesses += 1;
+    }
     groups.set(r.entity_id, g);
   }
   return [...groups.values()].sort((a, b) => (a.vendor ?? "~").localeCompare(b.vendor ?? "~") || a.key.localeCompare(b.key));
@@ -405,7 +410,7 @@ export function __runBulkAiV2Tests(): { passed: number; failed: number } {
   eq(bulkRunNote({ drafted: 1, failed: 0, left: 0 }), "Drafted 1 product, the queue is empty.", "run note");
 
   // review grid
-  eq([parseReviewMin("85"), parseReviewMin("x"), parseReviewMin(70)], [85, 0, 70], "parse min");
+  eq([parseReviewMin("80"), parseReviewMin("x"), parseReviewMin(70), parseReviewMin("85"), parseReviewMin(90)], [80, 0, 70, 80, 90], "parse min (old 85 -> 80)");
   const rows: ReviewRow[] = [
     { id: "1", entity_id: "p1", field_key: "description", confidence: 0.9, source: "ai2:pos", created_at: "2" },
     { id: "0", entity_id: "p1", field_key: "description", confidence: 0.2, source: "ai2:pos", created_at: "1" },
@@ -414,9 +419,9 @@ export function __runBulkAiV2Tests(): { passed: number; failed: number } {
   ];
   const vbk = new Map<string, string | null>([["p1", "V1"], ["p2", "V2"]]);
   const g = reviewGroups(rows, { vendorByKey: vbk, vendor: "", min: 0 });
-  eq(g.map((x) => [x.key, x.rows.map((r) => r.id), x.eligible]), [["p1", ["1", "2"], 1], ["p2", ["3"], 0]], "groups newest + eligible");
+  eq(g.map((x) => [x.key, x.rows.map((r) => r.id), x.eligible, x.bestGuesses]), [["p1", ["1", "2"], 1, 0], ["p2", ["3"], 1, 1]], "groups newest + eligible (best guess counted + flagged)");
   eq(reviewGroups(rows, { vendorByKey: vbk, vendor: "V2", min: 0 }).map((x) => x.key), ["p2"], "vendor filter");
-  eq(reviewGroups(rows, { vendorByKey: vbk, vendor: "", min: 85 }).map((x) => x.rows.map((r) => r.id)), [["1"], ["3"]], "min filter");
+  eq(reviewGroups(rows, { vendorByKey: vbk, vendor: "", min: 80 }).map((x) => x.rows.map((r) => r.id)), [["1"], ["3"]], "min filter");
 
   return { passed, failed };
 }

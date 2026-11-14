@@ -277,19 +277,20 @@ describe("D244 E-5 - the background run", () => {
   });
 });
 
-describe("D244 E-5 - review grid: accept all >= 85% (and publish) per product", () => {
-  it("accepts only the >= 85% non-best-guess drafts, then publishes a draft WITH a photo", async () => {
+describe("D244 E-5 - review grid: accept all >= 80% (and publish) per product", () => {
+  it("accepts the >= 80% drafts plus best guesses (flagged), then publishes a draft WITH a photo", async () => {
     await run(queueBulkAiV2Action(fd({ keys: ["k-1"] })));
     await runBulkAiV2({ now: () => T0, token: "x" });
     const to = await run(bulkAcceptAllForProductAction(fd({ key: "k-1", publish: "1", vendor_filter: "Hollingsworth", min: "70" })));
     expect(to.startsWith("/admin/products/bulk-ai?vendor=Hollingsworth&min=70&accepted_note=")).toBe(true);
     expect(decodeURIComponent(to)).toContain("Published.");
     const status = Object.fromEntries(st.db.rows("ai_suggestions").map((r) => [r.field_key, r.status]));
-    expect(status).toMatchObject({ display_name: "accepted", description: "accepted", short_description: "accepted", seo: "accepted", sensory: "pending", effects: "pending", tags: "pending" });
+    expect(status).toMatchObject({ display_name: "accepted", description: "accepted", short_description: "accepted", seo: "accepted", sensory: "accepted", effects: "accepted", tags: "accepted" });
+    expect(decodeURIComponent(to)).toContain("best guesses are live and flagged for a closer look");
     const e = st.db.rows("product_enrichments").find((r) => r.pos_product_key === "k-1")!;
     expect(e.status).toBe("published");
     expect(e.display_name).toBe("Phat Panda Blue Dream 3.5g");
-    expect(st.audits.at(-1)).toMatchObject({ action: "product.bulk_ai_accepted_all", entityId: "k-1", after: { threshold: 85, andPublish: true, published: true } });
+    expect(st.audits.at(-1)).toMatchObject({ action: "product.bulk_ai_accepted_all", entityId: "k-1", after: { threshold: 80, andPublish: true, published: true } });
   });
   it("Accept & publish never publishes a product without a photo (still accepts the drafts)", async () => {
     await run(queueBulkAiV2Action(fd({ keys: ["k-2"] })));
@@ -299,11 +300,20 @@ describe("D244 E-5 - review grid: accept all >= 85% (and publish) per product", 
     expect(st.db.rows("product_enrichments").find((r) => r.pos_product_key === "k-2")!.status).toBe("draft");
   });
   it("nothing eligible -> says so, accepts nothing", async () => {
-    st.reply = { ...st.reply, display_name: { value: "X", ...meta(60, ["pos"]) }, description: { value: "Y copy.", ...meta(60, ["pos"]) }, short_description: { value: "Z", ...meta(10, ["pos"]) }, seo: { title: "", meta: "", ...meta(10, ["pos"]) } };
+    st.reply = {
+      ...st.reply,
+      display_name: { value: "X", ...meta(45, ["pos"]) },
+      description: { value: "Y copy.", ...meta(45, ["pos"]) },
+      short_description: { value: "Z", ...meta(10, ["pos"]) },
+      seo: { title: "", meta: "", ...meta(10, ["pos"]) },
+      sensory: { aroma_notes: [], flavor_notes: [], terpenes: [], ...meta(0, []) },
+      effects: { values: [], ...meta(0, []) },
+      tags: { values: [], ...meta(0, []) },
+    };
     await run(queueBulkAiV2Action(fd({ keys: ["k-1"] })));
     await runBulkAiV2({ now: () => T0, token: "z" });
     const to = await run(bulkAcceptAllForProductAction(fd({ key: "k-1" })));
-    expect(decodeURIComponent(to)).toContain("No draft for this product is at or above 85%");
+    expect(decodeURIComponent(to)).toContain("No draft for this product is at or above 80% and none is a best guess");
     expect(st.db.rows("ai_suggestions").every((r) => r.status === "pending")).toBe(true);
   });
 });

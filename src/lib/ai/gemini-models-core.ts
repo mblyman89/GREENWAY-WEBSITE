@@ -7,6 +7,7 @@
  *
  * Sources (Google AI for Developers, read 2026 for R66):
  *   - Thinking guide, "thinking levels" table:
+ *       gemini-4-carbon         default medium  levels low, medium, high
  *       gemini-4-argon          default medium  levels low, medium, high
  *       gemini-3.8-flash        default medium  levels low, medium, high
  *       gemini-3.6-flash        default medium  levels minimal, low, medium, high
@@ -54,6 +55,8 @@ const ALL: readonly ThinkingLevel[] = ["minimal", "low", "medium", "high"];
 
 /** The capability table. Add a row here when Google ships a model. */
 export const GEMINI_MODEL_TABLE: Readonly<Record<string, Row>> = {
+  // D244 round 2: Gemini 4 Carbon (strongest reasoning; temperature ignored; >= 32K output recommended).
+  "gemini-4-carbon": { levels: LMH, def: "medium", maxOut: 65_536 },
   "gemini-4-argon": { levels: LMH, def: "medium", maxOut: 65_536 },
   "gemini-3.8-flash": { levels: LMH, def: "medium", maxOut: 65_536 },
   "gemini-3.7-flash": { levels: LMH, def: "medium", maxOut: 65_536, routedTo: "gemini-3.8-flash" },
@@ -275,6 +278,7 @@ export function __runGeminiModelsCoreTests(): { passed: number; failed: number }
   const fut = resolveGeminiModel("gemini-3.9-flash");
   ok(!fut.known && fut.id === "gemini-3.9-flash" && fut.thinkingLevels.join() === "low,medium,high" && fut.defaultThinking === "medium", "unknown future id = safe defaults");
   ok(resolveGeminiModel("gemini-4-argon").defaultThinking === "medium", "argon default medium");
+  ok(resolveGeminiModel("gemini-4-carbon").known && !resolveGeminiModel("gemini-4-carbon").thinkingLevels.includes("minimal"), "carbon known, no minimal");
   ok(resolveGeminiModel("").id === "gemini" && !resolveGeminiModel(null).known, "blank id safe");
   ok(isGeminiModelId("Gemini-3.8-flash") && !isGeminiModelId("gpt-4o"), "gemini detection");
   // clamp

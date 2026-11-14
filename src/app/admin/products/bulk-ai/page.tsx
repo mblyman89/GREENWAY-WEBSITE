@@ -9,8 +9,12 @@ import { getEnrichmentsForKeys, computeGaps } from "@/lib/enrichment/store";
 import { listPendingByType } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { isAiConfigured } from "@/lib/ai/provider";
-import { aiHeavyModelId, aiLightModelId, aiMode } from "@/lib/ai/router";
+import { aiMode } from "@/lib/ai/router";
 import { isReasoningModel } from "@/lib/ai/chat-payload-core";
+import { enrichModel } from "@/lib/ai/enrich-model";
+import { ENRICH_RECOMMENDED, enrichModelLine } from "@/lib/ai/enrich-model-core";
+import { listNeedsCloserLook } from "@/lib/enrichment/accept-drafts-server";
+import { markBestGuessCheckedAction } from "@/app/admin/products/actions";
 import {
   bulkGenerateDescriptionsAction,
   bulkAcceptSuggestionAction,
@@ -64,7 +68,8 @@ export default async function BulkAiPage({
   const { generated, failed, reason, accepted, error, back, queued, accepted_note } = sp;
   const vendorFilter = String(sp.vendor ?? "").trim();
   const minFilter = parseReviewMin(sp.min);
-  const draftModel = aiMode === "sprint" ? aiHeavyModelId : aiLightModelId;
+  // D244 R-1: the all-fields drafts use the dedicated enrichment model (AI_ENRICH_MODEL), whatever AI_MODE says.
+  const draftModel = enrichModel.model;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -120,6 +125,8 @@ export default async function BulkAiPage({
   const failedItems = bulk.ok ? bulk.state.items.filter((i) => i.status === "failed") : [];
   const counts = bulk.ok ? bulkCounts(bulk.state) : null;
   const pickable = gaps.slice(0, 400);
+  // D244 R-1: accepted best guesses nobody has checked yet.
+  const closerLook = await listNeedsCloserLook({ limit: 60 });
 
   return (
     <div>
@@ -137,10 +144,15 @@ export default async function BulkAiPage({
               "Pick the products you want descriptions for (we pre-list ones missing copy).",
               "Click Draft — the AI writes a compliant draft for each.",
               "Review each draft below and Accept or Reject it.",
-              "Accepted drafts save to the product; publish the product to go live.",
+              "Accept all takes every draft at 80% or better plus the AI’s best guesses; best guesses are flagged in “Needs a closer look”.",
+              "Accepted copy saves to the product. A product goes live on its own once a person attaches a published photo.",
             ]}
           >
-            <p>Nothing publishes automatically. Every AI draft is a suggestion you approve.</p>
+            <p>
+              The AI never publishes anything by itself. Drafts become live only when you accept them, and a product
+              publishes only after a person attaches a photo. Best guesses are accepted but flagged &mdash; click
+              &ldquo;Looks right&rdquo; in &ldquo;Needs a closer look&rdquo; once you have checked one.
+            </p>
           </HelpPanel>
         }
         action={
@@ -167,10 +179,14 @@ export default async function BulkAiPage({
         )}
         {isAiConfigured && (
           <p className="text-xs text-white/50">
-            Drafting model: <span className="font-mono text-white/70">{draftModel}</span> ({aiMode} mode)
+            Drafting model: <span className="font-mono text-white/70" data-testid="enrich-model-line">{enrichModelLine(enrichModel)}</span>
             {isReasoningModel(draftModel)
               ? " — reasoning-class model: requests use max_completion_tokens and default temperature automatically."
               : ""}
+            <span className="block text-white/40">
+              The all-fields drafts always use this model (set <code>AI_ENRICH_MODEL</code> in Vercel; {aiMode} mode does not change it).
+              Recommended: <span className="font-mono">{ENRICH_RECOMMENDED.live.model}</span> with effort {ENRICH_RECOMMENDED.live.effort} ({ENRICH_RECOMMENDED.live.why}).
+            </span>
           </p>
         )}
         {queued && (
@@ -330,7 +346,8 @@ export default async function BulkAiPage({
                 <option value="0">Any</option>
                 <option value="50">50%</option>
                 <option value="70">70%</option>
-                <option value="85">85%</option>
+                <option value="80">80%</option>
+                <option value="90">90%</option>
               </select>
             </label>
             <button type="submit" className={CHIP_NEUTRAL}>
@@ -356,7 +373,7 @@ export default async function BulkAiPage({
                             <input type="hidden" name="vendor_filter" value={vendorFilter} />
                             <input type="hidden" name="min" value={String(minFilter)} />
                             <button type="submit" className={CHIP_ACTION} data-testid="bulk-v2-accept-all">
-                              Accept all ≥ {ACCEPT_ALL_THRESHOLD}% ({g.eligible})
+                              Accept all ≥ {ACCEPT_ALL_THRESHOLD}% ({g.eligible}{g.bestGuesses ? `, ${g.bestGuesses} best guess${g.bestGuesses === 1 ? "" : "es"} flagged` : ""})
                             </button>
                           </form>
                           <form action={bulkAcceptAllForProductAction}>
@@ -370,7 +387,7 @@ export default async function BulkAiPage({
                           </form>
                         </>
                       ) : (
-                        <span className="text-[0.7rem] text-white/40">Nothing at or above {ACCEPT_ALL_THRESHOLD}% (best guesses never count) - review on the product page.</span>
+                        <span className="text-[0.7rem] text-white/40">Nothing at or above {ACCEPT_ALL_THRESHOLD}% - review on the product page.</span>
                       )}
                       <Link href={`/admin/products/${encodeURIComponent(g.key)}#ai`} className="self-center text-xs text-white/50 hover:text-white">
                         Open product ↗
@@ -415,6 +432,44 @@ export default async function BulkAiPage({
                 </div>
               ))}
             </div>
+          )}
+        </section>
+
+        {/* D244 R-1: accepted best guesses, flagged for a closer look */}
+        <section id="closer-look" data-testid="bulk-closer-look">
+          <h2 className="mb-1 text-sm font-bold text-white">
+            Needs a closer look <span className="text-white/40">({closerLook ? closerLook.length : "?"})</span>
+          </h2>
+          <p className="mb-2 text-xs text-white/50">
+            Best guesses are accepted automatically and go live, but they are flagged here until someone checks them. Open the product to
+            change one, or press Looks right to clear the flag.
+          </p>
+          {closerLook === null ? (
+            <p className="text-sm text-amber-200">The flagged list could not be read just now. Refresh to try again.</p>
+          ) : closerLook.length === 0 ? (
+            <p className="text-sm text-white/50">Nothing flagged. Every accepted best guess has been checked.</p>
+          ) : (
+            <ul className="space-y-2">
+              {closerLook.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-black p-2 text-xs" data-testid="bulk-closer-look-row">
+                  <span className="font-semibold text-white">{nameByKey.get(r.entity_id) ?? r.entity_id}</span>
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 uppercase text-white/60">{isDraftFieldKey(r.field_key) ? FIELD_LABEL[r.field_key] : r.field_key}</span>
+                  <span className="min-w-0 flex-1 truncate text-white/70">
+                    {r.field_key === SEO_FIELD_KEY ? seoSuggestionDisplay(r.suggested_value) ?? r.suggested_value : r.field_key === "sensory" ? sensoryText(r.suggested_value) || r.suggested_value : r.suggested_value}
+                  </span>
+                  <Link href={`/admin/products/${encodeURIComponent(r.entity_id)}#closer-look`} className="text-white/60 hover:text-white">
+                    Open product ↗
+                  </Link>
+                  <form action={markBestGuessCheckedAction}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <input type="hidden" name="return" value="bulk" />
+                    <button type="submit" className={CHIP_NEUTRAL} data-testid="bulk-closer-look-ok">
+                      Looks right
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 

@@ -22,10 +22,11 @@
  */
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
-import { adjustPayloadFor400, buildChatPayload, isReasoningModel, type ChatPayload } from "./chat-payload-core";
+import { adjustPayloadFor400, buildChatPayload, isReasoningModel, type ChatPayload, type ReasoningEffort } from "./chat-payload-core";
 import { extractCitations, extractSearchSuggestions, type WebCitation } from "./grounding-core";
 import { buildGeminiInteractionBody, shouldRetryWithoutSchema, thinkingLevelFor } from "./gemini-request-core";
 import {
+  isGeminiModelId,
   resolveGeminiModel,
   interactionStatus,
   incompleteRetry,
@@ -215,21 +216,42 @@ async function record(
  * response_format…) it fixes THAT parameter and retries — up to 3 sends — so
  * a reasoning-class AI_MODEL never dead-ends on a parameter mismatch.
  */
+/**
+ * D244 round 2 (R-1): where a chat body goes. Default = AI_BASE_URL + AI key.
+ * A "gemini-*" model goes to Google's OpenAI-compatible endpoint with the
+ * Gemini key (the same endpoint geminiChatFallback uses), so AI_ENRICH_MODEL
+ * can be a Gemini model while AI_BASE_URL still points at OpenAI.
+ */
+type ChatTarget = { baseUrl: string; apiKey: string };
+
+function chatTargetFor(model: string): ChatTarget {
+  if (isGeminiModelId(model)) {
+    return {
+      baseUrl: process.env.AI_GEMINI_OPENAI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKey: GEMINI_API_KEY,
+    };
+  }
+  return { baseUrl: AI_BASE_URL, apiKey: AI_API_KEY };
+}
+
 async function postChat(
   payload: ChatPayload,
   timeoutMs?: number,
+  target?: ChatTarget,
 ): Promise<{ ok: true; res: Response } | { ok: false; status: number; text: string }> {
   let body = payload;
   let last = { status: 0, text: "" };
+  const baseUrl = target?.baseUrl ?? AI_BASE_URL;
+  const apiKey = target?.apiKey ?? AI_API_KEY;
   for (let attempt = 0; attempt < 3; attempt++) {
     const init: RequestInit = {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_API_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
     };
     const res = timeoutMs
-      ? await fetchWithTimeout(`${AI_BASE_URL}/chat/completions`, init, timeoutMs)
-      : await fetch(`${AI_BASE_URL}/chat/completions`, init);
+      ? await fetchWithTimeout(`${baseUrl}/chat/completions`, init, timeoutMs)
+      : await fetch(`${baseUrl}/chat/completions`, init);
     if (res.ok) return { ok: true, res };
     const text = await res.text().catch(() => "");
     last = { status: res.status, text };
@@ -372,25 +394,39 @@ export type StructuredOptions<T> = {
   temperature?: number;
   maxTokens?: number;
   context?: AiContext;
+  /**
+   * D244 round 2 (R-1): an explicit model (AI_ENRICH_MODEL for drafting),
+   * independent of the tier/AI_MODE router. A gemini-* id is routed to
+   * Google's OpenAI-compatible endpoint.
+   */
+  model?: string;
+  /** Reasoning effort for that model (already clamped by enrich-model-core). */
+  reasoningEffort?: ReasoningEffort | null;
 };
 
 async function chatRaw(
   model: string,
   system: string,
   user: string,
-  opts: { temperature?: number; maxTokens?: number; responseFormat?: unknown },
+  opts: { temperature?: number; maxTokens?: number; responseFormat?: unknown; reasoningEffort?: ReasoningEffort | null },
 ): Promise<{ content: string; usage?: ChatUsage }> {
-  const sent = await postChat(
-    buildChatPayload(model, {
-      temperature: opts.temperature ?? 0.2,
-      maxTokens: opts.maxTokens ?? 600,
-      responseFormat: opts.responseFormat,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  );
+  const payload = buildChatPayload(model, {
+    temperature: opts.temperature ?? 0.2,
+    maxTokens: opts.maxTokens ?? 600,
+    responseFormat: opts.responseFormat,
+    reasoningEffort: opts.reasoningEffort,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
+  if (isGeminiModelId(model)) {
+    // Gemini 3+/4 ignore temperature (Google: keep the default) and take
+    // reasoning_effort on the compat layer (mapped to its thinking level).
+    delete payload.temperature;
+    if (opts.reasoningEffort) payload.reasoning_effort = opts.reasoningEffort;
+  }
+  const sent = await postChat(payload, undefined, chatTargetFor(model));
   if (!sent.ok) {
     throw new Error(`AI request failed (${sent.status}): ${sent.text.slice(0, 300)}`);
   }
@@ -415,7 +451,8 @@ export async function generateStructured<T>(opts: StructuredOptions<T>): Promise
   if (budget.blocked) throw new AiBudgetExceededError(budget.reason ?? "AI budget exceeded.");
 
   const tier: TaskTier = opts.tier ?? "light";
-  const model = modelForTask(tier);
+  // D244 round 2 (R-1): an explicit model (AI_ENRICH_MODEL) wins over the router.
+  const model = opts.model?.trim() || modelForTask(tier);
   const responseFormat = toResponseFormat(opts.schema);
 
   // Strengthen the user message with an explicit shape description as a belt-and-
@@ -431,6 +468,7 @@ export async function generateStructured<T>(opts: StructuredOptions<T>): Promise
         temperature: opts.temperature ?? (tier === "heavy" ? 0.4 : 0.2),
         maxTokens: opts.maxTokens ?? 700,
         responseFormat,
+        reasoningEffort: opts.reasoningEffort,
       });
 
       let parsed: unknown;

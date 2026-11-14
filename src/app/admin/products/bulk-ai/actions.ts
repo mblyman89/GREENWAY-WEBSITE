@@ -143,8 +143,8 @@ export async function bulkRejectSuggestionAction(formData: FormData): Promise<vo
 // D244 E-5 - Bulk AI v2. "Draft with AI" QUEUES products; the every-minute
 // worker drafts every field for each (the product page's all-fields call),
 // so a whole vendor finishes after the tab is closed. The review grid accepts
-// per product (>= ACCEPT_ALL_THRESHOLD, never a best guess, every field
-// through the compliance gate) and "Accept & publish" is still a person's
+// per product (>= ACCEPT_ALL_THRESHOLD plus best guesses, which stay flagged
+// for a closer look - owner round 2; every field through the compliance gate) and "Accept & publish" is still a person's
 // click that publishes only a draft that has a photo.
 // ---------------------------------------------------------------------------
 
@@ -205,8 +205,8 @@ export async function cancelBulkAiV2Action(): Promise<void> {
 }
 
 /**
- * Per product on the grid: "Accept all >= 85%" (publish=0) or "Accept all >=
- * 85% & publish" (publish=1). Publishing follows the worklist's default rule:
+ * Per product on the grid: "Accept all >= 80%" (publish=0) or "Accept all >=
+ * 80% & publish" (publish=1). Publishing follows the worklist's default rule:
  * only a DRAFT that has a photo (bulk-publish-core, mode "photo").
  */
 export async function bulkAcceptAllForProductAction(formData: FormData): Promise<void> {
@@ -218,9 +218,9 @@ export async function bulkAcceptAllForProductAction(formData: FormData): Promise
   const out = await acceptHighConfidenceForKey(key, session.userId);
   if (!out.ok) redirect(gridUrl(formData, "error=" + encodeURIComponent(out.error)));
   if (out.eligible === 0) {
-    redirect(gridUrl(formData, "error=" + encodeURIComponent(`No draft for this product is at or above ${ACCEPT_ALL_THRESHOLD}% (best guesses never count). Review them one by one.`)));
+    redirect(gridUrl(formData, "error=" + encodeURIComponent(`No draft for this product is at or above ${ACCEPT_ALL_THRESHOLD}% and none is a best guess. Review them one by one.`)));
   }
-  const { accepted, blocked, writeback } = out;
+  const { accepted, blocked, flagged, writeback } = out;
 
   let published = false;
   let publishNote = "";
@@ -261,7 +261,7 @@ export async function bulkAcceptAllForProductAction(formData: FormData): Promise
     action: "product.bulk_ai_accepted_all",
     entityType: "product",
     entityId: key,
-    after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, andPublish, published, kb_writeback: writeback ?? undefined },
+    after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, flagged_best_guesses: flagged, andPublish, published, kb_writeback: writeback ?? undefined },
   });
   revalidatePath(BULK_URL);
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
@@ -269,6 +269,6 @@ export async function bulkAcceptAllForProductAction(formData: FormData): Promise
     revalidatePath("/admin/products");
     revalidatePublicMenuSurfaces();
   }
-  const msg = acceptAllMessage(accepted, blocked) + publishNote;
+  const msg = acceptAllMessage(accepted, blocked, flagged) + publishNote;
   redirect(gridUrl(formData, (accepted.length ? "accepted_note=" : "error=") + encodeURIComponent(msg)));
 }

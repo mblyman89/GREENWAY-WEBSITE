@@ -57,7 +57,7 @@ import { readOnHandLots, readWorklistVendorData } from "@/lib/enrichment/worklis
 import {
   NO_VENDOR_LABEL,
   WORKLIST_PAGE_SIZE,
-  isOnHandStatus,
+  isOnHandCard,
   matchesVendor,
   nextVendor,
   onHandByCard,
@@ -266,7 +266,8 @@ export default async function ProductsPage({
   else if (gap === "ready") filtered = filtered.filter((g) => isReadyToPublish(g));
   filtered = filterByEnrichmentStatus(filtered, statusFilter);
   filtered = filterByStock(filtered, stockFilter);
-  if (stockFocus === "on-hand") filtered = filtered.filter((g) => isOnHandStatus(g.inventoryStatus));
+  // D244 R-1 (owner): "so long as the system thinks we have at least 1 lot in stock" = on hand.
+  if (stockFocus === "on-hand") filtered = filtered.filter((g) => isOnHandCard(g.inventoryStatus, onHandQty ? onHandQty.get(g.posKey) ?? 0 : null));
   if (vendorData && vv) filtered = filtered.filter((g) => matchesVendor(cardVendor.get(g.posKey) ?? null, vv));
   // S22: invoice/manifest, received-since and vendor filters (pure).
   const manifestFiltered = applyManifestFilters(filtered, mf, attrs, now);
@@ -279,6 +280,7 @@ export default async function ProductsPage({
         gaps.map((g) => ({
           vendorId: cardVendor.get(g.posKey) ?? null,
           inventoryStatus: g.inventoryStatus,
+          lotQty: onHandQty ? onHandQty.get(g.posKey) ?? 0 : null,
           enrichmentStatus: g.enrichmentStatus,
           hasImage: g.hasImage,
           hasDescription: g.hasDescription,
@@ -687,7 +689,7 @@ export default async function ProductsPage({
           {/* SLICE 72 — stock filter: fix what shoppers can BUY first. */}
           {/* D244 E-1a: "On hand" is the default; "Include sold-out" shows every card. */}
           <Select name="stock" defaultValue={stockFocus === "on-hand" ? "" : stockFocus} className="w-auto">
-            <option value="">On hand (in + low stock)</option>
+            <option value="">On hand (at least 1 in stock)</option>
             <option value="all">Include sold-out (every card)</option>
             <option value="in-stock">In stock</option>
             <option value="low-stock">Low stock</option>
@@ -882,8 +884,8 @@ export default async function ProductsPage({
         )}
         {!onHandQty && (
           <p className="text-xs text-[var(--admin-gold)]" data-testid="onhand-unavailable">
-            On-hand quantities could not be read just now, so the quantity column and sort are off. The stock filter still
-            works (it uses the menu&apos;s stock status).
+            On-hand quantities could not be read just now, so the quantity column and sort are off. The On hand filter still
+            works from the menu&apos;s stock status alone.
           </p>
         )}
 
