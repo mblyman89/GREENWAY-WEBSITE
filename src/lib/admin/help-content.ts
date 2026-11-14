@@ -405,7 +405,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Can I enrich lots of products at once?",
-        a: "Yes. On Bulk AI pick a vendor or tick products, then choose ⚡ Draft now (live, minutes, normal price) or 🌙 Add to the overnight batch (within 24 hours, about half price). Review on the grid, edit any draft in its box, and Accept all per product. Still drafts-first, always.",
+        a: "Yes. On Bulk AI pick a vendor, tick several vendors, tick Every vendor or tick products, then choose ⚡ Draft now (live, minutes, normal price) or 🌙 Add to the overnight batch (within 24 hours, about half price; it is gathered for two minutes, then the background worker sends it on its next free minute). Review on the grid, edit any draft in its box, and Accept all per product. Still drafts-first, always.",
         href: "/admin/products/bulk-ai",
       },
       {

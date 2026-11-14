@@ -23,6 +23,7 @@ import {
   cancelBulkAiV2Action,
   queueOvernightBatchAction,
   cancelOvernightBatchAction,
+  retryFailedOvernightAction,
   bulkAcceptAllForProductAction,
   bulkAcceptEditedAction,
   bulkRejectDraftAction,
@@ -49,7 +50,8 @@ import { loadBulkAiV2Status } from "@/lib/enrichment/bulk-ai-v2-server";
 import { autoApproveKeys } from "@/lib/enrichment/bulk-approve-core";
 import { BulkApproveBar } from "./BulkApproveBar";
 import { enrichBatchConfigured, enrichBatchModel, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
-import { ENRICH_MODES, batchCounts, batchProgressText, batchRecordLine } from "@/lib/enrichment/enrich-batch-core";
+import { ENRICH_BATCH_GATHER_MS, ENRICH_BATCH_MAX_OPEN, ENRICH_BATCH_MAX_QUEUE, ENRICH_BATCH_SEND_MAX, ENRICH_MODES, batchCounts, batchProgressText, batchRecordLine, openBatches } from "@/lib/enrichment/enrich-batch-core";
+import { batchTimingText, batchVendorBreakdown, vendorBreakdownLine } from "@/lib/enrichment/vendor-pick-core";
 
 export const dynamic = "force-dynamic";
 // D244 E-0: a 25-product batch on a reasoning model can run for minutes.
@@ -140,6 +142,12 @@ export default async function BulkAiPage({
   const failedItems = bulk.ok ? bulk.state.items.filter((i) => i.status === "failed") : [];
   const counts = bulk.ok ? bulkCounts(bulk.state) : null;
   const pickable = gaps.slice(0, 400);
+  // D244 R-16: the overnight batch per vendor, and when it actually leaves.
+  const overnightVendors = overnight.ok ? batchVendorBreakdown(overnight.state.items) : [];
+  const overnightTiming = overnight.ok
+    ? batchTimingText(overnight.state.items, { nowMs: overnight.readAtMs, gatherMs: ENRICH_BATCH_GATHER_MS, sendMax: ENRICH_BATCH_SEND_MAX, openBatches: openBatches(overnight.state).length, maxOpen: ENRICH_BATCH_MAX_OPEN, backoffUntil: overnight.state.backoffUntil })
+    : null;
+  const overnightFailed = overnight.ok ? overnight.state.items.filter((i) => i.status === "failed").length : 0;
   // D244 R-1: accepted best guesses nobody has checked yet.
   const closerLook = await listNeedsCloserLook({ limit: 60 });
 
@@ -317,6 +325,23 @@ export default async function BulkAiPage({
                 Last check{overnight.state.lastRunAt ? ` (${new Date(overnight.state.lastRunAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })})` : ""}: {overnight.state.lastNote}
               </span>
             ) : null}
+            {overnightTiming ? (
+              <span className="mt-1 block text-xs text-indigo-200" data-testid="bulk-batch-timing">
+                {overnightTiming}
+              </span>
+            ) : null}
+            {overnightVendors.length > 0 ? (
+              <details className="mt-1 text-xs text-white/70" data-testid="bulk-batch-vendors" open={overnightVendors.length <= 8}>
+                <summary className="cursor-pointer">
+                  {overnightVendors.length} vendor{overnightVendors.length === 1 ? "" : "s"} in the overnight batch
+                </summary>
+                <ul className="mt-1 grid gap-0.5 sm:grid-cols-2">
+                  {overnightVendors.map((v) => (
+                    <li key={v.vendor}>{vendorBreakdownLine(v)}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             {overnight.ok && overnight.state.batches.length > 0 ? (
               <ul className="mt-1 space-y-0.5 text-xs text-white/60" data-testid="bulk-batch-records">
                 {[...overnight.state.batches].reverse().slice(0, 6).map((b) => (
@@ -343,6 +368,13 @@ export default async function BulkAiPage({
               </ul>
             </details>
           )}
+          {overnightFailed > 0 && overnightOn && (
+            <form action={retryFailedOvernightAction} className="mt-2">
+              <button type="submit" className={CHIP_ACTION} data-testid="bulk-batch-retry-failed">
+                🌙 Retry the {overnightFailed} failed in the next overnight batch
+              </button>
+            </form>
+          )}
           {overnightCounts && overnightCounts.queued > 0 && (
             <form action={cancelOvernightBatchAction} className="mt-2">
               <button type="submit" className={CHIP_NEUTRAL} data-testid="bulk-batch-cancel">
@@ -355,7 +387,7 @@ export default async function BulkAiPage({
           <form action={queueBulkAiV2Action} className="mt-4 space-y-3">
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-xs text-white/70">
-                Every live product from one vendor
+                Every live product from a vendor
                 <select name="vendor" defaultValue="" className="mt-1 block rounded-lg border border-white/15 bg-black px-2 py-1.5 text-sm text-white" data-testid="bulk-v2-vendor">
                   <option value="">(none - use the ticked products)</option>
                   {vendors.map((v) => (
@@ -372,6 +404,29 @@ export default async function BulkAiPage({
                 {ENRICH_MODES.overnight.button}
               </Button>
             </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-white/70">
+              <label className="flex items-center gap-1.5" data-testid="bulk-all-vendors">
+                <input type="checkbox" name="all_vendors" value="1" className="h-3.5 w-3.5" />
+                Every vendor ({vendors.length} vendors, {[...vendorCount.values()].reduce((a, b) => a + b, 0)} live products)
+              </label>
+            </div>
+            <details className="text-xs text-white/60" data-testid="bulk-vendor-multi">
+              <summary className="cursor-pointer">Or tick several vendors ({vendors.length})</summary>
+              <div className="mt-2 grid max-h-72 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                {vendors.map((v) => (
+                  <label key={v} className="flex items-center gap-2 rounded border border-white/10 bg-black px-2 py-1 text-white/80">
+                    <input type="checkbox" name="vendors" value={v} className="h-3.5 w-3.5" />
+                    <span className="truncate">
+                      {v} <span className="text-white/40">({vendorCount.get(v) ?? 0})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </details>
+            <p className="text-[0.7rem] text-white/45">
+              The vendor list, the vendor ticks, &ldquo;Every vendor&rdquo; and the product ticks add up. The message after you press names every vendor added and how many from each.
+              Live takes up to {BULK_AI_V2_MAX_QUEUE} per press; the overnight batch up to {ENRICH_BATCH_MAX_QUEUE} (it sends them to Google in batches of {ENRICH_BATCH_SEND_MAX}).
+            </p>
             <p className="text-[0.7rem] text-white/45">
               Same products, your choice: ⚡ drafts them now at the normal price; 🌙 sends them to Google tonight at about half price and
               the drafts are here tomorrow.

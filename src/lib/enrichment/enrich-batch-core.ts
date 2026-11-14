@@ -102,7 +102,7 @@ export const ENRICH_MODES: Record<EnrichMode, { icon: string; name: string; butt
     price: "About half the live price (Google's Gemini Batch API).",
     how: [
       "Pick a vendor or tick products, then press 🌙 Add to the overnight batch.",
-      "Products pressed within two minutes of each other go to Google as one batch. Close the tab and go home.",
+      "It does not start the instant you press: products pressed within two minutes of each other are gathered into one batch, then the background worker sends it on its next free minute. Close the tab and go home.",
       "Next morning the drafts are in the review grid below, exactly like live drafts.",
     ],
   },
@@ -257,8 +257,9 @@ export function enqueueEnrichBatch(
   reqs: BatchQueueRequest[],
   actorId: string | null,
   nowIso: string,
-): { state: EnrichBatchState; added: number; already: number; capped: boolean } {
+): { state: EnrichBatchState; added: number; already: number; capped: boolean; addedKeys: string[] } {
   const items = s.items.map((i) => ({ ...i }));
+  const addedKeys: string[] = [];
   const byKey = new Map(items.map((i) => [i.key, i] as const));
   let added = 0;
   let already = 0;
@@ -284,10 +285,11 @@ export function enqueueEnrichBatch(
       byKey.set(key, row);
     }
     added += 1;
+    addedKeys.push(key);
   }
   const finished = items.filter((i) => i.status === "done" || i.status === "failed" || i.status === "canceled");
   const drop = new Set(finished.slice(0, Math.max(0, finished.length - ENRICH_BATCH_KEEP_DONE)).map((i) => i.key));
-  return { state: { ...s, items: items.filter((i) => !drop.has(i.key)), queuedBy: added ? actorId : s.queuedBy }, added, already, capped };
+  return { state: { ...s, items: items.filter((i) => !drop.has(i.key)), queuedBy: added ? actorId : s.queuedBy }, added, already, capped, addedKeys };
 }
 
 /** Cancel every product not yet sent (one already at Google is answered and stored). */
@@ -460,10 +462,13 @@ export function resolveBatchModel(raw: unknown, liveModel: string): string {
  * live call, JSON constrained to the all-fields schema, no web search (the
  * draft uses only the evidence we give it), thinking at the given level.
  */
-export function buildEnrichBatchRequest(o: { system: string; user: string; jsonSchema: unknown; maxOutputTokens: number; thinkingLevel: string | null }): Record<string, unknown> {
+export function buildEnrichBatchRequest(o: { system: string; user: string; responseSchema: unknown; maxOutputTokens: number; thinkingLevel: string | null }): Record<string, unknown> {
+  // D244 R-15: `responseSchema` (Gemini's OpenAPI subset) - the field every
+  // structured-output example on Google's Batch API page uses. R-3 sent
+  // `responseJsonSchema`, which the batch answers did not follow.
   const generationConfig: Record<string, unknown> = {
     responseMimeType: "application/json",
-    responseJsonSchema: o.jsonSchema,
+    responseSchema: o.responseSchema,
     maxOutputTokens: Math.max(1024, Math.floor(o.maxOutputTokens)),
   };
   if (o.thinkingLevel) generationConfig.thinkingConfig = { thinkingLevel: o.thinkingLevel };
@@ -648,8 +653,8 @@ export function __runEnrichBatchTests(): { passed: number; failed: number } {
   eq(returnBatchItems(claimForSend(f, "t", "B5", "m", new Map([["p", req]]), iso(T0))!.state, "B5", "lost", "x", T0).backoffUntil, f.backoffUntil, "lost does not add back-off");
 
   // requests + answers + words
-  const b = buildEnrichBatchRequest({ system: "S", user: "U", jsonSchema: { type: "object" }, maxOutputTokens: 500, thinkingLevel: "medium" });
-  eq(b.generationConfig, { responseMimeType: "application/json", responseJsonSchema: { type: "object" }, maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: "medium" } }, "request config");
+  const b = buildEnrichBatchRequest({ system: "S", user: "U", responseSchema: { type: "OBJECT" }, maxOutputTokens: 500, thinkingLevel: "medium" });
+  eq(b.generationConfig, { responseMimeType: "application/json", responseSchema: { type: "OBJECT" }, maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: "medium" } }, "request config");
   ok(!("tools" in b), "no web search in an enrichment draft");
   eq(parseAnswerJson('```json\n{"a":1}\n```'), { a: 1 }, "fenced json");
   eq(parseAnswerJson('Here: {"a":2} thanks'), { a: 2 }, "json in prose");

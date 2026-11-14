@@ -253,7 +253,8 @@ describe("D244 R-3 - the overnight tick", () => {
     expect(one).toContain("SYSTEM PROMPT");
     expect(one).toContain("USER PROMPT k-1");
     expect(one).toContain("application/json");
-    expect(one).toContain("responseJsonSchema");
+    expect(one).toContain("responseSchema"); // D244 R-15: the Batch API docs' field
+    expect(one).toContain("Return ONLY a JSON object");
     expect(one).not.toContain("googleSearch");
 
     const s = await state();

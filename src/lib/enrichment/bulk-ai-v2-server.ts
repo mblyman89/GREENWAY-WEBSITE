@@ -105,7 +105,7 @@ async function mutate<R>(
   throw new Error("The background AI queue kept changing while it was being saved. Try again.");
 }
 
-export type QueueOutcome = { added: number; already: number; capped: boolean };
+export type QueueOutcome = { added: number; already: number; capped: boolean; addedKeys?: string[] };
 
 /** Queue products for a background all-fields draft. Throws with a plain reason. */
 export async function queueBulkAiV2(reqs: QueueRequest[], actorId: string | null, deps: { admin?: Admin; nowIso?: string } = {}): Promise<QueueOutcome> {
@@ -113,11 +113,18 @@ export async function queueBulkAiV2(reqs: QueueRequest[], actorId: string | null
   const nowIso = deps.nowIso ?? new Date().toISOString();
   const out = await mutate(admin, actorId, (cur) => {
     const r = enqueueBulk(cur, reqs, actorId, nowIso);
-    return r.added === 0 ? { next: cur, out: { added: 0, already: r.already, capped: r.capped } } : { next: r.state, out: { added: r.added, already: r.already, capped: r.capped } };
+    return r.added === 0 ? { next: cur, out: { added: 0, already: r.already, capped: r.capped, addedKeys: [] as string[] } } : { next: r.state, out: { added: r.added, already: r.already, capped: r.capped, addedKeys: r.addedKeys } };
   });
-  const res = out ?? { added: 0, already: 0, capped: false };
-  await recordAudit({ actorId, action: BULK_AI_V2_AUDIT.queued, entityType: "product", entityId: null, after: { ...res, requested: reqs.length, keys: reqs.slice(0, 300).map((r) => r.key) } }).catch(() => {});
-  return res;
+  const full = out ?? { added: 0, already: 0, capped: false, addedKeys: [] as string[] };
+  const res = { added: full.added, already: full.already, capped: full.capped };
+  await recordAudit({ actorId, action: BULK_AI_V2_AUDIT.queued, entityType: "product", entityId: null, after: { ...res, vendors: vendorList(reqs, full.addedKeys), requested: reqs.length, keys: reqs.slice(0, 300).map((r) => r.key) } }).catch(() => {});
+  return { ...res, addedKeys: full.addedKeys };
+}
+
+/** D244 R-16: the vendors actually added (for the audit row). */
+function vendorList(reqs: QueueRequest[], keys: string[]): string[] {
+  const k = new Set(keys);
+  return [...new Set(reqs.filter((r) => k.has(r.key)).map((r) => (r.vendor ?? "").trim() || "No vendor"))].slice(0, 60);
 }
 
 /** Cancel every queued product (one already drafting finishes). */
