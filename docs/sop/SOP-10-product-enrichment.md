@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (D244 R-6; built on E-0 … E-5 #1798–#1804 and R-1 … R-5 #1805–#1809; living document) |
+| **Version** | 1.1 (D244 R-10; adds owner round 3: R-7 identity #1811, R-8 vendor kits #1812, R-9 remove text #1813; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -139,6 +139,36 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 2. **Pause** / **Resume** and **Retry** (for photos that could not be read) are there; each press is audited.
 3. A match "by meaning" alone is shown at 35–74% and never reaches High; when the name also matches it gets a lift.
 
+### 4.11 Know the product before you pick (identity strip)
+
+Owner (round 3): *"Add more details about the product, like its category and type and vendor assigned to it on the details page at the top of the page with its name. Then use that to help the image recommendations and drafting."*
+
+1. The product page opens with the **identity strip** under the name: Category (with its plain type), Inventory type (POS), POS category, Vendor (a link to the vendor card, and how it was found), Brand and Strain. A missing fact shows in orange; it is never guessed.
+2. If the vendor is missing or wrong, fix it on the vendor or brand card first. The photo suggestions and the drafts both use it.
+3. The photo suggestions use the type: a photo naming this type is lifted ("Same type"), and one naming a *different* type drops ("Different type (vape)"). Drafts are told the type and write for that type only.
+
+### 4.12 Vendor kits: one generic photo for many like-kind products
+
+Owner (round 3): *"Many vendors use the same non labeled images for all their like kind products. I want to be able to sort the vendors by type/ category so I can pick a generic on brand image and add it to all their like kind products that would use this image. I want the ai to help with this."*
+
+1. Product Enrichment → **Vendor kits (one photo, many products) →**, or **Vendor kits** on the vendor strip (`/admin/products/vendor-kits`).
+2. Pick the vendor. Choose **Sort by** website category or the POS category the vendor uses (for example Live Resin Cart).
+3. Open a group. The photos are ranked for a generic, on-brand picture, and each one says why. A photo with one strain's name printed on it drops.
+4. Press **Ask the AI**. The photo reader checks the top 4 photos and says whether each is generic or names one product, quoting the label. It only looks; nothing is attached.
+5. Pick the photo. The products with no photo are ticked for you; untick any that should not get it. Choose **Add to gallery** (it becomes the cover only where there is none) or **Make it the cover**.
+6. Press **Apply to N products**. Each card gets the photo, and a card with a published photo goes live (4.2).
+
+### 4.13 Remove text from a photo (wrong name or size printed on it)
+
+Owner (round 3): *"I need a way to remove text on a product picture. I want to drag a box over the text, then click a button to remove it."*
+
+1. On the product page, press **✂ Remove text** on a Recommended photo tile (beside Attach / Attach as cover), or **✂ Text** on a gallery photo. A tile whose label names another product says so in orange: *AI: the label names "Gelato" — not this product. Remove that text?*
+2. Drag a box over each piece of text you want gone (up to 12), or press **✨ Find the text (AI)**. The AI boxes every piece of text and ticks the ones that name a different product, size or brand, giving the reason. This product's own name and the brand are kept, and **warning or compliance text is always kept**. Untick anything you want to keep.
+3. Optional: type what is under the text (for example "black jar label").
+4. Press **Remove text**. FLUX Fill repaints only inside the boxes. It takes about 10–30 seconds.
+5. Compare **Before** and **After**. If it looks right, press **Attach as cover** (or **Attach to gallery**). If not, press **Try again with different boxes**.
+6. The original photo is never changed. The new one is saved in Digital Assets as "… (text removed)". It is a draft when the original was a draft or its rights are pending; publish it there before it can go live.
+
 ## 5. Messages: "If you see this message"
 
 | Message (or what you see) | What it means | What to do |
@@ -149,6 +179,10 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 | An AI button says AI is not set up | No AI key | Owner step, Appendix B |
 | Bulk AI failure list shows a reason | The AI call failed for that product | Fix what the reason says, or draft that product live |
 | Semantic photo search says pgvector is not available | Migration 0365 needs pgvector | Owner step, section 3 |
+| "FLUX is not set up (Settings → Integrations), so text cannot be removed yet." | No FLUX key | Owner step: add the BFL key in Settings → Integrations |
+| "The boxes cover most of the picture. Draw them tighter around the text." | The boxes cover more than 60% of the photo | Draw smaller boxes around the words only |
+| "Saved to the media library as a draft" after Remove text | The original photo was a draft or its rights are pending | Publish the new photo in Digital Assets once the rights are clear |
+| An orange **Vendor** in the identity strip | No vendor could be found for this card | Set the vendor on the brand or vendor card |
 
 ## 6. Exceptions & escalation
 
@@ -164,6 +198,8 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 3. **Numbers are never invented.** Potency must match a POS, lot or certificate number.
 4. **Price and stock stay POS-controlled.** Enrichment never changes them.
 5. **Photo first.** A published card needs a published photo, so shoppers never see a broken picture.
+6. **Edited photos are new photos.** Remove text never changes the original. The copy records where it came from (`text-removed:<id>`), keeps the original's rights status, and is audited (product.remove_text_found / _started / _saved).
+7. **Vendor kits re-check the vendor.** Apply only touches cards that belong to the chosen vendor, never duplicates a photo, and writes one audit row per card plus product.vendor_kit_applied.
 
 ## 8. Checklists & forms
 
@@ -173,6 +209,7 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 |---|---|
 | Vendor picked, On hand on | ☐ |
 | Ready to publish → published | ☐ |
+| Vendor kits: each like-kind group with a generic photo applied | ☐ |
 | Copilot: every photo-less card has a photo or is skipped with a note | ☐ |
 | Live or overnight drafts queued for the rest | ☐ |
 | Accept all ≥ 80% run per product | ☐ |
@@ -195,6 +232,8 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 **Confidence:** evidence ≥ 80% · Best guess ≤ 70% (accepted, flagged) · no evidence ≤ 40%.
 
 **⚡ Live** = minutes, normal price. **🌙 Overnight** = within 24 h, about half price.
+
+**Same photo for many?** Vendor kits → vendor → group → Ask the AI → Apply. **Wrong name on a photo?** ✂ Remove text → Find the text → Remove text → Attach as cover.
 
 ## 10. Glossary
 
@@ -224,6 +263,9 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 | Semantic photo search | `src/lib/media/media-embed-core.ts`, `supabase/migrations/0365_media_embeddings.sql` |
 | Copilot | `src/lib/enrichment/copilot-core.ts`, `copilot-server.ts`, `src/app/admin/products/copilot/` |
 | Models | `src/lib/ai/enrich-model-core.ts`, `src/lib/ai/enrich-model.ts` |
+| Identity strip and type evidence | `src/lib/enrichment/product-identity-core.ts` |
+| Vendor kits | `src/lib/enrichment/vendor-kit-core.ts`, `src/lib/enrichment/vendor-kit-server.ts`, `src/app/admin/products/vendor-kits/page.tsx` |
+| Remove text (vision finds, FLUX Fill removes) | `src/lib/enrichment/text-erase-core.ts`, `src/lib/enrichment/text-erase-server.ts`, `src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx` |
 
 ## Appendix B: Settings the owner can change
 
@@ -242,3 +284,4 @@ Both use the same prompt and the same checks; only the speed and price differ. O
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
+| 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
