@@ -16,8 +16,8 @@ import { aiHeavyModelId, aiLightModelId, aiMode } from "@/lib/ai/router";
 import { isReasoningModel } from "@/lib/ai/chat-payload-core";
 import { BulkCheckbox, ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
 // D244 E-2: tick cards (or every card matching the filter) and publish at once.
-import { BULK_FORM_ID, BulkStatusBar } from "@/components/admin/products/BulkStatusBar";
-import { BULK_STATUS_MAX, bulkPreflight, isReadyToPublish } from "@/lib/enrichment/bulk-publish-core";
+import { BulkStatusBar } from "@/components/admin/products/BulkStatusBar";
+import { BULK_FORM_ID, BULK_STATUS_MAX, bulkPreflight, isReadyToPublish } from "@/lib/enrichment/bulk-publish-core";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";

@@ -24,6 +24,9 @@ export type BulkPublishMode =
   /** Every selected card that has its own enrichment record. */
   | "all";
 
+/** The bulk bar's form id (checkboxes join it via the `form` attribute). */
+export const BULK_FORM_ID = "bulk-status-form";
+
 /** Most keys one press may change (keeps one request inside maxDuration). */
 export const BULK_STATUS_MAX = 2000;
 
