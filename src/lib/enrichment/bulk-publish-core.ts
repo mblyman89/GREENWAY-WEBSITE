@@ -189,6 +189,37 @@ export function bulkOutcomeMessage(
 }
 
 // ---------------------------------------------------------------------------
+// D244 round 2 (R-1): publish on photo
+// ---------------------------------------------------------------------------
+
+/**
+ * Owner (verbatim): "a product should be publish once it has a picture. the
+ * other important details like description and facts can come later. the
+ * menu looks terrible without product pictures, but with them, its a game
+ * changer."
+ *
+ * After a PERSON attaches a photo: a draft that now has a photo goes live.
+ * An archived card stays archived (someone retired it on purpose); a
+ * published one is left alone; no photo = nothing to do. A photo that is
+ * not yet public in the media library (an import still "rights pending
+ * review") does not count - shoppers would see no picture. The env switch
+ * ENRICH_PUBLISH_ON_PHOTO=off turns it off without a code change.
+ */
+export type PhotoPublishDecision = "publish" | "already-live" | "archived" | "no-photo" | "photo-not-public" | "off";
+
+export function photoPublishDecision(
+  r: { enrichmentStatus: string | null | undefined; hasImage: boolean; hasPublicImage?: boolean },
+  switchRaw?: unknown,
+): PhotoPublishDecision {
+  if (typeof switchRaw === "string" && /^(off|false|0|no)$/i.test(switchRaw.trim())) return "off";
+  if (!r.hasImage) return "no-photo";
+  if (r.hasPublicImage === false) return "photo-not-public";
+  if (r.enrichmentStatus === "published") return "already-live";
+  if (r.enrichmentStatus === "archived") return "archived";
+  return "publish";
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
 export function __runBulkPublishCoreTests(): { passed: number; failed: number } {
@@ -265,6 +296,11 @@ export function __runBulkPublishCoreTests(): { passed: number; failed: number } 
   ok(bulkOutcomeMessage("draft", 1, {}) === "Moved back to draft 1 product.", "draft message singular");
   ok(bulkOutcomeMessage("published", 3, {}, { writebackDone: 1, writebackLeft: 2 }).includes("2 ran out of time"), "writeback leftover message");
   ok(bulkOutcomeMessage("archived", 0, {}, { capped: true, cap: 10 }).includes("first 10"), "capped message");
+  // D244 round 2: publish on photo
+  ok(photoPublishDecision({ enrichmentStatus: "draft", hasImage: true }) === "publish" && photoPublishDecision({ enrichmentStatus: null, hasImage: true }) === "publish", "draft + photo -> publish");
+  ok(photoPublishDecision({ enrichmentStatus: "archived", hasImage: true }) === "archived" && photoPublishDecision({ enrichmentStatus: "published", hasImage: true }) === "already-live", "archived kept, live left alone");
+  ok(photoPublishDecision({ enrichmentStatus: "draft", hasImage: false }) === "no-photo" && photoPublishDecision({ enrichmentStatus: "draft", hasImage: true }, " OFF ") === "off", "no photo; env switch off");
+  ok(photoPublishDecision({ enrichmentStatus: "draft", hasImage: true, hasPublicImage: false }) === "photo-not-public", "a not-yet-public photo does not count");
 
   return { passed, failed };
 }

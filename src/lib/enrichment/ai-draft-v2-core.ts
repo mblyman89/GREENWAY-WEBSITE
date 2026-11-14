@@ -14,9 +14,18 @@
  *   F-09b  the KB product lookup needed the EXACT slug; now it also tries the
  *          name without the pack size and without the brand prefix.
  *
- * Owner questions still OPEN (so nothing here assumes an answer):
- *   Q3 (85 vs 90)  -> ACCEPT_ALL_THRESHOLD is a single constant (85).
- *   Q4 (best guess going live) -> best guesses are NEVER auto-accepted.
+ * Owner answers (D244 round 2, verbatim):
+ *   Q3: "lets drop it to 80%."  -> ACCEPT_ALL_THRESHOLD = 80.
+ *   Q4: "best guesses should auto accepted, but flagged so we can take a
+ *       closer look once we have time to." -> accept-all now includes best
+ *       guesses; each stays flagged (`|best-guess` on the accepted row) and
+ *       is listed under "Needs a closer look" until a person marks it
+ *       checked (`|checked`).
+ *   Calibration: "I have noticed there are times where the ai is 100%
+ *       accurate yet gives itself a 50% confidence result. if you can make it
+ *       trust itself better would be great." -> calibrateConfidence: a field
+ *       resting on direct evidence for THIS product (and not flagged a guess
+ *       by the model) is raised to a floor of 80 + 5 per extra direct source.
  *
  * Pure: no I/O. Self-tests at the bottom (registered in
  * scripts/compliance/run-pure-selftests.ts with an exact floor).
@@ -30,8 +39,16 @@ import {
   type StrainMatchResult,
 } from "@/lib/ai/kb/strain-matcher";
 
-/** "Accept all >= N%". Owner Q3 (85 vs 90) is open - one constant to change. */
-export const ACCEPT_ALL_THRESHOLD = 85;
+/** "Accept all >= N%". Owner Q3 answered (round 2): "lets drop it to 80%." */
+export const ACCEPT_ALL_THRESHOLD = 80;
+/** Calibration: one direct source raises a confident answer to this floor... */
+export const DIRECT_EVIDENCE_FLOOR = 80;
+/** ...plus this much per extra distinct direct source... */
+export const DIRECT_EVIDENCE_STEP = 5;
+/** ...never above this (the model can still say 100 itself). */
+export const DIRECT_EVIDENCE_FLOOR_MAX = 95;
+/** Below this the model is voicing a real doubt; we keep its number. */
+export const CALIBRATION_MIN_RAW = 50;
 /** A best guess (no direct evidence, or model-flagged) never scores above this. */
 export const BEST_GUESS_CAP = 70;
 /** A field that cites no offered evidence at all never scores above this. */
@@ -253,9 +270,23 @@ export function isDirectEvidence(id: string): boolean {
 export type DraftMeta = { confidence: number; evidence: string[]; bestGuess: boolean };
 
 /**
+ * Round 2 calibration. Models under-state confidence on facts they copied
+ * straight from the evidence (the owner saw "100% accurate" fields at 50%).
+ * When a field cites direct evidence for THIS product, the model did not
+ * call it a guess, and its own number is >= CALIBRATION_MIN_RAW, raise it to
+ * 80 (+5 per extra distinct direct source, max 95). Never lowers a number.
+ */
+export function calibrateConfidence(raw: number, directSources: number, modelSaidGuess: boolean): number {
+  if (modelSaidGuess || directSources < 1 || raw < CALIBRATION_MIN_RAW) return raw;
+  const floor = Math.min(DIRECT_EVIDENCE_FLOOR_MAX, DIRECT_EVIDENCE_FLOOR + DIRECT_EVIDENCE_STEP * (directSources - 1));
+  return Math.max(raw, floor);
+}
+
+/**
  * Clamp what the model said about a field into something we can trust:
  * evidence limited to ids we actually offered; confidence on a 0..100 scale;
- * best guess when the model said so OR nothing direct backs it (capped at 70);
+ * calibrated up when direct evidence backs it (calibrateConfidence); best
+ * guess when the model said so OR nothing direct backs it (capped at 70);
  * no evidence at all caps at 40.
  */
 export function normalizeDraftField(
@@ -274,7 +305,9 @@ export function normalizeDraftField(
   let c = typeof raw.confidence === "number" && Number.isFinite(raw.confidence) ? raw.confidence : 0;
   if (c > 0 && c <= 1) c *= 100;
   c = Math.max(0, Math.min(100, Math.round(c)));
-  const bestGuess = raw.best_guess === true || !evidence.some(isDirectEvidence);
+  const direct = evidence.filter(isDirectEvidence).length;
+  const bestGuess = raw.best_guess === true || direct === 0;
+  c = calibrateConfidence(c, direct, raw.best_guess === true);
   if (bestGuess) c = Math.min(c, BEST_GUESS_CAP);
   if (evidence.length === 0) c = Math.min(c, NO_EVIDENCE_CAP);
   return { confidence: c, evidence, bestGuess };
@@ -285,13 +318,33 @@ export function encodeEvidenceSource(meta: Pick<DraftMeta, "evidence" | "bestGue
   return `ai2:${meta.evidence.join(",")}${meta.bestGuess ? "|best-guess" : ""}`;
 }
 
-export function parseEvidenceSource(source: string | null | undefined): { v2: boolean; evidence: string[]; bestGuess: boolean } {
+/** Flags after the evidence list: `|best-guess` (from the draft), `|checked` (a person looked). */
+export const CHECKED_FLAG = "checked";
+
+export function parseEvidenceSource(source: string | null | undefined): { v2: boolean; evidence: string[]; bestGuess: boolean; checked: boolean } {
   const s = String(source ?? "");
-  if (!s.startsWith("ai2:")) return { v2: false, evidence: [], bestGuess: false };
-  const body = s.slice(4);
-  const bestGuess = body.endsWith("|best-guess");
-  const list = bestGuess ? body.slice(0, -"|best-guess".length) : body;
-  return { v2: true, evidence: list.split(",").map((x) => x.trim()).filter(Boolean), bestGuess };
+  if (!s.startsWith("ai2:")) return { v2: false, evidence: [], bestGuess: false, checked: false };
+  const [list, ...flags] = s.slice(4).split("|");
+  return {
+    v2: true,
+    evidence: (list ?? "").split(",").map((x) => x.trim()).filter(Boolean),
+    bestGuess: flags.includes("best-guess"),
+    checked: flags.includes(CHECKED_FLAG),
+  };
+}
+
+/** The source after a person pressed "Looks right" on an accepted best guess. */
+export function markCheckedSource(source: string | null | undefined): string | null {
+  const s = String(source ?? "");
+  if (!s.startsWith("ai2:")) return null;
+  return parseEvidenceSource(s).checked ? s : `${s}|${CHECKED_FLAG}`;
+}
+
+/** An accepted (now live) best guess nobody has looked at yet. */
+export function needsCloserLook(r: { status: string; source?: string | null }): boolean {
+  if (r.status !== "accepted") return false;
+  const ev = parseEvidenceSource(r.source);
+  return ev.v2 && ev.bestGuess && !ev.checked;
 }
 
 /** Human chip label for an evidence id. */
@@ -323,11 +376,27 @@ export type SuggestionLite = {
 };
 
 /**
- * Ids to accept for "Accept all >= N%": the NEWEST pending v2 suggestion per
- * field, only if its confidence (0..1 stored) >= threshold% and it is NOT a
- * best guess (owner Q4 is open - best guesses always need a person).
+ * Is ONE pending v2 draft taken by "Accept all"? A best guess always is
+ * (owner Q4, round 2: "best guesses should auto accepted, but flagged"),
+ * unless the caller turns that off; anything else needs >= threshold%.
  */
-export function acceptAllEligible(rows: SuggestionLite[], threshold = ACCEPT_ALL_THRESHOLD): string[] {
+export function isAcceptAllCandidate(
+  r: { confidence?: number | null; source?: string | null },
+  threshold = ACCEPT_ALL_THRESHOLD,
+  opts: { bestGuesses?: boolean } = {},
+): boolean {
+  const ev = parseEvidenceSource(r.source);
+  if (!ev.v2) return false;
+  if (ev.bestGuess) return opts.bestGuesses !== false;
+  return Math.round((r.confidence ?? 0) * 100) >= threshold;
+}
+
+/**
+ * Ids to accept for "Accept all >= N%": the NEWEST pending v2 suggestion per
+ * field when isAcceptAllCandidate says so. Best guesses are included and stay
+ * flagged on the accepted row (see needsCloserLook).
+ */
+export function acceptAllEligible(rows: SuggestionLite[], threshold = ACCEPT_ALL_THRESHOLD, opts: { bestGuesses?: boolean } = {}): string[] {
   const newest = new Map<string, SuggestionLite>();
   for (const r of rows) {
     if (r.status !== "pending" || !isDraftFieldKey(r.field_key)) continue;
@@ -338,10 +407,7 @@ export function acceptAllEligible(rows: SuggestionLite[], threshold = ACCEPT_ALL
   for (const key of ALL_FIELDS) {
     const r = newest.get(key);
     if (!r) continue;
-    const ev = parseEvidenceSource(r.source);
-    if (!ev.v2 || ev.bestGuess) continue;
-    const pct = Math.round((r.confidence ?? 0) * 100);
-    if (pct >= threshold) out.push(r.id);
+    if (isAcceptAllCandidate(r, threshold, opts)) out.push(r.id);
   }
   return out;
 }
@@ -442,14 +508,27 @@ export function __runAiDraftV2Tests(): { passed: number; failed: number } {
   ok(!isDirectEvidence("kb:strain:blue dream") && !isDirectEvidence("kb:category:flower"), "indirect ids");
   const offered = ["pos", "vendor", "photo:1", "kb:strain:blue dream"];
   eq(normalizeDraftField("description", { confidence: 0.92, evidence: ["pos", "kb:strain:blue dream", "made-up"] }, offered), { confidence: 92, evidence: ["pos", "kb:strain:blue dream"], bestGuess: false }, "norm 0..1 scale + filter");
+  // round 2 calibration: "100% accurate yet ... 50% confidence"
+  eq(normalizeDraftField("display_name", { confidence: 50, evidence: ["pos"] }, offered).confidence, 80, "calibrate: one direct source -> 80");
+  eq(normalizeDraftField("display_name", { confidence: 55, evidence: ["pos", "photo:1"] }, offered).confidence, 85, "calibrate: two direct -> 85");
+  eq(normalizeDraftField("display_name", { confidence: 40, evidence: ["pos", "photo:1"] }, offered).confidence, 40, "calibrate: real doubt (<50) kept");
+  eq(normalizeDraftField("display_name", { confidence: 60, evidence: ["pos"], best_guess: true }, offered).confidence, 60, "calibrate: model-said guess never raised");
+  eq([calibrateConfidence(97, 1, false), calibrateConfidence(50, 9, false), calibrateConfidence(70, 0, false)], [97, 95, 70], "calibrate never lowers, caps 95, needs direct");
   eq(normalizeDraftField("description", { confidence: 95, evidence: ["kb:strain:blue dream"] }, offered), { confidence: 70, evidence: ["kb:strain:blue dream"], bestGuess: true }, "indirect -> best guess cap");
   eq(normalizeDraftField("tags", { confidence: 90, evidence: [] }, offered), { confidence: 40, evidence: [], bestGuess: true }, "no evidence cap");
   eq(normalizeDraftField("seo", { confidence: 99, evidence: ["pos"], best_guess: true }, offered).confidence, 70, "model best guess cap");
   eq(normalizeDraftField("seo", { confidence: 250, evidence: ["pos"] }, offered).confidence, 100, "clamp high");
   eq(normalizeDraftField("seo", { confidence: "x", evidence: "pos" }, offered).confidence, 0, "junk input");
   eq(encodeEvidenceSource({ evidence: ["pos", "photo:1"], bestGuess: true }), "ai2:pos,photo:1|best-guess", "encode");
-  eq(parseEvidenceSource("ai2:pos,photo:1|best-guess"), { v2: true, evidence: ["pos", "photo:1"], bestGuess: true }, "parse");
-  eq(parseEvidenceSource("ai"), { v2: false, evidence: [], bestGuess: false }, "parse legacy");
+  eq(parseEvidenceSource("ai2:pos,photo:1|best-guess"), { v2: true, evidence: ["pos", "photo:1"], bestGuess: true, checked: false }, "parse");
+  eq(parseEvidenceSource("ai"), { v2: false, evidence: [], bestGuess: false, checked: false }, "parse legacy");
+  eq(parseEvidenceSource("ai2:pos|best-guess|checked"), { v2: true, evidence: ["pos"], bestGuess: true, checked: true }, "parse checked");
+  eq([markCheckedSource("ai2:pos|best-guess"), markCheckedSource("ai2:pos|best-guess|checked"), markCheckedSource("ai")], ["ai2:pos|best-guess|checked", "ai2:pos|best-guess|checked", null], "mark checked idempotent");
+  eq(
+    [needsCloserLook({ status: "accepted", source: "ai2:pos|best-guess" }), needsCloserLook({ status: "pending", source: "ai2:pos|best-guess" }), needsCloserLook({ status: "accepted", source: "ai2:pos|best-guess|checked" }), needsCloserLook({ status: "accepted", source: "ai2:pos" })],
+    [true, false, false, false],
+    "needs a closer look = accepted + best guess + not checked",
+  );
   eq([evidenceLabel("pos"), evidenceLabel("photo:2"), evidenceLabel("kb:strain:blue dream"), evidenceLabel("kb:product:draft")], ["POS record", "Photo 2", "Strain: blue dream", "KB product (draft)"], "labels");
 
   // accept-all
@@ -462,8 +541,9 @@ export function __runAiDraftV2Tests(): { passed: number; failed: number } {
     { id: "e", field_key: "display_name", status: "accepted", confidence: 0.99, source: "ai2:pos", created_at: "2025-01-02" },
     { id: "f", field_key: "short_description", status: "pending", confidence: 0.85, source: "ai2:photo:1", created_at: "2025-01-02" },
   ];
-  eq(acceptAllEligible(rows), ["a", "f"], "accept-all picks newest, >=85, not best guess, v2 only");
-  eq(acceptAllEligible(rows, 80), ["a", "f", "b"], "threshold param (ALL_FIELDS order)");
+  eq(acceptAllEligible(rows), ["a", "f", "c", "b"], "accept-all: newest, >=80, best guesses included (flagged), v2 only, ALL_FIELDS order");
+  eq(acceptAllEligible(rows, 85, { bestGuesses: false }), ["a", "f"], "threshold + best guesses off");
+  eq(ACCEPT_ALL_THRESHOLD, 80, "owner Q3: 80");
   eq([fieldDiff("", "x"), fieldDiff("Hello  world", "hello world"), fieldDiff("a", "b")], ["new", "same", "changed"], "diff");
 
   eq(sensoryText('{"aroma_notes":["citrus"],"flavor_notes":[],"terpenes":["limonene"]}'), "Aroma: citrus · Terpenes: limonene", "sensory text");

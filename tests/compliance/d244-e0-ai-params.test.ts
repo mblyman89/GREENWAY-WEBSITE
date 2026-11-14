@@ -57,7 +57,9 @@ describe("D244 E-0 — AI request parameters", () => {
     const src = read("src/lib/ai/provider.ts");
     expect(src).toContain('from "./chat-payload-core"');
     expect(src).toContain("async function postChat(");
-    expect((src.match(/await postChat\(\s*buildChatPayload\(/g) ?? []).length).toBe(5);
+    // D244 round 2 (R-1): chatRaw builds its body first (Gemini tweaks), then posts it.
+    expect((src.match(/await postChat\(\s*buildChatPayload\(/g) ?? []).length).toBe(4);
+    expect(src).toContain("const sent = await postChat(payload, undefined, chatTargetFor(model));");
     expect(src).not.toMatch(/^function isReasoningModel/m);
     // generateStructured stops on a non-repairable 4xx instead of resending it.
     expect(src).toContain("if (/AI request failed \\(4\\d\\d\\)/.test(lastErr)) break;");

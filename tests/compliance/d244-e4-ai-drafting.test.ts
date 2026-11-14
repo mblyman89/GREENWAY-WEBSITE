@@ -5,7 +5,9 @@
  * rules." Strategy doc slice E-4: one "Enrich this product" call drafts every
  * field with per-field confidence, evidence, a best-guess flag and a diff;
  * "Accept all >= 85%" (owner Q3 open -> one constant; Q4 open -> best guesses
- * are never auto-accepted). Closes F-08 (vendor never reached the prompt),
+ * are never auto-accepted). Round 2 (R-1) owner answers: "lets drop it to
+ * 80%." and "best guesses should auto accepted, but flagged so we can take a
+ * closer look once we have time to." Closes F-08 (vendor never reached the prompt),
  * F-09 (substring strain match) and F-09b (exact-only KB product slug).
  *
  * Proven on the REAL generator + REAL actions (provider stubbed) through
@@ -73,7 +75,8 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { generateProductAi, acceptAllHighConfidence, acceptSuggestion } from "@/app/admin/products/actions";
+import { generateProductAi, acceptAllHighConfidence, acceptSuggestion, markBestGuessCheckedAction } from "@/app/admin/products/actions";
+import { listNeedsCloserLook } from "@/lib/enrichment/accept-drafts-server";
 import { __runAiDraftV2Tests, ACCEPT_ALL_THRESHOLD, parseEvidenceSource } from "@/lib/enrichment/ai-draft-v2-core";
 
 const ROOT = process.cwd();
@@ -153,13 +156,13 @@ beforeEach(() => {
 });
 
 describe("D244 E-4 ai-draft-v2-core", () => {
-  it("runs exactly 44 assertions, none failing, registered at that floor", () => {
-    expect(__runAiDraftV2Tests()).toEqual({ passed: 44, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 44); // D244 E-4');
+  it("runs exactly 53 assertions, none failing, registered at that floor", () => {
+    expect(__runAiDraftV2Tests()).toEqual({ passed: 53, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 53); // D244 E-4');
   });
-  it("Q3 is one constant (85); Q4 keeps best guesses out of accept-all", () => {
-    expect(ACCEPT_ALL_THRESHOLD).toBe(85);
-    expect(read("src/lib/enrichment/ai-draft-v2-core.ts")).toContain("if (!ev.v2 || ev.bestGuess) continue;");
+  it("Q3 is one constant (80, owner R-1); Q4 accepts best guesses and flags them", () => {
+    expect(ACCEPT_ALL_THRESHOLD).toBe(80);
+    expect(read("src/lib/enrichment/ai-draft-v2-core.ts")).toContain("if (ev.bestGuess) return opts.bestGuesses !== false;");
   });
 });
 
@@ -204,7 +207,7 @@ describe("D244 E-4 - Enrich this product (all fields)", () => {
     expect(st.audits.at(-1)).toMatchObject({ action: "product.ai_generated", after: { kind: "all", photos: 1, vendor: true } });
   });
 
-  it("Accept all >= 85% applies only the high-confidence, non-best-guess drafts", async () => {
+  it("Accept all >= 80% applies the high-confidence drafts plus best guesses (flagged)", async () => {
     await run(generateProductAi(fd({ key: KEY, kind: "all" })));
     const to = await run(acceptAllHighConfidence(fd({ key: KEY })));
     expect(to.startsWith(`/admin/products/${KEY}?saved=1&note=`)).toBe(true);
@@ -214,23 +217,46 @@ describe("D244 E-4 - Enrich this product (all fields)", () => {
       description: "accepted",
       short_description: "accepted",
       seo: "accepted",
-      sensory: "pending",
-      effects: "pending",
-      tags: "pending",
+      // D244 R-1 (owner: "best guesses should auto accepted, but flagged"):
+      sensory: "accepted",
+      effects: "accepted",
+      tags: "accepted",
     });
+    expect(decodeURIComponent(to)).toContain("3 best guesses are live and flagged for a closer look (sensory, effects, tags)");
+    const flagged = await listNeedsCloserLook({ entityId: KEY });
+    expect(flagged?.map((r) => r.field_key).sort()).toEqual(["effects", "sensory", "tags"]);
+    // "Looks right" clears the flag; the best-guess badge stays.
+    const sid = flagged!.find((r) => r.field_key === "sensory")!.id;
+    const back = await run(markBestGuessCheckedAction(fd({ id: sid, return: "detail", key: KEY })));
+    expect(back).toBe(`/admin/products/${KEY}?saved=1&note=${encodeURIComponent("Marked as checked.")}#closer-look`);
+    const row = st.db.rows("ai_suggestions").find((r) => r.id === sid)!;
+    expect(String(row.source)).toMatch(/\|best-guess\|checked$/);
+    expect(parseEvidenceSource(String(row.source)).bestGuess).toBe(true);
+    expect((await listNeedsCloserLook({ entityId: KEY }))?.map((r) => r.field_key).sort()).toEqual(["effects", "tags"]);
+    expect(st.audits.at(-1)).toMatchObject({ action: "product.ai_best_guess_checked", entityId: KEY, after: { field: "sensory" } });
     const e = st.db.rows("product_enrichments")[0]!;
     expect(e.display_name).toBe("Phat Panda Blue Dream 3.5g");
     expect(e.short_description).toBe("Sweet berry hybrid flower from Phat Panda.");
     expect(String(e.description)).toContain("Blue Dream from Phat Panda");
     expect(e.seo_title).toBeTruthy();
-    expect(st.audits.at(-1)).toMatchObject({ action: "product.ai_accepted_all", after: { threshold: 85 } });
+    expect(st.audits.find((a) => a.action === "product.ai_accepted_all")).toMatchObject({ after: { threshold: 80, flagged_best_guesses: ["sensory", "effects", "tags"] } });
   });
 
   it("Accept all with nothing eligible says so and accepts nothing", async () => {
-    st.reply = { ...st.reply, display_name: { value: "X", ...meta(60, ["pos"]) }, description: { value: "Y copy here.", ...meta(60, ["pos"]) }, short_description: { value: "Z", ...meta(10, ["pos"]) }, seo: { title: "", meta: "", ...meta(10, ["pos"]) } };
+    // Raw 45 is under the calibration floor (50), so direct evidence does not lift it; no best guesses filed.
+    st.reply = {
+      ...st.reply,
+      display_name: { value: "X", ...meta(45, ["pos"]) },
+      description: { value: "Y copy here.", ...meta(45, ["pos"]) },
+      short_description: { value: "Z", ...meta(10, ["pos"]) },
+      seo: { title: "", meta: "", ...meta(10, ["pos"]) },
+      sensory: { aroma_notes: [], flavor_notes: [], terpenes: [], ...meta(0, []) },
+      effects: { values: [], ...meta(0, []) },
+      tags: { values: [], ...meta(0, []) },
+    };
     await run(generateProductAi(fd({ key: KEY, kind: "all" })));
     const to = await run(acceptAllHighConfidence(fd({ key: KEY })));
-    expect(decodeURIComponent(to)).toContain("No draft is at or above 85%");
+    expect(decodeURIComponent(to)).toContain("No draft is at or above 80% and none is a best guess");
     expect(st.db.rows("ai_suggestions").every((r) => r.status === "pending")).toBe(true);
   });
 

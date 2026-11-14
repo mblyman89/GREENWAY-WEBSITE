@@ -44,7 +44,8 @@ import { rememberImageAttach } from "@/lib/catalog/image-memory-server";
 import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
 import { draftAllFieldsForProduct } from "@/lib/enrichment/ai-draft-v2-server";
 import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
-import { acceptAllMessage, acceptHighConfidenceForKey, applyAcceptedValue } from "@/lib/enrichment/accept-drafts-server";
+import { acceptAllMessage, acceptHighConfidenceForKey, applyAcceptedValue, markBestGuessChecked } from "@/lib/enrichment/accept-drafts-server";
+import { publishOnPhoto } from "@/lib/enrichment/publish-on-photo-server";
 import {
   attachImageToGallery,
   detachImageFromGallery,
@@ -263,6 +264,8 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
   }
 
   await updateEnrichment(key, update as Parameters<typeof updateEnrichment>[1], session.userId);
+  // D244 R-1: "a product should be publish once it has a picture."
+  const photoPub = update.image_media_ids ? await publishOnPhoto(key, session) : null;
 
   await recordAudit({
     actorId: session.userId,
@@ -299,7 +302,12 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
   // D244 E-1b (F-41): "Save & next" opens the next card in the same list.
   const nextKey = formData.get("then") === "next" ? cleanKey(formData.get("nextKey")) : "";
   if (nextKey && nextKey !== key) redirect(detailUrl(nextKey, listBack, "?saved=1"));
-  redirect(detailUrl(key, listBack, "?saved=1"));
+  redirect(detailUrl(key, listBack, savedWithNote(photoPub?.note ?? "")));
+}
+
+/** D244 R-1: "?saved=1" plus the publish-on-photo sentence, when there is one. */
+function savedWithNote(note: string): string {
+  return note ? `?saved=1&note=${encodeURIComponent(note)}` : "?saved=1";
 }
 
 /** Publish / unpublish / archive the enrichment. */
@@ -549,11 +557,12 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
 }
 
 /**
- * D244 E-4: "Accept all >= 85%". Accepts the NEWEST pending all-fields draft
- * per field whose confidence clears ACCEPT_ALL_THRESHOLD and that is NOT a
- * best guess (owner Q4 is open, so best guesses always need a person). Every
- * one still goes through the compliance re-scan; a blocked one is skipped and
- * named in the flash. Owner Q3 (85 vs 90) is open - the bar is one constant.
+ * D244 E-4: "Accept all >= 80%". Accepts the NEWEST pending all-fields draft
+ * per field whose confidence clears ACCEPT_ALL_THRESHOLD, plus best guesses,
+ * which stay flagged for a closer look (owner, round 2: "best guesses should
+ * auto accepted, but flagged so we can take a closer look once we have time
+ * to."). Every one still goes through the compliance re-scan; a blocked one
+ * is skipped and named in the flash. Owner Q3: "lets drop it to 80%."
  */
 export async function acceptAllHighConfidence(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
@@ -565,20 +574,51 @@ export async function acceptAllHighConfidence(formData: FormData): Promise<void>
   const out = await acceptHighConfidenceForKey(key, session.userId);
   if (!out.ok) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(out.error), "#ai"));
   if (out.eligible === 0) {
-    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(`No draft is at or above ${ACCEPT_ALL_THRESHOLD}% (best guesses never count). Review them one by one.`), "#ai"));
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(`No draft is at or above ${ACCEPT_ALL_THRESHOLD}% and none is a best guess. Review them one by one.`), "#ai"));
   }
-  const { accepted, blocked, writeback } = out;
+  const { accepted, blocked, flagged, writeback } = out;
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "product.ai_accepted_all",
     entityType: "product",
     entityId: key,
-    after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, kb_writeback: writeback ?? undefined },
+    after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, flagged_best_guesses: flagged, kb_writeback: writeback ?? undefined },
   });
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  const msg = acceptAllMessage(accepted, blocked);
+  const msg = acceptAllMessage(accepted, blocked, flagged);
   redirect(detailUrl(key, listBack, (accepted.length ? "?saved=1&note=" : "?error=") + encodeURIComponent(msg), "#ai"));
+}
+
+/**
+ * D244 R-1: "Looks right" on an accepted best guess. It leaves the "Needs a
+ * closer look" list; the value it wrote is unchanged.
+ */
+export async function markBestGuessCheckedAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "").trim();
+  const listBack = cleanBack(formData.get("back"));
+  const returnTo = String(formData.get("return") ?? "") === "bulk" ? "bulk" : "detail";
+  const fallbackKey = cleanKey(formData.get("key"));
+  if (!id) redirect("/admin/products?error=" + encodeURIComponent("Missing draft id."));
+  const r = await markBestGuessChecked(id, session.userId);
+  const key = r.ok ? r.key : fallbackKey;
+  if (r.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "product.ai_best_guess_checked",
+      entityType: "product",
+      entityId: r.key,
+      after: { suggestionId: id, field: r.field },
+    });
+    revalidatePath(`/admin/products/${encodeURIComponent(r.key)}`);
+    revalidatePath("/admin/products/bulk-ai");
+  }
+  const flash = r.ok ? `?saved=1&note=${encodeURIComponent("Marked as checked.")}` : `?error=${encodeURIComponent(r.error)}`;
+  if (returnTo === "bulk") redirect(`/admin/products/bulk-ai${flash}#closer-look`);
+  if (!key) redirect("/admin/products/bulk-ai" + flash + "#closer-look");
+  redirect(detailUrl(key, listBack, flash, "#closer-look"));
 }
 
 /** Reject an AI suggestion (discard, mark rejected). */
@@ -727,9 +767,11 @@ export async function attachMatchedMedia(formData: FormData): Promise<void> {
     entityId: key,
     after: { mediaId, source, becamePrimary: merge.becamePrimary || Boolean(cover?.changed), identityKey: identityKey || null, remembered: remembered.ok },
   });
+  const photoPub = await publishOnPhoto(key, session);
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(detailUrl(key, listBack, "?saved=1"));
+  revalidatePath("/admin/products");
+  redirect(detailUrl(key, listBack, savedWithNote(photoPub.note)));
 }
 
 /** Import a VENDOR-hosted image (Cultivera/GrowFlow menu line) then attach it. */
@@ -786,9 +828,11 @@ export async function importVendorImage(formData: FormData): Promise<void> {
     entityId: key,
     after: { assetId, platform, becamePrimary: merge.becamePrimary },
   });
+  const photoPub = await publishOnPhoto(key, session);
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  redirect(detailUrl(key, listBack, "?saved=1"));
+  revalidatePath("/admin/products");
+  redirect(detailUrl(key, listBack, savedWithNote(photoPub.note)));
 }
 
 // ---------------------------------------------------------------------------
@@ -1101,8 +1145,10 @@ export async function importResearchImage(formData: FormData): Promise<void> {
     entityId: key,
     after: { assetId, imageUrl, becamePrimary: merge.becamePrimary },
   });
+  const photoPub = await publishOnPhoto(key, session);
 
   revalidatePath(back);
   revalidatePath("/menu");
-  redirect(detailUrl(key, listBack, "?saved=1"));
+  revalidatePath("/admin/products");
+  redirect(detailUrl(key, listBack, savedWithNote(photoPub.note)));
 }

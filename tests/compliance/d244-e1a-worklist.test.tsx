@@ -121,9 +121,10 @@ describe("D244 E-1a — page wiring", () => {
   });
   it("on hand is the default focus; Include sold-out is offered", () => {
     expect(page).toContain("const stockFocus = parseWorklistStock(sp.stock);");
-    expect(page).toContain('if (stockFocus === "on-hand") filtered = filtered.filter((g) => isOnHandStatus(g.inventoryStatus));');
+    // D244 R-1: lots (>= 1 unit) OR the menu's in/low status.
+    expect(page).toContain('if (stockFocus === "on-hand") filtered = filtered.filter((g) => isOnHandCard(g.inventoryStatus, onHandQty ? onHandQty.get(g.posKey) ?? 0 : null));');
     expect(page).toContain('<option value="all">Include sold-out (every card)</option>');
-    expect(page).toContain('<option value="">On hand (in + low stock)</option>');
+    expect(page).toContain('<option value="">On hand (at least 1 in stock)</option>');
   });
   it("quantity column and sort, with an honest note when unread", () => {
     expect(page).toContain('{onHandQty && <th className="px-4 py-3 text-right">On hand</th>}');
@@ -155,6 +156,6 @@ describe("D244 E-1a — page wiring", () => {
   it("the pure runner calls the core", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runWorklistCoreTests } from "../../src/lib/enrichment/worklist-core";');
-    expect(runner).toContain('assertRan("worklist-core", __runWorklistCoreTests(), 36);');
+    expect(runner).toContain('assertRan("worklist-core", __runWorklistCoreTests(), 39);');
   });
 });

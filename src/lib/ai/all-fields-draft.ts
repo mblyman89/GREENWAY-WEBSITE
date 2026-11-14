@@ -12,6 +12,8 @@
  */
 import "server-only";
 import { generateStructured } from "./provider";
+import { enrichModel } from "./enrich-model";
+import { enrichMaxTokens } from "./enrich-model-core";
 import { COMPLIANCE_SYSTEM, checkCompliance, checkEffects } from "./compliance";
 import { productAllFieldsSchema, ALLOWED_PRODUCT_TAGS, type DraftMetaRaw } from "./schemas/product";
 import { buildGroundedFacts, loadBannedPhrases } from "./kb/retrieval";
@@ -68,6 +70,7 @@ export function allFieldsPrompt(input: {
     "Draft EVERY field for this product page at a licensed 21+ Washington State cannabis retailer (Greenway Marijuana, Port Orchard). Use ONLY the evidence below.",
     "For each field: give the value, a confidence 0-100, the evidence ids (exactly as shown in square brackets) it rests on, and best_guess.",
     "You MAY infer from strain-family or category norms when the evidence for this exact product is thin, but then best_guess MUST be true and confidence low.",
+    "CONFIDENCE CALIBRATION: confidence is how sure you are the value is CORRECT for this exact product, not how creative it is. When the value is stated directly by [pos], [vendor], a [photo:N] label or a [kb:product...] / [kb:brand] fact, say 90-100 - do not be modest about facts you copied from the evidence. 70-89 = well supported but partly worded by you. Below 50 only when you genuinely doubt it.",
     `SEO title at most ${SEO_TITLE_MAX} characters, product name first, no store name. Meta description 120-${SEO_META_MAX} characters, mentions in-store pickup.`,
     `Effects only from the allowed experiential list; tags only from: ${ALLOWED_PRODUCT_TAGS.join(", ")}. Return empty lists when nothing fits.`,
     "Never mention price, stock, discounts, health or medical claims, or anything that appeals to minors.",
@@ -107,7 +110,11 @@ export async function generateProductAllFields(
     user,
     schema: productAllFieldsSchema,
     tier: "heavy",
-    maxTokens: 1100,
+    // D244 round 2 (R-1): the dedicated enrichment model (AI_ENRICH_MODEL),
+    // independent of AI_MODE, with its reasoning effort / Gemini 32K floor.
+    model: enrichModel.model,
+    reasoningEffort: enrichModel.effort,
+    maxTokens: enrichMaxTokens(enrichModel, 1100),
     context: { feature: "product.all_fields", entityType: "product", entityId: posProductKey, actorId: generatedBy },
   });
 
@@ -129,6 +136,7 @@ export async function generateProductAllFields(
       generated_by: generatedBy,
       confidence: meta.confidence / 100,
       source: encodeEvidenceSource(meta),
+      model: enrichModel.model,
     });
     out.saved.push({ field, id: s.id, confidence: meta.confidence, bestGuess: meta.bestGuess, flags });
   };

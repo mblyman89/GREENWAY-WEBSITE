@@ -34,6 +34,7 @@ import { readDraftForWaiting } from "@/lib/catalog/waiting-facts-server";
 import { draftsHref, normalizeDraftView } from "@/lib/catalog/draft-deep-link-core";
 import { imageIdentityKeys, rememberImageAttach, type ImageDraftRow } from "@/lib/catalog/image-memory-server";
 import { parseImageMemorySource, type ImageMemorySource } from "@/lib/catalog/image-recommend-core";
+import { publishOnPhoto } from "@/lib/enrichment/publish-on-photo-server";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -112,6 +113,8 @@ async function attachToDraftProduct(opts: {
       ...(opts.extraAudit ?? {}),
     },
   });
+  // D244 R-1: "a product should be publish once it has a picture."
+  const photoPub = merge.alreadyPresent ? null : await publishOnPhoto(key, opts.session);
   revalidatePath("/admin/inventory/drafts");
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
 
@@ -123,7 +126,7 @@ async function attachToDraftProduct(opts: {
   if (merge.alreadyPresent) return { code: "already", sentence: `That photo was already on this product.${memNote}` };
   return {
     code: "attached",
-    sentence: `${merge.becamePrimary ? "Attached as the cover photo." : "Attached to the product's gallery."}${memNote}`,
+    sentence: `${merge.becamePrimary ? "Attached as the cover photo." : "Attached to the product's gallery."}${memNote}${photoPub?.note ? ` ${photoPub.note}` : ""}`,
   };
 }
 

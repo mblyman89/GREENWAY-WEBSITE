@@ -1381,6 +1381,7 @@ import { __runDetailNavCoreTests } from "../../src/lib/enrichment/detail-nav-cor
 import { __runImageRecommendV3Tests } from "../../src/lib/enrichment/image-recommend-v3-core";
 import { __runAiDraftV2Tests } from "../../src/lib/enrichment/ai-draft-v2-core";
 import { __runBulkAiV2Tests } from "../../src/lib/enrichment/bulk-ai-v2-core";
+import { __runEnrichModelCoreTests } from "../../src/lib/ai/enrich-model-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2802,7 +2803,7 @@ __runLiquidVolumeTests();
   assertRan("cutover-drift-core", __runCutoverDriftCoreTests(), 48); // R50 A6: daily drift check 11/02-11/08 (on hand vs Cultivera + every recorded change)
   assertRan("image-recommend-core", __runImageRecommendCoreTests(), 35); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
   assertRan("gemini-request-core", __runGeminiRequestCoreTests(), 19); // R51 D1: Gemini Interactions body (system_instruction, url_context, service_tier, seed, response_format); R66: model-aware
-  assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 45); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
+  assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 46); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
   assertRan("print-rules-core", __runPrintRulesTests(), 29); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
   assertRan("fulfillment-core", __runFulfillmentTests(), 19); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
@@ -2955,12 +2956,13 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("newsletter-batch-core", __runNewsletterBatchCoreTests(), 42); // D237 N-2 (SOP-22 G-112): batches of 100, idempotency keys, retry rules, progress, resume lease
   assertRan("budalerts-core", __runBudalertsCoreTests(), 86); // D242 S1 + D244 (lookup on Menus on file): Budalerts fetcher (owner permission, internal use only): robots-allowed URLs only, 3 s gap, brand/product page parsers, minor-unit prices, exact-slug suggestions, done-table rule
   assertRan("chat-payload-core", __runChatPayloadCoreTests(), 30); // D244 E-0: reasoning-model params (max_completion_tokens, no temperature, effort), 400 auto-repair, friendly error
-  assertRan("bulk-publish-core", __runBulkPublishCoreTests(), 34); // D244 E-2: bulk publish/unpublish/archive plan, ready-to-publish (draft + photo), pre-flight counts, key scope + cap, outcome sentence
-  assertRan("worklist-core", __runWorklistCoreTests(), 36); // D244 E-1a vendor-first, on-hand-first worklist
+  assertRan("bulk-publish-core", __runBulkPublishCoreTests(), 38); // D244 E-2: bulk publish/unpublish/archive plan, ready-to-publish (draft + photo), pre-flight counts, key scope + cap, outcome sentence; R-1 publish on photo
+  assertRan("worklist-core", __runWorklistCoreTests(), 39); // D244 E-1a vendor-first, on-hand-first worklist
   assertRan("detail-nav-core", __runDetailNavCoreTests(), 32); // D244 E-1b keep my place: back on every detail redirect, Prev / Next / Save & next
   assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 33); // D244 E-3
-  assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 44); // D244 E-4
+  assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 53); // D244 E-4 + R-1 calibration / best-guess / checked
   assertRan("bulk-ai-v2-core", __runBulkAiV2Tests(), 38); // D244 E-5
+  assertRan("enrich-model-core", __runEnrichModelCoreTests(), 16); // D244 R-1: enrichment model pin (AI_ENRICH_MODEL), provider + effort clamp, Gemini 32K floor
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

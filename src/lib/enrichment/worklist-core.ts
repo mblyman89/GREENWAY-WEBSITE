@@ -63,6 +63,17 @@ export function isOnHandStatus(status: string | null | undefined): boolean {
   return status === "in-stock" || status === "low-stock";
 }
 
+/**
+ * D244 round 2 - owner (verbatim): "so long as the system thinks we have at
+ * least 1 lot in stock, we should consider that to be what I mean by
+ * \"on-hand\"." A card is on hand when ANY of the system's stock signals
+ * says at least one unit: its lots' on_hand_qty sum (inventory_lots) is > 0,
+ * or the menu's stock status is in / low stock. qty null = lots unread.
+ */
+export function isOnHandCard(status: string | null | undefined, lotQty: number | null | undefined): boolean {
+  return isOnHandStatus(status) || (typeof lotQty === "number" && lotQty > 0);
+}
+
 export function matchesWorklistStock(status: string | null | undefined, choice: WorklistStock): boolean {
   if (choice === "all") return true;
   if (choice === "on-hand") return isOnHandStatus(status);
@@ -129,6 +140,8 @@ export type ProgressRow = {
   enrichmentStatus: string | null;
   hasImage: boolean;
   hasDescription: boolean;
+  /** D244 R-1: the card's lot on-hand sum (null/absent = lots unread). */
+  lotQty?: number | null;
 };
 
 export type VendorProgress = {
@@ -165,7 +178,7 @@ export function vendorProgress(rows: readonly ProgressRow[], labels: ReadonlyMap
       by.set(id, p);
     }
     p.total++;
-    if (!isOnHandStatus(r.inventoryStatus)) continue;
+    if (!isOnHandCard(r.inventoryStatus, r.lotQty)) continue;
     p.onHand++;
     if (r.enrichmentStatus === "published") p.onHandPublished++;
     else if (r.enrichmentStatus === "draft" && r.hasImage) p.onHandReady++;
@@ -317,5 +330,9 @@ export function __runWorklistCoreTests(): { passed: number; failed: number } {
   ok(pageWindow(650, "99").page === 3, "page clamps high");
   ok(pageWindow(650, "x").page === 1 && pageWindow(0, "2").pages === 1, "page junk → 1; empty list one page");
 
+  // D244 R-1: on hand = at least one unit by lots OR by menu status
+  ok(isOnHandCard("unavailable", 1) && isOnHandCard("in-stock", 0) && isOnHandCard("low-stock", null), "on hand: lots > 0 or status in/low");
+  ok(!isOnHandCard("unavailable", 0) && !isOnHandCard(null, null) && !isOnHandCard("unavailable", -2), "not on hand: no unit anywhere");
+  ok(vendorProgress([{ vendorId: V1, inventoryStatus: "unavailable", enrichmentStatus: null, hasImage: false, hasDescription: false, lotQty: 2 }], new Map()).find((p) => p.id === V1)?.onHand === 1, "progress counts a lot-only on-hand card");
   return { passed, failed };
 }

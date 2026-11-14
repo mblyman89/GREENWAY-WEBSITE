@@ -332,6 +332,8 @@ type PersistInput = {
   confidence?: number | null;
   /** Where the facts came from: model | kb | pos | crawl:<url> (optional). */
   source?: string | null;
+  /** D244 R-1: the model that actually wrote it (AI_ENRICH_MODEL); default aiModelId. */
+  model?: string | null;
 };
 
 /**
@@ -350,7 +352,7 @@ export async function persistSuggestion(input: PersistInput): Promise<AiSuggesti
     field_key: input.field_key,
     suggested_value: input.suggested_value,
     status: "pending" as const,
-    model: aiModelId,
+    model: input.model || aiModelId,
     prompt_version: PROMPT_VERSION,
     input_summary: input.input_summary,
     generated_by: input.generated_by,

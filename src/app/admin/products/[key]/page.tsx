@@ -60,6 +60,9 @@ import {
   type SuggestionLite,
 } from "@/lib/enrichment/ai-draft-v2-core";
 import { logMediaSearch } from "@/lib/media/library-v2-server";
+import { listNeedsCloserLook } from "@/lib/enrichment/accept-drafts-server";
+import { enrichModel } from "@/lib/ai/enrich-model";
+import { enrichModelLine } from "@/lib/ai/enrich-model-core";
 import type { PickerImageSearch } from "./MediaLibraryPicker";
 import { fallbackSourceLabel, MENU_CARD_FALLBACK_PAGE } from "@/lib/menu/menu-card-fallback-core";
 import {
@@ -68,6 +71,7 @@ import {
   generateProductAi,
   acceptSuggestion,
   acceptAllHighConfidence,
+  markBestGuessCheckedAction,
   rejectSuggestion,
   attachKbMatchFacts,
   applyMatchedText,
@@ -117,6 +121,9 @@ export default async function ProductEditorPage({
   const brandsP = listAllBrands();
   const productLotsP = listLotsForProductKey(key, 6);
   const suggestionsP = listSuggestions("product", key, "pending");
+  // D244 R-1: accepted best guesses on this product nobody has checked yet.
+  const closerLookP = listNeedsCloserLook({ entityId: key, limit: 50 });
+  closerLookP.catch(() => undefined);
   // D221 M1: the picker pool includes every picture filed under this
   // product's own vendor / brand, plus the ranked media_search hits for the
   // typed search - not only the newest 400 rows.
@@ -171,11 +178,14 @@ export default async function ProductEditorPage({
   const researchImageDrafts = allSuggestions.filter((s) => s.field_key === RESEARCH_IMAGES_FIELD);
   const suggestions = allSuggestions.filter((s) => s.field_key !== RESEARCH_IMAGES_FIELD);
   // D244 E-4: what each all-fields draft would change (sensory/effects have
-  // no column, so they show no diff), and the "Accept all >= 85%" set.
+  // no column, so they show no diff), and the "Accept all >= 80%" set
+  // (D244 R-1: best guesses are included and flagged for a closer look).
   const onRecord = currentFields(enrichment);
   delete onRecord.sensory;
   delete onRecord.effects;
   const acceptAllIds = acceptAllEligible(suggestions as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
+  const acceptAllGuesses = suggestions.filter((s) => acceptAllIds.includes(s.id) && parseEvidenceSource(s.source).bestGuess).length;
+  const closerLook = await closerLookP.catch(() => null);
   const crawlerOn = isCrawlerConfigured();
   const searchUrl = buildWebSearchUrl(item.name, item.brand_name);
   // SLICE 78 \u2014 the in-page Gemini look-up starts from a sharpened query:
@@ -925,12 +935,48 @@ export default async function ProductEditorPage({
               <input type="hidden" name="key" value={key} />
               {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
               <Button type="submit" variant="confirm" size="sm">
-                Accept all ≥ {ACCEPT_ALL_THRESHOLD}% ({acceptAllIds.length})
+                Accept all ≥ {ACCEPT_ALL_THRESHOLD}% + best guesses ({acceptAllIds.length})
               </Button>
               <span className="text-[11px] text-white/45">
-                Newest draft per field at or above {ACCEPT_ALL_THRESHOLD}%. Best guesses are never included. Each one is still compliance-checked.
+                Newest draft per field at or above {ACCEPT_ALL_THRESHOLD}%, plus the AI&rsquo;s best guesses
+                {acceptAllGuesses > 0 ? ` (${acceptAllGuesses} here)` : ""}. Best guesses go live but stay flagged under &ldquo;Needs a closer
+                look&rdquo;. Each one is still compliance-checked.
               </span>
             </form>
+          ) : null}
+
+          <p className="mt-2 text-[11px] text-white/40" data-testid="detail-enrich-model-line">
+            Drafting model: {enrichModelLine(enrichModel)}
+          </p>
+
+          {closerLook && closerLook.length > 0 ? (
+            <div id="closer-look" className="mt-4 rounded-lg border border-amber-400/30 bg-black p-3" data-testid="detail-closer-look">
+              <p className="text-xs font-semibold text-amber-200">Needs a closer look ({closerLook.length})</p>
+              <p className="mt-0.5 text-[11px] text-white/50">
+                These best guesses were accepted and are live. Check each one; edit the field above if it is wrong, or press Looks right.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {closerLook.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center gap-2 text-xs" data-testid="detail-closer-look-row">
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 uppercase text-white/60">
+                      {isDraftFieldKey(r.field_key) ? FIELD_LABEL[r.field_key] : r.field_key}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-white/75">
+                      {r.field_key === "sensory" ? sensoryText(r.suggested_value) || r.suggested_value : r.field_key === SEO_FIELD_KEY ? seoSuggestionDisplay(r.suggested_value) ?? r.suggested_value : r.suggested_value}
+                    </span>
+                    <form action={markBestGuessCheckedAction}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <input type="hidden" name="return" value="detail" />
+                      <input type="hidden" name="key" value={key} />
+                      {listBack ? <input type="hidden" name="back" value={listBack} /> : null}
+                      <Button type="submit" variant="neutral" size="sm" data-testid="detail-closer-look-ok">
+                        Looks right
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           {suggestions.length > 0 ? (
@@ -951,7 +997,7 @@ export default async function ProductEditorPage({
                         {ev.v2 && isDraftFieldKey(s.field_key) ? FIELD_LABEL[s.field_key] : s.field_key}
                       </span>
                       {ev.bestGuess ? (
-                        <span data-testid="ai-best-guess" className="rounded bg-[var(--admin-orange-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-orange)]" title="Inferred from category or strain-family norms, not stated for this exact product. Never auto-accepted.">
+                        <span data-testid="ai-best-guess" className="rounded bg-[var(--admin-orange-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-orange)]" title="Inferred from category or strain-family norms, not stated for this exact product. Accept all takes it, but it stays flagged for a closer look.">
                           Best guess
                         </span>
                       ) : null}
