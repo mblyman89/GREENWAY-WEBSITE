@@ -165,3 +165,96 @@ export const productSeoSchema = defineSchema<ProductSeoResult>("product_seo", {
     max: 1,
   },
 });
+
+// D244 E-4: ONE call drafts every field. Each field carries its own
+// confidence, the evidence ids it rests on (from the list in the prompt) and
+// a best_guess flag. ai-draft-v2-core.normalizeDraftField re-clamps all three
+// (evidence filtered to ids we offered; best guesses capped) after the reply.
+const draftMeta = {
+  confidence: { kind: "number", description: "0 to 100. How sure you are THIS field is right for THIS product.", min: 0, max: 100 },
+  evidence: {
+    kind: "stringArray",
+    description: "The evidence ids (exactly as written in square brackets in the prompt, e.g. pos, vendor, photo:1, kb:strain:blue dream) this field rests on.",
+    maxItems: 6,
+  },
+  best_guess: {
+    kind: "boolean",
+    description: "True if this field is inferred from category or strain-family norms rather than stated by the evidence for this exact product.",
+  },
+} as const;
+
+export type DraftMetaRaw = { confidence: number; evidence: string[]; best_guess: boolean };
+
+export type ProductAllFieldsResult = {
+  display_name: DraftMetaRaw & { value: string };
+  description: DraftMetaRaw & { value: string };
+  short_description: DraftMetaRaw & { value: string };
+  seo: DraftMetaRaw & { title: string; meta: string };
+  sensory: DraftMetaRaw & { aroma_notes: string[]; flavor_notes: string[]; terpenes: string[] };
+  effects: DraftMetaRaw & { values: string[] };
+  tags: DraftMetaRaw & { values: string[] };
+};
+
+export const productAllFieldsSchema = defineSchema<ProductAllFieldsResult>("product_all_fields", {
+  display_name: {
+    kind: "object",
+    fields: {
+      value: { kind: "string", description: "Clean customer-facing product name (brand + strain/product + format/size). No price, no store name.", maxLength: 120 },
+      ...draftMeta,
+    },
+  },
+  description: {
+    kind: "object",
+    fields: {
+      value: {
+        kind: "string",
+        description: "2-3 sentence product description (~35-60 words). Aroma, flavor, format, strain character only. No price, no stock, no health/medical/effect claims.",
+        maxLength: 700,
+      },
+      ...draftMeta,
+    },
+  },
+  short_description: {
+    kind: "object",
+    fields: {
+      value: { kind: "string", description: "One punchy sentence (max ~120 chars) for cards/menus.", maxLength: 200 },
+      ...draftMeta,
+    },
+  },
+  seo: {
+    kind: "object",
+    fields: {
+      title: { kind: "string", description: "Search-result title, at most 39 characters. Product name first. No store name, no price, no trailing period.", maxLength: 100 },
+      meta: { kind: "string", description: "Meta description, 120-160 characters. Mentions in-store pickup. No price, stock, health, medical or effect claims.", maxLength: 340 },
+      ...draftMeta,
+    },
+  },
+  sensory: {
+    kind: "object",
+    fields: {
+      aroma_notes: { kind: "stringArray", description: "Up to 5 short aroma descriptors. Sensory only.", maxItems: 5 },
+      flavor_notes: { kind: "stringArray", description: "Up to 5 short flavor descriptors.", maxItems: 5 },
+      terpenes: { kind: "stringArray", description: "Dominant terpenes ONLY if the evidence supports it; else empty.", maxItems: 4 },
+      ...draftMeta,
+    },
+  },
+  effects: {
+    kind: "object",
+    fields: {
+      values: {
+        kind: "stringArray",
+        description: "Up to 4 experiential descriptors from the allowed list ONLY: [" + ALLOWED_EFFECTS.join(", ") + "]. Never medical.",
+        allowed: ALLOWED_EFFECTS,
+        maxItems: 4,
+      },
+      ...draftMeta,
+    },
+  },
+  tags: {
+    kind: "object",
+    fields: {
+      values: { kind: "stringArray", description: "0-3 merchandising tags from the allowed list only.", allowed: ALLOWED_PRODUCT_TAGS, maxItems: 3 },
+      ...draftMeta,
+    },
+  },
+});

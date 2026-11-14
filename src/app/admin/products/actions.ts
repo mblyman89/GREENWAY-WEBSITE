@@ -13,7 +13,7 @@ import {
   computeGaps,
   setEnrichmentStatusForKeys,
 } from "@/lib/enrichment/store";
-import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
+import { getPublishedVersion, getVersionItems, getItemBySourceKey } from "@/lib/pos/menu-version";
 import {
   BULK_STATUS_MAX,
   bulkOutcomeMessage,
@@ -34,6 +34,7 @@ import {
   generateProductSeo,
   reviewSuggestion,
   getSuggestion,
+  listSuggestions,
   type ProductFacts,
 } from "@/lib/ai/suggestions";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
@@ -42,6 +43,8 @@ import { checkCompliance } from "@/lib/ai/compliance";
 import { getMedia } from "@/lib/media/store";
 import { rememberImageAttach } from "@/lib/catalog/image-memory-server";
 import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
+import { draftAllFieldsForProduct } from "@/lib/enrichment/ai-draft-v2-server";
+import { ACCEPT_ALL_THRESHOLD, acceptAllEligible, type SuggestionLite } from "@/lib/enrichment/ai-draft-v2-core";
 import {
   attachImageToGallery,
   detachImageFromGallery,
@@ -442,8 +445,24 @@ export async function generateProductAi(formData: FormData): Promise<void> {
     cbd: orNull(formData.get("posCbd")),
   };
 
+  let allNote: Record<string, unknown> | undefined;
   try {
-    if (kind === "tags") {
+    if (kind === "all") {
+      // D244 E-4: ONE call drafts every field. Facts are read on the SERVER
+      // from the published menu row (vendor + attached photos included - F-08);
+      // the form only names the product.
+      const published = await getPublishedVersion().catch(() => null);
+      const row = published ? await getItemBySourceKey(published.id, key).catch(() => null) : null;
+      const out = await draftAllFieldsForProduct(
+        key,
+        row
+          ? { name: row.name, product_name: row.product_name, brand_name: row.brand_name, vendor_name: row.vendor_name, category: row.category, strain_type: row.strain_type, strain_name: row.strain_name, thc: row.thc, cbd: row.cbd }
+          : { name: facts.name, brand_name: facts.brand ?? null, vendor_name: null, category: facts.category ?? null, strain_type: facts.strainType ?? null, strain_name: facts.strainName ?? null, thc: facts.thc ?? null, cbd: facts.cbd ?? null },
+        session.userId,
+      );
+      if (out.saved.length === 0) throw new Error("The AI reply had nothing usable for any field. Try again.");
+      allNote = { saved: out.saved.map((x) => `${x.field}:${x.confidence}${x.bestGuess ? "?" : ""}`), skipped: out.skipped.map((x) => x.field), photos: out.photos, vendor: Boolean(out.vendor) };
+    } else if (kind === "tags") {
       await generateProductTags(key, facts, session.userId);
     } else if (kind === "sensory") {
       await generateProductSensory(key, facts, session.userId);
@@ -477,11 +496,50 @@ export async function generateProductAi(formData: FormData): Promise<void> {
     action: "product.ai_generated",
     entityType: "product",
     entityId: key,
-    after: { kind },
+    after: allNote ? { kind, ...allNote } : { kind },
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   redirect(detailUrl(key, listBack, "?ai=1", "#ai"));
+}
+
+/**
+ * Write an accepted suggestion's value to the enrichment. Returns an error
+ * sentence (nothing written) or null. Shared by Accept and "Accept all".
+ */
+async function applyAcceptedValue(
+  key: string,
+  sugg: { field_key: string; suggested_value: string | null },
+  userId: string,
+): Promise<string | null> {
+  if (sugg.field_key === SEO_FIELD_KEY) {
+    // R23 (fix 4): one "seo" suggestion carries both parts; re-cleaned here
+    // so a row edited in the database can never exceed the length rules.
+    const seo = parseSeoSuggestion(sugg.suggested_value);
+    if (!seo) return "That SEO draft could not be read. Draft it again.";
+    await ensureEnrichment(key, {}, userId);
+    await updateEnrichment(key, { seo_title: seo.title, seo_description: seo.description }, userId);
+    return null;
+  }
+  await ensureEnrichment(key, {}, userId);
+  if (sugg.field_key === "description") {
+    await updateEnrichment(key, { description: sugg.suggested_value }, userId);
+  } else if (sugg.field_key === "display_name" || sugg.field_key === "short_description") {
+    // D244 E-4: the all-fields draft also proposes these two.
+    const v = String(sugg.suggested_value ?? "").trim();
+    if (!v) return "That draft is empty. Draft it again.";
+    await updateEnrichment(key, { [sugg.field_key]: v } as Parameters<typeof updateEnrichment>[1], userId);
+  } else if (sugg.field_key === "tags") {
+    const tags = (sugg.suggested_value ?? "")
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => ALLOWED_TAGS.has(t));
+    await updateEnrichment(key, { tags }, userId);
+  }
+  // sensory + effects have no enrichment column; they are validated facts that
+  // live on the accepted suggestion and are promoted to the KB (on accept here
+  // and again on publish via writeBackOnPublish). No enrichment write needed.
+  return null;
 }
 
 /** Accept an AI suggestion: apply its value to the enrichment, mark accepted. */
@@ -509,28 +567,8 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
     redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(gate.message), "#ai"));
   }
 
-  await ensureEnrichment(key, {}, session.userId);
-
-  if (sugg!.field_key === "description") {
-    await updateEnrichment(key, { description: sugg!.suggested_value }, session.userId);
-  } else if (sugg!.field_key === "tags") {
-    const tags = (sugg!.suggested_value ?? "")
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => ALLOWED_TAGS.has(t));
-    await updateEnrichment(key, { tags }, session.userId);
-  } else if (sugg!.field_key === SEO_FIELD_KEY) {
-    // R23 (fix 4): one "seo" suggestion carries both parts; re-cleaned here
-    // so a row edited in the database can never exceed the length rules.
-    const seo = parseSeoSuggestion(sugg!.suggested_value);
-    if (!seo) {
-      redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("That SEO draft could not be read. Draft it again."), "#ai"));
-    }
-    await updateEnrichment(key, { seo_title: seo!.title, seo_description: seo!.description }, session.userId);
-  }
-  // sensory + effects have no enrichment column; they are validated facts that
-  // live on the accepted suggestion and are promoted to the KB (on accept here
-  // and again on publish via writeBackOnPublish). No enrichment write needed.
+  const applyErr = await applyAcceptedValue(key, sugg!, session.userId);
+  if (applyErr) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(applyErr), "#ai"));
 
   await reviewSuggestion(id, "accepted", session.userId);
 
@@ -548,6 +586,59 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   redirect(detailUrl(key, listBack, "?saved=1", "#ai"));
+}
+
+/**
+ * D244 E-4: "Accept all >= 85%". Accepts the NEWEST pending all-fields draft
+ * per field whose confidence clears ACCEPT_ALL_THRESHOLD and that is NOT a
+ * best guess (owner Q4 is open, so best guesses always need a person). Every
+ * one still goes through the compliance re-scan; a blocked one is skipped and
+ * named in the flash. Owner Q3 (85 vs 90) is open - the bar is one constant.
+ */
+export async function acceptAllHighConfidence(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = cleanKey(formData.get("key"));
+  const listBack = cleanBack(formData.get("back"));
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+
+  const pending = await listSuggestions("product", key, "pending").catch(() => null);
+  if (!pending) {
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("The drafts could not be read just now. Nothing was accepted."), "#ai"));
+  }
+  const ids = acceptAllEligible(pending as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
+  if (ids.length === 0) {
+    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(`No draft is at or above ${ACCEPT_ALL_THRESHOLD}% (best guesses never count). Review them one by one.`), "#ai"));
+  }
+  const byId = new Map(pending!.map((p) => [p.id, p] as const));
+  const accepted: string[] = [];
+  const blocked: string[] = [];
+  for (const id of ids) {
+    const sugg = byId.get(id)!;
+    const gate = await acceptWithComplianceGate(sugg);
+    if (!gate.ok) {
+      blocked.push(sugg.field_key);
+      continue;
+    }
+    const err = await applyAcceptedValue(key, sugg, session.userId);
+    if (err) {
+      blocked.push(sugg.field_key);
+      continue;
+    }
+    await reviewSuggestion(id, "accepted", session.userId);
+    accepted.push(sugg.field_key);
+  }
+  const writeback = accepted.length ? await writeBackOnPublish(key, session.userId) : null;
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.ai_accepted_all",
+    entityType: "product",
+    entityId: key,
+    after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, kb_writeback: writeback ?? undefined },
+  });
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  const msg = `Accepted ${accepted.length} draft${accepted.length === 1 ? "" : "s"} at or above ${ACCEPT_ALL_THRESHOLD}%${accepted.length ? ` (${accepted.join(", ")})` : ""}.${blocked.length ? ` Skipped ${blocked.join(", ")} - review those by hand.` : ""}`;
+  redirect(detailUrl(key, listBack, (accepted.length ? "?saved=1&note=" : "?error=") + encodeURIComponent(msg), "#ai"));
 }
 
 /** Reject an AI suggestion (discard, mark rejected). */
