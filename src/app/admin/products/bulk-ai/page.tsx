@@ -15,7 +15,28 @@ import {
   bulkGenerateDescriptionsAction,
   bulkAcceptSuggestionAction,
   bulkRejectSuggestionAction,
+  queueBulkAiV2Action,
+  cancelBulkAiV2Action,
+  bulkAcceptAllForProductAction,
 } from "./actions";
+import { SEO_FIELD_KEY, seoSuggestionDisplay } from "@/lib/enrichment/seo-draft-core";
+import {
+  ACCEPT_ALL_THRESHOLD,
+  FIELD_LABEL,
+  evidenceLabel,
+  isDraftFieldKey,
+  parseEvidenceSource,
+  sensoryText,
+} from "@/lib/enrichment/ai-draft-v2-core";
+import {
+  BULK_AI_V2_MAX_QUEUE,
+  bulkCounts,
+  bulkProgressText,
+  bulkVendorStrip,
+  parseReviewMin,
+  reviewGroups,
+} from "@/lib/enrichment/bulk-ai-v2-core";
+import { loadBulkAiV2Status } from "@/lib/enrichment/bulk-ai-v2-server";
 
 export const dynamic = "force-dynamic";
 // D244 E-0: a 25-product batch on a reasoning model can run for minutes.
@@ -24,11 +45,25 @@ export const maxDuration = 300;
 export default async function BulkAiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ generated?: string; failed?: string; reason?: string; accepted?: string; error?: string; back?: string }>;
+  searchParams: Promise<{
+    generated?: string;
+    failed?: string;
+    reason?: string;
+    accepted?: string;
+    error?: string;
+    back?: string;
+    // D244 E-5
+    queued?: string;
+    accepted_note?: string;
+    vendor?: string;
+    min?: string;
+  }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
-  const { generated, failed, reason, accepted, error, back } = sp;
+  const { generated, failed, reason, accepted, error, back, queued, accepted_note } = sp;
+  const vendorFilter = String(sp.vendor ?? "").trim();
+  const minFilter = parseReviewMin(sp.min);
   const draftModel = aiMode === "sprint" ? aiHeavyModelId : aiLightModelId;
 
   if (!isSupabaseServiceConfigured) {
@@ -66,8 +101,25 @@ export default async function BulkAiPage({
 
   // Map of pos key -> product name for the review section.
   const nameByKey = new Map(gaps.map((g) => [g.posKey, g.name]));
-  const pending = await listPendingByType("product");
-  const pendingDesc = pending.filter((s) => s.field_key === "description");
+  // D244 E-5: enough rows for a vendor's worth of all-fields drafts (7 per product).
+  const pending = await listPendingByType("product", 1500);
+  // The old grid shows only the old description-only drafts; all-fields (v2) drafts are grouped below.
+  const pendingDesc = pending.filter((s) => s.field_key === "description" && !parseEvidenceSource(s.source).v2);
+
+  // D244 E-5: the background queue + the grouped review grid.
+  const bulk = await loadBulkAiV2Status();
+  const vendorByKey = new Map(items.map((i) => [i.source_item_id, (i.vendor_name ?? "").trim() || null] as const));
+  const vendors = [...new Set(items.map((i) => (i.vendor_name ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const vendorCount = new Map<string, number>();
+  for (const i of items) {
+    const v = (i.vendor_name ?? "").trim();
+    if (v) vendorCount.set(v, (vendorCount.get(v) ?? 0) + 1);
+  }
+  const v2Rows = pending.filter((s) => parseEvidenceSource(s.source).v2 && (isDraftFieldKey(s.field_key) || s.field_key === SEO_FIELD_KEY));
+  const groups = reviewGroups(v2Rows, { vendorByKey, vendor: vendorFilter, min: minFilter });
+  const failedItems = bulk.ok ? bulk.state.items.filter((i) => i.status === "failed") : [];
+  const counts = bulk.ok ? bulkCounts(bulk.state) : null;
+  const pickable = gaps.slice(0, 400);
 
   return (
     <div>
@@ -121,11 +173,103 @@ export default async function BulkAiPage({
               : ""}
           </p>
         )}
+        {queued && (
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]" data-testid="bulk-v2-queued">
+            {queued}
+          </div>
+        )}
+        {accepted_note && (
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]" data-testid="bulk-v2-accepted">
+            {accepted_note}
+          </div>
+        )}
         {accepted && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             Saved to the product. Publish the product to make it live.
           </div>
         )}
+
+        {/* D244 E-5: background all-fields drafts (queue + progress) */}
+        <section id="queue" className="rounded-xl border border-[var(--admin-accent)]/30 bg-[#0a0a0a] p-4" data-testid="bulk-v2-queue">
+          <h2 className="text-sm font-bold text-white">Draft every field with AI, in the background</h2>
+          <p className="mt-1 text-xs text-white/60">
+            Each product gets the same all-fields draft as its page&apos;s &ldquo;Enrich this product (all fields)&rdquo; button: display name,
+            descriptions, SEO, aroma/flavor/terpenes, effects and tags, each with a confidence and the evidence it used. The
+            worker drafts about a dozen products a run, every minute, after you close this tab. Nothing is saved to a product
+            until a person accepts it below.
+          </p>
+          <div className="mt-3 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white/80" data-testid="bulk-v2-progress">
+            {bulk.ok ? bulkProgressText(bulk.state) : <span className="text-red-300">The background queue could not be read: {bulk.error}</span>}
+            {bulk.ok && bulk.state.lastNote ? (
+              <span className="mt-1 block text-xs text-white/50">
+                Last run{bulk.state.lastRunAt ? ` (${new Date(bulk.state.lastRunAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })})` : ""}: {bulk.state.lastNote}
+              </span>
+            ) : null}
+          </div>
+          {bulk.ok && bulkVendorStrip(bulk.state).length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-1.5 text-[0.7rem]" data-testid="bulk-v2-vendors">
+              {bulkVendorStrip(bulk.state).map((v) => (
+                <li key={v.vendor} className="rounded-full border border-white/15 px-2 py-0.5 text-white/70">
+                  {v.vendor}: {v.done} of {v.total} drafted{v.failed ? ` · ${v.failed} failed` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+          {failedItems.length > 0 && (
+            <details className="mt-2 text-xs text-amber-200" data-testid="bulk-v2-failures">
+              <summary className="cursor-pointer">{failedItems.length} product{failedItems.length === 1 ? "" : "s"} failed - see why</summary>
+              <ul className="mt-1 space-y-0.5 pl-4">
+                {failedItems.slice(0, 50).map((i) => (
+                  <li key={i.key}>
+                    <Link href={`/admin/products/${encodeURIComponent(i.key)}`} className="underline">
+                      {i.name}
+                    </Link>
+                    : {i.error ?? "no reason recorded"}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {counts && counts.queued > 0 && (
+            <form action={cancelBulkAiV2Action} className="mt-2">
+              <button type="submit" className={CHIP_NEUTRAL} data-testid="bulk-v2-cancel">
+                Cancel the {counts.queued} waiting
+              </button>
+            </form>
+          )}
+          <form action={queueBulkAiV2Action} className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-white/70">
+                Every live product from one vendor
+                <select name="vendor" defaultValue="" className="mt-1 block rounded-lg border border-white/15 bg-black px-2 py-1.5 text-sm text-white" data-testid="bulk-v2-vendor">
+                  <option value="">(none - use the ticked products)</option>
+                  {vendors.map((v) => (
+                    <option key={v} value={v}>
+                      {v} ({vendorCount.get(v) ?? 0})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button type="submit" variant="special" size="sm" data-testid="bulk-v2-draft">
+                ✨ Draft with AI (all fields, background)
+              </Button>
+            </div>
+            <details className="text-xs text-white/60">
+              <summary className="cursor-pointer">Or tick products ({pickable.length} live products listed; up to {BULK_AI_V2_MAX_QUEUE} queue per press)</summary>
+              <div className="mt-2 grid max-h-72 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                {pickable.map((g) => (
+                  <label key={g.posKey} className="flex items-center gap-2 rounded border border-white/10 bg-black px-2 py-1 text-white/80">
+                    <input type="checkbox" name="keys" value={g.posKey} className="h-3.5 w-3.5" />
+                    <span className="truncate">
+                      {g.name}
+                      <span className="ml-1 text-white/40">· {vendorByKey.get(g.posKey) ?? "no vendor"}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </details>
+          </form>
+        </section>
 
         {/* Selection: products missing descriptions */}
         <form action={bulkGenerateDescriptionsAction} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
@@ -162,6 +306,117 @@ export default async function BulkAiPage({
             Tip: uncheck any you don&apos;t want. We draft up to 25 per click to keep it fast.
           </p>
         </form>
+
+        {/* D244 E-5: review grid v2 - all-fields drafts grouped by product */}
+        <section id="review-v2" data-testid="bulk-v2-review">
+          <h2 className="mb-2 text-sm font-bold text-white">
+            All-fields drafts by product <span className="text-white/40">({groups.length} product{groups.length === 1 ? "" : "s"})</span>
+          </h2>
+          <form method="get" className="mb-3 flex flex-wrap items-end gap-2 text-xs text-white/70" data-testid="bulk-v2-filter">
+            <label>
+              Vendor
+              <select name="vendor" defaultValue={vendorFilter} className="mt-1 block rounded-lg border border-white/15 bg-black px-2 py-1 text-sm text-white">
+                <option value="">All vendors</option>
+                {vendors.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Confidence at least
+              <select name="min" defaultValue={String(minFilter)} className="mt-1 block rounded-lg border border-white/15 bg-black px-2 py-1 text-sm text-white">
+                <option value="0">Any</option>
+                <option value="50">50%</option>
+                <option value="70">70%</option>
+                <option value="85">85%</option>
+              </select>
+            </label>
+            <button type="submit" className={CHIP_NEUTRAL}>
+              Filter
+            </button>
+          </form>
+          {groups.length === 0 ? (
+            <p className="text-sm text-white/50">No all-fields drafts match. Queue products above; drafts appear here as the worker finishes them.</p>
+          ) : (
+            <div className="space-y-4">
+              {groups.map((g) => (
+                <div key={g.key} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4" data-testid="bulk-v2-group">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white">
+                      {nameByKey.get(g.key) ?? g.key}
+                      <span className="ml-2 text-xs font-normal text-white/40">{g.vendor ?? "no vendor"}</span>
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {g.eligible > 0 ? (
+                        <>
+                          <form action={bulkAcceptAllForProductAction}>
+                            <input type="hidden" name="key" value={g.key} />
+                            <input type="hidden" name="vendor_filter" value={vendorFilter} />
+                            <input type="hidden" name="min" value={String(minFilter)} />
+                            <button type="submit" className={CHIP_ACTION} data-testid="bulk-v2-accept-all">
+                              Accept all ≥ {ACCEPT_ALL_THRESHOLD}% ({g.eligible})
+                            </button>
+                          </form>
+                          <form action={bulkAcceptAllForProductAction}>
+                            <input type="hidden" name="key" value={g.key} />
+                            <input type="hidden" name="publish" value="1" />
+                            <input type="hidden" name="vendor_filter" value={vendorFilter} />
+                            <input type="hidden" name="min" value={String(minFilter)} />
+                            <button type="submit" className={CHIP_ACTION} data-testid="bulk-v2-accept-publish" title="Publishes only a draft that has a photo">
+                              Accept all ≥ {ACCEPT_ALL_THRESHOLD}% & publish
+                            </button>
+                          </form>
+                        </>
+                      ) : (
+                        <span className="text-[0.7rem] text-white/40">Nothing at or above {ACCEPT_ALL_THRESHOLD}% (best guesses never count) - review on the product page.</span>
+                      )}
+                      <Link href={`/admin/products/${encodeURIComponent(g.key)}#ai`} className="self-center text-xs text-white/50 hover:text-white">
+                        Open product ↗
+                      </Link>
+                    </div>
+                  </div>
+                  <ul className="mt-3 space-y-2">
+                    {g.rows.map((r) => {
+                      const ev = parseEvidenceSource(r.source);
+                      const pct = Math.round((r.confidence ?? 0) * 100);
+                      const shown =
+                        r.field_key === SEO_FIELD_KEY
+                          ? (seoSuggestionDisplay(r.suggested_value) ?? r.suggested_value)
+                          : r.field_key === "sensory"
+                            ? sensoryText(r.suggested_value) || r.suggested_value
+                            : r.suggested_value;
+                      const flags = checkCompliance(shown ?? "").flags;
+                      return (
+                        <li key={r.id} className="rounded-lg border border-white/10 bg-black p-2 text-sm">
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="font-semibold text-white">{isDraftFieldKey(r.field_key) ? FIELD_LABEL[r.field_key] : r.field_key}</span>
+                            <span className={`rounded px-1.5 py-0.5 font-semibold ${pct >= ACCEPT_ALL_THRESHOLD ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : pct >= 50 ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]" : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]"}`}>
+                              {pct}%
+                            </span>
+                            {ev.bestGuess && (
+                              <span className="rounded border border-amber-400/40 px-1.5 py-0.5 text-amber-200" data-testid="bulk-v2-best-guess">
+                                best guess
+                              </span>
+                            )}
+                            {flags.length > 0 && <span className="text-red-400">⚠ {flags.length} flag{flags.length > 1 ? "s" : ""}</span>}
+                            {ev.evidence.map((id) => (
+                              <span key={id} className="rounded-full border border-white/15 px-1.5 py-0.5 text-white/50">
+                                {evidenceLabel(id)}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="mt-1 whitespace-pre-wrap text-white/80">{shown}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Review grid */}
         <div id="review">

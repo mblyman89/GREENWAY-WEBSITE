@@ -34,7 +34,6 @@ import {
   generateProductSeo,
   reviewSuggestion,
   getSuggestion,
-  listSuggestions,
   type ProductFacts,
 } from "@/lib/ai/suggestions";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
@@ -44,7 +43,8 @@ import { getMedia } from "@/lib/media/store";
 import { rememberImageAttach } from "@/lib/catalog/image-memory-server";
 import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
 import { draftAllFieldsForProduct } from "@/lib/enrichment/ai-draft-v2-server";
-import { ACCEPT_ALL_THRESHOLD, acceptAllEligible, type SuggestionLite } from "@/lib/enrichment/ai-draft-v2-core";
+import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
+import { acceptAllMessage, acceptHighConfidenceForKey, applyAcceptedValue } from "@/lib/enrichment/accept-drafts-server";
 import {
   attachImageToGallery,
   detachImageFromGallery,
@@ -54,7 +54,6 @@ import {
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 import { researchUrl, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { persistSuggestion } from "@/lib/ai/suggestions";
-import { SEO_FIELD_KEY, parseSeoSuggestion } from "@/lib/enrichment/seo-draft-core";
 import {
   validateResearchUrl,
   packImageCandidates,
@@ -503,45 +502,6 @@ export async function generateProductAi(formData: FormData): Promise<void> {
   redirect(detailUrl(key, listBack, "?ai=1", "#ai"));
 }
 
-/**
- * Write an accepted suggestion's value to the enrichment. Returns an error
- * sentence (nothing written) or null. Shared by Accept and "Accept all".
- */
-async function applyAcceptedValue(
-  key: string,
-  sugg: { field_key: string; suggested_value: string | null },
-  userId: string,
-): Promise<string | null> {
-  if (sugg.field_key === SEO_FIELD_KEY) {
-    // R23 (fix 4): one "seo" suggestion carries both parts; re-cleaned here
-    // so a row edited in the database can never exceed the length rules.
-    const seo = parseSeoSuggestion(sugg.suggested_value);
-    if (!seo) return "That SEO draft could not be read. Draft it again.";
-    await ensureEnrichment(key, {}, userId);
-    await updateEnrichment(key, { seo_title: seo.title, seo_description: seo.description }, userId);
-    return null;
-  }
-  await ensureEnrichment(key, {}, userId);
-  if (sugg.field_key === "description") {
-    await updateEnrichment(key, { description: sugg.suggested_value }, userId);
-  } else if (sugg.field_key === "display_name" || sugg.field_key === "short_description") {
-    // D244 E-4: the all-fields draft also proposes these two.
-    const v = String(sugg.suggested_value ?? "").trim();
-    if (!v) return "That draft is empty. Draft it again.";
-    await updateEnrichment(key, { [sugg.field_key]: v } as Parameters<typeof updateEnrichment>[1], userId);
-  } else if (sugg.field_key === "tags") {
-    const tags = (sugg.suggested_value ?? "")
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => ALLOWED_TAGS.has(t));
-    await updateEnrichment(key, { tags }, userId);
-  }
-  // sensory + effects have no enrichment column; they are validated facts that
-  // live on the accepted suggestion and are promoted to the KB (on accept here
-  // and again on publish via writeBackOnPublish). No enrichment write needed.
-  return null;
-}
-
 /** Accept an AI suggestion: apply its value to the enrichment, mark accepted. */
 export async function acceptSuggestion(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
@@ -601,33 +561,13 @@ export async function acceptAllHighConfidence(formData: FormData): Promise<void>
   const listBack = cleanBack(formData.get("back"));
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
 
-  const pending = await listSuggestions("product", key, "pending").catch(() => null);
-  if (!pending) {
-    redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent("The drafts could not be read just now. Nothing was accepted."), "#ai"));
-  }
-  const ids = acceptAllEligible(pending as SuggestionLite[], ACCEPT_ALL_THRESHOLD);
-  if (ids.length === 0) {
+  // D244 E-5: the same per-product accept the Bulk AI grid uses.
+  const out = await acceptHighConfidenceForKey(key, session.userId);
+  if (!out.ok) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(out.error), "#ai"));
+  if (out.eligible === 0) {
     redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(`No draft is at or above ${ACCEPT_ALL_THRESHOLD}% (best guesses never count). Review them one by one.`), "#ai"));
   }
-  const byId = new Map(pending!.map((p) => [p.id, p] as const));
-  const accepted: string[] = [];
-  const blocked: string[] = [];
-  for (const id of ids) {
-    const sugg = byId.get(id)!;
-    const gate = await acceptWithComplianceGate(sugg);
-    if (!gate.ok) {
-      blocked.push(sugg.field_key);
-      continue;
-    }
-    const err = await applyAcceptedValue(key, sugg, session.userId);
-    if (err) {
-      blocked.push(sugg.field_key);
-      continue;
-    }
-    await reviewSuggestion(id, "accepted", session.userId);
-    accepted.push(sugg.field_key);
-  }
-  const writeback = accepted.length ? await writeBackOnPublish(key, session.userId) : null;
+  const { accepted, blocked, writeback } = out;
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
@@ -637,7 +577,7 @@ export async function acceptAllHighConfidence(formData: FormData): Promise<void>
     after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, kb_writeback: writeback ?? undefined },
   });
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
-  const msg = `Accepted ${accepted.length} draft${accepted.length === 1 ? "" : "s"} at or above ${ACCEPT_ALL_THRESHOLD}%${accepted.length ? ` (${accepted.join(", ")})` : ""}.${blocked.length ? ` Skipped ${blocked.join(", ")} - review those by hand.` : ""}`;
+  const msg = acceptAllMessage(accepted, blocked);
   redirect(detailUrl(key, listBack, (accepted.length ? "?saved=1&note=" : "?error=") + encodeURIComponent(msg), "#ai"));
 }
 

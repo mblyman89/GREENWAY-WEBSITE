@@ -43,6 +43,10 @@
  * automatic onboarding Start of rebuilt Cultivera manifests
  * (runCultiveraAutoStart, 600 s budget, its own lease in site_settings).
  *
+ * D244 E-5 (no new cron). When nothing else ran, it drafts products queued by
+ * "Draft with AI" on the Bulk AI page (runBulkAiV2, 540 s budget, its own
+ * lease in site_settings).
+ *
  * AUTH. The same fail-closed preamble as /api/cron/leafly-ack-sweep (copied,
  * not shared, for the reason recorded there):
  *   - CRON_SECRET set            -> Bearer must match, else staff session.
@@ -58,6 +62,8 @@ import { runCultiveraAutoStart } from "@/lib/inventory/cultivera-auto-start";
 import { AUTO_START_CRON_BUDGET_MS } from "@/lib/inventory/cultivera-auto-start-core";
 import { runMailReadBg } from "@/lib/pos/cultivera-mail-read-bg";
 import { MAIL_READ_BG_BUDGET_MS } from "@/lib/pos/cultivera-mail-read-bg-core";
+import { runBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
+import { BULK_AI_V2_BUDGET_MS } from "@/lib/enrichment/bulk-ai-v2-core";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +108,7 @@ export async function GET(req: NextRequest) {
   // carries on the automatic onboarding Start of rebuilt Cultivera manifests. No new cron. Its
   // own lease means one run at a time; an idle state costs one read of one site_settings row.
   // R74 S34: a minute that submitted or ingested a batch has used its time.
-  if (batch.submitted > 0 || batch.ingested > 0) return NextResponse.json({ ...result, batch, autoStart: null, mailRead: null }, { status: 200 });
+  if (batch.submitted > 0 || batch.ingested > 0) return NextResponse.json({ ...result, batch, autoStart: null, mailRead: null, bulkAi: null }, { status: 200 });
   let autoStart: Awaited<ReturnType<typeof runCultiveraAutoStart>> | null = null;
   if (result.ok && result.skipped) {
     autoStart = await runCultiveraAutoStart({ budgetMs: AUTO_START_CRON_BUDGET_MS, trigger: "worker" });
@@ -114,7 +120,14 @@ export async function GET(req: NextRequest) {
   if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run)) {
     mailRead = await runMailReadBg({ budgetMs: MAIL_READ_BG_BUDGET_MS, trigger: "worker" });
   }
-  return NextResponse.json({ ...result, batch, autoStart, mailRead }, { status: result.ok ? 200 : 500 });
+  // D244 E-5: a tick with no lookup, no automatic start and no background reading drafts queued
+  // products with AI ("Draft with AI" on the Bulk AI page). No new cron. Its own lease means one
+  // run at a time; an empty queue costs one read of one site_settings row.
+  let bulkAi: Awaited<ReturnType<typeof runBulkAiV2>> | null = null;
+  if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run) && !(mailRead?.ok && !mailRead.skipped)) {
+    bulkAi = await runBulkAiV2({ budgetMs: BULK_AI_V2_BUDGET_MS, trigger: "worker" });
+  }
+  return NextResponse.json({ ...result, batch, autoStart, mailRead, bulkAi }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.
