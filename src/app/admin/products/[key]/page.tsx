@@ -47,6 +47,8 @@ import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/m
 import { readLibraryPickerAssets, readImageSearch } from "@/lib/media/library-picker-server";
 import { confidenceText, parseImageSearchScope, rankSearchResults } from "@/lib/catalog/image-recommend-core";
 import { loadRecommendPanel } from "@/lib/enrichment/image-recommend-v3-server";
+import { productIdentityRows } from "@/lib/enrichment/product-identity-core";
+import { readWorklistVendorData } from "@/lib/enrichment/worklist-server";
 import { cardFacts, currentFields } from "@/lib/enrichment/ai-draft-v2-server";
 import { enrichBatchConfigured, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
 import { ENRICH_MODES, productBatchLine } from "@/lib/enrichment/enrich-batch-core";
@@ -170,6 +172,8 @@ export default async function ProductEditorPage({
   // shelf, name searches), in parallel with the command center.
   const recommendP = enrichmentP.then((e) => loadRecommendPanel({ item, enrichment: e }));
   recommendP.catch(() => undefined);
+  // D244 R-7: vendor display names for the identity header.
+  const vendorDataP = readWorklistVendorData().catch(() => null);
   const [enrichment, brands, productLots, allSuggestions] = await Promise.all([
     enrichmentP,
     brandsP,
@@ -208,6 +212,22 @@ export default async function ProductEditorPage({
   });
   const center = await centerP;
   const recommend = await recommendP.catch(() => null);
+  const vendorData = await vendorDataP;
+  // D244 R-7 (owner: "category and type and vendor assigned to it ... at the
+  // top of the page with its name"). Same vendor the recommender used.
+  const identityVendorId = recommend?.vendorId ?? enrichment?.vendor_id ?? null;
+  const identityRows = productIdentityRows({
+    category: item.category,
+    posInventoryType: item.pos_inventory_type,
+    posInventoryCategory: item.pos_inventory_category,
+    brand: item.brand_name,
+    strainType: item.strain_type,
+    strainName: item.strain_name,
+    posVendorName: item.vendor_name,
+    vendorId: identityVendorId,
+    vendorVia: recommend?.vendorVia ?? (enrichment?.vendor_id ? "enrichment" : null),
+    vendorLabel: identityVendorId ? (vendorData?.labels.get(identityVendorId.toLowerCase()) ?? null) : null,
+  });
   // SLICE 75 — the guidance panel is permanent; this flips it to its green
   // "fully enriched" state when every checklist row is done.
   const checklistDone = checklistComplete(center.checklist);
@@ -275,6 +295,28 @@ export default async function ProductEditorPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {/* D244 R-7: what this product IS - the same facts the photo
+            recommender and the AI drafts now read (type + vendor). */}
+        <dl data-testid="product-identity" className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[#0a0a0a] p-3 text-xs sm:grid-cols-3 lg:grid-cols-6">
+          {identityRows.map((r) => (
+            <div key={r.key} data-testid={`identity-${r.key}`} className="min-w-0">
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">{r.label}</dt>
+              <dd className={`truncate font-semibold ${r.missing ? "text-[var(--admin-orange)]" : "text-white"}`} title={r.value}>
+                {r.key === "vendor" && identityVendorId ? (
+                  <Link href={`/admin/vendors/${identityVendorId}`} className="hover:underline">
+                    {r.value}
+                  </Link>
+                ) : (
+                  r.value
+                )}
+              </dd>
+              {r.hint ? <dd className="truncate text-[10px] text-white/40">{r.hint}</dd> : null}
+            </div>
+          ))}
+          <p className="col-span-full text-[10px] text-white/40">
+            The recommended photos and the AI drafts use this type and vendor: a photo of a different type ranks lower, and the draft writes for this type only.
+          </p>
+        </dl>
         <DetailNav posKey={key} back={listBack} position="top" />
         {/* D244 R-5: this card inside its vendor's Copilot session. */}
         {recommend && (

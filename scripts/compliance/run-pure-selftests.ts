@@ -1386,6 +1386,7 @@ import { __runLotEvidenceTests } from "../../src/lib/enrichment/lot-evidence-cor
 import { __runDraftEditTests } from "../../src/lib/enrichment/draft-edit-core";
 import { __runEnrichModelCoreTests } from "../../src/lib/ai/enrich-model-core";
 import { __runCopilotCoreTests } from "../../src/lib/enrichment/copilot-core";
+import { __runProductIdentityTests } from "../../src/lib/enrichment/product-identity-core";
 import { __runMediaEmbedTests } from "../../src/lib/media/media-embed-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
@@ -2806,7 +2807,7 @@ __runLiquidVolumeTests();
   assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 41); // R50 A4: cutover failure-alert planner
   assertRan("cutover-weekend-core", __runCutoverWeekendCoreTests(), 42); // R50 A5: the dated, timed cutover weekend on one page
   assertRan("cutover-drift-core", __runCutoverDriftCoreTests(), 48); // R50 A6: daily drift check 11/02-11/08 (on hand vs Cultivera + every recorded change)
-  assertRan("image-recommend-core", __runImageRecommendCoreTests(), 40); // R51: onboarding image recommendations (memory > on record > name match, confidence %); D244 R-4: +5 semantic (meaning) evidence
+  assertRan("image-recommend-core", __runImageRecommendCoreTests(), 47); // R51: onboarding image recommendations (memory > on record > name match, confidence %); D244 R-4: +5 semantic (meaning) evidence; D244 R-7: +7 type evidence
   assertRan("gemini-request-core", __runGeminiRequestCoreTests(), 19); // R51 D1: Gemini Interactions body (system_instruction, url_context, service_tier, seed, response_format); R66: model-aware
   assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 46); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
@@ -2972,6 +2973,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("draft-edit-core", __runDraftEditTests(), 21); // D244 R-2 edit a draft on the grid
   assertRan("media-embed-core", __runMediaEmbedTests(), 55); // D244 R-4: semantic photo search - embed text, hashes, plan, RRF, calibrated confidence, lease
   assertRan("enrich-model-core", __runEnrichModelCoreTests(), 16); // D244 R-1: enrichment model pin (AI_ENRICH_MODEL), provider + effort clamp, Gemini 32K floor
+  assertRan("product-identity-core", __runProductIdentityTests(), 26); // D244 R-7: identity header rows, form of a category, type words, form match, prompt lines
   assertRan("copilot-core", __runCopilotCoreTests(), 55); // D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   console.log("ALL PURE SELF-TESTS PASSED");
 }

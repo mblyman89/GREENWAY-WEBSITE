@@ -175,7 +175,7 @@ async function defaultBuild(key: string): Promise<{ req: BatchItemReq; system: s
   if (!published) throw new Error("There is no live menu, so this product's facts could not be read.");
   const row = await getItemBySourceKey(published.id, key);
   if (!row) throw new Error("This product is not on the live menu any more.");
-  const item: DraftItem = { name: row.name, product_name: row.product_name, brand_name: row.brand_name, vendor_name: row.vendor_name, category: row.category, strain_type: row.strain_type, strain_name: row.strain_name, thc: row.thc, cbd: row.cbd };
+  const item: DraftItem = { name: row.name, product_name: row.product_name, brand_name: row.brand_name, vendor_name: row.vendor_name, category: row.category, pos_inventory_type: row.pos_inventory_type, pos_inventory_category: row.pos_inventory_category, strain_type: row.strain_type, strain_name: row.strain_name, thc: row.thc, cbd: row.cbd };
   const r = await buildAllFieldsRequestForProduct(key, item);
   return { req: { offered: r.offered, numbers: r.numbers, summary: r.summary }, system: r.system, user: r.user };
 }

@@ -255,7 +255,7 @@ export async function copilotDraftNowAction(formData: FormData): Promise<void> {
   try {
     const out = await draftAllFieldsForProduct(
       c.key,
-      { name: row!.name, product_name: row!.product_name, brand_name: row!.brand_name, vendor_name: row!.vendor_name, category: row!.category, strain_type: row!.strain_type, strain_name: row!.strain_name, thc: row!.thc, cbd: row!.cbd },
+      { name: row!.name, product_name: row!.product_name, brand_name: row!.brand_name, vendor_name: row!.vendor_name, category: row!.category, pos_inventory_type: row!.pos_inventory_type, pos_inventory_category: row!.pos_inventory_category, strain_type: row!.strain_type, strain_name: row!.strain_name, thc: row!.thc, cbd: row!.cbd },
       session.userId,
     );
     if (out.saved.length === 0) throw new Error("The AI reply had nothing usable for any field. Try again.");

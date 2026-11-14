@@ -35,6 +35,7 @@ import {
   type PhotoFacts,
 } from "@/lib/enrichment/ai-draft-v2-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
+import { identityPromptLines } from "@/lib/enrichment/product-identity-core";
 import {
   checkPotencyDraft,
   posPotencyNumbers,
@@ -55,6 +56,8 @@ function posLines(f: ProductFacts): string[] {
     `Product name (POS): ${f.name}`,
     f.brand ? `Brand (POS): ${f.brand}` : null,
     f.category ? `Category (POS): ${f.category}` : null,
+    // D244 R-7: the product's TYPE in plain words + the POS's own type words.
+    ...identityPromptLines({ category: f.category, posInventoryType: f.inventoryType, posInventoryCategory: f.inventoryCategory }),
     f.strainType && f.strainType !== "unknown" ? `Strain type (POS): ${f.strainType}` : null,
     f.strainName ? `Strain (POS): ${f.strainName}` : null,
     f.thc ? `THC (POS): ${f.thc}` : null,
