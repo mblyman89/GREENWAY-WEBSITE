@@ -409,6 +409,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/products/bulk-ai",
       },
       {
+        q: "What is the Enrichment Copilot?",
+        a: "A one-vendor work session: the products you have on hand, one card at a time, the ones with no photo first. Press 1-9 to attach a recommended photo, D to draft every field, A to accept the drafts at 80% or better, P to publish and go to the next card. The chat on the right suggests changes (shorter description, strain type and potency from the lab certificate, which photo is the product); you press Use this, and it still passes the compliance check.",
+        href: "/admin/products/copilot",
+      },
+      {
         q: "What is Product Mastering?",
         a: "It groups the many batch-level items from your POS into one clean 'master' product (one Blue Dream, not twenty batches) so your menu is tidy and photos/descriptions attach in one place.",
         href: "/admin/products/masters",

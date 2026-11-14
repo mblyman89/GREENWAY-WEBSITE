@@ -13,3 +13,14 @@ export const enrichModel: EnrichModelChoice = resolveEnrichModel({
   heavyModel: process.env.AI_MODEL_HEAVY ?? process.env.OPENAI_MODEL_HEAVY,
   effort: process.env.AI_ENRICH_REASONING_EFFORT,
 });
+
+/**
+ * D244 R-5: the Copilot's chat model. AI_COPILOT_MODEL (optional; the
+ * recommendation is the flagship, ENRICH_RECOMMENDED.hard) else the
+ * enrichment model above, with the same effort clamp.
+ */
+export const copilotModel: EnrichModelChoice = resolveEnrichModel({
+  enrichModel: process.env.AI_COPILOT_MODEL,
+  heavyModel: enrichModel.model,
+  effort: process.env.AI_ENRICH_REASONING_EFFORT,
+});
