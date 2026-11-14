@@ -46,6 +46,8 @@ import {
   reviewGroups,
 } from "@/lib/enrichment/bulk-ai-v2-core";
 import { loadBulkAiV2Status } from "@/lib/enrichment/bulk-ai-v2-server";
+import { autoApproveKeys } from "@/lib/enrichment/bulk-approve-core";
+import { BulkApproveBar } from "./BulkApproveBar";
 import { enrichBatchConfigured, enrichBatchModel, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
 import { ENRICH_MODES, batchCounts, batchProgressText, batchRecordLine } from "@/lib/enrichment/enrich-batch-core";
 
@@ -114,7 +116,8 @@ export default async function BulkAiPage({
   // Map of pos key -> product name for the review section.
   const nameByKey = new Map(gaps.map((g) => [g.posKey, g.name]));
   // D244 E-5: enough rows for a vendor's worth of all-fields drafts (7 per product).
-  const pending = await listPendingByType("product", 1500);
+  // D244 R-12: 3000 so 250+ products (7 drafts each) all show and "Approve every draft at 80%+" sees them.
+  const pending = await listPendingByType("product", 3000);
   // The old grid shows only the old description-only drafts; all-fields (v2) drafts are grouped below.
   const pendingDesc = pending.filter((s) => s.field_key === "description" && !parseEvidenceSource(s.source).v2);
 
@@ -157,6 +160,7 @@ export default async function BulkAiPage({
               "The AI writes a compliant draft of every field for each product (live: within minutes; overnight: by tomorrow).",
               "Review each draft below. Type over any draft right in its box, then press Save & accept (or Reject).",
               "Accept all takes every draft at 80% or better plus the AI’s best guesses; best guesses are flagged in “Needs a closer look”.",
+              "Many at once: tick products (or single drafts), or Select all, then Approve selected. Or press ⚡ Approve every draft at 80%+ to do every product in one press; it works through them in small chunks and shows a running total.",
               "Accepted copy saves to the product. A product goes live on its own once a person attaches a published photo.",
             ]}
           >
@@ -456,6 +460,7 @@ export default async function BulkAiPage({
               Filter
             </button>
           </form>
+          {groups.length > 0 ? <BulkApproveBar autoKeys={autoApproveKeys(groups)} threshold={ACCEPT_ALL_THRESHOLD} products={groups.length} /> : null}
           {groups.length === 0 ? (
             <p className="text-sm text-white/50">No all-fields drafts match. Queue products above; drafts appear here as the worker finishes them.</p>
           ) : (
@@ -463,7 +468,14 @@ export default async function BulkAiPage({
               {groups.map((g) => (
                 <div key={g.key} id={`product-${encodeURIComponent(g.key)}`} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4" data-testid="bulk-v2-group">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-white">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <input
+                        type="checkbox"
+                        data-approve-key={g.key}
+                        data-testid="bulk-approve-product"
+                        aria-label={`Select ${nameByKey.get(g.key) ?? g.key}`}
+                        className="h-4 w-4"
+                      />
                       {nameByKey.get(g.key) ?? g.key}
                       <span className="ml-2 text-xs font-normal text-white/40">{g.vendor ?? "no vendor"}</span>
                     </span>
@@ -510,6 +522,14 @@ export default async function BulkAiPage({
                       return (
                         <li key={r.id} className="rounded-lg border border-white/10 bg-black p-2 text-sm">
                           <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              data-approve-id={r.id}
+                              data-approve-of={g.key}
+                              data-testid="bulk-approve-draft"
+                              aria-label={`Select the ${isDraftFieldKey(r.field_key) ? FIELD_LABEL[r.field_key] : r.field_key} draft`}
+                              className="h-3.5 w-3.5"
+                            />
                             <span className="font-semibold text-white">{isDraftFieldKey(r.field_key) ? FIELD_LABEL[r.field_key] : r.field_key}</span>
                             <span className={`rounded px-1.5 py-0.5 font-semibold ${pct >= ACCEPT_ALL_THRESHOLD ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : pct >= 50 ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]" : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]"}`}>
                               {pct}%
