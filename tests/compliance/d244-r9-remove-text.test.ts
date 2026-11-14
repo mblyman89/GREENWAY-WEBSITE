@@ -36,13 +36,13 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const P: EraseProduct = { name: "Phat Panda Blue Dream 3.5g", brand: "Phat Panda", strainName: "Blue Dream", vendor: "Hollingsworth", category: "Flower" };
 
 describe("D244 R-9 remove text — pure core", () => {
-  it("all 54 self-tests (R-9 + R-11) pass and are registered", () => {
-    expect(__runTextEraseCoreTests()).toEqual({ passed: 54, failed: 0 }); // R-11 added 9 queue checks
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 54)');
+  it("all 64 self-tests (R-9 + R-11 + R-17) pass and are registered", () => {
+    expect(__runTextEraseCoreTests()).toEqual({ passed: 64, failed: 0 }); // R-11 added 9 queue checks, R-17 added 10
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 64)');
   });
 
-  it("FLUX Fill is the remover; the mask is white only inside the boxes", () => {
-    expect(ERASE_MODEL).toBe("flux-pro-1.0-fill");
+  it("FLUX Erase is the remover (D244 R-17); the mask is white only inside the boxes", () => {
+    expect(ERASE_MODEL).toBe("flux-tools/erase-v1");
     const c = checkEraseBoxes([{ x: 0.2, y: 0.2, w: 0.2, h: 0.1 }]);
     expect(c.ok).toBe(true);
     const svg = eraseMaskSvg(200, 100, c.ok ? c.boxes : []);

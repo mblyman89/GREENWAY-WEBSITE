@@ -169,7 +169,9 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 1. On the product page, press **✂ Remove text** on a Recommended photo tile (beside Attach / Attach as cover), or **✂ Text** on a gallery photo. A tile whose label names another product says so in orange: *AI: the label names "Gelato" — not this product. Remove that text?*
 2. Drag a box over each piece of text you want gone (up to 12), or press **✨ Find the text (AI)**. The AI boxes every piece of text and ticks the ones that name a different product, size or brand, giving the reason. This product's own name and the brand are kept, and **warning or compliance text is always kept**. Untick anything you want to keep.
 3. Optional: type what is under the text (for example "black jar label").
-4. Press **Remove text**. FLUX Fill repaints only inside the boxes. It takes about 10–30 seconds.
+4. Press **Remove text**. FLUX Erase clears the text inside the boxes, and only the boxed areas are pasted onto the photo. It takes about 10–30 seconds.
+
+**Why FLUX Erase (D244 R-17).** Owner, round 6: "Flux adds weird things to the removed text. Barcodes, more text, fuzzy looking text, etc." The old way asked FLUX Fill to paint the boxes with a prompt that said "no letters, no words, no numbers". Black Forest Labs' own guide says FLUX has no negative prompts and "the model focuses on the word", so naming text made it paint text. Now the tool uses FLUX Erase (`flux-tools/erase-v1`), Black Forest Labs' purpose-built remover. It takes no prompt and grows the mask 12 pixels so it covers the edges of the letters. The photo is sent at about 1 megapixel, the size Erase was trained on. The answer is then pasted back onto the original, inside the boxes only, with a soft edge, so nothing outside a box can change and the photo keeps its full size. If the BFL project has no Erase access, it falls back to FLUX Fill with a prompt that only describes a clean, blank surface. For the best result, draw each box snug around the text (a little margin is added for you), use one box per line or block, and leave out barcodes and warnings you want to keep.
 5. Compare **Before** and **After**. If it looks right, press **Attach as cover** (or **Attach to gallery**). If not, press **Try again with different boxes**.
 6. The original photo is never changed. The new one is saved in Digital Assets as "… (text removed)". It is a draft when the original was a draft or its rights are pending; publish it there before it can go live.
 
@@ -180,7 +182,7 @@ Owner (round 4): *"I want to draw a box on all product images, then click the re
 1. On the **Copilot** (under the photos) or on **Vendor kits** (under the generic photos), find **✂ Remove text from several photos**.
 2. Tick the photos to fix (up to 12). Each opens below with its own picture.
 3. On each one, drag a box over the text, or press **✨ Find the text**. Optional: say what is under the text once for all of them.
-4. Press **✂ Remove text from N photos** once. FLUX Fill fixes them one after the next; each says *Waiting…*, then *FLUX is removing the text*, then *Done*, with a running total.
+4. Press **✂ Remove text from N photos** once. FLUX Erase fixes them one after the next (4.13); each says *Waiting…*, then *FLUX is removing the text*, then *Done*, with a running total.
 5. Compare **Before** and **After** on each. On the Copilot press **Attach as cover** or **Attach**. On Vendor kits press **Use as the kit photo**, check the ticks, then **Apply**.
 6. Remember 4.2: facts and AI first, photo last — attaching publishes the product and it leaves the list.
 

@@ -70,13 +70,13 @@ export async function queueStartEraseAction(scope: QueueScope, mediaId: string, 
   return out;
 }
 
-export async function queuePollEraseAction(scope: QueueScope, pollingUrl: string, originalId: string): Promise<ErasePollOut> {
+export async function queuePollEraseAction(scope: QueueScope, pollingUrl: string, originalId: string, boxesJson = "[]"): Promise<ErasePollOut> {
   const session = await requirePermission("products.enrich");
   const s = cleanQueueScope(scope);
   const m = id(originalId);
   if (!s || !m) return { state: "failed", error: "Missing product or photo." };
   try {
-    const out = await pollTextErase({ pollingUrl: String(pollingUrl ?? "").slice(0, 600), originalId: m, actorId: session.userId });
+    const out = await pollTextErase({ pollingUrl: String(pollingUrl ?? "").slice(0, 600), originalId: m, actorId: session.userId, boxes: String(boxesJson ?? "").slice(0, 4000) });
     if (out.state === "ready") {
       await recordAudit({
         actorId: session.userId,

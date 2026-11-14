@@ -142,15 +142,100 @@ export function eraseMaskSvg(width: number, height: number, boxes: readonly Eras
 // FLUX Fill prompt and the saved result
 // ---------------------------------------------------------------------------
 
-export const ERASE_MODEL = "flux-pro-1.0-fill";
+/**
+ * D244 R-17 (owner round 6): "Flux adds weird things to the removed text.
+ * Barcodes, more text, fuzzy looking text, etc." Fixed per BFL's own docs:
+ *   - FLUX Erase (docs.bfl.ai/flux_tools/flux_erase) is BFL's purpose-built
+ *     remover: "No prompt is needed - the model uses a built-in erase
+ *     instruction", mask + dilate_pixels (0-25, default 10), trained on ~1 MP.
+ *     A Fill prompt that says "no text" made FLUX paint text: "FLUX models
+ *     don't support negative prompts... the model focuses on the word"
+ *     (docs.bfl.ai/guides/prompting_guide_t2i_negative).
+ *   - The answer is pasted back over the ORIGINAL through a feathered mask, so
+ *     every pixel outside the boxes is the untouched original (the standard
+ *     inpaint "paste back" / crop-and-stitch practice).
+ *   - FLUX Fill stays only as the fallback when the BFL project has no Erase
+ *     access, with a positive-only prompt ("clean, blank, unmarked").
+ */
+export const ERASE_MODEL = "flux-tools/erase-v1";
+/** Fallback when the BFL project cannot use Erase (403/404/405). */
+export const ERASE_FALLBACK_MODEL = "flux-pro-1.0-fill";
+/** BFL: "Range 0-25, default 10". Text edges carry JPEG halos, so a bit more. */
+export const ERASE_DILATE_PX = 12;
+/** BFL: Erase "was trained on images at ~1 megapixel". */
+export const ERASE_TARGET_PIXELS = 1_000_000;
 
-/** What FLUX Fill is asked to paint into the white boxes. */
+/** The size to send: scaled DOWN (never up) to about 1 MP, multiples of 16. */
+export function eraseSendSize(width: number, height: number, target = ERASE_TARGET_PIXELS): { width: number; height: number; scale: number } {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  const scale = Math.min(1, Math.sqrt(target / (w * h)));
+  if (scale >= 1) return { width: w, height: h, scale: 1 };
+  const r16 = (n: number) => Math.max(16, Math.round(n / 16) * 16);
+  const sw = r16(w * scale);
+  const sh = r16(h * scale);
+  return { width: sw, height: sh, scale: sw / w };
+}
+
+/** FLUX Erase request body (no prompt, by design). */
+export function eraseBody(p: { imageB64: string; maskB64: string; dilatePixels?: number }): Record<string, unknown> {
+  const d = Math.round(Math.min(25, Math.max(0, p.dilatePixels ?? ERASE_DILATE_PX)));
+  return { image: p.imageB64, mask: p.maskB64, dilate_pixels: d, output_format: "png" };
+}
+
+/** Is this Erase failure "the project cannot use Erase" (so try Fill)? Busy / no credits are not. */
+export function eraseUnavailable(error: string): boolean {
+  if (/busy|out of credits/i.test(error)) return false;
+  return /\((403|404|405)\)|rejected the API key|not found|forbidden/i.test(error);
+}
+
+/**
+ * The paste-back mask on the ORIGINAL picture: the boxes grown by half the
+ * Erase dilation (scaled to the original), then feathered by `featherPx`, so
+ * the soft edge lands inside what Erase repainted and nothing outside moves.
+ */
+export function pasteBackPlan(sendScale: number, dilatePx = ERASE_DILATE_PX): { growPx: number; featherPx: number } {
+  const s = sendScale > 0 ? sendScale : 1;
+  const grow = Math.max(1, Math.round(dilatePx / 2 / s));
+  const feather = Math.max(1.5, Math.min(12, dilatePx / 3 / s));
+  return { growPx: grow, featherPx: Math.round(feather * 10) / 10 };
+}
+
+/** RGB pixels + one alpha channel -> RGBA (for the paste-back overlay). */
+export function interleaveRgba(rgb: Uint8Array, alpha: Uint8Array): Uint8Array {
+  const n = alpha.length;
+  if (rgb.length !== n * 3) throw new Error("paste-back: picture and mask sizes differ");
+  const out = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    out[i * 4] = rgb[i * 3];
+    out[i * 4 + 1] = rgb[i * 3 + 1];
+    out[i * 4 + 2] = rgb[i * 3 + 2];
+    out[i * 4 + 3] = alpha[i];
+  }
+  return out;
+}
+
+/** Boxes grown by `growPx` pixels on each side (still inside the picture). */
+export function growBoxes(boxes: readonly EraseBox[], width: number, height: number, growPx: number): EraseBox[] {
+  const gx = growPx / Math.max(1, width);
+  const gy = growPx / Math.max(1, height);
+  return boxes.map((b) => {
+    const x = Math.max(0, b.x - gx);
+    const y = Math.max(0, b.y - gy);
+    return { x, y, w: Math.min(1, b.x + b.w + gx) - x, h: Math.min(1, b.y + b.h + gy) - y };
+  });
+}
+
+/**
+ * Fill fallback prompt, POSITIVE ONLY (BFL: "no text" -> "clean surfaces,
+ * unmarked, blank"). Never names letters, words, numbers, logos or barcodes,
+ * because naming them is what made FLUX paint them.
+ */
 export function erasePrompt(opts: { surface?: string | null } = {}): string {
   const surface = (opts.surface ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
   return [
-    "Remove all printed text and lettering inside the masked area.",
-    `Fill it with the surrounding ${surface || "packaging"} surface so it looks untouched: the same colour, texture, gradient, lighting and edges.`,
-    "No letters, no words, no numbers, no logos, no stickers, no smudges.",
+    `A clean, blank, unmarked ${surface || "packaging"} surface.`,
+    "It continues the exact colour, texture, gradient, lighting and edges of the area right around it, seamless and smooth, like the untouched part of the same surface.",
   ].join(" ");
 }
 
@@ -441,13 +526,30 @@ export function __runTextEraseCoreTests(): { passed: number; failed: number } {
   ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="800"'), "mask is the picture's size");
 
   // prompt + saved result
-  ok(erasePrompt().includes("No letters") && erasePrompt().includes("packaging"), "prompt asks for no letters");
+  ok(erasePrompt().includes("clean, blank, unmarked packaging") && !/\b(no|letters?|words?|text|numbers?|logos?|barcodes?)\b/i.test(erasePrompt()), "fallback prompt is positive only (never names text)");
   ok(erasePrompt({ surface: "jar label" }).includes("jar label"), "prompt names the surface");
   ok(erasedTitle("Gelato cart") === "Gelato cart (text removed)", "title marked");
   ok(erasedTitle("Gelato cart (text removed)") === "Gelato cart (text removed)", "title never doubled");
   ok(erasedTitle(null) === "Product photo (text removed)", "blank title");
   ok(erasedSource("abc") === "text-removed:abc", "source points at the original");
-  ok(ERASE_MODEL === "flux-pro-1.0-fill", "FLUX Fill is the remover");
+  ok(ERASE_MODEL === "flux-tools/erase-v1" && ERASE_FALLBACK_MODEL === "flux-pro-1.0-fill", "FLUX Erase is the remover; Fill only the fallback");
+  // R-17: Erase body, size, paste-back
+  const eb = eraseBody({ imageB64: "I", maskB64: "M" });
+  ok(eb.dilate_pixels === 12 && eb.output_format === "png" && !("prompt" in eb), "Erase body: no prompt, dilate 12, png");
+  ok(eraseBody({ imageB64: "I", maskB64: "M", dilatePixels: 99 }).dilate_pixels === 25 && eraseBody({ imageB64: "I", maskB64: "M", dilatePixels: -3 }).dilate_pixels === 0, "dilate clamped to BFL's 0-25");
+  const big = eraseSendSize(4000, 3000);
+  ok(big.width % 16 === 0 && big.height % 16 === 0 && Math.abs(big.width * big.height - 1_000_000) < 60_000 && big.scale < 0.3, "a 12 MP photo is sent at about 1 MP");
+  const small = eraseSendSize(800, 600);
+  ok(small.width === 800 && small.height === 600 && small.scale === 1, "a small photo is never enlarged");
+  ok(eraseUnavailable("FLUX rejected the request (404): Not Found") && eraseUnavailable("BFL rejected the API key. Check it in Settings → Integrations."), "no Erase access falls back to Fill");
+  ok(!eraseUnavailable("FLUX is busy (too many active tasks — the limit is 24). Wait a moment and try again.") && !eraseUnavailable("The BFL account is out of credits."), "busy / no credits do not fall back");
+  const pl = pasteBackPlan(0.25);
+  ok(pl.growPx === 24 && pl.featherPx === 12, "paste-back grows and feathers in original pixels");
+  ok(pasteBackPlan(1).growPx === 6 && pasteBackPlan(1).featherPx === 4, "paste-back at full size");
+  const il = interleaveRgba(new Uint8Array([1, 2, 3, 4, 5, 6]), new Uint8Array([0, 255]));
+  ok(il.join(",") === "1,2,3,0,4,5,6,255", "RGB + mask -> RGBA overlay");
+  const gb = growBoxes([{ x: 0, y: 0.5, w: 0.1, h: 0.1 }], 100, 100, 5);
+  ok(gb[0].x === 0 && Math.abs(gb[0].y - 0.45) < 1e-9 && Math.abs(gb[0].w - 0.15) < 1e-9 && Math.abs(gb[0].h - 0.2) < 1e-9, "grown boxes stay inside the picture");
   ok(erasedStatus({ status: "published", license_status: null }) === "published", "published original: published copy");
   ok(erasedStatus({ status: "published", license_status: "pending-review" }) === "draft" && erasedStatus({ status: "draft", license_status: null }) === "draft", "rights pending or draft: draft copy");
 

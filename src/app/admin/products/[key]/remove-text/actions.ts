@@ -64,13 +64,13 @@ export async function startEraseAction(key: string, mediaId: string, boxesJson: 
   return out;
 }
 
-export async function pollEraseAction(key: string, pollingUrl: string, originalId: string): Promise<ErasePollOut> {
+export async function pollEraseAction(key: string, pollingUrl: string, originalId: string, boxesJson = "[]"): Promise<ErasePollOut> {
   const session = await requirePermission("products.enrich");
   const k = cleanKey(key);
   const m = id(originalId);
   if (!k || !m) return { state: "failed", error: "Missing product or photo." };
   try {
-    const out = await pollTextErase({ pollingUrl: String(pollingUrl ?? "").slice(0, 600), originalId: m, actorId: session.userId });
+    const out = await pollTextErase({ pollingUrl: String(pollingUrl ?? "").slice(0, 600), originalId: m, actorId: session.userId, boxes: String(boxesJson ?? "").slice(0, 4000) });
     if (out.state === "ready") {
       await recordAudit({
         actorId: session.userId,
