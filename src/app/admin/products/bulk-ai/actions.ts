@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
-import { ensureEnrichment, updateEnrichment } from "@/lib/enrichment/store";
+import { getPublishedVersion, getVersionItems, getItemBySourceKey } from "@/lib/pos/menu-version";
+import { ensureEnrichment, updateEnrichment, getEnrichment, setEnrichmentStatusForKeys, computeGaps } from "@/lib/enrichment/store";
 import {
   generateProductDescription,
   getSuggestion,
@@ -16,6 +16,12 @@ import { isAiConfigured } from "@/lib/ai/provider";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { friendlyAiError } from "@/lib/ai/chat-payload-core";
+import { planBulkStatus } from "@/lib/enrichment/bulk-publish-core";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
+import { BULK_AI_V2_MAX_QUEUE, type QueueRequest } from "@/lib/enrichment/bulk-ai-v2-core";
+import { cancelBulkAiV2, queueBulkAiV2 } from "@/lib/enrichment/bulk-ai-v2-server";
+import { acceptAllMessage, acceptHighConfidenceForKey } from "@/lib/enrichment/accept-drafts-server";
 
 /**
  * Bulk AI: generate draft DESCRIPTIONS for a set of selected products in one
@@ -131,4 +137,138 @@ export async function bulkRejectSuggestionAction(formData: FormData): Promise<vo
   if (id) await reviewSuggestion(id, "rejected", session.userId);
   revalidatePath("/admin/products/bulk-ai");
   redirect("/admin/products/bulk-ai#review");
+}
+
+// ---------------------------------------------------------------------------
+// D244 E-5 - Bulk AI v2. "Draft with AI" QUEUES products; the every-minute
+// worker drafts every field for each (the product page's all-fields call),
+// so a whole vendor finishes after the tab is closed. The review grid accepts
+// per product (>= ACCEPT_ALL_THRESHOLD, never a best guess, every field
+// through the compliance gate) and "Accept & publish" is still a person's
+// click that publishes only a draft that has a photo.
+// ---------------------------------------------------------------------------
+
+const BULK_URL = "/admin/products/bulk-ai";
+
+/** Keep the grid's filters (vendor / min) on the way back. */
+function gridUrl(formData: FormData, flash: string, hash = "#review"): string {
+  const q = new URLSearchParams();
+  const vendor = String(formData.get("vendor_filter") ?? "").trim();
+  const min = String(formData.get("min") ?? "").trim();
+  if (vendor) q.set("vendor", vendor);
+  if (min) q.set("min", min);
+  const base = [q.toString(), flash].filter(Boolean).join("&");
+  return `${BULK_URL}${base ? `?${base}` : ""}${hash}`;
+}
+
+/** Queue the ticked products, or every live product from one vendor. */
+export async function queueBulkAiV2Action(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  if (!isAiConfigured) redirect(`${BULK_URL}?error=` + encodeURIComponent("AI is not configured.") + "#queue");
+  const ticked = new Set(formData.getAll("keys").map((k) => String(k).trim()).filter(Boolean));
+  const vendor = String(formData.get("vendor") ?? "").trim();
+  if (ticked.size === 0 && !vendor) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent("Tick at least one product, or pick a vendor.") + "#queue");
+  }
+  const published = await getPublishedVersion();
+  if (!published) redirect(`${BULK_URL}?error=` + encodeURIComponent("There is no live menu yet.") + "#queue");
+  const items = await getVersionItems(published!.id);
+  const reqs: QueueRequest[] = items
+    .filter((i) => ticked.has(i.source_item_id) || (vendor !== "" && (i.vendor_name ?? "").trim() === vendor))
+    .map((i) => ({ key: i.source_item_id, name: i.name, vendor: (i.vendor_name ?? "").trim() || null }));
+  if (reqs.length === 0) redirect(`${BULK_URL}?error=` + encodeURIComponent("None of those products is on the live menu.") + "#queue");
+  let out: Awaited<ReturnType<typeof queueBulkAiV2>>;
+  try {
+    out = await queueBulkAiV2(reqs, session.userId);
+  } catch (err) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent((err as Error).message) + "#queue");
+  }
+  revalidatePath(BULK_URL);
+  const parts = [`Queued ${out!.added} product${out!.added === 1 ? "" : "s"} for an all-fields AI draft.`];
+  if (out!.already) parts.push(`${out!.already} already waiting.`);
+  if (out!.capped) parts.push(`Only the first ${BULK_AI_V2_MAX_QUEUE} were added; queue the rest after these finish.`);
+  parts.push("The worker starts within a minute; you can close this tab.");
+  redirect(`${BULK_URL}?queued=` + encodeURIComponent(parts.join(" ")) + "#queue");
+}
+
+/** Cancel everything still waiting (a product already drafting finishes). */
+export async function cancelBulkAiV2Action(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  let n = 0;
+  try {
+    n = await cancelBulkAiV2(session.userId);
+  } catch (err) {
+    redirect(`${BULK_URL}?error=` + encodeURIComponent((err as Error).message) + "#queue");
+  }
+  revalidatePath(BULK_URL);
+  redirect(`${BULK_URL}?queued=` + encodeURIComponent(`Canceled ${n} waiting product${n === 1 ? "" : "s"}.`) + "#queue");
+}
+
+/**
+ * Per product on the grid: "Accept all >= 85%" (publish=0) or "Accept all >=
+ * 85% & publish" (publish=1). Publishing follows the worklist's default rule:
+ * only a DRAFT that has a photo (bulk-publish-core, mode "photo").
+ */
+export async function bulkAcceptAllForProductAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "").trim();
+  const andPublish = formData.get("publish") === "1";
+  if (!key) redirect(gridUrl(formData, "error=" + encodeURIComponent("Missing product key.")));
+
+  const out = await acceptHighConfidenceForKey(key, session.userId);
+  if (!out.ok) redirect(gridUrl(formData, "error=" + encodeURIComponent(out.error)));
+  if (out.eligible === 0) {
+    redirect(gridUrl(formData, "error=" + encodeURIComponent(`No draft for this product is at or above ${ACCEPT_ALL_THRESHOLD}% (best guesses never count). Review them one by one.`)));
+  }
+  const { accepted, blocked, writeback } = out;
+
+  let published = false;
+  let publishNote = "";
+  if (andPublish && accepted.length > 0) {
+    const live = await getPublishedVersion();
+    const item = live ? await getItemBySourceKey(live.id, key).catch(() => null) : null;
+    const e = await getEnrichment(key).catch(() => null);
+    if (!item || !e) {
+      publishNote = " Not published: the product could not be read just now.";
+    } else {
+      const g = computeGaps(item, e);
+      const plan = planBulkStatus(
+        [{ posKey: key, hasImage: g.hasImage, hasDescription: g.hasDescription, descriptionPlaceholder: g.descriptionPlaceholder, enrichmentStatus: g.enrichmentStatus, hasOwnRecord: true }],
+        "published",
+        "photo",
+      );
+      if (plan.apply.length === 0) {
+        publishNote = plan.skipped["no-photo"]
+          ? " Not published: it has no photo yet."
+          : plan.skipped.already
+            ? " It was already published."
+            : " Not published.";
+      } else {
+        try {
+          published = (await setEnrichmentStatusForKeys([key], "published", session.userId)).length === 1;
+          if (published) await writeBackOnPublish(key, session.userId).catch(() => null);
+          publishNote = published ? " Published." : " Not published: the change did not save.";
+        } catch (err) {
+          publishNote = ` Not published: ${(err as Error).message}`;
+        }
+      }
+    }
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.bulk_ai_accepted_all",
+    entityType: "product",
+    entityId: key,
+    after: { threshold: ACCEPT_ALL_THRESHOLD, accepted, blocked, andPublish, published, kb_writeback: writeback ?? undefined },
+  });
+  revalidatePath(BULK_URL);
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  if (published) {
+    revalidatePath("/admin/products");
+    revalidatePublicMenuSurfaces();
+  }
+  const msg = acceptAllMessage(accepted, blocked) + publishNote;
+  redirect(gridUrl(formData, (accepted.length ? "accepted_note=" : "error=") + encodeURIComponent(msg)));
 }

@@ -344,7 +344,7 @@ export function __runBulkAiV2Tests(): { passed: number; failed: number } {
   eq(parseBulkAiV2({ items: [{ key: "a" }, { key: "a" }, { nope: 1 }, { key: "b", status: "weird" }] }).items.map((i) => [i.key, i.status]), [["a", "queued"], ["b", "queued"]], "parse dedupe + junk");
 
   // enqueue
-  let s = enqueueBulk(emptyBulkAiV2(), [{ key: "a", name: "A", vendor: "V1" }, { key: "b", name: "B", vendor: "V2" }, { key: "a", name: "A", vendor: "V1" }], "u", iso(T0));
+  const s = enqueueBulk(emptyBulkAiV2(), [{ key: "a", name: "A", vendor: "V1" }, { key: "b", name: "B", vendor: "V2" }, { key: "a", name: "A", vendor: "V1" }], "u", iso(T0));
   eq([s.added, s.already, s.capped], [2, 0, false], "enqueue adds");
   eq(s.state.queuedBy, "u", "enqueue actor");
   const again = enqueueBulk(s.state, [{ key: "a", name: "A", vendor: "V1" }], "u", iso(T0));
