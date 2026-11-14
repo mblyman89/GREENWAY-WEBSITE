@@ -145,7 +145,7 @@ export function RemoveTextQueue(props: {
   };
 
   const runOne = async (m: string, boxes: EraseBox[]) => {
-    patch(m, { state: "working", progress: "Sending to FLUX Fill\u2026", error: null });
+    patch(m, { state: "working", progress: "Sending to FLUX Erase\u2026", error: null });
     const sub = await queueStartEraseAction(scope, m, JSON.stringify(boxes), surface);
     if (!sub.ok) {
       patch(m, { state: "failed", progress: null, error: sub.error });
@@ -153,7 +153,7 @@ export function RemoveTextQueue(props: {
     }
     for (let i = 0; i < POLL_MAX && !cancelled.current; i++) {
       await new Promise((r) => setTimeout(r, POLL_MS));
-      const p = await queuePollEraseAction(scope, sub.pollingUrl, m);
+      const p = await queuePollEraseAction(scope, sub.pollingUrl, m, JSON.stringify(sub.boxes));
       if (p.state === "ready") {
         patch(m, { state: "ready", progress: null, result: { mediaId: p.mediaId, url: p.url, published: p.published }, after: true });
         return;

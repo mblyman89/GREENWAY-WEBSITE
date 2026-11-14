@@ -8,7 +8,7 @@
  * Drag on the picture to draw a box (any number, up to 12). "Find the text"
  * asks the vision model where the text is and which pieces name a different
  * product; those come in ticked, with the reason, and the person can untick
- * any. "Remove text" sends the boxes to FLUX Fill; the browser polls every
+ * any. "Remove text" sends the boxes to FLUX Erase (D244 R-17; Fill only as a fallback); the browser polls every
  * 3 s, then shows Before / After. Attach / Attach as cover are ordinary
  * forms (attachMatchedMedia); nothing is attached until one is pressed.
  */
@@ -101,7 +101,7 @@ export function RemoveTextEditor(props: {
     const chosen = boxes.filter((b) => b.on).map(({ x, y, w, h }) => ({ x, y, w, h }));
     setError(null);
     setWorking(true);
-    setProgress("Sending to FLUX Fill…");
+    setProgress("Sending to FLUX Erase…");
     try {
       const sub = await startEraseAction(productKey, mediaId, JSON.stringify(chosen), surface);
       if (!sub.ok) {
@@ -110,7 +110,7 @@ export function RemoveTextEditor(props: {
       }
       for (let i = 0; i < POLL_MAX && !cancelled.current; i++) {
         await new Promise((r) => setTimeout(r, POLL_MS));
-        const p = await pollEraseAction(productKey, sub.pollingUrl, mediaId);
+        const p = await pollEraseAction(productKey, sub.pollingUrl, mediaId, JSON.stringify(sub.boxes));
         if (p.state === "ready") {
           setResult({ mediaId: p.mediaId, url: p.url, published: p.published });
           setShowAfter(true);
@@ -227,7 +227,7 @@ export function RemoveTextEditor(props: {
               {working ? (progress ?? "Working…") : `Remove text (${onCount} box${onCount === 1 ? "" : "es"})`}
             </button>
             {!fluxReady ? <p className="text-[11px] text-amber-300">FLUX is not set up (Settings → Integrations), so text cannot be removed yet.</p> : null}
-            <p className="text-[11px] text-white/45">FLUX Fill repaints only inside the boxes to match the packaging around them. The original photo is never changed — the result is saved as a new library photo.</p>
+            <p className="text-[11px] text-white/45">FLUX Erase (Black Forest Labs&apos; purpose-built remover) clears the text inside the boxes, then only the boxed areas are pasted onto your photo, so nothing outside them can change. Draw each box snug around the text. The original photo is never changed — the result is saved as a new library photo.</p>
           </>
         ) : (
           <div className="space-y-3" data-testid="remove-text-result">
