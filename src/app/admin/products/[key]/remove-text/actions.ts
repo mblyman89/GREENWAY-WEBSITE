@@ -12,7 +12,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { cleanKey } from "@/lib/enrichment/detail-nav-core";
-import { findTextOnPhoto, pollTextErase, startTextErase, type ErasePollOut, type FindTextOut, type StartEraseOut } from "@/lib/enrichment/text-erase-server";
+import { findTextOnPhoto, pollMode, pollTextErase, startTextErase, type ErasePollOut, type FindTextOut, type StartEraseOut } from "@/lib/enrichment/text-erase-server";
 import { parseEraseBoxes, type EraseProduct } from "@/lib/enrichment/text-erase-core";
 
 const id = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 80) : "");
@@ -46,31 +46,31 @@ export async function findTextAction(key: string, mediaId: string, product: Eras
   return out;
 }
 
-export async function startEraseAction(key: string, mediaId: string, boxesJson: string, surface: string): Promise<StartEraseOut> {
+export async function startEraseAction(key: string, mediaId: string, boxesJson: string, surface: string, mode: string = "letters"): Promise<StartEraseOut> {
   const session = await requirePermission("products.enrich");
   const k = cleanKey(key);
   const m = id(mediaId);
   if (!k || !m) return { ok: false, error: "Missing product or photo." };
   const boxes = parseEraseBoxes(boxesJson);
-  const out = await startTextErase({ mediaId: m, boxes, surface: txt(surface, 80), productKey: k, actorId: session.userId, actorEmail: session.email });
+  const out = await startTextErase({ mediaId: m, boxes, surface: txt(surface, 80), mode: pollMode(mode), productKey: k, actorId: session.userId, actorEmail: session.email });
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "product.remove_text_started",
     entityType: "product",
     entityId: k,
-    after: { mediaId: m, ok: out.ok, boxes: boxes.length, error: out.ok ? null : out.error.slice(0, 200) },
+    after: { mediaId: m, ok: out.ok, boxes: boxes.length, mode: out.ok ? out.mode : pollMode(mode), error: out.ok ? null : out.error.slice(0, 200) },
   }).catch(() => {});
   return out;
 }
 
-export async function pollEraseAction(key: string, pollingUrl: string, originalId: string, boxesJson = "[]"): Promise<ErasePollOut> {
+export async function pollEraseAction(key: string, pollingUrl: string, originalId: string, boxesJson = "[]", mode: string = "letters"): Promise<ErasePollOut> {
   const session = await requirePermission("products.enrich");
   const k = cleanKey(key);
   const m = id(originalId);
   if (!k || !m) return { state: "failed", error: "Missing product or photo." };
   try {
-    const out = await pollTextErase({ pollingUrl: String(pollingUrl ?? "").slice(0, 600), originalId: m, actorId: session.userId, boxes: String(boxesJson ?? "").slice(0, 4000) });
+    const out = await pollTextErase({ pollingUrl: String(pollingUrl ?? "").slice(0, 600), originalId: m, actorId: session.userId, boxes: String(boxesJson ?? "").slice(0, 4000), mode: pollMode(mode) });
     if (out.state === "ready") {
       await recordAudit({
         actorId: session.userId,

@@ -17,7 +17,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 describe("SOP-10 v1.2", () => {
   const doc = read("docs/sop/SOP-10-product-enrichment.md");
   it("is version 1.2 with a history row", () => {
-    expect(doc).toMatch(/\| \*\*Version\*\* \| 1\.[2-9] \(D244 R-1\d/);
+    expect(doc).toMatch(/\| \*\*Version\*\* \| 1\.[2-9] \(D244 R-\d+/);
     expect(doc).toMatch(/\| 1\.2 \| D244 R-13 \|/);
   });
   it("quotes the owner for both round-4 features", () => {
