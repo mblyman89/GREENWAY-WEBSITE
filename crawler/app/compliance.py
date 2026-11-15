@@ -170,6 +170,76 @@ def pattern_blocks(text: str, pattern: re.Pattern[str], rules: dict = CONTEXT_RU
     return False
 
 
+# -----------------------------------------------------------------------------
+# D244 R-23 — the owner's Compliance guardrails settings (Knowledge base →
+# Compliance guardrails; one site_settings row "compliance_guardrails").
+# Owner round 10: "I need to be in control, and if I choose something is ok to
+# do, thats my choice". Mirrors src/lib/ai/guardrails-state-core.ts: a level
+# per rule ("block" / "warn" / "off", key = ai.<slug of the label>) and words
+# allowed everywhere. The shared pattern fixture is NOT changed.
+GUARDRAILS_SETTING_KEY = "compliance_guardrails"
+_LEVELS = ("block", "warn", "off")
+_RULE_KEY_RE = re.compile(r"^[a-z0-9_.-]{3,100}$")
+_active_rules: dict[str, str] = {}
+_active_allow: set[str] = set()
+_warn_phrases: set[str] = set()
+
+
+def ai_pattern_key(label: str) -> str:
+    """Same key as aiPatternKey() on the site."""
+    slug = re.sub(r"[^a-z0-9]+", "-", str(label or "").lower()).strip("-")[:90]
+    return f"ai.{slug}"
+
+
+def clean_allow_word(raw: object) -> str:
+    s = re.sub(r"\s+", " ", str(raw or "").replace("\u2018", "'").replace("\u2019", "'")).strip().lower()
+    return s if s and len(s) <= 80 else ""
+
+
+def set_guardrails(value: object, warn_phrases: list[str] | None = None) -> None:
+    """Make the owner's settings active (value = the site_settings value_json)."""
+    global _active_rules, _active_allow, _warn_phrases
+    rules: dict[str, str] = {}
+    allow: set[str] = set()
+    if isinstance(value, dict):
+        raw_rules = value.get("rules")
+        if isinstance(raw_rules, dict):
+            for k, v in raw_rules.items():
+                if isinstance(k, str) and _RULE_KEY_RE.match(k) and v in _LEVELS:
+                    rules[k] = v
+        raw_allow = value.get("allow")
+        if isinstance(raw_allow, list):
+            for w in raw_allow[:500]:
+                c = clean_allow_word(w)
+                if c:
+                    allow.add(c)
+    _active_rules = rules
+    _active_allow = allow
+    _warn_phrases = {p.strip().lower() for p in (warn_phrases or []) if p and p.strip()}
+
+
+def rule_level(key: str, built_in: str) -> str:
+    return _active_rules.get(key, built_in)
+
+
+def is_allowed_word(word: str) -> bool:
+    c = clean_allow_word(word)
+    return bool(c) and c in _active_allow
+
+
+def _judge_owner_hits(text: str, pattern: re.Pattern[str]) -> tuple[bool, bool]:
+    """(hit, blocked): hits minus the owner's allowed words; blocked = one
+    remaining hit is not everyday use (same reading as pattern_blocks)."""
+    hit = False
+    for m in pattern.finditer(text or ""):
+        if not m.group(0) or is_allowed_word(m.group(0)):
+            continue
+        hit = True
+        if not judge_hit(text, m.start(), m.group(0), CONTEXT_RULES):
+            return True, True
+    return hit, False
+
+
 @dataclass
 class ComplianceResult:
     ok: bool  # no blocking flags
@@ -187,11 +257,16 @@ def check_compliance(text: str, extra_banned: list[str] | None = None) -> Compli
     blocking: list[str] = []
 
     for p in _RISKY_PATTERNS:
-        if not p.pattern.search(text):
+        # D244 R-23: the owner's level for this rule and the allowed words.
+        level = rule_level(ai_pattern_key(p.label), p.severity)
+        if level == "off":
             continue
-        if p.severity != "block":
+        hit, blocked = _judge_owner_hits(text, p.pattern)
+        if not hit:
+            continue
+        if level != "block":
             flags.append(f"{p.label} (heads-up)")
-        elif pattern_blocks(text, p.pattern):
+        elif blocked:
             flags.append(f"{p.label} (must fix)")
             blocking.append(p.label)
         else:  # D244 R-14: everyday use (e.g. the cure process) is a heads-up
@@ -202,10 +277,13 @@ def check_compliance(text: str, extra_banned: list[str] | None = None) -> Compli
         if not trimmed:
             continue
         re_phrase = re.compile(rf"(?:^|(?<=\W)){re.escape(trimmed)}(?=\W|$)", re.I)
-        if re_phrase.search(text):
+        hit, blocked = _judge_owner_hits(text, re_phrase)
+        if hit:
             label = f'banned phrase: "{trimmed}"'
-            if pattern_blocks(text, re_phrase):
-                flags.append(f"{label} (must fix)")  # owner phrases default to blocking
+            if trimmed.lower() in _warn_phrases:  # D244 R-23: the owner set it to Warn
+                flags.append(f"{label} (heads-up)")
+            elif blocked:
+                flags.append(f"{label} (must fix)")
                 blocking.append(label)
             else:
                 flags.append(f"{label} \u2014 allowed in context (heads-up)")

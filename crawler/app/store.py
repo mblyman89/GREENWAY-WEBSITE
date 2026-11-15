@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .compliance import PROMPT_VERSION
+from .compliance import GUARDRAILS_SETTING_KEY, PROMPT_VERSION, set_guardrails
 from .config import Settings, get_settings
 
 
@@ -34,16 +34,34 @@ def _client(settings: Settings):
 
 
 def fetch_banned_phrases(settings: Settings | None = None) -> list[str]:
-    """Owner's editable extra banned phrases, if the table exists."""
+    """Owner's editable extra banned phrases, if the table exists.
+
+    D244 R-23: also loads the owner's Compliance guardrails settings (rule
+    levels, allowed words, which phrases are Warn only) and makes them active
+    for check_compliance, exactly like loadBannedPhrases() on the site."""
     settings = settings or get_settings()
     if not settings.supabase_enabled:
         return []
     try:
         client = _client(settings)
-        res = client.table("kb_banned_phrases").select("phrase, active").eq("active", True).execute()
-        return [r["phrase"] for r in (res.data or []) if r.get("phrase")]
+        res = client.table("kb_banned_phrases").select("phrase, severity, active").eq("active", True).execute()
+        rows = [r for r in (res.data or []) if r.get("phrase")]
     except Exception:
         return []
+    _sync_guardrails(client, [r["phrase"] for r in rows if r.get("severity") == "warn"])
+    return [r["phrase"] for r in rows]
+
+
+def _sync_guardrails(client, warn_phrases: list[str]) -> None:
+    """Never raises: on any error the built-in levels are used."""
+    value = None
+    try:
+        res = client.table("site_settings").select("value_json").eq("key", GUARDRAILS_SETTING_KEY).limit(1).execute()
+        if res.data:
+            value = res.data[0].get("value_json")
+    except Exception:
+        value = None
+    set_guardrails(value, warn_phrases)
 
 
 def _pending_exists(client, row: DraftRow) -> bool:
