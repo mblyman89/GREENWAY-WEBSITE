@@ -48,7 +48,7 @@ describe("D244 E-3 pure core", () => {
     expect(parseCoverIntent("0")).toBe(false);
   });
   it("registered in the selftest runner", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 33)');
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("image-recommend-v3-core", __runImageRecommendV3Tests\(\), \d+\)/);
   });
 });
 

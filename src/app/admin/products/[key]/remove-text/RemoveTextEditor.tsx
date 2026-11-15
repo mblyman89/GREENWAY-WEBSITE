@@ -14,7 +14,7 @@
  * forms (attachMatchedMedia); nothing is attached until one is pressed.
  */
 import { useEffect, useRef, useState, useTransition } from "react";
-import { findTextAction, pollEraseAction, startEraseAction } from "./actions";
+import { findTextAction, pollEraseAction, publishErasedAction, startEraseAction } from "./actions";
 import { attachMatchedMedia } from "../../actions";
 import { FACTS_FIRST_HINT, foundSummary, type EraseBox, type EraseMaskMode, type EraseProduct, type FoundText } from "@/lib/enrichment/text-erase-core";
 
@@ -49,6 +49,22 @@ export function RemoveTextEditor(props: {
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ mediaId: string; url: string; published: boolean } | null>(null);
   const [showAfter, setShowAfter] = useState(true);
+  // D244 R-22: Publish a text-removed draft so the Copilot can suggest it.
+  const [publishing, setPublishing] = useState(false);
+  const [publishNote, setPublishNote] = useState<string | null>(null);
+  const publishResult = async () => {
+    if (!result) return;
+    setPublishing(true);
+    setError(null);
+    const out = await publishErasedAction(productKey, result.mediaId);
+    setPublishing(false);
+    if (!out.ok) {
+      setError(out.error);
+      return;
+    }
+    setPublishNote(out.note);
+    setResult({ ...result, published: true });
+  };
   const cancelled = useRef(false);
 
   useEffect(() => () => {
@@ -268,6 +284,22 @@ export function RemoveTextEditor(props: {
               </p>
             ) : null}
             <p className="text-xs text-emerald-300">Saved to the media library{result.published ? "." : " as a draft (the original was a draft or its rights are pending)."}</p>
+            {result.published ? (
+              <p className="text-[11px] text-white/60" data-testid="remove-text-published-note">
+                {publishNote ?? "Published: the Copilot suggests it just behind exact matches."}
+              </p>
+            ) : (
+              <button
+                type="button"
+                data-testid="remove-text-publish"
+                disabled={publishing}
+                onClick={publishResult}
+                className="w-full rounded-lg border border-emerald-400/60 px-3 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-60"
+                title="Publish this text-removed photo so the Copilot can suggest it (you are confirming the rights are fine)"
+              >
+                {publishing ? "Publishing\u2026" : "Publish (so the Copilot suggests it)"}
+              </button>
+            )}
             <form action={attachMatchedMedia}>
               <input type="hidden" name="key" value={productKey} />
               {back ? <input type="hidden" name="back" value={back} /> : null}

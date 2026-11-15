@@ -8,11 +8,13 @@
  *   pollEraseAction - one poll; when ready a NEW library photo is saved.
  * None of them attaches anything: the person presses Attach / Attach as cover
  * on the before/after view (attachMatchedMedia, source "text-removed").
+ * D244 R-22: publishErasedAction - the person's Publish press on a
+ * text-removed draft, so the Copilot can suggest it.
  */
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { cleanKey } from "@/lib/enrichment/detail-nav-core";
-import { findTextOnPhoto, pollMode, pollTextErase, startTextErase, type ErasePollOut, type FindTextOut, type StartEraseOut } from "@/lib/enrichment/text-erase-server";
+import { findTextOnPhoto, pollMode, pollTextErase, publishErasedPhoto, startTextErase, type ErasedPublishOut, type ErasePollOut, type FindTextOut, type StartEraseOut } from "@/lib/enrichment/text-erase-server";
 import { parseEraseBoxes, type EraseProduct } from "@/lib/enrichment/text-erase-core";
 
 const id = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 80) : "");
@@ -85,4 +87,21 @@ export async function pollEraseAction(key: string, pollingUrl: string, originalI
   } catch (e) {
     return { state: "failed", error: e instanceof Error ? e.message.slice(0, 300) : "FLUX check failed." };
   }
+}
+
+export async function publishErasedAction(key: string, mediaId: string): Promise<ErasedPublishOut> {
+  const session = await requirePermission("products.enrich");
+  const k = cleanKey(key);
+  const m = id(mediaId);
+  if (!k || !m) return { ok: false, error: "Missing product or photo." };
+  const out = await publishErasedPhoto(m, session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.remove_text_published",
+    entityType: "media_asset",
+    entityId: m,
+    after: { productKey: k, ok: out.ok, error: out.ok ? null : out.error },
+  }).catch(() => {});
+  return out;
 }

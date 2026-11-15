@@ -623,6 +623,31 @@ export function erasedStatus(original: { status: string | null; license_status: 
   return original.status === "published" && original.license_status !== "pending-review" ? "published" : "draft";
 }
 
+/**
+ * D244 R-22 — owner (round 9, verbatim): "give me the ability to publish
+ * the draft from removing the text so it can be suggested on the copilot
+ * page." What one Publish press does to a text-removed photo. PURE. Only a
+ * photo made by Remove text (tag text-removed or source text-removed:…)
+ * can be published from here; an archived one never; a published one is a
+ * no-op. The person's press is the rights decision, so the patch records who.
+ */
+export type ErasedPublishStep =
+  | { kind: "patch"; patch: { status: "published"; publish_reason: "human"; published_by: string | null; published_at: string } }
+  | { kind: "skip"; note: string }
+  | { kind: "refuse"; error: string };
+export function erasedPublishStep(
+  a: { tags: readonly string[] | null; source: string | null; status: string | null } | null,
+  actorId: string | null,
+  nowIso: string,
+): ErasedPublishStep {
+  if (!a) return { kind: "refuse", error: "That photo no longer exists in the media library." };
+  const made = (a.tags ?? []).includes("text-removed") || (a.source ?? "").startsWith("text-removed:");
+  if (!made) return { kind: "refuse", error: "Only a photo made by Remove text can be published here. Use the media library for other photos." };
+  if (a.status === "archived") return { kind: "refuse", error: "That photo is archived. Restore it in the media library first." };
+  if (a.status === "published") return { kind: "skip", note: "Already published." };
+  return { kind: "patch", patch: { status: "published", publish_reason: "human", published_by: actorId, published_at: nowIso } };
+}
+
 // ---------------------------------------------------------------------------
 // AI "find the text" + keep/remove advice
 // ---------------------------------------------------------------------------
@@ -983,6 +1008,17 @@ export function __runTextEraseCoreTests(): { passed: number; failed: number } {
   const fullPick = toggleQueuePick(Array.from({ length: ERASE_QUEUE_MAX }, (_, i) => `m${i}`), "x");
   ok(fullPick.full && fullPick.picked.length === ERASE_QUEUE_MAX, "R-21: a full queue says so and keeps the picks");
   ok(toggleQueuePick(Array.from({ length: ERASE_QUEUE_MAX }, (_, i) => `m${i}`), "m3").picked.length === ERASE_QUEUE_MAX - 1 && !toggleQueuePick([], "").full, "R-21: untick makes room; blank id ignored");
+  {
+    const pub = erasedPublishStep({ tags: ["text-removed", "flux-fill"], source: "text-removed:abc", status: "draft" }, "u1", "2025-01-01T00:00:00Z");
+    ok(pub.kind === "patch" && pub.patch.status === "published" && pub.patch.published_by === "u1" && pub.patch.publish_reason === "human", "R-22: a text-removed draft publishes on the press");
+    ok(
+      erasedPublishStep({ tags: [], source: "upload", status: "draft" }, "u1", "t").kind === "refuse" &&
+        erasedPublishStep({ tags: [], source: "text-removed:x", status: "archived" }, "u1", "t").kind === "refuse" &&
+        erasedPublishStep({ tags: ["text-removed"], source: null, status: "published" }, "u1", "t").kind === "skip" &&
+        erasedPublishStep(null, null, "t").kind === "refuse",
+      "R-22: other photos refused, archived refused, published is a no-op",
+    );
+  }
 
   // R-20: crop-and-stitch at ~1 MP + letters-only mask
   const sb = [{ x: 305 / 550, y: 318 / 550, w: 45 / 550, h: 20 / 550 }, { x: 320 / 550, y: 340 / 550, w: 120 / 550, h: 52 / 550 }];

@@ -36,9 +36,9 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const P: EraseProduct = { name: "Phat Panda Blue Dream 3.5g", brand: "Phat Panda", strainName: "Blue Dream", vendor: "Hollingsworth", category: "Flower" };
 
 describe("D244 R-9 remove text — pure core", () => {
-  it("all 88 self-tests (R-9 + R-11 + R-17 + R-20 + R-21) pass and are registered", () => {
-    expect(__runTextEraseCoreTests()).toEqual({ passed: 88, failed: 0 }); // R-11 added 9 queue checks, R-17 added 10, R-20 added 21, R-21 added 3
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 88)');
+  it("all 90 self-tests (R-9 + R-11 + R-17 + R-20 + R-21 + R-22) pass and are registered", () => {
+    expect(__runTextEraseCoreTests()).toEqual({ passed: 90, failed: 0 }); // R-11 added 9 queue checks, R-17 added 10, R-20 added 21, R-21 added 3, R-22 added 2
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 90)');
   });
 
   it("FLUX Erase is the remover (D244 R-17); the mask is white only inside the boxes", () => {
@@ -88,7 +88,7 @@ describe("D244 R-9 remove text — wiring", () => {
   });
 
   it("every action needs products.enrich and is audited", () => {
-    expect(actions.match(/requirePermission\("products\.enrich"\)/g)?.length).toBe(3);
+    expect(actions.match(/requirePermission\("products\.enrich"\)/g)?.length).toBe(4); // R-22 added Publish
     for (const a of ["product.remove_text_found", "product.remove_text_started", "product.remove_text_saved"]) expect(actions).toContain(a);
   });
 

@@ -153,7 +153,7 @@ export async function loadCopilotSession(vendor: string, requestedKey: string, s
   const [urls, pending, recommend, lots] = await Promise.all([
     resolveMediaUrls(ids).catch(() => new Map<string, string>()),
     listSuggestions("product", key, "pending").catch(() => null),
-    loadRecommendPanel({ item, enrichment }),
+    loadRecommendPanel({ item, enrichment, wholeVendor: true }),
     readLotEvidence(key),
   ]);
   return {
@@ -237,7 +237,7 @@ export async function askCopilot(input: {
   const [prep, pending, recommend, style] = await Promise.all([
     prepareAllFields(input.key, itemFacts(item)),
     listSuggestions("product", input.key, "pending").catch(() => [] as AiSuggestion[]),
-    loadRecommendPanel({ item, enrichment }),
+    loadRecommendPanel({ item, enrichment, wholeVendor: true }),
     readVendorStyle(input.vendorId, input.key),
   ]);
   const grounded = await buildGroundedFacts(prep.facts).catch(() => ({ block: "", sources: [] as string[] }));
