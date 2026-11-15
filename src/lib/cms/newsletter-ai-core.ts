@@ -26,6 +26,7 @@
  */
 import type { ThisWeekFeed } from "./this-week-feed-core";
 import { claimHits } from "@/lib/ai/compliance-context-core";
+import { issueLevel, notAllowed } from "@/lib/ai/guardrails-state-core";
 import {
   newBlockId,
   normalizeCanvas,
@@ -75,19 +76,25 @@ const normPct = (s: string) => s.replace(/\s|percent/gi, "").replace("%", "");
  */
 export function checkAiCopy(text: string, facts: string): AiIssue[] {
   const issues: AiIssue[] = [];
-  const sup = [...new Set((text.match(SUPERLATIVE_RE) ?? []).map((m) => m.toLowerCase()))];
-  if (sup.length) issues.push({ level: "must-fix", text: `Superlatives are not allowed (Q-22-9): ${sup.join(", ")}.` });
+  // D244 R-23: every word rule below follows the owner's level (block = must
+  // fix, warn = heads-up, off = not checked) and the owner's allowed words.
+  const sup = notAllowed(text.match(SUPERLATIVE_RE) ?? []);
+  const supL = issueLevel("newsletter.superlatives", "block");
+  if (sup.length && supL) issues.push({ level: supL, text: `Superlatives are not allowed (Q-22-9): ${sup.join(", ")}.` });
   const okMoney = new Set((facts.match(MONEY_RE) ?? []).map(normMoney));
   const okPct = new Set((facts.match(PERCENT_RE) ?? []).map(normPct));
   const bad = [
     ...(text.match(MONEY_RE) ?? []).filter((m) => !okMoney.has(normMoney(m))),
     ...(text.match(PERCENT_RE) ?? []).filter((p) => !okPct.has(normPct(p))),
   ];
-  if (bad.length) issues.push({ level: "must-fix", text: `These amounts are not in this week's deals (Q-22-8): ${[...new Set(bad)].join(", ")}.` });
+  const amtL = issueLevel("newsletter.amounts", "block");
+  if (bad.length && amtL) issues.push({ level: amtL, text: `These amounts are not in this week's deals (Q-22-8): ${[...new Set(bad)].join(", ")}.` });
   const links = [...new Set(text.match(URL_RE) ?? [])].filter((u) => !facts.includes(u));
-  if (links.length) issues.push({ level: "must-fix", text: `Links the AI made up: ${links.join(", ")}.` });
-  const health = claimHits(text, HEALTH_RE); // D244 R-14: "slow cured" is the curing process
-  if (health.length) issues.push({ level: "must-fix", text: `Health or medical wording is not allowed in the newsletter: ${health.join(", ")}.` });
+  const linkL = issueLevel("newsletter.links", "block");
+  if (links.length && linkL) issues.push({ level: linkL, text: `Links the AI made up: ${links.join(", ")}.` });
+  const health = notAllowed(claimHits(text, HEALTH_RE)); // D244 R-14: "slow cured" is the curing process
+  const healthL = issueLevel("newsletter.health", "block");
+  if (health.length && healthL) issues.push({ level: healthL, text: `Health or medical wording is not allowed in the newsletter: ${health.join(", ")}.` });
   return issues;
 }
 
@@ -392,12 +399,13 @@ export function checkImageAsk(ask: string): AiIssue[] {
   const issues: AiIssue[] = [];
   if (!t) issues.push({ level: "must-fix", text: "Say what the picture should look like." });
   if (t.length > AI_IMAGE_PROMPT_MAX) issues.push({ level: "must-fix", text: `Keep the ask under ${AI_IMAGE_PROMPT_MAX} characters.` });
-  const hits = [...new Set((t.match(IMAGE_BLOCK_RE) ?? []).map((m) => m.toLowerCase()))];
-  if (hits.length) {
-    issues.push({ level: "must-fix", text: `Cannabis ads may not show minors, use, cartoons or medical themes (WAC 314-55-155): ${hits.join(", ")}.` });
+  const hits = notAllowed(t.match(IMAGE_BLOCK_RE) ?? []);
+  const picL = issueLevel("newsletter.picture-words", "block");
+  if (hits.length && picL) {
+    issues.push({ level: picL, text: `Cannabis ads may not show minors, use, cartoons or medical themes (WAC 314-55-155): ${hits.join(", ")}.` });
   }
-  const sup = [...new Set((t.match(SUPERLATIVE_RE) ?? []).map((m) => m.toLowerCase()))];
-  if (sup.length) issues.push({ level: "heads-up", text: `If the picture has words, superlatives are not allowed: ${sup.join(", ")}.` });
+  const sup = notAllowed(t.match(SUPERLATIVE_RE) ?? []);
+  if (sup.length && issueLevel("newsletter.picture-superlatives", "warn")) issues.push({ level: "heads-up", text: `If the picture has words, superlatives are not allowed: ${sup.join(", ")}.` });
   return issues;
 }
 
@@ -612,3 +620,6 @@ export function __runNewsletterAiCoreTests(): { passed: number; failed: number }
 
   return { passed, failed };
 }
+
+/** D244 R-23: the word lists, read-only, for the Compliance guardrails page. */
+export const NEWSLETTER_WORD_LISTS = { superlatives: SUPERLATIVE_RE.source, health: HEALTH_RE.source, pictureWords: IMAGE_BLOCK_RE.source } as const;

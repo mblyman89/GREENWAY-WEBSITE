@@ -25,6 +25,7 @@
  *   Contrast: WCAG 2.x 1.4.11 non-text contrast 3:1 used as the "will it read" bar.
  *   Content themes: WAC 314-55-155(2)(a) (R69 s1.1).
  */
+import { isAllowedWord, ruleLevel } from "@/lib/ai/guardrails-state-core";
 import { type Blank, type Method, type Placement, METHOD_LABEL, contrastRatio, getBlank, getPlacement, isDarkColor, isThreadColor, nearestThread } from "./garment-catalog-core";
 
 export type Level = "blocker" | "warning" | "tip" | "review";
@@ -156,7 +157,9 @@ export function themeHits(text: string): { theme: string; label: string; word: s
   const t = ` ${text.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ")} `;
   const hits: { theme: string; label: string; word: string }[] = [];
   for (const [theme, def] of Object.entries(THEME_KEYWORDS)) {
-    for (const w of def.words) if (t.includes(` ${w} `)) { hits.push({ theme, label: def.label, word: w }); break; }
+    // D244 R-23: the owner can turn a theme off or allow single words.
+    if (ruleLevel(`merch.${theme}`, "warn") === "off") continue;
+    for (const w of def.words) if (t.includes(` ${w} `) && !isAllowedWord(w)) { hits.push({ theme, label: def.label, word: w }); break; }
   }
   return hits;
 }

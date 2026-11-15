@@ -21,7 +21,9 @@ import "server-only";
 // test_compliance_parity.py on the crawler side) fail when the site fixture and
 // the crawler's copy drift. Edit the JSON, not this file.
 import compliancePatternsJson from "./compliance-patterns.json";
-import { judgePattern } from "./compliance-context-core";
+import { judgeHit } from "./compliance-context-core";
+import { ALLOWED_EFFECTS, EFFECT_MEDICAL_WORDS } from "./effects-lists-core";
+import { aiPatternKey, isAllowedWord, ruleLevel } from "./guardrails-state-core";
 
 // Bump when the system rules change so we can A/B accept-rate by prompt_version.
 export const PROMPT_VERSION = "v2-grounded";
@@ -146,39 +148,72 @@ export function checkCompliance(text: string, extra: ExtraBannedPhrase[] = []): 
   // "cures anxiety" still blocks. An allowed hit is never silent.
   const allowedNote = (why: string[]) => `allowed in context: ${why.join("; ")}`;
   for (const { pattern, label, severity } of RISKY_PATTERNS) {
-    if (!pattern.test(text)) continue;
-    if (severity !== "block") {
+    // D244 R-23: the owner's level for this rule (block / warn / off) and the
+    // words the owner allowed everywhere (Compliance guardrails page).
+    const level = ruleLevel(aiPatternKey(label), severity);
+    if (level === "off") continue;
+    const j = judgeOwnerHits(text, pattern);
+    if (!j.hit) continue;
+    if (level !== "block") {
       flags.push(`${label} (heads-up)`);
       continue;
     }
-    const j = judgePattern(text, pattern);
     if (j.blocked) {
       flags.push(`${label} (must fix)`);
       blockingFlags.push(label);
     } else {
-      flags.push(`${label} — ${allowedNote(j.allowedWhy)} (heads-up)`);
+      flags.push(`${label} \u2014 ${allowedNote(j.allowedWhy)} (heads-up)`);
     }
   }
   for (const { phrase, severity } of extra) {
     const trimmed = phrase.trim();
     if (!trimmed) continue;
     const re = new RegExp(`(?:^|(?<=\\W))${escapeRegExp(trimmed)}(?=\\W|$)`, "i");
-    if (!re.test(text)) continue;
+    const j = judgeOwnerHits(text, re);
+    if (!j.hit) continue;
     const label = `banned phrase: "${trimmed}"`;
     if (severity !== "block") {
       flags.push(`${label} (heads-up)`);
       continue;
     }
-    const j = judgePattern(text, re);
     if (j.blocked) {
       flags.push(`${label} (must fix)`);
       blockingFlags.push(label);
     } else {
-      flags.push(`${label} — ${allowedNote(j.allowedWhy)} (heads-up)`);
+      flags.push(`${label} \u2014 ${allowedNote(j.allowedWhy)} (heads-up)`);
     }
   }
   return { ok: blockingFlags.length === 0, flags, blockingFlags };
 }
+
+/**
+ * D244 R-23: every hit of one pattern, minus the words the owner allowed.
+ * `hit` = at least one hit is left; `blocked` = one of them still reads as a
+ * claim in context (same reading as judgePattern, D244 R-14).
+ */
+function judgeOwnerHits(text: string, re: RegExp): { hit: boolean; blocked: boolean; allowedWhy: string[] } {
+  const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+  let hit = false;
+  let blocked = false;
+  const allowedWhy: string[] = [];
+  for (const m of String(text ?? "").matchAll(g)) {
+    if (!m[0] || isAllowedWord(m[0])) continue;
+    hit = true;
+    if (blocked) continue;
+    const v = judgeHit(text, m.index ?? 0, m[0]);
+    if (!v.allowed) {
+      blocked = true;
+      continue;
+    }
+    const note = `"${m[0].toLowerCase()}" (${v.why})`;
+    if (!allowedWhy.includes(note)) allowedWhy.push(note);
+  }
+  return { hit, blocked, allowedWhy: blocked ? [] : allowedWhy };
+}
+
+/** D244 R-23: the rule keys of the two effect lists (Compliance guardrails page). */
+export const EFFECTS_ALLOW_LIST_KEY = "effects.allow-list";
+export const EFFECTS_MEDICAL_WORDS_KEY = "effects.medical-words";
 
 // =============================================================================
 // EFFECTS — experiential-only allow-list + validator
@@ -190,50 +225,9 @@ export function checkCompliance(text: string, extra: ExtraBannedPhrase[] = []): 
 // kb_banned_phrases blocklist. This is the gate for BOTH effect generation and
 // effect write-back into the KB. Sensory copy still uses checkCompliance().
 
-/** Canonical experiential effect descriptors permitted under WA I-502. */
-export const ALLOWED_EFFECTS = [
-  // Relaxed / sedating experience (NOT medical — describes the subjective feel)
-  "sleepy",
-  "relaxed",
-  "relaxing",
-  "calm",
-  "calming",
-  "chill",
-  "mellow",
-  "soothing",
-  "couch-lock",
-  "heavy",
-  "sedate",
-  "sedating",
-  "dreamy",
-  // Uplifted / social
-  "uplifted",
-  "uplifting",
-  "happy",
-  "euphoric",
-  "giggly",
-  "talkative",
-  "sociable",
-  "social",
-  // Energetic / active
-  "focused",
-  "creative",
-  "energetic",
-  "energizing",
-  "motivated",
-  "productive",
-  "tingly",
-  "hungry",
-  "munchies",
-  "appetite",
-  // Potency / character (experiential, per the compliance reference)
-  "stoney",
-  "potent",
-  "buzzy",
-  "cerebral",
-  "body high",
-  "head high",
-] as const;
+// D244 R-23: the lists live in effects-lists-core.ts (pure) so the guardrails
+// page can show them; re-exported here so every import keeps working.
+export { ALLOWED_EFFECTS };
 
 export type EffectCheckResult = {
   /** Effects that are on the allow-list AND pass the medical-claim filter. */
@@ -245,50 +239,6 @@ export type EffectCheckResult = {
 };
 
 const ALLOWED_EFFECT_SET = new Set<string>(ALLOWED_EFFECTS.map((e) => e.toLowerCase()));
-
-/**
- * Extra medical-claim words that, on their own, are never valid as an "effect"
- * value even though checkCompliance already flags them in prose. Keeping a small
- * dedicated list makes the effect validator strict and self-documenting.
- */
-const EFFECT_MEDICAL_WORDS = [
-  "cure",
-  "cures",
-  "treat",
-  "treats",
-  "heal",
-  "heals",
-  "relieve",
-  "relieves",
-  "relief",
-  "prevent",
-  "prevents",
-  "diagnose",
-  "remedy",
-  "therapy",
-  "therapeutic",
-  "medicine",
-  "medical",
-  "medicinal",
-  "disease",
-  "disorder",
-  "symptom",
-  "clinical",
-  "clinically",
-  "fda",
-  "pain",
-  "anxiety",
-  "depression",
-  "insomnia",
-  "ptsd",
-  "cancer",
-  "arthritis",
-  "migraine",
-  "nausea",
-  "seizure",
-  "adhd",
-  "inflammation",
-];
 
 /**
  * Validate a list of proposed EFFECT descriptors. An effect is accepted only if
@@ -309,11 +259,18 @@ export function checkEffects(effects: string[], extra: ExtraBannedPhrase[] = [])
     if (seen.has(effect)) continue;
     seen.add(effect);
 
-    if (!ALLOWED_EFFECT_SET.has(effect)) {
+    // D244 R-23: the owner can loosen both lists (block / warn / off) and can
+    // allow single words everywhere. "warn" keeps the effect (a person reads it).
+    const ownerAllowed = isAllowedWord(effect);
+    if (!ownerAllowed && !ALLOWED_EFFECT_SET.has(effect) && ruleLevel(EFFECTS_ALLOW_LIST_KEY, "block") === "block") {
       rejected.push({ effect, reason: "not on the approved experiential-effect list" });
       continue;
     }
-    if (EFFECT_MEDICAL_WORDS.some((w) => effect === w || effect.includes(w))) {
+    if (
+      !ownerAllowed &&
+      ruleLevel(EFFECTS_MEDICAL_WORDS_KEY, "block") === "block" &&
+      EFFECT_MEDICAL_WORDS.some((w) => !isAllowedWord(w) && (effect === w || effect.includes(w)))
+    ) {
       rejected.push({ effect, reason: "contains a medical-claim word" });
       continue;
     }

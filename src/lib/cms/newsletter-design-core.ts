@@ -29,6 +29,7 @@ import {
 import { MAX_ELEMENTS, defaultElement, defaultIcon, isSafeIconPath, type DesignElement } from "./banner-elements-core";
 import { encodeQr } from "@/lib/printing/qr-core";
 import { checkAdText, adFindingMessage } from "@/lib/marketing/ad-check-core";
+import { ruleLevel } from "@/lib/ai/guardrails-state-core";
 import { escapeHtml, EMAIL_FONT_PX } from "./newsletter-email-core";
 
 // ── Sizes ───────────────────────────────────────────────────────────────
@@ -270,8 +271,9 @@ export function designIssues(f: DesignSectionFields, warningsPx: number = EMAIL_
   if (shown.largest > warningsPx * 10) out.push({ level: "must-fix", code: "design-text-huge", text: `Words on a design picture show at about ${Math.round(shown.largest)} px; the warnings must be at least 10% of the largest text. Make them smaller.` });
   const phone = designTextPx(f.design, (PHONE_VIEW_PX * designDisplayWidth(f)) / EMAIL_COLUMN_PX);
   if (phone.smallest > 0 && phone.smallest < PHONE_MIN_TEXT_PX) out.push({ level: "heads-up", code: "design-text-small", text: `Some words on a design picture are about ${Math.round(phone.smallest)} px on a phone. Make them bigger, or put them in a text section.` });
-  if (words.some((w) => PRICE_RE.test(w))) out.push({ level: "heads-up", code: "design-price", text: "A price or discount is typed onto a design picture. Prices can change: add the product as a live row (Menu products) or in a text section." });
-  if (words.some((w) => DATE_RE.test(w))) out.push({ level: "heads-up", code: "design-date", text: "A date or day is typed onto a design picture. Put dates in live text (the countdown or a text section) so they can be corrected." });
+  // D244 R-23: the owner can turn these two picture heads-ups off.
+  if (ruleLevel("newsletter.picture-price", "warn") !== "off" && words.some((w) => PRICE_RE.test(w))) out.push({ level: "heads-up", code: "design-price", text: "A price or discount is typed onto a design picture. Prices can change: add the product as a live row (Menu products) or in a text section." });
+  if (ruleLevel("newsletter.picture-date", "warn") !== "off" && words.some((w) => DATE_RE.test(w))) out.push({ level: "heads-up", code: "design-date", text: "A date or day is typed onto a design picture. Put dates in live text (the countdown or a text section) so they can be corrected." });
   if (f.timerEndsAt && Date.parse(f.timerEndsAt) <= Date.now()) out.push({ level: "heads-up", code: "design-timer-ended", text: "The countdown under a design picture has already ended." });
   return out;
 }

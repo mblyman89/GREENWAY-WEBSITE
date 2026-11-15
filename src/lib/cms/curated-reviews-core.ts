@@ -10,6 +10,7 @@
  * (WAC 314-55-155) is held back even when ticked.
  */
 import { therapeuticWords } from "./culture-desk-core";
+import { ruleLevel } from "@/lib/ai/guardrails-state-core";
 
 export const CURATED_REVIEWS_KEY = "curated_reviews";
 export const REVIEWS_MAX = 100;
@@ -110,7 +111,9 @@ export function reviewProblems(r: CuratedReview): string[] {
   const out: string[] = [];
   if (!r.permission) out.push("No permission tick yet. Ask the customer first.");
   if (!r.firstName) out.push("Add the customer's first name.");
-  const thera = therapeuticWords(r.quote);
+  // D244 R-23: the owner can make this a heads-up (warn) or turn it off; only
+  // "block" holds a review back.
+  const thera = ruleLevel("reviews.health-words", "block") === "block" ? therapeuticWords(r.quote) : [];
   if (thera.length) out.push(`Health-benefit wording (${thera.join(", ")}) cannot be used in advertising (WAC 314-55-155). Pick a different review.`);
   return out;
 }
