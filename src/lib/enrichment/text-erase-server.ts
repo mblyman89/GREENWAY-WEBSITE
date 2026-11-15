@@ -54,6 +54,7 @@ import {
   TEXT_FIND_SYSTEM,
   checkEraseBoxes,
   erasePrompt,
+  erasedPublishStep,
   erasedSource,
   erasedStatus,
   erasedTitle,
@@ -344,5 +345,31 @@ export async function pollTextErase(p: { pollingUrl: string; originalId: string;
     return { state: "ready", mediaId: saved.id, url, published: status === "published" };
   } catch (err) {
     return { state: "failed", error: err instanceof Error ? err.message.slice(0, 300) : "Saving the result failed." };
+  }
+}
+
+export type ErasedPublishOut = { ok: true; note: string } | { ok: false; error: string };
+
+/**
+ * D244 R-22: publish ONE text-removed photo (a person pressed Publish). The
+ * decision is pure (erasedPublishStep). An older database without the
+ * publish_reason / published_by / published_at columns gets status only.
+ * Never throws.
+ */
+export async function publishErasedPhoto(mediaId: string, actorId: string | null): Promise<ErasedPublishOut> {
+  try {
+    const a = await getMedia(mediaId);
+    const step = erasedPublishStep(a ? { tags: a.tags ?? null, source: a.source ?? null, status: a.status ?? null } : null, actorId, new Date().toISOString());
+    if (step.kind === "refuse") return { ok: false, error: step.error };
+    if (step.kind === "skip") return { ok: true, note: step.note };
+    const admin = createSupabaseAdminClient();
+    const full = await admin.from("media_assets").update(step.patch).eq("id", mediaId);
+    if (full.error) {
+      const bare = await admin.from("media_assets").update({ status: "published" }).eq("id", mediaId);
+      if (bare.error) return { ok: false, error: bare.error.message.slice(0, 200) };
+    }
+    return { ok: true, note: "Published. It is now suggested on the Copilot, just behind exact matches." };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message.slice(0, 200) : "Publishing failed." };
   }
 }

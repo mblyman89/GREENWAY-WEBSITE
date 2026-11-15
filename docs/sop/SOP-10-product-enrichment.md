@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.6 (D244 R-21; adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
+| **Version** | 1.7 (D244 R-22; adds owner round 9: Publish a text-removed draft, text-removed photos rank second behind exact matches, and the Copilot lists every photo of the vendor, 4.17; 1.6 was D244 R-21 and adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -219,6 +219,22 @@ Owner (round 6): *"I need a way to approve all of the 20,000 records awaiting me
 4. Press **✅ Publish every draft that passes** and confirm. It works 500 drafts per step (20,000 takes about 40 steps; no AI call, so there is no thinking wait), with a running total and a **Stop** button. Press it again to carry on after a Stop.
 5. Each record must have a name, meet the bar and pass the WA compliance scan of its words (name, description, summary, effects), including your banned-phrase list. The rest stay drafts in the Review inbox with the reason counted, for you to look at one by one. Every step that publishes writes an audit row (`kb.bulk.publish_passing`). Any published record can be archived later.
 
+### 4.17 Publish a text-removed photo, and how the Copilot ranks it (D244 R-22)
+
+Owner (round 9): *"give me the ability to publish the draft from removing the text so it can be suggested on the copilot page. I need every product image I remove text from to be the second highest suggested item behind exact matches. The removed text gives me the ability to use a generic version of their product as a representation. So it's a very valuable image in the list of suggestions. Please also expand the list of suggestions on the copilot page to be every image from that vendor."*
+
+1. **Publish the draft.** A Remove-text result is saved as a draft when the original photo was a draft or its rights are pending. The result now has a **Publish (so the Copilot suggests it)** button, in the Remove-text list (Copilot and Vendor kits) and in the product page's Remove text editor. Pressing it is you confirming the rights are fine. It publishes only that new photo (never the original, and only photos made by Remove text), and writes an audit row (`product.remove_text_published`). After it says *Published*, the Copilot can suggest it.
+2. **How the Copilot orders its suggestions.**
+   1. Photos you picked for this product before.
+   2. Photos already on this product's card.
+   3. Exact matches: photos rated High (80% or more).
+   4. **Published text-removed photos of this vendor or brand**, with the chip **Text removed · generic**. This tier also includes a text-removed photo with no vendor on file when its own match is at least 35%.
+   5. Everything else.
+
+   The percentage shown is still the photo's own match score; only the order changes. A text-removed draft is not lifted until you press Publish.
+3. **Every photo of the vendor.** Under **Recommended photos (press 1-9)** the Copilot now lists **Every other photo from this vendor (N)**. That is all the vendor's and brand's photos in the library (up to 3,000), in the same order. Click one to attach it. Keys 1–9 and the chat still work on the first nine. These photos are also offered to the Remove-text list.
+4. The product page's own **Recommended photos** panel keeps its 12 tiles, with the same order (published text-removed photos second, behind exact matches).
+
 ## 5. Messages: "If you see this message"
 
 | Message (or what you see) | What it means | What to do |
@@ -284,7 +300,7 @@ Owner (round 6): *"I need a way to approve all of the 20,000 records awaiting me
 
 **Rule:** photo = published. Words can come later.
 
-**Copilot keys:** **1–9** attach photo · **A** accept all ≥ 80% · **D** draft now · **P** publish & next · **N** next · **S** skip · **/** chat.
+**Copilot keys:** **1–9** attach photo (every other vendor photo is listed below them; click to attach) · **A** accept all ≥ 80% · **D** draft now · **P** publish & next · **N** next · **S** skip · **/** chat.
 
 **Confidence:** evidence ≥ 80% · Best guess ≤ 70% (accepted, flagged) · no evidence ≤ 40%.
 
@@ -348,6 +364,7 @@ Owner (round 6): *"I need a way to approve all of the 20,000 records awaiting me
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
 | 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
+| 1.7 | D244 R-22 | Owner round 9: a Publish button on text-removed drafts; published text-removed photos of the vendor rank second, behind exact matches; the Copilot lists every photo of the vendor after the numbered 1–9 (4.17) |
 | 1.6 | D244 R-21 | Owner round 8: Vendor kits shows one photo grid; every photo in it has a ✂ Remove text button that adds it to the queue (12 at a time); the separate small thumbnail strip is gone (4.14) |
 | 1.5 | D244 R-20 | Owner round 7: Remove text cuts out the text area and enlarges it to about 1 megapixel (FLUX Erase's training size), masks only the letters (or the whole box, by choice) and stitches the answer back through the same mask (4.13) |
 | 1.4 | D244 R-18 | Owner round 6: ✅ Approve every draft (any confidence, all pages) and ✅ Accept all description drafts on Bulk AI (4.7 step 6); Knowledge Base publish every draft that passes, with Check first, a quality bar and a source filter (4.16) |

@@ -326,6 +326,23 @@ export function copilotPhotoChoices(
     .map((t, i) => ({ n: i + 1, id: t.id, url: t.url, label: t.label.slice(0, 120), confidence: Math.round(t.confidence), chips: t.chips.slice(0, 4) }));
 }
 
+export type CopilotMorePhoto = { id: string; url: string | null; label: string; confidence: number; chips: string[]; textRemoved: boolean };
+
+/**
+ * D244 R-22: every other photo of the vendor after the numbered 1-9 (owner:
+ * "expand the list of suggestions on the copilot page to be every image from
+ * that vendor"). Same order as the panel; attached ones and the numbered ones
+ * skipped. Each is attached with a click (no number key).
+ */
+export function copilotMorePhotos(
+  tiles: readonly { id: string; url: string | null; label: string; confidence: number; chips: string[]; attached: boolean; textRemoved?: boolean }[],
+): CopilotMorePhoto[] {
+  const numbered = new Set(copilotPhotoChoices(tiles).map((c) => c.id));
+  return tiles
+    .filter((t) => !t.attached && t.id && !numbered.has(t.id))
+    .map((t) => ({ id: t.id, url: t.url, label: t.label.slice(0, 120), confidence: Math.round(t.confidence), chips: t.chips.slice(0, 4), textRemoved: Boolean(t.textRemoved) }));
+}
+
 /** One published card of the same vendor, as a style example for the prompt. */
 export function copilotVendorStyleLine(r: { display_name: string | null; short_description: string | null; description: string | null }): string {
   const name = (r.display_name ?? "").trim() || "(unnamed)";
@@ -485,6 +502,11 @@ export function __runCopilotCoreTests(): { passed: number; failed: number } {
   const ch = copilotPhotoChoices(tiles);
   ok(ch.length === 9 && ch[0]!.id === "t0" && ch[0]!.n === 1 && ch[8]!.n === 9, "photo choices: attached skipped, numbered 1-9, max 9");
   ok(copilotPhotoChoices([{ ...tiles[0]!, attached: false }])[0]!.confidence === 91, "confidence rounded");
+  {
+    const more = copilotMorePhotos([...tiles, { id: "tr", url: "u", label: "TR", confidence: 33.6, chips: ["Text removed"], attached: false, textRemoved: true }]);
+    ok(more.length === 3 && more[0]!.id === "t9" && more[2]!.id === "tr" && more[2]!.textRemoved && more[2]!.confidence === 34, "R-22: every photo after 1-9 listed, attached skipped");
+    ok(copilotMorePhotos(tiles.slice(0, 5)).length === 0, "R-22: nothing more when 9 or fewer");
+  }
   ok(copilotVendorStyleLine({ display_name: "A", short_description: "B", description: "C" }) === "A | B | C", "style line");
   ok(copilotVendorStyleLine({ display_name: null, short_description: null, description: null }) === "(unnamed)", "style line empty");
   return { passed, failed };

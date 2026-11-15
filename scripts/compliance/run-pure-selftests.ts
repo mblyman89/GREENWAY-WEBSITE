@@ -2972,7 +2972,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("bulk-publish-core", __runBulkPublishCoreTests(), 38); // D244 E-2: bulk publish/unpublish/archive plan, ready-to-publish (draft + photo), pre-flight counts, key scope + cap, outcome sentence; R-1 publish on photo
   assertRan("worklist-core", __runWorklistCoreTests(), 39); // D244 E-1a vendor-first, on-hand-first worklist
   assertRan("detail-nav-core", __runDetailNavCoreTests(), 32); // D244 E-1b keep my place: back on every detail redirect, Prev / Next / Save & next
-  assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 33); // D244 E-3
+  assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 47); // D244 E-3; D244 R-22: text-removed photos second behind exact matches, every vendor photo on the Copilot
   assertRan("ai-draft-v2-core", __runAiDraftV2Tests(), 60); // D244 E-4 + R-1 calibration / best-guess / checked + R-2 lot/coa/potency/edited
   assertRan("bulk-ai-v2-core", __runBulkAiV2Tests(), 38); // D244 E-5
   assertRan("enrich-batch-core", __runEnrichBatchTests(), 45); // D244 R-3
@@ -2982,13 +2982,13 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("enrich-model-core", __runEnrichModelCoreTests(), 16); // D244 R-1: enrichment model pin (AI_ENRICH_MODEL), provider + effort clamp, Gemini 32K floor
   assertRan("product-identity-core", __runProductIdentityTests(), 26); // D244 R-7: identity header rows, form of a category, type words, form match, prompt lines
   assertRan("vendor-kit-core", __runVendorKitCoreTests(), 36); // D244 R-8: vendor kits - like-kind groups, product-specific words, generic photo ranking, apply plan, AI verdicts in the URL
-  assertRan("text-erase-core", __runTextEraseCoreTests(), 88); // D244 R-21: tick any vendor-kit photo for the queue; D244 R-20: crop-and-stitch at ~1 MP (enlarge small shots), letters-only mask, stitch through the mask; D244 R-17: FLUX Erase body, ~1 MP send size, Fill fallback, paste-back only inside the boxes; D244 R-9/R-11: remove text - drag boxes, FLUX Fill mask, AI find-the-text keep/remove advice, other-name hint, multi-photo queue
+  assertRan("text-erase-core", __runTextEraseCoreTests(), 90); // D244 R-22: publish a text-removed draft on the press; D244 R-21: tick any vendor-kit photo for the queue; D244 R-20: crop-and-stitch at ~1 MP (enlarge small shots), letters-only mask, stitch through the mask; D244 R-17: FLUX Erase body, ~1 MP send size, Fill fallback, paste-back only inside the boxes; D244 R-9/R-11: remove text - drag boxes, FLUX Fill mask, AI find-the-text keep/remove advice, other-name hint, multi-photo queue
   assertRan("vendor-pick-core", __runVendorPickTests(), 17); // D244 R-16: many vendors / every vendor in one press, vendors named in the flash, overnight per-vendor breakdown + when it leaves, retry failed
   assertRan("batch-answer-core", __runBatchAnswerTests(), 20); // D244 R-15: overnight answers read tolerantly (wrappers, flat fields, long text) + responseSchema in the Batch API docs' form
   assertRan("compliance-context-core", __runComplianceContextTests(), 76); // D244 R-14: "cure"/"cured" (the cure process) read in context, a heads-up; medical uses still block
   assertRan("bulk-approve-core", __runBulkApproveCoreTests(), 17); // D244 R-12: Bulk AI select one/all + approve every draft at 80%+, chunked (8 products / 40 drafts per call), totals, never publishes
   assertRan("kb-bulk-review-core", __runKbBulkReviewTests(), 17); // D244 R-19: KB pipeline "Publish every draft that passes" (quality bar + compliance, 500 per page, Check first)
-  assertRan("copilot-core", __runCopilotCoreTests(), 55); // D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
+  assertRan("copilot-core", __runCopilotCoreTests(), 57); // D244 R-22: every vendor photo after 1-9; D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -44,7 +44,7 @@ describe("D244 R-21 one photo grid on Vendor kits", () => {
     expect(toggleQueuePick([], "a").picked).toEqual(["a"]);
   });
   it("SOP-10 v1.6, Concierge and strategy row explain it", () => {
-    expect(read("docs/sop/SOP-10-product-enrichment.md")).toContain("| **Version** | 1.6 (D244 R-21;");
+    expect(read("docs/sop/SOP-10-product-enrichment.md")).toMatch(/\| \*\*Version\*\* \| 1\.(6 \(D244 R-21;|[7-9] \(D244 R-\d+;.*1\.6 was D244 R-21)/);
     expect(read("src/lib/admin/concierge-kb.ts")).toContain("Remove text on Vendor kits, any photo (D244 R-21");
     expect(read("docs/sop-program/D244-enrichment-powerhouse-strategy.md")).toMatch(/\| R-21 \| #\d+ \| merged \|/);
   });

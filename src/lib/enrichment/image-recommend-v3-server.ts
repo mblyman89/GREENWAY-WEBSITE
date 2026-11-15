@@ -11,12 +11,17 @@
  *   name / brand / category, text AND picture rows). Their similarity is
  *   passed to the recommender as calibrated evidence (never "High" alone).
  *   Off / not indexed = [] and the panel is exactly the word-based one.
+ *   D244 R-22: published text-removed photos of this vendor always join (they
+ *   rank just behind exact matches), and `wholeVendor` (the Copilot) adds
+ *   every photo of this vendor / brand, scored without the floor, and lifts
+ *   the 12-tile cap (owner: "expand the list of suggestions on the copilot
+ *   page to be every image from that vendor").
  */
 import "server-only";
 import { otherNameOnPhoto } from "@/lib/enrichment/text-erase-core";
 import { readLibraryAssetsByIds, readLibraryPickerAssets, readSearchHitAssets } from "@/lib/media/library-picker-server";
 import { loadImageMemory, loadOnRecordImageIds } from "@/lib/catalog/image-memory-server";
-import { recommendImages } from "@/lib/catalog/image-recommend-core";
+import { rankSearchResults, recommendImages } from "@/lib/catalog/image-recommend-core";
 import { semanticSearch } from "@/lib/media/media-embed-server";
 import { bestSimilarity, productSemanticQuery } from "@/lib/media/media-embed-core";
 import { enrichmentIdentityForItem } from "./enrichment-identity-core";
@@ -24,9 +29,12 @@ import { readWorklistVendorData } from "./worklist-server";
 import { resolveCardVendor, type VendorVia } from "./worklist-core";
 import { formOfCategory, identitySemanticCategory, identityTypeWords } from "./product-identity-core";
 import {
+  COPILOT_PANEL_LIMIT,
+  RECOMMEND_PANEL_LIMIT,
   RECOMMEND_WIDE_LIMIT,
   mergeRecommendPools,
   orderRecommendPanel,
+  recommendExtras,
   recommendFullQuery,
   recommendSearchWords,
   type RecommendPanel,
@@ -63,6 +71,8 @@ export type RecommendPanelInput = {
     identity_key?: string | null;
     image_media_ids?: string[] | null;
   } | null;
+  /** D244 R-22: the Copilot lists every photo of the vendor (no 12-tile cap). */
+  wholeVendor?: boolean;
 };
 
 /** Identity keys for a card: the stored key first, then the computed one. */
@@ -133,7 +143,14 @@ export async function loadRecommendPanel(input: RecommendPanelInput): Promise<Re
       limit: RECOMMEND_WIDE_LIMIT,
       semantic,
     });
-    const panel = orderRecommendPanel(view, pool, name);
+    // D244 R-22: the photos the floor dropped that still belong in the list.
+    const ref = { vendorId, brandId: enrichment?.brand_id ?? null };
+    const extraAssets = recommendExtras(pool, view, ref, Boolean(input.wholeVendor));
+    const extras = extraAssets.length
+      ? rankSearchResults(extraAssets, product, { galleryIds: enrichment?.image_media_ids ?? [], limit: extraAssets.length })
+      : [];
+    const wide = extras.length ? { ...view, items: [...view.items, ...extras], emptyText: null } : view;
+    const panel = orderRecommendPanel(wide, pool, name, input.wholeVendor ? COPILOT_PANEL_LIMIT : RECOMMEND_PANEL_LIMIT, ref);
     // D244 R-9: a near-perfect photo whose label names another product gets
     // a "Remove text" hint (owner: "I want the ai to help recommend the name
     // to be removed from the image").

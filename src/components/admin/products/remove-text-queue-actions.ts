@@ -12,10 +12,14 @@
  * scope can be one product card (Copilot) or one vendor (Vendor kits). All
  * need products.enrich and write an audit row. None attaches anything: the
  * person presses Attach (Copilot) or "Use as the kit photo" (Vendor kits).
+ *
+ * D244 R-22: queuePublishErasedAction - the person's Publish press on a
+ * text-removed draft (owner: "give me the ability to publish the draft from
+ * removing the text so it can be suggested on the copilot page").
  */
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { findTextOnPhoto, pollMode, pollTextErase, startTextErase, type ErasePollOut, type FindTextOut, type StartEraseOut } from "@/lib/enrichment/text-erase-server";
+import { findTextOnPhoto, pollMode, pollTextErase, publishErasedPhoto, startTextErase, type ErasedPublishOut, type ErasePollOut, type FindTextOut, type StartEraseOut } from "@/lib/enrichment/text-erase-server";
 import { cleanQueueScope, parseEraseBoxes, type EraseProduct, type QueueScope } from "@/lib/enrichment/text-erase-core";
 
 const id = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 80) : "");
@@ -91,4 +95,21 @@ export async function queuePollEraseAction(scope: QueueScope, pollingUrl: string
   } catch (e) {
     return { state: "failed", error: e instanceof Error ? e.message.slice(0, 300) : "FLUX check failed." };
   }
+}
+
+export async function queuePublishErasedAction(scope: QueueScope, mediaId: string): Promise<ErasedPublishOut> {
+  const session = await requirePermission("products.enrich");
+  const s = cleanQueueScope(scope);
+  const m = id(mediaId);
+  if (!s || !m) return { ok: false, error: "Missing product or photo." };
+  const out = await publishErasedPhoto(m, session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.remove_text_published",
+    entityType: "media_asset",
+    entityId: m,
+    after: { scope: s.kind, scopeId: s.id, via: "queue", ok: out.ok, error: out.ok ? null : out.error },
+  }).catch(() => {});
+  return out;
 }

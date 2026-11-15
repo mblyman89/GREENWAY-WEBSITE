@@ -16,10 +16,15 @@
  *
  * D244 R-21: a page can own the ticks (picked / onToggle) and hide the small
  * thumbnail strip - Vendor kits ticks straight from its one photo grid.
+ *
+ * D244 R-22: a result saved as a draft has a Publish button (owner: "give
+ * me the ability to publish the draft from removing the text so it can be
+ * suggested on the copilot page"). Published text-removed photos rank just
+ * behind exact matches in the Copilot's suggestions.
  */
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { queueFindTextAction, queuePollEraseAction, queueStartEraseAction } from "./remove-text-queue-actions";
+import { queueFindTextAction, queuePollEraseAction, queuePublishErasedAction, queueStartEraseAction } from "./remove-text-queue-actions";
 import {
   ERASE_BOXES_MAX,
   eraseQueuePlan,
@@ -35,11 +40,11 @@ import {
 
 export type QueuePhoto = { mediaId: string; url: string; label: string };
 type Box = EraseBox & { id: number; text?: string; why?: string; on: boolean; ai: boolean };
-type Slot = { boxes: Box[]; state: QueueState; progress: string | null; error: string | null; result: { mediaId: string; url: string; published: boolean } | null; after: boolean; finding: boolean };
+type Slot = { boxes: Box[]; state: QueueState; progress: string | null; error: string | null; result: { mediaId: string; url: string; published: boolean } | null; after: boolean; finding: boolean; publishing: boolean; publishNote: string | null };
 
 const POLL_MS = 3000;
 const POLL_MAX = 60;
-const emptySlot = (): Slot => ({ boxes: [], state: "idle", progress: null, error: null, result: null, after: true, finding: false });
+const emptySlot = (): Slot => ({ boxes: [], state: "idle", progress: null, error: null, result: null, after: true, finding: false, publishing: false, publishNote: null });
 const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
 
 function QueueCanvas(props: { photo: QueuePhoto; slot: Slot; locked: boolean; onBox: (b: EraseBox) => void }) {
@@ -155,6 +160,17 @@ export function RemoveTextQueue(props: {
       finding: false,
       boxes: [...s.boxes.filter((b) => !b.ai), ...out.found.map((f) => ({ ...f.box, id: nextId.current++, text: f.text, why: f.why, on: f.advice === "remove", ai: true }))].slice(0, ERASE_BOXES_MAX),
     }));
+  };
+
+  /** D244 R-22: the person's Publish press on a text-removed draft. */
+  const publishResult = async (m: string, mediaId: string) => {
+    patch(m, { publishing: true, error: null });
+    const out = await queuePublishErasedAction(scope, mediaId);
+    if (!out.ok) {
+      patch(m, { publishing: false, error: out.error });
+      return;
+    }
+    patch(m, (cur) => ({ publishing: false, publishNote: out.note, result: cur.result ? { ...cur.result, published: true } : cur.result }));
   };
 
   const runOne = async (m: string, boxes: EraseBox[]) => {
@@ -298,6 +314,22 @@ export function RemoveTextQueue(props: {
                         </button>
                       </div>
                       <p className="text-[11px] text-emerald-300">Saved to the media library{s.result.published ? "." : " as a draft (the original was a draft or its rights are pending)."}</p>
+                      {s.result.published ? (
+                        <p className="text-[11px] text-white/60" data-testid="queue-published-note">
+                          {s.publishNote ?? "Published: the Copilot suggests it just behind exact matches."}
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          data-testid="queue-publish"
+                          disabled={s.publishing}
+                          onClick={() => publishResult(p.mediaId, s.result!.mediaId)}
+                          className="w-full rounded border border-emerald-400/60 px-2 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-60"
+                          title="Publish this text-removed photo so the Copilot can suggest it (you are confirming the rights are fine)"
+                        >
+                          {s.publishing ? "Publishing\u2026" : "Publish (so the Copilot suggests it)"}
+                        </button>
+                      )}
                       {attachAction ? (
                         <div className="flex gap-1.5">
                           <form action={attachAction} className="flex-1">

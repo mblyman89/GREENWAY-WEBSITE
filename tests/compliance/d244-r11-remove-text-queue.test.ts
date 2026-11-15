@@ -38,7 +38,7 @@ describe("R-11 queue core", () => {
   it("self-tests pass (45 from R-9 + 9 for the queue + 10 for R-17 Erase + 21 for R-20 crop and letters mask + 3 for R-21 any-photo pick)", () => {
     const r = __runTextEraseCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(88);
+    expect(r.passed).toBe(90);
   });
   it("one press sends every boxed photo, in order, skipping done ones", () => {
     expect(
@@ -73,7 +73,7 @@ describe("R-11 queue wiring", () => {
   });
   it("the queue actions need products.enrich, audit, and reuse the R-9 server", () => {
     expect(ACTIONS.trimStart().startsWith('"use server";')).toBe(true);
-    expect((ACTIONS.match(/requirePermission\("products\.enrich"\)/g) ?? []).length).toBe(3);
+    expect((ACTIONS.match(/requirePermission\("products\.enrich"\)/g) ?? []).length).toBe(4); // R-22 added Publish
     for (const a of ["product.remove_text_found", "product.remove_text_started", "product.remove_text_saved"]) expect(ACTIONS).toContain(a);
     expect(ACTIONS).toContain("startTextErase(");
     expect(ACTIONS).toContain("pollTextErase(");

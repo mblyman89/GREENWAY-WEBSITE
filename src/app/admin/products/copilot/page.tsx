@@ -13,6 +13,7 @@ import { ACCEPT_ALL_THRESHOLD, FIELD_LABEL, evidenceLabel, isDraftFieldKey, pars
 import { EDIT_HINT, editKind, editText } from "@/lib/enrichment/draft-edit-core";
 import {
   COPILOT_KEYS,
+  copilotMorePhotos,
   copilotNext,
   copilotPhotoChoices,
   copilotUrl,
@@ -164,10 +165,12 @@ export default async function CopilotPage({
   const hasImage = c.photos.length > 0;
   const blocked = publishBlockReason(hasImage);
   const choices = copilotPhotoChoices(c.recommend.tiles);
+  // D244 R-22: every other photo of this vendor, after the numbered 1-9.
+  const more = copilotMorePhotos(c.recommend.tiles);
   // D244 R-11: the Remove-text queue offers the card's photos and the recommended ones.
   const ready = await textEraseReady();
   const queuePhotos: QueuePhoto[] = [];
-  for (const p of [...c.photos.map((x, n) => ({ id: x.id, url: x.url, label: `On this card ${n + 1}` })), ...choices.map((x) => ({ id: x.id, url: x.url, label: `Photo ${x.n}` }))]) {
+  for (const p of [...c.photos.map((x, n) => ({ id: x.id, url: x.url, label: `On this card ${n + 1}` })), ...choices.map((x) => ({ id: x.id, url: x.url, label: `Photo ${x.n}` })), ...more.map((x) => ({ id: x.id, url: x.url, label: x.label }))]) {
     if (p.url && !queuePhotos.some((q) => q.mediaId === p.id)) queuePhotos.push({ mediaId: p.id, url: p.url, label: p.label });
   }
   const queueProduct: EraseProduct = {
@@ -312,6 +315,33 @@ export default async function CopilotPage({
               ) : (
                 <p className="text-xs text-white/40">{c.recommend.emptyText ?? "No library photo looks like this product yet. Use the full product page to search or import one."}</p>
               )}
+              {more.length ? (
+                <details className="mt-2" data-testid="copilot-more-photos" open={more.length <= 30}>
+                  <summary className="cursor-pointer text-xs text-white/60">
+                    Every other photo from this vendor ({more.length}) &mdash; click one to attach it
+                  </summary>
+                  <div className="mt-2 grid max-h-[32rem] grid-cols-4 gap-2 overflow-y-auto pr-1">
+                    {more.map((p) => (
+                      <form key={p.id} action={copilotAttachPhotoAction} className="rounded border border-white/10 p-1">
+                        {ctx}
+                        <input type="hidden" name="mediaId" value={p.id} />
+                        <input type="hidden" name="identityKey" value={c.recommend.identityKey} />
+                        <button type="submit" className="block w-full text-left" title={`Attach ${p.label}`}>
+                          <div className="relative aspect-square overflow-hidden rounded bg-white/5">
+                            {p.url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.url} alt={p.label} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                            ) : null}
+                            {p.textRemoved ? <span className="absolute left-1 top-1 rounded bg-emerald-600/90 px-1 text-[0.6rem] font-semibold text-black">{"\u2702"}</span> : null}
+                            <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[0.6rem] text-white/80">{p.confidence}%</span>
+                          </div>
+                          <span className="mt-1 block truncate text-[0.6rem] text-white/60">{p.chips.join(" \u00b7 ") || p.label}</span>
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
 
             <RemoveTextQueue

@@ -21,15 +21,29 @@
  *      tie-breaks never change the number a person sees.
  *   3. at most RECOMMEND_PANEL_LIMIT tiles.
  *
+ * D244 R-22 — owner (round 9, verbatim): "I need every product image I
+ * remove text from to be the second highest suggested item behind exact
+ * matches. The removed text gives me the ability to use a generic version
+ * of their product as a representation. ... Please also expand the list of
+ * suggestions on the copilot page to be every image from that vendor."
+ *   Tiers now: picked before > on this card > exact match (High, 80%+) >
+ *   a PUBLISHED text-removed photo of this vendor / brand > everything else.
+ *   recommendExtras adds the photos the recommender dropped under its floor:
+ *   always this vendor's published text-removed photos; on the Copilot
+ *   (wholeVendor) every photo of this vendor / brand. The confidence shown
+ *   stays the recommender's own number.
+ *
  * Embeddings / vision confirmation are NOT here (owner Q5 still open).
  */
 import {
+  MIN_RECOMMEND_CONFIDENCE,
   NOT_PRODUCT_ROLES,
   packSizes,
+  vendorMatch,
   type ImageRecommendView,
   type ImageRecommendation,
 } from "@/lib/catalog/image-recommend-core";
-import type { LibraryPickerAsset } from "@/lib/media/library-picker-core";
+import { isPickableImage, type LibraryPickerAsset } from "@/lib/media/library-picker-core";
 
 export const RECOMMEND_PANEL_LIMIT = 12;
 /** How many name words get their own one-word search. */
@@ -38,6 +52,14 @@ export const MAX_WORD_SEARCHES = 3;
 export const RECOMMEND_WIDE_LIMIT = 60;
 export const PACK_MATCH_NUDGE = 3;
 export const PRODUCT_ROLE_NUDGE = 2;
+/** D244 R-22: an "exact match" is High (80%+) or a person's own past pick. */
+export const EXACT_MATCH_MIN = 80;
+/** D244 R-22: the Copilot shows every photo of the vendor (more than the 3000-row shelf read can return). */
+export const COPILOT_PANEL_LIMIT = 4000;
+/** D244 R-22: the chip a text-removed photo carries. */
+export const TEXT_REMOVED_CHIP = "Text removed \u00b7 generic";
+/** The tag every FLUX text-removed photo carries (text-erase-core ERASE_TAGS). */
+export const TEXT_REMOVED_TAG = "text-removed";
 
 const PRODUCT_ROLES = new Set(["product", "packaging", "flower"]);
 const STOP = new Set(["the", "and", "for", "with", "pre", "roll", "rolls", "pack", "flower", "cart", "cartridge", "infused", "gram", "grams"]);
@@ -103,7 +125,50 @@ export function packFit(a: Pick<LibraryPickerAsset, "pack_size" | "visible_text"
   return want.some((w) => have.has(w)) ? "same" : "other";
 }
 
-export type RecommendTile = ImageRecommendation & { pack: PackFit; productPhoto: boolean };
+export type RecommendTile = ImageRecommendation & { pack: PackFit; productPhoto: boolean; textRemoved: boolean };
+
+/** D244 R-22: a photo made by "Remove text" (tag text-removed). */
+export function isTextRemovedPhoto(a: Pick<LibraryPickerAsset, "tags"> | null | undefined): boolean {
+  return Boolean(a && (a.tags ?? []).some((t) => String(t).trim().toLowerCase() === TEXT_REMOVED_TAG));
+}
+
+export type RecommendProductRef = { vendorId?: string | null; brandId?: string | null };
+
+/**
+ * D244 R-22: does this text-removed photo earn the "generic photo" tier?
+ * Published (a draft waits for the person's Publish), and this vendor's /
+ * brand's photo, or a recommender match not filed under another vendor.
+ */
+export function genericTierFits(a: LibraryPickerAsset | undefined, confidence: number, product: RecommendProductRef | null | undefined): boolean {
+  if (!a || !isTextRemovedPhoto(a) || a.status !== "published") return false;
+  const vm = vendorMatch(a, product ?? {});
+  if (vm === "same") return true;
+  return vm === "unknown" && confidence >= MIN_RECOMMEND_CONFIDENCE;
+}
+
+/**
+ * D244 R-22: pool photos the recommender left out that still belong in the
+ * list: this vendor's / brand's published text-removed photos always, and
+ * (wholeVendor, the Copilot) every pickable photo of this vendor / brand.
+ * Pool order kept; ids already in the view skipped.
+ */
+export function recommendExtras(
+  pool: readonly LibraryPickerAsset[],
+  view: Pick<ImageRecommendView, "items">,
+  product: RecommendProductRef,
+  wholeVendor: boolean,
+): LibraryPickerAsset[] {
+  const have = new Set(view.items.map((r) => r.id));
+  const out: LibraryPickerAsset[] = [];
+  for (const a of pool) {
+    if (!a || have.has(a.id) || !isPickableImage(a)) continue;
+    if (vendorMatch(a, product) !== "same") continue;
+    if (!wholeVendor && !(isTextRemovedPhoto(a) && a.status === "published")) continue;
+    have.add(a.id);
+    out.push(a);
+  }
+  return out;
+}
 
 export type RecommendPanel = {
   tiles: RecommendTile[];
@@ -112,8 +177,12 @@ export type RecommendPanel = {
   emptyText: string | null;
 };
 
-function tier(r: ImageRecommendation): number {
-  return r.remembered ? 2 : r.onRecord ? 1 : 0;
+/** D244 R-22: 4 picked before, 3 on this card, 2 exact (High), 1 generic text-removed, 0 the rest. */
+function tier(r: ImageRecommendation, generic: boolean): number {
+  if (r.remembered) return 4;
+  if (r.onRecord) return 3;
+  if (r.confidence >= EXACT_MATCH_MIN) return 2;
+  return generic ? 1 : 0;
 }
 
 /**
@@ -125,6 +194,7 @@ export function orderRecommendPanel(
   assets: readonly LibraryPickerAsset[],
   productName: string | null | undefined,
   limit: number = RECOMMEND_PANEL_LIMIT,
+  product: RecommendProductRef | null = null,
 ): RecommendPanel {
   const byId = new Map(assets.map((a) => [a.id, a] as const));
   const rows = view.items.map((r, i) => {
@@ -137,11 +207,15 @@ export function orderRecommendPanel(
     if (pack === "other") score -= PACK_MATCH_NUDGE;
     if (productPhoto) score += PRODUCT_ROLE_NUDGE;
     if (NOT_PRODUCT_ROLES.has(role)) score -= PRODUCT_ROLE_NUDGE;
-    return { tile: { ...r, pack, productPhoto } as RecommendTile, score, i };
+    const textRemoved = isTextRemovedPhoto(a);
+    const generic = genericTierFits(a, r.confidence, product);
+    const chips = generic && !r.chips.includes(TEXT_REMOVED_CHIP) ? [TEXT_REMOVED_CHIP, ...r.chips] : r.chips;
+    const reasons = generic ? [...r.reasons, "Text removed: a generic photo of this vendor's product, ranked just behind exact matches."] : r.reasons;
+    return { tile: { ...r, chips, reasons, pack, productPhoto, textRemoved } as RecommendTile, score, i, t: tier(r, generic) };
   });
   rows.sort((x, y) => {
     if (x.tile.attached !== y.tile.attached) return x.tile.attached ? 1 : -1;
-    const t = tier(y.tile) - tier(x.tile);
+    const t = y.t - x.t;
     if (t !== 0) return t;
     if (y.score !== x.score) return y.score - x.score;
     return x.i - y.i;
@@ -236,6 +310,35 @@ export function __runImageRecommendV3Tests(): { passed: number; failed: number }
   eq("counts pass through", [panel.considered, panel.matched], [40, 6]);
   eq("empty passes text", orderRecommendPanel({ items: [], considered: 3, matched: 0, emptyText: "none" }, [], "x").emptyText, "none");
   eq("stable on ties", orderRecommendPanel({ ...view, items: [R("b", 50), R("a", 50)] }, [], "x").tiles.map((t) => t.id), ["b", "a"]);
+
+  // D244 R-22: text-removed photos rank second, behind exact matches
+  const TR = ["text-removed", "flux-fill"];
+  const prod = { vendorId: "v1", brandId: null };
+  ok("text-removed tag seen", isTextRemovedPhoto(A("x", { tags: ["Text-Removed"] })) && !isTextRemovedPhoto(A("y", { tags: ["flux"] })) && !isTextRemovedPhoto(null));
+  ok("generic: published same vendor", genericTierFits(A("g", { tags: TR, vendor_id: "v1" }), 0, prod));
+  ok("generic: draft waits for Publish", !genericTierFits(A("g", { tags: TR, vendor_id: "v1", status: "draft" }), 90, prod));
+  ok("generic: other vendor never", !genericTierFits(A("g", { tags: TR, vendor_id: "v2" }), 70, prod));
+  ok("generic: unknown vendor needs a match", genericTierFits(A("g", { tags: TR }), 40, prod) && !genericTierFits(A("g", { tags: TR }), 10, prod));
+  ok("generic: plain photo no", !genericTierFits(A("g", { vendor_id: "v1" }), 70, prod));
+  const gView: ImageRecommendView = {
+    items: [R("low", 40), R("tr", 20), R("hi", 84), R("rec", 90, { onRecord: true }), R("mem", 60, { remembered: true }), R("trd", 70), R("mid", 74)],
+    considered: 9,
+    matched: 7,
+    emptyText: null,
+  };
+  const gAssets = [A("tr", { tags: TR, vendor_id: "v1" }), A("trd", { tags: TR, vendor_id: "v1", status: "draft" })];
+  const gp = orderRecommendPanel(gView, gAssets, "x", 12, prod);
+  eq("order: memory, record, exact, text-removed, rest", gp.tiles.map((t) => t.id), ["mem", "rec", "hi", "tr", "mid", "trd", "low"]);
+  ok("text-removed chip first, confidence kept", gp.tiles[3]!.chips[0] === TEXT_REMOVED_CHIP && gp.tiles[3]!.confidence === 20 && gp.tiles[3]!.textRemoved);
+  ok("draft text-removed: flagged, no chip", gp.tiles.find((t) => t.id === "trd")!.textRemoved && !gp.tiles.find((t) => t.id === "trd")!.chips.includes(TEXT_REMOVED_CHIP));
+  eq("no product: no generic tier", orderRecommendPanel(gView, gAssets, "x", 12).tiles.map((t) => t.id).indexOf("tr"), 6);
+  // recommendExtras
+  const pool = [A("in", { vendor_id: "v1" }), A("tr2", { tags: TR, vendor_id: "v1" }), A("plain", { vendor_id: "v1" }), A("far", { vendor_id: "v2" }), A("trd2", { tags: TR, vendor_id: "v1", status: "draft" }), A("pdf", { vendor_id: "v1", mime_type: "application/pdf" })];
+  const inView = { items: [R("in", 50)] };
+  eq("extras: published text-removed only", recommendExtras(pool, inView, prod, false).map((a) => a.id), ["tr2"]);
+  eq("extras: whole vendor (Copilot)", recommendExtras(pool, inView, prod, true).map((a) => a.id), ["tr2", "plain", "trd2"]);
+  eq("extras: no vendor -> none", recommendExtras(pool, inView, {}, true).length, 0);
+  ok("copilot limit beyond the shelf read", COPILOT_PANEL_LIMIT >= 3000);
 
   // parseCoverIntent
   ok("cover 1", parseCoverIntent("1"));
