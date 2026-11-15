@@ -116,10 +116,10 @@ describe("D244 R-20 wiring and docs", () => {
     expect(q).toContain('data-testid="queue-mode-boxes"');
     expect(q).toContain("queueStartEraseAction(scope, m, JSON.stringify(boxes), surface, mode)");
   });
-  it("SOP-10 v1.5, Concierge and the strategy row explain it", () => {
+  it("SOP-10 v1.5+, Concierge and the strategy row explain it", () => {
     const sop = read("docs/sop/SOP-10-product-enrichment.md");
     expect(sop).toContain("(D244 R-20).** Owner, round 7:");
-    expect(sop).toContain("| **Version** | 1.5 (D244 R-20;");
+    expect(sop).toMatch(/\| \*\*Version\*\* \| 1\.\d+ \(D244 R-\d+;.*1\.5 was D244 R-20|\| \*\*Version\*\* \| 1\.5 \(D244 R-20;/);
     expect(read("src/lib/admin/concierge-kb.ts")).toContain("Remove text, round 7 fix (D244 R-20");
     expect(read("docs/sop-program/D244-enrichment-powerhouse-strategy.md")).toMatch(/\| R-20 \| #\d+ \| merged \|/);
   });

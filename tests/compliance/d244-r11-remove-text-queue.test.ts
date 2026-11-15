@@ -35,10 +35,10 @@ const KITS = read("src/app/admin/products/vendor-kits/page.tsx");
 const EDITOR = read("src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx");
 
 describe("R-11 queue core", () => {
-  it("self-tests pass (45 from R-9 + 9 for the queue + 10 for R-17 Erase + 21 for R-20 crop and letters mask)", () => {
+  it("self-tests pass (45 from R-9 + 9 for the queue + 10 for R-17 Erase + 21 for R-20 crop and letters mask + 3 for R-21 any-photo pick)", () => {
     const r = __runTextEraseCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(85);
+    expect(r.passed).toBe(88);
   });
   it("one press sends every boxed photo, in order, skipping done ones", () => {
     expect(
@@ -87,9 +87,12 @@ describe("R-11 queue wiring", () => {
     expect(QUEUE).toContain('data-testid="queue-attach-cover"');
   });
   it("Vendor kits shows the queue; the clean photo becomes the kit photo by a click", () => {
-    expect(KITS).toContain("<RemoveTextQueue");
-    expect(KITS).toContain('scope={{ kind: "vendor", id: s.vendorId }}');
-    expect(KITS).toContain('pickLabel="Use as the kit photo"');
+    // D244 R-21: the queue now lives inside the one photo grid (KitPhotoGrid).
+    const GRID = read("src/app/admin/products/vendor-kits/KitPhotoGrid.tsx");
+    expect(KITS).toContain("<KitPhotoGrid");
+    expect(GRID).toContain("<RemoveTextQueue");
+    expect(GRID).toContain('scope={{ kind: "vendor", id: vendorId }}');
+    expect(GRID).toContain('pickLabel="Use as the kit photo"');
     expect(KITS).toContain("await getMedia(photoId)");
     expect(KITS).toContain('data-testid="facts-first-hint"');
   });

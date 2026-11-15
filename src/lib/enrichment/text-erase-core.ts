@@ -816,6 +816,19 @@ export function eraseQueuePlan(entries: readonly QueueEntry[]): string[] {
   return out;
 }
 
+/**
+ * D244 R-21 (owner round 8: "I want to be able to remove text from any and
+ * all images available on the vendor kit page"): tick / untick a photo for
+ * the Remove-text queue from ANY tile. Up to ERASE_QUEUE_MAX at a time; a
+ * finished photo can be unticked to make room for the next ones.
+ */
+export function toggleQueuePick(picked: readonly string[], mediaId: string, max = ERASE_QUEUE_MAX): { picked: string[]; full: boolean } {
+  if (!mediaId) return { picked: [...picked], full: false };
+  if (picked.includes(mediaId)) return { picked: picked.filter((x) => x !== mediaId), full: false };
+  if (picked.length >= max) return { picked: [...picked], full: true };
+  return { picked: [...picked, mediaId], full: false };
+}
+
 /** "2 done · 1 working · 3 waiting · 1 failed" (empty parts left out). */
 export function queueSummary(states: readonly QueueState[]): string {
   const n = (s: QueueState) => states.filter((x) => x === s).length;
@@ -965,6 +978,11 @@ export function __runTextEraseCoreTests(): { passed: number; failed: number } {
   ok(queueButtonLabel(0, 0).startsWith("Draw a box"), "queue button idle");
   ok(cleanQueueScope({ kind: "vendor", id: " v1 " })?.id === "v1" && cleanQueueScope({ kind: "x", id: "a" }) === null && cleanQueueScope({ kind: "product", id: "" }) === null, "queue scope");
   ok(FACTS_FIRST_HINT.includes("by design") && FACTS_FIRST_HINT.includes("first"), "facts-first hint");
+  // R-21: tick any photo on the page
+  ok(toggleQueuePick(["a"], "b").picked.join() === "a,b" && toggleQueuePick(["a", "b"], "a").picked.join() === "b", "R-21: tick and untick any photo");
+  const fullPick = toggleQueuePick(Array.from({ length: ERASE_QUEUE_MAX }, (_, i) => `m${i}`), "x");
+  ok(fullPick.full && fullPick.picked.length === ERASE_QUEUE_MAX, "R-21: a full queue says so and keeps the picks");
+  ok(toggleQueuePick(Array.from({ length: ERASE_QUEUE_MAX }, (_, i) => `m${i}`), "m3").picked.length === ERASE_QUEUE_MAX - 1 && !toggleQueuePick([], "").full, "R-21: untick makes room; blank id ignored");
 
   // R-20: crop-and-stitch at ~1 MP + letters-only mask
   const sb = [{ x: 305 / 550, y: 318 / 550, w: 45 / 550, h: 20 / 550 }, { x: 320 / 550, y: 340 / 550, w: 120 / 550, h: 52 / 550 }];

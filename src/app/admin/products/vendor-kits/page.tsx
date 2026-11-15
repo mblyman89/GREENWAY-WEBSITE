@@ -15,7 +15,7 @@ import {
 } from "@/lib/enrichment/vendor-kit-core";
 import { kitApplyAction, kitCheckAction } from "./actions";
 import { getMedia } from "@/lib/media/store";
-import { RemoveTextQueue, type QueuePhoto } from "@/components/admin/products/RemoveTextQueue";
+import { KitPhotoGrid, type KitGridPhoto } from "./KitPhotoGrid";
 import { mediaPublicUrl, textEraseReady } from "@/lib/enrichment/text-erase-server";
 import { FACTS_FIRST_HINT } from "@/lib/enrichment/text-erase-core";
 
@@ -59,7 +59,7 @@ export default async function VendorKitsPage({
             "Open a group. The products with no photo are listed first and ticked for you.",
             "The photos are ranked for a generic, on-brand picture: this vendor's own photos, product or package shots, the same type, and no single strain name printed on it.",
             `Press “Ask the AI” to have the photo reader look at the top ${KIT_AI_CHECK_MAX} photos and say which ones name one product. It only looks; it never attaches.`,
-            "Photos with a strain name printed on them? Under the photos, tick several, drag a box over the text on each, and press Remove text once: FLUX cleans them one after the next. Press \u201cUse as the kit photo\u201d on the clean one.",
+            "Photos with a strain name printed on them? Press \u201c\u2702 Remove text\u201d on any photo (as many as you like, 12 at a time), drag a box over the text on each, and press Remove text once: FLUX cleans them one after the next. Press \u201cUse as the kit photo\u201d on the clean one.",
             "Facts and AI first, photo last: a product with a photo goes live and leaves the worklists (by design). Attach any facts, or run the AI drafts, before you press Apply.",
             "Pick the photo, check the ticks, and press Apply. Each product gets the photo (as the cover when it has none), and a product with a photo goes live.",
           ]}
@@ -123,7 +123,19 @@ export default async function VendorKitsPage({
   const freshPick = fresh ? { id: fresh.id, url: mediaPublicUrl(fresh), label: fresh.title || fresh.filename || "Cleaned photo", reasons: ["Cleaned with Remove text."] } : null;
   const selected: { id: string; url: string | null; label: string; reasons: string[] } | null = g ? (freshPick ?? s.photos.find((p) => p.id === photoId) ?? s.photos[0] ?? null) : null;
   const ready = g ? await textEraseReady() : { vision: false, flux: false };
-  const queuePhotos: QueuePhoto[] = s.photos.filter((p): p is typeof p & { url: string } => Boolean(p.url)).slice(0, 12).map((p) => ({ mediaId: p.id, url: p.url, label: p.label }));
+  // D244 R-21: every ranked photo (not just the first 12) can go to Remove text.
+  const gridPhotos: KitGridPhoto[] = g
+    ? s.photos.map((p) => ({
+        id: p.id,
+        url: p.url,
+        label: p.label,
+        score: p.score,
+        chips: p.chips,
+        reasons: p.reasons,
+        warn: Boolean(p.namesProduct || p.verdict?.generic === "no"),
+        href: kitUrl({ vendor: s.vendorId, by, group: g.key, photo: p.id, chk, hash: "products" }),
+      }))
+    : [];
   const ctxHidden = (
     <>
       <input type="hidden" name="vendor" value={s.vendorId} />
@@ -195,40 +207,16 @@ export default async function VendorKitsPage({
                 </form>
               </div>
               {s.photos.length ? (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                  {s.photos.map((p) => (
-                    <Link
-                      key={p.id}
-                      href={kitUrl({ vendor: s.vendorId, by, group: g.key, photo: p.id, chk, hash: "products" })}
-                      data-testid="kit-photo"
-                      className={`block rounded-lg border p-1 ${selected?.id === p.id ? "border-[var(--admin-accent)] ring-2 ring-[var(--admin-accent)]/40" : "border-white/10 hover:border-white/40"}`}
-                      title={p.reasons.join(" ")}
-                    >
-                      <div className="relative aspect-square overflow-hidden rounded bg-white/5">
-                        {p.url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.url} alt={p.label} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                        ) : null}
-                        <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[0.65rem] text-white/80">{p.score}</span>
-                      </div>
-                      <span className="mt-1 block truncate text-xs text-white/75">{p.label}</span>
-                      <span className={`block text-[0.65rem] ${p.namesProduct || p.verdict?.generic === "no" ? "text-[var(--admin-orange)]" : "text-white/50"}`}>{p.chips.join(" · ")}</span>
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              {s.photos.length ? (
-                <div className="mt-4">
-                  <RemoveTextQueue
-                    scope={{ kind: "vendor", id: s.vendorId }}
-                    photos={queuePhotos}
-                    product={{ name: `${s.vendorLabel} ${g.label}`.trim(), brand: s.vendorLabel || null, strainName: null, vendor: s.vendorLabel || null, category: g.label || null }}
-                    visionReady={ready.vision}
-                    fluxReady={ready.flux}
-                    pickHref={kitUrl({ vendor: s.vendorId, by, group: g.key, photo: "__MEDIA__", chk, hash: "products" })}
-                    pickLabel="Use as the kit photo"
-                  />
-                </div>
+                // D244 R-21 (owner: "I do not want two sections of images"): one grid; every photo can be picked as the kit photo AND sent to Remove text.
+                <KitPhotoGrid
+                  photos={gridPhotos}
+                  selectedId={selected?.id ?? null}
+                  vendorId={s.vendorId}
+                  product={{ name: `${s.vendorLabel} ${g.label}`.trim(), brand: s.vendorLabel || null, strainName: null, vendor: s.vendorLabel || null, category: g.label || null }}
+                  visionReady={ready.vision}
+                  fluxReady={ready.flux}
+                  pickHref={kitUrl({ vendor: s.vendorId, by, group: g.key, photo: "__MEDIA__", chk, hash: "products" })}
+                />
               ) : (
                 <p className="text-sm text-white/50">
                   No photo of this vendor fits yet. Upload the vendor&rsquo;s generic picture on Content → Media and file it under this vendor, then come back.
