@@ -40,6 +40,7 @@ import {
   type PostDraft,
   type TemplateItem,
 } from "./post-templates-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -128,6 +129,7 @@ export async function draftCultureFromNews(input: {
   actorId: string | null;
   actorEmail: string | null;
 }): Promise<CultureDraftOut> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) return { ok: false, error: "AI is not configured. Set AI_API_KEY (or OPENAI_API_KEY) to draft posts." };
   const t = getTemplate("culture")!;
   const item = cultureItem(input.news, input.notes);
@@ -172,6 +174,7 @@ export function cultureGuardForPost(post: { category: string; title: string; exc
 
 /** For the scheduled publish: read the post and run the guard. Returns a refusal reason or null. */
 export async function cultureGuardRefusal(postId: string): Promise<string | null> {
+  await syncGuardrails().catch(() => null);
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.from("blog_posts").select("category, title, excerpt, body").eq("id", postId).maybeSingle();

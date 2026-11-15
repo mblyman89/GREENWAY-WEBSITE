@@ -15,6 +15,7 @@
 import "server-only";
 import { generate, isAiConfigured, aiModelId } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "@/lib/ai/compliance";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -94,6 +95,7 @@ function cleanOutput(raw: string): string {
 export async function generateContentSuggestion(
   brief: ContentBlockBrief,
 ): Promise<ContentSuggestion> {
+  await syncGuardrails().catch(() => null);
   const { user } = buildPrompt(brief);
   const raw = await generate({
     system: COMPLIANCE_SYSTEM,

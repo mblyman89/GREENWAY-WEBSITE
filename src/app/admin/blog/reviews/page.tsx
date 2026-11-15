@@ -6,6 +6,7 @@ import { Badge, Button, Input, Textarea } from "@/components/admin/ui";
 import { loadCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import { REVIEW_QUOTE_MAX, reviewProblems } from "@/lib/cms/curated-reviews-core";
 import { saveCuratedReviewAction, deleteCuratedReviewAction } from "./actions";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function CuratedReviewsPage({
 }: {
   searchParams: Promise<{ saved?: string; removed?: string; error?: string; edit?: string }>;
 }) {
+  await syncGuardrails().catch(() => null);
   await requirePermission("blog.manage");
   const sp = await searchParams;
   const list = await loadCuratedReviews();

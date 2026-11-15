@@ -1,5 +1,6 @@
 import { getContentForRender } from "@/lib/cms/render-content";
 import { MERCH_AD_BLOCK, resolveMerchAd, type MerchAdView } from "@/lib/merch/merch-ad-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 /**
  * R71 S4 / R72 S5 - read the Greenway Goods redirect ad ONCE per shop render.
@@ -16,6 +17,7 @@ import { MERCH_AD_BLOCK, resolveMerchAd, type MerchAdView } from "@/lib/merch/me
  * Any failure returns null: an ad must never break the shop.
  */
 export async function loadMerchAdView(): Promise<MerchAdView | null> {
+  await syncGuardrails().catch(() => null);
   try {
     return resolveMerchAd(await getContentForRender(MERCH_AD_BLOCK));
   } catch {

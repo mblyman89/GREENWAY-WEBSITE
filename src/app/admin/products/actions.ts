@@ -71,6 +71,7 @@ import { MENU_KB_LINK_BACKFILL_AUDIT_ACTION } from "@/lib/catalog/menu-kb-link-c
 import { runMenuSensoryBackfill, MENU_SENSORY_BACKFILL_AUDIT_ACTION } from "@/lib/pos/menu-sensory-backfill-server";
 import { attachKbMatchFacts as attachKbMatchFactsServer, KB_MATCH_AUDIT_ACTION } from "@/lib/enrichment/kb-match-attach";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -690,6 +691,7 @@ const APPLYABLE_TEXT_FIELDS = new Set(["description", "short_description"]);
 
 /** Copy suggested text (from the KB or a vendor menu line) into the draft. */
 export async function applyMatchedText(formData: FormData): Promise<void> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
   const listBack = cleanBack(formData.get("back"));

@@ -27,6 +27,7 @@ import {
   type PostTemplateKey,
   type TemplateItem,
 } from "./post-templates-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -82,6 +83,7 @@ export async function draftFromTemplate(input: {
   actorId: string | null;
   actorEmail: string | null;
 }): Promise<TemplateDraftOut> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) return { ok: false, error: "AI is not configured. Set AI_API_KEY (or OPENAI_API_KEY) to draft posts." };
   const r = await resolveItem(input.key, input.itemId, input.notes);
   if (!r.ok) return r;
@@ -115,6 +117,7 @@ export async function checkFinalDraft(
   notes: string,
   draft: PostDraft,
 ): Promise<{ ok: true; t: PostTemplate; issues: DraftIssue[]; complianceFlags: string[]; blocking: string[] } | { ok: false; error: string }> {
+  await syncGuardrails().catch(() => null);
   const r = await resolveItem(key, itemId, notes);
   if (!r.ok) return r;
   const issues = checkDraft(r.t, r.item, draft);

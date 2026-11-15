@@ -20,6 +20,7 @@ import { generateStructured } from "@/lib/ai/provider";
 import { defineSchema } from "@/lib/ai/schema";
 import { checkCompliance, COMPLIANCE_SYSTEM, type ComplianceResult } from "@/lib/ai/compliance";
 import { toPlainText } from "./payload-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export type WeedmapsDescriptionDraft = {
   description: string;
@@ -60,6 +61,7 @@ export type DraftDescriptionResult = {
 export async function draftWeedmapsDescription(
   input: DraftDescriptionInput,
 ): Promise<DraftDescriptionResult> {
+  await syncGuardrails().catch(() => null);
   const system = [
     COMPLIANCE_SYSTEM,
     "",

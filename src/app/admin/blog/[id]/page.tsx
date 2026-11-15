@@ -24,6 +24,7 @@ import { SchedulePanel } from "@/components/admin/SchedulePanel";
 import { listMedia, publicUrlForKey } from "@/lib/media/store";
 import { usableCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import type { BlogMediaChoice } from "@/components/admin/blog/BlogEditorClient";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function BlogEditorPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ saved?: string; ai?: string; topic?: string; error?: string; back?: string; scheduled?: string }>;
 }) {
+  await syncGuardrails().catch(() => null);
   await requirePermission("blog.manage");
   const { id } = await params;
   const { saved, ai, topic, error, back, scheduled } = await searchParams;

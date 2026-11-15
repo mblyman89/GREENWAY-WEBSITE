@@ -12,6 +12,8 @@ import { can, type Permission } from "@/lib/auth/roles";
 import { backOfficeGateForStaff } from "@/lib/staffing/handbook-ack-store";
 import { HandbookGateScreen } from "@/components/admin/HandbookGateScreen";
 import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
+import { GuardrailsSync } from "@/components/admin/GuardrailsSync";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 import "../globals.css";
 
 // PERF-S2: /admin is its OWN root layout (the public site lives in the
@@ -99,6 +101,10 @@ export default async function AdminLayout({
   // fallback is the identical nav without chips.
   const showExceptionBadge = can(session.profile.role, "orders.manage" as Permission);
   const showOwnerBadge = session.profile.role === "owner";
+  // D244 R-23: the owner's Compliance guardrails (Block / Warn / Off and
+  // allowed words) for this server render and, via <GuardrailsSync>, for
+  // every check that runs in the browser.
+  const guardrails = await syncGuardrails();
   const navBase = {
     role: session.profile.role,
     fullName: session.profile.full_name ?? "",
@@ -130,6 +136,7 @@ export default async function AdminLayout({
           {/* R45-S2: "someone else saved first" notice (?conflict=<key>). */}
           <EditConflictNotice />
         </Suspense>
+        <GuardrailsSync settings={guardrails} />
         <ToastProvider>{children}</ToastProvider>
       </main>
       <div className="admin-chrome">

@@ -10,10 +10,12 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { cleanReview, newReviewId, removeReview, reviewProblems, upsertReview } from "@/lib/cms/curated-reviews-core";
 import { loadCuratedReviews, saveCuratedReviews } from "@/lib/cms/curated-reviews-server";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const BACK = "/admin/blog/reviews";
 
 export async function saveCuratedReviewAction(formData: FormData): Promise<void> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("blog.manage");
   const rawId = String(formData.get("id") ?? "").trim();
   const review = cleanReview({

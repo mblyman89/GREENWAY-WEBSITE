@@ -35,6 +35,7 @@ import {
   campaignChecklist,
   type CampaignChannel,
 } from "@/lib/marketing/campaign-rules-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -110,6 +111,7 @@ export async function suggestStrategy(
   input: { goal: string; channel?: MarketingChannel },
   extraBanned: ExtraBannedPhrase[] = [],
 ): Promise<StrategyResult> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) {
     return { ok: false, error: "AI is not configured.", blockingFlags: [] };
   }

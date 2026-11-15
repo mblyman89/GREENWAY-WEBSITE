@@ -51,6 +51,7 @@ import {
   type ImageAspectKey,
   type ImageEngine,
 } from "./newsletter-ai-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const SITE = greenwayBusiness.website.replace(/\/$/, "");
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? process.env.AI_API_KEY ?? "";
@@ -91,6 +92,7 @@ function fullCopyCheck(text: string, facts: string): AiIssue[] {
 export type BuildOut = { ok: true; doc: CanvasDoc; issues: AiIssue[]; partial: boolean; model: string } | Fail;
 
 export async function aiBuildCanvas(doc: CanvasDoc, postId: string, ask: string, actor: Actor): Promise<BuildOut> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) return { ok: false, error: NOT_CONFIGURED };
   const blocked = await budgetBlock();
   if (blocked) return blocked;
@@ -113,6 +115,7 @@ export async function aiBuildCanvas(doc: CanvasDoc, postId: string, ask: string,
 export type ImproveOut = { ok: true; block: CanvasBlock; changed: string[]; issues: AiIssue[] } | Fail;
 
 export async function aiImproveBlock(block: CanvasBlock, postId: string, ask: string, actor: Actor): Promise<ImproveOut> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) return { ok: false, error: NOT_CONFIGURED };
   const blocked = await budgetBlock();
   if (blocked) return blocked;
@@ -137,6 +140,7 @@ export async function aiImproveBlock(block: CanvasBlock, postId: string, ask: st
 export type IdeasOut = { ok: true; ideas: { subject: string; preheader: string; issues: AiIssue[] }[] } | Fail;
 
 export async function aiSubjectIdeas(doc: CanvasDoc, postId: string, actor: Actor): Promise<IdeasOut> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) return { ok: false, error: NOT_CONFIGURED };
   const blocked = await budgetBlock();
   if (blocked) return blocked;
@@ -226,6 +230,7 @@ export async function aiImage(p: {
   /** D243 E-4: the usage-ledger feature name (default newsletter.ai.image.<engine>). */
   feature?: string;
 } & Actor): Promise<ImageOut> {
+  await syncGuardrails().catch(() => null);
   const issues = p.promptReady ? [] : checkImageAsk(p.ask);
   const must = issues.filter((i) => i.level === "must-fix");
   if (must.length) return { ok: false, error: must.map((i) => i.text).join(" ") };

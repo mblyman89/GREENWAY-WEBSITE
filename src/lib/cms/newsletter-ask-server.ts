@@ -25,6 +25,7 @@ import { getThisWeekFeed } from "./this-week-feed-server";
 import { recentPostLinks } from "./newsletter-canvas-server";
 import { budgetBlock } from "./newsletter-ai-server";
 import { askOpWords, askShotOk, buildAskPrompt, describeAskOp, parseAskOps, type AskOp } from "./newsletter-ask-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const SITE = greenwayBusiness.website.replace(/\/$/, "");
 
@@ -37,6 +38,7 @@ export type AskOut =
   | { ok: false; error: string };
 
 export async function askCanvas(p: { postId: string; ask: string; doc: unknown; shot: unknown; actorId: string | null; actorEmail: string | null }): Promise<AskOut> {
+  await syncGuardrails().catch(() => null);
   if (!isAiConfigured) return { ok: false, error: "AI is not configured. Set AI_API_KEY (or OPENAI_API_KEY) on the deployment." };
   const ask = String(p.ask ?? "").trim();
   if (!ask) return { ok: false, error: "Type what you want done (or a question about the email)." };

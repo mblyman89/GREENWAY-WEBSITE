@@ -6,6 +6,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { CURATED_REVIEWS_KEY, normalizeReviews, usableChoices, type CuratedReview, type CuratedReviewChoice } from "./curated-reviews-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export async function loadCuratedReviews(): Promise<CuratedReview[]> {
   if (!isSupabaseServiceConfigured) return [];
@@ -20,6 +21,7 @@ export async function loadCuratedReviews(): Promise<CuratedReview[]> {
 
 /** Only the reviews with the permission tick, a first name and no health wording. */
 export async function usableCuratedReviews(): Promise<CuratedReviewChoice[]> {
+  await syncGuardrails().catch(() => null);
   return usableChoices(await loadCuratedReviews());
 }
 

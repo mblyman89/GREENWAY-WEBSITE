@@ -45,6 +45,7 @@ import { loadTemplateItems, draftFromTemplate, checkFinalDraft, type TemplateIte
 import { normalizeDraft, draftToParagraphs, type DraftIssue } from "@/lib/cms/post-templates-core";
 import { listDeskNews, findNews, draftCultureFromNews, checkCultureDraft, cultureGuardForPost, type FindNewsOut, type CultureDraftOut } from "@/lib/cms/culture-desk-server";
 import { cleanNewsItem, type NewsItem } from "@/lib/cms/culture-desk-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const MAX_IMG_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -276,6 +277,7 @@ export async function updatePostAction(formData: FormData): Promise<void> {
 // Status transitions
 // ---------------------------------------------------------------------------
 export async function setPostStatusAction(formData: FormData): Promise<void> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("blog.manage");
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as PostStatus;
@@ -549,6 +551,7 @@ export async function loadTemplateItemsAction(key: string): Promise<TemplateItem
 }
 
 export async function draftFromTemplateAction(input: { key: string; itemId: string; notes: string }): Promise<TemplateDraftOut> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("blog.manage");
   // D239 N-9 (Q-22-2 (a)): a review spotlight quotes only a curated review with permission.
   if (String(input?.key ?? "") === "review-spotlight") {
@@ -590,6 +593,7 @@ export async function createPostFromDraftAction(input: {
   draft: unknown;
   heroMediaId?: string | null;
 }): Promise<CreateFromDraftOut> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("blog.manage");
   const title = String(input?.title ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
   if (!title) return { ok: false, error: "Pick or type a headline first." };
@@ -683,6 +687,7 @@ export async function draftCultureAction(input: { news: unknown; notes: string }
 }
 
 export async function createCulturePostAction(input: { news: unknown; notes: string; title: string; draft: unknown }): Promise<CreateFromDraftOut> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("blog.manage");
   const news = cleanNewsItem(input?.news);
   if (!news) return { ok: false, error: "Pick a news item with a source link first." };

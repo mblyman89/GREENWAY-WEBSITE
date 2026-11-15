@@ -22,6 +22,7 @@ import "server-only";
 import { generateJSON, isAiConfigured, aiModelId } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -127,6 +128,7 @@ export async function generateBlogIdeas(opts: {
   actorId?: string | null;
   actorEmail?: string | null;
 }): Promise<BlogIdeaResult> {
+  await syncGuardrails().catch(() => null);
   const count = Math.min(Math.max(opts.count ?? 6, 1), 10);
   const user = ideaPrompt(opts.kind, count, opts.topic ?? null);
 

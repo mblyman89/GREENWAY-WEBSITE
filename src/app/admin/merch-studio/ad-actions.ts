@@ -18,10 +18,12 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getContentBlock, saveContentDraft, publishContentBlock, ensureContentBlocksSeeded } from "@/lib/cms/content-store";
 import { MERCH_AD_BLOCK, merchAdIssues, parseMerchAd, serializeMerchAd } from "@/lib/merch/merch-ad-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const BACK = "/admin/merch-studio?tab=publish";
 
 async function adAction(formData: FormData, publish: boolean): Promise<void> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("content.edit");
   if (String(formData.get("block_key") ?? "") !== MERCH_AD_BLOCK) redirect(BACK);
   let block = await getContentBlock(MERCH_AD_BLOCK);

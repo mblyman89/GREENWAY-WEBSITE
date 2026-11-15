@@ -16,6 +16,7 @@ import { isAiConfigured } from "@/lib/ai/provider";
 import { imageEngines } from "@/lib/cms/newsletter-ai-server";
 import { canvasClicksFor } from "@/lib/cms/newsletter-motion-server";
 import { CanvasClickReport } from "@/components/admin/newsletter/CanvasClickReport";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export const dynamic = "force-dynamic";
  * when "Send this canvas as the email" is off.
  */
 export default async function NewsletterCanvasPage({ params }: { params: Promise<{ id: string }> }) {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("blog.manage");
   const { id } = await params;
   if (!isSupabaseServiceConfigured) notFound();

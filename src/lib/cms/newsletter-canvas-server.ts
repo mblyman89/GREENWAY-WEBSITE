@@ -38,6 +38,7 @@ import {
   type ImageInfo,
   type RenderOpts,
 } from "./newsletter-canvas-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const SITE = greenwayBusiness.website.replace(/\/$/, "");
 const PROBE_TIMEOUT_MS = 8000;
@@ -206,6 +207,7 @@ export async function probeImages(doc: CanvasDoc): Promise<Map<string, ImageInfo
 
 /** The full send-readiness check: HTML size, plain text and real image weights. */
 export async function runCanvasCheck(doc: CanvasDoc, post: { id?: string; slug: string } | null): Promise<CanvasCheck> {
+  await syncGuardrails().catch(() => null);
   const o = renderOptsFor(post, null, await frameContextFor(post?.id ?? null));
   const html = renderCanvasEmail(doc, o);
   const text = canvasPlainText(doc, o);
@@ -388,6 +390,7 @@ export async function sendCanvasTest(params: {
   actorId: string | null;
   actorEmail: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  await syncGuardrails().catch(() => null);
   const { newsletterSendConfig, resendApiKey } = await import("./newsletter-send-store");
   const cfg = newsletterSendConfig();
   const apiKey = resendApiKey();
