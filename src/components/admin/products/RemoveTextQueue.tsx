@@ -24,6 +24,7 @@ import {
   queueButtonLabel,
   queueSummary,
   type EraseBox,
+  type EraseMaskMode,
   type EraseProduct,
   type QueueScope,
   type QueueState,
@@ -111,6 +112,7 @@ export function RemoveTextQueue(props: {
   const [picked, setPicked] = useState<string[]>([]);
   const [slots, setSlots] = useState<Record<string, Slot>>({});
   const [surface, setSurface] = useState("");
+  const [mode, setMode] = useState<EraseMaskMode>("letters");
   const [running, setRunning] = useState(false);
 
   useEffect(() => () => {
@@ -146,14 +148,14 @@ export function RemoveTextQueue(props: {
 
   const runOne = async (m: string, boxes: EraseBox[]) => {
     patch(m, { state: "working", progress: "Sending to FLUX Erase\u2026", error: null });
-    const sub = await queueStartEraseAction(scope, m, JSON.stringify(boxes), surface);
+    const sub = await queueStartEraseAction(scope, m, JSON.stringify(boxes), surface, mode);
     if (!sub.ok) {
       patch(m, { state: "failed", progress: null, error: sub.error });
       return;
     }
     for (let i = 0; i < POLL_MAX && !cancelled.current; i++) {
       await new Promise((r) => setTimeout(r, POLL_MS));
-      const p = await queuePollEraseAction(scope, sub.pollingUrl, m, JSON.stringify(sub.boxes));
+      const p = await queuePollEraseAction(scope, sub.pollingUrl, m, JSON.stringify(sub.boxes), sub.mode);
       if (p.state === "ready") {
         patch(m, { state: "ready", progress: null, result: { mediaId: p.mediaId, url: p.url, published: p.published }, after: true });
         return;
@@ -322,6 +324,10 @@ export function RemoveTextQueue(props: {
           <label className="block text-xs text-white/60">
             What is under the text? <span className="text-white/40">(optional, used for every photo, e.g. &ldquo;black jar label&rdquo;)</span>
             <input value={surface} onChange={(e) => setSurface(e.target.value)} maxLength={80} disabled={running} className="mt-1 w-full rounded border border-white/15 bg-black px-2 py-1.5 text-sm text-white" />
+          </label>
+          <label className="flex items-center gap-2 text-xs text-white/60">
+            <input type="checkbox" checked={mode === "boxes"} onChange={(e) => setMode(e.target.checked ? "boxes" : "letters")} disabled={running} data-testid="queue-mode-boxes" />
+            Erase the whole boxes <span className="text-white/40">(off = the letters only, best for text)</span>
           </label>
           <button
             type="button"

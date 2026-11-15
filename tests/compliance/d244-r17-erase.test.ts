@@ -47,9 +47,9 @@ async function pixel(buf: Buffer, x: number, y: number): Promise<number[]> {
 }
 
 describe("D244 R-17 the remover", () => {
-  it("self-tests pass (63 + 1) and are registered", () => {
-    expect(__runTextEraseCoreTests()).toEqual({ passed: 64, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 64)');
+  it("self-tests pass (R-20: 85) and are registered", () => {
+    expect(__runTextEraseCoreTests()).toEqual({ passed: 85, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 85)');
   });
   it("FLUX Erase, no prompt, BFL's dilation; Fill only as the fallback with a positive prompt", () => {
     expect(ERASE_MODEL).toBe("flux-tools/erase-v1");
@@ -100,12 +100,12 @@ describe("D244 R-17 wiring", () => {
     expect(server).toContain("submitFluxTask(ERASE_MODEL, eraseBody(");
     expect(server).toContain("if (!sub.ok && eraseUnavailable(sub.error))");
     expect(server).toContain("submitFluxTask(ERASE_FALLBACK_MODEL, fluxFillBody(");
-    expect(server).toContain("await pasteBack(oin.buf, buffer, boxes)");
+    expect(server).toContain("await pasteBack(oin.buf, buffer, boxes, pollMode(p.mode))"); // R-20 adds the mask mode
     expect(server).toContain(".rotate()");
   });
   it("both clients send the boxes back with each poll", () => {
-    expect(read("src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx")).toContain("pollEraseAction(productKey, sub.pollingUrl, mediaId, JSON.stringify(sub.boxes))");
-    expect(read("src/components/admin/products/RemoveTextQueue.tsx")).toContain("queuePollEraseAction(scope, sub.pollingUrl, m, JSON.stringify(sub.boxes))");
+    expect(read("src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx")).toContain("pollEraseAction(productKey, sub.pollingUrl, mediaId, JSON.stringify(sub.boxes), sub.mode)");
+    expect(read("src/components/admin/products/RemoveTextQueue.tsx")).toContain("queuePollEraseAction(scope, sub.pollingUrl, m, JSON.stringify(sub.boxes), sub.mode)");
   });
   it("SOP-10, Concierge and the strategy row explain it", () => {
     expect(read("docs/sop/SOP-10-product-enrichment.md")).toContain("FLUX Erase (D244 R-17)");

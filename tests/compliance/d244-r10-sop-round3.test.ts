@@ -18,7 +18,7 @@ describe("SOP-10 v1.1", () => {
   const doc = read("docs/sop/SOP-10-product-enrichment.md");
 
   it("is version 1.1 or later with a 1.1 history row", () => {
-    expect(doc).toMatch(/\| \*\*Version\*\* \| 1\.[1-9] \(D244 R-1\d/);
+    expect(doc).toMatch(/\| \*\*Version\*\* \| 1\.[1-9] \(D244 R-\d+/);
     expect(doc).toMatch(/\| 1\.1 \| D244 R-10 \|/);
   });
 

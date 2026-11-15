@@ -36,9 +36,9 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const P: EraseProduct = { name: "Phat Panda Blue Dream 3.5g", brand: "Phat Panda", strainName: "Blue Dream", vendor: "Hollingsworth", category: "Flower" };
 
 describe("D244 R-9 remove text — pure core", () => {
-  it("all 64 self-tests (R-9 + R-11 + R-17) pass and are registered", () => {
-    expect(__runTextEraseCoreTests()).toEqual({ passed: 64, failed: 0 }); // R-11 added 9 queue checks, R-17 added 10
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 64)');
+  it("all 85 self-tests (R-9 + R-11 + R-17 + R-20) pass and are registered", () => {
+    expect(__runTextEraseCoreTests()).toEqual({ passed: 85, failed: 0 }); // R-11 added 9 queue checks, R-17 added 10, R-20 added 21
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 85)');
   });
 
   it("FLUX Erase is the remover (D244 R-17); the mask is white only inside the boxes", () => {

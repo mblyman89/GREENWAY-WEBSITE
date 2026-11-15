@@ -8,14 +8,15 @@
  * Drag on the picture to draw a box (any number, up to 12). "Find the text"
  * asks the vision model where the text is and which pieces name a different
  * product; those come in ticked, with the reason, and the person can untick
- * any. "Remove text" sends the boxes to FLUX Erase (D244 R-17; Fill only as a fallback); the browser polls every
+ * any. "Remove text" sends the boxes to FLUX Erase (D244 R-17; Fill only as a fallback;
+ * R-20: cropped + enlarged to ~1 MP, letters-only mask by default); the browser polls every
  * 3 s, then shows Before / After. Attach / Attach as cover are ordinary
  * forms (attachMatchedMedia); nothing is attached until one is pressed.
  */
 import { useEffect, useRef, useState, useTransition } from "react";
 import { findTextAction, pollEraseAction, startEraseAction } from "./actions";
 import { attachMatchedMedia } from "../../actions";
-import { FACTS_FIRST_HINT, foundSummary, type EraseBox, type EraseProduct, type FoundText } from "@/lib/enrichment/text-erase-core";
+import { FACTS_FIRST_HINT, foundSummary, type EraseBox, type EraseMaskMode, type EraseProduct, type FoundText } from "@/lib/enrichment/text-erase-core";
 
 type Box = EraseBox & { id: number; text?: string; why?: string; advice?: FoundText["advice"]; on: boolean; ai: boolean };
 
@@ -39,6 +40,8 @@ export function RemoveTextEditor(props: {
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [surface, setSurface] = useState("");
+  const [mode, setMode] = useState<EraseMaskMode>("letters");
+  const [detail, setDetail] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(hint);
   const [error, setError] = useState<string | null>(null);
   const [finding, startFind] = useTransition();
@@ -103,14 +106,15 @@ export function RemoveTextEditor(props: {
     setWorking(true);
     setProgress("Sending to FLUX Erase…");
     try {
-      const sub = await startEraseAction(productKey, mediaId, JSON.stringify(chosen), surface);
+      const sub = await startEraseAction(productKey, mediaId, JSON.stringify(chosen), surface, mode);
       if (!sub.ok) {
         setError(sub.error);
         return;
       }
+      setDetail(sub.detail);
       for (let i = 0; i < POLL_MAX && !cancelled.current; i++) {
         await new Promise((r) => setTimeout(r, POLL_MS));
-        const p = await pollEraseAction(productKey, sub.pollingUrl, mediaId, JSON.stringify(sub.boxes));
+        const p = await pollEraseAction(productKey, sub.pollingUrl, mediaId, JSON.stringify(sub.boxes), sub.mode);
         if (p.state === "ready") {
           setResult({ mediaId: p.mediaId, url: p.url, published: p.published });
           setShowAfter(true);
@@ -217,6 +221,22 @@ export function RemoveTextEditor(props: {
               <input value={surface} onChange={(e) => setSurface(e.target.value)} maxLength={80} className="mt-1 w-full rounded border border-white/15 bg-black px-2 py-1.5 text-sm text-white" />
             </label>
 
+            <fieldset className="space-y-1 text-xs text-white/70" data-testid="remove-text-mode">
+              <legend className="mb-1 text-white/60">What to erase inside each box</legend>
+              <label className="flex items-start gap-2">
+                <input type="radio" name="erase-mode" checked={mode === "letters"} onChange={() => setMode("letters")} className="mt-0.5" />
+                <span>
+                  The letters only <span className="text-white/40">(best: the label round each letter is kept, so FLUX has no room to invent new text)</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input type="radio" name="erase-mode" checked={mode === "boxes"} onChange={() => setMode("boxes")} className="mt-0.5" />
+                <span>
+                  The whole box <span className="text-white/40">(for a sticker, logo or picture rather than letters)</span>
+                </span>
+              </label>
+            </fieldset>
+
             <button
               type="button"
               data-testid="remove-text-run"
@@ -227,7 +247,7 @@ export function RemoveTextEditor(props: {
               {working ? (progress ?? "Working…") : `Remove text (${onCount} box${onCount === 1 ? "" : "es"})`}
             </button>
             {!fluxReady ? <p className="text-[11px] text-amber-300">FLUX is not set up (Settings → Integrations), so text cannot be removed yet.</p> : null}
-            <p className="text-[11px] text-white/45">FLUX Erase (Black Forest Labs&apos; purpose-built remover) clears the text inside the boxes, then only the boxed areas are pasted onto your photo, so nothing outside them can change. Draw each box snug around the text. The original photo is never changed — the result is saved as a new library photo.</p>
+            <p className="text-[11px] text-white/45">FLUX Erase (Black Forest Labs&apos; purpose-built remover) works best at about 1 megapixel on a mask that follows the letters. So the text area is cut out with some label round it, enlarged to about 1 MP, the letters inside your boxes are found and erased, and only those pixels are stitched back onto your photo — nothing else can change. Draw each box snug round one line or block of text. The original photo is never changed — the result is saved as a new library photo.</p>
           </>
         ) : (
           <div className="space-y-3" data-testid="remove-text-result">
@@ -242,6 +262,11 @@ export function RemoveTextEditor(props: {
             <p className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-2 text-[11px] text-[var(--admin-gold)]" data-testid="facts-first-hint">
               {FACTS_FIRST_HINT}
             </p>
+            {detail ? (
+              <p className="text-[11px] text-white/50" data-testid="remove-text-detail">
+                {detail}
+              </p>
+            ) : null}
             <p className="text-xs text-emerald-300">Saved to the media library{result.published ? "." : " as a draft (the original was a draft or its rights are pending)."}</p>
             <form action={attachMatchedMedia}>
               <input type="hidden" name="key" value={productKey} />

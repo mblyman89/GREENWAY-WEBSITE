@@ -35,10 +35,10 @@ const KITS = read("src/app/admin/products/vendor-kits/page.tsx");
 const EDITOR = read("src/app/admin/products/[key]/remove-text/RemoveTextEditor.tsx");
 
 describe("R-11 queue core", () => {
-  it("self-tests pass (45 from R-9 + 9 for the queue + 10 for R-17 Erase)", () => {
+  it("self-tests pass (45 from R-9 + 9 for the queue + 10 for R-17 Erase + 21 for R-20 crop and letters mask)", () => {
     const r = __runTextEraseCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(64);
+    expect(r.passed).toBe(85);
   });
   it("one press sends every boxed photo, in order, skipping done ones", () => {
     expect(

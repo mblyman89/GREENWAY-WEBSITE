@@ -33,21 +33,27 @@ import { getMedia, publicUrlForKey, uploadMedia } from "@/lib/media/store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { MediaAsset } from "@/lib/supabase/types";
 import {
-  ERASE_DILATE_PX,
   ERASE_FALLBACK_MODEL,
   ERASE_MODEL,
   ERASE_TAGS,
   cleanBox,
+  dilateMask,
   eraseBody,
-  eraseSendSize,
+  eraseCropPlan,
+  eraseDetail,
+  eraseDilateFor,
   eraseUnavailable,
-  growBoxes,
   interleaveRgba,
-  pasteBackPlan,
+  sendRects,
+  stitchPlan,
+  strokeGrowPx,
+  strokeMask,
+  type CropPlan,
+  type EraseMaskMode,
+  type StrokeBox,
   TEXT_FIND_SYSTEM,
   checkEraseBoxes,
   erasePrompt,
-  eraseMaskSvg,
   erasedSource,
   erasedStatus,
   erasedTitle,
@@ -109,7 +115,7 @@ export async function findTextOnPhoto(p: { mediaId: string; product: EraseProduc
 // ---------------------------------------------------------------------------
 
 export type EraseMethod = "erase" | "fill";
-export type StartEraseOut = { ok: true; pollingUrl: string; prompt: string; boxes: EraseBox[]; method: EraseMethod } | Fail;
+export type StartEraseOut = { ok: true; pollingUrl: string; prompt: string; boxes: EraseBox[]; method: EraseMethod; mode: EraseMaskMode; detail: string } | Fail;
 
 /** The photo turned upright (EXIF) on white, as the browser showed it when the boxes were drawn. */
 async function uprightPicture(buf: Buffer): Promise<{ png: Buffer; width: number; height: number } | null> {
@@ -121,14 +127,52 @@ async function uprightPicture(buf: Buffer): Promise<{ png: Buffer; width: number
 }
 
 /**
- * D244 R-17: FLUX Erase (BFL's purpose-built remover, no prompt) on a copy
- * sized to about 1 MP, mask = the padded boxes, dilate_pixels 12. When the
+ * D244 R-20 crop-and-stitch input: the context window round the boxes,
+ * enlarged (or shrunk) to about 1 MP, and the mask on that same picture -
+ * letters only (default) or the whole boxes. Deterministic, so the poll
+ * rebuilds exactly the mask that was sent from the original + the boxes.
+ */
+export async function eraseInput(
+  png: Buffer,
+  width: number,
+  height: number,
+  boxes: readonly EraseBox[],
+  mode: EraseMaskMode,
+): Promise<{ plan: CropPlan; rgb: Buffer; mask: Uint8Array; stroke: StrokeBox[] }> {
+  const sharp = (await import("sharp")).default;
+  const plan = eraseCropPlan(width, height, boxes);
+  const { width: sw, height: sh } = plan.send;
+  const rgb = await sharp(png).extract(plan.crop).resize(sw, sh, { fit: "fill", kernel: "lanczos3" }).removeAlpha().toColourspace("srgb").raw().toBuffer();
+  const rects = sendRects(boxes, width, height, plan);
+  if (mode === "boxes") {
+    const mask = new Uint8Array(sw * sh);
+    for (const r of rects) for (let y = r.top; y < r.top + r.height; y++) mask.fill(255, y * sw + r.left, y * sw + r.left + r.width);
+    return { plan, rgb, mask, stroke: rects.map(() => ({ cover: 1, whole: true })) };
+  }
+  const sm = strokeMask(new Uint8Array(rgb.buffer, rgb.byteOffset, rgb.length), sw, sh, rects, strokeGrowPx(plan.scale));
+  return { plan, rgb, mask: sm.mask, stroke: sm.boxes };
+}
+
+/**
+ * D244 R-17 + R-20: FLUX Erase (BFL's purpose-built remover, no prompt).
+ * R-20 (owner: "We are not doing something right"): the text area is
+ * cropped with context and sent at Erase's native ~1 MP (a 550 px shot used
+ * to go in at 0.3 MP), with a mask on the letters only instead of whole
+ * rectangles (BMVC 2024: box masks make diffusion invent new text). When the
  * BFL project has no Erase access, FLUX Fill with a positive-only prompt.
  */
-export async function startTextErase(p: { mediaId: string; boxes: readonly EraseBox[]; surface?: string | null; productKey: string; actorId: string | null; actorEmail?: string | null }): Promise<StartEraseOut> {
+export async function startTextErase(p: {
+  mediaId: string;
+  boxes: readonly EraseBox[];
+  surface?: string | null;
+  mode?: EraseMaskMode;
+  productKey: string;
+  actorId: string | null;
+  actorEmail?: string | null;
+}): Promise<StartEraseOut> {
   const check = checkEraseBoxes(p.boxes);
   if (!check.ok) return check;
-  if (!(await isFluxConfigured().catch(() => false))) return { ok: false, error: "FLUX is not set up (Settings → Integrations), so text cannot be removed yet." };
+  if (!(await isFluxConfigured().catch(() => false))) return { ok: false, error: "FLUX is not set up (Settings \u2192 Integrations), so text cannot be removed yet." };
   const blocked = await budgetBlocked();
   if (blocked) return blocked;
   const asset = await getMedia(p.mediaId);
@@ -137,20 +181,24 @@ export async function startTextErase(p: { mediaId: string; boxes: readonly Erase
   const input = await loadInput(url);
   if ("ok" in input) return input;
   const sharp = (await import("sharp")).default;
+  const mode: EraseMaskMode = p.mode === "boxes" ? "boxes" : "letters";
   let image: Buffer;
   let mask: Buffer;
+  let detail: string;
   try {
     const up = await uprightPicture(input.buf);
     if (!up) return { ok: false, error: "The picture size could not be read." };
-    const send = eraseSendSize(up.width, up.height);
-    image = await sharp(up.png).resize(send.width, send.height, { fit: "fill" }).jpeg({ quality: 95 }).toBuffer();
-    mask = await sharp(Buffer.from(eraseMaskSvg(send.width, send.height, check.boxes))).greyscale().png().toBuffer();
+    const ei = await eraseInput(up.png, up.width, up.height, check.boxes, mode);
+    const { width: sw, height: sh } = ei.plan.send;
+    image = await sharp(ei.rgb, { raw: { width: sw, height: sh, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    mask = await sharp(Buffer.from(ei.mask), { raw: { width: sw, height: sh, channels: 1 } }).png().toBuffer();
+    detail = eraseDetail(ei.plan, ei.stroke);
   } catch {
     return { ok: false, error: "That file is not a picture FLUX can read." };
   }
   const prompt = erasePrompt({ surface: p.surface });
   let method: EraseMethod = "erase";
-  let sub = await submitFluxTask(ERASE_MODEL, eraseBody({ imageB64: image.toString("base64"), maskB64: mask.toString("base64") }));
+  let sub = await submitFluxTask(ERASE_MODEL, eraseBody({ imageB64: image.toString("base64"), maskB64: mask.toString("base64"), dilatePixels: eraseDilateFor(mode) }));
   if (!sub.ok && eraseUnavailable(sub.error)) {
     method = "fill";
     sub = await submitFluxTask(ERASE_FALLBACK_MODEL, fluxFillBody({ imageB64: image.toString("base64"), maskB64: mask.toString("base64"), prompt }));
@@ -167,30 +215,44 @@ export async function startTextErase(p: { mediaId: string; boxes: readonly Erase
     errorNote: sub.ok ? (sub.cost ? `credits ${sub.cost}` : null) : sub.error.slice(0, 200),
   }).catch(() => {});
   if (!sub.ok) return sub;
-  return { ok: true, pollingUrl: sub.pollingUrl, prompt: method === "erase" ? "" : prompt, boxes: check.boxes, method };
+  return { ok: true, pollingUrl: sub.pollingUrl, prompt: method === "erase" ? "" : prompt, boxes: check.boxes, method, mode, detail };
 }
 
 /**
- * D244 R-17 paste-back: FLUX's answer is laid over the ORIGINAL through the
- * boxes (grown a little, edges feathered), so nothing outside the boxes can
- * change: no new text, barcodes or blur appear anywhere else, and the photo
- * keeps its full size. Returns null when it cannot (the raw answer is kept).
+ * D244 R-17 + R-20 stitch-back: FLUX's answer (for the cropped, enlarged
+ * window) is shrunk back into that window and laid over the ORIGINAL
+ * through the same mask that was sent (grown by half Erase's dilation,
+ * feathered). Nothing outside the mask can change - not even the label
+ * between the letters - and the photo keeps its full size. Returns null when
+ * it cannot (the raw answer is kept).
  */
-export async function pasteBack(originalBuf: Buffer, resultBuf: Buffer, boxes: readonly EraseBox[]): Promise<Buffer | null> {
+export async function pasteBack(originalBuf: Buffer, resultBuf: Buffer, boxes: readonly EraseBox[], mode: EraseMaskMode = "letters"): Promise<Buffer | null> {
   if (!boxes.length) return null;
   const sharp = (await import("sharp")).default;
   const up = await uprightPicture(originalBuf);
   if (!up) return null;
-  const { width: W, height: H } = up;
-  const plan = pasteBackPlan(eraseSendSize(W, H).scale, ERASE_DILATE_PX);
-  const rgb = await sharp(resultBuf).resize(W, H, { fit: "fill" }).removeAlpha().toColourspace("srgb").raw().toBuffer();
-  const alpha = await sharp(Buffer.from(eraseMaskSvg(W, H, growBoxes(boxes, W, H, plan.growPx)))).blur(plan.featherPx).extractChannel(0).raw().toBuffer();
-  if (rgb.length !== W * H * 3 || alpha.length !== W * H) return null;
+  const ei = await eraseInput(up.png, up.width, up.height, boxes, mode);
+  const { crop, send } = ei.plan;
+  const sp = stitchPlan(ei.plan.scale, eraseDilateFor(mode));
+  const grown = dilateMask(ei.mask, send.width, send.height, sp.growSendPx);
+  const rgb = await sharp(resultBuf).resize(crop.width, crop.height, { fit: "fill", kernel: "lanczos3" }).removeAlpha().toColourspace("srgb").raw().toBuffer();
+  const alpha = await sharp(Buffer.from(grown), { raw: { width: send.width, height: send.height, channels: 1 } })
+    .resize(crop.width, crop.height, { fit: "fill" })
+    .blur(sp.featherPx)
+    .extractChannel(0)
+    .raw()
+    .toBuffer();
+  if (rgb.length !== crop.width * crop.height * 3 || alpha.length !== crop.width * crop.height) return null;
   const overlay = Buffer.from(interleaveRgba(rgb, alpha));
   return sharp(up.png)
-    .composite([{ input: overlay, raw: { width: W, height: H, channels: 4 } }])
+    .composite([{ input: overlay, raw: { width: crop.width, height: crop.height, channels: 4 }, left: crop.left, top: crop.top }])
     .jpeg({ quality: 92, mozjpeg: true })
     .toBuffer();
+}
+
+/** The mask mode the browser sends back with each poll. */
+export function pollMode(raw: unknown): EraseMaskMode {
+  return raw === "boxes" ? "boxes" : "letters";
 }
 
 /** The boxes the browser sends back with each poll (already checked + padded at start). */
@@ -216,7 +278,7 @@ export type ErasePollOut =
   | { state: "ready"; mediaId: string; url: string; published: boolean }
   | { state: "failed"; error: string };
 
-export async function pollTextErase(p: { pollingUrl: string; originalId: string; actorId: string | null; boxes?: unknown }): Promise<ErasePollOut> {
+export async function pollTextErase(p: { pollingUrl: string; originalId: string; actorId: string | null; boxes?: unknown; mode?: unknown }): Promise<ErasePollOut> {
   const r = await pollFluxTask(String(p.pollingUrl));
   if (!(r.status === "ready" && r.sampleUrl)) {
     if (r.terminal) return { state: "failed", error: r.detail ?? "FLUX reported an error." };
@@ -231,13 +293,13 @@ export async function pollTextErase(p: { pollingUrl: string; originalId: string;
     let buffer: Buffer = Buffer.from(await res.arrayBuffer());
     let mime = (res.headers.get("content-type") || "").split(";")[0].trim();
     if (!mime.startsWith("image/")) mime = "image/jpeg";
-    // D244 R-17: paste the answer back over the original inside the boxes only.
+    // D244 R-17/R-20: stitch the answer back over the original through the mask only.
     const ourl = mediaPublicUrl(original);
     const boxes = pollBoxes(p.boxes);
     if (ourl && boxes.length) {
       const oin = await loadInput(ourl).catch(() => null);
       if (oin && !("ok" in oin)) {
-        const merged = await pasteBack(oin.buf, buffer, boxes).catch(() => null);
+        const merged = await pasteBack(oin.buf, buffer, boxes, pollMode(p.mode)).catch(() => null);
         if (merged) {
           buffer = merged;
           mime = "image/jpeg";

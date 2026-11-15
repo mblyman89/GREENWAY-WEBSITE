@@ -162,6 +162,16 @@ export const ERASE_MODEL = "flux-tools/erase-v1";
 export const ERASE_FALLBACK_MODEL = "flux-pro-1.0-fill";
 /** BFL: "Range 0-25, default 10". Text edges carry JPEG halos, so a bit more. */
 export const ERASE_DILATE_PX = 12;
+/**
+ * D244 R-20: a letters-only mask already carries its own halo (strokeGrowPx),
+ * so Erase grows it less - BFL: dilate "10" for typical SAM masks, more only
+ * when the mask is loose. Keeps thin letters thin, not merged back into a box.
+ */
+export const ERASE_LETTERS_DILATE_PX = 6;
+/** The Erase dilation for a mask mode. */
+export function eraseDilateFor(mode: EraseMaskMode): number {
+  return mode === "letters" ? ERASE_LETTERS_DILATE_PX : ERASE_DILATE_PX;
+}
 /** BFL: Erase "was trained on images at ~1 megapixel". */
 export const ERASE_TARGET_PIXELS = 1_000_000;
 
@@ -224,6 +234,362 @@ export function growBoxes(boxes: readonly EraseBox[], width: number, height: num
     const y = Math.max(0, b.y - gy);
     return { x, y, w: Math.min(1, b.x + b.w + gx) - x, h: Math.min(1, b.y + b.h + gy) - y };
   });
+}
+
+// ---------------------------------------------------------------------------
+// D244 R-20: crop-and-stitch at Erase's native size + a letters-only mask
+// ---------------------------------------------------------------------------
+//
+// Owner (round 7, verbatim): "If this is an actual feature flux has, the
+// results should be significantly better in my opinion. Rather than us just
+// trying to use it in a way it's not meant to be used. We are not doing
+// something right."
+//
+// He was right. What went wrong, and the fix, per the sources:
+//   1. SIZE. BFL: Erase "was trained on images at ~1 megapixel ... significant
+//      deviations may reduce quality". eraseSendSize only shrank, so a 550 x
+//      550 product shot (0.3 MP) went in at 0.3 MP, and the label text was a
+//      few pixels tall. Fix (the ComfyUI Inpaint-CropAndStitch practice): crop
+//      a context window around the boxes and ENLARGE it to about 1 MP (aspect
+//      kept inside BFL's 1:2..2:1, sides in 16s), then shrink the answer back
+//      and stitch it in. A big phone photo also gains: the text area is sent
+//      at full detail instead of the whole photo squeezed to 1 MP.
+//   2. MASK SHAPE. BFL's tips are written for "typical SAM (Segment Anything)
+//      masks" that follow the object. Roy & Stenger, "Text Removal in
+//      E-Commerce Images" (BMVC 2024): the mask "is crucial" - masks that
+//      follow the letter strokes beat bounding boxes, and diffusion models
+//      hallucinate new text into big boxes. Fix: inside each box only the
+//      pixels that stand out from the local background (the letters) are
+//      masked (a median background, a robust MAD threshold, a small grow). A
+//      thin mask leaves the model nothing to invent text into - it just
+//      continues the label colour and pattern around each letter.
+//   3. The answer is stitched back through the same letters mask (grown by
+//      half Erase's dilation, feathered), so even inside a box the label
+//      between the letters stays the original pixels.
+
+/** What is masked inside each box: the letters only (R-20 default) or the whole box. */
+export type EraseMaskMode = "letters" | "boxes";
+
+/** A pixel rectangle (whole pixels). */
+export type PxRect = { left: number; top: number; width: number; height: number };
+
+/** Context margin around the boxes, as a share of their larger side. */
+export const ERASE_CONTEXT = 0.75;
+/** The crop is at least this share of the photo's shorter side. */
+export const ERASE_CONTEXT_MIN = 0.4;
+/** Never enlarge more than 4x (beyond that the photo has no detail left to add). */
+export const ERASE_UPSCALE_MAX = 4;
+/** BFL: trained on "9 aspect ratios from 1:2 to 2:1". */
+export const ERASE_ASPECT_MAX = 2;
+
+const r16 = (n: number) => Math.max(16, Math.round(n / 16) * 16);
+
+/** The union of the boxes in pixels. */
+export function boxesUnion(boxes: readonly EraseBox[], width: number, height: number): PxRect {
+  let l = width;
+  let t = height;
+  let r = 0;
+  let b = 0;
+  for (const bx of boxes) {
+    const p = boxPixels(bx, width, height);
+    l = Math.min(l, p.left);
+    t = Math.min(t, p.top);
+    r = Math.max(r, p.left + p.width);
+    b = Math.max(b, p.top + p.height);
+  }
+  if (r <= l || b <= t) return { left: 0, top: 0, width: Math.max(1, width), height: Math.max(1, height) };
+  return { left: l, top: t, width: r - l, height: b - t };
+}
+
+/** Place a span of `len` centred on `mid`, inside 0..max. */
+function place(mid: number, len: number, max: number): [number, number] {
+  const L = Math.min(max, Math.max(1, Math.round(len)));
+  const start = Math.min(max - L, Math.max(0, Math.round(mid - L / 2)));
+  return [start, L];
+}
+
+/**
+ * Crop-and-stitch plan: the context window around the boxes (on the upright
+ * original) and the size it is sent at - about 1 MP, enlarged when the photo
+ * is small, aspect inside 1:2..2:1, sides in multiples of 16.
+ */
+export function eraseCropPlan(
+  width: number,
+  height: number,
+  boxes: readonly EraseBox[],
+  target = ERASE_TARGET_PIXELS,
+): { crop: PxRect; send: { width: number; height: number }; scale: number } {
+  const W = Math.max(1, Math.round(width));
+  const H = Math.max(1, Math.round(height));
+  const u = boxesUnion(boxes, W, H);
+  const margin = Math.max(24, Math.round(Math.max(u.width, u.height) * ERASE_CONTEXT));
+  const minSide = Math.round(Math.min(W, H) * ERASE_CONTEXT_MIN);
+  let cw = Math.max(u.width + 2 * margin, minSide);
+  let ch = Math.max(u.height + 2 * margin, minSide);
+  if (cw > ERASE_ASPECT_MAX * ch) ch = Math.ceil(cw / ERASE_ASPECT_MAX);
+  if (ch > ERASE_ASPECT_MAX * cw) cw = Math.ceil(ch / ERASE_ASPECT_MAX);
+  cw = Math.min(cw, W);
+  ch = Math.min(ch, H);
+  // A very wide/tall photo: trim the long side back inside 2:1 (never below the boxes).
+  if (cw > ERASE_ASPECT_MAX * ch) cw = Math.max(u.width, ERASE_ASPECT_MAX * ch);
+  if (ch > ERASE_ASPECT_MAX * cw) ch = Math.max(u.height, ERASE_ASPECT_MAX * cw);
+  const [left, cwi] = place(u.left + u.width / 2, cw, W);
+  const [top, chi] = place(u.top + u.height / 2, ch, H);
+  const s = Math.min(ERASE_UPSCALE_MAX, Math.sqrt(target / (cwi * chi)));
+  const sw = r16(cwi * s);
+  const sh = r16(chi * s);
+  return { crop: { left, top, width: cwi, height: chi }, send: { width: sw, height: sh }, scale: Math.round((sw / cwi) * 1000) / 1000 };
+}
+
+/** A box (fractions of the photo) as a pixel rect inside `crop`. */
+export function boxInCrop(b: EraseBox, width: number, height: number, crop: PxRect): PxRect | null {
+  const p = boxPixels(b, width, height);
+  const l = Math.max(p.left, crop.left);
+  const t = Math.max(p.top, crop.top);
+  const r = Math.min(p.left + p.width, crop.left + crop.width);
+  const bt = Math.min(p.top + p.height, crop.top + crop.height);
+  if (r <= l || bt <= t) return null;
+  return { left: l - crop.left, top: t - crop.top, width: r - l, height: bt - t };
+}
+
+export type CropPlan = ReturnType<typeof eraseCropPlan>;
+
+/** The boxes as pixel rects on the SENT (cropped + resized) picture. */
+export function sendRects(boxes: readonly EraseBox[], width: number, height: number, plan: CropPlan): PxRect[] {
+  const sx = plan.send.width / plan.crop.width;
+  const sy = plan.send.height / plan.crop.height;
+  const out: PxRect[] = [];
+  for (const b of boxes) {
+    const r = boxInCrop(b, width, height, plan.crop);
+    if (!r) continue;
+    const left = Math.max(0, Math.floor(r.left * sx));
+    const top = Math.max(0, Math.floor(r.top * sy));
+    const right = Math.min(plan.send.width, Math.ceil((r.left + r.width) * sx));
+    const bottom = Math.min(plan.send.height, Math.ceil((r.top + r.height) * sy));
+    if (right > left && bottom > top) out.push({ left, top, width: right - left, height: bottom - top });
+  }
+  return out;
+}
+
+/** Pixels above the background by at least this much are letters (0-255). */
+export const STROKE_MIN_DEV = 22;
+/** ...and above 3 robust standard deviations of the box's own noise... */
+export const STROKE_MAD_K = 3;
+/** ...but never asking more than 60 (a box across two colours inflates the noise; letters stand out by more). */
+export const STROKE_MAX_DEV = 60;
+/** Letters found in less than 1% / more than 60% of a box: mask the whole box. */
+export const STROKE_COVER_MIN = 0.01;
+export const STROKE_COVER_MAX = 0.6;
+/** Grow the letters by 2 px of the ORIGINAL photo so the soft/JPEG halo round each letter goes too. */
+export const STROKE_GROW_PX = 2;
+
+/** The grow in sent pixels for a crop enlarged `scale` times (2..12). */
+export function strokeGrowPx(scale: number): number {
+  return Math.max(STROKE_GROW_PX, Math.min(12, Math.round(STROKE_GROW_PX * (scale > 0 ? scale : 1))));
+}
+
+/** Median (0-255) of a histogram holding `n` values. */
+function histMedian(hist: Uint32Array, n: number): number {
+  const half = (n + 1) >> 1;
+  let acc = 0;
+  for (let v = 0; v < 256; v++) {
+    acc += hist[v];
+    if (acc >= half) return v;
+  }
+  return 255;
+}
+
+/**
+ * The local background of one colour plane over `rect`: a sliding median
+ * with a window of `win` px (on a k-times smaller copy when the window is
+ * big, so it stays fast), read back by bilinear sampling.
+ */
+function backgroundPlane(plane: Uint8Array, w: number, h: number, rect: PxRect, win: number): Float32Array {
+  const rad = win >> 1;
+  const x0 = Math.max(0, rect.left - rad);
+  const y0 = Math.max(0, rect.top - rad);
+  const x1 = Math.min(w, rect.left + rect.width + rad);
+  const y1 = Math.min(h, rect.top + rect.height + rad);
+  const k = Math.max(1, Math.ceil(win / 24));
+  const dw = Math.max(1, Math.ceil((x1 - x0) / k));
+  const dh = Math.max(1, Math.ceil((y1 - y0) / k));
+  const ds = new Uint8Array(dw * dh);
+  for (let dy = 0; dy < dh; dy++)
+    for (let dx = 0; dx < dw; dx++) {
+      let s = 0;
+      let c = 0;
+      for (let y = y0 + dy * k; y < Math.min(y1, y0 + dy * k + k); y++)
+        for (let x = x0 + dx * k; x < Math.min(x1, x0 + dx * k + k); x++) {
+          s += plane[y * w + x];
+          c++;
+        }
+      ds[dy * dw + dx] = c ? Math.round(s / c) : 0;
+    }
+  const r = Math.max(1, Math.round(rad / k));
+  const med = new Uint8Array(dw * dh);
+  const hist = new Uint32Array(256);
+  const at = (x: number, y: number) => ds[Math.min(dh - 1, Math.max(0, y)) * dw + Math.min(dw - 1, Math.max(0, x))];
+  const n = (2 * r + 1) * (2 * r + 1);
+  for (let y = 0; y < dh; y++) {
+    hist.fill(0);
+    for (let yy = y - r; yy <= y + r; yy++) for (let xx = -r; xx <= r; xx++) hist[at(xx, yy)]++;
+    med[y * dw] = histMedian(hist, n);
+    for (let x = 1; x < dw; x++) {
+      for (let yy = y - r; yy <= y + r; yy++) {
+        hist[at(x - r - 1, yy)]--;
+        hist[at(x + r, yy)]++;
+      }
+      med[y * dw + x] = histMedian(hist, n);
+    }
+  }
+  const out = new Float32Array(rect.width * rect.height);
+  for (let y = 0; y < rect.height; y++) {
+    const fy = Math.min(dh - 1, Math.max(0, (rect.top + y - y0 + 0.5) / k - 0.5));
+    const iy = Math.floor(fy);
+    const iy2 = Math.min(dh - 1, iy + 1);
+    const ty = fy - iy;
+    for (let x = 0; x < rect.width; x++) {
+      const fx = Math.min(dw - 1, Math.max(0, (rect.left + x - x0 + 0.5) / k - 0.5));
+      const ix = Math.floor(fx);
+      const ix2 = Math.min(dw - 1, ix + 1);
+      const tx = fx - ix;
+      const a = med[iy * dw + ix] * (1 - tx) + med[iy * dw + ix2] * tx;
+      const b = med[iy2 * dw + ix] * (1 - tx) + med[iy2 * dw + ix2] * tx;
+      out[y * rect.width + x] = a * (1 - ty) + b * ty;
+    }
+  }
+  return out;
+}
+
+/** Grow a 0/255 mask by `r` px (square), separable. */
+export function dilateMask(mask: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  if (r <= 0) return mask.slice();
+  const tmp = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let xx = Math.max(0, x - r); xx <= Math.min(w - 1, x + r) && !v; xx++) v = mask[y * w + xx];
+      tmp[y * w + x] = v ? 255 : 0;
+    }
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let yy = Math.max(0, y - r); yy <= Math.min(h - 1, y + r) && !v; yy++) v = tmp[yy * w + x];
+      out[y * w + x] = v ? 255 : 0;
+    }
+  return out;
+}
+
+/** Drop specks smaller than `min` pixels (8-connected) inside `rect`. */
+function dropSpecks(mask: Uint8Array, w: number, rect: PxRect, min: number): void {
+  const seen = new Uint8Array(rect.width * rect.height);
+  const stack: number[] = [];
+  const comp: number[] = [];
+  for (let y = 0; y < rect.height; y++)
+    for (let x = 0; x < rect.width; x++) {
+      const li = y * rect.width + x;
+      if (seen[li] || !mask[(rect.top + y) * w + rect.left + x]) continue;
+      seen[li] = 1;
+      stack.push(li);
+      comp.length = 0;
+      while (stack.length) {
+        const c = stack.pop()!;
+        comp.push(c);
+        const cx = c % rect.width;
+        const cy = (c / rect.width) | 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= rect.width || ny >= rect.height) continue;
+            const ni = ny * rect.width + nx;
+            if (seen[ni] || !mask[(rect.top + ny) * w + rect.left + nx]) continue;
+            seen[ni] = 1;
+            stack.push(ni);
+          }
+      }
+      if (comp.length < min) for (const c of comp) mask[(rect.top + ((c / rect.width) | 0)) * w + rect.left + (c % rect.width)] = 0;
+    }
+}
+
+export type StrokeBox = { cover: number; whole: boolean };
+
+/**
+ * The letters-only mask (0/255, w x h) for RGB pixels `rgb` (w x h x 3) and
+ * the box rects: in each box, the pixels whose colour stands out from the
+ * local median background by more than max(22, 3 x MAD) in any channel,
+ * specks under 3 px dropped, grown by `growPx` (strokeGrowPx). A box where that finds almost
+ * nothing (or most of the box) is masked whole, the safe old behaviour.
+ */
+export function strokeMask(rgb: Uint8Array, w: number, h: number, rects: readonly PxRect[], growPx = STROKE_GROW_PX): { mask: Uint8Array; boxes: StrokeBox[] } {
+  if (rgb.length !== w * h * 3) throw new Error("stroke mask: picture size mismatch");
+  const planes = [0, 1, 2].map((c) => {
+    const p = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) p[i] = rgb[i * 3 + c];
+    return p;
+  });
+  const letters = new Uint8Array(w * h);
+  const whole = new Uint8Array(w * h);
+  const info: StrokeBox[] = [];
+  for (const rect of rects) {
+    const n = rect.width * rect.height;
+    const win = Math.max(7, Math.round(Math.min(rect.height, rect.width) * 0.9)) | 1;
+    const bgs = planes.map((p) => backgroundPlane(p, w, h, rect, win));
+    const dev = new Float32Array(n);
+    for (let y = 0; y < rect.height; y++)
+      for (let x = 0; x < rect.width; x++) {
+        const i = (rect.top + y) * w + rect.left + x;
+        const li = y * rect.width + x;
+        let m = 0;
+        for (let c = 0; c < 3; c++) m = Math.max(m, Math.abs(planes[c][i] - bgs[c][li]));
+        dev[li] = m;
+      }
+    const sorted = Float32Array.from(dev).sort();
+    const mad = sorted[sorted.length >> 1] * 1.4826;
+    const th = Math.min(STROKE_MAX_DEV, Math.max(STROKE_MIN_DEV, STROKE_MAD_K * mad));
+    const local = new Uint8Array(w * h);
+    for (let y = 0; y < rect.height; y++)
+      for (let x = 0; x < rect.width; x++) if (dev[y * rect.width + x] > th) local[(rect.top + y) * w + rect.left + x] = 255;
+    dropSpecks(local, w, rect, 3);
+    let hit = 0;
+    for (let y = 0; y < rect.height; y++) for (let x = 0; x < rect.width; x++) if (local[(rect.top + y) * w + rect.left + x]) hit++;
+    const cover = n ? hit / n : 0;
+    const useWhole = cover < STROKE_COVER_MIN || cover > STROKE_COVER_MAX;
+    info.push({ cover: Math.round(cover * 1000) / 1000, whole: useWhole });
+    if (useWhole) {
+      for (let y = 0; y < rect.height; y++) whole.fill(255, (rect.top + y) * w + rect.left, (rect.top + y) * w + rect.left + rect.width);
+    } else for (let i = 0; i < w * h; i++) if (local[i]) letters[i] = 255;
+  }
+  const grown = dilateMask(letters, w, h, Math.max(0, Math.min(12, Math.round(growPx))));
+  for (let i = 0; i < w * h; i++) if (whole[i]) grown[i] = 255;
+  return { mask: grown, boxes: info };
+}
+
+/** Share of a 0/255 mask that is on. */
+export function maskCover(mask: Uint8Array): number {
+  let n = 0;
+  for (const v of mask) if (v) n++;
+  return mask.length ? n / mask.length : 0;
+}
+
+/**
+ * Stitch-back plan: the letters mask is grown by half Erase's dilation (in
+ * sent pixels, so the soft edge lands inside what Erase repainted), then
+ * feathered by `featherPx` on the original.
+ */
+export function stitchPlan(scale: number, dilatePx = ERASE_DILATE_PX): { growSendPx: number; featherPx: number } {
+  const s = scale > 0 ? scale : 1;
+  return { growSendPx: Math.max(1, Math.round(dilatePx / 2)), featherPx: Math.round(Math.max(0.8, Math.min(6, dilatePx / 4 / s)) * 10) / 10 };
+}
+
+/** One line for the person: how the picture was sent. */
+export function eraseDetail(plan: CropPlan, boxes: readonly StrokeBox[]): string {
+  const sent = `${plan.send.width}\u00d7${plan.send.height}`;
+  const size = plan.scale > 1.05 ? `the text area enlarged ${plan.scale.toFixed(1)}\u00d7 to ${sent}` : `the text area at ${sent}`;
+  const letters = boxes.filter((b) => !b.whole).length;
+  const mask = letters === boxes.length ? "a letters-only mask" : letters === 0 ? "whole-box masks" : `a letters-only mask (${boxes.length - letters} of ${boxes.length} boxes masked whole)`;
+  return `Sent ${size} (FLUX Erase works best at about 1 MP) with ${mask}.`;
 }
 
 /**
@@ -599,6 +965,47 @@ export function __runTextEraseCoreTests(): { passed: number; failed: number } {
   ok(queueButtonLabel(0, 0).startsWith("Draw a box"), "queue button idle");
   ok(cleanQueueScope({ kind: "vendor", id: " v1 " })?.id === "v1" && cleanQueueScope({ kind: "x", id: "a" }) === null && cleanQueueScope({ kind: "product", id: "" }) === null, "queue scope");
   ok(FACTS_FIRST_HINT.includes("by design") && FACTS_FIRST_HINT.includes("first"), "facts-first hint");
+
+  // R-20: crop-and-stitch at ~1 MP + letters-only mask
+  const sb = [{ x: 305 / 550, y: 318 / 550, w: 45 / 550, h: 20 / 550 }, { x: 320 / 550, y: 340 / 550, w: 120 / 550, h: 52 / 550 }];
+  const cp = eraseCropPlan(550, 550, sb);
+  const cpx = cp.send.width * cp.send.height;
+  ok(cp.scale > 2 && cpx > 850_000 && cpx < 1_150_000, "R-20: a 550 px shot's text area is ENLARGED to about 1 MP");
+  ok(cp.send.width % 16 === 0 && cp.send.height % 16 === 0, "R-20: sent sides in 16s");
+  ok(cp.send.width <= 2 * cp.send.height + 16 && cp.send.height <= 2 * cp.send.width + 16, "R-20: aspect inside BFL's 1:2..2:1");
+  const un = boxesUnion(sb, 550, 550);
+  ok(cp.crop.left <= un.left && cp.crop.top <= un.top && cp.crop.left + cp.crop.width >= un.left + un.width && cp.crop.top + cp.crop.height >= un.top + un.height, "R-20: the crop holds every box");
+  ok(cp.crop.left >= 0 && cp.crop.top >= 0 && cp.crop.left + cp.crop.width <= 550 && cp.crop.top + cp.crop.height <= 550, "R-20: the crop stays inside the photo");
+  ok(cp.crop.width > un.width + 40 && cp.crop.height > un.height + 40, "R-20: the crop carries label context round the text");
+  const bigCp = eraseCropPlan(4032, 3024, [{ x: 0.4, y: 0.45, w: 0.1, h: 0.04 }]);
+  ok(bigCp.crop.width < 4032 && bigCp.send.width * bigCp.send.height < 1_150_000, "R-20: a phone photo sends the text area, not the whole photo squeezed");
+  const tiny = eraseCropPlan(120, 90, [{ x: 0.2, y: 0.2, w: 0.3, h: 0.2 }]);
+  ok(tiny.scale <= ERASE_UPSCALE_MAX + 0.2, "R-20: enlargement capped at 4x");
+  const wide = eraseCropPlan(3000, 400, [{ x: 0.05, y: 0.3, w: 0.9, h: 0.3 }]);
+  ok(wide.crop.width <= 3000 && wide.crop.height <= 400 && wide.send.width % 16 === 0, "R-20: a very wide photo stays a valid crop");
+  ok(boxInCrop({ x: 0.9, y: 0.9, w: 0.05, h: 0.05 }, 100, 100, { left: 0, top: 0, width: 50, height: 50 }) === null, "R-20: a box outside the crop is skipped");
+  const sr = sendRects([{ x: 0.5, y: 0.5, w: 0.1, h: 0.1 }], 100, 100, { crop: { left: 40, top: 40, width: 40, height: 40 }, send: { width: 400, height: 400 }, scale: 10 });
+  ok(sr.length === 1 && sr[0].left === 100 && sr[0].top === 100 && sr[0].width === 100, "R-20: box to sent pixels");
+  const dm = new Uint8Array(100);
+  dm[55] = 255;
+  ok(maskCover(dilateMask(dm, 10, 10, 1)) === 0.09 && maskCover(dilateMask(dm, 10, 10, 0)) === 0.01, "R-20: grow is a square of 2r+1");
+  // a grey label with two dark "letters" bars, and a flat box
+  const LW = 80;
+  const LH = 40;
+  const lab = new Uint8Array(LW * LH * 3).fill(180);
+  for (let y = 12; y < 28; y++) for (const x0 of [20, 40]) for (let x = x0; x < x0 + 4; x++) lab.fill(30, (y * LW + x) * 3, (y * LW + x) * 3 + 3);
+  const st = strokeMask(lab, LW, LH, [{ left: 10, top: 5, width: 50, height: 30 }, { left: 65, top: 5, width: 12, height: 30 }], 1);
+  const at = (x: number, y: number) => st.mask[y * LW + x];
+  ok(at(21, 20) === 255 && at(41, 20) === 255, "R-20: the letters are masked");
+  ok(at(31, 20) === 0 && at(12, 7) === 0, "R-20: the label between the letters is NOT masked");
+  ok(at(5, 20) === 0, "R-20: nothing outside the boxes is masked");
+  ok(!st.boxes[0].whole && st.boxes[0].cover > 0.05 && st.boxes[0].cover < 0.2, "R-20: the letters box reports its cover");
+  ok(st.boxes[1].whole && at(70, 20) === 255, "R-20: a box with no letters found is masked whole (the safe old way)");
+  ok(strokeGrowPx(1) === 2 && strokeGrowPx(2.7) === 5 && strokeGrowPx(20) === 12, "R-20: letter halo grows with the enlargement");
+  ok(eraseDilateFor("letters") === 6 && eraseDilateFor("boxes") === ERASE_DILATE_PX, "R-20: tight Erase dilation for a letters mask");
+  const spn = stitchPlan(2.75, 6);
+  ok(spn.growSendPx === 3 && spn.featherPx >= 0.8 && spn.featherPx <= 6, "R-20: stitch grows half the dilation, small feather");
+  ok(eraseDetail(cp, st.boxes).includes("enlarged") && eraseDetail(cp, st.boxes).includes("1 of 2 boxes masked whole"), "R-20: the detail line says what was sent");
 
   return { passed, failed };
 }
