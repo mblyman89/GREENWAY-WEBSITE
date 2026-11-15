@@ -49,9 +49,19 @@ import {
   type BaselineResult,
 } from "@/lib/admin/comparison-basis-core";
 import { computeDelta, type Delta } from "@/lib/admin/cockpit-core";
+import {
+  baselineDayValues,
+  formatClockLabel,
+  normalizeMinute,
+  revenueBeforeDiscounts,
+  type SameTimeDayValues,
+} from "@/lib/admin/same-time-core";
 
-/** The four headline measures the cockpit compares. */
-export type MeasureKey = "revenue" | "orders" | "units" | "avgOrder";
+/**
+ * The headline measures the cockpit compares. D245 added
+ * `grossBeforeDiscounts` (revenue + discounts) and `discount`.
+ */
+export type MeasureKey = "revenue" | "orders" | "units" | "avgOrder" | "grossBeforeDiscounts" | "discount";
 
 /** One measure's worth of comparison, ready to render. */
 export type MeasureComparison = {
@@ -72,15 +82,21 @@ export type ComparisonBundle = {
   orders: MeasureComparison;
   units: MeasureComparison;
   avgOrder: MeasureComparison;
+  /** D245: revenue before discounts (revenue + discounts). Optional for old fixtures. */
+  grossBeforeDiscounts?: MeasureComparison;
+  /** D245: total discounts given (regular price minus price charged). */
+  discount?: MeasureComparison;
+  /**
+   * D245: the Pacific minute of the day each baseline day was cut at, or null
+   * when the baseline is whole days (no cut asked for, or no clock data).
+   */
+  cutMinute?: number | null;
+  /** D245: "2:35 PM" when cut, else "". */
+  cutLabel?: string;
 };
 
 /** A day's worth of headline numbers, or null when the store had no orders. */
-type DayValues = {
-  revenue: number;
-  orders: number;
-  units: number;
-  avgOrder: number;
-} | null;
+type DayValues = SameTimeDayValues;
 
 function zeroComparison(): MeasureComparison {
   const result: BaselineResult = { value: null, daysWithData: 0, daysRequested: 0, partial: false };
@@ -103,6 +119,10 @@ export function emptyComparisonBundle(
     orders: zeroComparison(),
     units: zeroComparison(),
     avgOrder: zeroComparison(),
+    grossBeforeDiscounts: zeroComparison(),
+    discount: zeroComparison(),
+    cutMinute: null,
+    cutLabel: "",
   };
 }
 
@@ -114,8 +134,8 @@ export function emptyComparisonBundle(
  * day. Averaging four days' AOVs would weight a 3-order day the same as a
  * 300-order day.
  */
-export function indexDays(report: SalesReport): Map<string, DayValues> {
-  const map = new Map<string, DayValues>();
+export function indexDays(report: SalesReport): Map<string, { revenue: number; orders: number; units: number; avgOrder: number } | null> {
+  const map = new Map<string, { revenue: number; orders: number; units: number; avgOrder: number } | null>();
   for (const p of report.byDay) {
     if (p.orders <= 0) {
       // See THE CLOSED-DAY RULE above: no orders means no evidence the store
@@ -131,6 +151,20 @@ export function indexDays(report: SalesReport): Map<string, DayValues> {
     });
   }
   return map;
+}
+
+/**
+ * D245: the baseline day values cut at the same Pacific minute of the day as
+ * now (same-time-core.ts). A traded day with nothing sold yet by that minute
+ * is a real zero; a day with no orders all day stays no data. Falls back to
+ * whole days (and says so through `sameTime`) when no cut is asked for or the
+ * report has no clock series.
+ */
+export function indexDaysAt(
+  report: SalesReport,
+  cutMinute: number | null | undefined,
+): { days: Map<string, DayValues>; sameTime: boolean } {
+  return baselineDayValues(report.byDay ?? [], report.byDayClock, cutMinute);
 }
 
 /** Pull one measure out of the day index, preserving null for no-data days. */
@@ -208,6 +242,12 @@ export async function buildComparison(
    * fetchComparisonBaseline). Omitted = read it now, exactly as before.
    */
   baseline?: Promise<SalesReport>,
+  /**
+   * D245 (owner: "compare both days/ periods at the same time as what we are
+   * doing today"): the current Pacific minute of the day (0..1439). Each
+   * baseline day is cut at this minute. Omitted/null = whole days (pre-D245).
+   */
+  cutMinute?: number | null,
 ): Promise<ComparisonBundle> {
   const window = comparisonWindowFor(basis, todayYmd);
   if (window.days.length === 0) return emptyComparisonBundle(basis, todayYmd);
@@ -215,7 +255,9 @@ export async function buildComparison(
   // One span covering every baseline day: oldest .. newest.
   const baselineReport = await (baseline ?? fetchComparisonBaseline(basis, todayYmd));
 
-  const days = indexDays(baselineReport);
+  const { days, sameTime } = indexDaysAt(baselineReport, cutMinute);
+  const cut = sameTime ? normalizeMinute(cutMinute ?? null) : null;
+  const todayDiscount = todayReport.totalDiscountMinorUnits ?? 0;
 
   return {
     window,
@@ -223,5 +265,14 @@ export async function buildComparison(
     orders: measure(todayReport.totalOrders, window, days, "orders"),
     units: measure(todayReport.totalUnits, window, days, "units"),
     avgOrder: measure(todayReport.avgOrderMinorUnits, window, days, "avgOrder"),
+    grossBeforeDiscounts: measure(
+      revenueBeforeDiscounts(todayReport.totalRevenueMinorUnits, todayDiscount),
+      window,
+      days,
+      "grossBeforeDiscounts",
+    ),
+    discount: measure(todayDiscount, window, days, "discount"),
+    cutMinute: cut,
+    cutLabel: cut === null ? "" : formatClockLabel(cut),
   };
 }

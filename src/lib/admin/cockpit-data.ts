@@ -29,7 +29,8 @@ import {
 } from "@/lib/admin/cockpit-cache-server";
 import { getPublishedVersion, listImports } from "@/lib/pos/menu-version";
 import { getLoyaltyStatusCounts } from "@/lib/loyalty/signups-store";
-import { pacificToday, addPacificDays } from "@/lib/reports/timezone";
+import { pacificToday, addPacificDays, pacificParts } from "@/lib/reports/timezone";
+import { minuteOfDay } from "@/lib/admin/same-time-core";
 import {
   computeDelta,
   rollupDrawers,
@@ -177,6 +178,12 @@ export type CockpitRefunds = {
   refundSeverityToday: RefundSeverity;
 };
 
+/** D245: the current Pacific minute of the day (0..1439), for the same-time cut. */
+function nowMinuteOfDay(): number {
+  const p = pacificParts(new Date());
+  return minuteOfDay(p.hour, p.minute);
+}
+
 function readSales(basis: ComparisonBasis, todayYmd: string): Promise<CockpitSales> {
   const yestYmd = addPacificDays(todayYmd, -1);
   const yesterdayP = safeData(() => cockpitSalesDays(yestYmd, yestYmd), EMPTY_SALES_REPORT).then((r) => r.data);
@@ -196,7 +203,9 @@ function readSales(basis: ComparisonBasis, todayYmd: string): Promise<CockpitSal
     todayYmd,
     today: todayR.data,
     yesterday,
-    comparison: await buildComparison(basis, todayYmd, todayR.data, baselineP),
+    // D245: baseline days are cut at the same Pacific minute of the day as
+    // now, AFTER the cached whole-day read (cache keys never carry the time).
+    comparison: await buildComparison(basis, todayYmd, todayR.data, baselineP, nowMinuteOfDay()),
     todayReadable: todayR.ok,
     baseline: await baselineP,
   }));

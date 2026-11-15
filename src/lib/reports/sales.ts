@@ -30,7 +30,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
 import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
-import { pacificDayKey, pacificHour, addPacificDays, formatHourLabel } from "@/lib/reports/timezone";
+import { pacificDayKey, pacificParts, addPacificDays, formatHourLabel } from "@/lib/reports/timezone";
+import { buildClockSeries, minuteOfDay, type ClockOrder, type DayClockSeries } from "@/lib/admin/same-time-core";
 import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,11 @@ export type SalesGroupRow = {
   revenueShare: number;
 };
 
-export type DayPoint = { date: string; revenueMinorUnits: number; orders: number; units: number };
+/**
+ * D245: `discountMinorUnits` is the day's line markdown (regular price minus
+ * price charged), the same basis as `totalDiscountMinorUnits`.
+ */
+export type DayPoint = { date: string; revenueMinorUnits: number; orders: number; units: number; discountMinorUnits: number };
 export type HourPoint = { hour: number; label: string; revenueMinorUnits: number; orders: number };
 /**
  * D210 (cockpit v2): one Pacific day's one hour. SPARSE: only hours with at
@@ -106,6 +111,12 @@ export type SalesReport = {
   byDayHour: DayHourPoint[];
   /** D210: sparse per-day revenue + units by category and type. */
   byDayCategoryType: DayCategoryTypePoint[];
+  /**
+   * D245: per Pacific day, every completed order's minute of the day with its
+   * revenue, units and discount (compact parallel arrays, see same-time-core).
+   * Lets the cockpit compare baseline days cut at the SAME time of day as now.
+   */
+  byDayClock: DayClockSeries[];
   byCustomerType: CustomerTypeRow[];
 };
 
@@ -137,6 +148,7 @@ export const EMPTY_SALES_REPORT: SalesReport = {
   byHour: [],
   byDayHour: [],
   byDayCategoryType: [],
+  byDayClock: [],
   byCustomerType: [],
 };
 
@@ -180,7 +192,7 @@ function emptyDaySeries(fromISO: string, toISO: string): DayPoint[] {
   const last = pacificDayKey(toISO);
   let guard = 0;
   while (cur <= last && guard < 400) {
-    out.push({ date: cur, revenueMinorUnits: 0, orders: 0, units: 0 });
+    out.push({ date: cur, revenueMinorUnits: 0, orders: 0, units: 0, discountMinorUnits: 0 });
     cur = addPacificDays(cur, 1);
     guard += 1;
   }
@@ -311,6 +323,9 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
   let totalDiscount = 0;
 
   const orderRevenue = new Map<string, number>(); // for per-order day/hour roll-up
+  // D245: per-order units and discount, for the same-time-of-day series.
+  const orderUnits = new Map<string, number>();
+  const orderDiscount = new Map<string, number>();
   // D210: sparse per-day series for the cockpit's basis-aware charts.
   const dayHourMap = new Map<string, DayHourPoint>();
   const dayCatTypeMap = new Map<string, DayCategoryTypePoint>();
@@ -359,9 +374,12 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     }
 
     orderRevenue.set(l.order_id, (orderRevenue.get(l.order_id) ?? 0) + lineRevenue);
+    orderUnits.set(l.order_id, (orderUnits.get(l.order_id) ?? 0) + qty);
+    orderDiscount.set(l.order_id, (orderDiscount.get(l.order_id) ?? 0) + lineDiscount);
   }
 
   // 5) Day + hour roll-up (per order, using header placed_at).
+  const clockOrders: ClockOrder[] = [];
   for (const [orderId, revenue] of orderRevenue) {
     const o = orderById.get(orderId);
     if (!o) continue;
@@ -370,8 +388,17 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     if (day) {
       day.revenueMinorUnits += revenue;
       day.orders += 1;
+      day.discountMinorUnits += orderDiscount.get(orderId) ?? 0;
     }
-    const hour = pacificHour(o.placed_at);
+    const parts = pacificParts(o.placed_at);
+    const hour = parts.hour;
+    clockOrders.push({
+      date: dk,
+      minute: minuteOfDay(parts.hour, parts.minute),
+      revenue,
+      units: orderUnits.get(orderId) ?? 0,
+      discount: orderDiscount.get(orderId) ?? 0,
+    });
     if (hour >= 0 && hour < 24) {
       hourPoints[hour].revenueMinorUnits += revenue;
       if (!hourOrderSeen[hour].has(orderId)) {
@@ -463,6 +490,7 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     byDayCategoryType: [...dayCatTypeMap.values()].sort((a, b) =>
       a.date === b.date ? b.revenueMinorUnits - a.revenueMinorUnits : a.date < b.date ? -1 : 1,
     ),
+    byDayClock: buildClockSeries(clockOrders),
     byCustomerType: [
       custTypes["New customers"],
       custTypes["Returning customers"],
