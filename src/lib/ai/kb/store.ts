@@ -1650,6 +1650,20 @@ export async function setBannedActive(id: string, active: boolean): Promise<void
   if (error) throw new Error(error.message);
 }
 
+/** D244 R-23: change one owner phrase's level and reason (Compliance guardrails page). */
+export async function updateBannedPhrase(id: string, severity: "block" | "warn", reason: string | null): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("kb_banned_phrases").update({ severity, reason }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** D244 R-23: remove one owner phrase for good (Compliance guardrails page). */
+export async function deleteBannedPhrase(id: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("kb_banned_phrases").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export type UpsertBrandInput = {
   slug: string; name: string; known_for?: string | null; house_style?: string | null;
   sensory_notes?: string[]; aliases?: string[];
