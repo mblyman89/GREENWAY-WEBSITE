@@ -18,7 +18,7 @@
  */
 
 import type { CockpitSnapshot } from "@/lib/admin/cockpit-data";
-import { buildAttentionFlags, type AttentionFlag, type Delta } from "@/lib/admin/cockpit-core";
+import { buildAttentionFlags, computeDelta, type AttentionFlag, type Delta } from "@/lib/admin/cockpit-core";
 import { can, type Permission } from "@/lib/auth/roles";
 import type { StaffRole } from "@/lib/supabase/types";
 import type { SalesReport } from "@/lib/reports/sales";
@@ -32,44 +32,83 @@ import { computeNetSales, EMPTY_REFUND_FACTS } from "@/lib/admin/refund-metrics-
 // ── KPI tiles ────────────────────────────────────────────────────────────────
 
 export type MobileKpi = {
-  key: "revenue" | "orders" | "units" | "avgOrder";
+  key: "grossBeforeDiscounts" | "discount" | "revenue" | "orders" | "units" | "avgOrder";
   label: string;
   /** minor units for money keys; raw count otherwise. Formatting happens in the view. */
   valueMinorOrCount: number;
   isMoney: boolean;
   delta: Delta;
+  /**
+   * D245b: what the delta compares against, e.g. "yesterday by 2:35 PM"
+   * (the same-time comparison the desktop dashboard uses), or "yesterday"
+   * when only whole-day figures are available.
+   */
+  vsLabel: string;
 };
 
-/** Today's four headline numbers with their vs-yesterday deltas. */
+type MeasureLike = { delta: Delta } | undefined;
+
+/**
+ * Today's headline numbers. D245b (owner: "Please update the phone dashboard
+ * too"): the same six tiles in the same order as the desktop "Today's sales"
+ * row (Revenue before discounts and Total discounts first), each compared with
+ * the default basis cut at the same Pacific time of day as now
+ * (snap.comparison, built by comparison-data.ts with the same-time cut).
+ * Falls back to the whole-day yesterday deltas only when a comparison measure
+ * is missing, and then says "yesterday" rather than claiming same time.
+ */
 export function mobileKpis(snap: CockpitSnapshot): MobileKpi[] {
+  const c = snap.comparison;
+  const sameTimeVs = `${c.window.comparisonLabel.replace(/^vs /, "")}${c.cutLabel ? ` by ${c.cutLabel}` : ""}`;
+  const todayDiscount = snap.today.totalDiscountMinorUnits ?? 0;
+  const yDiscount = snap.yesterday.totalDiscountMinorUnits ?? 0;
+  const pick = (m: MeasureLike, fallback: Delta): { delta: Delta; vsLabel: string } =>
+    m ? { delta: m.delta, vsLabel: sameTimeVs } : { delta: fallback, vsLabel: "yesterday" };
   return [
+    {
+      key: "grossBeforeDiscounts",
+      label: "Before discounts",
+      valueMinorOrCount: snap.today.totalRevenueMinorUnits + todayDiscount,
+      isMoney: true,
+      ...pick(
+        c.grossBeforeDiscounts,
+        computeDelta(snap.today.totalRevenueMinorUnits + todayDiscount, snap.yesterday.totalRevenueMinorUnits + yDiscount),
+      ),
+    },
+    {
+      key: "discount",
+      label: "Total discounts",
+      valueMinorOrCount: todayDiscount,
+      isMoney: true,
+      ...pick(c.discount, computeDelta(todayDiscount, yDiscount)),
+    },
     {
       key: "revenue",
       label: "Revenue today",
       valueMinorOrCount: snap.today.totalRevenueMinorUnits,
       isMoney: true,
-      delta: snap.deltas.revenue,
+      ...pick(c.revenue, snap.deltas.revenue),
     },
     {
       key: "orders",
       label: "Orders",
       valueMinorOrCount: snap.today.totalOrders,
       isMoney: false,
-      delta: snap.deltas.orders,
+      ...pick(c.orders, snap.deltas.orders),
     },
     {
       key: "units",
       label: "Units sold",
       valueMinorOrCount: snap.today.totalUnits,
       isMoney: false,
-      delta: snap.deltas.units,
+      ...pick(c.units, snap.deltas.units),
     },
     {
       key: "avgOrder",
       label: "Avg. order",
       valueMinorOrCount: snap.today.avgOrderMinorUnits,
       isMoney: true,
-      delta: snap.deltas.avgOrder,
+      ...pick(c.avgOrder, snap.deltas.avgOrder),
     },
   ];
 }
@@ -229,6 +268,7 @@ export function __runMobileCoreTests(): { passed: number } {
       totalUnits: 42,
       totalOrders: 10,
       avgOrderMinorUnits: 12345,
+      totalDiscountMinorUnits: 2500,
     },
     yesterday: emptyReport,
     deltas: { revenue: zeroDelta, orders: zeroDelta, units: zeroDelta, avgOrder: zeroDelta },
@@ -266,9 +306,29 @@ export function __runMobileCoreTests(): { passed: number } {
   };
 
   const kpis = mobileKpis(snap);
-  assert(kpis.length === 4, "four KPI tiles");
-  assert(kpis[0].isMoney && kpis[0].valueMinorOrCount === 123456, "revenue KPI is money w/ minor units");
-  assert(kpis[1].key === "orders" && kpis[1].valueMinorOrCount === 10, "orders KPI count");
+  assert(kpis.length === 6, "six KPI tiles, same as the desktop row (D245b)");
+  assert(kpis[0].key === "grossBeforeDiscounts" && kpis[1].key === "discount", "the two discount tiles lead (D245b)");
+  assert(kpis[0].isMoney && kpis[0].valueMinorOrCount === 123456 + 2500, "before discounts = revenue + discounts");
+  assert(kpis[1].isMoney && kpis[1].valueMinorOrCount === 2500, "total discounts in minor units");
+  assert(kpis[2].key === "revenue" && kpis[2].isMoney && kpis[2].valueMinorOrCount === 123456, "revenue KPI is money w/ minor units");
+  assert(kpis[3].key === "orders" && kpis[3].valueMinorOrCount === 10, "orders KPI count");
+  // The fixture's comparison has the four classic measures but not the two
+  // new ones, and no cut: classic tiles say the basis, new tiles fall back.
+  assert(kpis[2].vsLabel === "yesterday", "no cut: plain basis label");
+  assert(kpis[0].vsLabel === "yesterday", "missing measure falls back to whole-day yesterday");
+  const cutSnap: CockpitSnapshot = {
+    ...snap,
+    comparison: {
+      ...snap.comparison,
+      grossBeforeDiscounts: { ...zeroMeasure, delta: { change: 10, pct: 5, direction: "up", isNew: false } },
+      discount: zeroMeasure,
+      cutMinute: 875,
+      cutLabel: "2:35 PM",
+    },
+  };
+  const cutKpis = mobileKpis(cutSnap);
+  assert(cutKpis.every((k) => k.vsLabel === "yesterday by 2:35 PM"), "every tile compares at the same time of day");
+  assert(cutKpis[0].delta.direction === "up", "the same-time delta is the one shown");
 
   const glances = mobileGlances(snap);
   assert(glances.find((g) => g.key === "activeOrders")!.value === "3", "open orders glance = 3");
