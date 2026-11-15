@@ -21,11 +21,7 @@ function deltaColor(d: MobileKpi["delta"]): string {
 }
 
 function KpiTile({ kpi }: { kpi: MobileKpi }) {
-  const value = kpi.isMoney
-    ? kpi.key === "revenue"
-      ? formatMoneyMinor(kpi.valueMinorOrCount)
-      : formatMoneyMinor(kpi.valueMinorOrCount)
-    : String(kpi.valueMinorOrCount);
+  const value = kpi.isMoney ? formatMoneyMinor(kpi.valueMinorOrCount) : String(kpi.valueMinorOrCount);
   return (
     <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
       <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">
@@ -33,7 +29,7 @@ function KpiTile({ kpi }: { kpi: MobileKpi }) {
       </div>
       <div className="mt-1 text-xl font-bold text-[var(--admin-text)]">{value}</div>
       <div className={`mt-0.5 text-[11px] font-semibold ${deltaColor(kpi.delta)}`}>
-        {deltaLabel(kpi.delta)}
+        {deltaLabel(kpi.delta, kpi.vsLabel)}
       </div>
     </div>
   );

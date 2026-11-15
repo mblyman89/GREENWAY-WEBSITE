@@ -86,6 +86,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Printable one-page SOPs (truck day + every intake stage) live at Dashboard → Printable SOPs (/admin/sop).",
       "Today's sales starts with two cards: Revenue before discounts (what today's goods would have rung up at regular price = Revenue + Total discounts) and Total discounts (regular price minus the price charged, the same figure as Reports → Sales \"Discounts given\"; medical tax exemptions on the register count here too). Then Revenue, Orders, Units sold and Avg. order.",
       "The Compare with chips compare today with the chosen days cut off at the SAME time of day as now (e.g. \"vs yesterday by 2:35 PM\"), not with their whole-day totals. A day the store did not trade at all is left out of the baseline; a day it traded but had not sold yet by that time counts as $0.",
+      "The phone dashboard (/admin/mobile) shows the same six Today tiles in the same order, each compared with yesterday up to the same time of day.",
     ],
   },
 

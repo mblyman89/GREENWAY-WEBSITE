@@ -150,3 +150,14 @@ describe("D245 wiring", () => {
     expect(read("src/lib/admin/concierge-kb.ts")).toContain("Revenue before discounts");
   });
 });
+
+describe("D245b: the phone dashboard matches", () => {
+  it("six tiles, discount tiles first, every hint compares at the same time of day", async () => {
+    const { __runMobileCoreTests } = await import("@/lib/admin/mobile-core");
+    expect(__runMobileCoreTests().passed).toBeGreaterThanOrEqual(17);
+    const core = read("src/lib/admin/mobile-core.ts");
+    expect(core).toContain('key: "grossBeforeDiscounts"');
+    expect(core).toContain("c.cutLabel ? ` by ${c.cutLabel}` : \"\"");
+    expect(read("src/components/admin/mobile/MobileHome.tsx")).toContain("deltaLabel(kpi.delta, kpi.vsLabel)");
+  });
+});
