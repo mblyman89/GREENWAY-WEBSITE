@@ -84,6 +84,8 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "The Dashboard is the home page — click the Greenway wordmark (top-left) to reach it.",
       "Until the store is fully set up, the Dashboard shows a setup-progress banner that links straight to the next incomplete step (database, migrations, menu import, publish, email, team). It reads real data, so the progress is trustworthy.",
       "Printable one-page SOPs (truck day + every intake stage) live at Dashboard → Printable SOPs (/admin/sop).",
+      "Today's sales starts with two cards: Revenue before discounts (what today's goods would have rung up at regular price = Revenue + Total discounts) and Total discounts (regular price minus the price charged, the same figure as Reports → Sales \"Discounts given\"; medical tax exemptions on the register count here too). Then Revenue, Orders, Units sold and Avg. order.",
+      "The Compare with chips compare today with the chosen days cut off at the SAME time of day as now (e.g. \"vs yesterday by 2:35 PM\"), not with their whole-day totals. A day the store did not trade at all is left out of the baseline; a day it traded but had not sold yet by that time counts as $0.",
     ],
   },
 

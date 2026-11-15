@@ -210,6 +210,7 @@ export function __runMobileCoreTests(): { passed: number } {
     byHour: [],
     byDayHour: [],
     byDayCategoryType: [],
+    byDayClock: [],
     byCustomerType: [],
   };
   const zeroMeasure = {

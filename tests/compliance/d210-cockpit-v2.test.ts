@@ -168,7 +168,8 @@ describe("D210 cockpit v2: wiring", () => {
   });
 
   it("the cache version moved because the SalesReport shape changed", () => {
-    expect(read("src/lib/admin/cockpit-cache-core.ts")).toMatch(/COCKPIT_CACHE_VERSION = "v2"/);
+    // D245 moved it again (v3): SalesReport gained byDayClock + byDay discounts.
+    expect(read("src/lib/admin/cockpit-cache-core.ts")).toMatch(/COCKPIT_CACHE_VERSION = "v3"/);
   });
 
   it("only the chart kit imports recharts", () => {

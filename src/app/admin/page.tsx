@@ -24,7 +24,8 @@ import {
 } from "@/lib/admin/cockpit-core";
 import { ComparisonBasisPicker } from "@/components/admin/ComparisonBasisPicker";
 import { formatRate } from "@/lib/admin/refund-metrics-core";
-import type { MeasureComparison } from "@/lib/admin/comparison-data";
+import type { ComparisonBundle, MeasureComparison } from "@/lib/admin/comparison-data";
+import { revenueBeforeDiscounts } from "@/lib/admin/same-time-core";
 import { can } from "@/lib/auth/roles";
 import { getWorkQueueInputs } from "@/lib/catalog/hub";
 import { emptyWorkQueueInputs, workQueueAttentionFlags } from "@/lib/catalog/work-queue-core";
@@ -75,6 +76,25 @@ function measureHint(m: MeasureComparison, comparisonLabel: string, isMoney: boo
   const base = isMoney ? formatMoneyMinor(m.baseline) : String(m.baseline);
   const qual = m.qualifier ? ` (${m.qualifier})` : "";
   return `${arrow} ${pct} ${comparisonLabel} \u00b7 ${base}${qual}`;
+}
+
+/**
+ * D245 (owner: "compare both days/ periods at the same time as what we are
+ * doing today"): the sentence under "Today's sales". When the baseline days
+ * were cut at the same Pacific minute as now, say so; otherwise keep the
+ * honest whole-day note.
+ */
+function salesComparisonNote(c: ComparisonBundle): string {
+  const lead = c.window.comparisonLabel.replace(/^vs /, "Compared with ");
+  if (c.cutLabel) {
+    return `${lead}, each day up to the same time (${c.cutLabel}). Today is still in progress; discounts are regular price minus price charged.`;
+  }
+  return `${lead}. ${c.window.paceNote}`;
+}
+
+/** D245: the label in a tile hint, e.g. "vs yesterday by 2:35 PM". */
+function hintLabel(c: ComparisonBundle): string {
+  return c.cutLabel ? `${c.window.comparisonLabel} by ${c.cutLabel}` : c.window.comparisonLabel;
 }
 
 function deltaAccent(d: Delta): "green" | "orange" | "muted" {
@@ -277,7 +297,7 @@ async function CockpitSalesSection({ basis }: { basis?: string }) {
       {/* ── Today's sales KPIs (vs the chosen basis) ────────────────────── */}
       <Section
         title="Today's sales"
-        description={`${snap.comparison.window.comparisonLabel.replace(/^vs /, "Compared with ")}. ${snap.comparison.window.paceNote}`}
+        description={salesComparisonNote(snap.comparison)}
       >
         <div className="mb-4">
           <ComparisonBasisPicker active={snap.basis} />
@@ -288,32 +308,49 @@ async function CockpitSalesSection({ basis }: { basis?: string }) {
             Today&apos;s sales could not be read just now, so these tiles show zero. Refresh in a moment.
           </p>
         ) : null}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {/* D245: "Revenue before discounts" and "Total discounts" lead the row (owner: "These two
+            new cards should be the first cards in the line up"). Every hint compares against the basis
+            cut at the same time of day as now. */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <StatCard
+            label="Revenue before discounts"
+            value={formatMoneyMinor(revenueBeforeDiscounts(snap.today.totalRevenueMinorUnits, snap.today.totalDiscountMinorUnits))}
+            hint={snap.comparison.grossBeforeDiscounts ? measureHint(snap.comparison.grossBeforeDiscounts, hintLabel(snap.comparison), true) : undefined}
+            accent={snap.comparison.grossBeforeDiscounts ? deltaAccent(snap.comparison.grossBeforeDiscounts.delta) : "muted"}
+            icon="🏷️"
+          />
+          <StatCard
+            label="Total discounts"
+            value={formatMoneyMinor(snap.today.totalDiscountMinorUnits)}
+            hint={snap.comparison.discount ? measureHint(snap.comparison.discount, hintLabel(snap.comparison), true) : undefined}
+            accent="gold"
+            icon="✂️"
+          />
           <StatCard
             label="Revenue"
             value={formatMoneyMinor(snap.today.totalRevenueMinorUnits)}
-            hint={measureHint(snap.comparison.revenue, snap.comparison.window.comparisonLabel, true)}
+            hint={measureHint(snap.comparison.revenue, hintLabel(snap.comparison), true)}
             accent={deltaAccent(snap.comparison.revenue.delta)}
             icon="💵"
           />
           <StatCard
             label="Orders"
             value={snap.today.totalOrders}
-            hint={measureHint(snap.comparison.orders, snap.comparison.window.comparisonLabel, false)}
+            hint={measureHint(snap.comparison.orders, hintLabel(snap.comparison), false)}
             accent={deltaAccent(snap.comparison.orders.delta)}
             icon="🧾"
           />
           <StatCard
             label="Units sold"
             value={snap.today.totalUnits}
-            hint={measureHint(snap.comparison.units, snap.comparison.window.comparisonLabel, false)}
+            hint={measureHint(snap.comparison.units, hintLabel(snap.comparison), false)}
             accent={deltaAccent(snap.comparison.units.delta)}
             icon="📦"
           />
           <StatCard
             label="Avg. order"
             value={formatMoneyMinor(snap.today.avgOrderMinorUnits)}
-            hint={measureHint(snap.comparison.avgOrder, snap.comparison.window.comparisonLabel, true)}
+            hint={measureHint(snap.comparison.avgOrder, hintLabel(snap.comparison), true)}
             accent={deltaAccent(snap.comparison.avgOrder.delta)}
             icon="🛒"
           />

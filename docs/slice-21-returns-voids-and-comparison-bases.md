@@ -97,3 +97,7 @@ The product was correct; the assertion was not. It now uses `pacificDayKey`, whi
 New: `src/lib/admin/comparison-basis-core.ts` (579 lines, pure), `src/lib/admin/refund-metrics-core.ts` (425, pure), `src/lib/admin/comparison-data.ts` (197), `src/lib/admin/returns-metrics-store.ts` (219), `src/components/admin/ComparisonBasisPicker.tsx` (74), `src/app/admin/reports/returns/page.tsx` (233), `tests/compliance/cockpit-comparisons-and-refunds.test.ts` (712).
 
 Modified: `src/lib/admin/cockpit-data.ts`, `src/lib/admin/cockpit-core.ts`, `src/lib/admin/mobile-core.ts`, `src/app/admin/page.tsx`, `src/components/admin/reports/ReportTabs.tsx`, `scripts/compliance/run-pure-selftests.ts`.
+
+## D245 update: same time of day (2026-11-15)
+
+The owner asked for the comparison to be made "at the same time as what we are doing today". The "Today's sales" tiles now compare today so far with each baseline day **cut at the same Pacific minute** (`src/lib/admin/same-time-core.ts`, fed by `SalesReport.byDayClock`), instead of with whole finished days. The `paceNote` whole-day sentence is still used when no cut can be made (a report without the clock series). The closed-day rule is unchanged for days with no orders at all; a day that traded but had sold nothing yet by that minute counts as a real zero. Two measures were added: revenue before discounts and total discounts.

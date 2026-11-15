@@ -1395,6 +1395,7 @@ import { __runBulkApproveCoreTests } from "../../src/lib/enrichment/bulk-approve
 import { __runComplianceContextTests } from "../../src/lib/ai/compliance-context-core";
 import { __runMediaEmbedTests } from "../../src/lib/media/media-embed-core";
 import { __runKbBulkReviewTests } from "../../src/lib/ai/kb/kb-bulk-review-core";
+import { __runSameTimeCoreTests } from "../../src/lib/admin/same-time-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2989,6 +2990,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("bulk-approve-core", __runBulkApproveCoreTests(), 17); // D244 R-12: Bulk AI select one/all + approve every draft at 80%+, chunked (8 products / 40 drafts per call), totals, never publishes
   assertRan("kb-bulk-review-core", __runKbBulkReviewTests(), 17); // D244 R-19: KB pipeline "Publish every draft that passes" (quality bar + compliance, 500 per page, Check first)
   assertRan("copilot-core", __runCopilotCoreTests(), 57); // D244 R-22: every vendor photo after 1-9; D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
+  assertRan("same-time-core", __runSameTimeCoreTests(), 36); // D245: cockpit compares the basis days cut at the SAME Pacific time of day as now (closed-day rule kept: traded-but-not-yet = real 0, avg order null), compact per-order clock series, revenue before discounts
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
