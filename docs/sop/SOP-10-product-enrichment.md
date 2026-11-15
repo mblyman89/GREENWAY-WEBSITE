@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.7 (D244 R-22; adds owner round 9: Publish a text-removed draft, text-removed photos rank second behind exact matches, and the Copilot lists every photo of the vendor, 4.17; 1.6 was D244 R-21 and adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
+| **Version** | 1.8 (D244 R-23; adds owner round 10: every word rule that can stop or flag text is on Knowledge Base → Compliance guardrails, with Block / Warn / Off per rule and allowed words, 4.18; 1.7 was D244 R-22 and adds owner round 9: Publish a text-removed draft, text-removed photos rank second behind exact matches, and the Copilot lists every photo of the vendor, 4.17; 1.6 was D244 R-21 and adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -235,6 +235,30 @@ Owner (round 9): *"give me the ability to publish the draft from removing the te
 3. **Every photo of the vendor.** Under **Recommended photos (press 1-9)** the Copilot now lists **Every other photo from this vendor (N)**. That is all the vendor's and brand's photos in the library (up to 3,000), in the same order. Click one to attach it. Keys 1–9 and the chat still work on the first nine. These photos are also offered to the Remove-text list.
 4. The product page's own **Recommended photos** panel keeps its 12 tiles, with the same order (published text-removed photos second, behind exact matches).
 
+### 4.18 Compliance guardrails: every word rule, and you choose (D244 R-23)
+
+Owner (round 10): *"we need to go back to the banned words we have in the system. we have a "compliance guardrails" page in the knowledge base. I want every banned and warning words and phrases to be in this page. I keep getting blocked out right for things that are not disallowed. I need to be in control, and if I choose something is ok to do, thats my choice. please upgrade and enhance that compliance guardrails page to have any and all things that block me from publishing text to be included here. so I can fine tune them myself and enable and disable them as I see fit. please make sure you find everything that blocks, and add it to the page. be methodical please."*
+
+Open **Knowledge Base → Compliance guardrails** (`/admin/knowledge-base/compliance`). The page lists **every word rule on the site that can stop or flag text**, grouped by where it applies:
+
+1. **AI writing check (the main one).** These are the shared rules in `compliance-patterns.json`, used by product and vendor copy, the Copilot, Accept drafts, Bulk publish, the review inbox, the knowledge-base write-back, SEO, the blog and newsletter AI, banner words and the crawler.
+2. **Effect words.** The approved effect list and the medical words inside an effect.
+3. **Newsletter AI.** Superlatives, health words, amounts and links that are not in the facts, picture-ask words, and the design-picture price and date heads-ups.
+4. **Blog post templates.** Superlatives, prices outside Sale and Vendor-day posts, amounts, dates, source link and links.
+5. **Culture desk and curated reviews.** Therapeutic words, health-topic words (which turn on the source link, no-selling-links and provider-line rules) and review health words.
+6. **Promotion wording.** The 11 promotion warnings.
+7. **Merch studio and merch ad.** The art theme words, and the price and cart words on the merch ad.
+
+Each rule shows its words, the exact pattern, why it exists and its source (WAC 314-55-155 or your earlier decision). It also shows its level now and its built-in level.
+
+1. **Block / Warn / Off.** Press a level on any rule. **Block** stops the text until it is fixed. **Warn** shows a heads-up and stops nothing. **Off** means the rule is not checked at all. **Reset** puts one rule back to its built-in level. **Reset all rules** (at the bottom, with a tick to confirm) puts every rule back; it can also clear the allowed words.
+2. **Allowed words.** A word or phrase you add here is skipped by **every** rule, everywhere. The other words in the same rule are still checked. Remove a word with ×.
+3. **Your own phrases** (kb_banned_phrases). You can add a phrase, choose Block or Warn, change the reason, turn it on or off, or delete it. **Add missing starter medical phrases** only adds phrases you do not have; it never turns one back on or changes it.
+4. **Test some text.** Paste the words that were stopped. The page shows the main AI check's verdict and every rule that matches, at your current levels, with a link to each rule.
+5. **Other checks.** Checks that are not word lists are listed for completeness. These are the newsletter's required warnings, unsubscribe link and alt text; the promotion text-versus-deal accuracy warnings; the banner minors-appeal tick; and below-cost deals held out of Sale posts.
+
+Your choices are saved in one setting (`site_settings` key `compliance_guardrails`). This needs no database change, and the setting survives a factory reset. They apply on the next check: on the server within a minute, and in the browser on the next page load. The crawler follows them too. Every change is written to the audit log (`kb.guardrails.*`, `kb.banned.*`). Turning a rule off is your decision; the site does not stop you.
+
 ## 5. Messages: "If you see this message"
 
 | Message (or what you see) | What it means | What to do |
@@ -273,6 +297,7 @@ Owner (round 9): *"give me the ability to publish the draft from removing the te
 7. **Vendor kits re-check the vendor.** Apply only touches cards that belong to the chosen vendor, never duplicates a photo, and writes one audit row per card plus product.vendor_kit_applied.
 8. **Bulk approve is a person's press.** Select and approve never runs on its own (no cron). It uses the same 80% rule and compliance gate as one-by-one Accept, writes an audit row per product (`via: "bulk-select"`), and never publishes.
 9. **Words are read in context (D244 R-14).** A blocked word used in its everyday sense, such as the cure process, becomes a heads-up. The word is never hidden, and a medical word in the same sentence still blocks. The site and the crawler run the same word lists from one file (`src/lib/ai/compliance-patterns.json`, patterns version 4).
+10. **The owner sets the word rules (D244 R-23).** Every word rule has a built-in level from WAC 314-55-155 or an owner decision. The owner can set any rule to Block, Warn or Off, and can allow words everywhere, on Compliance guardrails. Each change is audited, and Reset puts the shipped level back.
 
 ## 8. Checklists & forms
 
@@ -356,6 +381,7 @@ Owner (round 9): *"give me the ability to publish the draft from removing the te
 | `AI_GEMINI_API_KEY` | Needed for the overnight batch and semantic search | Set it |
 | `AI_EMBED_MODEL` | The semantic search model (optional) | `gemini-embedding-2` (default) |
 | `ENRICH_PUBLISH_ON_PHOTO` | `off` stops publish-on-photo | Leave unset (on) |
+| Compliance guardrails page (not Vercel) | Block / Warn / Off per word rule, and allowed words (site_settings `compliance_guardrails`) | Your choice; Reset restores the shipped levels |
 
 ## Appendix D: Version history
 
@@ -364,6 +390,7 @@ Owner (round 9): *"give me the ability to publish the draft from removing the te
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
 | 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
+| 1.8 | D244 R-23 | Owner round 10: Compliance guardrails lists every word rule that can stop or flag text (AI check, effects, newsletter, blog, culture and reviews, promotions, merch), with Block / Warn / Off per rule, allowed words, owner phrase edit and delete, and a text tester (4.18, control 10) |
 | 1.7 | D244 R-22 | Owner round 9: a Publish button on text-removed drafts; published text-removed photos of the vendor rank second, behind exact matches; the Copilot lists every photo of the vendor after the numbered 1–9 (4.17) |
 | 1.6 | D244 R-21 | Owner round 8: Vendor kits shows one photo grid; every photo in it has a ✂ Remove text button that adds it to the queue (12 at a time); the separate small thumbnail strip is gone (4.14) |
 | 1.5 | D244 R-20 | Owner round 7: Remove text cuts out the text area and enlarges it to about 1 megapixel (FLUX Erase's training size), masks only the letters (or the whole box, by choice) and stitches the answer back through the same mask (4.13) |
