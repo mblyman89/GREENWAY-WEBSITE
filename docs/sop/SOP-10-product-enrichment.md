@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.5 (D244 R-20; adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
+| **Version** | 1.6 (D244 R-21; adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -182,8 +182,8 @@ Owner (round 3): *"I need a way to remove text on a product picture. I want to d
 
 Owner (round 4): *"I want to draw a box on all product images, then click the remove text button. that way I can quickly queue up several images to feed to flux to fix one after the next."*
 
-1. On the **Copilot** (under the photos) or on **Vendor kits** (under the generic photos), find **✂ Remove text from several photos**.
-2. Tick the photos to fix (up to 12). Each opens below with its own picture.
+1. On the **Copilot**, find **✂ Remove text from several photos** under the photos and tick the photos to fix (up to 12). On **Vendor kits** there is only one photo grid (D244 R-21, owner round 8: "I do not want two sections of images, I want to be able to remove text from any and all images available on the vendor kit page, not just the small section at the bottom.") — press **✂ Remove text** under ANY photo in it (every ranked photo, not just the first 12). Up to 12 are in the list at a time; press **✓ In the Remove-text list · take out** on a finished one to make room for more. Clicking the picture itself still picks it as the kit photo.
+2. Each photo you add opens below the grid (or below the strip on the Copilot) with its own picture.
 3. On each one, drag a box over the text, or press **✨ Find the text**. Optional: say what is under the text once for all of them.
 4. Press **✂ Remove text from N photos** once. FLUX Erase fixes them one after the next (4.13); each says *Waiting…*, then *FLUX is removing the text*, then *Done*, with a running total.
 5. Compare **Before** and **After** on each. On the Copilot press **Attach as cover** or **Attach**. On Vendor kits press **Use as the kit photo**, check the ticks, then **Apply**.
@@ -348,6 +348,7 @@ Owner (round 6): *"I need a way to approve all of the 20,000 records awaiting me
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
 | 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
+| 1.6 | D244 R-21 | Owner round 8: Vendor kits shows one photo grid; every photo in it has a ✂ Remove text button that adds it to the queue (12 at a time); the separate small thumbnail strip is gone (4.14) |
 | 1.5 | D244 R-20 | Owner round 7: Remove text cuts out the text area and enlarges it to about 1 megapixel (FLUX Erase's training size), masks only the letters (or the whole box, by choice) and stitches the answer back through the same mask (4.13) |
 | 1.4 | D244 R-18 | Owner round 6: ✅ Approve every draft (any confidence, all pages) and ✅ Accept all description drafts on Bulk AI (4.7 step 6); Knowledge Base publish every draft that passes, with Check first, a quality bar and a source filter (4.16) |
 | 1.3 | D244 R-14 | Owner round 5: "cure", "cured" and other blocked words are read in context (4.15). The cure process is a heads-up, not a block; a medical use still blocks. New messages, control 9, quick-reference line and source map row |

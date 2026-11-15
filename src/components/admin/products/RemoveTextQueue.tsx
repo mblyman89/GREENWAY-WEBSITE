@@ -13,16 +13,19 @@
  * result shows Before / After with the page's own buttons (Copilot: Attach /
  * Attach as cover; Vendor kits: Use as the kit photo). Nothing is attached by
  * the queue itself: a person's press does that.
+ *
+ * D244 R-21: a page can own the ticks (picked / onToggle) and hide the small
+ * thumbnail strip - Vendor kits ticks straight from its one photo grid.
  */
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { queueFindTextAction, queuePollEraseAction, queueStartEraseAction } from "./remove-text-queue-actions";
 import {
   ERASE_BOXES_MAX,
-  ERASE_QUEUE_MAX,
   eraseQueuePlan,
   queueButtonLabel,
   queueSummary,
+  toggleQueuePick,
   type EraseBox,
   type EraseMaskMode,
   type EraseProduct,
@@ -105,11 +108,19 @@ export function RemoveTextQueue(props: {
   /** Vendor kits: a link with __MEDIA__ in place of the new photo's id. */
   pickHref?: string;
   pickLabel?: string;
+  /**
+   * D244 R-21: the page owns the ticks (Vendor kits ticks from its one big
+   * photo grid) and the small thumbnail strip is hidden.
+   */
+  picked?: string[];
+  onToggle?: (mediaId: string) => void;
+  hidePicker?: boolean;
 }) {
-  const { scope, photos, product, visionReady, fluxReady, attachAction, hidden, pickHref, pickLabel } = props;
+  const { scope, photos, product, visionReady, fluxReady, attachAction, hidden, pickHref, pickLabel, hidePicker } = props;
   const nextId = useRef(1);
   const cancelled = useRef(false);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [ownPicked, setOwnPicked] = useState<string[]>([]);
+  const picked = props.picked ?? ownPicked;
   const [slots, setSlots] = useState<Record<string, Slot>>({});
   const [surface, setSurface] = useState("");
   const [mode, setMode] = useState<EraseMaskMode>("letters");
@@ -126,8 +137,8 @@ export function RemoveTextQueue(props: {
       return { ...all, [m]: { ...cur, ...(typeof p === "function" ? p(cur) : p) } };
     });
 
-  const toggle = (m: string) => setPicked((p) => (p.includes(m) ? p.filter((x) => x !== m) : p.length >= ERASE_QUEUE_MAX ? p : [...p, m]));
-  const chosen = photos.filter((p) => picked.includes(p.mediaId));
+  const toggle = (m: string) => (props.onToggle ? props.onToggle(m) : setOwnPicked((p) => toggleQueuePick(p, m).picked));
+  const chosen = picked.map((m) => photos.find((p) => p.mediaId === m)).filter((p): p is QueuePhoto => Boolean(p));
   const entries = chosen.map((p) => ({ mediaId: p.mediaId, boxesOn: slotOf(p.mediaId).boxes.filter((b) => b.on).length, state: slotOf(p.mediaId).state }));
   const plan = eraseQueuePlan(entries);
   const planBoxes = entries.filter((e) => plan.includes(e.mediaId)).reduce((n, e) => n + e.boxesOn, 0);
@@ -186,6 +197,7 @@ export function RemoveTextQueue(props: {
   };
 
   if (photos.length === 0) return null;
+  if (hidePicker && chosen.length === 0) return null;
 
   return (
     <div className="space-y-3 rounded-lg border border-white/10 p-3" data-testid="remove-text-queue">
@@ -194,8 +206,9 @@ export function RemoveTextQueue(props: {
         {summary ? <span className="text-xs text-white/60" data-testid="queue-summary">{summary}</span> : null}
       </div>
       <p className="text-[11px] text-white/50">
-        1. Tick the photos. 2. Drag a box over the text on each one (or press &ldquo;Find the text&rdquo;). 3. Press Remove text once &mdash; FLUX fixes them one after the next. The originals never change; each result is a new library photo.
+        1. {hidePicker ? <>Press &ldquo;{"\u2702"} Remove text&rdquo; on any photo above (up to 12 at a time).</> : <>Tick the photos.</>} 2. Drag a box over the text on each one (or press &ldquo;Find the text&rdquo;). 3. Press Remove text once &mdash; FLUX fixes them one after the next. The originals never change; each result is a new library photo.
       </p>
+      {hidePicker ? null : (
       <div className="flex flex-wrap gap-2" data-testid="queue-pick">
         {photos.map((p) => {
           const on = picked.includes(p.mediaId);
@@ -217,6 +230,7 @@ export function RemoveTextQueue(props: {
           );
         })}
       </div>
+      )}
 
       {chosen.length > 0 ? (
         <>

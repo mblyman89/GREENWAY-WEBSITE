@@ -47,9 +47,9 @@ async function pixel(buf: Buffer, x: number, y: number): Promise<number[]> {
 }
 
 describe("D244 R-17 the remover", () => {
-  it("self-tests pass (R-20: 85) and are registered", () => {
-    expect(__runTextEraseCoreTests()).toEqual({ passed: 85, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 85)');
+  it("self-tests pass (R-21: 88) and are registered", () => {
+    expect(__runTextEraseCoreTests()).toEqual({ passed: 88, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("text-erase-core", __runTextEraseCoreTests(), 88)');
   });
   it("FLUX Erase, no prompt, BFL's dilation; Fill only as the fallback with a positive prompt", () => {
     expect(ERASE_MODEL).toBe("flux-tools/erase-v1");
