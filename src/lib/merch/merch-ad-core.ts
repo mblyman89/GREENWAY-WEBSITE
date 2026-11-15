@@ -32,6 +32,8 @@
  * blockers. When the ad is off, the cards and the filter option disappear.
  */
 
+import { isAllowedWord, ruleLevel } from "@/lib/ai/guardrails-state-core";
+
 export const MERCH_AD_BLOCK = "merch.ad";
 export const MERCH_AD_MAX_TILES = 4;
 export const MERCH_AD_MAX_CARDS = 12;
@@ -214,8 +216,13 @@ export function merchAdIssues(ad: MerchAd, ownHost?: string | null): MerchAdIssu
   else if (!safeMerchUrl(ad.url, ownHost)) out.push({ level: "blocker", field: "url", text: "The address must be https:// on the SEPARATE merch domain - no ?parameters or #tags, no greenwaymarijuana.com, no IP address or port." });
   const words: [string, string][] = [["eyebrow", ad.eyebrow], ["heading", ad.heading], ["intro", ad.intro], ["button", ad.button], ...ad.tiles.map((t, i): [string, string] => [`tile ${i + 1} caption`, t.caption]), ...ad.cards.flatMap((c, i): [string, string][] => [[`card ${i + 1} name`, c.label], [`card ${i + 1} words`, c.text]])];
   for (const [field, text] of words) {
-    if (PRICE_RE.test(text)) out.push({ level: "blocker", field, text: `"${field}" looks like a price. Prices live only on the merch site - the cannabis site shows no product details.` });
-    if (CART_RE.test(text)) out.push({ level: "blocker", field, text: `"${field}" reads like a cart/checkout or product detail. Keep it to a simple invitation ("Visit the apparel shop").` });
+    // D244 R-23: the owner's level for these two word rules (block / warn / off).
+    const priceL = ruleLevel("merch-ad.price-words", "block");
+    const cartL = ruleLevel("merch-ad.cart-words", "block");
+    const m1 = text.match(PRICE_RE);
+    if (m1 && priceL !== "off" && !isAllowedWord(m1[0])) out.push({ level: priceL === "block" ? "blocker" : "warn", field, text: `"${field}" looks like a price. Prices live only on the merch site - the cannabis site shows no product details.` });
+    const m2 = text.match(CART_RE);
+    if (m2 && cartL !== "off" && !isAllowedWord(m2[0])) out.push({ level: cartL === "block" ? "blocker" : "warn", field, text: `"${field}" reads like a cart/checkout or product detail. Keep it to a simple invitation ("Visit the apparel shop").` });
   }
   if (!ad.heading) out.push({ level: "warn", field: "heading", text: "A short heading helps customers understand the link leaves this site." });
   if (ad.tiles.length === 0) out.push({ level: "warn", field: "tiles", text: "No pictures yet - the ad will show as a single text card." });
@@ -316,3 +323,6 @@ export function __runMerchAdTests(): { passed: number; failed: number } {
   ok(resolveMerchAd(serializeMerchAd({ ...carded, enabled: false })) === null, "disabled ad -> no cards anywhere");
   return { passed, failed };
 }
+
+/** D244 R-23: the word lists, read-only, for the Compliance guardrails page. */
+export const MERCH_AD_WORD_LISTS = { price: PRICE_RE.source, cart: CART_RE.source } as const;

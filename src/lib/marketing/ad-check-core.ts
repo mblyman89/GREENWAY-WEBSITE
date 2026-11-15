@@ -25,6 +25,7 @@
  */
 import patternsJson from "@/lib/ai/compliance-patterns.json";
 import { judgeHit } from "@/lib/ai/compliance-context-core";
+import { aiPatternKey, isAllowedWord, ruleLevel } from "@/lib/ai/guardrails-state-core";
 import { UNIVERSAL_CONTENT_BANS } from "@/lib/marketing/campaign-rules-core";
 import { resolveBoxText, type BannerDesign } from "@/lib/cms/banner-design-core";
 
@@ -59,13 +60,17 @@ export function checkAdText(texts: readonly (string | null | undefined)[]): AdFi
   const seen = new Set<string>();
   const all = texts.map((t) => String(t ?? "")).filter((t) => t.trim() !== "");
   for (const rule of AD_RULES) {
+    // D244 R-23: the same owner level as the AI copy check (one rule, one switch).
+    const level = ruleLevel(aiPatternKey(rule.label), rule.kind === "rule" ? "block" : "warn");
+    if (level === "off") continue;
+    const ruleKind = level === "block" ? ("rule" as const) : ("review" as const);
     for (const t of all) {
       for (const m of t.matchAll(rule.re)) {
         const found = m[0].trim().toLowerCase();
-        if (!found) continue;
+        if (!found || isAllowedWord(found)) continue;
         // D244 R-14: a rule word used in an everyday way ("slow cured",
         // "keep out of reach of children") is shown as a second look, not a break.
-        const kind = rule.kind === "rule" && judgeHit(t, m.index ?? 0, m[0]).allowed ? ("review" as const) : rule.kind;
+        const kind = ruleKind === "rule" && judgeHit(t, m.index ?? 0, m[0]).allowed ? ("review" as const) : ruleKind;
         const k = `${rule.label}|${found}|${kind}`;
         if (seen.has(k)) continue;
         seen.add(k);

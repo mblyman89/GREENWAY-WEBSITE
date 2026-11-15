@@ -36,6 +36,7 @@
  * form (client island) and on the server (promotion page + list).
  */
 import { claimHits } from "@/lib/ai/compliance-context-core";
+import { notAllowed, ruleLevel } from "@/lib/ai/guardrails-state-core";
 
 export type CopyField = "title" | "description" | "bonus_note";
 
@@ -80,6 +81,8 @@ export type CopyCheckInput = {
 // ---------------------------------------------------------------------------
 
 type WordRule = {
+  /** D244 R-23: the rule key on the Compliance guardrails page. */
+  key: string;
   re: RegExp;
   kind: CopyFinding["kind"];
   label: string;
@@ -92,6 +95,7 @@ const WAC_155 = "WAC 314-55-155(1)(a)";
 
 const WORD_RULES: WordRule[] = [
   {
+    key: "promo.free",
     re: /\b(free|freebies?|on the house|complimentary|giveaways?|give[- ]?aways?|giving away|no charge)\b/i,
     kind: "legal",
     label: "\"Free\" or giveaway wording",
@@ -100,6 +104,7 @@ const WORD_RULES: WordRule[] = [
     cite: "RCW 69.50.357",
   },
   {
+    key: "promo.minors",
     re: /\b(candy|candies|gummy bears?|kid|kids|kiddos?|children|childhood|cartoons?|toys?|mascots?|back[- ]to[- ]school|trick[- ]or[- ]treat|teens?|students?|lollipops?)\b/i,
     kind: "legal",
     label: "Could appeal to people under 21",
@@ -108,6 +113,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.health",
     re: /\b(cures?|cured|heals?|healing|treats? (?:your|pain|anxiety|insomnia)|remed(?:y|ies)|therapeutic|therapy|medicinal|medicine|relief|relieves?|pain|anxiety|insomnia|depression|nausea|inflammation|ptsd|arthritis|sleep aid|wellness benefits?)\b/i,
     kind: "legal",
     label: "Health or medical claim",
@@ -116,6 +122,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.safety",
     re: /\b(safe|safer|healthy|healthier|harmless|non-?addictive|no side effects|good for you)\b/i,
     kind: "legal",
     label: "Safety or health-benefit claim",
@@ -124,6 +131,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.over-consumption",
     re: /\b(get (?:really )?(?:high|blazed|wasted|stoned|baked|lit)|as much as you can|binge|over-?consume|stock up and smoke|megadose|double (?:the )?dose|max(?:imum)? high|blast off)\b/i,
     kind: "legal",
     label: "Encourages over-consumption",
@@ -132,6 +140,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.dosing",
     re: /\b(\d+\s*mg (?:per|a) (?:day|dose)|dosage|dosing|take \d+|start with \d+)\b/i,
     kind: "legal",
     label: "Dosing advice",
@@ -140,6 +149,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.alcohol-tobacco",
     re: /\b(beer|wine|booze|alcohol|cocktails?|shots|liquor|vodka|whiskey|tequila|tobacco|cigarettes?|nicotine|happy hour)\b/i,
     kind: "legal",
     label: "Alcohol or tobacco association",
@@ -148,6 +158,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.unsupported-claim",
     re: /\b(guarantee[sd]?|miracle|clinically (?:proven|tested)|doctor[- ]recommended|physician[- ]recommended|fda[- ]approved|scientifically proven|proven to)\b/i,
     kind: "legal",
     label: "Unsupported claim",
@@ -156,6 +167,7 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
   {
+    key: "promo.vendor-funded",
     re: /\b(sponsored by|brought to you by|courtesy of|paid for by|presented by|in partnership with)\b/i,
     kind: "legal",
     label: "Sounds vendor-funded",
@@ -164,6 +176,7 @@ const WORD_RULES: WordRule[] = [
     cite: "WAC 314-55-018",
   },
   {
+    key: "promo.no-limit",
     re: /\b(no limits?|unlimited|limitless|as many as you want)\b/i,
     kind: "legal",
     label: "\"No limit\" is untrue",
@@ -172,6 +185,7 @@ const WORD_RULES: WordRule[] = [
     cite: "WAC 314-55-095",
   },
   {
+    key: "promo.superlative",
     re: /\b(lowest prices?|cheapest|best prices? in (?:town|the state|washington)|beat any price|price match|unbeatable|best weed|#1|number one)\b/i,
     kind: "accuracy",
     label: "Comparison or superlative claim",
@@ -180,6 +194,15 @@ const WORD_RULES: WordRule[] = [
     cite: WAC_155,
   },
 ];
+
+/** D244 R-23: the wording rules, read-only, for the Compliance guardrails page. */
+export const PROMOTION_WORD_RULES: readonly { key: string; label: string; words: string; why: string; cite?: string }[] = WORD_RULES.map((r) => ({
+  key: r.key,
+  label: r.label,
+  words: r.re.source,
+  why: r.why,
+  cite: r.cite,
+}));
 
 // ---------------------------------------------------------------------------
 // 2. Mechanics helpers
@@ -283,9 +306,13 @@ export function checkPromotionCopy(i: CopyCheckInput): CopyFinding[] {
   // 1. Wording rules.
   for (const { field, text } of texts) {
     for (const r of WORD_RULES) {
+      // D244 R-23: the owner can turn a wording rule off and allow words
+      // (these are warnings only; they never block saving or publishing).
+      if (ruleLevel(r.key, "warn") === "off") continue;
+      const g = new RegExp(r.re.source, "gi");
       // D244 R-14: "slow cured" is the curing process; only a claim is a finding.
-      const m = r.label === "Health or medical claim" ? claimHits(text, r.re).slice(0, 1) : text.match(r.re);
-      if (m && m.length) push({ kind: r.kind, field, label: r.label, found: m[0], why: r.why, suggest: r.suggest, cite: r.cite });
+      const m = notAllowed(r.label === "Health or medical claim" ? claimHits(text, r.re) : text.match(g) ?? []).slice(0, 1);
+      if (m.length) push({ kind: r.kind, field, label: r.label, found: m[0], why: r.why, suggest: r.suggest, cite: r.cite });
     }
   }
 

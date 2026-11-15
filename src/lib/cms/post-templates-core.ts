@@ -16,6 +16,7 @@
  * Pure: no server imports. The server adds checkCompliance() flags.
  */
 import type { ThisWeekFeed } from "./this-week-feed-core";
+import { issueLevel, notAllowed } from "@/lib/ai/guardrails-state-core";
 
 export type PostTemplateKey =
   | "new-vendor"
@@ -283,31 +284,38 @@ export function checkDraft(t: PostTemplate, item: TemplateItem, d: PostDraft): D
   if (d.headlines.length === 0) issues.push({ level: "must-fix", text: "No headline came back. Draft it again." });
   if (d.sections.length === 0) issues.push({ level: "must-fix", text: "No body came back. Draft it again." });
 
-  const sup = [...new Set((text.match(SUPERLATIVE_RE) ?? []).map((m) => m.toLowerCase()))];
-  if (sup.length) issues.push({ level: "must-fix", text: `Superlatives are not allowed (Q-22-9): ${sup.join(", ")}.` });
+  // D244 R-23: each rule follows the owner's level (Compliance guardrails page).
+  const sup = notAllowed(text.match(SUPERLATIVE_RE) ?? []);
+  const supL = issueLevel("blog.superlatives", "block");
+  if (sup.length && supL) issues.push({ level: supL, text: `Superlatives are not allowed (Q-22-9): ${sup.join(", ")}.` });
 
   const money = [...new Set(text.match(MONEY_RE) ?? [])];
   const pct = [...new Set(text.match(PERCENT_RE) ?? [])];
+  const priceL = issueLevel("blog.prices", "block");
+  const amtL = issueLevel("blog.amounts", "block");
   if (!t.allowsPrice) {
-    if (money.length || pct.length) issues.push({ level: "must-fix", text: `Prices are only for Sale and Vendor-day posts (Q-22-8): ${[...money, ...pct].join(", ")}.` });
+    if ((money.length || pct.length) && priceL) issues.push({ level: priceL, text: `Prices are only for Sale and Vendor-day posts (Q-22-8): ${[...money, ...pct].join(", ")}.` });
   } else {
     const okMoney = new Set((facts.match(MONEY_RE) ?? []).map(normMoney));
     const okPct = new Set((facts.match(PERCENT_RE) ?? []).map(normPct));
     const bad = [...money.filter((m) => !okMoney.has(normMoney(m))), ...pct.filter((p) => !okPct.has(normPct(p)))];
-    if (bad.length) issues.push({ level: "must-fix", text: `These amounts are not in the promotion (Q-22-8): ${bad.join(", ")}.` });
+    if (bad.length && amtL) issues.push({ level: amtL, text: `These amounts are not in the promotion (Q-22-8): ${bad.join(", ")}.` });
   }
   if (!t.allowsDates) {
     const dates = [...new Set(text.match(DATE_RE) ?? [])];
-    if (dates.length) issues.push({ level: "heads-up", text: `Dates are only for Sale, Vendor-day and Holiday posts: ${dates.join(", ")}.` });
+    const dateL = issueLevel("blog.dates", "warn");
+    if (dates.length && dateL) issues.push({ level: dateL, text: `Dates are only for Sale, Vendor-day and Holiday posts: ${dates.join(", ")}.` });
   }
   if (t.key === "culture") {
     const factLinks = linksIn(facts);
-    if (factLinks.length && !factLinks.some((u) => text.includes(u))) {
-      issues.push({ level: "heads-up", text: "The source link is not in the draft; add it so readers can check the news (Q-22-1)." });
+    const srcL = issueLevel("blog.source-link", "warn");
+    if (factLinks.length && !factLinks.some((u) => text.includes(u)) && srcL) {
+      issues.push({ level: srcL, text: "The source link is not in the draft; add it so readers can check the news (Q-22-1)." });
     }
   }
   const foreignLinks = linksIn(text).filter((u) => !facts.includes(u));
-  if (foreignLinks.length) issues.push({ level: "must-fix", text: `Links not in the facts: ${foreignLinks.join(", ")}.` });
+  const linkL = issueLevel("blog.links", "block");
+  if (foreignLinks.length && linkL) issues.push({ level: linkL, text: `Links not in the facts: ${foreignLinks.join(", ")}.` });
   return issues;
 }
 
@@ -482,3 +490,6 @@ export function __runPostTemplatesCoreTests(): { passed: number; failed: number 
 
   return { passed, failed };
 }
+
+/** D244 R-23: the superlative list, read-only, for the Compliance guardrails page. */
+export const BLOG_SUPERLATIVES_SOURCE: string = SUPERLATIVE_RE.source;

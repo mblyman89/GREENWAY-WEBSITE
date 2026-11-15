@@ -20,6 +20,7 @@
  * Pure: no server imports.
  */
 import { claimHits } from "@/lib/ai/compliance-context-core";
+import { issueLevel, notAllowed, ruleLevel } from "@/lib/ai/guardrails-state-core";
 
 export const PROVIDER_LINE =
   "This post reports news and research; it is not medical advice. Talk to your healthcare provider about any health question.";
@@ -73,12 +74,15 @@ export function isProductOrDealLink(url: string, siteHosts: readonly string[] = 
 }
 
 export function touchesHealth(text: string): boolean {
-  return HEALTH_RE.test(text);
+  // D244 R-23: the owner can turn the health-topic rule off, or allow words.
+  if (ruleLevel("culture.health-topic", "block") === "off") return false;
+  const g = new RegExp(HEALTH_RE.source, "gi");
+  return notAllowed(text.match(g) ?? []).length > 0;
 }
 
 export function therapeuticWords(text: string): string[] {
   // D244 R-14: "slow cured" is the curing process, not a claim (context read).
-  return claimHits(text, THERAPEUTIC_RE);
+  return notAllowed(claimHits(text, THERAPEUTIC_RE));
 }
 
 /** Same-site relative links like "/menu" or "/deals" also count as selling. */
@@ -114,23 +118,28 @@ export function guardCultureText(text: string, opts: { requireSource?: boolean; 
   const sources = links.filter((u) => !isProductOrDealLink(u, opts.siteHosts ?? []));
   const hasProviderLine = /talk to your (?:healthcare|health care) provider/i.test(text);
 
+  // D244 R-23: each rule follows the owner's level (Compliance guardrails page).
   const thera = therapeuticWords(text);
-  if (thera.length) {
-    issues.push({ level: "must-fix", text: `Therapeutic wording is not allowed (WAC 314-55-155(2)(a)(vii)): ${thera.join(", ")}. Report what a source said, attributed, never as a benefit.` });
+  const theraL = issueLevel("culture.therapeutic", "block");
+  if (thera.length && theraL) {
+    issues.push({ level: theraL, text: `Therapeutic wording is not allowed (WAC 314-55-155(2)(a)(vii)): ${thera.join(", ")}. Report what a source said, attributed, never as a benefit.` });
   }
-  if ((opts.requireSource || health) && sources.length === 0) {
+  const srcL = issueLevel("culture.source-link", "block");
+  if ((opts.requireSource || health) && sources.length === 0 && srcL) {
     issues.push({
-      level: "must-fix",
+      level: srcL,
       text: health
         ? "This touches health, so it needs a cited source link (Q-22-1). Add the link to the study or news."
         : "A culture post carries its source link. Add the link to the news.",
     });
   }
-  if (health && selling.length) {
-    issues.push({ level: "must-fix", text: `A health post may not link to products, the menu or deals (Q-22-1): ${selling.join(", ")}.` });
+  const sellL = issueLevel("culture.health-selling-links", "block");
+  if (health && selling.length && sellL) {
+    issues.push({ level: sellL, text: `A health post may not link to products, the menu or deals (Q-22-1): ${selling.join(", ")}.` });
   }
-  if (health && !hasProviderLine) {
-    issues.push({ level: "must-fix", text: `A health post needs the line: "${PROVIDER_LINE}"` });
+  const provL = issueLevel("culture.provider-line", "block");
+  if (health && !hasProviderLine && provL) {
+    issues.push({ level: provL, text: `A health post needs the line: "${PROVIDER_LINE}"` });
   }
   return { health, issues, blocking: issues.filter((i) => i.level === "must-fix").map((i) => i.text), sources, hasProviderLine };
 }
@@ -371,3 +380,6 @@ export function __runCultureDeskCoreTests(): { passed: number; failed: number } 
 
   return { passed, failed };
 }
+
+/** D244 R-23: the word lists, read-only, for the Compliance guardrails page. */
+export const CULTURE_WORD_LISTS = { health: HEALTH_RE.source, therapeutic: THERAPEUTIC_RE.source } as const;
