@@ -36,6 +36,7 @@ import { batchNoFor, isMissingRecipientsTable } from "./newsletter-batch-core";
 import { canvasSettingKey, normalizeCanvas, checkCanvas } from "./newsletter-canvas-core";
 import { canvasEmailFor } from "./newsletter-canvas-server";
 import { applyMergeTags, cleanFirstName } from "./newsletter-polish-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 const MEDIA_BUCKET = "media";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -344,6 +345,7 @@ export async function sendNewsletter(params: {
   actorId: string | null;
   actorEmail: string | null;
 }): Promise<SendResult> {
+  await syncGuardrails().catch(() => null);
   const cfg = newsletterSendConfig();
   if (!cfg.configured || !cfg.from) {
     return { ok: false, error: "Email sending is not configured yet. Add RESEND_API_KEY and NEWSLETTER_FROM_EMAIL." };

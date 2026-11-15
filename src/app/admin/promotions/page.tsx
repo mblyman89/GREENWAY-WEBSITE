@@ -51,6 +51,7 @@ import {
   resolveSpecialsPresentation,
   isWeekdayHiddenByPresentation,
 } from "@/lib/specials/specials-presentation-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +119,7 @@ export default async function PromotionsAdminPage({
 }: {
   searchParams: Promise<Params>;
 }) {
+  await syncGuardrails().catch(() => null);
   await requirePermission("promotions.manage");
   const sp = await searchParams;
 

@@ -10,6 +10,7 @@ import { usableCuratedReviews } from "@/lib/cms/curated-reviews-server";
 import { CultureNewsDesk } from "@/components/admin/blog/CultureNewsDesk";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
 import { createPostAction } from "../actions";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function NewBlogPostPage({
 }: {
   searchParams?: Promise<{ back?: string; error?: string }>;
 }) {
+  await syncGuardrails().catch(() => null);
   await requirePermission("blog.manage");
   const sp: { back?: string; error?: string } = searchParams ? await searchParams : {};
 

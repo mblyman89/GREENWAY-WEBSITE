@@ -19,6 +19,7 @@
 import "server-only";
 import { generateJSON, isAiConfigured, aiModelId, type AiContext } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "@/lib/ai/compliance";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -86,6 +87,7 @@ export async function generateSeoMeta(
   brief: SeoMetaBrief,
   context?: Omit<AiContext, "feature">,
 ): Promise<SeoMetaSuggestion> {
+  await syncGuardrails().catch(() => null);
   const lines = [
     `You are an SEO specialist writing search-engine metadata for ${describePath(brief.path)}.`,
     `Route: ${brief.path}`,

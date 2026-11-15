@@ -27,8 +27,8 @@ import {
 export const GUARDRAILS_TAG = "compliance-guardrails";
 
 async function readUncached(): Promise<GuardrailSettings> {
-  if (!isSupabaseServiceConfigured) return emptyGuardrails();
   try {
+    if (!isSupabaseServiceConfigured) return emptyGuardrails();
     const admin = createSupabaseAdminClient();
     const { data } = await admin.from("site_settings").select("value_json").eq("key", GUARDRAILS_SETTING_KEY).maybeSingle();
     return normalizeGuardrails((data as { value_json?: unknown } | null)?.value_json ?? null);
@@ -65,7 +65,12 @@ export async function getGuardrailsForEdit(): Promise<GuardrailSettings> {
 
 /** Load the owner's settings and make them active for every check. Never throws. */
 export async function syncGuardrails(): Promise<GuardrailSettings> {
-  const s = await getGuardrails().catch(() => emptyGuardrails());
+  let s: GuardrailSettings;
+  try {
+    s = await getGuardrails();
+  } catch {
+    s = emptyGuardrails();
+  }
   setActiveGuardrails(s);
   return s;
 }

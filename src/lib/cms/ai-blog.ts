@@ -12,6 +12,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { generate, isAiConfigured, aiModelId } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "@/lib/ai/compliance";
 import type { AiSuggestion, AiSuggestionStatus } from "@/lib/enrichment/types";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -81,6 +82,7 @@ export async function generateBlogBody(
   brief: PostBrief,
   generatedBy: string | null,
 ): Promise<GeneratedBlogSuggestion> {
+  await syncGuardrails().catch(() => null);
   const { user, inputSummary } = bodyPrompt(brief);
   const text = await generate({ system: COMPLIANCE_SYSTEM, user, temperature: 0.7, maxTokens: 500 });
   const compliance = checkCompliance(text);
@@ -100,6 +102,7 @@ export async function generateBlogSeo(
   brief: PostBrief,
   generatedBy: string | null,
 ): Promise<GeneratedBlogSuggestion> {
+  await syncGuardrails().catch(() => null);
   const { user, inputSummary } = seoPrompt(brief);
   const text = await generate({ system: COMPLIANCE_SYSTEM, user, temperature: 0.5, maxTokens: 160 });
   const compliance = checkCompliance(text);
@@ -159,6 +162,7 @@ export async function generateHeroAltText(
   title: string,
   category: string,
 ): Promise<{ value: string; complianceFlags: string[]; model: string }> {
+  await syncGuardrails().catch(() => null);
   const user = `Write ALT TEXT for the hero image of a blog post on a licensed Washington cannabis retailer's website, following all rules. The alt text describes the image for screen-reader users and SEO. Return ONE plain sentence, 8-16 words, no quotes, no "image of"/"photo of" prefix, tasteful and adult-oriented.\n\nPost title: ${title}\nCategory: ${category}`;
   const text = await generate({ system: COMPLIANCE_SYSTEM, user, temperature: 0.5, maxTokens: 60 });
   const clean = text.trim().replace(/^["'`]+|["'`]+$/g, "").replace(/\s+/g, " ").trim();

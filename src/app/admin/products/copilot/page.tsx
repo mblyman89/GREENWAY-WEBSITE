@@ -36,6 +36,7 @@ import {
   copilotRejectDraftAction,
   copilotSkipAction,
 } from "./actions";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 // Draft now (one all-fields call) runs inside the request.
@@ -51,6 +52,7 @@ export default async function CopilotPage({
 }: {
   searchParams: Promise<{ vendor?: string; key?: string; skip?: string; saved?: string; note?: string; error?: string }>;
 }) {
+  await syncGuardrails().catch(() => null);
   await requirePermission("products.enrich");
   const sp = await searchParams;
   const vendor = String(sp.vendor ?? "").trim().slice(0, 100);

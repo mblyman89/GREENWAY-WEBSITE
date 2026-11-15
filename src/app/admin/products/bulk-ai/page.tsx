@@ -53,6 +53,7 @@ import { AcceptAllDescriptions } from "./AcceptAllDescriptions";
 import { enrichBatchConfigured, enrichBatchModel, loadEnrichBatchStatus } from "@/lib/enrichment/enrich-batch-server";
 import { ENRICH_BATCH_GATHER_MS, ENRICH_BATCH_MAX_OPEN, ENRICH_BATCH_MAX_QUEUE, ENRICH_BATCH_SEND_MAX, ENRICH_MODES, batchCounts, batchProgressText, batchRecordLine, openBatches } from "@/lib/enrichment/enrich-batch-core";
 import { batchTimingText, batchVendorBreakdown, vendorBreakdownLine } from "@/lib/enrichment/vendor-pick-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 // D244 E-0: a 25-product batch on a reasoning model can run for minutes.
@@ -75,6 +76,7 @@ export default async function BulkAiPage({
     min?: string;
   }>;
 }) {
+  await syncGuardrails().catch(() => null);
   await requirePermission("products.enrich");
   const sp = await searchParams;
   const { generated, failed, reason, accepted, error, back, queued, accepted_note } = sp;

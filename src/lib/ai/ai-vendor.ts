@@ -20,6 +20,7 @@
 import "server-only";
 import { generate, isAiConfigured, aiModelId, type AiContext } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "@/lib/ai/compliance";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -121,6 +122,7 @@ export async function generateVendorProfile(
   brief: VendorBrief,
   context?: AiContext,
 ): Promise<VendorProfileSuggestion> {
+  await syncGuardrails().catch(() => null);
   const raw = await generate({
     system: COMPLIANCE_SYSTEM,
     user: buildPrompt(brief),

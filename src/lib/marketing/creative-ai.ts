@@ -28,6 +28,7 @@ import { defineSchema } from "@/lib/ai/schema";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { COMPLIANCE_NOTE } from "@/lib/marketing/midjourney-core";
 import type { CreativePlacement } from "@/lib/marketing/creative-placements-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -84,6 +85,7 @@ export async function suggestCreativeConcept(input: {
   /** Grounded live-promotions blurb — built by the caller from published rules. */
   promotionsContext?: string;
 }): Promise<CreativeConceptResult> {
+  await syncGuardrails().catch(() => null);
   const idea = (input.idea ?? "").trim();
   const userParts = [
     `Image idea: ${idea || "(none given — propose something on-brand for the destination)"}`,

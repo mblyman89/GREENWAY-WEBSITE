@@ -33,6 +33,7 @@ import { persistSuggestion, reviewSuggestion, getSuggestion, listSuggestions } f
 import { attachKbProductImage, listKbProducts } from "@/lib/ai/kb/store";
 import type { AiSuggestion } from "@/lib/enrichment/types";
 import { MEDIA_UPLOAD_MAX_BYTES, tooLargeMessage } from "@/lib/media/gif-core";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 // R43: 4 MB per file. Uploads run through a Server Action = a Vercel Function,
 // whose request body is hard-capped at 4.5 MB by the platform (anything larger
@@ -304,6 +305,7 @@ export type MediaAltResult =
 const VISION_MIME = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
 
 export async function suggestMediaAltAction(id: string): Promise<MediaAltResult> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("media.manage");
   if (!isAiConfigured) {
     return { ok: false, error: "AI is not configured. Set AI_API_KEY to enable suggestions." };
@@ -530,6 +532,7 @@ async function loadEntityFacts(entityName: string): Promise<{ block: string; sou
 }
 
 export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAllResult> {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("media.manage");
   if (!isAiConfigured) {
     return { ok: false, error: "AI is not configured. Set AI_API_KEY to enable suggestions." };

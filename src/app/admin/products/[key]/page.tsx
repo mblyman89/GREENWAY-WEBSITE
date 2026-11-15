@@ -91,6 +91,7 @@ import {
   researchProductAction,
   importResearchImage,
 } from "../actions";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export const dynamic = "force-dynamic";
 // SLICE 74: the web-research server action submitted from this page calls the
@@ -111,6 +112,7 @@ export default async function ProductEditorPage({
   params: Promise<{ key: string }>;
   searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string; lq?: string; lscope?: string; lv?: string; lsim?: string; note?: string }>;
 }) {
+  await syncGuardrails().catch(() => null);
   const session = await requirePermission("products.enrich");
   const { key: rawKey } = await params;
   const key = decodeURIComponent(rawKey);

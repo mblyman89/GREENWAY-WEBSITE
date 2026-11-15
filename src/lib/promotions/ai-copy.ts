@@ -21,6 +21,7 @@ import "server-only";
 import { generateJSON, isAiConfigured, aiModelId, type AiContext } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "@/lib/ai/compliance";
 import { DISCOUNT_TYPE_LABELS, WEEKDAY_LABELS, type DiscountType, type Weekday } from "./types";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 
 export { isAiConfigured };
 
@@ -78,6 +79,7 @@ export async function generatePromotionCopy(
   brief: PromotionCopyBrief,
   context?: Omit<AiContext, "feature">,
 ): Promise<PromotionCopySuggestion> {
+  await syncGuardrails().catch(() => null);
   const lines = [
     `You are a cannabis-retail marketer writing in-store promotion copy for a licensed Washington State (21+) dispensary, Greenway Marijuana.`,
     `Here are the deal mechanics the staffer already configured:`,
