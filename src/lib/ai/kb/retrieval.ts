@@ -19,6 +19,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { syncGuardrails } from "@/lib/ai/guardrails-server";
 import { dashedSlug } from "@/lib/catalog/slug-core";
 import { kbProductSlugCandidates, strainMatchFromText } from "@/lib/enrichment/ai-draft-v2-core";
 import {
@@ -948,6 +949,9 @@ export type BannedPhrase = { phrase: string; severity: "block" | "warn"; reason:
 
 /** Load the active extra banned phrases (best-effort; empty if not migrated). */
 export async function loadBannedPhrases(): Promise<BannedPhrase[]> {
+  // D244 R-23: every gate that loads the owner's phrases also gets the owner's
+  // rule levels and allowed words (Compliance guardrails page). Never throws.
+  await syncGuardrails().catch(() => null);
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
