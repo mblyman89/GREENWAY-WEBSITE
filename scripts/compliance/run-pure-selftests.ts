@@ -1393,6 +1393,8 @@ import { __runVendorKitCoreTests } from "../../src/lib/enrichment/vendor-kit-cor
 import { __runTextEraseCoreTests } from "../../src/lib/enrichment/text-erase-core";
 import { __runBulkApproveCoreTests } from "../../src/lib/enrichment/bulk-approve-core";
 import { __runComplianceContextTests } from "../../src/lib/ai/compliance-context-core";
+import { __runGuardrailsStateTests } from "../../src/lib/ai/guardrails-state-core";
+import { __runGuardrailsCatalogTests } from "../../src/lib/ai/guardrails-catalog-core";
 import { __runMediaEmbedTests } from "../../src/lib/media/media-embed-core";
 import { __runKbBulkReviewTests } from "../../src/lib/ai/kb/kb-bulk-review-core";
 import { __runSameTimeCoreTests } from "../../src/lib/admin/same-time-core";
@@ -2991,6 +2993,8 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("kb-bulk-review-core", __runKbBulkReviewTests(), 17); // D244 R-19: KB pipeline "Publish every draft that passes" (quality bar + compliance, 500 per page, Check first)
   assertRan("copilot-core", __runCopilotCoreTests(), 57); // D244 R-22: every vendor photo after 1-9; D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   assertRan("same-time-core", __runSameTimeCoreTests(), 36); // D245: cockpit compares the basis days cut at the SAME Pacific time of day as now (closed-day rule kept: traded-but-not-yet = real 0, avg order null), compact per-order clock series, revenue before discounts
+  assertRan("guardrails-state-core", __runGuardrailsStateTests(), 17); // D244 R-23: owner Block / Warn / Off per rule + allowed words (one site_settings row)
+  assertRan("guardrails-catalog-core", __runGuardrailsCatalogTests(), 18); // D244 R-23: every word rule that can stop or flag text, for the Compliance guardrails page
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

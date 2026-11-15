@@ -180,7 +180,7 @@ export function readableWords(pattern: string): string[] {
       .replace(/\(\?:/g, "(")
       .replace(/\\s\+|\\s\*|\\s\?|\\s/g, " ")
       .replace(/\[- \]\?/g, "-")
-      .replace(/\[- \]/g, " ")
+      .replace(/\[- \]/g, "-")
       .replace(/-\?/g, "-")
       .replace(/\\d\+|\\d/g, "#")
       .replace(/\\\$/g, "$")
