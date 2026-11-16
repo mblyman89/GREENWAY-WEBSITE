@@ -164,6 +164,13 @@ export default async function VendorsPage({
             >
               <span aria-hidden>🔀</span> Combine duplicates
             </Link>
+            {/* D246: vendor facts from the manifests/invoices (license -> lots). */}
+            <Link
+              href={withBackParam("/admin/vendors/ledger", sp)}
+              className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)]"
+            >
+              <span aria-hidden>📑</span> What the paperwork says
+            </Link>
             <Link
               href={withBackParam("/admin/vendors/import", sp)}
               className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-orange)] px-4 py-2 text-sm font-semibold text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110"

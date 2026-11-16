@@ -177,7 +177,9 @@ describe("S26 — each destination receives its param and has the control", () =
     expect(page).toContain("const kbHref = kbProductsHref(kbProduct?.display_name || lot.product_name);");
     expect(page.match(/href=\{kbHref\}/g)?.length).toBe(2);
     expect(page).not.toContain("href={`/admin/knowledge-base/products`}");
-    expect(page).toContain("(await loadMenuCategoriesForKeys([lot.pos_product_key])).has(lot.pos_product_key)");
+    // D246: one read of the published card's category serves both the live guard and the "At the register" panel.
+    expect(page).toContain("await loadMenuCategoriesForKeys([lot.pos_product_key])");
+    expect(page).toContain("liveMenuCategories.has(lot.pos_product_key)");
     expect(page).toContain("const enrichHref = lotEnrichmentHref(lot.pos_product_key, isLive,");
     expect(page.match(/href=\{enrichHref\}/g)?.length).toBe(2);
     expect(page).not.toContain("href={`/admin/products/${encodeURIComponent(lot.pos_product_key)}");

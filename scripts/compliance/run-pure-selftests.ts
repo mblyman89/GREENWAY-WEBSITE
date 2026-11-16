@@ -624,6 +624,9 @@ import { __runCultiveraStrainFixCoreTests } from "../../src/lib/pos/cultivera-st
 import { __runLegacyLotRemovalCoreTests } from "../../src/lib/pos/legacy-lot-removal-core";
 import { __runCardBrandCoreTests } from "../../src/lib/menu/card-brand-core";
 import { __runMenuCategoryOverrideCoreTests } from "../../src/lib/menu/menu-category-override-core";
+import { __runRegisterLimitExplainTests } from "../../src/lib/inventory/register-limit-explain-core";
+import { __runVendorLedgerTests } from "../../src/lib/vendors/vendor-ledger-core";
+import { __runPublicProfileCollapseTests } from "../../src/lib/vendors/public-profile-collapse-core";
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -2997,6 +3000,9 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("guardrails-state-core", __runGuardrailsStateTests(), 17); // D244 R-23: owner Block / Warn / Off per rule + allowed words (one site_settings row)
   assertRan("guardrails-catalog-core", __runGuardrailsCatalogTests(), 18); // D244 R-23: every word rule that can stop or flag text, for the Compliance guardrails page
   assertRan("copilot-search-core", __runCopilotSearchTests(), 28); // D244 R-24: the Copilot photo search (any text: whole + each word + joined forms + typed vendor / brand shelves, typo-tolerant, fused and explained)
+  assertRan("register-limit-explain-core", __runRegisterLimitExplainTests(), 17); // D246: inventory page "At the register" (category, source, legal bucket, flower-filed-as-infused flag)
+  assertRan("vendor-ledger-core", __runVendorLedgerTests(), 30); // D246: paperwork license -> lot verdicts, move groups, UBI groups, brand fills
+  assertRan("public-profile-collapse-core", __runPublicProfileCollapseTests(), 12); // D246: merged vendor rows fold into survivor on public /vendors
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

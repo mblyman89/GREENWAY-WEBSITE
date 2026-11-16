@@ -20,6 +20,8 @@ import { vendorListBackHref } from "@/lib/vendors/list-state-core";
 import { getVendorById, listBrandsForVendor, publicMediaUrl } from "@/lib/vendors/store";
 // SLICE 77: vendors ⇄ inventory cross-link — recent lots from this vendor.
 import { listLotsForVendor } from "@/lib/inventory/store";
+// D246: what the manifests/invoices say about this business.
+import { loadVendorPaperworkPanel } from "@/lib/vendors/vendor-ledger-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Brand } from "@/lib/vendors/types";
 import { vendorCompleteness } from "@/lib/vendors/completeness";
@@ -119,12 +121,13 @@ export default async function VendorEditPage({
   if (!vendor) notFound();
   // R39 S5: ACH document drop (managers + admins). Status only, no numbers.
   const achDocs = canDropDocuments(session.profile.role) ? await listAchDocuments({ payeeType: "vendor", payeeId: id }) : null;
-  const [brands, vendorLogo, pendingSuggestions, vendorLots] = await Promise.all([
+  const [brands, vendorLogo, pendingSuggestions, vendorLots, paperwork] = await Promise.all([
     listBrandsForVendor(id),
     logoUrlForMediaId(vendor.logo_media_id),
     listSuggestions("vendor", id, "pending"),
     // SLICE 77: recent inventory lots from this vendor for the cross-link panel.
     listLotsForVendor(id, 8),
+    loadVendorPaperworkPanel(id).catch(() => null),
   ]);
 
   // SLICE 94: vault lookup for the badge. Only fetched when the viewer holds
@@ -811,6 +814,60 @@ export default async function VendorEditPage({
                 </ul>
               )}
             </section>
+
+            {/* D246: facts from the manifests/invoices (state transfer records). */}
+            {paperwork && (
+              <section id="paperwork-facts" className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-white">What the paperwork says</h2>
+                  <Link href="/admin/vendors/ledger" className="text-xs font-semibold text-[var(--admin-accent)] hover:underline">
+                    All vendors →
+                  </Link>
+                </div>
+                {paperwork.facts.licenses.length === 0 ? (
+                  <p className="text-xs text-white/45">No manifest or invoice in the archive names this business&rsquo;s license yet.</p>
+                ) : (
+                  <ul className="space-y-1 text-xs">
+                    {paperwork.facts.licenses.map((l) => (
+                      <li key={l.license} className="flex justify-between gap-2 text-white/80">
+                        <span>
+                          License <strong>{l.license}</strong>
+                          {l.onCard ? "" : " (not on a card)"}
+                          {l.labels.length ? <span className="text-white/45"> · printed as {l.labels.join(" / ")}</span> : null}
+                        </span>
+                        <span className="shrink-0 text-white/45">
+                          {l.docs} doc{l.docs === 1 ? "" : "s"}{l.lastSeen ? ` · last ${l.lastSeen}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {paperwork.facts.ubis.length > 0 && (
+                  <p className="mt-2 text-xs text-white/45">UBI (business): {paperwork.facts.ubis.join(", ")}</p>
+                )}
+                {paperwork.facts.cardLicenseSeenOnPaperwork === false && (
+                  <p className="mt-2 text-xs text-[var(--admin-gold)]">This card&rsquo;s license number has never appeared on a manifest. Check it.</p>
+                )}
+                {paperwork.misfiled.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-[var(--admin-gold)]">Lots here that the paperwork puts somewhere else:</p>
+                    <ul className="mt-1 space-y-1 text-xs text-white/70">
+                      {paperwork.misfiled.map((m) => (
+                        <li key={m.lotId}>
+                          <Link href={`/admin/inventory/${m.lotId}`} className="hover:underline">{m.productName ?? "Lot"}</Link>
+                          <span className="text-white/45">
+                            {" "}· license {m.license ?? "?"}
+                            {m.kind === "unknown_license" ? " (on no card)" : m.targetName ? ` → ${m.targetName}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-xs text-white/45">Fix these on <Link href="/admin/vendors/ledger" className="underline">What the paperwork says</Link>.</p>
+                  </div>
+                )}
+                {paperwork.problems.length > 0 && <p className="mt-2 text-xs text-[var(--admin-gold)]">Partial read: {paperwork.problems.join("; ")}</p>}
+              </section>
+            )}
           </aside>
         </div>
       </div>

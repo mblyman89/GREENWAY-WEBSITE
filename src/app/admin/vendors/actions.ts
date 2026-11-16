@@ -1030,7 +1030,8 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
     .getAll("duplicate_ids")
     .map((v) => String(v).trim())
     .filter(Boolean);
-  const back = "/admin/vendors/merge";
+  // D246: the paperwork ledger page reuses this merge; only known admin pages may be returned to.
+  const back = String(formData.get("return_to") ?? "") === "/admin/vendors/ledger" ? "/admin/vendors/ledger" : "/admin/vendors/merge";
 
   const problem = validateMergeSelection(survivorId, duplicateIds);
   if (problem) redirect(`${back}?error=` + encodeURIComponent(problem));

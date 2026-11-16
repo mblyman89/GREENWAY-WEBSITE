@@ -129,7 +129,9 @@ describe("menu-columns-core", () => {
     expect(direct).toContain("getPublishedVersion()");
     expect(direct).toContain("getItemBySourceKey(version.id, id)");
     expect(direct).toContain("row.hidden");
-    expect(direct).toContain("withCardIdentity([menuRowToGreenwayItem(row)])");
+    // D246: the single-row path applies the same back-office re-file (override) as the list path.
+    expect(direct).toContain("applyClassificationOverrideRows([menuRowToGreenwayItem(row)]");
+    expect(direct).toContain("getOverrideForKey(row.source_item_id)");
     expect(direct).not.toContain("loadLiveMenuAll");
     expect(direct).not.toContain("loadLiveMenuItems");
     expect(direct).not.toContain("unstable_cache");
