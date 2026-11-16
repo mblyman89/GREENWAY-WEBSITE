@@ -112,11 +112,14 @@ export function parseSkips(raw: unknown): string[] {
 }
 
 /** The copilot URL (every action redirects here). */
-export function copilotUrl(p: { vendor: string; key?: string | null; skip?: readonly string[]; flash?: string; hash?: string }): string {
+export function copilotUrl(p: { vendor: string; key?: string | null; skip?: readonly string[]; flash?: string; hash?: string; q?: string | null }): string {
   const parts = [`vendor=${encodeURIComponent(p.vendor)}`];
   if (p.key) parts.push(`key=${encodeURIComponent(p.key)}`);
   const skips = (p.skip ?? []).slice(0, COPILOT_MAX_SKIPS);
   if (skips.length) parts.push(`skip=${encodeURIComponent(skips.join(","))}`);
+  // D244 R-24: the photo search text stays while the card stays.
+  const q = (p.q ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (q) parts.push(`q=${encodeURIComponent(q)}`);
   const f = (p.flash ?? "").replace(/^[?&]/, "");
   if (f) parts.push(f);
   const h = p.hash ? (p.hash.startsWith("#") ? p.hash : `#${p.hash}`) : "";
@@ -459,6 +462,8 @@ export function __runCopilotCoreTests(): { passed: number; failed: number } {
   ok(parseSkips(Array.from({ length: 99 }, (_, i) => `k${i}`).join(",")).length === COPILOT_MAX_SKIPS, "skips bounded");
   ok(copilotUrl({ vendor: "v 1", key: "k/1", skip: ["a", "b"], flash: "?saved=1", hash: "chat" }) === "/admin/products/copilot?vendor=v%201&key=k%2F1&skip=a%2Cb&saved=1#chat", "url");
   ok(copilotUrl({ vendor: "v1" }) === "/admin/products/copilot?vendor=v1", "bare url");
+  ok(copilotUrl({ vendor: "v1", key: "k", q: " blue  dream ", flash: "saved=1", hash: "photo-search" }) === "/admin/products/copilot?vendor=v1&key=k&q=blue%20dream&saved=1#photo-search", "R-24: search text kept in the url");
+  ok(copilotUrl({ vendor: "v1", q: "\u0001 " }) === "/admin/products/copilot?vendor=v1", "R-24: empty search text dropped");
   ok(publishBlockReason(true) === null && Boolean(publishBlockReason(false)), "publish needs a photo only");
   ok(copilotKeyTarget({ key: "A" }, false) === "a", "A accepts all");
   ok(copilotKeyTarget({ key: "3" }, false) === "photo-3", "digits pick photos");

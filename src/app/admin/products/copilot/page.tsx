@@ -37,6 +37,8 @@ import {
   copilotSkipAction,
 } from "./actions";
 import { syncGuardrails } from "@/lib/ai/guardrails-server";
+import { searchCopilotPhotos } from "@/lib/enrichment/copilot-search-server";
+import { COPILOT_SEARCH_MAX_CHARS, cleanCopilotQuery } from "@/lib/enrichment/copilot-search-core";
 
 export const dynamic = "force-dynamic";
 // Draft now (one all-fields call) runs inside the request.
@@ -50,13 +52,15 @@ export const maxDuration = 300;
 export default async function CopilotPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vendor?: string; key?: string; skip?: string; saved?: string; note?: string; error?: string }>;
+  searchParams: Promise<{ vendor?: string; key?: string; skip?: string; saved?: string; note?: string; error?: string; q?: string }>;
 }) {
   await syncGuardrails().catch(() => null);
   await requirePermission("products.enrich");
   const sp = await searchParams;
   const vendor = String(sp.vendor ?? "").trim().slice(0, 100);
   const skips = parseSkips(sp.skip);
+  // D244 R-24: the photo search text (owner: "a search bar that is very smart").
+  const q = cleanCopilotQuery(sp.q);
   const note = typeof sp.note === "string" ? sp.note.trim().slice(0, 400) : "";
   const s = await loadCopilotSession(vendor, String(sp.key ?? "").trim(), skips);
 
@@ -73,6 +77,7 @@ export default async function CopilotPage({
             "Pick a vendor. The session holds that vendor’s on-hand products (at least 1 unit in a lot) that are not published yet, the ones with no photo first.",
             "Facts and AI first, photo last: attaching a photo publishes the product and it leaves this session (by design). So attach any facts, or press D and A, before the photo.",
             "Attach a photo (press 1-9 for a recommended photo). A product goes live once it has a photo; the words can come later.",
+            "Not in the recommendations? Use Search for any photo under them: type anything (a brand, vendor, strain, size, words on the package). It searches the whole library, typos included, and a vendor you name brings its other brands too. Click a result to attach it, or send it to Remove text.",
             "Photo has the wrong text on it? Under the photos, tick several, drag a box over the text on each, and press Remove text once: FLUX fixes them one after the next. Then Attach the clean one.",
             `Press D to draft every field now, then A to accept every draft at ${ACCEPT_ALL_THRESHOLD}% or better (best guesses too, flagged for a closer look).`,
             "Talk to the copilot on the right: ask for a shorter description, the strain type and potency from the lab certificate, or which photo is this product. It only suggests; Use this saves through the same compliance check.",
@@ -162,6 +167,7 @@ export default async function CopilotPage({
       <input type="hidden" name="vendor" value={s.vendorId} />
       <input type="hidden" name="skip" value={skip} />
       <input type="hidden" name="nextKey" value={next} />
+      {q ? <input type="hidden" name="q" value={q} /> : null}
     </>
   );
   const hasImage = c.photos.length > 0;
@@ -169,10 +175,14 @@ export default async function CopilotPage({
   const choices = copilotPhotoChoices(c.recommend.tiles);
   // D244 R-22: every other photo of this vendor, after the numbered 1-9.
   const more = copilotMorePhotos(c.recommend.tiles);
+  // D244 R-24: owner, round 11: "sometimes, the recommendations miss the vendors other brands ... I need a
+  // search bar that is very smart, lets me enter any text and the system does its best to show me something".
+  const found = q ? await searchCopilotPhotos({ query: q, cardVendorId: s.vendorId, excludeIds: c.photos.map((x) => x.id) }) : null;
+  const searchPhotos = found?.photos ?? [];
   // D244 R-11: the Remove-text queue offers the card's photos and the recommended ones.
   const ready = await textEraseReady();
   const queuePhotos: QueuePhoto[] = [];
-  for (const p of [...c.photos.map((x, n) => ({ id: x.id, url: x.url, label: `On this card ${n + 1}` })), ...choices.map((x) => ({ id: x.id, url: x.url, label: `Photo ${x.n}` })), ...more.map((x) => ({ id: x.id, url: x.url, label: x.label }))]) {
+  for (const p of [...c.photos.map((x, n) => ({ id: x.id, url: x.url, label: `On this card ${n + 1}` })), ...choices.map((x) => ({ id: x.id, url: x.url, label: `Photo ${x.n}` })), ...searchPhotos.map((x) => ({ id: x.id, url: x.url, label: `Search: ${x.label}` })), ...more.map((x) => ({ id: x.id, url: x.url, label: x.label }))]) {
     if (p.url && !queuePhotos.some((q) => q.mediaId === p.id)) queuePhotos.push({ mediaId: p.id, url: p.url, label: p.label });
   }
   const queueProduct: EraseProduct = {
@@ -344,6 +354,69 @@ export default async function CopilotPage({
                   </div>
                 </details>
               ) : null}
+
+              {/* D244 R-24: search the whole library with any text. */}
+              <div id="photo-search" className="mt-3 scroll-mt-24 rounded border border-white/10 p-2" data-testid="copilot-photo-search">
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-white/50">Search for any photo</h3>
+                <form method="get" action="/admin/products/copilot#photo-search" className="flex flex-wrap items-center gap-2" role="search">
+                  <input type="hidden" name="vendor" value={s.vendorId} />
+                  <input type="hidden" name="key" value={c.key} />
+                  {skip ? <input type="hidden" name="skip" value={skip} /> : null}
+                  <label htmlFor="copilot-photo-q" className="sr-only">
+                    Search the photo library
+                  </label>
+                  <input
+                    id="copilot-photo-q"
+                    name="q"
+                    type="search"
+                    defaultValue={q}
+                    maxLength={COPILOT_SEARCH_MAX_CHARS}
+                    placeholder="Any words: a brand, vendor, strain, size, words on the package…"
+                    className="min-w-[14rem] flex-1 rounded border border-white/15 bg-black/40 px-2 py-1 text-sm text-white placeholder:text-white/35"
+                    data-testid="copilot-photo-q"
+                  />
+                  <button type="submit" className={CHIP_ACTION}>
+                    Search
+                  </button>
+                  {q ? (
+                    <Link href={copilotUrl({ vendor: s.vendorId, key: c.key, skip: skips })} className="text-xs text-white/50 hover:text-white">
+                      Clear
+                    </Link>
+                  ) : null}
+                </form>
+                {!q ? (
+                  <p className="mt-1 text-[0.7rem] text-white/40">
+                    Searches every photo in the library, not just this vendor&rsquo;s: the whole text, each word, typos, and every photo of a brand or vendor you name (a vendor brings its other brands too). Results can be attached with a click and sent to Remove text below.
+                  </p>
+                ) : found?.note ? (
+                  <p className="mt-1 text-xs text-amber-200" data-testid="copilot-photo-search-note">{found.note}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-white/60" data-testid="copilot-photo-search-summary">{found?.summary}</p>
+                )}
+                {searchPhotos.length ? (
+                  <div className="mt-2 grid max-h-[32rem] grid-cols-4 gap-2 overflow-y-auto pr-1" data-testid="copilot-photo-search-results">
+                    {searchPhotos.map((p) => (
+                      <form key={p.id} action={copilotAttachPhotoAction} className="rounded border border-white/10 p-1">
+                        {ctx}
+                        <input type="hidden" name="mediaId" value={p.id} />
+                        <input type="hidden" name="identityKey" value={c.recommend.identityKey} />
+                        <button type="submit" className="block w-full text-left" title={`Attach ${p.label}`}>
+                          <div className="relative aspect-square overflow-hidden rounded bg-white/5">
+                            {p.url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.url} alt={p.label} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                            ) : null}
+                            {p.textRemoved ? <span className="absolute left-1 top-1 rounded bg-emerald-600/90 px-1 text-[0.6rem] font-semibold text-black">{"\u2702"}</span> : null}
+                            <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[0.6rem] text-white/80">{p.score}%</span>
+                          </div>
+                          <span className="mt-1 block truncate text-[0.6rem] text-white/80">{p.label}</span>
+                          <span className="block truncate text-[0.6rem] text-white/50">{p.chips.join(" \u00b7 ")}</span>
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <RemoveTextQueue
@@ -353,7 +426,7 @@ export default async function CopilotPage({
               visionReady={ready.vision}
               fluxReady={ready.flux}
               attachAction={copilotAttachPhotoAction}
-              hidden={{ key: c.key, vendor: s.vendorId, skip, nextKey: next, identityKey: c.recommend.identityKey }}
+              hidden={{ key: c.key, vendor: s.vendorId, skip, nextKey: next, identityKey: c.recommend.identityKey, ...(q ? { q } : {}) }}
             />
 
             <div id="drafts" data-testid="copilot-drafts">
