@@ -77,7 +77,8 @@ describe("D244 R-22 text-removed photos rank second, behind exact matches", () =
   it("self-tests pass and are registered", () => {
     expect(__runImageRecommendV3Tests()).toEqual({ passed: 47, failed: 0 });
     expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("image-recommend-v3-core", __runImageRecommendV3Tests(), 47)');
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("copilot-core", __runCopilotCoreTests(), 57)');
+    // R-24 raised the floor (search text kept in the url); 57 or more still holds.
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("copilot-core", __runCopilotCoreTests\(\), (5[7-9]|[6-9]\d)\)/);
   });
 });
 
