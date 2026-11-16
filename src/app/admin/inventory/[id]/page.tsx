@@ -40,6 +40,8 @@ import { getKbProductByPosKey } from "@/lib/ai/kb/store";
 // Option A: per-product website Type/Category override (migration 0150).
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
+// D246: what the REGISTER does with this product (category, source, legal bucket).
+import { explainRegisterLimit } from "@/lib/inventory/register-limit-explain-core";
 // T-324: after-tax price correction (current price read + pure formula math).
 import { getLotPriceState } from "@/lib/inventory/price-write-store";
 // D208: the onboarding floor for the off-menu price box (same math the approval enforces).
@@ -204,9 +206,11 @@ export default async function LotDetailPage({
   );
   // S26 (F-101): is this product's card on the PUBLISHED menu? The product
   // page 404s otherwise, so the enrichment button falls back to a search.
-  const isLive = lot.pos_product_key
-    ? (await loadMenuCategoriesForKeys([lot.pos_product_key])).has(lot.pos_product_key)
-    : false;
+  // D246: the same one read also gives the register's category (below).
+  const liveMenuCategories = lot.pos_product_key
+    ? await loadMenuCategoriesForKeys([lot.pos_product_key])
+    : new Map<string, string>();
+  const isLive = lot.pos_product_key ? liveMenuCategories.has(lot.pos_product_key) : false;
   const enrichHref = lotEnrichmentHref(lot.pos_product_key, isLive, enrichment?.display_name || lot.product_name, lot.id);
   const kbHref = kbProductsHref(kbProduct?.display_name || lot.product_name);
   const enrichImageId = enrichment?.primary_media_id ?? enrichment?.image_media_ids?.[0] ?? null;
@@ -244,6 +248,23 @@ export default async function LotDetailPage({
     : null;
   const effectiveWebsiteCategory =
     override?.website_category ?? categoryResolution.websiteCategory;
+  // D246: the register's view of this product. The menu row's OWN category
+  // (onboarding) plus your re-file, exactly as loadLiveMenuAll applies them.
+  const registerMenuCategory = lot.pos_product_key
+    ? liveMenuCategories.get(lot.pos_product_key) ?? null
+    : null;
+  const unitWeightUom = String(lot.unit_weight_uom ?? "").trim().toLowerCase();
+  const registerUnitGrams =
+    typeof lot.unit_weight === "number" && (unitWeightUom === "" || unitWeightUom.startsWith("g"))
+      ? lot.unit_weight
+      : null;
+  const registerLimit = explainRegisterLimit({
+    menuCategory: registerMenuCategory,
+    overrideCategory: override?.website_category ?? null,
+    inventoryType: lot.inventory_type,
+    productName: lot.product_name,
+    unitGrams: registerUnitGrams,
+  });
   const complianceStatus = assessClassificationStatus({
     posProductKey: lot.pos_product_key,
     productName: lot.product_name,
@@ -1367,6 +1388,32 @@ export default async function LotDetailPage({
                       : `${lotTypeLabel(lot)} (auto)`}
                   </span>
                 </div>
+              </div>
+              {/* D246: At the register — the category the register rings this
+                  product under, where it came from, and the legal limit it
+                  counts against. A wrong bucket here is fixed by re-filing
+                  the Website category below. */}
+              <div
+                id="at-the-register"
+                className={`mb-4 rounded-[var(--admin-radius-sm)] border px-3 py-2 text-xs ${
+                  registerLimit.looksLikeFlowerFiledAsInfused || registerLimit.oneUnitOverLimit
+                    ? "border-amber-500 bg-amber-50 text-amber-950"
+                    : "border-[var(--admin-border)] bg-[var(--admin-bg)] text-[var(--admin-text)]"
+                }`}
+              >
+                <p className="font-semibold">At the register</p>
+                <p className="mt-1">
+                  Rings up as <strong>{registerLimit.category ?? "—"}</strong>, from {registerLimit.sourceText}.
+                  {" "}Legal limit bucket: <strong>{registerLimit.bucketLabel}</strong>
+                  {registerLimit.limitText ? <> (max {registerLimit.limitText} per sale, recreational)</> : null}.
+                </p>
+                {registerLimit.advice.length > 0 ? (
+                  <ul className="mt-1 list-disc pl-5">
+                    {registerLimit.advice.map((a) => (
+                      <li key={a}>{a}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
               <form action={classificationAction} className="space-y-4">
                 <Field

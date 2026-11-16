@@ -9,6 +9,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type { Brand, Vendor, VendorWithBrands } from "@/lib/vendors/types";
+import { collapseMergedVendorProfiles } from "@/lib/vendors/public-profile-collapse-core";
 
 /** Build a public URL for a media asset stored in the `media` bucket. */
 export function publicMediaUrl(storageKey: string | null | undefined): string | null {
@@ -296,15 +297,34 @@ export async function listPublicVendorProfiles(): Promise<PublicVendorProfile[]>
     if (!aliasesByVendor.has(row.vendor_id)) aliasesByVendor.set(row.vendor_id, []);
     aliasesByVendor.get(row.vendor_id)!.push(row.source_name);
   }
-  return vendors.map((v) => ({
+  // D246: fold merged duplicates into their survivor first. Before D246 an
+  // archived duplicate with no logo (sort_order 0) won the "first profile
+  // wins" match and the survivor's logo never reached the website.
+  const collapsed = collapseMergedVendorProfiles(
+    vendors.map((v) => ({
+      id: v.id,
+      merged_into_id: (v as Vendor & { merged_into_id?: string | null }).merged_into_id ?? null,
+      status: v.status ?? null,
+      sort_order: v.sort_order ?? 0,
+      display_name: v.display_name,
+      dba: v.dba,
+      legal_name: v.legal_name,
+      aliases: aliasesByVendor.get(v.id) ?? [],
+      logoUrl: logoMap.get(v.id) ?? null,
+      about: v.about,
+      mission_statement: v.mission_statement,
+      product_philosophy: v.product_philosophy ?? null,
+    })),
+  );
+  return collapsed.map((v) => ({
     display_name: v.display_name,
     dba: v.dba,
     legal_name: v.legal_name,
-    aliases: aliasesByVendor.get(v.id) ?? [],
-    logoUrl: logoMap.get(v.id) ?? null,
+    aliases: v.aliases,
+    logoUrl: v.logoUrl,
     about: v.about,
     mission_statement: v.mission_statement,
-    product_philosophy: v.product_philosophy ?? null,
+    product_philosophy: v.product_philosophy,
   }));
 }
 

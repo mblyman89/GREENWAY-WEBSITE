@@ -44,6 +44,9 @@ import { MENU_CACHE_KEY, menuCacheOptions } from "@/lib/menu/menu-cache-policy-c
 // Fix Phase 1.6c (G-25 req 3; F-05a-16): a recalled product leaves the public menu.
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { withoutRecalled } from "@/lib/inventory/recall-event-core";
+// D246: the owner's back-office re-files reach the register + order pricing.
+import { getOverrideForKey, listAllOverrides } from "@/lib/pos/product-classification-overrides";
+import { applyClassificationOverrideRows } from "@/lib/menu/menu-category-override-core";
 // SLICE E: the published menu is ~5.94 MB and Vercel's Data Cache drops items
 // over 2 MB silently, so the entry is stored compressed. See the codec module.
 import {
@@ -157,14 +160,23 @@ export async function loadLiveMenuAll(): Promise<GreenwayMenuItem[]> {
   }
   const version = await getPublishedVersion();
   if (!version) return [];
-  const rows = await getVersionItems(version.id);
+  const [rows, overrideRows] = await Promise.all([getVersionItems(version.id), listAllOverrides()]);
   // SLICE 66 (owner D1/D2/D3): overlay DISPLAY identity — a brand linked in
   // Product Enrichment (published) replaces the row's brand for the card
   // label, and vendors show their short/dba name with any trailing license
   // number stripped ("CERES", never "CERES - 435011"). Display-only: the
   // stored menu rows keep the full brand/vendor text (search, admin, carts,
   // receipts, CCRS). Degrades to the raw rows on any read failure.
-  return withCardIdentity(rows.map(menuRowToGreenwayItem));
+  //
+  // D246 (owner): a product re-filed on its inventory page (Website type &
+  // category) is stored in product_classification_overrides. Before D246 only
+  // the public pages applied it, so the REGISTER and order pricing still used
+  // the onboarding category: a full-flower 20 x 0.5 g pack re-filed from
+  // "infused-preroll" to "preroll" kept counting against the 7 g concentrate
+  // limit and could not be sold. The re-file now applies HERE, read straight
+  // through (no cache), before anything else reads the category. A failed
+  // read keeps each row's own category (the pre-D246 behaviour).
+  return withCardIdentity(applyClassificationOverrideRows(rows.map(menuRowToGreenwayItem), overrideRows));
 }
 
 /** Visible items only (hidden excluded) — the standard site menu. */
@@ -208,7 +220,11 @@ export async function getLiveMenuItemByIdDirect(
   if (!version) return undefined;
   const row = await getItemBySourceKey(version.id, id);
   if (!row || row.hidden) return undefined;
-  const [item] = await withCardIdentity([menuRowToGreenwayItem(row)]);
+  // D246: the same back-office re-file the list loader applies.
+  const override = await getOverrideForKey(row.source_item_id);
+  const [item] = await withCardIdentity(
+    applyClassificationOverrideRows([menuRowToGreenwayItem(row)], override ? [override] : []),
+  );
   return item;
 }
 

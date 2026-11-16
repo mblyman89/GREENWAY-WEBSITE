@@ -161,3 +161,42 @@ function missingTableResult(): UpsertOverrideResult {
       "(supabase/migrations/0150_product_classification_overrides.sql). Run it, then try again.",
   };
 }
+
+/**
+ * D246 — every saved re-file, read straight through (NO cache). The register
+ * bundle and order pricing (live-menu.ts loadLiveMenuAll) apply these so a
+ * product the owner re-filed in the back office is the same product at the
+ * register and in the legal-limit check ("cache the display, never cache the
+ * money"). The table holds one row per re-filed product (a few dozen), so one
+ * paged read of the whole table is cheaper than 15 chunked key lookups.
+ * Empty array when unconfigured / pre-0150 / on any error (callers keep the
+ * menu row's own category, exactly the pre-D246 behaviour).
+ */
+export async function listAllOverrides(): Promise<ProductClassificationOverride[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const out: ProductClassificationOverride[] = [];
+    const PAGE = 1000;
+    for (let from = 0; from < 50_000; from += PAGE) {
+      const { data, error } = await admin
+        .from("product_classification_overrides")
+        .select("pos_product_key, website_category, house_type, note")
+        .order("pos_product_key", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        if (!isMissingTable(error)) {
+          console.error("[product-classification-overrides] listAllOverrides read error:", error.message);
+        }
+        return [];
+      }
+      const rows = (data as ProductClassificationOverride[] | null) ?? [];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    return out;
+  } catch (err) {
+    console.error("[product-classification-overrides] listAllOverrides failed:", err);
+    return [];
+  }
+}

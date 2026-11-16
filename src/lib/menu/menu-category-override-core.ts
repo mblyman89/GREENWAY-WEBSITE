@@ -79,6 +79,52 @@ export function applyCategoryOverrides(
   });
 }
 
+/**
+ * D246 — apply the owner's saved re-files (product_classification_overrides
+ * rows) to a menu list in ONE step: category first (it decides the fan-out
+ * base), then the type label. This is the single function BOTH the public
+ * overlay (withCategoryOverride) and the register / order-pricing loader
+ * (live-menu.ts loadLiveMenuAll) use, so a product re-filed in the back office
+ * reads the same on the website, on the register, and in the legal-limit
+ * check. Before D246 only the website applied it: a full-flower 20-pack the
+ * owner re-filed from "infused-preroll" to "preroll" still rang up on the
+ * register as a 7 g concentrate.
+ */
+export type OverrideRowLike = {
+  pos_product_key: string;
+  website_category: string | null;
+  house_type: string | null;
+};
+export function applyClassificationOverrideRows(
+  items: GreenwayMenuItem[],
+  rows: Iterable<OverrideRowLike>,
+): GreenwayMenuItem[] {
+  const cats = new Map<string, string | null>();
+  const types = new Map<string, string | null>();
+  for (const r of rows) {
+    if (!r || typeof r.pos_product_key !== "string" || !r.pos_product_key.trim()) continue;
+    cats.set(r.pos_product_key, r.website_category);
+    types.set(r.pos_product_key, r.house_type);
+  }
+  if (cats.size === 0) return items;
+  return applyHouseTypeOverrides(applyCategoryOverrides(items, cats), types);
+}
+
+/**
+ * D246 — where the register's category for a product comes from, in words the
+ * back office can show next to the legal-limit bucket. Pure.
+ */
+export type RegisterCategorySource = "override" | "menu" | "none";
+export function registerCategoryFor(input: {
+  menuCategory: string | null | undefined;
+  overrideCategory: string | null | undefined;
+}): { category: string | null; source: RegisterCategorySource } {
+  if (isValidWebsiteCategory(input.overrideCategory)) return { category: input.overrideCategory, source: "override" };
+  const m = (input.menuCategory ?? "").trim();
+  if (m) return { category: m, source: "menu" };
+  return { category: null, source: "none" };
+}
+
 // ---------------------------------------------------------------------------
 // self-tests (pure, deterministic) — registered in the pure runner
 // ---------------------------------------------------------------------------
@@ -210,6 +256,21 @@ export function __runMenuCategoryOverrideCoreTests(): { passed: number } {
   eq([...(blunt[0].filterCategories ?? [])].sort(), ["blunt", "flower"], "R33 type change recomputes the raw-label fan-out");
   eq(applyHouseTypeOverrides([typed], new Map([["SKU-1", "x".repeat(200)]]))[0].posInventoryCategory?.length, 80, "R33 label capped at 80");
   eq(applyHouseTypeOverrides([typed], new Map([["SKU-1", "Live   Resin"]]))[0].posInventoryCategory, "Live Resin", "R33 whitespace collapsed");
+
+  // D246: one-step row overlay (register + website share it).
+  const pre = { ...base, id: "21575412712446329", category: "infused-preroll", posInventoryCategory: "Infused Pre-roll", filterCategories: ["infused-preroll"] } as GreenwayMenuItem;
+  const fixedRows = applyClassificationOverrideRows([pre], [{ pos_product_key: "21575412712446329", website_category: "preroll", house_type: null }]);
+  eq(fixedRows[0].category, "preroll", "D246 row overlay re-files infused-preroll -> preroll");
+  eq(fixedRows[0].posInventoryCategory, "Infused Pre-roll", "D246 null house_type keeps the type label");
+  ok(applyClassificationOverrideRows([pre], [])[0] === pre, "D246 no rows -> identity");
+  ok(applyClassificationOverrideRows([pre], [{ pos_product_key: "OTHER", website_category: "preroll", house_type: null }])[0] === pre, "D246 other key untouched");
+  ok(applyClassificationOverrideRows([pre], [{ pos_product_key: "21575412712446329", website_category: "not-a-cat", house_type: null }])[0] === pre, "D246 invalid category ignored");
+  const both = applyClassificationOverrideRows([pre], [{ pos_product_key: "21575412712446329", website_category: "preroll-pack", house_type: "Pre-roll Pack" }]);
+  eq([both[0].category, both[0].posInventoryCategory], ["preroll-pack", "Pre-roll Pack"], "D246 category + type together");
+  ok(applyClassificationOverrideRows([pre], [{ pos_product_key: "  ", website_category: "preroll", house_type: null }])[0] === pre, "D246 blank key skipped");
+  eq(registerCategoryFor({ menuCategory: "infused-preroll", overrideCategory: "preroll" }), { category: "preroll", source: "override" }, "D246 override wins");
+  eq(registerCategoryFor({ menuCategory: "infused-preroll", overrideCategory: "bogus" }), { category: "infused-preroll", source: "menu" }, "D246 invalid override -> menu");
+  eq(registerCategoryFor({ menuCategory: null, overrideCategory: null }), { category: null, source: "none" }, "D246 nothing -> none");
 
   return { passed };
 }
