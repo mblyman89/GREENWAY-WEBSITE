@@ -30,6 +30,7 @@ import { ACCEPT_ALL_THRESHOLD } from "@/lib/enrichment/ai-draft-v2-core";
 import { cleanKey } from "@/lib/enrichment/detail-nav-core";
 import { parseCoverIntent } from "@/lib/enrichment/image-recommend-v3-core";
 import { askCopilot, inspectPhoto, fileCopilotProposal } from "@/lib/enrichment/copilot-server";
+import { cleanCopilotQuery } from "@/lib/enrichment/copilot-search-core";
 import {
   COPILOT_MESSAGE_MAX_CHARS,
   copilotUrl,
@@ -39,7 +40,7 @@ import {
   type CopilotAnswer,
 } from "@/lib/enrichment/copilot-core";
 
-type Ctx = { key: string; vendor: string; skip: string[]; next: string };
+type Ctx = { key: string; vendor: string; skip: string[]; next: string; q: string };
 
 function ctx(formData: FormData): Ctx {
   return {
@@ -47,11 +48,15 @@ function ctx(formData: FormData): Ctx {
     vendor: String(formData.get("vendor") ?? "").trim().slice(0, 100),
     skip: parseSkips(formData.get("skip")),
     next: cleanKey(formData.get("nextKey")),
+    // D244 R-24: the photo search text, kept while the card stays.
+    q: cleanCopilotQuery(formData.get("q")),
   };
 }
 
-const back = (c: Ctx, flash: string, key: string | null = c.key, hash = "") =>
-  copilotUrl({ vendor: c.vendor, key, skip: c.skip, flash, hash });
+const back = (c: Ctx, flash: string, key: string | null = c.key, hash = "") => {
+  const same = Boolean(c.q) && key === c.key;
+  return copilotUrl({ vendor: c.vendor, key, skip: c.skip, flash, hash: hash || (same ? "photo-search" : ""), q: same ? c.q : null });
+};
 const ok = (note = "") => (note ? `saved=1&note=${encodeURIComponent(note)}` : "saved=1");
 const err = (msg: string) => `error=${encodeURIComponent(msg)}`;
 

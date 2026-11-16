@@ -1388,6 +1388,7 @@ import { __runLotEvidenceTests } from "../../src/lib/enrichment/lot-evidence-cor
 import { __runDraftEditTests } from "../../src/lib/enrichment/draft-edit-core";
 import { __runEnrichModelCoreTests } from "../../src/lib/ai/enrich-model-core";
 import { __runCopilotCoreTests } from "../../src/lib/enrichment/copilot-core";
+import { __runCopilotSearchTests } from "../../src/lib/enrichment/copilot-search-core";
 import { __runProductIdentityTests } from "../../src/lib/enrichment/product-identity-core";
 import { __runVendorKitCoreTests } from "../../src/lib/enrichment/vendor-kit-core";
 import { __runTextEraseCoreTests } from "../../src/lib/enrichment/text-erase-core";
@@ -2991,10 +2992,11 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("compliance-context-core", __runComplianceContextTests(), 76); // D244 R-14: "cure"/"cured" (the cure process) read in context, a heads-up; medical uses still block
   assertRan("bulk-approve-core", __runBulkApproveCoreTests(), 17); // D244 R-12: Bulk AI select one/all + approve every draft at 80%+, chunked (8 products / 40 drafts per call), totals, never publishes
   assertRan("kb-bulk-review-core", __runKbBulkReviewTests(), 17); // D244 R-19: KB pipeline "Publish every draft that passes" (quality bar + compliance, 500 per page, Check first)
-  assertRan("copilot-core", __runCopilotCoreTests(), 57); // D244 R-22: every vendor photo after 1-9; D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
+  assertRan("copilot-core", __runCopilotCoreTests(), 59); // D244 R-24: search text kept in the url; D244 R-22: every vendor photo after 1-9; D244 R-5 (E-6): Copilot queue (on-hand, photo-less first, skips to the back), keys, chat bounds, proposals, inspect
   assertRan("same-time-core", __runSameTimeCoreTests(), 36); // D245: cockpit compares the basis days cut at the SAME Pacific time of day as now (closed-day rule kept: traded-but-not-yet = real 0, avg order null), compact per-order clock series, revenue before discounts
   assertRan("guardrails-state-core", __runGuardrailsStateTests(), 17); // D244 R-23: owner Block / Warn / Off per rule + allowed words (one site_settings row)
   assertRan("guardrails-catalog-core", __runGuardrailsCatalogTests(), 18); // D244 R-23: every word rule that can stop or flag text, for the Compliance guardrails page
+  assertRan("copilot-search-core", __runCopilotSearchTests(), 28); // D244 R-24: the Copilot photo search (any text: whole + each word + joined forms + typed vendor / brand shelves, typo-tolerant, fused and explained)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
