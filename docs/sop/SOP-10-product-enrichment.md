@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.8 (D244 R-23; adds owner round 10: every word rule that can stop or flag text is on Knowledge Base → Compliance guardrails, with Block / Warn / Off per rule and allowed words, 4.18; 1.7 was D244 R-22 and adds owner round 9: Publish a text-removed draft, text-removed photos rank second behind exact matches, and the Copilot lists every photo of the vendor, 4.17; 1.6 was D244 R-21 and adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
+| **Version** | 1.9 (D244 R-24; adds owner round 11: the Copilot has a Search for any photo box that searches the whole library with any text, and its results go to Remove text, 4.19; 1.8 was D244 R-23 and adds owner round 10: every word rule that can stop or flag text is on Knowledge Base → Compliance guardrails, with Block / Warn / Off per rule and allowed words, 4.18; 1.7 was D244 R-22 and adds owner round 9: Publish a text-removed draft, text-removed photos rank second behind exact matches, and the Copilot lists every photo of the vendor, 4.17; 1.6 was D244 R-21 and adds owner round 8: Vendor kits has one photo grid and every photo can go to Remove text, 4.14; 1.5 was D244 R-20 and adds owner round 7: Remove text sends the text area at about 1 megapixel with a letters-only mask, 4.13; 1.4 was D244 R-18 and adds owner round 6: approve every Bulk AI draft at any confidence, 4.7 step 6, and KB publish every draft that passes, 4.16; 1.3 was D244 R-14; adds the cure process is not a medical claim, 4.15; 1.2 was D244 R-13 and adds owner round 4: R-11 Remove text queue on the Copilot and Vendor kits #1815, R-12 Bulk AI select and approve #1816; 1.1 was D244 R-10 with round 3; 1.0 was D244 R-6; living document) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Product Enrichment** (`/admin/products`, nav Product Intake, permission `products.enrich`, `src/components/admin/admin-nav-data.ts` L77). **Enrichment Copilot** (`/admin/products/copilot`). **Bulk AI** (`/admin/products/bulk-ai`). The product page (`/admin/products/[key]`). **Digital Assets** semantic photo search (`/admin/media`, `media.manage`, L95). The public menu cards that show the result |
@@ -259,6 +259,25 @@ Each rule shows its words, the exact pattern, why it exists and its source (WAC 
 
 Your choices are saved in one setting (`site_settings` key `compliance_guardrails`). This needs no database change, and the setting survives a factory reset. They apply on the next check: on the server within a minute, and in the browser on the next page load. The crawler follows them too. Every change is written to the audit log (`kb.guardrails.*`, `kb.banned.*`). Turning a rule off is your decision; the site does not stop you.
 
+### 4.19 Search for any photo on the Copilot (D244 R-24)
+
+Owner (round 11): *"sometimes, the recommendations miss the vendors other brands. so, in addition to the main section of recommendations and the every other image from this vendor, I need a search bar that is very smart, lets me enter any text and the system does its best to show me something based on that text. these images need to be included in the text removal feature."*
+
+Under **Recommended photos (press 1-9)** and **Every other photo from this vendor**, the Copilot has a box called **Search for any photo**.
+
+1. **Type anything.** For example a brand, a vendor, a strain, a size, a product type, or words printed on the package. Press **Search** (or Enter). **Clear** empties the box.
+2. **What it searches.** It searches the **whole library**, not just this card's vendor. It runs several searches at once and puts the results together:
+   1. the whole text, by words and by meaning (when semantic search is on);
+   2. each word on its own, so one word that does not match does not hide the rest;
+   3. joined and split spellings, such as `pre-roll`, `pre roll` and `preroll`;
+   4. **every photo of a vendor or brand you name**, even with a one-letter typo. A vendor you name also brings **every brand filed under that vendor**, which is how you find the vendor's other brands.
+3. **The order.** Photos that carry all your words come first. The chips say why each one is there, for example *All words*, *2 of 3 words*, *Matches by meaning*, *Brand: …*, *Vendor: …*, *This vendor* or *Text removed*. The percentage compares each result with the best one in this search. Photos already on the card are left out, and archived photos never show. Up to 60 results are shown.
+4. **Attach.** Click a result to attach it, the same as a recommended photo. Attaching it also teaches the recommender for this product.
+5. **Remove text.** Every search result is added to the **Remove text from several photos** list below, labelled *Search: …*. Tick one or more, drag a box over the text, and press Remove text, as in 4.14.
+6. **The search stays.** After you attach a photo or a Remove-text result, the page comes back to the same search on the same card. Going to the next card starts with an empty search.
+
+The search only reads. It does not change any photo, and it needs no setting and no database change.
+
 ## 5. Messages: "If you see this message"
 
 | Message (or what you see) | What it means | What to do |
@@ -390,6 +409,7 @@ Your choices are saved in one setting (`site_settings` key `compliance_guardrail
 | 1.0 | D244 R-6 | First version: photo-first publishing, the 80% rule with best guesses accepted and flagged, the Copilot, live vs overnight, edit in place, lot and certificate evidence, semantic photo search |
 | 1.1 | D244 R-10 | Owner round 3: the identity strip and type evidence (4.11), Vendor kits (4.12), Remove text with FLUX Fill and the AI text finder (4.13); new messages, controls 6–7, checklist row, quick-reference lines and source map rows |
 | 1.2 | D244 R-13 | Owner round 4: Remove text from several photos at once on the Copilot and Vendor kits (4.14); "facts and AI first, photo last" (4.2); Bulk AI select one / all and ⚡ Approve every draft at 80%+ (4.7 step 5); new messages, control 8, checklist, quick-reference lines and source map rows |
+| 1.9 | D244 R-24 | Owner round 11: the Copilot's **Search for any photo** box (4.19). Any text searches the whole library: the whole text, each word, joined and split spellings, and every photo of a typed vendor or brand (a vendor brings its other brands), with one-letter typos allowed. Results are ordered with why chips, attach with a click, and are added to the Remove-text list. The search text stays while the card stays. |
 | 1.8 | D244 R-23 | Owner round 10: Compliance guardrails lists every word rule that can stop or flag text (AI check, effects, newsletter, blog, culture and reviews, promotions, merch), with Block / Warn / Off per rule, allowed words, owner phrase edit and delete, and a text tester (4.18, control 10) |
 | 1.7 | D244 R-22 | Owner round 9: a Publish button on text-removed drafts; published text-removed photos of the vendor rank second, behind exact matches; the Copilot lists every photo of the vendor after the numbered 1–9 (4.17) |
 | 1.6 | D244 R-21 | Owner round 8: Vendor kits shows one photo grid; every photo in it has a ✂ Remove text button that adds it to the queue (12 at a time); the separate small thumbnail strip is gone (4.14) |
