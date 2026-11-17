@@ -11,12 +11,15 @@ import ExcelJS from "exceljs";
 import {
   DELIVERY_SHEETS,
   DeliveryError,
+  deliveryExpect,
   detectDeliveryCsv,
   readDeliveredInventory,
   readDeliveredSales,
   readDeliveredSheet,
   xlsxCellText,
   type DeliveryCsvLayout,
+  type DeliveryPlan,
+  type DeliveryReviewBucket,
   type DeliverySet,
   type DeliverySheet,
 } from "./ccrs-delivery-core";
@@ -107,4 +110,77 @@ export async function buildDeliverySet(files: readonly { fileName: string; bytes
   }
   info.sort((a, b) => DELIVERY_SLOTS.indexOf(a.slot) - DELIVERY_SLOTS.indexOf(b.slot));
   return { set, info };
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared by the page and the CLI so both paths store and apply the same thing.
+ * ------------------------------------------------------------------ */
+
+export type DeliveryLoadSummary = {
+  counts: DeliveryPlan["counts"];
+  expect: { add: number; upd: number };
+  source: string;
+  proofSource: string;
+  /** up to 50 examples per review bucket (the full list is in the report) */
+  examples: Record<DeliveryReviewBucket, { t: string; id: string; why: string }[]>;
+};
+
+export function summarizeDelivery(p: DeliveryPlan): DeliveryLoadSummary {
+  const examples = Object.fromEntries(Object.entries(p.review).map(([k, v]) => [k, v.slice(0, 50).map((x) => ({ t: x.t, id: x.id, why: x.why }))])) as DeliveryLoadSummary["examples"];
+  return { counts: p.counts, expect: deliveryExpect(p), source: p.source, proofSource: p.proofSource, examples };
+}
+
+export type DeliveryProvenance = { role: "Inventory" | "Product"; fileName: string; sha256: string; rows: number; storagePath: string | null };
+
+/** The provenance rows ccrs_apply_delivery records as seed/closed ccrs_files. */
+export function deliveryProvenance(asOf: string, files: readonly (DeliveryFileInfo & { storagePath?: string | null })[]): DeliveryProvenance[] {
+  return files.map((f) => ({ role: SLOT_ROLE[f.slot], fileName: `${asOf}-${f.fileName}`, sha256: f.sha256, rows: f.rows, storagePath: f.storagePath ?? null }));
+}
+
+/** Postgres string literal (standard_conforming_strings on: only ' needs doubling). */
+export function sqlText(s: string): string {
+  if (s.includes("\u0000")) throw new DeliveryError("a value contains a NUL byte");
+  return `'${s.replace(/'/g, "''")}'`;
+}
+
+/**
+ * The ONE-transaction script the CLI writes (or pipes to psql): insert the load
+ * (status ready, the same summary the page stores), stage every write, then call
+ * the same guarded ccrs_apply_delivery the page calls. Any refusal rolls back
+ * everything (ON_ERROR_STOP).
+ */
+export function deliveryApplySql(input: {
+  loadId: string; asOf: string; plan: DeliveryPlan; files: readonly DeliveryFileInfo[]; report: string; notes: string | null; actorEmail: string | null;
+}): string {
+  const { loadId, asOf, plan, files } = input;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(loadId)) throw new DeliveryError("bad load id");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf) || plan.asOf !== asOf) throw new DeliveryError("as-of does not match the plan");
+  const ex = deliveryExpect(plan);
+  const j = (v: unknown) => `${sqlText(JSON.stringify(v))}::jsonb`;
+  const out: string[] = [
+    "-- D250 S3 examiner delivery load (scripts/compliance/load-ccrs-delivery.ts). One transaction.",
+    `-- as of ${asOf}: ${ex.add} new, ${ex.upd} updated. Files: ${files.map((f) => `${f.fileName} sha256 ${f.sha256}`).join("; ")}`,
+    "\\set ON_ERROR_STOP on",
+    "begin;",
+    "insert into public.ccrs_delivery_loads (id, as_of, status, files, summary, report, notes, uploaded_by_email, planned_at)",
+    `values (${sqlText(loadId)}, ${sqlText(asOf)}, 'ready', ${j(files.map((f) => ({ ...f, storagePath: null })))}, ${j(summarizeDelivery(plan))}, ${sqlText(input.report)}, ${input.notes === null ? "null" : sqlText(input.notes.slice(0, 2000))}, ${input.actorEmail === null ? "null" : sqlText(input.actorEmail)}, now());`,
+  ];
+  const CHUNK = 500;
+  for (let i = 0; i < plan.writes.length; i += CHUNK) {
+    const rows = plan.writes.slice(i, i + CHUNK).map((w) => ({
+      op: w.op, file_type: w.t, external_id: w.id, filed_name: w.name, product_external_id: w.prod, state: w.state, source: w.source,
+      payload: w.payload, conflicts: w.conflicts, expect_state: w.expectState, expect_us: w.expectUpdatedAt,
+    }));
+    out.push(
+      "insert into public.ccrs_delivery_stage (load_id, op, file_type, external_id, filed_name, product_external_id, state, source, payload, conflicts, expect_state, expect_us)",
+      `select ${sqlText(loadId)}::uuid, x.op, x.file_type, x.external_id, x.filed_name, x.product_external_id, x.state, x.source, x.payload, x.conflicts, x.expect_state, x.expect_us::bigint`,
+      `from jsonb_to_recordset(${j(rows)}) as x(op text, file_type text, external_id text, filed_name text, product_external_id text, state text, source text, payload jsonb, conflicts jsonb, expect_state text, expect_us text);`,
+    );
+  }
+  out.push(
+    `select public.ccrs_apply_delivery(${sqlText(loadId)}::uuid, ${ex.add}, ${ex.upd}, ${j(deliveryProvenance(asOf, files))}, null, ${input.actorEmail === null ? "null" : sqlText(input.actorEmail)}) as result;`,
+    "commit;",
+    "",
+  );
+  return out.join("\n");
 }

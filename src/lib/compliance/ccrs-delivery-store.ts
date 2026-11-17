@@ -11,20 +11,13 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { parseLedgerLine, type LedgerRow } from "./ccrs-reseed-core";
-import { deliveryExpect, deliveryReport, planDeliveryMerge, type DeliveryPlan, type DeliveryReviewBucket } from "./ccrs-delivery-core";
-import { buildDeliverySet, DELIVERY_SLOTS, SLOT_ROLE, type DeliveryFileInfo } from "./ccrs-delivery-files";
+import { deliveryExpect, deliveryReport, planDeliveryMerge, type DeliveryPlan } from "./ccrs-delivery-core";
+import { buildDeliverySet, deliveryProvenance, summarizeDelivery, DELIVERY_SLOTS, type DeliveryFileInfo, type DeliveryLoadSummary } from "./ccrs-delivery-files";
 import { RECORDS_BUCKET } from "./ccrs-records-compare-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
-export type DeliveryLoadSummary = {
-  counts: DeliveryPlan["counts"];
-  expect: { add: number; upd: number };
-  source: string;
-  proofSource: string;
-  /** up to 50 examples per review bucket (the full list is in the report) */
-  examples: Record<DeliveryReviewBucket, { t: string; id: string; why: string }[]>;
-};
+export type { DeliveryLoadSummary } from "./ccrs-delivery-files";
 
 export type DeliveryLoadRow = {
   id: string;
@@ -119,11 +112,6 @@ async function plan(admin: Admin, load: { id: string; as_of: string }, names: re
   return { plan: p, files };
 }
 
-function summarize(p: DeliveryPlan): DeliveryLoadSummary {
-  const examples = Object.fromEntries(Object.entries(p.review).map(([k, v]) => [k, v.slice(0, 50).map((x) => ({ t: x.t, id: x.id, why: x.why }))])) as DeliveryLoadSummary["examples"];
-  return { counts: p.counts, expect: deliveryExpect(p), source: p.source, proofSource: p.proofSource, examples };
-}
-
 /** Step 2 (and "Check again"): read the files, plan against the live ledger, store the summary + full report. */
 export async function checkDeliveryLoad(id: string, fileNames: readonly string[]): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = createSupabaseAdminClient();
@@ -135,7 +123,7 @@ export async function checkDeliveryLoad(id: string, fileNames: readonly string[]
     const { plan: p, files } = await plan(admin, load, names);
     const { error } = await admin
       .from("ccrs_delivery_loads")
-      .update({ status: "ready", files, summary: summarize(p), report: deliveryReport(p, 100000), error: null, planned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: "ready", files, summary: summarizeDelivery(p), report: deliveryReport(p, 100000), error: null, planned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) return { ok: false, error: `Couldn't save the check: ${error.message}` };
     return { ok: true };
@@ -182,7 +170,7 @@ export async function applyDeliveryLoad(input: { id: string; expectAdd: number; 
     p_load_id: input.id,
     p_expect_add: ex.add,
     p_expect_upd: ex.upd,
-    p_provenance: files.map((f) => ({ role: SLOT_ROLE[f.slot], fileName: `${load.as_of}-${f.fileName}`, sha256: f.sha256, rows: f.rows, storagePath: f.storagePath })),
+    p_provenance: deliveryProvenance(load.as_of, files),
     p_actor: input.actorId,
     p_actor_email: input.actorEmail,
   });
