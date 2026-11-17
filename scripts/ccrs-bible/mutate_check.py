@@ -184,6 +184,8 @@ D227_STRATEGY = "src/lib/compliance/ccrs-strategy-core.ts"
 D227_ID_TESTS = "tests/compliance/d227-ccrs-sale-excise-identity.test.ts"
 D227_RESEND_TESTS = "tests/compliance/d227-ccrs-resend-refused.test.ts"
 D227_S18B_TESTS = "tests/compliance/s18b-ccrs-error-strategy.test.ts"
+D250_CORE = "src/lib/compliance/ccrs-delivery-core.ts"
+D250_TESTS = "tests/compliance/d250-delivery-core.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4341,6 +4343,86 @@ MUTATIONS = [
         '  { text: "Cannabis Excise Tax does not equal 37% of Unit Price (never)", cls: "row",',
         D227_S18B_TESTS,
         'The 2026-11-10 message is known, so its error file applies instead of waiting as unknown.',
+    ),
+    (
+        'M533-d250-touched-lot-written',
+        D250_CORE,
+        '    if (untouchedSeed(l)) {\n      const differs',
+        '    if (true) {\n      const differs',
+        D250_TESTS,
+        'A lot one of our own files touched is never overwritten by the delivery.',
+    ),
+    (
+        'M534-d250-twin-highest-id',
+        D250_CORE,
+        '      const sorted = [...fromList].sort((a, b) => byCodeUnit(a.id, b.id));',
+        '      const sorted = [...fromList].sort((a, b) => byCodeUnit(b.id, a.id));',
+        D250_TESTS,
+        'Identical twins record the lowest id by code unit (C1- before C11).',
+    ),
+    (
+        'M535-d250-name-case-folded',
+        D250_CORE,
+        '    const fromList = (byName.get(lot.productName) ?? []).filter((p) => p.type === lot.productType);',
+        '    const fromList = [...products.values()].filter((p) => p.name.toLowerCase() === lot.productName.toLowerCase() && p.type === lot.productType);',
+        D250_TESTS,
+        'The product join is the exact Name [G L0576], never case-folded.',
+    ),
+    (
+        'M536-d250-proof-source',
+        D250_CORE,
+        '    const base = { t: "Inventory" as const, id, name: null, prod: null, payload, conflicts: null, source: pSource };',
+        '    const base = { t: "Inventory" as const, id, name: null, prod: null, payload, conflicts: null, source };',
+        D250_TESTS,
+        'A sale-proven lot carries the proof source, so equalize never reads it as a copy with a quantity.',
+    ),
+    (
+        'M537-d250-u68-all-sales',
+        D250_CORE,
+        '.filter((s) => mdyToIso(s.saleDate)! > sys);',
+        '.filter((s) => mdyToIso(s.saleDate)! >= sys);',
+        D250_TESTS,
+        'U-68 counts only sales dated after the lot\'s System Date.',
+    ),
+    (
+        'M538-d250-overlap-double-count',
+        D250_CORE,
+        '    for (const m of seenByFile.values()) for (const [k, n] of m) merged.set(k, Math.max(merged.get(k) ?? 0, n));',
+        '    for (const m of seenByFile.values()) for (const [k, n] of m) merged.set(k, (merged.get(k) ?? 0) + n);',
+        D250_TESTS,
+        'A sale in both overlapping sales files is counted once.',
+    ),
+    (
+        'M539-d250-header-trimmed',
+        D250_CORE,
+        '    if (cells.length === want.length && cells.every((c, i) => c === want[i])) return k;',
+        '    if (cells.length === want.length && cells.every((c, i) => c.trim().toLowerCase() === want[i].trim().toLowerCase())) return k;',
+        D250_TESTS,
+        'Headers match exactly, LCB spelling included; a changed layout stops the load.',
+    ),
+    (
+        'M540-d250-zero-lot-open',
+        D250_CORE,
+        '    const state: LedgerState = milli(lot.qoh) === BigInt(0) ? "closed" : "seed";',
+        '    const state: LedgerState = "seed";',
+        D250_TESTS,
+        'A delivered zero lot is closed.',
+    ),
+    (
+        'M541-d250-no-seed-needed',
+        D250_CORE,
+        '  if (!ledger.some((r) => r.source.startsWith("seed:"))) throw',
+        '  if (false) throw',
+        D250_TESTS,
+        'The delta is laid on the 9/18 seed; with no seed it refuses.',
+    ),
+    (
+        'M542-d250-link-guard',
+        D250_CORE,
+        '  const guard = (l: LedgerRow) => ({ expectState: l.state, expectUpdatedAt: l.updatedAt });',
+        '  const guard = (l: LedgerRow) => ({ expectState: l.state, expectUpdatedAt: null as string | null });',
+        D250_TESTS,
+        'Every change carries the updated_at the plan saw (STALE guard).',
     ),
 ]
 
