@@ -632,6 +632,7 @@ import { __runMergeBrandAbsorbCoreTests } from "../../src/lib/vendors/merge-bran
 import { __runPdfGeminiReadCoreTests } from "../../src/lib/pos/pdf-gemini-read-core";
 import { __runPayScheduleCoreTests } from "../../src/lib/payroll/pay-schedule-core";
 import { __runTimeCardCoreTests } from "../../src/lib/payroll/time-card-core";
+import { __runPayPreviewCoreTests } from "../../src/lib/payroll/pay-preview-core";
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3013,6 +3014,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("pdf-gemini-read-core", __runPdfGeminiReadCoreTests(), 32); // D247: Gemini background reader for unreadable vendor PDFs - lease, pause, self-pause on outages, answer cleaning (never our own licence), row patch
   assertRan("pay-schedule-core", __runPayScheduleCoreTests(), 51); // D248: payroll command center - pay Friday + period, holiday moves (taxed when paid), year plan vs calendar, workweek advice
   assertRan("time-card-core", __runTimeCardCoreTests(), 54); // D248 slice 2: time cards by workweek - days, punches, breaks, regular/OT, sick, exceptions, engine cross-check, period roll-up
+  assertRan("pay-preview-core", __runPayPreviewCoreTests(), 40); // D248 slice 3: pay-run preview register - Sage paystub columns, re-add checks, totals, CSV
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
