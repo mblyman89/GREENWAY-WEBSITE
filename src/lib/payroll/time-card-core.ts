@@ -85,6 +85,7 @@ export type CardWeek = {
 export type ExceptionCode =
   | "OPEN_PUNCH"
   | "LONG_SHIFT"
+  | "IMPLAUSIBLE_SHIFT"
   | "BREAK_FLAG"
   | "OVERTIME"
   | "NEAR_OVERTIME"
@@ -142,6 +143,8 @@ export const OT_THRESHOLD_MINUTES = 40 * 60;
 export const NEAR_OT_MINUTES = 36 * 60;
 /** A single work punch longer than this is probably a missed clock-out. */
 export const LONG_SHIFT_MINUTES = 12 * 60;
+/** Over 24 hours the pay engine refuses the punch (IMPLAUSIBLE_SHIFT); so does the card. */
+export const IMPLAUSIBLE_SHIFT_MINUTES = 24 * 60;
 
 /* ═════════════════════════════════════════════════════════════════════════ *
  * HELPERS
@@ -291,6 +294,13 @@ export function buildTimeCard(args: {
           severity: "block",
           day: d.day,
           message: `${p.kind === "break" ? "A break" : "A work punch"} on ${d.day} has no clock-out. Pay cannot be computed until it is closed.`,
+        });
+      } else if (m > IMPLAUSIBLE_SHIFT_MINUTES) {
+        ex.push({
+          code: "IMPLAUSIBLE_SHIFT",
+          severity: "block",
+          day: d.day,
+          message: `A ${fmtMinutes(m)} ${p.kind === "break" ? "break" : "work punch"} starting ${d.day} - over 24 hours, almost certainly a missed clock-out. The pay engine will not pay it until it is corrected.`,
         });
       } else if (p.kind === "work" && m > LONG_SHIFT_MINUTES) {
         ex.push({
@@ -526,6 +536,12 @@ export function __runTimeCardCoreTests(): { passed: number; failed: number } {
   ok(open.exceptions.some((e) => e.code === "LONG_SHIFT"), "14h shift warns");
   ok(open.days.find((d) => d.day === "2026-11-03")!.hasOpenPunch, "day open flag");
   ok(open.workMinutes === 14 * 60, "open punch not counted");
+  const huge = buildTimeCard({
+    employeeId: "e1", fullName: "Pat", startDate: "2026-11-01", endDate: "2026-11-14", workweekStartsOn: 0,
+    punches: [P("h", "2026-11-02", "2026-11-02T15:52:00Z", "2026-11-03T23:48:00Z")],
+  });
+  ok(huge.status === "blocked" && huge.exceptions.some((e) => e.code === "IMPLAUSIBLE_SHIFT"), "31.9h punch blocks (matches engine)");
+  ok(!huge.exceptions.some((e) => e.code === "LONG_SHIFT"), "implausible is not also a long-shift warning");
 
   // No workweek: no OT split, no guess.
   const nw = buildTimeCard({ employeeId: "e1", fullName: "Pat", startDate: "2026-11-01", endDate: "2026-11-14", workweekStartsOn: null, punches: w1 });
