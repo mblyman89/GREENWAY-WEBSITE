@@ -74,6 +74,12 @@ describe("D248 slice 5 - wiring and safety", () => {
     expect(store).not.toMatch(/\.rpc\(/);
   });
 
+  it("punches and sick leave are paged in full (no silent 1,000-row cap) and a failed page is never shown as whole", () => {
+    expect(store).not.toMatch(/\.limit\(\s*\d{4,}/);
+    expect(store.match(/pagedAllChecked</g) ?? []).toHaveLength(2);
+    expect(store).toContain("Time punches could not be read in full");
+  });
+
   it("self-test suite is registered in the pure self-test runner", () => {
     const r = read("scripts/compliance/run-pure-selftests.ts");
     expect(r).toContain('assertRan("payroll-stats-core", __runPayrollStatsCoreTests(), 43)');
