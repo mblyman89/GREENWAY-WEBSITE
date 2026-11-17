@@ -16,6 +16,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { validateScheduleInput, isIsoDay } from "@/lib/payroll/pay-schedule-core";
 import { generateYear, loadPaySchedule, savePaySchedule, saveWorkweek } from "@/lib/payroll/pay-schedule-store";
+import { approvePayPeriod, computeTimesheetForPeriod } from "@/lib/payroll/timesheet-store";
 
 const SCHEDULE = "/admin/payroll-center/schedule";
 
@@ -107,4 +108,50 @@ export async function generatePeriodsAction(formData: FormData): Promise<void> {
     outcome.conflicts ? `${outcome.conflicts} skipped because they clash with periods already on file (listed below)` : "",
   ].filter(Boolean);
   back("msg", `${parts.join(", ")}.`, `&year=${year}`);
+}
+
+/* ── D248 slice 2: time cards ─────────────────────────────────────────────── */
+
+const TIME_CARDS = "/admin/payroll-center/time-cards";
+
+/**
+ * Approve a period's hours from the time-card screen. Same write as the owner's
+ * timesheet screen (approvePayPeriod - never a locked period), same rule: the
+ * pay engine is re-run at the moment of the write and any employee it refuses
+ * blocks the approval. Approval marks the hours as checked; it books nothing.
+ */
+export async function approveTimeCardsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const periodId = String(formData.get("period_id") ?? "");
+  const to = (kind: "msg" | "error", text: string): never =>
+    redirect(`${TIME_CARDS}?period=${encodeURIComponent(periodId)}&${kind}=${encodeURIComponent(text)}`);
+  if (!periodId) redirect(`${TIME_CARDS}?error=${encodeURIComponent("Choose a pay period first.")}`);
+
+  let failure: string | null = null;
+  let label = "";
+  try {
+    const computed = await computeTimesheetForPeriod(periodId);
+    if (!computed.ok) {
+      failure = `The hours could not be re-checked, so nothing was approved. ${computed.message}`;
+    } else if (computed.refusedCount > 0) {
+      const who = computed.sheets.filter((s) => s.refusals.length > 0).map((s) => s.employee.fullName).join(", ");
+      failure = `Not approved: ${who} still ha${computed.refusedCount === 1 ? "s" : "ve"} time-clock problems. Fix the punches flagged in red, then approve.`;
+    } else {
+      const res = await approvePayPeriod(periodId, session.profile.id);
+      if (!res.ok) failure = res.message;
+      else label = res.period.label;
+    }
+  } catch (e) {
+    failure = e instanceof Error ? e.message : String(e);
+  }
+  if (failure) to("error", failure);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "payroll.hours.approve",
+    entityType: "pay_period",
+    entityId: periodId,
+    after: { status: "approved", via: "payroll-center/time-cards" },
+  }).catch(() => {});
+  revalidatePath(TIME_CARDS);
+  to("msg", `Hours approved for ${label}. Nothing was booked or paid - this marks the hours as checked.`);
 }
