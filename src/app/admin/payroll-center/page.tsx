@@ -37,6 +37,7 @@ const TOOLS: Tool[] = [
   { label: "Pay schedule & calendar", href: "/admin/payroll-center/schedule", what: "Set the pay Friday and period, the workweek, and lay out the year's pay periods." },
   { label: "Time cards", href: "/admin/payroll-center/time-cards", what: "Every punch, break, overtime and sick hour for a pay period, by workweek - fix in place, approve when clean." },
   { label: "Pay preview", href: "/admin/payroll-center/pay-preview", what: "Every employee's gross, federal tax, Social Security, Medicare, PFML, WA Cares, L&I and net - plus employer taxes - laid out like Sage, with a CSV. Calculated only." },
+  { label: "Compare with Sage", href: "/admin/payroll-center/compare", what: "Type or paste Sage's paystub numbers and see every line as match, within rounding, or off - with the difference." },
   { label: "Time clock", href: "/admin/staffing", what: "Clock in and out, breaks, and manager punch fixes with a reason." },
   { label: "Hours", href: "/admin/staffing/hours", what: "Hours worked by employee." },
   { label: "Employees", href: "/admin/staffing/employees", what: "Employee files, pay rates and status." },

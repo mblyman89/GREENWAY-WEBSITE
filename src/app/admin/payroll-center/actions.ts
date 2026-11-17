@@ -17,6 +17,10 @@ import { recordAudit } from "@/lib/auth/audit";
 import { validateScheduleInput, isIsoDay } from "@/lib/payroll/pay-schedule-core";
 import { generateYear, loadPaySchedule, savePaySchedule, saveWorkweek } from "@/lib/payroll/pay-schedule-store";
 import { approvePayPeriod, computeTimesheetForPeriod } from "@/lib/payroll/timesheet-store";
+import { PREVIEW_COLUMNS, type PreviewColumnKey } from "@/lib/payroll/pay-preview-core";
+import { parseAmount, parseSageCsv } from "@/lib/payroll/sage-compare-core";
+import { loadSageEntries, saveSageEntries } from "@/lib/payroll/sage-compare-store";
+import { loadPayRun } from "@/lib/payroll/pay-run-store";
 
 const SCHEDULE = "/admin/payroll-center/schedule";
 
@@ -154,4 +158,130 @@ export async function approveTimeCardsAction(formData: FormData): Promise<void> 
   }).catch(() => {});
   revalidatePath(TIME_CARDS);
   to("msg", `Hours approved for ${label}. Nothing was booked or paid - this marks the hours as checked.`);
+}
+
+/* ── D248 slice 4: Sage comparison ─────────────────────────────────────────── */
+
+const COMPARE = "/admin/payroll-center/compare";
+const toCompare = (periodId: string, kind: "msg" | "error", text: string, extra = ""): never =>
+  redirect(`${COMPARE}?period=${encodeURIComponent(periodId)}${extra}&${kind}=${encodeURIComponent(text)}`);
+
+type Entries = Record<string, Partial<Record<PreviewColumnKey, number>>>;
+
+/** The employees on this period's pay run - the only ids a Sage amount may be saved against. */
+async function runEmployees(periodId: string): Promise<{ id: string; name: string }[] | string> {
+  const run = await loadPayRun(periodId);
+  if (!run.ok) return run.message;
+  return run.result.lines.map((l) => ({ id: l.employeeId, name: l.employeeName }));
+}
+
+/**
+ * Save the Sage amounts typed into the grid for ONE employee (field names
+ * `sage_<columnKey>`). Blank clears that line. Other employees are untouched.
+ */
+export async function saveSageEmployeeAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const periodId = String(formData.get("period_id") ?? "");
+  const employeeId = String(formData.get("employee_id") ?? "");
+  const extra = `&emp=${encodeURIComponent(employeeId)}`;
+  if (!periodId || !employeeId) redirect(`${COMPARE}?error=${encodeURIComponent("Choose a pay period and an employee first.")}`);
+
+  let failure: string | null = null;
+  let name = "";
+  let before: unknown = null;
+  let after: unknown = null;
+  try {
+    const emps = await runEmployees(periodId);
+    if (typeof emps === "string") failure = emps;
+    else {
+      const emp = emps.find((e) => e.id === employeeId);
+      if (!emp) failure = "That employee is not on this pay run, so nothing was saved.";
+      else {
+        name = emp.name;
+        const row: Partial<Record<PreviewColumnKey, number>> = {};
+        const bad: string[] = [];
+        for (const c of PREVIEW_COLUMNS) {
+          const p = parseAmount(String(formData.get(`sage_${c.key}`) ?? ""));
+          if (!p.ok) bad.push(`${c.label}: ${p.error}`);
+          else if (p.value !== null) row[c.key] = p.value;
+        }
+        if (bad.length > 0) failure = `Nothing was saved. ${bad.join(" ")}`;
+        else {
+          const cur = await loadSageEntries(periodId);
+          if (!cur.ok) failure = cur.message;
+          else {
+            const next: Entries = { ...cur.doc.entries };
+            before = next[employeeId] ?? null;
+            if (Object.keys(row).length === 0) delete next[employeeId];
+            else next[employeeId] = row;
+            after = next[employeeId] ?? null;
+            await saveSageEntries(periodId, next, session.profile.id);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    failure = e instanceof Error ? e.message : String(e);
+  }
+  if (failure) toCompare(periodId, "error", failure, extra);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "payroll.sage_compare.save",
+    entityType: "pay_period",
+    entityId: periodId,
+    before: { employeeId, amounts: before },
+    after: { employeeId, amounts: after },
+  }).catch(() => {});
+  revalidatePath(COMPARE);
+  toCompare(periodId, "msg", `Sage amounts saved for ${name}. Comparison only - nothing was booked or paid.`, extra);
+}
+
+/**
+ * Paste a CSV of Sage's numbers (the downloaded preview CSV with Sage's
+ * figures typed in works as-is). Matched by exact employee name. Each pasted
+ * employee's lines replace what was saved for them; others are untouched.
+ * Any problem (unknown name, bad amount) stops the save - nothing partial.
+ */
+export async function pasteSageCsvAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const periodId = String(formData.get("period_id") ?? "");
+  const text = String(formData.get("csv") ?? "");
+  if (!periodId) redirect(`${COMPARE}?error=${encodeURIComponent("Choose a pay period first.")}`);
+
+  let failure: string | null = null;
+  let count = 0;
+  try {
+    if (text.trim() === "") failure = "Paste the CSV first.";
+    else if (text.length > 200_000) failure = "That paste is too large for one pay period.";
+    else {
+      const emps = await runEmployees(periodId);
+      if (typeof emps === "string") failure = emps;
+      else {
+        const parsed = parseSageCsv(text, emps);
+        if (parsed.problems.length > 0) failure = `Nothing was saved. ${parsed.problems.slice(0, 8).join(" ")}`;
+        else if (Object.keys(parsed.entries).length === 0) failure = "No Sage amounts were found in the paste.";
+        else {
+          const cur = await loadSageEntries(periodId);
+          if (!cur.ok) failure = cur.message;
+          else {
+            const next: Entries = { ...cur.doc.entries, ...parsed.entries };
+            count = Object.keys(parsed.entries).length;
+            await saveSageEntries(periodId, next, session.profile.id);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    failure = e instanceof Error ? e.message : String(e);
+  }
+  if (failure) toCompare(periodId, "error", failure);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "payroll.sage_compare.paste",
+    entityType: "pay_period",
+    entityId: periodId,
+    after: { employees: count, via: "csv" },
+  }).catch(() => {});
+  revalidatePath(COMPARE);
+  toCompare(periodId, "msg", `Sage amounts saved for ${count} employee${count === 1 ? "" : "s"}. Comparison only - nothing was booked or paid.`);
 }
