@@ -136,7 +136,7 @@ describe("D248 slice 1 - wiring", () => {
   it("owner + admin gate (settings.manage) on every page and action", () => {
     expect(hub).toContain('requirePermission("settings.manage")');
     expect(sched).toContain('requirePermission("settings.manage")');
-    expect(actions.match(/requirePermission\("settings\.manage"\)/g)?.length).toBe(3);
+    expect(actions.match(/requirePermission\("settings\.manage"\)/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
   it("every save is audited", () => {
