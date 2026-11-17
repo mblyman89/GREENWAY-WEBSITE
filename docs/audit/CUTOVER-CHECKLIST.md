@@ -556,6 +556,7 @@ this stage adds no new work; it is the formal look-back.
   It must be current **after** Cultivera's final upload (Sun 11/01). Last time it took 4 days (U-69).
   Do not wait for it to open or to upload 11/08: unknown lots are withheld, never Inserted.
 - [ ] **C-148 🤝 When the copy arrives: merge it (Bible Part 09 S-15)** — Use the re-seed / diff loader, reviewed in a session.
+  **2026-11-17 (D250):** the copy arrived as a delta (11/13 + 11/17 sets; md5s in Part 13 §I). It is loaded with the D250 delivery loader ("Load the examiner's delivery" on the Records page), not S-15. Keep the five files exactly as received.
 - [ ] **C-149 🤝 Equalize waves, weeks 2–3 (Bible Part 09 S-14 + S-14b)** —
   Each wave runs on the day it is built: our lots read live that day, the merged copy, and two required inputs:
   `--final-upload-date 2026-11-01 --counted-file counted-2026-10-30.txt`.

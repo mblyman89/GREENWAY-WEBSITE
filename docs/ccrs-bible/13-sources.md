@@ -137,3 +137,19 @@ No `[PIN]` tags: these are platform facts that the code depends on, and they are
 | A refresh token stops working when access is revoked, when it "has not been used for six months", or when "The user changed passwords and the refresh token contains Gmail scopes"; an External app in "Testing" gets a 7-day refresh token | https://developers.google.com/identity/protocols/oauth2 | OAuth mode warning, `.env.example` |
 | `_dmarc.lcb.wa.gov` = `v=DMARC1; p=none; aspf=s; ...` (receivers are asked not to reject forged mail; SPF alignment is strict) | DNS TXT via https://dns.google/resolve, 2026-10-20 | `authVerdict` shown, never blocking (U-67). Google's own `dmarc=` result wins when present. The DKIM/SPF fallback is a relaxed (subdomain) reading, shown only |
 
+
+---
+
+## I. 2026-11-17 examiner delivery (D250) and the 2026-11-13 delta
+
+Location of the facts: `docs/ccrs-bible/evidence/2026-11-17-examiner-delivery/README.md`. **The data files are not committed** because the repo is public and the files are LCB data. The owner holds them; the D250 loader checks each md5 before reading.
+
+| File | Received | Bytes | md5 | Rows |
+|---|---|---|---|---|
+| `Data_Request_11_17_26_inventory.csv` | 2026-11-17 | 174,883 | `c245d2a1be802ae2dd914e43b7c04601` | 1,093 open lots |
+| `Data_Request_11_17_26_sales.csv` | 2026-11-17 | 1,575,728 | `b9462d6cd2e7f762550163a179e10294` | 12,433 |
+| `11_17_datarequest.xlsx` (`areas`, `strains`, `Product`) | 2026-11-17 | 5,012,430 | `1b7d3e4b23d18791c872148c681a471f` | 9 / 129 / 65,264 |
+| `Data_Request_11_13_26_inventory.csv` | 2026-11-13 | 13,183 | `035a8e661418f5eb0bd37e4ffcf0d413` | 81 lots |
+| `Data_Request_11_13_26_sales.csv` | 2026-11-13 | 305,324 | `51d35a2236bd65cfe02743cd909b0395` | 2,387 |
+
+The sha256 of each file is in the evidence README. This set closes the "Not yet received" note in §G for the post-cutover copy, as a **delta** (U-30, partly closed).

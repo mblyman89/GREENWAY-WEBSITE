@@ -1335,6 +1335,36 @@ Branches `ccrs/d227-s1-sale-excise-identity`, `ccrs/d227-s3-known-excise-message
 2. Press **Re-send refused rows** on it.
 3. Download the new Sale file, upload it to PREprod, then mark it uploaded and apply the answer.
 
+## D250 — Load the examiner's 11/13 + 11/17 delivery; make the two late weeks ready; finish the cleanup (IN PROGRESS, 2026-11-17)
+
+Owner request D250 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). Evidence: `evidence/2026-11-17-examiner-delivery/README.md`; sources in Part 13 §I.
+
+**What the delivery is.** It is a delta, not a four-file copy:
+- the open lots created after 9/18 (11/17: 1,093; 11/13: 81);
+- the full Product list (65,264);
+- 129 new Strains and the 9 Areas;
+- two Sales files (9/18–10/26 and 10/24–11/1).
+
+So the full CCRS picture is the 9/18 seed already in the ledger plus this delta. S-15 (Records page / reseed) cannot take it: the headers differ, and the seedMissing gate would see ~62,000 "missing" rows.
+
+**Slices (each pushed and merged on its own):**
+1. **S1 evidence**: README, Parts 13/12/09, checklist. No data committed (public repo).
+2. **S2 pure delivery core** (`ccrs-delivery-core.ts`):
+   - It reads each layout by exact header (BOM, CRLF, and LCB's own spellings such as `LicenesNumber` and ` Updated Date `).
+   - It maps delivered lots to the seed payload keys, so equalize, compare and verify read them unchanged.
+   - It joins each lot to its Product by exact Name [G L0576]. Identical twins pick one deterministically; differing twins are held (U-82).
+   - It plans add / settleLink / refresh-of-seed rows and never touches a row our files wrote.
+   - Lots named only by an accepted Cultivera sale are proved by reference [G L1302-L1304] (U-70).
+3. **S3 the merge path**: migration 0368 (a delivery RPC with the same guards as 0298) and a "Load the examiner's delivery" panel on the Records page. It is one button for the owner, with a dry run first.
+4. **S4 the two late weeks** (11/01–11/07 and 11/08–11/14): a readiness check on the hub, so that after the load every row is either sent or held with a named reason.
+5. **S5 cleanup made easy**: equalize reads the composite record (seed + delivery) and uses Brian's answers as defaults:
+   - nominal 0.01 (4c) [EXAM2 L0033];
+   - keep the filed strain (4d) [EXAM2 L0035];
+   - Update first, Reconciliation after, at most 15 minutes apart (4a) [EXAM2 L0029];
+   - optional zero-lot cleanup (4b) [EXAM2 L0031];
+   - the physical count is the truth (11a) [EXAM2 L0066].
+6. **S6 docs and the owner's checklist.**
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |
