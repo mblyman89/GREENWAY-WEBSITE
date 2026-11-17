@@ -10,6 +10,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { addPacificDays, pacificDayKey, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { dayBreakFlags } from "@/lib/staffing/break-clock-core";
 import type { WeekdayIndex } from "@/lib/payroll/timesheet-core";
@@ -34,17 +35,33 @@ export async function loadPayrollStats(today: string, weeks: number): Promise<Pa
   const lo = pacificWallTimeToUtcISO(range[0].startDate, "start");
   const hi = pacificWallTimeToUtcISO(addPacificDays(range[range.length - 1].endDate, 1), "start");
 
-  const punchQuery = (cols: string) =>
-    admin.from("time_punches").select(cols).gte("clock_in_at", lo).lt("clock_in_at", hi).order("clock_in_at", { ascending: true }).limit(20000);
+  // Every read pages with .range() (PostgREST silently caps a response at 1,000
+  // rows, so a .limit() above that would quietly drop punches). A failed page
+  // stops the read and is reported - stats never show a short list as whole.
+  const readPunches = async (cols: string) => {
+    let lastError: unknown = null;
+    const r = await pagedAllChecked<Record<string, unknown>>(async (from, to) => {
+      const { data, error } = await admin
+        .from("time_punches")
+        .select(cols)
+        .gte("clock_in_at", lo)
+        .lt("clock_in_at", hi)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) lastError = error;
+      return { rows: (data ?? []) as unknown as Record<string, unknown>[], ok: !error };
+    });
+    return { rows: r.rows, complete: r.verdict.complete, message: lastError ? short(lastError) : r.verdict.message };
+  };
   const [emps, pay, full] = await Promise.all([
     admin.from("employees").select("id, full_name").eq("active", true).order("full_name", { ascending: true }),
     admin.from("employee_pay").select("employee_id, basis, hourly_rate_milli_cents").eq("is_current", true),
-    punchQuery("employee_id, punch_kind, clock_in_at, clock_out_at, break_reason"),
+    readPunches("employee_id, punch_kind, clock_in_at, clock_out_at, break_reason"),
   ]);
   for (const r of [emps, pay]) if (r.error) throw new Error(`Payroll stats could not be read: ${short(r.error)}`);
   // break_reason arrives with migration 0348. Without it, read the rest.
-  const pun = full.error ? await punchQuery("employee_id, punch_kind, clock_in_at, clock_out_at") : full;
-  if (pun.error) throw new Error(`Time punches could not be read: ${short(pun.error)}`);
+  const pun = full.complete ? full : await readPunches("employee_id, punch_kind, clock_in_at, clock_out_at");
+  if (!pun.complete) throw new Error(`Time punches could not be read in full: ${pun.message}`);
 
   const rate = new Map(
     ((pay.data ?? []) as { employee_id: string; basis: string; hourly_rate_milli_cents: number | null }[]).map((p) => [
@@ -59,7 +76,9 @@ export async function loadPayrollStats(today: string, weeks: number): Promise<Pa
   }));
 
   type Row = { employee_id: string; punch_kind: string | null; clock_in_at: string | null; clock_out_at: string | null; break_reason?: string | null };
-  const raw = ((pun.data ?? []) as unknown as Row[]).filter((r) => r.clock_in_at);
+  const raw = (pun.rows as unknown as Row[])
+    .filter((r) => r.clock_in_at)
+    .sort((x, y) => (x.clock_in_at as string).localeCompare(y.clock_in_at as string));
   const reasonBy = new Map(raw.map((r) => [`${r.employee_id}|${r.clock_in_at}`, r.break_reason ?? null]));
   const punches: StatsPunch[] = raw
     .map((r) => ({
@@ -76,10 +95,21 @@ export async function loadPayrollStats(today: string, weeks: number): Promise<Pa
 
   let sickLedger: SickLedgerRow[] = [];
   let sickWarning: string | null = null;
-  const sl = await admin.from("sick_leave_ledger").select("employee_id, entry_kind, minutes, entry_date").lte("entry_date", today).limit(50000);
-  if (sl.error) sickWarning = `Sick leave could not be read, so sick figures show zero: ${short(sl.error)}`;
+  let sickError: unknown = null;
+  const sl = await pagedAllChecked<{ employee_id: string; entry_kind: string; minutes: number; entry_date: string }>(async (from, to) => {
+    const { data, error } = await admin
+      .from("sick_leave_ledger")
+      .select("id, employee_id, entry_kind, minutes, entry_date")
+      .lte("entry_date", today)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) sickError = error;
+    return { rows: (data ?? []) as { employee_id: string; entry_kind: string; minutes: number; entry_date: string }[], ok: !error };
+  });
+  if (!sl.verdict.complete)
+    sickWarning = `Sick leave could not be read in full, so sick figures show zero: ${sickError ? short(sickError) : sl.verdict.message}`;
   else
-    sickLedger = ((sl.data ?? []) as { employee_id: string; entry_kind: string; minutes: number; entry_date: string }[]).map((r) => ({
+    sickLedger = sl.rows.map((r) => ({
       employeeId: r.employee_id,
       kind: r.entry_kind,
       minutes: r.minutes,
