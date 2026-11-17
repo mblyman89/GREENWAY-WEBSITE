@@ -120,7 +120,7 @@ begin
   on conflict (env, file_type, external_id) do nothing;
   get diagnostics v_add = row_count;
   if v_add <> p_expect_add then
-    raise exception 'CCRS_RESEED_STALE: added % of % new records; the ledger changed since the check. Nothing was written. Check again.', v_add, p_expect_add using errcode = 'check_violation';
+    raise exception 'CCRS_RESEED_STALE: added % of % new records. The ledger changed since the check. Nothing was written. Check again.', v_add, p_expect_add using errcode = 'check_violation';
   end if;
 
   update public.ccrs_filed_entities e
@@ -132,7 +132,7 @@ begin
      and e.state = s.expect_state and (extract(epoch from e.updated_at) * 1000000)::bigint = s.expect_us;
   get diagnostics v_upd = row_count;
   if v_upd <> p_expect_upd then
-    raise exception 'CCRS_RESEED_STALE: updated % of % records; the ledger changed since the check. Nothing was written. Check again.', v_upd, p_expect_upd using errcode = 'check_violation';
+    raise exception 'CCRS_RESEED_STALE: updated % of % records. The ledger changed since the check. Nothing was written. Check again.', v_upd, p_expect_upd using errcode = 'check_violation';
   end if;
 
   perform public.ccrs_link_unfiled_migration_lots(true);
@@ -162,7 +162,7 @@ grant select, insert, update, delete on table public.ccrs_delivery_stage to serv
 revoke all on function public.ccrs_apply_delivery(uuid, integer, integer, jsonb, uuid, text) from public, anon, authenticated;
 grant execute on function public.ccrs_apply_delivery(uuid, integer, integer, jsonb, uuid, text) to service_role;
 
--- The delivery's sheet file is an xlsx. Allow it next to the CSVs.
+-- The sheet file of the delivery is an xlsx. Allow it next to the CSVs.
 do $m$
 begin
   if exists (select 1 from information_schema.columns where table_schema = 'storage' and table_name = 'buckets' and column_name = 'allowed_mime_types') then
