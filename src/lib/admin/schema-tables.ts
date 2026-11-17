@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 358 tables across 365 migrations at the time of writing.
+ * Measured 359 tables across 367 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -285,6 +285,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "payee_contacts",
   "payroll_run_lines",
   "payroll_runs",
+  "payroll_sage_comparisons",
   "payroll_source_documents",
   "payroll_ytd_accumulators",
   "pin_throttle",

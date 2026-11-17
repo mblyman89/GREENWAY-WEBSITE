@@ -655,6 +655,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "employee_ssn_reveals", disposition: "WIPE", because: "The log of who viewed a Social Security number while testing." },
   { table: "employees", disposition: "KEEP", because: "Your people. Deleting them would mean re-entering every hire, W-4 and I-9." },
   { table: "staff_profiles", disposition: "KEEP", because: "Login accounts — including yours. Wiping this would lock you out of the app." },
+  { table: "payroll_sage_comparisons", disposition: "KEEP", because: "The owner's Sage figures typed in to check the calculated pay (D248, 0367). Comparison notes only, never a pay record. The period id is a plain uuid with no FK into a wiped table, and after a reset no period carries an old id, so old rows are never shown." },
   { table: "employee_pay", disposition: "KEEP", because: "Each employee's pay rate — a standing term of employment, not a test event." },
   { table: "employee_w4", disposition: "KEEP", because: "Signed W-4 elections." },
   { table: "employee_i9", disposition: "KEEP", because: "I-9 verification records, which federal law requires you to retain." },
