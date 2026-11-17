@@ -4302,3 +4302,31 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0367_payroll_sage_compare.rollback.sql` (drops the table and the
   typed Sage amounts. Nothing else reads it).
+
+- [ ] **`supabase/migrations/0368_ccrs_delivery_loads.sql`** - D250 slice 3, loading the examiner's delivery (owner:
+  "please get these records in the system along with the last set I uploaded earlier"). Adds two tables and one function:
+  `ccrs_delivery_loads` (one row per upload of the delivery files: status, the files with their sha256, the checked
+  summary and the full plan report), `ccrs_delivery_stage` (the planned writes of one load while it is applied, emptied
+  after), and `ccrs_apply_delivery(...)`, which lays the delivery on top of the 9/18 seed in one transaction. The apply is
+  guarded: it takes the seed lock, needs the 9/18 seed, refuses a delivery dated on or before 9/18, needs 1 to 10 files
+  each with a sha256, refuses a stage that differs from the plan or carries any source other than the delivery date, never
+  changes a record one of our own files wrote, and refuses (CCRS_RESEED_STALE, nothing written) if the ledger moved since
+  the check. Every load is recorded as seed/closed provenance rows in `ccrs_files`. Both tables are service role only (RLS
+  on, no policies). The private `ccrs-records` bucket also accepts the xlsx sheet file. Until it is applied, the delivery
+  panel on /admin/compliance/ccrs/records says the table is missing. Nothing else is affected.
+
+  Safe to re-run. Paste the file itself (no editor-safe copy is needed because the transit-hazard scanner finds no
+  apostrophes, semicolons or non-ASCII characters in its comments or literals).
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select relrowsecurity as rls_on from pg_class where oid = 'public.ccrs_delivery_loads'::regclass;           -- true
+  select relrowsecurity as rls_on from pg_class where oid = 'public.ccrs_delivery_stage'::regclass;           -- true
+  select count(*) as fn from pg_proc where proname = 'ccrs_apply_delivery';                                  -- 1
+  select count(*) as loads_now from public.ccrs_delivery_loads;                                              -- 0
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0368_ccrs_delivery_loads.rollback.sql` (drops the two tables and the
+  function and puts the bucket back to CSV/text. Ledger rows a load already wrote stay, marked by their source
+  `seed:<date>-delivery` or `proof:<date>-delivery-sale`).

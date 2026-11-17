@@ -30,6 +30,7 @@ import {
 } from "@/lib/compliance/ccrs-delivery-files";
 import type { LedgerRow } from "@/lib/compliance/ccrs-reseed-core";
 import { parseArgs } from "../../scripts/compliance/load-ccrs-delivery";
+import { transitHazards } from "../../scripts/compliance/strip-comments-for-sql-editor";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const MIG = read("supabase/migrations/0368_ccrs_delivery_loads.sql");
@@ -162,6 +163,13 @@ describe("D250 S3 migration 0368", () => {
   it("the apply is guarded: lock, seeded, newer than 9/18, provenance, counts, source, STALE, never our files", () => {
     for (const s of ["pg_advisory_xact_lock(hashtext('ccrs_seed_finalize'))", "CCRS_RESEED_NOT_SEEDED", "CCRS_DELIVERY_TOO_OLD", "CCRS_DELIVERY_PROVENANCE", "CCRS_RESEED_STAGE", "CCRS_DELIVERY_SOURCE", "CCRS_RESEED_STALE", "on conflict (env, file_type, external_id) do nothing", "and e.last_file_id is null", "ccrs_link_unfiled_migration_lots(true)"]) expect(MIG).toContain(s);
     expect(MIG).toContain("'local:' || coalesce(nullif(x->>'fileName', ''), x->>'role')");
+  });
+
+  it("pastes safely into the SQL editor as is (no transit hazards, no editor-safe copy needed)", () => {
+    for (const sql of [MIG, RB]) {
+      const h = transitHazards(sql);
+      expect({ ...h, commentLines: 0 }).toEqual({ commentLines: 0, oddApostrophe: 0, withSemicolon: 0, bareRelationWord: 0, nonAscii: 0, semicolonInString: 0 });
+    }
   });
 
   it("the rollback drops what 0368 made and keeps the ledger", () => {

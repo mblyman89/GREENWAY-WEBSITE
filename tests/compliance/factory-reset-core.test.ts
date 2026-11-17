@@ -1370,7 +1370,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D242: +4 KEEP budalerts_brand_links, budalerts_brand_snapshots, budalerts_menu_items, budalerts_fetch_state (0364; FKs only to vendors/media_assets KEEP).
     // D244 R-4: +1 KEEP media_embeddings (0365; semantic photo search index, FK only to media_assets KEEP).
     // D248 S4: +1 KEEP payroll_sage_comparisons (0367; owner's typed Sage figures, plain-uuid period id, no FK).
-    expect(plan.keep.length).toBe(220);
+    // D250 S3: +2 KEEP ccrs_delivery_loads, ccrs_delivery_stage (0368; examiner delivery loads, State records, stage emptied by the load).
+    expect(plan.keep.length).toBe(222);
     expect(plan.wipe.length).toBe(139);
   });
 

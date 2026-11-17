@@ -1,7 +1,7 @@
 -- Rollback for 0368_ccrs_delivery_loads.sql (D250 slice 3).
 -- Run MANUALLY only if needed. Drops the delivery-load history and the apply
 -- function, and puts the ccrs-records bucket back to CSV/text only. Ledger
--- rows a load already wrote STAY (they are the State's record; their source
+-- rows a load already wrote STAY (they are the record of the State, and their source
 -- seed:<date>-delivery / proof:<date>-delivery-sale says where they came from).
 drop function if exists public.ccrs_apply_delivery(uuid, integer, integer, jsonb, uuid, text);
 drop table if exists public.ccrs_delivery_stage;

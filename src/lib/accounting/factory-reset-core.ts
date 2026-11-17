@@ -758,6 +758,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   // it holds, and when) are evidence; the merge stage is emptied by the merge.
   { table: "ccrs_record_copies", disposition: "KEEP", because: "The CCRS data copies you uploaded from the LCB Service Desk — the State's own record of what it holds, and when." },
   { table: "ccrs_record_copy_stage", disposition: "KEEP", because: "A merge plan staged for a moment before it is applied to State records; the merge itself empties it, so nothing is left to reset." },
+  // D250 S3 (0368): the examiner-delivery loads and their momentary stage.
+  { table: "ccrs_delivery_loads", disposition: "KEEP", because: "The examiner deliveries you loaded (the files Brian sent, their fingerprints and the plan) — the State's own record of what it holds, and when." },
+  { table: "ccrs_delivery_stage", disposition: "KEEP", because: "A delivery load staged for a moment before it is applied to State records; the load itself empties it, so nothing is left to reset." },
   { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
   // S-12d (0250): the owner's written reasons for checking off a real State
   // deadline. Evidence for an examiner, not test activity.
