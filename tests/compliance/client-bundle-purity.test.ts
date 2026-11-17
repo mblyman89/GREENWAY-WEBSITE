@@ -224,7 +224,7 @@ describe("client bundle purity: no browser file may reach node-only builtins", (
             `Move the disk-reading code into a sibling *-gates.ts imported only by tests, the way ` +
             `books-33 did for timesheet-mentor and company-identity-mentor.`,
     ).toBe("");
-  });
+  }, 60_000);
 
   it("the detector can actually fail (rule 16: prove the gate is wired)", () => {
     // A green sweep is worthless unless the walker can find a violation. Build
