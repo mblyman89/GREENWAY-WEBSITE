@@ -4,7 +4,7 @@ import Link from "next/link";
  * D248 - the payroll command center's own tab strip. Server component; the
  * current tab is passed in. Owner-only tabs are listed only when `isOwner`.
  */
-export type PayrollCenterTab = "hub" | "schedule" | "time-cards" | "pay-preview" | "compare";
+export type PayrollCenterTab = "hub" | "schedule" | "time-cards" | "pay-preview" | "compare" | "stats";
 
 const TABS: { key: PayrollCenterTab; label: string; href: string }[] = [
   { key: "hub", label: "Command center", href: "/admin/payroll-center" },
@@ -12,6 +12,7 @@ const TABS: { key: PayrollCenterTab; label: string; href: string }[] = [
   { key: "time-cards", label: "Time cards", href: "/admin/payroll-center/time-cards" },
   { key: "pay-preview", label: "Pay preview", href: "/admin/payroll-center/pay-preview" },
   { key: "compare", label: "Compare with Sage", href: "/admin/payroll-center/compare" },
+  { key: "stats", label: "Stats", href: "/admin/payroll-center/stats" },
 ];
 
 export function PayrollCenterNav({ current }: { current: PayrollCenterTab }) {
