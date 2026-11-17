@@ -108,7 +108,9 @@ describe("D250 S3 apply SQL (CLI path)", () => {
 
   it("is one transaction: load (ready), every write staged, the guarded RPC with the expected counts", () => {
     const sql = deliveryApplySql({ loadId: LID, asOf: "2026-11-17", plan, files, report: "r", notes: "it's", actorEmail: null });
-    expect(sql.indexOf("begin;")).toBeLessThan(sql.indexOf("insert into public.ccrs_delivery_loads"));
+    expect(sql.split("\n").filter((l) => l === "begin;")).toHaveLength(1);
+    expect(sql.indexOf("\nbegin;\n")).toBeGreaterThan(0);
+    expect(sql.indexOf("\nbegin;\n")).toBeLessThan(sql.indexOf("insert into public.ccrs_delivery_loads"));
     expect(sql).toMatch(/values \('0f9c2a8e-[^']+', '2026-11-17', 'ready'/);
     expect(sql).toContain("'it''s'");
     expect(sql).toContain("O''Brien");

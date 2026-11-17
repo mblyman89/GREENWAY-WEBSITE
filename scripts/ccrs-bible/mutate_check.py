@@ -186,6 +186,10 @@ D227_RESEND_TESTS = "tests/compliance/d227-ccrs-resend-refused.test.ts"
 D227_S18B_TESTS = "tests/compliance/s18b-ccrs-error-strategy.test.ts"
 D250_CORE = "src/lib/compliance/ccrs-delivery-core.ts"
 D250_TESTS = "tests/compliance/d250-delivery-core.test.ts"
+D250_FILES = "src/lib/compliance/ccrs-delivery-files.ts"
+D250_MIG = "supabase/migrations/0368_ccrs_delivery_loads.sql"
+D250_CLI = "scripts/compliance/load-ccrs-delivery.ts"
+D250_LOAD_TESTS = "tests/compliance/d250-delivery-load.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4423,6 +4427,70 @@ MUTATIONS = [
         '  const guard = (l: LedgerRow) => ({ expectState: l.state, expectUpdatedAt: null as string | null });',
         D250_TESTS,
         'Every change carries the updated_at the plan saw (STALE guard).',
+    ),
+    (
+        'M543-d250-sql-no-escape',
+        D250_FILES,
+        "  return `'${s.replace(/'/g, \"''\")}'`;",
+        "  return `'${s}'`;",
+        D250_LOAD_TESTS,
+        'Every value in the CLI\'s SQL is a quoted literal (O\'Brien stays one value).',
+    ),
+    (
+        'M544-d250-sql-no-transaction',
+        D250_FILES,
+        '    "begin;",\n',
+        '',
+        D250_LOAD_TESTS,
+        'The CLI load is one transaction; a refusal leaves nothing behind.',
+    ),
+    (
+        'M545-d250-key-any-slot',
+        D250_FILES,
+        '  if (!Number.isInteger(n) || n < 0 || n >= DELIVERY_SLOTS.length) throw new DeliveryError("bad file number");',
+        '  if (!Number.isInteger(n) || n < 0) throw new DeliveryError("bad file number");',
+        D250_LOAD_TESTS,
+        'Uploads land only on the five keys of the load.',
+    ),
+    (
+        'M546-d250-two-of-a-slot',
+        D250_FILES,
+        '    if (seen.has(slot)) throw',
+        '    if (false) throw',
+        D250_LOAD_TESTS,
+        'Each file of the delivery is read once; a second of a slot is refused.',
+    ),
+    (
+        'M547-d250-mig-no-our-file-guard',
+        D250_MIG,
+        '     and e.last_file_id is null\n',
+        '',
+        D250_LOAD_TESTS,
+        'A delivery never overwrites a record one of our own files wrote.',
+    ),
+    (
+        'M548-d250-mig-local-path',
+        D250_MIG,
+        "coalesce(nullif(x->>'storagePath', ''), 'local:' || coalesce(nullif(x->>'fileName', ''), x->>'role'))",
+        "x->>'storagePath'",
+        D250_LOAD_TESTS,
+        'A file loaded from disk still satisfies ccrs_files_bytes_fixed_after_draft (e2e found it).',
+    ),
+    (
+        'M549-d250-cli-other-files',
+        D250_CLI,
+        '    if (other.length && !bools.has("allow-other-files")) {',
+        '    if (false) {',
+        D250_LOAD_TESTS,
+        'The CLI loads only the files Brian sent unless told otherwise.',
+    ),
+    (
+        'M550-d250-provenance-role',
+        D250_FILES,
+        '  return files.map((f) => ({ role: SLOT_ROLE[f.slot],',
+        '  return files.map((f) => ({ role: "Inventory" as const,',
+        D250_LOAD_TESTS,
+        'The xlsx is recorded as the Product file.',
     ),
 ]
 
