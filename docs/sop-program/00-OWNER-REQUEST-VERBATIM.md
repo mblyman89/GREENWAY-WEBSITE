@@ -3531,3 +3531,4 @@ Files received: `11_17_datarequest.xlsx`, `Data_Request_11_17_26_inventory.csv`,
 ### D250 As-built
 
 - **Slice 1 (evidence):** delivery README (md5 + sha256, exact headers, measured profile, the Name join and twin finding, U-68 answered, week 11/01-11/07 cross-check); bible Parts 13, 12, 09 and the cutover checklist updated.
+- **Slice 2 (pure delivery core):** `ccrs-delivery-core.ts` reads the four delivered CSV layouts and the three xlsx sheets by exact header and plans the merge on top of the 9/18 seed. It never writes a row our files touched, and every change carries a STALE guard. Tests: d250-delivery-core (vitest), the self-test, and mutations M533-M542.

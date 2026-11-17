@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-11-10 20:03Z at commit `0917405e1490fd189aa27aa67b5dfacb880b7921` by `build_atlas_part.py`.
+Generated 2026-11-17 22:39Z at commit `aeb123bb5621338de025ee03eaa8d03d75f25ce9` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 0917405 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff aeb123b -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -484,11 +484,11 @@ Generated 2026-11-10 20:03Z at commit `0917405e1490fd189aa27aa67b5dfacb880b7921`
 - L68: `export function lotKeysForLines(`
 - L86: `export function __runVariantLotCoreTests(): void {`
 
-### `src/app/admin/compliance/ccrs/page.tsx` (1338 L)
+### `src/app/admin/compliance/ccrs/page.tsx` (1342 L)
 
-- L104: `export const dynamic = "force-dynamic";`
-- L109: `export const maxDuration = 300;`
-- L287: `export default async function CcrsCommandCenterPage({`
+- L106: `export const dynamic = "force-dynamic";`
+- L111: `export const maxDuration = 300;`
+- L289: `export default async function CcrsCommandCenterPage({`
 
 ### `src/app/admin/compliance/ccrs/actions.ts` (833 L)
 
@@ -570,11 +570,11 @@ Generated 2026-11-10 20:03Z at commit `0917405e1490fd189aa27aa67b5dfacb880b7921`
 - L57: `export function reportTabsFor(showAchTab: boolean, showCultiveraTab = false): ReportTab[] {`
 - L61: `export function ReportTabs({ showAchTab = false, showCultiveraTab = false }: { showAchTab?: boolean; showCultiveraTab?: boolean }) {`
 
-### `src/components/admin/admin-nav-data.ts` (271 L)
+### `src/components/admin/admin-nav-data.ts` (272 L)
 
 - L4: `export type AdminNavItem = {`
 - L47: `export const adminNav: AdminNavItem[] = [`
-- L234: `export const navGroups: AdminNavItem["group"][] = [`
+- L235: `export const navGroups: AdminNavItem["group"][] = [`
 
 ## A. Batch builders — `src/lib/compliance/ccrs-batch.ts`
 
@@ -2920,42 +2920,42 @@ Generated 2026-11-10 20:03Z at commit `0917405e1490fd189aa27aa67b5dfacb880b7921`
   86|   applyCcrsNotProcessedMailAction,
   87|   applyCcrsSuccessMailAction,
   88|   dismissCcrsMailAction,
-  89|   pollCcrsMailNowAction,
-  90| } from "./mail-actions";
-  91| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
-  92| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
-  93| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
-  94| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
-  95| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
-  96| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
-  97| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
-  98| import { readOwed } from "@/lib/compliance/ccrs-held-store";
-  99| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
- 100| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
- 101| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
- 102| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
- 103| 
- 104| export const dynamic = "force-dynamic";
- 105| // W-1 (2026-10-30): the page builds the week's batch, and its server actions
- 106| // (email Apply, week sign-off) re-read files and rows. A page-level
- 107| // maxDuration also covers every server action posted from this page
- 108| // (Next docs: route-segment-config/maxDuration). Same ceiling as /records.
- 109| export const maxDuration = 300;
- 110| 
+  89|   reopenCcrsMailAction,
+  90|   adoptHandmadeFileAction,
+  91|   pollCcrsMailNowAction,
+  92| } from "./mail-actions";
+  93| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+  94| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
+  95| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
+  96| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
+  97| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
+  98| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
+  99| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
+ 100| import { readOwed } from "@/lib/compliance/ccrs-held-store";
+ 101| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
+ 102| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+ 103| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
+ 104| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
+ 105| 
+ 106| export const dynamic = "force-dynamic";
+ 107| // W-1 (2026-10-30): the page builds the week's batch, and its server actions
+ 108| // (email Apply, week sign-off) re-read files and rows. A page-level
+ 109| // maxDuration also covers every server action posted from this page
+ 110| // (Next docs: route-segment-config/maxDuration). Same ceiling as /records.
 ```
 
 `src/app/admin/compliance/ccrs/page.tsx` — hub page section anchors
 
-- L621: `title="Step 1 — Pick the reporting week"`
-- L652: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
-- L825: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
-- L852: `<UploadWalkthrough`
-- L953: `title="Step 3 — Record this week"`
-- L1127: `<ErrorTriagePanel`
-- L1140: `title="DOH / Medical sales"`
-- L1206: `title="Monthly LIQ-1295 (tax report)"`
-- L1279: `<PushRemindersPanel />`
-- L1289: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
+- L623: `title="Step 1 — Pick the reporting week"`
+- L654: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
+- L827: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
+- L854: `<UploadWalkthrough`
+- L957: `title="Step 3 — Record this week"`
+- L1131: `<ErrorTriagePanel`
+- L1144: `title="DOH / Medical sales"`
+- L1210: `title="Monthly LIQ-1295 (tax report)"`
+- L1283: `<PushRemindersPanel />`
+- L1293: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
 
 `src/app/admin/compliance/ccrs/actions.ts` — server actions
 
@@ -3201,18 +3201,18 @@ Generated 2026-11-10 20:03Z at commit `0917405e1490fd189aa27aa67b5dfacb880b7921`
 - L24: `| "CCRS"`
 - L45: `// cannabis-specific glyphs (🌿 flower, 🧾 receipts, 🛡 compliance) are used where`
 - L81: `{ label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊`
-- L113: `{ label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade s`
-- L114: `{ label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 s`
-- L126: `// CCRS: standalone top-header button → the Compliance Command Center (Task W;`
-- L129: `{ label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ complia`
-- L130: `{ label: "CCRS Sales Check", href: "/admin/compliance/sales-check", permission: "reports.view", icon: "\u2705", group: "CCRS" }, // D183: every sale f`
-- L131: `{ label: "Taxes Owed", href: "/admin/compliance/taxes-owed", permission: "reports.view", icon: "\ud83e\uddfe", group: "CCRS" }, // D183: excise + sale`
-- L132: `{ label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check`
-- L133: `{ label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change`
-- L134: `{ label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-`
-- L221: `{ label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal li`
-- L226: `{ label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "A`
-- L244: `"CCRS",`
+- L114: `{ label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade s`
+- L115: `{ label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 s`
+- L127: `// CCRS: standalone top-header button → the Compliance Command Center (Task W;`
+- L130: `{ label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ complia`
+- L131: `{ label: "CCRS Sales Check", href: "/admin/compliance/sales-check", permission: "reports.view", icon: "\u2705", group: "CCRS" }, // D183: every sale f`
+- L132: `{ label: "Taxes Owed", href: "/admin/compliance/taxes-owed", permission: "reports.view", icon: "\ud83e\uddfe", group: "CCRS" }, // D183: excise + sale`
+- L133: `{ label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check`
+- L134: `{ label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change`
+- L135: `{ label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-`
+- L222: `{ label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal li`
+- L227: `{ label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "A`
+- L245: `"CCRS",`
 
 ## J. Schema anchors (Supabase migrations)
 

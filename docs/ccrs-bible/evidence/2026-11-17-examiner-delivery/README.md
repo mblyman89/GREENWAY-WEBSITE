@@ -83,6 +83,7 @@ The examiner's answer is that "Data is not changed by CCRS, it is changed by you
 The data agree:
 - 825 open lots in the delivered inventories have later sales that their QoH does not reflect.
 - 186 lots are sold out by those sales but still show open.
+- (Recon measure: all delivered sales against Initial Quantity.) The D250 core's measure is stricter: only sales dated after the lot's own System Date, against its Quantity on Hand, with the 10/24-10/26 overlap counted once. By that measure 984 lots are stale and 205 are sold out but still open; an independent Python check gives the same counts. Both measures lead to the same conclusion.
 
 So the delivered QoH is the last Inventory Insert/Update value, not a running balance. The cleanup must be driven by our physical count (Brian 4a: Update to 0, then Reconciliation `[EXAM2 L0029]`), never by CCRS's QoH.
 

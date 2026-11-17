@@ -1365,6 +1365,8 @@ So the full CCRS picture is the 9/18 seed already in the ledger plus this delta.
    - the physical count is the truth (11a) [EXAM2 L0066].
 6. **S6 docs and the owner's checklist.**
 
+**S2 as-built (2026-11-17).** `src/lib/compliance/ccrs-delivery-core.ts`; tests `tests/compliance/d250-delivery-core.test.ts` (24 vitest cases plus 24 self-test assertions, registered in `run-pure-selftests.ts`); mutations M533-M542, all killed. Dry run on the real files against a seeded ledger: 1,174 lots, 65,264 products, 129 strains, 9 areas; 14,820 sale rows naming 3,015 lots, of which 2,005 are proved only by a sale (source `proof:2026-11-17-delivery-sale`, no quantity, so equalize holds them); 0 unresolved products; 2 twinDiffers (U-82); 1,007 lot strains are not in the delivered Strain list. These are expected in the 9/18 seed and the live ledger, and are checked again at apply time. U-68 by the core's measure (sales dated after the lot's System Date, overlap counted once): 984 lots stale, 205 sold out but still open.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |
