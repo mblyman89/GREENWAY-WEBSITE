@@ -4247,3 +4247,27 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0365_media_embeddings.rollback.sql` (drops the table and the four
   functions; the vector extension stays installed; photos are untouched).
+
+- [ ] **`supabase/migrations/0366_media_search_fast.sql`** — D247 faster back-office saves (owner: "we have to speed it
+  up so a button click does not hold us back"). Order-independent of 0365 (it needs only 0352, already applied).
+  `media_search` was the most expensive call in the database (about 1.8 s each), because it scored every live photo
+  against the search words on every call, so none of the indexes were used. This file adds one GIN trigram index
+  on photo text (`visible_text` + `ai_caption`) and rewrites `media_search` to collect candidates via indexes first
+  (word match, product name, title, photo text), then score only those. The results are the same: on a copy of 0352
+  and on 7 live searches the ids, scores and totals matched exactly (md5). Same arguments, same columns, same
+  service-role-only grant. No table changes.
+
+  Safe to re-run. Paste the file itself (no editor-safe copy is needed: its comments carry no apostrophes, semicolons or
+  non-ASCII characters, checked by the repo's transit-hazard scanner).
+  The index build takes a few seconds; if the editor shows "Potential issue detected", click **"Run without RLS"**.
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select indexname from pg_indexes where indexname = 'idx_media_assets_text_trgm';   -- 1 row
+  select position('cand' in prosrc) > 0 as fast_body from pg_proc where proname = 'media_search';  -- true
+  select count(*) as hits from public.media_search(p_query => 'blue dream', p_limit => 30); -- same count as before
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0366_media_search_fast.rollback.sql` (restores the exact 0352
+  function body and drops the new index).

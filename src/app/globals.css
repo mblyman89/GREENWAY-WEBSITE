@@ -693,6 +693,15 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* D247: a row whose Approve / Dismiss / Restore was just sent (PendingRowMark)
+ * is dimmed and locked until the server answers, so the eye moves on and a
+ * second click can never send it twice. */
+tr[data-row-pending] {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
 /* ---------------------------------------------------------------------------
  * R41 S2: designed banners (bible PART 5.3 R-3). Inline styles can't hold
  * container queries, so the phone overrides live here. Each box/button sets

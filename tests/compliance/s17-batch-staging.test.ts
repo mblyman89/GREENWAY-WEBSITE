@@ -438,7 +438,8 @@ describe("S17 wiring", () => {
     const body = bodyOf(drafts, "export async function approveDraftWithPrice");
     expect(body).toContain("if (row?.manifest_id && !opts.skipStaging) {");
     expect(body).toContain("await stageIntakeMenuVersionForManifest(row.manifest_id, actorId);");
-    expect(drafts).toMatch(/opts: \{ skipStaging\?: boolean \} = \{\},\n\): Promise<\{ ok: boolean; error\?: string \}>/);
+    // D247: + backgroundStaging (the onboarding button queues the rebuild); skipStaging unchanged.
+    expect(drafts).toMatch(/opts: \{ skipStaging\?: boolean; backgroundStaging\?: boolean \} = \{\},\n\): Promise<\{ ok: boolean; error\?: string; stagingQueued\?: boolean \}>/);
   });
 
   it("the batch: flag + uuid checks, named columns, every gate via approveDraftWithPrice, ONE staging", () => {

@@ -3402,3 +3402,56 @@ the other issue I am having is regarding the vendors. we need a new and better a
 **Not done (needs owner go-ahead).** Contact details (phone/email/address) from the 8,663 invoice PDFs that have no text layer would need Gemini to read each PDF. Those would land as drafts in the existing AI-drafts review, and the accept allow-list would need phone/email/website added. This was deliberately not run against production in this PR.
 
 **Checks.** Scoped tsc clean; eslint clean on changed files; 248 vitest files on the affected surface pass (two source pins updated for the deliberate D246 changes, plus the new d246 plumbing test); ALL PURE SELF-TESTS PASSED.
+
+## D247 — Fast back-office saves (no more 300-second clicks); hand-picked vendor merge that keeps brands; Gemini batch reader for unreadable invoice PDFs (2026-11-16)
+
+Owner (verbatim): "thank you. yes lets have gemini batch read these pdfs if you think it is the better option to use over llama parse. I want this feature to be something that I run from the back office, and runs on the server so it doesn't prevent me from continuing my work. I want this to help with the merge vendor logic. there are a couple of vendors with a brand or few brands, and the system is treating the brands as standalone vendors. I need a way to manually select two or more vendors to merge into one, with each brand absorbed getting added to the vendors profile. please build this enhancement, then I want to move on to a more important issue I am having. I need you to log into supabase, and query the database looking for why the back office is having such a hard time saving data from button clicks, specifically speaking about the onboarding page, but it is not limited to that page by any means. why is it taking so long? is there a way to click the apply or save or whatever button, it goes onto the server or where ever, and then we move on? right now several times it will get all the way to 300 seconds and then die. we need to either move these saves and button clicks on to a thread that does not prevent us from moving through the products onboarding them or doing whatever in the back office. the enrichment page is terrible too. surely there is a better way to enhance and improve on this. is there deep research that can be done to find the right solution? is there community resources and solutions to the same or similar problems that they worked out collectively? are there more professional expert approaches to improving speed and efficiency while working through the products? we have thousands to get through, so it needs to be more efficient somehow. we have to speed it up so a button click does not hold us back. please do your very best to fix this issue. go above and beyond. follow the standing rules. thank you."
+
+### D247 As-built
+
+**(C) Fast saves: heavy work moved off the click.**
+- **Approve on Product Onboarding** (/admin/inventory/drafts) no longer rebuilds the whole live menu inside the click.
+  - `approveDraftWithPrice(..., { backgroundStaging: true })` queues the delivery on a new coalesced background queue: pure `menu-restage-queue-core` (31 self-tests) plus the server `menu-restage-queue.ts`.
+  - The queue holds one site_settings row (`menu_restage_queue`) written by compare-and-swap, with a lease and retries.
+  - The rebuild starts right after the response. The every-minute worker `/api/cron/lookup-jobs` is the fallback (`restageIfTime`, only when the route has budget plus slack left).
+  - An approval that lands during a rebuild is rebuilt again (never lost). A failed rebuild stays queued with its error.
+  - Any queue failure falls back to the old inline rebuild. `MENU_RESTAGE_BACKGROUND=off` switches back to inline.
+  - The page shows a "menu updates" status line, and only the clicked row is greyed while it saves (`PendingRowMark`, `tr[data-row-pending]`).
+- **Publish / Accept on Enrichment** (/admin/products): the knowledge-base writeback runs after the response (`writeBackOnPublishAfterResponse`, audited `product.kb_writeback`).
+- **Migration 0366_media_search_fast** (owner applies by hand): a trigram index on media_assets text, and `media_search` narrows candidates through indexed lookups first. Results and thresholds are the same as 0352. A rollback is included. No editor-safe copy is needed: the file has no transit hazards.
+
+**(B) Hand-picked vendor merge that keeps brands** (/admin/vendors/merge, "Merge vendors you pick").
+- Search any live vendors (name, legal name, DBA, license or website), add 2 to 5, pick the one to keep, preview, and tick confirm.
+- With "Add the merged-in vendors as brands" (on by default), each merged-in card that has no brand becomes a brand on the kept card before the merge runs:
+  - the brand is published if the vendor was published;
+  - it copies the website, about, mission, philosophy and logo;
+  - an orphan brand with the same name is claimed instead of duplicated;
+  - a brand owned by another vendor is never taken.
+- Products, drafts, enrichments and lots of the merged-in vendor that had no brand get that brand. Existing brand ids are never overwritten.
+- Pure `merge-brand-absorb-core` (23 self-tests) plus `merge-brand-absorb.ts`. Absorption failures stop the merge ("Nothing was merged"). The merge itself is the existing audited `merge_vendors_v2`.
+
+**(A) Gemini reads the unreadable vendor PDFs, from the back office, on the server.** Live count at build time: 8,663 waiting, 93 of them over 14 MB (marked "too large", never sent).
+- New panel **"Read the unreadable PDFs with Gemini"** at the top of /admin/vendors/ledger, with Start, Pause, a live status line and an auto-refresh while it runs.
+- Start queues every `cultivera_mail_docs` row with status 'unreadable', kind 'pdf' and a stored file (8,663 measured), then reads them on the server:
+  - the first run starts right after the click (200 s budget);
+  - after that, the every-minute worker carries on in quiet minutes (300 s per run), until all are read;
+  - it runs four PDFs at a time.
+- Each PDF goes to Gemini (`AI_PDF_READ_MODEL`, default `gemini-3.5-flash-lite`) with a strict JSON schema: sender name, sender license, UBI, document type/number/date, and package ids.
+  - The answer is cleaned: only an exact 6-digit license, never our own 413541, never "Greenway" as the sender.
+- The answer is written to the row's `vendor_label` / `vendor_license` / `barcodes`. The note becomes "Gemini read <date> (<model>): …", with the old note kept.
+  - The row stays 'unreadable', so menu import is unaffected.
+  - Each row is written once: too-large (>14 MB), missing or rejected files are marked and never resent.
+- Safety:
+  - a compare-and-swap state row (`pdf_gemini_read_bg`) and a lease (one run at a time);
+  - Pause takes effect between pages;
+  - the monthly AI budget is checked before every page, and usage is logged as `vendor.pdf_read`;
+  - a Gemini outage (no key, 401/403/429/5xx, network) never marks a PDF, and after 3 failed runs in a row the reader pauses itself and shows the reason.
+- Pure `pdf-gemini-read-core` (32 self-tests) plus `pdf-gemini-read.ts`.
+- **Feeds the merge logic:** the vendor ledger now reads parsed manifests **plus** Gemini-read PDFs with a sender license, so more lots, licenses and duplicate cards show up on /admin/vendors/ledger and on each vendor's "What the paperwork says" panel. The summary line counts them separately.
+
+**Owner actions.**
+1. Paste `supabase/migrations/0366_media_search_fast.sql` into the Supabase SQL editor and run it. Checks and rollback are in docs/MIGRATIONS_TO_RUN.md.
+2. Press **Start reading** on Vendors → What the paperwork says.
+3. Optional settings: `AI_PDF_READ_MODEL`; `MENU_RESTAGE_BACKGROUND=off`.
+
+**Checks.** d247-fast-saves (28 tests: queue, absorption, PDF reader with fake database/storage/Gemini, wiring pins) plus the affected cron, ledger, onboarding and product suites; pure self-tests; scoped tsc; eslint on changed files.

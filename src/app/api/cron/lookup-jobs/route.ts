@@ -58,6 +58,12 @@
  * tick where it sent or saved something leaves the live drafts for the
  * next minute (both budgets together would not fit the 800 s route).
  *
+ * D247 (no new cron). Last, when the time left still fits its budget plus one
+ * worst-case rebuild, it finishes the BACKGROUND MENU UPDATES queued by
+ * onboarding Approve clicks (runMenuRestageQueue, its own lease; an empty
+ * queue costs one site_settings read). The click itself starts that work
+ * after its response; this is the safety net for a run that was cut off.
+ *
  * AUTH. The same fail-closed preamble as /api/cron/leafly-ack-sweep (copied,
  * not shared, for the reason recorded there):
  *   - CRON_SECRET set            -> Bearer must match, else staff session.
@@ -79,6 +85,10 @@ import { runEnrichBatchTick } from "@/lib/enrichment/enrich-batch-server";
 import { ENRICH_BATCH_TICK_BUDGET_MS } from "@/lib/enrichment/enrich-batch-core";
 import { runMediaEmbedTick } from "@/lib/media/media-embed-server";
 import { MEDIA_EMBED_TICK_BUDGET_MS } from "@/lib/media/media-embed-core";
+import { runMenuRestageQueue } from "@/lib/pos/menu-restage-queue";
+import { MENU_RESTAGE_CRON_BUDGET_MS, MENU_RESTAGE_LEASE_SLACK_MS } from "@/lib/pos/menu-restage-queue-core";
+import { runPdfGeminiRead } from "@/lib/pos/pdf-gemini-read";
+import { PDF_READ_CRON_BUDGET_MS, PDF_READ_LEASE_SLACK_MS } from "@/lib/pos/pdf-gemini-read-core";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +136,10 @@ export async function GET(req: NextRequest) {
   // carries on the automatic onboarding Start of rebuilt Cultivera manifests. No new cron. Its
   // own lease means one run at a time; an idle state costs one read of one site_settings row.
   // R74 S34: a minute that submitted or ingested a batch has used its time.
-  if (batch.submitted > 0 || batch.ingested > 0) return NextResponse.json({ ...result, batch, autoStart: null, mailRead: null, bulkAi: null }, { status: 200 });
+  if (batch.submitted > 0 || batch.ingested > 0) {
+    const restage = await restageIfTime(routeStart);
+    return NextResponse.json({ ...result, batch, autoStart: null, mailRead: null, bulkAi: null, restage }, { status: 200 });
+  }
   let autoStart: Awaited<ReturnType<typeof runCultiveraAutoStart>> | null = null;
   if (result.ok && result.skipped) {
     autoStart = await runCultiveraAutoStart({ budgetMs: AUTO_START_CRON_BUDGET_MS, trigger: "worker" });
@@ -158,7 +171,25 @@ export async function GET(req: NextRequest) {
   let mediaEmbed: Awaited<ReturnType<typeof runMediaEmbedTick>> | null = null;
   const embedBudgetMs = Math.min(MEDIA_EMBED_TICK_BUDGET_MS, ROUTE_END_MS - (Date.now() - routeStart));
   if (idle && !enrichWorked && embedBudgetMs >= 30_000) mediaEmbed = await runMediaEmbedTick({ budgetMs: embedBudgetMs });
-  return NextResponse.json({ ...result, batch, autoStart, mailRead, enrichBatch, bulkAi, mediaEmbed }, { status: result.ok ? 200 : 500 });
+  const restage = await restageIfTime(routeStart);
+  // D247 (A): a quiet minute with time left reads unreadable vendor PDFs with Gemini ("Start reading"
+  // on Vendors -> Ledger). No new cron. Its own lease means one run at a time; an idle state costs
+  // one read of one site_settings row. Menu updates (above) always go first.
+  let pdfRead: Awaited<ReturnType<typeof runPdfGeminiRead>> | null = null;
+  if (idle && !enrichWorked && ROUTE_END_MS - (Date.now() - routeStart) >= PDF_READ_CRON_BUDGET_MS + PDF_READ_LEASE_SLACK_MS) {
+    pdfRead = await runPdfGeminiRead({ budgetMs: PDF_READ_CRON_BUDGET_MS, trigger: "worker" });
+  }
+  return NextResponse.json({ ...result, batch, autoStart, mailRead, enrichBatch, bulkAi, mediaEmbed, restage, pdfRead }, { status: result.ok ? 200 : 500 });
+}
+
+/**
+ * D247: the background menu updates, only when the route still has room for the budget plus one
+ * worst-case rebuild started at its very end (the lease slack), so the 800 s route is never overrun.
+ */
+async function restageIfTime(routeStart: number): Promise<Awaited<ReturnType<typeof runMenuRestageQueue>> | null> {
+  const left = ROUTE_END_MS - (Date.now() - routeStart);
+  if (left < MENU_RESTAGE_CRON_BUDGET_MS + MENU_RESTAGE_LEASE_SLACK_MS) return null;
+  return runMenuRestageQueue({ budgetMs: MENU_RESTAGE_CRON_BUDGET_MS, trigger: "worker" });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.

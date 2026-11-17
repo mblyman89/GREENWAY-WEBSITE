@@ -1258,9 +1258,15 @@ export async function approveDraftWithPrice(
    * S17: `skipStaging` = the caller ("Approve all priced") approves several
    * drafts and stages ONCE itself afterwards. Every gate above still runs;
    * only the per-approval menu staging is deferred to that single call.
+   *
+   * D247: `backgroundStaging` = the onboarding Approve button. The approval
+   * is saved here exactly as before (every gate, the KB attach, the audit);
+   * only the menu rebuild + publish is put on the coalesced background queue
+   * (menu-restage-queue.ts) so the click returns at once. If the queue cannot
+   * be written, the rebuild runs inline as before - never skipped.
    */
-  opts: { skipStaging?: boolean } = {},
-): Promise<{ ok: boolean; error?: string }> {
+  opts: { skipStaging?: boolean; backgroundStaging?: boolean } = {},
+): Promise<{ ok: boolean; error?: string; stagingQueued?: boolean }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
   const admin = createSupabaseAdminClient();
 
@@ -1828,6 +1834,15 @@ export async function approveDraftWithPrice(
   // server-only menu code into every caller of this module; a staging/publish
   // hiccup must never fail the approval itself.
   if (row?.manifest_id && !opts.skipStaging) {
+    // D247: the onboarding button hands the rebuild to the background queue
+    // (one worker, coalesced: ten approvals in a minute = about two rebuilds).
+    if (opts.backgroundStaging) {
+      const { queueMenuRestage } = await import("@/lib/pos/menu-restage-queue");
+      const { restageBackgroundOn, MENU_RESTAGE_ENV } = await import("@/lib/pos/menu-restage-queue-core");
+      if (restageBackgroundOn(process.env[MENU_RESTAGE_ENV]) && (await queueMenuRestage(row.manifest_id, actorId))) {
+        return { ok: true, stagingQueued: true };
+      }
+    }
     try {
       const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
       await stageIntakeMenuVersionForManifest(row.manifest_id, actorId);

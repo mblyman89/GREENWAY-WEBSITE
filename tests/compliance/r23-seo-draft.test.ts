@@ -195,7 +195,9 @@ describe("R23 fix 4 - Draft SEO title & meta", () => {
     expect(e.seo_title).toBe(parseSeoSuggestion(st.db.rows("ai_suggestions")[0]!.suggested_value)!.title);
     expect(String(e.seo_description).length).toBeLessThanOrEqual(SEO_META_MAX);
     expect(st.db.rows("ai_suggestions")[0]!.status).toBe("accepted");
-    expect(st.audits.at(-1)).toMatchObject({ action: "product.ai_accepted", after: { field: "seo" } });
+    // D247 pin update (on purpose): the KB writeback now runs after the response and writes its
+    // own product.kb_writeback row, so the accept row is no longer necessarily the last one.
+    expect(st.audits.find((x) => (x as { action?: string }).action === "product.ai_accepted")).toMatchObject({ action: "product.ai_accepted", after: { field: "seo", kb_writeback: "background" } });
   });
 
   it("the accept-time compliance re-scan refuses a blocking claim and writes nothing", async () => {

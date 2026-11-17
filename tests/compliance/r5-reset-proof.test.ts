@@ -198,7 +198,9 @@ describe("guard: every table the rehearsal code WRITES is wiped, or deliberately
     // Fix Phase 4.4b (G-38): checklist_tasks / checklist_runs / checklist_ticks
     // (0327) are KEEP (the owner's task catalog and the five-year daily
     // checklist record), written by daily-checklist-store.
-    "audit_logs", "brands", "checklist_runs", "checklist_tasks", "checklist_ticks", "destruction_evidence", "disposition_settings", "employee_product_loans", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
+    // D247 (A): cultivera_mail_docs is KEEP (the emailed vendor-document archive), written by the
+    // Gemini PDF reader (pdf-gemini-read.ts: sender name / license / package ids on unreadable PDFs).
+    "audit_logs", "brands", "checklist_runs", "checklist_tasks", "checklist_ticks", "cultivera_mail_docs", "destruction_evidence", "disposition_settings", "employee_product_loans", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
     "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_cart_adjustments", "pos_devices", "product_classification_overrides", "recall_event_lots", "recall_event_weekly", "recall_events", "site_settings",
     "testing_labs", "vendor_aliases", "vendors", "website_category_types",
   ];

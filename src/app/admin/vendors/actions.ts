@@ -1039,6 +1039,19 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
   const survivor = await getVendorById(survivorId);
   if (!survivor) redirect(`${back}?error=` + encodeURIComponent("The card you chose to keep no longer exists."));
 
+  // D247: "each brand absorbed getting added to the vendors profile" - a merged-in card with no
+  // brand of its own becomes a brand ON THAT CARD first, so the merge carries it to the kept card.
+  let absorb: import("@/lib/vendors/merge-brand-absorb").AbsorbResult | null = null;
+  if (String(formData.get("absorb_brands") ?? "") === "1") {
+    try {
+      const { absorbVendorsAsBrands } = await import("@/lib/vendors/merge-brand-absorb");
+      absorb = await absorbVendorsAsBrands(survivorId, duplicateIds, session.userId);
+    } catch (err) {
+      unstable_rethrow(err);
+      redirect(`${back}?error=` + encodeURIComponent(`Nothing was merged - ${err instanceof Error ? err.message : "the brands could not be prepared"}.`));
+    }
+  }
+
   let summary: MergeVendorsSummary;
   try {
     summary = await mergeVendors(survivorId, duplicateIds);
@@ -1061,6 +1074,9 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
       total_rows_repointed: summary.totalRowsRepointed,
       merge_version: summary.version,
       needs_attention: summary.needsAttention,
+      absorbed_brands: absorb
+        ? { created: absorb.created, claimed: absorb.claimed, filled: absorb.filled, errors: absorb.errors, steps: absorb.steps.map((x) => ({ kind: x.kind, vendor: x.vendorName })) }
+        : undefined,
     },
   });
 
@@ -1078,7 +1094,13 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
     ? ` Left on the old card for you to review (money records are never moved automatically): ${held.map(([t, n]) => `${t.replace(/_/g, " ")} (${n})`).join(", ")}.`
     : "";
   const note = `Combined ${cards} cards into “${survivor!.display_name}”. ${summary.totalRowsRepointed} linked record${summary.totalRowsRepointed === 1 ? "" : "s"} moved over; the duplicate card${summary.duplicateIds.length === 1 ? " was" : "s were"} archived (nothing deleted).${heldNote}`;
-  redirect(`${back}?saved=1&note=${encodeURIComponent(note)}`);
+  let absorbText = "";
+  if (absorb) {
+    const { absorbNote } = await import("@/lib/vendors/merge-brand-absorb-core");
+    absorbText = absorbNote(absorb.steps);
+    if (absorb.errors.length) absorbText += ` Some brand steps failed: ${absorb.errors.slice(0, 3).join("; ")}.`;
+  }
+  redirect(`${back}?saved=1&note=${encodeURIComponent(absorbText ? `${note} ${absorbText}` : note)}`);
 }
 
 /**

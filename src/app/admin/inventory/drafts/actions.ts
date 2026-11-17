@@ -226,7 +226,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
     unitThcMg,
     volumeQuantity,
     volumeUnit,
-  });
+  }, { backgroundStaging: true });
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
     // Surface the floor-violation / classification-gate message.
