@@ -31,7 +31,7 @@ declare
   us bigint;
   prov jsonb := '[{"role":"Inventory","fileName":"inv17.csv","sha256":"1111111111111111111111111111111111111111111111111111111111111111","rows":2,"storagePath":"x/a"},
                   {"role":"Inventory","fileName":"sales17.csv","sha256":"2222222222222222222222222222222222222222222222222222222222222222","rows":3,"storagePath":"x/b"},
-                  {"role":"Product","fileName":"sheets.xlsx","sha256":"3333333333333333333333333333333333333333333333333333333333333333","rows":1,"storagePath":"x/c"}]';
+                  {"role":"Product","fileName":"sheets.xlsx","sha256":"3333333333333333333333333333333333333333333333333333333333333333","rows":1,"storagePath":null}]';
 begin
   -- 0. shape and grants
   select count(*) into n from pg_class where relname in ('ccrs_delivery_loads', 'ccrs_delivery_stage') and relkind = 'r' and relrowsecurity;
@@ -122,6 +122,8 @@ begin
   assert n = 1, 'product added with its name';
   select count(*) into n from public.ccrs_files where purpose = 'seed' and state = 'closed' and file_name like 'seed:2026-11-17-delivery:%';
   assert n = 3, 'three provenance files';
+  select count(*) into n from public.ccrs_files where purpose = 'seed' and file_name like 'seed:2026-11-17-delivery:3333%' and storage_path = 'local:sheets.xlsx';
+  assert n = 1, 'a file loaded from disk (CLI, no storage path) is recorded as local:<name>';
   select count(*) into n from public.ccrs_delivery_stage where load_id = lid;
   assert n = 0, 'stage cleared';
   select count(*) into n from public.ccrs_delivery_loads where id = lid and status = 'applied' and applied_by_email = 'owner@example.com';

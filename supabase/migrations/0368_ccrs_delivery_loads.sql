@@ -139,7 +139,8 @@ begin
 
   insert into public.ccrs_files (env, file_type, purpose, file_name, sha256, number_records, storage_path, state, notes)
   select 'prod', x->>'role', 'seed', v_seed || ':' || left(x->>'sha256', 12) || ':' || coalesce(nullif(x->>'fileName', ''), x->>'role'),
-         x->>'sha256', coalesce((x->>'rows')::integer, 0), x->>'storagePath', 'closed',
+         x->>'sha256', coalesce((x->>'rows')::integer, 0),
+         coalesce(nullif(x->>'storagePath', ''), 'local:' || coalesce(nullif(x->>'fileName', ''), x->>'role')), 'closed',
          'LCB examiner delivery current through ' || to_char(d.as_of, 'YYYY-MM-DD') || ' (D250). Loaded on top of the 9/18 seed: +'
            || v_add || ' new, ' || v_upd || ' updated.'
     from jsonb_array_elements(p_provenance) x
