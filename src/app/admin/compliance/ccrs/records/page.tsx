@@ -26,6 +26,9 @@ import { LOT_BUCKET_META, PLAN_BUCKET_META, bucketMeta, type CompareArea, type C
 import { CcrsCopyUploader } from "@/components/admin/compliance/CcrsCopyUploader";
 import { CcrsCopyActions } from "@/components/admin/compliance/CcrsCopyActions";
 import { CcrsFindingsExplorer } from "@/components/admin/compliance/CcrsFindingsExplorer";
+import { CcrsDeliveryApply, CcrsDeliveryUploader } from "@/components/admin/compliance/CcrsDeliveryLoader";
+import { listDeliveryLoads, type DeliveryLoadRow } from "@/lib/compliance/ccrs-delivery-store";
+import { DELIVERY_REVIEW_META, type DeliveryReviewBucket } from "@/lib/compliance/ccrs-delivery-core";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -212,6 +215,62 @@ function CopyDashboard({ copy, canEdit }: { copy: CopyRow; canEdit: boolean }) {
   );
 }
 
+/** D250 S3: the examiner's delivery (11/13 + 11/17 inventory and sales CSVs + 11_17_datarequest.xlsx). */
+function DeliveryLoad({ load, canEdit }: { load: DeliveryLoadRow; canEdit: boolean }) {
+  const s = load.summary;
+  const c = s?.counts;
+  const T = (r: Record<string, number> | undefined) => Object.values(r ?? {}).reduce((a, b) => a + b, 0);
+  return (
+    <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_TONE[load.status]}`}>{load.status === "applied" ? "Loaded" : STATUS_LABEL[load.status]}</span>
+        <span className="font-bold text-white/85">Delivery of {load.as_of}</span>
+        <span className="text-white/45">uploaded {when(load.created_at)}{load.uploaded_by_email ? ` · ${load.uploaded_by_email}` : ""}</span>
+        {load.applied_at ? <span className="text-violet-200">loaded {when(load.applied_at)} · +{n(load.apply_result?.added)} new / {n(load.apply_result?.updated)} updated</span> : null}
+        {s ? <a href={`/admin/compliance/ccrs/records/delivery/${load.id}/report`} className="ml-auto font-semibold text-emerald-300 hover:underline">Download the full report ↓</a> : null}
+      </div>
+      {load.error ? <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-100">{load.error}</div> : null}
+      {load.files?.length ? (
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          {load.files.map((f) => (
+            <span key={f.fileName} title={f.sha256 ? `sha256 ${f.sha256}` : undefined} className={`rounded-lg border px-2 py-1 ${f.known ? "border-emerald-400/30 text-emerald-100" : "border-amber-400/30 text-amber-100"}`}>
+              {f.known ? "✓" : "?"} {f.fileName}{f.rows !== undefined ? ` · ${n(f.rows)} rows` : ""}{f.known === false ? " · not the file Brian sent" : ""}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {c ? (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            <StatCard label="Lots delivered" value={n(c.delivered.lots)} />
+            <StatCard label="Sale rows" value={n(c.delivered.saleRows)} />
+            <StatCard label="New records" value={n(s.expect.add)} />
+            <StatCard label="Records updated" value={n(s.expect.upd)} />
+            <StatCard label="Lots proven by a sale" value={n(c.proofAdd + c.proofSettle)} />
+            <StatCard label="Already right" value={n(c.unchanged)} />
+          </div>
+          <p className="text-xs text-white/50">
+            Adds {n(T(c.add))} (Inventory {n(c.add.Inventory)}, Product {n(c.add.Product)}, Strain {n(c.add.Strain)}, Area {n(c.add.Area)}), refreshes {n(T(c.refresh))}, settles {n(c.settleLink)} unfiled-migration links.
+            CCRS&apos;s quantity is behind later sales on {n(c.staleQoh)} lots ({n(c.soldOutStillOpen)} of them sold out but still open): the clean-up fixes those from the physical count, not from this file.
+          </p>
+          <div className="space-y-1">
+            {(Object.keys(DELIVERY_REVIEW_META) as DeliveryReviewBucket[]).filter((b) => (c.review[b] ?? 0) > 0).map((b) => (
+              <details key={b} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
+                <summary className="cursor-pointer text-white/75"><b className="font-mono text-amber-100">{n(c.review[b])}</b> {b}: {DELIVERY_REVIEW_META[b]}</summary>
+                <ul className="mt-2 max-h-60 space-y-0.5 overflow-auto font-mono text-[11px] text-white/55">
+                  {(s.examples[b] ?? []).map((x) => <li key={`${x.t}:${x.id}`}>{x.t} {x.id} {x.why}</li>)}
+                  {(c.review[b] ?? 0) > (s.examples[b]?.length ?? 0) ? <li className="text-white/35">... the rest are in the full report</li> : null}
+                </ul>
+              </details>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {canEdit ? <CcrsDeliveryApply id={load.id} status={load.status} add={s?.expect.add ?? 0} upd={s?.expect.upd ?? 0} fileNames={(load.files ?? []).map((f) => f.fileName)} /> : null}
+    </div>
+  );
+}
+
 export default async function CcrsRecordsPage({ searchParams }: { searchParams: Promise<{ copy?: string; finding?: string }> }) {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");
@@ -220,6 +279,8 @@ export default async function CcrsRecordsPage({ searchParams }: { searchParams: 
   const pickId = sp.copy ?? list.rows.find((r) => r.status !== "discarded")?.id;
   const copy = pickId && list.available ? await getCopy(pickId) : null;
   const latestApplied = list.rows.find((r) => r.status === "applied");
+  const deliveries = isSupabaseServiceConfigured ? await listDeliveryLoads() : { available: false, rows: [] as DeliveryLoadRow[], error: null };
+  const shownLoads = deliveries.rows.filter((r) => r.status !== "discarded").slice(0, 3);
 
   return (
     <div className="space-y-5">
@@ -244,6 +305,22 @@ export default async function CcrsRecordsPage({ searchParams }: { searchParams: 
           {list.error ? `Couldn't read the copies: ${list.error}` : "Apply migration 0298_ccrs_record_copies.sql to turn this page on."}
         </div>
       ) : null}
+
+      <Section
+        title="Load the examiner's delivery (11/13 + 11/17)"
+        subtitle="Drop the five files Brian sent. They are checked against our ledger first (nothing changes); then one button records what CCRS holds, so the held-back weeks can upload as Updates. Lots, products, strains and areas are added; our own filings are never overwritten."
+      >
+        {!deliveries.available ? (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-xs text-amber-100">
+            {deliveries.error ? `Couldn't read the delivery loads: ${deliveries.error}` : "Apply migration 0368_ccrs_delivery_loads.sql to turn this on."}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {shownLoads.map((l) => <DeliveryLoad key={l.id} load={l} canEdit={canEdit} />)}
+            {canEdit && !shownLoads.some((l) => l.status === "applied") ? <CcrsDeliveryUploader defaultAsOf="2026-11-17" /> : null}
+          </div>
+        )}
+      </Section>
 
       {canEdit && list.available ? (
         <Section title="Upload a new CCRS copy" subtitle="Ask the LCB Service Desk for a full data copy for your license. You get four CSVs: Inventory, Product, Strain and Area. Nothing changes until you press Merge.">
