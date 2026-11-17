@@ -19,7 +19,8 @@
 -- or score >= 0.3) if it is a full-text hit or one of its three trigram
 -- scores is >= 0.3 (when there is no full-text hit the rank part is zero -
 -- verified on the live data), so the filter keeps every photo 0352 would
--- return. The thresholds are set to 0.29 for this function only. pg_trgm is
+-- return. The thresholds are set to 0.29 for this call only (set_config in
+-- the body - see the note there - then put back). pg_trgm is
 -- case-insensitive, so the raw columns match the lower() scores (verified:
 -- zero differences on the live library). Verified before writing this file:
 -- for seven real queries the ordered top 60 (ids, scores and totals)
@@ -48,8 +49,6 @@ returns table (media_id uuid, score real, total bigint)
 language plpgsql
 stable
 set search_path = public, extensions, pg_temp
-set pg_trgm.similarity_threshold = '0.29'
-set pg_trgm.word_similarity_threshold = '0.29'
 as $$
 #variable_conflict use_column
 declare
@@ -57,6 +56,8 @@ declare
   v_tq  tsquery := null;
   v_lim integer := least(greatest(coalesce(p_limit, 60), 1), 200);
   v_off integer := greatest(coalesce(p_offset, 0), 0);
+  v_old_sim  text;
+  v_old_wsim text;
 begin
   if v_t is null then
     return query
@@ -78,6 +79,15 @@ begin
     select string_agg(w || ':*', ' & ')
       from regexp_split_to_table(regexp_replace(v_t, '[^a-z0-9 ]', ' ', 'g'), ' +') w
      where w <> ''));
+
+  -- Thresholds for the candidate step, for this call only. Set in the body
+  -- with set_config because a function SET clause naming a pg_trgm setting
+  -- is refused (42501) for a non-superuser such as the SQL editor login.
+  -- The caller values are saved first and put back before returning.
+  v_old_sim  := coalesce(nullif(current_setting('pg_trgm.similarity_threshold', true), ''), '0.3');
+  v_old_wsim := coalesce(nullif(current_setting('pg_trgm.word_similarity_threshold', true), ''), '0.6');
+  perform set_config('pg_trgm.similarity_threshold', '0.29', true);
+  perform set_config('pg_trgm.word_similarity_threshold', '0.29', true);
 
   return query
     with cand as (
@@ -114,6 +124,9 @@ begin
       from hits h
      order by h.s desc, h.created_at desc, h.id
      limit v_lim offset v_off;
+
+  perform set_config('pg_trgm.similarity_threshold', v_old_sim, true);
+  perform set_config('pg_trgm.word_similarity_threshold', v_old_wsim, true);
 end;
 $$;
 

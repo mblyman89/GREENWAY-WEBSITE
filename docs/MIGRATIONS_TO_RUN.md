@@ -4257,6 +4257,14 @@ in Vercel.
   and on 7 live searches the ids, scores and totals matched exactly (md5). Same arguments, same columns, same
   service-role-only grant. No table changes.
 
+  **Fixed 2026-11-17 (D249):** the first version failed in the SQL editor with
+  `42501: permission denied to set parameter "pg_trgm.similarity_threshold"`, because a function `SET` clause naming
+  a pg_trgm setting is refused for a non-superuser. The thresholds are now set inside the function body with
+  `set_config(..., true)` and put back before it returns. Verified as a non-superuser on a fresh Postgres: it applies,
+  re-runs cleanly, and on 3,000 photos and 14 searches (with paging and a status filter) the ids, scores and totals are
+  identical to 0352. The live database already has the index from the failed attempt (the index step ran before
+  the error). Re-running is safe: the index is skipped and the function is created.
+
   Safe to re-run. Paste the file itself (no editor-safe copy is needed: its comments carry no apostrophes, semicolons or
   non-ASCII characters, checked by the repo's transit-hazard scanner).
   The index build takes a few seconds; if the editor shows "Potential issue detected", click **"Run without RLS"**.
@@ -4265,7 +4273,8 @@ in Vercel.
 
   ```sql
   select indexname from pg_indexes where indexname = 'idx_media_assets_text_trgm';   -- 1 row
-  select position('cand' in prosrc) > 0 as fast_body from pg_proc where proname = 'media_search';  -- true
+  select position('cand' in prosrc) > 0 as fast_body, position('set_config' in prosrc) > 0 as fixed_body
+    from pg_proc where proname = 'media_search';                                     -- true, true
   select count(*) as hits from public.media_search(p_query => 'blue dream', p_limit => 30); -- same count as before
   ```
 

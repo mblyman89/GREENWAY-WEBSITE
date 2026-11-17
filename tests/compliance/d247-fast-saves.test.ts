@@ -183,8 +183,14 @@ describe("D247 migration 0366 media_search_fast", () => {
   const rb = read("supabase/rollbacks/0366_media_search_fast.rollback.sql");
   it("adds the trigram index and an indexed candidate UNION with matching thresholds", () => {
     expect(mig).toContain("create index if not exists idx_media_assets_text_trgm");
-    expect(mig).toMatch(/set pg_trgm\.similarity_threshold\s*=\s*'0\.29'/);
-    expect(mig).toMatch(/set pg_trgm\.word_similarity_threshold\s*=\s*'0\.29'/);
+    // Owner hit 42501 "permission denied to set parameter pg_trgm.similarity_threshold"
+    // in the SQL editor: a function SET clause naming a pg_trgm setting is refused
+    // for a non-superuser. The thresholds are set inside the body instead and put back.
+    expect(mig).not.toMatch(/^\s*set\s+pg_trgm\./im);
+    expect(mig).toContain("perform set_config('pg_trgm.similarity_threshold', '0.29', true);");
+    expect(mig).toContain("perform set_config('pg_trgm.word_similarity_threshold', '0.29', true);");
+    expect(mig).toContain("perform set_config('pg_trgm.similarity_threshold', v_old_sim, true);");
+    expect(mig).toContain("perform set_config('pg_trgm.word_similarity_threshold', v_old_wsim, true);");
     expect(mig).toContain("union");
     expect(mig).toContain("revoke");
     expect(mig).toContain("to service_role");
