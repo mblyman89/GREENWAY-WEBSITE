@@ -12,12 +12,13 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { parseLedgerLine, type LedgerRow } from "./ccrs-reseed-core";
 import { deliveryExpect, deliveryReport, planDeliveryMerge, type DeliveryPlan } from "./ccrs-delivery-core";
-import { buildDeliverySet, deliveryProvenance, summarizeDelivery, DELIVERY_SLOTS, type DeliveryFileInfo, type DeliveryLoadSummary } from "./ccrs-delivery-files";
+import { buildDeliverySet, deliveryKey, deliveryProvenance, summarizeDelivery, DELIVERY_SLOTS, type DeliveryFileInfo, type DeliveryLoadSummary } from "./ccrs-delivery-files";
 import { RECORDS_BUCKET } from "./ccrs-records-compare-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 export type { DeliveryLoadSummary } from "./ccrs-delivery-files";
+export { deliveryKey } from "./ccrs-delivery-files";
 
 export type DeliveryLoadRow = {
   id: string;
@@ -39,12 +40,6 @@ const COLS = "id, as_of, status, files, summary, error, notes, uploaded_by_email
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const missing = (m: string | undefined, code?: string) =>
   code === "42P01" || code === "PGRST202" || code === "PGRST205" || (/ccrs_delivery_|ccrs_apply_delivery/.test(m ?? "") && /does not exist|schema cache|Could not find/.test(m ?? ""));
-
-export function deliveryKey(loadId: string, n: number): string {
-  if (!/^[0-9a-f-]{36}$/i.test(loadId)) throw new Error("bad load id");
-  if (!Number.isInteger(n) || n < 0 || n >= DELIVERY_SLOTS.length) throw new Error("bad file number");
-  return `deliveries/${loadId}/file-${n + 1}`;
-}
 
 export async function listDeliveryLoads(): Promise<{ available: boolean; rows: DeliveryLoadRow[]; error: string | null }> {
   const { data, error } = await createSupabaseAdminClient().from("ccrs_delivery_loads").select(COLS).order("created_at", { ascending: false }).limit(20);
