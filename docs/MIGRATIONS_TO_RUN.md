@@ -4271,3 +4271,25 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0366_media_search_fast.rollback.sql` (restores the exact 0352
   function body and drops the new index).
+
+- [ ] **`supabase/migrations/0367_payroll_sage_compare.sql`** — D248 slice 4, Sage comparison (owner: "I just want to take
+  the hours worked and calculate all things employee payroll for me to compare with sage"). Adds one table,
+  `payroll_sage_comparisons`: one row per pay period holding the Sage amounts typed or pasted on
+  /admin/payroll-center/compare (per employee, per paystub line, in cents). It is service role only (RLS on, no
+  policies, revoked from anon and authenticated) because per-employee pay must not be readable by every staff login, as
+  `site_settings` is. It is not a pay record, journal or filing. It has no foreign key (the factory reset empties pay
+  periods and keeps this table, so the period id is a plain uuid). Until it is applied, the compare page shows the
+  calculated side and says the table is missing. Nothing else is affected.
+
+  Safe to re-run. Paste the file itself (no editor-safe copy is needed because the transit-hazard scanner finds no apostrophes,
+  semicolons or non-ASCII characters in its comments).
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select relrowsecurity as rls_on from pg_class where oid = 'public.payroll_sage_comparisons'::regclass;  -- true
+  select count(*) as rows_now from public.payroll_sage_comparisons;                                          -- 0
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0367_payroll_sage_compare.rollback.sql` (drops the table and the
+  typed Sage amounts. Nothing else reads it).
