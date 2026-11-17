@@ -627,6 +627,9 @@ import { __runMenuCategoryOverrideCoreTests } from "../../src/lib/menu/menu-cate
 import { __runRegisterLimitExplainTests } from "../../src/lib/inventory/register-limit-explain-core";
 import { __runVendorLedgerTests } from "../../src/lib/vendors/vendor-ledger-core";
 import { __runPublicProfileCollapseTests } from "../../src/lib/vendors/public-profile-collapse-core";
+import { __runMenuRestageQueueCoreTests } from "../../src/lib/pos/menu-restage-queue-core";
+import { __runMergeBrandAbsorbCoreTests } from "../../src/lib/vendors/merge-brand-absorb-core";
+import { __runPdfGeminiReadCoreTests } from "../../src/lib/pos/pdf-gemini-read-core";
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3003,6 +3006,9 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("register-limit-explain-core", __runRegisterLimitExplainTests(), 17); // D246: inventory page "At the register" (category, source, legal bucket, flower-filed-as-infused flag)
   assertRan("vendor-ledger-core", __runVendorLedgerTests(), 30); // D246: paperwork license -> lot verdicts, move groups, UBI groups, brand fills
   assertRan("public-profile-collapse-core", __runPublicProfileCollapseTests(), 12); // D246: merged vendor rows fold into survivor on public /vendors
+  assertRan("menu-restage-queue-core", __runMenuRestageQueueCoreTests(), 31); // D247: approve saves fast - the live-menu rebuild runs in a coalesced background queue (after the click + cron fallback), lease, retries, status
+  assertRan("merge-brand-absorb-core", __runMergeBrandAbsorbCoreTests(), 23); // D247: hand-picked vendor merge - brand-less merged-in cards become brands on the kept card (never steals another vendor's brand), picker search + ids
+  assertRan("pdf-gemini-read-core", __runPdfGeminiReadCoreTests(), 32); // D247: Gemini background reader for unreadable vendor PDFs - lease, pause, self-pause on outages, answer cleaning (never our own licence), row patch
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

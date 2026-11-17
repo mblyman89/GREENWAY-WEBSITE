@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -6,6 +7,9 @@ import { listVendors } from "@/lib/vendors/store";
 import { findDuplicateGroups, type MergeCandidate } from "@/lib/vendors/merge-core";
 import { MergeGroupCard } from "@/components/admin/vendors/MergeGroupCard";
 import { mergeVendorsAction } from "../actions";
+import { ManualMergePicker } from "@/components/admin/vendors/ManualMergePicker";
+import { MANUAL_MERGE_MAX_CARDS, parsePickedIds, searchVendorsForMerge } from "@/lib/vendors/merge-brand-absorb-core";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +61,7 @@ function toCandidate(v: MergeCandidate): MergeCandidate {
 export default async function VendorMergePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; note?: string; back?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; note?: string; back?: string; q?: string; pick?: string | string[] }>;
 }) {
   await requirePermission("vendors.manage");
   const sp = await searchParams;
@@ -78,6 +82,29 @@ export default async function VendorMergePage({
 
   const all = await listVendors();
   const groups = findDuplicateGroups(all.map(toCandidate));
+
+  // D247: hand-picked merge - search any vendor, pick 2-5 cards (kept in the URL).
+  const pickIds = parsePickedIds(sp.pick).filter((id) => all.some((v) => v.id === id && v.status !== "archived"));
+  const q = String(sp.q ?? "").slice(0, 80);
+  const hits = q ? searchVendorsForMerge(all, q, pickIds) : [];
+  const urlFor = (ids: string[], query = q) => {
+    const u = new URLSearchParams();
+    if (query) u.set("q", query);
+    if (ids.length) u.set("pick", ids.join(","));
+    const qs = u.toString();
+    return `/admin/vendors/merge${qs ? `?${qs}` : ""}#pick`;
+  };
+  // Live brand counts for the picks (the stored vendors.brand_count can lag).
+  const liveBrands = new Map<string, number>();
+  if (pickIds.length) {
+    const { data } = await createSupabaseAdminClient().from("brands").select("vendor_id").in("vendor_id", pickIds);
+    for (const r of (data as { vendor_id: string }[] | null) ?? []) liveBrands.set(r.vendor_id, (liveBrands.get(r.vendor_id) ?? 0) + 1);
+  }
+  const picked = pickIds
+    .map((id) => all.find((v) => v.id === id))
+    .filter((v): v is NonNullable<typeof v> => Boolean(v))
+    .map((v) => ({ ...toCandidate(v), brand_count: liveBrands.get(v.id) ?? 0 }));
+  const removeHref = Object.fromEntries(pickIds.map((id) => [id, urlFor(pickIds.filter((x) => x !== id))]));
 
   return (
     <div>
@@ -132,6 +159,58 @@ export default async function VendorMergePage({
             {sp.note ? decodeURIComponent(sp.note) : "Merged."}
           </div>
         )}
+
+        {/* D247: pick any two or more cards by hand (brands filed as their own vendor). */}
+        <section id="pick" className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4" data-testid="manual-merge">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Pick cards to merge by hand</h2>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              For a vendor whose brands were filed as their own vendor cards. Search, add two to {MANUAL_MERGE_MAX_CARDS} cards, choose the one to keep. Each merged-in card can become a
+              brand on the kept card.
+            </p>
+          </div>
+          <form method="get" action="/admin/vendors/merge#pick" className="flex flex-wrap items-center gap-2">
+            {pickIds.length > 0 && <input type="hidden" name="pick" value={pickIds.join(",")} />}
+            <input
+              type="search"
+              name="q"
+              defaultValue={q}
+              placeholder="Vendor name, DBA, license or website"
+              className="min-w-[16rem] flex-1 rounded-[var(--admin-radius)] border border-white/15 bg-black/30 px-3 py-1.5 text-sm text-white"
+            />
+            <button type="submit" className="rounded-full border border-white/15 px-4 py-1.5 text-xs text-white/80 hover:border-[var(--admin-accent)] hover:text-white">
+              Search
+            </button>
+            {(pickIds.length > 0 || q) && (
+              <Link href="/admin/vendors/merge#pick" className="text-xs text-white/50 underline-offset-2 hover:text-white hover:underline">
+                Start over
+              </Link>
+            )}
+          </form>
+          {q && (
+            <ul className="divide-y divide-white/5 rounded-[var(--admin-radius)] border border-white/10" data-testid="manual-merge-hits">
+              {hits.length === 0 && <li className="px-3 py-2 text-xs text-white/50">No active vendor matches “{q}”.</li>}
+              {hits.map((v) => (
+                <li key={v.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate text-white">
+                    {v.display_name}
+                    <span className="ml-2 text-xs text-white/40">
+                      {v.license_number ? `Lic ${v.license_number}` : "No license #"} · {v.status}
+                    </span>
+                  </span>
+                  {pickIds.length < MANUAL_MERGE_MAX_CARDS ? (
+                    <Link href={urlFor([...pickIds, v.id])} className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/80 hover:border-[var(--admin-accent)] hover:text-white">
+                      + Add
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-white/40">{MANUAL_MERGE_MAX_CARDS} picked (the most per merge)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {picked.length > 0 && <ManualMergePicker key={pickIds.join(",")} picked={picked} removeHref={removeHref} mergeAction={mergeVendorsAction} />}
+        </section>
 
         {groups.length === 0 ? (
           <EmptyState

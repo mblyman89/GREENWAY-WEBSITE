@@ -18,6 +18,9 @@ import { loadVendorLedger } from "@/lib/vendors/vendor-ledger-server";
 import { brandFills, licenseKey, moveGroups, unknownLicenseGroups } from "@/lib/vendors/vendor-ledger-core";
 import { vendorSlugCandidate, stripLicenseSuffix } from "@/lib/inventory/vendor-resolve-core";
 import { mergeVendorsAction } from "../actions";
+import { runAfterResponse } from "@/lib/after-response";
+import { armPdfReadNow, pausePdfReadNow, runPdfGeminiRead } from "@/lib/pos/pdf-gemini-read";
+import { PDF_READ_PRESS_BUDGET_MS } from "@/lib/pos/pdf-gemini-read-core";
 
 const BACK = "/admin/vendors/ledger";
 
@@ -180,4 +183,33 @@ export async function ledgerFillBrandAction(formData: FormData): Promise<void> {
 export async function ledgerMergeAction(formData: FormData): Promise<void> {
   formData.set("return_to", BACK);
   return mergeVendorsAction(formData);
+}
+
+/**
+ * D247 (A): "Read the unreadable PDFs with Gemini". Queues every unreadable vendor PDF and starts the
+ * first run AFTER the response (the click returns at once); the every-minute worker keeps going
+ * until all are read. Re-pressing restarts the pass counts; already-read PDFs are never resent.
+ */
+export async function ledgerStartPdfReadAction(): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  try {
+    await armPdfReadNow(session.userId);
+  } catch (err) {
+    fail(`Could not start the PDF reader: ${err instanceof Error ? err.message : "unknown error"}`);
+  }
+  runAfterResponse("vendor-pdf-read", async () => {
+    await runPdfGeminiRead({ budgetMs: PDF_READ_PRESS_BUDGET_MS, actorId: session.userId, trigger: "press" });
+  });
+  done("Gemini started reading the unreadable vendor PDFs on the server. You can leave this page; it keeps going in the background and this page shows the progress.");
+}
+
+/** D247 (A): pause the background PDF reader (PDFs already being read are finished and saved). */
+export async function ledgerPausePdfReadAction(): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  try {
+    await pausePdfReadNow(session.userId);
+  } catch (err) {
+    fail(`Could not pause the PDF reader: ${err instanceof Error ? err.message : "unknown error"}`);
+  }
+  done("The PDF reader is paused. Press Start to carry on; PDFs already read are kept.");
 }

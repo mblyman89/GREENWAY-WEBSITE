@@ -8,7 +8,9 @@ import "server-only";
  *
  * Sources (all read-only, all paged with a stable order):
  *   - cultivera_mail_docs: every parsed manifest/invoice we were emailed
- *     (sender license, printed sender name, package barcodes).
+ *     (sender license, printed sender name, package barcodes), plus (D247)
+ *     the "unreadable" vendor PDFs Gemini has since read the sender off
+ *     (note starts "Gemini read"; see src/lib/pos/pdf-gemini-read.ts).
  *   - inbound_manifests: WCIA transfer JSON we imported directly
  *     (from_license_number / from_license_name, items[].inventory_id).
  *   - vendors, inventory_lots, brands.
@@ -18,6 +20,7 @@ import "server-only";
  */
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { PDF_READ_NOTE_PREFIX } from "@/lib/pos/pdf-gemini-read-core";
 import {
   buildVendorLedger,
   licenseKey,
@@ -62,8 +65,14 @@ export type VendorLedgerData = {
   result: LedgerResult;
   /** Read problems; empty when every table was read completely. */
   problems: string[];
-  sources: { mailDocs: number; wciaManifests: number };
+  sources: { mailDocs: number; geminiDocs: number; wciaManifests: number };
 };
+
+/**
+ * D247: the documents the ledger trusts - parsed manifests, and unreadable vendor PDFs whose sender
+ * Gemini read (the row keeps status 'unreadable'; only its sender columns + note were filled).
+ */
+export const LEDGER_DOC_FILTER = `status.eq.parsed,and(status.eq.unreadable,note.like.${PDF_READ_NOTE_PREFIX}*)`;
 
 type VendorRow = Omit<LedgerVendor, "has_logo"> & { logo_media_id: string | null };
 
@@ -72,14 +81,14 @@ export async function loadVendorLedger(adminIn?: Admin): Promise<VendorLedgerDat
   const problems: string[] = [];
 
   const [mailDocs, manifests, vendorRows, lots, brands] = await Promise.all([
-    readAll<{ id: string; vendor_license: string | null; vendor_label: string | null; transfer_date: string | null; email_at: string | null; barcodes: string[] | null }>(
+    readAll<{ id: string; status: string | null; vendor_license: string | null; vendor_label: string | null; transfer_date: string | null; email_at: string | null; barcodes: string[] | null }>(
       "manifest/invoice archive",
       problems,
       (f, t) =>
         admin
           .from("cultivera_mail_docs")
-          .select("id, vendor_license, vendor_label, transfer_date, email_at, barcodes")
-          .eq("status", "parsed")
+          .select("id, status, vendor_license, vendor_label, transfer_date, email_at, barcodes")
+          .or(LEDGER_DOC_FILTER)
           .not("vendor_license", "is", null)
           .order("id")
           .range(f, t),
@@ -153,7 +162,7 @@ export async function loadVendorLedger(adminIn?: Admin): Promise<VendorLedgerDat
 
   const vendors: LedgerVendor[] = vendorRows.map(({ logo_media_id, ...v }) => ({ ...v, has_logo: !!logo_media_id }));
   const result = buildVendorLedger({ docs, vendors, lots });
-  return { docs, vendors, lots, brands, result, problems, sources: { mailDocs: mailDocs.length, wciaManifests: wciaAdded } };
+  return { docs, vendors, lots, brands, result, problems, sources: { mailDocs: mailDocs.filter((d) => d.status === "parsed").length, geminiDocs: mailDocs.filter((d) => d.status !== "parsed").length, wciaManifests: wciaAdded } };
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +208,7 @@ export async function loadVendorPaperworkPanel(vendorId: string, adminIn?: Admin
   const forms = cardLics.flatMap(storedLicenseForms);
   if (forms.length) {
     const rows = await readAll<DocRow>("manifests for this license", problems, (f, t) =>
-      admin.from("cultivera_mail_docs").select(sel).eq("status", "parsed").in("vendor_license", forms).order("id").range(f, t),
+      admin.from("cultivera_mail_docs").select(sel).or(LEDGER_DOC_FILTER).in("vendor_license", forms).order("id").range(f, t),
     );
     for (const r of rows) docsById.set(r.id, r);
   }
@@ -207,7 +216,7 @@ export async function loadVendorPaperworkPanel(vendorId: string, adminIn?: Admin
   for (let i = 0; i < codes.length; i += 100) {
     const chunk = codes.slice(i, i + 100);
     const rows = await readAll<DocRow>("manifests for these lots", problems, (f, t) =>
-      admin.from("cultivera_mail_docs").select(sel).eq("status", "parsed").not("vendor_license", "is", null).overlaps("barcodes", chunk).order("id").range(f, t),
+      admin.from("cultivera_mail_docs").select(sel).or(LEDGER_DOC_FILTER).not("vendor_license", "is", null).overlaps("barcodes", chunk).order("id").range(f, t),
     );
     for (const r of rows) docsById.set(r.id, r);
   }

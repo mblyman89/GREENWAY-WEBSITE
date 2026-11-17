@@ -230,6 +230,9 @@ import { LOOKUP_HONEST_MISS } from "@/lib/inventory/product-lookup-core";
 // R66: progress bar + measured time left + auto-refresh while the batch runs.
 import { batchProgress, etaLine } from "@/lib/catalog/lookup-progress-core";
 import { BatchLookupAutoRefresh } from "@/components/admin/catalog/BatchLookupAutoRefresh";
+// D247: Approve returns at once; the menu update runs in the background (status line + row lock).
+import { PendingRowMark } from "@/components/admin/catalog/PendingRowMark";
+import { loadMenuRestageStatus } from "@/lib/pos/menu-restage-queue";
 
 export const dynamic = "force-dynamic";
 // T-318 / T-323: the AI product lookup (a server action invoked on this route)
@@ -357,6 +360,8 @@ export default async function CatalogDraftsPage({
         })
       : null,
   );
+  // D247: the background menu update (one site_settings row).
+  const restageP = early(() => loadMenuRestageStatus());
   const savedFactsP = early(() => (earlyRowsOpen && onboardingV2RowEnabled(process.env[ONBOARDING_V2_ROW_ENV]) ? loadSavedProductFacts(earlyFactRows) : null));
   // R50 S3: rows whose delivery was rebuilt from the Cultivera export (cards
   // already selling) + the "Cultivera manifests" section. Both best-effort:
@@ -815,10 +820,13 @@ export default async function CatalogDraftsPage({
     factResult && factResult !== "error" && factResult !== "migration"
       ? servingLimitBannerText(parseServingLimitCodes(sp.fact_warn))
       : null;
+  const restage = await restageP;
   const banner =
     factResult ? [factResultCopy(factResult, sp.fact_msg), factLimitWarn].filter(Boolean).join(" ")
     : batchDone ? batchResultCopy(batchDone)
-    : approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
+    : approved ? (restage?.ok && restage.tone === "busy"
+        ? "Approved — saved. The live menu updates in the background within about a minute (keep approving; nothing waits for it). Add photos & a description in Product Enrichment whenever you're ready."
+        : "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready.")
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
           : errorText;
@@ -873,6 +881,19 @@ export default async function CatalogDraftsPage({
           </BackLink>
         </div>
         <CatalogStageStrip current="onboarding" />
+
+        {/* D247: Approve no longer waits for the whole menu to rebuild - it is queued and done in
+            the background (coalesced). This line says what is waiting and refreshes itself. */}
+        {restage?.ok && restage.tone !== "ok" && (
+          <div
+            className={`rounded-[var(--admin-radius)] border px-3 py-2 text-xs ${restage.tone === "warn" ? "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]" : "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]"}`}
+            data-testid="menu-restage-status"
+            data-tone={restage.tone}
+          >
+            <p>{restage.text}</p>
+            <BatchLookupAutoRefresh active={restage.tone === "busy"} everyMs={20_000} />
+          </div>
+        )}
 
         {/* W4: one plain-English next action for the tab you're on. */}
         <WhatDoIDoHere action={draftsWhatDoIDoHere(view, counts)} />
@@ -2340,6 +2361,8 @@ export default async function CatalogDraftsPage({
                                   </p>
                                 )}
                                 </>)}
+                                {/* D247: the row dims + locks the moment Approve is sent; the next row is free. */}
+                                <PendingRowMark />
                               </form>
                   );
                   return (
@@ -2538,6 +2561,7 @@ export default async function CatalogDraftsPage({
                               <form action={dismiss}>
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 <Button type="submit" variant="neutral" size="sm">Dismiss</Button>
+                                <PendingRowMark />
                               </form>
                             </>
                           )}
@@ -2582,6 +2606,7 @@ export default async function CatalogDraftsPage({
                               <form action={restore}>
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 <Button type="submit" variant="neutral" size="sm">↩ Restore</Button>
+                                <PendingRowMark />
                               </form>
                               {view === "approved" && factFlags?.flags.get(d.id) && (
                                 <IntakeFactReviewPanel

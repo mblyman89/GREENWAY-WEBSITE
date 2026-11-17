@@ -8,9 +8,13 @@ import type { MergeCandidate } from "@/lib/vendors/merge-core";
 import { MergeGroupCard } from "@/components/admin/vendors/MergeGroupCard";
 import { loadVendorLedger } from "@/lib/vendors/vendor-ledger-server";
 import { brandFills, businessGroups, moveGroups, unknownLicenseGroups, type LedgerVendor } from "@/lib/vendors/vendor-ledger-core";
-import { ledgerAddLicenseAction, ledgerFillBrandAction, ledgerMergeAction, ledgerMoveLotsAction } from "./actions";
+import { ledgerAddLicenseAction, ledgerFillBrandAction, ledgerMergeAction, ledgerMoveLotsAction, ledgerPausePdfReadAction, ledgerStartPdfReadAction } from "./actions";
+import { loadPdfReadStatus } from "@/lib/pos/pdf-gemini-read";
+import { BatchLookupAutoRefresh } from "@/components/admin/catalog/BatchLookupAutoRefresh";
 
 export const dynamic = "force-dynamic";
+/** D247 (A): the Start button's first Gemini run (PDF_READ_PRESS_BUDGET_MS = 200 s) runs after the response on this route. */
+export const maxDuration = 300;
 
 /**
  * /admin/vendors/ledger (D246): "What the paperwork says".
@@ -82,7 +86,7 @@ export default async function VendorLedgerPage({
     );
   }
 
-  const [ledger, allVendors] = await Promise.all([loadVendorLedger(), listVendors()]);
+  const [ledger, allVendors, pdfRead] = await Promise.all([loadVendorLedger(), listVendors(), loadPdfReadStatus()]);
   const byId = new Map(ledger.vendors.map((v) => [v.id, v]));
   const fullById = new Map(allVendors.map((v) => [v.id, v]));
   const c = ledger.result.counts;
@@ -142,6 +146,7 @@ export default async function VendorLedgerPage({
           <h2 className="text-sm font-bold text-white">Summary</h2>
           <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
             Read {ledger.sources.mailDocs.toLocaleString()} parsed manifests/invoices from the email archive
+            {ledger.sources.geminiDocs ? ` plus ${ledger.sources.geminiDocs.toLocaleString()} PDFs read by Gemini` : ""}
             {ledger.sources.wciaManifests ? ` plus ${ledger.sources.wciaManifests} imported transfer manifests` : ""}, covering{" "}
             {ledger.result.licenses.size.toLocaleString()} sender licenses.
           </p>
@@ -155,6 +160,41 @@ export default async function VendorLedgerPage({
           {!showAll && (
             <p className="mt-2 text-xs"><Link className="underline" href="/admin/vendors/ledger?all=1">Show every row</Link> (lists are cut to {SHOW} each).</p>
           )}
+        </section>
+
+
+        <section className={card} data-testid="pdf-gemini-read">
+          <BatchLookupAutoRefresh active={pdfRead.ok && pdfRead.running} />
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="max-w-3xl">
+              <h2 className="text-sm font-bold text-white">Read the unreadable PDFs with Gemini</h2>
+              <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+                Thousands of emailed vendor PDFs are invoices or scans the manifest reader could not use. Gemini reads
+                each one on the server and saves the sender&apos;s name, license, UBI and package ids, so this page can
+                place more lots and more cards. Nothing on your vendor cards changes until you press a fix button below.
+              </p>
+              <p className="mt-2 text-sm text-white/90" data-testid="pdf-gemini-read-status">
+                {pdfRead.ok ? pdfRead.text : `Status unavailable: ${pdfRead.error}`}
+              </p>
+              {pdfRead.ok && pdfRead.lastNote && (
+                <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+                  Last run{pdfRead.lastRunAt ? ` ${new Date(pdfRead.lastRunAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}` : ""}: {pdfRead.lastNote}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {(!pdfRead.ok || pdfRead.canStart) && (
+                <form action={ledgerStartPdfReadAction}>
+                  <button type="submit" className={btn}>Start reading</button>
+                </form>
+              )}
+              {pdfRead.ok && pdfRead.canPause && (
+                <form action={ledgerPausePdfReadAction}>
+                  <button type="submit" className="rounded-[var(--admin-radius)] border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/85 hover:border-white/40">Pause</button>
+                </form>
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="space-y-3">

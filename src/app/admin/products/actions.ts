@@ -38,6 +38,7 @@ import {
   type ProductFacts,
 } from "@/lib/ai/suggestions";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
+import { writeBackOnPublishAfterResponse } from "@/lib/ai/kb/writeback-after";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getMedia } from "@/lib/media/store";
@@ -326,9 +327,10 @@ export async function setEnrichmentStatus(formData: FormData): Promise<void> {
 
   // On PUBLISH, promote the validated facts into the KB (drafts-only, non-
   // destructive, compliance-gated). Best-effort: never blocks the publish.
-  let writeback: Awaited<ReturnType<typeof writeBackOnPublish>> = null;
+  // D247: the writeback (~20 sequential DB round trips) runs AFTER the response and
+  // audits its own result as product.kb_writeback - the click no longer waits on it.
   if (status === "published") {
-    writeback = await writeBackOnPublish(key, session.userId);
+    writeBackOnPublishAfterResponse(key, { userId: session.userId, email: session.email }, "publish");
   }
 
   await recordAudit({
@@ -337,7 +339,7 @@ export async function setEnrichmentStatus(formData: FormData): Promise<void> {
     action: `product.${status}`,
     entityType: "product",
     entityId: key,
-    after: writeback ? { kb_writeback: writeback } : undefined,
+    after: status === "published" ? { kb_writeback: "background" } : undefined,
   });
 
   revalidatePath("/admin/products");
@@ -559,7 +561,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
       after: out.ok ? out.audit : { error: out.error, ...(out.audit ?? {}) },
     });
     if (!out.ok) redirect(detailUrl(key, listBack, "?error=" + encodeURIComponent(out.error), "#ai"));
-    await writeBackOnPublish(key, session.userId).catch(() => null);
+    writeBackOnPublishAfterResponse(key, { userId: session.userId, email: session.email }, "accept-edited"); // D247
     if (out.field === "strain_type" || out.field === "potency") revalidatePublicMenuSurfaces();
     revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
     redirect(detailUrl(key, listBack, "?saved=1", "#ai"));
@@ -588,7 +590,8 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
   await reviewSuggestion(id, "accepted", session.userId);
 
   // Promote the newly-validated fact(s) into the KB (drafts-only, best-effort).
-  const writeback = await writeBackOnPublish(key, session.userId);
+  // D247: after the response; its result lands in its own product.kb_writeback audit row.
+  writeBackOnPublishAfterResponse(key, { userId: session.userId, email: session.email }, "accept");
 
   await recordAudit({
     actorId: session.userId,
@@ -596,7 +599,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
     action: "product.ai_accepted",
     entityType: "product",
     entityId: key,
-    after: { field: sugg!.field_key, kb_writeback: writeback ?? undefined, ...gate.audit },
+    after: { field: sugg!.field_key, kb_writeback: "background", ...gate.audit },
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
