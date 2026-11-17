@@ -112,6 +112,13 @@ export async function buildDeliverySet(files: readonly { fileName: string; bytes
   return { set, info };
 }
 
+/** Storage key of the n-th uploaded file of a load (private ccrs-records bucket). */
+export function deliveryKey(loadId: string, n: number): string {
+  if (!/^[0-9a-f-]{36}$/i.test(loadId)) throw new DeliveryError("bad load id");
+  if (!Number.isInteger(n) || n < 0 || n >= DELIVERY_SLOTS.length) throw new DeliveryError("bad file number");
+  return `deliveries/${loadId}/file-${n + 1}`;
+}
+
 /* ------------------------------------------------------------------ *
  * Shared by the page and the CLI so both paths store and apply the same thing.
  * ------------------------------------------------------------------ */
