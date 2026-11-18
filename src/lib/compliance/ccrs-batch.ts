@@ -141,6 +141,7 @@ import {
   type ProductHold,
 } from "@/lib/compliance/ccrs-never-block-core";
 import { CCRS_CHUNK_ROWS } from "@/lib/compliance/ccrs-chunk-core";
+import { combineDuplicateInventoryRows, initialQtyForLot, parseCcrsQty, restockItems, restockVariantIds, type RestockLink } from "@/lib/compliance/ccrs-held-back-fix-core";
 import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
 import { LINEAGE_MANIFEST_SELECT, type LineageManifestRow } from "@/lib/inventory/import-lineage-core";
 import { cultiveraManifestIdSet, lotFlaggedCultivera } from "@/lib/inventory/cultivera-received-flag-core";
@@ -520,6 +521,31 @@ async function readReturnsForCorrections(
 class MissingReturnsTable extends Error {}
 
 /**
+ * D251 S1: product rows for restock lots (pure part: ccrs-held-back-fix-core).
+ * A read error is reported and nothing is added (those lots stay held, E41).
+ */
+async function readRestockItems(admin: Admin, items: MenuItemRow[], lots: readonly LotRow[], issues: CcrsSyncIssue[]): Promise<MenuItemRow[]> {
+  const itemKeys = new Set(items.map((i) => i.source_item_id.trim()));
+  const ids = restockVariantIds(lots.map((l) => l.pos_product_key ?? ""), itemKeys);
+  if (ids.length === 0) return [];
+  let failed: string | null = null;
+  const links = await chunkedIn<string, RestockLink>(ids, async (chunk, from, to) => {
+    const { data, error } = await admin.from("menu_variants").select("source_variant_id, menu_item_id").in("source_variant_id", chunk).order("id", { ascending: true }).range(from, to);
+    if (error) failed = error.message;
+    return (data as RestockLink[] | null) ?? [];
+  });
+  if (failed) {
+    issues.push({ severity: "warning", file: "Product", message: `Could not read restock variants (${failed}); restock lots stay held back.` });
+    return [];
+  }
+  const r = restockItems(items, links);
+  if (r.ambiguous.length > 0) {
+    issues.push({ severity: "warning", file: "Product", message: `${r.ambiguous.length} restock lot(s) sit on more than one menu card, so their product is not guessed and they stay held back: ${r.ambiguous.slice(0, 20).join(", ")}.` });
+  }
+  return r.items;
+}
+
+/**
  * S-17b: for product keys that lots name but the published menu does not show,
  * read whether each is HIDDEN in the published version (with its reason) or
  * present only in a STAGED version. Any read error → `readable: false` (the
@@ -573,6 +599,8 @@ async function readMenuPresence(
 }
 
 type MenuItemRow = {
+  /** D251 S1: menu_items.id, to find the card a restock variant sits on. */
+  id?: string | null;
   source_item_id: string;
   name: string;
   strain_name: string | null;
@@ -999,7 +1027,9 @@ function buildInventoryFile(
   plan: LedgerPlan,
   areaName: string,
   menuPresence: MenuPresence | null = null,
-): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
+  ccrsInitialById: ReadonlyMap<string, number> = new Map(),
+): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[]; fromCcrsInitial: number } {
+  let fromCcrsInitial = 0;
   const warnings: string[] = [];
   const rows: string[][] = [];
   // S-02 coded pre-flight errors. Rows are collected, never capped.
@@ -1058,14 +1088,18 @@ function buildInventoryFile(
     // CBD" [G L0298-L0299]. How a hold is shown to CCRS is open (N-01, OD-3).
     const area = areaName;
     if (isHeldLotStatus(l.status)) e45Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: `status "${l.status}" → Area "${areaName}"` });
-    const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
+    // D251 S1: a lot CCRS already holds whose received count is lower than
+    // what is on hand carries CCRS's own Initial Quantity (Service Desk copy).
+    const init = initialQtyForLot({ received: l.received_qty ?? 0, onHand: l.on_hand_qty ?? 0, op: planned.op, ccrsInitial: ccrsInitialById.get(ext) });
+    if (init.fromCcrs) fromCcrsInitial += 1;
+    const totalCostMinor = (l.unit_cost_minor_units ?? 0) * init.qty;
 
     // E7 [G L0614] / E8 [G L0597]. The decision lives in the pure core so it is
     // unit-tested directly; a failing row is WITHHELD because CCRS rejects
     // that row, tells us only by email [FAQ L0102], and every later row that
     // references it fails too (CCRS accepts row-by-row: U-17 CLOSED FALSE,
     // PREprod P20261005A/P20261006A, Brian A24).
-    const initialQty = l.received_qty ?? 0;
+    const initialQty = init.qty;
     const onHandQty = l.on_hand_qty ?? 0;
     const verdict = inventoryRowVerdict({
       id: l.id,
@@ -1086,7 +1120,7 @@ function buildInventoryFile(
       strain,
       area,
       productName,
-      String(l.received_qty ?? 0),
+      String(init.qty),
       String(l.on_hand_qty ?? 0),
       verdict.totalCost,
       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
@@ -1171,7 +1205,32 @@ function buildInventoryFile(
       message: `${e45Rows.length} lot(s) are on hold (quarantine or recalled) in our system. They are reported in the "${areaName}" Area, not a quarantine Area: "IsQuarantine True only applies to imported CBD. There are no quarantine requirements for cannabis products and must have an entry as False." [G L0298-L0299]. Advisory; a held lot that is sold is still an error.`,
     });
   }
-  return { rows, warnings: [...new Set(warnings)], issues };
+  return { rows, warnings: [...new Set(warnings)], issues, fromCcrsInitial };
+}
+
+/**
+ * D251 S1: CCRS's "Initial Quantity" (Service Desk copy, seed_payload) for the
+ * lots whose on-hand is above our received count. Read error -> empty map
+ * (those lots stay held by E8, as before).
+ */
+async function readCcrsInitials(admin: Admin, env: string, lots: readonly LotRow[]): Promise<Map<string, number>> {
+  const ids = [...new Set(lots.filter((l) => (l.on_hand_qty ?? 0) > (l.received_qty ?? 0)).map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x))];
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  try {
+    const rows = await chunkedIn<string, { external_id: string; seed_payload: Record<string, unknown> | null }>(ids, async (chunk, from, to) => {
+      const { data, error } = await admin.from("ccrs_filed_entities").select("external_id, seed_payload").eq("env", env).eq("file_type", "Inventory").in("external_id", chunk).order("external_id", { ascending: true }).range(from, to);
+      if (error) throw new Error(error.message);
+      return (data as { external_id: string; seed_payload: Record<string, unknown> | null }[] | null) ?? [];
+    });
+    for (const r of rows) {
+      const q = parseCcrsQty(r.seed_payload?.["Initial Quantity"]);
+      if (q != null) out.set(r.external_id, q);
+    }
+  } catch {
+    return new Map();
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1270,7 +1329,7 @@ export async function buildCcrsBatch(
       const { data, error } = await admin
         .from("menu_items")
         .select(
-          "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total_cbd_json, compounds_json",
+          "id, source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total_cbd_json, compounds_json",
         )
         .eq("menu_version_id", versionId)
         .eq("hidden", false)
@@ -1286,10 +1345,13 @@ export async function buildCcrsBatch(
       message: "No published menu version — Strain/Product files will be empty.",
     });
   }
-  const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
-
+  // D251 S1: a restock lot sits on its card as a `<lotKey>-onboarded` size
+  // variant; give each one its own Product (the card's details, the lot's
+  // weight), else the lot is held as "not in the published menu".
   // SLICE 2 (paged live lots): started above, in parallel with the menu read.
   const liveLots = await liveLotsP;
+  if (versionId) items = [...items, ...(await readRestockItems(admin, items, liveLots, syncIssues))];
+  const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
 
   // --- Event files first (R5-1) ---------------------------------------------
   // Adjustment + Sale are built BEFORE the ledger slice so the lots their rows
@@ -1547,7 +1609,21 @@ export async function buildCcrsBatch(
     items.map((i) => i.source_item_id),
     keysNeedingMenuLookup(coverageLots, plannedKeys),
   );
-  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);
+  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence, ledger ? await readCcrsInitials(admin, env, lots) : new Map());
+  if (inventory.fromCcrsInitial > 0) {
+    syncIssues.push({ severity: "warning", file: "Inventory", message: `${inventory.fromCcrsInitial} lot(s) from the Cultivera days had a received count lower than what is on hand; they carry the Initial Quantity CCRS already holds for them (Service Desk copy), so CCRS does not refuse them [G L0597].` });
+  }
+  // D251 S1: two of our lots with ONE CCRS id (a re-used vendor barcode) are
+  // one CCRS record: send one row, quantities and cost summed, instead of two
+  // rows CCRS refuses as a duplicate id [G L0219-L0221].
+  {
+    const IC = CCRS_COLUMNS.Inventory;
+    const merged = combineDuplicateInventoryRows(inventory.rows, { ext: IC.indexOf("ExternalIdentifier"), initial: IC.indexOf("InitialQuantity"), onHand: IC.indexOf("QuantityOnHand"), cost: IC.indexOf("TotalCost"), created: IC.indexOf("CreatedDate") });
+    inventory.rows = merged.rows;
+    if (merged.combined.length > 0) {
+      syncIssues.push({ severity: "warning", file: "Inventory", message: `${merged.combined.length} CCRS id(s) are carried by more than one of our lots (the vendor re-used the barcode). Each is sent as ONE Inventory row with the quantities and cost added together: ${merged.combined.map((m) => m.ext).slice(0, 20).join(", ")}.` });
+    }
+  }
   const routingWithheld = product.withheld.filter(
     (w) => !isInflightHoldReason(w.reason) && (!productHolds.has(w.key) || productHolds.get(w.key)!.reason === LEDGER_DUPLICATE_REASON),
   );

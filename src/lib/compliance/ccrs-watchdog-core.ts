@@ -102,7 +102,7 @@ const REASON_TEXT: Record<NoEmailReason, string> = {
     "A CCRS error (or unreadable) email arrived after this upload and is waiting in the hub. It may be the answer to this file. Open it; the system never matches an error file to an upload by guess.",
   "monitor-off": "The mailbox monitor is not watching right now, so the system cannot see CCRS's answer. Look in Gmail (Inbox AND Spam) for email from info@lcb.wa.gov.",
   silence:
-    "The mailbox monitor checked the submitting mailbox (Spam included) and found nothing from CCRS for this file. Check that the upload really finished in the CCRS portal. If CCRS shows it and still no email came, press \"No email after 60 minutes\" on the hub.",
+    "The mailbox monitor checked the submitting mailbox (Spam included) and found nothing from CCRS for this file. Check that the upload really finished in the CCRS portal. If CCRS shows it and still no email came, press \"No email after 60 minutes\" on the hub. In production CCRS sends no success email at all, so silence there means the file was accepted: that button records it as accepted.",
 };
 
 export type WatchdogMessage = { subject: string; text: string; html: string; linkPath: string };
