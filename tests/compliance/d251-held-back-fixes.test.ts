@@ -19,6 +19,7 @@ import {
   combineDuplicateInventoryRows,
   initialQtyForLot,
   restockItems,
+  pickFiledStrain,
   restockVariantIds,
   silenceOutcome,
 } from "@/lib/compliance/ccrs-held-back-fix-core";
@@ -34,7 +35,7 @@ describe("the pure core", () => {
   it("self-tests pass", () => {
     const r = __runCcrsHeldBackFixCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(19);
+    expect(r.passed).toBeGreaterThanOrEqual(23);
   });
 });
 
@@ -67,6 +68,19 @@ describe("2. a Cultivera-era lot carries CCRS's Initial Quantity [G L0597]", () 
     expect(BATCH).toContain("String(init.qty),");
     expect(BATCH).toContain("const totalCostMinor = (l.unit_cost_minor_units ?? 0) * init.qty;");
     expect(BATCH).toContain('.from("ccrs_filed_entities").select("external_id, seed_payload")');
+  });
+});
+
+describe("2b. a lot with no strain keeps the strain CCRS filed for it [G L0552] [EXAM2 L0035]", () => {
+  // Real: GF41918905566981 has no strain on our side; the Service Desk copy says "Cherry Og".
+  const view = { entries: new Map([["Strain\u0000Cherry Og", { state: "seed" }]]) };
+  it("only an exact strain CCRS holds; otherwise still held (E64)", () => {
+    expect(pickFiledStrain(null, "Cherry Og", view)).toBe("Cherry Og");
+    expect(pickFiledStrain(null, "Cherry OG", view)).toBeNull();
+  });
+  it("the batch reads the copy only for blank-strain Update rows", () => {
+    expect(BATCH).toContain('inventory.rows.filter((r) => r[invOpCol] === "Update" && !(r[invStrainCol] ?? "").trim())');
+    expect(BATCH).toContain('pickFiledStrain(told.kind === "loaded" ? told.byId.get(id)?.told?.Strain : null, seedStrain.get(id)?.["Strain"], ledger)');
   });
 });
 

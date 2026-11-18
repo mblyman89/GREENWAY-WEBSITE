@@ -293,7 +293,7 @@ describe("embedded pure self-test suites", () => {
   it("ccrs-held-back-fix-core (D251 S1: restock Products, CCRS initial qty, one row per re-used id, prod silence = success)", () => {
     const r = __runCcrsHeldBackFixCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(19);
+    expect(r.passed).toBeGreaterThanOrEqual(23);
   });
   it("ccrs-equalize-core (Part 17 §E, S-14: equalize waves)", () => {
     const r = __runCcrsEqualizeCoreTests();
