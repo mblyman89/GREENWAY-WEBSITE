@@ -141,7 +141,7 @@ import {
   type ProductHold,
 } from "@/lib/compliance/ccrs-never-block-core";
 import { CCRS_CHUNK_ROWS } from "@/lib/compliance/ccrs-chunk-core";
-import { combineDuplicateInventoryRows, initialQtyForLot, parseCcrsQty, restockItems, restockVariantIds, type RestockLink } from "@/lib/compliance/ccrs-held-back-fix-core";
+import { combineDuplicateInventoryRows, initialQtyForLot, parseCcrsQty, pickFiledStrain, restockItems, restockVariantIds, type RestockLink } from "@/lib/compliance/ccrs-held-back-fix-core";
 import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
 import { LINEAGE_MANIFEST_SELECT, type LineageManifestRow } from "@/lib/inventory/import-lineage-core";
 import { cultiveraManifestIdSet, lotFlaggedCultivera } from "@/lib/inventory/cultivera-received-flag-core";
@@ -1214,8 +1214,22 @@ function buildInventoryFile(
  * (those lots stay held by E8, as before).
  */
 async function readCcrsInitials(admin: Admin, env: string, lots: readonly LotRow[]): Promise<Map<string, number>> {
-  const ids = [...new Set(lots.filter((l) => (l.on_hand_qty ?? 0) > (l.received_qty ?? 0)).map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x))];
+  const ids = lots.filter((l) => (l.on_hand_qty ?? 0) > (l.received_qty ?? 0)).map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x);
   const out = new Map<string, number>();
+  for (const [id, p] of await readSeedPayloads(admin, env, ids)) {
+    const q = parseCcrsQty(p["Initial Quantity"]);
+    if (q != null) out.set(id, q);
+  }
+  return out;
+}
+
+/**
+ * D251 S1: the Service Desk copy row (seed_payload) for each Inventory id.
+ * Read error -> empty map: the caller then holds the rows as before.
+ */
+async function readSeedPayloads(admin: Admin, env: string, idList: readonly string[]): Promise<Map<string, Record<string, unknown>>> {
+  const ids = [...new Set(idList.filter(Boolean))];
+  const out = new Map<string, Record<string, unknown>>();
   if (ids.length === 0) return out;
   try {
     const rows = await chunkedIn<string, { external_id: string; seed_payload: Record<string, unknown> | null }>(ids, async (chunk, from, to) => {
@@ -1223,10 +1237,7 @@ async function readCcrsInitials(admin: Admin, env: string, lots: readonly LotRow
       if (error) throw new Error(error.message);
       return (data as { external_id: string; seed_payload: Record<string, unknown> | null }[] | null) ?? [];
     });
-    for (const r of rows) {
-      const q = parseCcrsQty(r.seed_payload?.["Initial Quantity"]);
-      if (q != null) out.set(r.external_id, q);
-    }
+    for (const r of rows) if (r.seed_payload && typeof r.seed_payload === "object") out.set(r.external_id, r.seed_payload);
   } catch {
     return new Map();
   }
@@ -2034,7 +2045,15 @@ export async function buildCcrsBatch(
   // P-F: a row still without a Strain takes the strain CCRS last accepted for
   // the lot ("use the same strain name that was already provided" [EXAM2
   // L0034-L0035]); with none it is held back (E64), never sent blank.
-  const strainFill = fillBlankStrains(inventory.rows, (id) => (told.kind === "loaded" ? told.byId.get(id)?.told?.Strain : null));
+  // D251 S1: a lot CCRS holds from the Service Desk copy (no accepted file of
+  // ours yet) keeps the strain CCRS filed for it (Brian 4d [EXAM2 L0035]).
+  const invStrainCol = CCRS_COLUMNS.Inventory.indexOf("Strain");
+  const seedStrain = ledger
+    ? await readSeedPayloads(admin, env, inventory.rows.filter((r) => r[invOpCol] === "Update" && !(r[invStrainCol] ?? "").trim()).map((r) => r[invExtCol]))
+    : new Map<string, Record<string, unknown>>();
+  const strainFill = fillBlankStrains(inventory.rows, (id) =>
+    pickFiledStrain(told.kind === "loaded" ? told.byId.get(id)?.told?.Strain : null, seedStrain.get(id)?.["Strain"], ledger),
+  );
   if (strainFill.held.length > 0) {
     // The row names the PRODUCT key (fix link to the product page); the label says which lot.
     const lotByExt = new Map(lots.flatMap((l) => {

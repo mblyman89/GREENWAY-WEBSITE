@@ -157,6 +157,25 @@ export function combineDuplicateInventoryRows(
   return { rows: out, combined, refused };
 }
 
+/**
+ * The strain to fill a blank Inventory Strain with: what CCRS last accepted
+ * from us, else what the Service Desk copy says CCRS filed for the lot, but
+ * only when CCRS's Strain list holds that exact string (Valid Values:
+ * Strain.Strain [G L0552]). Never a guess: null holds the lot (E64).
+ */
+export function pickFiledStrain(
+  told: string | null | undefined,
+  seed: unknown,
+  view: { entries: ReadonlyMap<string, { state: string }> } | null,
+): string | null {
+  const t = (told ?? "").trim();
+  if (t) return t;
+  const s = typeof seed === "string" ? seed.trim() : "";
+  if (!s || !view) return null;
+  const e = view.entries.get(`Strain\u0000${s}`);
+  return e && ["seed", "filed", "confirmed"].includes(e.state) ? s : null;
+}
+
 /** What 60 silent minutes after an upload mean (U-65: production sends no success email). */
 export function silenceOutcome(env: "prod" | "preprod"): "success" | "no-email" {
   return env === "prod" ? "success" : "no-email";
@@ -214,6 +233,11 @@ export function __runCcrsHeldBackFixCoreTests(): { passed: number; failed: numbe
   ok(e.refused.join() === "X" && e.rows.length === 2, "blank number: refused, never guessed");
   const d = combineDuplicateInventoryRows([["X", "1", "1", "1", "12/31/2025"], ["X", "1", "1", "1", "01/02/2026"]], C);
   ok(d.rows[0][4] === "12/31/2025", "earliest date across years");
+  const v = { entries: new Map([["Strain\u0000Cherry Og", { state: "seed" }], ["Strain\u0000Gone", { state: "deleted" }]]) };
+  ok(pickFiledStrain(" Kush ", "Cherry Og", v) === "Kush", "strain: our accepted value first");
+  ok(pickFiledStrain(null, "Cherry Og", v) === "Cherry Og", "strain: CCRS's filed strain");
+  ok(pickFiledStrain(null, "Cherry OG", v) === null, "strain: exact string only");
+  ok(pickFiledStrain(null, "Gone", v) === null && pickFiledStrain(null, "", v) === null && pickFiledStrain(null, "Cherry Og", null) === null, "strain: deleted / blank / no ledger -> held");
   ok(silenceOutcome("prod") === "success" && silenceOutcome("preprod") === "no-email", "silence");
   return { passed, failed };
 }
