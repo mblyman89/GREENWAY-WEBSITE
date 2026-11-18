@@ -15,6 +15,7 @@
  * garbled ledger could turn an Update into an Insert (Part 03 §D.3).
  */
 import { isMissingDbFunctionError, type RpcErrorLike } from "@/lib/db/rpc-fallback-core";
+import { repairLedgerNames } from "./ccrs-name-repair-core";
 import { LEDGER_STATES, buildLedgerView, type LedgerEntry, type LedgerEnv, type LedgerFileType, type LedgerView } from "./ccrs-ledger-core";
 
 export const LEDGER_SLICE_RPC = "ccrs_ledger_slice";
@@ -85,7 +86,7 @@ export function decodeLedgerSlice(env: LedgerEnv, data: unknown, error: RpcError
     productIdByKey.set(x[0], x[1]);
   });
 
-  const { view, duplicates } = buildLedgerView(env, rows, productIdByKey);
+  const { view, duplicates } = buildLedgerView(env, repairLedgerNames(rows), productIdByKey);
   return { kind: "loaded", ledger: { view, lastStamp, duplicates } };
 }
 
@@ -155,3 +156,4 @@ export function __runCcrsLedgerStoreCoreTests(): void {
   assert(checkAssignResult("preprod", ["k1"], [{ product_key: "k1", external_id: "P20261007A-GWP-000003", newly_assigned: true }], "P20261007A").length === 1, "preprod ok");
   console.log("ccrs-ledger-store-core: all tests passed");
 }
+

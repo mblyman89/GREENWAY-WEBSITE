@@ -367,6 +367,19 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - On production, "No email after 60 minutes: accepted" records success.
 - See Part 09 D251.
 
+### A.24 D252 Production answers hours later; garbled Product names — DONE in code (2026-11-18)
+
+- **Before:**
+  - The walkthrough unlocked the next group after a 10-minute timer, but production answered hours later. The 11/17 Sale was checked before Inventory was processed, so 313 rows on new lots were refused.
+  - 80 Product and 12 Strain names in the ledger seed carried a garble from the examiner's export (UTF-8 read as Windows-1252). The 7 lots that used one were refused by CCRS, which checks the lot's Product by its Name [G L0576].
+  - D251 treated production silence as success.
+- **Now:**
+  - Each group stays locked until CCRS's email on the group before it is applied (and at least 10 minutes).
+  - Ledger names are repaired on read (strict decode; anything doubtful stays as it is), so Inventory rows carry CCRS's clean Product name.
+  - Production and PREprod error subjects and the production success subject are recognized.
+  - Silence records no-email again on both envs.
+- See Part 09 D252.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

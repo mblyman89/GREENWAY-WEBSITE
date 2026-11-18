@@ -23,6 +23,7 @@ import {
   WAGOV_CREATE_ACCOUNT_URLS,
   envOfPortalUrl,
 } from "@/lib/compliance/ccrs-signin-core";
+import { gateNote, type UploadGate } from "@/lib/compliance/ccrs-upload-gate-core";
 
 type FileSummary = { type: string; fileName: string; recordCount: number; empty: boolean };
 
@@ -33,6 +34,12 @@ type Props = {
   submittable: boolean;
   /** S-12c: the portal of the env the zip targets (PREprod is a different host). */
   portalUrl?: string;
+  /**
+   * D252 S1: earlier-group files still waiting for their CCRS email. CCRS can
+   * answer hours later in production, and a group checked before the one it
+   * depends on is refused (2026-11-17: 313 sale lines).
+   */
+  gate?: UploadGate;
 };
 
 const PROD_PORTAL_URL = "https://cannabisreporting.lcb.wa.gov";
@@ -92,7 +99,7 @@ function fmtRemaining(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, portalUrl }: Props) {
+export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, portalUrl, gate }: Props) {
   const PORTAL_URL = portalUrl ?? PROD_PORTAL_URL;
   const portalHost = PORTAL_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
   // S-17c: CCRS signs in with WA.gov since 2026-10-12; PREprod needs its own account.
@@ -219,7 +226,7 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, p
     },
     {
       id: "wait1",
-      title: `Wait ${WAIT_MINUTES} minutes (CCRS dependency processing)`,
+      title: `Wait for CCRS's emails on Group 1 (at least ${WAIT_MINUTES} minutes)`,
       locked: !state.done.group1,
       lockNote: "Check off Group 1 first — the timer starts automatically.",
       body: state.done.group1 ? (
@@ -238,13 +245,13 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, p
     {
       id: "group2",
       title: "Upload Group 2 — Inventory",
-      locked: Boolean(state.done.group1 && g1Remaining > 0),
-      lockNote: "Wait for the 10-minute timer above before uploading Inventory.",
+      locked: Boolean(state.done.group1 && g1Remaining > 0) || Boolean(gate?.group2.locked),
+      lockNote: gate?.group2.locked ? gateNote(gate.group2, "Inventory") : "Wait for the 10-minute timer above before uploading Inventory.",
       body: fileList(group2),
     },
     {
       id: "wait2",
-      title: `Wait ${WAIT_MINUTES} minutes again`,
+      title: `Wait for CCRS's email on Inventory (at least ${WAIT_MINUTES} minutes)`,
       locked: !state.done.group2,
       lockNote: "Check off Group 2 first — the timer starts automatically.",
       body: state.done.group2 ? (
@@ -260,8 +267,8 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, p
     {
       id: "group3",
       title: "Upload Group 3 — InventoryAdjustment, InventoryTransfer, Sale",
-      locked: Boolean(state.done.group2 && g2Remaining > 0),
-      lockNote: "Wait for the second 10-minute timer before uploading Group 3.",
+      locked: Boolean(state.done.group2 && g2Remaining > 0) || Boolean(gate?.group3.locked),
+      lockNote: gate?.group3.locked ? gateNote(gate.group3, "Group 3") : "Wait for the second 10-minute timer before uploading Group 3.",
       body: fileList(group3),
     },
     {
@@ -287,7 +294,8 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, p
             Guided upload walkthrough
           </h2>
           <p className="mt-1 text-xs text-white/40">
-            Hand-held, in order, with the 10-minute dependency waits built in. Progress is saved on
+            Hand-held, in order. Each group waits for CCRS&apos;s email on the group before it (production can take
+            hours), and at least 10 minutes. Progress is saved on
             this device for week {weekKey.slice(2)}.
           </p>
         </div>

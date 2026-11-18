@@ -1008,6 +1008,8 @@ import { __runCcrsDeliveryCoreTests } from "../../src/lib/compliance/ccrs-delive
 import { __runCcrsLateWeeksTests } from "../../src/lib/compliance/ccrs-late-weeks-core";
 import { __runCcrsEqualizeCoreTests } from "../../src/lib/compliance/ccrs-equalize-core";
 import { __runCcrsHeldBackFixCoreTests } from "../../src/lib/compliance/ccrs-held-back-fix-core";
+import { __runCcrsNameRepairCoreTests } from "../../src/lib/compliance/ccrs-name-repair-core";
+import { __runCcrsUploadGateCoreTests } from "../../src/lib/compliance/ccrs-upload-gate-core";
 import { __runCcrsCopyVerifyCoreTests } from "../../src/lib/compliance/ccrs-copy-verify-core";
 import { __runReturnCorrectionsTests } from "../../src/lib/compliance/ccrs-return-corrections-core";
 import { __runCcrsTransferTests } from "../../src/lib/compliance/ccrs-transfer-core";
@@ -2112,7 +2114,9 @@ __runLiquidVolumeTests();
   assertRan("ccrs-delivery-core", __runCcrsDeliveryCoreTests(), 24); // D250 S2: examiner delta delivery merge
   assertRan("ccrs-late-weeks-core", __runCcrsLateWeeksTests(), 19); // D250 S4: late weeks readiness (load first, answer waiting files, named holds, spacing, hand-over day)
   assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 30); // S-14b: +5 (final-upload guard, audit-counted hold); D250 S5: +6 (Brian policy, composite copy)
-  assertRan("ccrs-held-back-fix-core", __runCcrsHeldBackFixCoreTests(), 23); // D251 S1: restock lots own a Product, CCRS initial qty for E8, CCRS filed strain for E64, one row per re-used CCRS id, production silence = success
+  assertRan("ccrs-held-back-fix-core", __runCcrsHeldBackFixCoreTests(), 22); // D251 S1: restock lots own a Product, CCRS initial qty for E8, CCRS filed strain for E64, one row per re-used CCRS id (D252: "production silence = success" reverted)
+  assertRan("ccrs-name-repair-core", __runCcrsNameRepairCoreTests(), 17); // D252 S1: undo the examiner export's garbled accents (CCRS holds the clean name)
+  assertRan("ccrs-upload-gate-core", __runCcrsUploadGateCoreTests(), 11); // D252 S1: a group waits for CCRS's email on the group before it
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file
   assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 51); // R6-2: InventoryTransfer rows for received deliveries; C1: no TR- prefix, legacy alias, correction path

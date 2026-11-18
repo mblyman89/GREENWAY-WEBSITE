@@ -283,10 +283,12 @@ describe("every REAL confirmation, delivered as Gmail delivers it", () => {
     // Worst tick stays under Google's 6,000 units/min/user: list 5x5, get(full) 60, attachments.get 20.
     expect(5 * 5 + MAX_NEW_PER_TICK * 60 + MAX_NEW_PER_TICK * MAX_CSV_PER_MESSAGE * 20).toBeLessThan(6000);
   });
-  it("subjectEnv: only the observed PREprod success subject is verified; error subjects never are (U-65, U-66)", () => {
+  it("subjectEnv: the four observed subjects are verified; anything else is not (U-65, U-66 answered in D252)", () => {
     expect(subjectEnv("PRE: CCRS Processing Successful", "success")).toEqual({ env: "preprod", verified: true });
-    expect(subjectEnv("CCRS Processing Successful", "success")).toEqual({ env: "prod", verified: false });
+    expect(subjectEnv("CCRS Processing Successful", "success")).toEqual({ env: "prod", verified: true });
     expect(subjectEnv("Re: CCRS Processing Successful", "success")).toEqual({ env: null, verified: false });
+    expect(subjectEnv("PRE: CCRS errors for file: Strain_413541_20261117220513_20261117T228393.csv", "error")).toEqual({ env: "preprod", verified: true });
+    expect(subjectEnv("CCRS errors for file: Inventory_413541_20261117220516_20261118T159360.csv", "error")).toEqual({ env: "prod", verified: true });
     expect(subjectEnv("PRE: CCRS Processing Error", "error")).toEqual({ env: "preprod", verified: false });
     expect(subjectEnv("CCRS Processing Error", "error")).toEqual({ env: null, verified: false });
   });
@@ -304,13 +306,13 @@ describe("every REAL confirmation, delivered as Gmail delivers it", () => {
     expect(a.successes[0]).toEqual({ fileName: "Strain_413541_20261006222847.csv", submittedAt: "2026-10-07T17:35:10.000Z" });
   });
 
-  it("production: a subject without PRE is reported prod but NOT verified (U-65), and flagged", () => {
-    const body = "The file Sale_413541_20261107230000_20261108T93012.csv you submitted has been processed. Date Submitted: 11/8/2026 9:30:00 AM";
+  it("production: the subject without PRE is production, verified (U-65 answered in D252)", () => {
+    const body = "The file Area_413541_20261117220514_20261118T148392.csv you submitted has been processed.  Date Submitted: 11/17/2026 10:43:18 PM";
     const a = classifyCcrsMail(asTick(gmail({ id: "p1", subject: "CCRS Processing Successful", text: body })));
     expect(a.kind).toBe("success");
     expect(a.env).toBe("prod");
-    expect(a.envVerified).toBe(false);
-    expect(a.needsHuman.join(" ")).toMatch(/U-65/);
+    expect(a.envVerified).toBe(true);
+    expect(a.needsHuman.join(" ")).not.toMatch(/U-65/);
   });
 
   it("an unfamiliar subject decides nothing: env null, owner chooses", () => {
@@ -338,7 +340,7 @@ describe("every REAL error CSV, attached as Gmail attaches it", () => {
     expect(a.errors[0].dataLines).toBe(csv.split(/\r\n/).filter(Boolean).length - 1);
   });
 
-  it("the error SUBJECT never decides the env (U-66): only a PRE prefix is a hint", () => {
+  it("an unfamiliar error SUBJECT never decides the env: only a PRE prefix is a hint", () => {
     const csv = read(ERROR_FILES[0]);
     for (const [subj, env] of [["Anything at all", null], ["PRE: something", "preprod"]] as const) {
       const a = classifyCcrsMail(asTick(gmail({ id: `x${subj.length}`, subject: subj, attachments: [{ filename: path.basename(ERROR_FILES[0]), text: csv }] })));

@@ -3552,3 +3552,13 @@ Context: production week 11/01 succeeded except Sale (`Sale__20261117T231541807.
 ### D251 As-built
 
 - **S1 (held-back fixes):** `ccrs-held-back-fix-core.ts`. Restock lots get their own Product from their visible card; E8 lots send CCRS's filed InitialQuantity; re-used CCRS ids become one combined row; blank strains take the strain CCRS filed; on production, silence after 60 minutes records success. Tests d251-held-back-fixes (13), self-test (23), mutations M570-M579. The 8 unknown lots: check physically; gone → zero them in our system, nothing in CCRS; present → a deliberate Insert release is still needed.
+
+## D252 - Production answers hours later; what broke in the 11/17 files (2026-11-18)
+
+> "thank you. i was wrong again. ccrs does send confirmation emails for both success and fail, just hours later. so now I know about more failed files. I will upload them for you to see and help me work through. log back in to supabase so you can help me if needed. here are the success emails, [Area_413541_20261117220514_20261118T148392.csv processed (submitted 11/17 10:43:18 PM), Product_413541_20261117220515_20261118T148408.csv, InventoryAdjustment_413541_20261117220517_20261118T159563.csv (submitted 11:15:37 PM), InventoryTransfer_413541_20261117220518_20261118T159579.csv] I will upload the failed files. now that we have the complete picture with the status of every file uploaded. help me understand what broke and what needs fixing, or if everything is fine and we just needed to wait longer before uploading the next batch. let me know what you think about this. follow the standing rules. thank you."
+
+Context: error files `Inventory__20261118T020015199.csv`, `Strain_20261118T014836797.csv` and (earlier) `Sale__20261117T231541807.csv`.
+
+### D252 As-built
+
+- **S1 (order and names):** Sale's 313 refusals were timing (checked before Inventory was processed); the walkthrough now waits for each group's email (`ccrs-upload-gate-core.ts`). The 7 Inventory refusals were garbled Product names from the examiner's export; ledger names are repaired on read (`ccrs-name-repair-core.ts`). Strain's 11 duplicates are harmless. Error and success subjects recognized (U-65, U-66 answered); D251's silence = success reverted. Tests d252-order-and-names (10), self-tests 17 + 11, mutations M578, M580-M587. U-84 opened.

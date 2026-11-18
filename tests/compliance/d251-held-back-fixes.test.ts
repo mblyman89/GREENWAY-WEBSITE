@@ -7,7 +7,8 @@
  *   [G L0597] "QuanityOnHand is greater than InitialQuantity" (E8).
  *   [G L0219-L0221] "Duplicate External Identifier" (E60 on a re-used id).
  *   [G L0246-L0248] Update alters "an existing record indicated by external identifier".
- * Owner, 2026-11-18: production CCRS sends no success email (U-65).
+ * D252 (owner, 2026-11-18): production CCRS DOES send success emails, hours
+ * later; D251's "silence = success" is reverted and guarded here.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -21,7 +22,6 @@ import {
   restockItems,
   pickFiledStrain,
   restockVariantIds,
-  silenceOutcome,
 } from "@/lib/compliance/ccrs-held-back-fix-core";
 import { CCRS_COLUMNS } from "@/lib/compliance/ccrs-batch-core";
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
@@ -35,7 +35,7 @@ describe("the pure core", () => {
   it("self-tests pass", () => {
     const r = __runCcrsHeldBackFixCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(23);
+    expect(r.passed).toBeGreaterThanOrEqual(22);
   });
 });
 
@@ -105,16 +105,15 @@ describe("3. two lots with one CCRS id are one row [G L0219-L0221]", () => {
   });
 });
 
-describe("4. production silence is success (U-65)", () => {
-  it("prod -> success, PREprod -> no-email", () => {
-    expect(silenceOutcome("prod")).toBe("success");
-    expect(silenceOutcome("preprod")).toBe("no-email");
+describe("4. D252: production silence is NOT success (D251 4 reverted)", () => {
+  // Owner 2026-11-18 (D252): production CCRS does send success AND error
+  // emails, just hours later. Silence never records acceptance.
+  it("the no-email action records no-email in every env", () => {
+    expect(ACTIONS).toContain('out = await recordOutcome(admin, file.id, "no-email",');
+    expect(ACTIONS).not.toContain("silenceOutcome");
+    expect(SRC("src/lib/compliance/ccrs-held-back-fix-core.ts")).not.toContain("export function silenceOutcome");
   });
-  it("the no-email action records the env's silence outcome", () => {
-    expect(ACTIONS).toContain("const outcome = silenceOutcome(env);");
-    expect(ACTIONS).toContain("out = await recordOutcome(admin, file.id, outcome,");
-  });
-  it("the production button says it records acceptance; PREprod's does not", () => {
+  it("neither panel offers \"accepted\" on silence", () => {
     const noop = () => {};
     const actions = { markUploaded: noop, recordSuccess: noop, recordError: noop, recordNoEmail: noop, abandon: noop, startPreprod: noop, assignPreprodIds: noop };
     const up = {
@@ -128,7 +127,9 @@ describe("4. production silence is success (U-65)", () => {
           unassignedProductCount: 0, nowISO: "2026-11-17T23:30:00.000Z", actions,
         } as unknown as Parameters<typeof CcrsFilesPanel>[0]),
       );
-    expect(html("prod")).toContain("accepted (production sends no success email)");
-    expect(html("preprod")).not.toContain("accepted (production");
+    for (const env of ["prod", "preprod"] as const) {
+      expect(html(env)).toContain("No email after 60 minutes (checked spam)");
+      expect(html(env)).not.toContain("accepted (production");
+    }
   });
 });

@@ -34,6 +34,7 @@ import { emitPayload, verifyOutboxAgainstLedger, type EmitPayloadFile, type Ledg
 import { isReservedStrainName } from "./ccrs-preflight-core";
 import { SALES_FLOOR_AREA } from "./ccrs-area-core";
 import { samePayload, type LedgerRow } from "./ccrs-reseed-core";
+import { repairGarbledName, repairLedgerNames } from "./ccrs-name-repair-core";
 import type { SeedEntity } from "./ccrs-ledger-seed-core";
 import { ledgerAsCopy } from "./ccrs-delivery-core";
 
@@ -397,9 +398,10 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
   if (!input.ledger.some((r) => r.t === "Area" && r.name === SALES_FLOOR_AREA && PRESENT.has(r.state))) {
     throw new EqualizeError(`the ledger holds no filed Area named "${SALES_FLOOR_AREA}"; every Update names that Area [G L0570]`);
   }
-  const { view } = buildLedgerView("prod", input.ledger.map((r) => ({ fileType: r.t, externalId: r.id, filedName: r.name, state: r.state, productExternalId: r.prod })));
+  // D252 S1: the copy's garbled accents are repaired to the text CCRS holds.
+  const { view } = buildLedgerView("prod", repairLedgerNames(input.ledger.map((r) => ({ fileType: r.t, externalId: r.id, filedName: r.name, state: r.state, productExternalId: r.prod }))));
   const ledgerById = new Map(input.ledger.filter((r) => r.t === "Inventory").map((r) => [r.id, r]));
-  const strainOf = strainLookup(input.ledger);
+  const strainOf = strainLookup(input.ledger.map((r) => (r.t === "Strain" ? { ...r, id: repairGarbledName(r.id) } : r)));
 
   let overrideStrain: string | null = null;
   if (policy.strainOverride !== null) {
