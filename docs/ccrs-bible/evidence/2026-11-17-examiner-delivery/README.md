@@ -93,6 +93,17 @@ So the delivered QoH is the last Inventory Insert/Update value, not a running ba
 - 224 more are proved to exist by Cultivera's delivered sales.
 - 160 lots (269 lines) appear in neither. They were created before 9/18, so they are expected in the 9/18 seed already in the ledger. The readiness check (D250 slice 4) confirms each against the live ledger; none is assumed.
 
+## Owner checklist
+
+The whole D250 sequence for the owner is in [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md):
+1. migration 0368;
+2. the load;
+3. the two late weeks;
+4. the count list;
+5. clean-up wave(s);
+6. the adjustments;
+7. a fresh copy from the examiner, checked with `verify-ccrs-copy.ts`.
+
 ## Recon scripts (outside the repo, read-only)
 
 `/workspace/ccrs-work/recon-2026-11-17/`: `profile.py`, `join.py`, `twins.py`, `insert_only.py`, `soldout.py`, `u68.py`, `week1.py`.
