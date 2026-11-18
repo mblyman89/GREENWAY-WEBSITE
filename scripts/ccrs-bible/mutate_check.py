@@ -192,6 +192,9 @@ D250_CLI = "scripts/compliance/load-ccrs-delivery.ts"
 D250_LOAD_TESTS = "tests/compliance/d250-delivery-load.test.ts"
 D250_LATE = "src/lib/compliance/ccrs-late-weeks-core.ts"
 D250_LATE_TESTS = "tests/compliance/d250-late-weeks.test.ts"
+D250_EQ = "src/lib/compliance/ccrs-equalize-core.ts"
+D250_EQ_CLI = "scripts/compliance/equalize-ccrs-wave.ts"
+D250_CLEAN_TESTS = "tests/compliance/d250-cleanup.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4573,6 +4576,78 @@ MUTATIONS = [
         '  const nonEmpty = b.files.filter((f) => f.recordCount >= 0)',
         D250_LATE_TESTS,
         'The download step lists only files with rows.',
+    ),
+    (
+        'M561-d250-clean-keep-filed',
+        D250_EQ,
+        '      if (policy.keepFiledStrain && strain.trim() !== "") {',
+        '      if (strain.trim() !== "") {',
+        D250_CLEAN_TESTS,
+        'Brian 4d is a switch: the default still holds a reserved strain.',
+    ),
+    (
+        'M562-d250-clean-blank-guard',
+        D250_EQ,
+        '      if (policy.keepFiledStrain && strain.trim() !== "") {',
+        '      if (policy.keepFiledStrain) {',
+        D250_CLEAN_TESTS,
+        'A blank strain is still held under Brian 4d.',
+    ),
+    (
+        'M563-d250-clean-not-both',
+        D250_EQ,
+        '  if (p.keepFiledStrain && p.strainOverride !== null) throw',
+        '  if (p.keepFiledStrain && p.strainOverride === "") throw',
+        D250_CLEAN_TESTS,
+        'Keeping the filed strain and an override are refused together.',
+    ),
+    (
+        'M564-d250-clean-composite-gate',
+        D250_EQ,
+        '  if (!ledger.some((r) => r.t === "Inventory" && r.source === source)) {',
+        '  if (!ledger.some((r) => r.t === "Inventory")) {',
+        D250_CLEAN_TESTS,
+        'The composite copy refuses until the delivery is loaded.',
+    ),
+    (
+        'M565-d250-clean-brian-cost',
+        D250_EQ,
+        '  nominalTotalCost: "0.01",\n  strainOverride: null,\n  maxLots: 10_000,\n  keepFiledStrain: true,',
+        '  nominalTotalCost: null,\n  strainOverride: null,\n  maxLots: 10_000,\n  keepFiledStrain: true,',
+        D250_CLEAN_TESTS,
+        'Brian 4c: the clean-up writes 0.01 where the cost is 0.',
+    ),
+    (
+        'M566-d250-clean-kept-count',
+        D250_EQ,
+        '      keptFiledStrain: take.filter((c) => c.kept).length,',
+        '      keptFiledStrain: take.filter((c) => c.override).length,',
+        D250_CLEAN_TESTS,
+        'The plan counts the lots written with the filed strain.',
+    ),
+    (
+        'M567-d250-clean-cli-conflict',
+        D250_EQ_CLI,
+        '    for (const f of ["--nominal-cost", "--strain-override", "--same-batch"]) {',
+        '    for (const f of ["--nominal-cost", "--strain-override"]) {',
+        D250_CLEAN_TESTS,
+        '--brian cannot be combined with --same-batch (Brian 4a).',
+    ),
+    (
+        'M568-d250-clean-cli-copy-files',
+        D250_EQ_CLI,
+        '      if (given.length) { console.error(',
+        '      if (given.length > 9) { console.error(',
+        D250_CLEAN_TESTS,
+        '--composite refuses copy files.',
+    ),
+    (
+        'M569-d250-clean-cli-snapshot-default',
+        D250_EQ_CLI,
+        '(composite ? waveDate : undefined)',
+        '(composite ? undefined : undefined)',
+        D250_CLEAN_TESTS,
+        'With --composite the snapshot date defaults to the wave date.',
     ),
 ]
 

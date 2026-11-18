@@ -1335,7 +1335,7 @@ Branches `ccrs/d227-s1-sale-excise-identity`, `ccrs/d227-s3-known-excise-message
 2. Press **Re-send refused rows** on it.
 3. Download the new Sale file, upload it to PREprod, then mark it uploaded and apply the answer.
 
-## D250 — Load the examiner's 11/13 + 11/17 delivery; make the two late weeks ready; finish the cleanup (IN PROGRESS, 2026-11-17)
+## D250 — Load the examiner's 11/13 + 11/17 delivery; make the two late weeks ready; finish the cleanup (S1-S5 DONE, 2026-11-17)
 
 Owner request D250 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). Evidence: `evidence/2026-11-17-examiner-delivery/README.md`; sources in Part 13 §I.
 
@@ -1376,6 +1376,31 @@ End-to-end on scratch Postgres with the real files and a seeded ledger: 68,581 n
 **S4 as-built (2026-11-17): the two late weeks.** `src/lib/compliance/ccrs-late-weeks-core.ts` (pure) gives each late week (completed, on/after the first day of sales, not recorded; oldest first) one verdict and the exact steps, in this order: on production, load the examiner delivery first (apply 0368 if missing; press LOAD if planned); answer every file still waiting for its CCRS email; fix blocking errors; then "ready", with the non-empty files, the upload order and spacing (the walkthrough waits 10 minutes between groups; examiner: "I would at max give a 15 minutes between files" `[EXAM2 L0029]`), apply each email, record the week. Every held row is grouped by a named reason with its next step; groups the delivery load releases are marked (E52 Cultivera lot not on record, a sale whose lot is not on record, a filed product not proven, unknown status). A held row without a reason is counted and named in the headline. The hub shows this as "Late weeks: ready to upload?" above Step 1, built from the same week build (no second build).
 
 Hand-over day finding (measured, `ccrs-work/recon-2026-11-17/nov1*.py`, not in the repo): the plan was that Cultivera's last upload holds nothing dated 11/01 `[EXAM2 L0006-L0007]`, but the 11/13 delivered sales hold 93 lines dated 11/01 (84 lots). Our PREprod Sale file for 11/01-11/07 has 89 lines dated 11/01 (80 lots, all `GWY-` sale ids). No line shares lot and amount, 9 lots are shared, and 93 + 89 = 182 is an ordinary day (our 11/02-11/07: 171 to 241 lines). So the store rang 11/01 on both systems and these are different sales: ours are sent as they are. A duplicate is keyed on the sale ids ("Duplicate Sale for Licensee" `[G L1390]`; "if the same data is supplied it would result in a duplicate error" `[EXAM2 L0008-L0009]`), and ours are our own ids, so a duplicate cannot arise. The finding is shown on the 11/01 week. Tests: `tests/compliance/d250-late-weeks.test.ts` (20, including a check against the real sent file); self-test floor 19; mutations M551-M560 all killed.
+
+**S5 as-built (2026-11-17): the clean-up, made easy.** The examiner's answers are now one switch, and the copy comes from the ledger:
+- `BRIAN_EQUALIZE_POLICY` in `src/lib/compliance/ccrs-equalize-core.ts` covers four of Brian's answers.
+  - 4a: separate files. The Update goes first and the Reconciliation follows after its success email, at most 15 minutes apart [EXAM2 L0029].
+  - 4c: a nominal TotalCost of 0.01 where the filed cost is 0 [EXAM2 L0033].
+  - 4d: the strain already filed is kept unchanged, even THC/Other/Unknown (`keepFiledStrain`) [EXAM2 L0035]. A blank strain is still held, and keeping the filed strain together with `--strain-override` is refused.
+  - 4b: lots already at 0 are counted and never sent ("focus on going forward" [EXAM2 L0031]).
+- `compositeCopy(ledger, "2026-11-17")` builds the clean-up copy from the 9/18 seed plus the loaded delivery. It refuses until that delivery is in the ledger, and it never includes a lot our own files touched or a sale-proof-only lot.
+- The CLI `equalize-ccrs-wave.ts` takes `--composite 2026-11-17 --brian`. No copy files are needed, and `--snapshot-date` defaults to `--wave-date`. Combining `--brian` with `--nominal-cost`, `--strain-override` or `--same-batch`, or giving copy files, exits 2.
+- The default policy is unchanged and still holds every unanswered case.
+- Area Delete stays off (`PROD_AREA_PLAN` update-only), which matches Brian 5a [EXAM2 L0040].
+
+Tests:
+- `tests/compliance/d250-cleanup.test.ts`: 16 cases.
+- Equalize self-test: 6 more assertions (floor 30).
+- Mutations M561-M569: all killed.
+
+Dry run on the real delivered files over a scratch ledger that held only a seed marker (script `ccrs-work/recon-2026-11-17/s5dry.ts`, not in the repo):
+- 1,174 delivered lots are open;
+- 167 lots are ready, removing 1,860 units;
+- 0 lots need the nominal cost or the filed strain;
+- 1,007 lots are held as H_STRAIN_NOT_FILED, because their strains predate 9/18 and the scratch ledger had no 9/18 Strain rows. On the live ledger those strains are seeded, so this hold should clear. The live plan shows any lot it still holds by name.
+- On the live ledger, the 9/18 seed's ~44,700 open lots join the plan. At 10,000 per wave, the clean-up runs as W1, W2 and so on, each with its own adjustment phase.
+
+**After the clean-up:** ask the examiner for a fresh full copy and check it with the Records-page compare / `verify-ccrs-copy.ts` (the email draft is in the owner checklist).
 
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 

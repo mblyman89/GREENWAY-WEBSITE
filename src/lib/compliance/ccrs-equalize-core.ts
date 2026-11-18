@@ -35,6 +35,7 @@ import { isReservedStrainName } from "./ccrs-preflight-core";
 import { SALES_FLOOR_AREA } from "./ccrs-area-core";
 import { samePayload, type LedgerRow } from "./ccrs-reseed-core";
 import type { SeedEntity } from "./ccrs-ledger-seed-core";
+import { ledgerAsCopy } from "./ccrs-delivery-core";
 
 /* ------------------------------------------------------------------ *
  * Constants, types, errors
@@ -90,8 +91,8 @@ export const EQUALIZE_HOLD_MEANING: Record<EqualizeHoldCode, string> = {
   H_INITIAL: "The filed Initial Quantity is not a plain number.",
   H_ISMEDICAL: "The filed IsMedical is not TRUE or FALSE.",
   H_COST: "The filed TotalCost is blank, negative or not a number.",
-  H_ZERO_COST: "The filed TotalCost is 0, which CCRS refuses on any row [G L0614]. Held until the examiner says what to write (Q-B3).",
-  H_STRAIN_RESERVED: "The filed strain is blank or Unknown/THC/Other, which CCRS refuses [G L0358]. Held until the examiner says what to write (Q-B6).",
+  H_ZERO_COST: "The filed TotalCost is 0, which CCRS refuses on any row [G L0614]. Held unless the nominal cost is on (Brian 4c: \"a nominal 0.01 is an acceptable entry\" [EXAM2 L0033]).",
+  H_STRAIN_RESERVED: "The filed strain is blank or Unknown/THC/Other, which CCRS refuses [G L0358]. Held unless the filed strain is kept (Brian 4d [EXAM2 L0035]); a blank strain is always held.",
   H_STRAIN_NOT_FILED: "The lot's strain is not a strain CCRS holds for us in any casing [G L0555].",
   H_PRODUCT: "The lot's product cannot be proven from the Product list, so the row would be refused as Invalid Product [G L0579].",
   H_UNENCODABLE: "A value contains a comma or a line break, which CCRS's reader cannot carry.",
@@ -117,6 +118,13 @@ export type EqualizePolicy = {
   strainOverride: string | null;
   /** Q-B7: the most lots one wave zeroes. */
   maxLots: number;
+  /**
+   * D250 S5, Brian 4d: write the strain CCRS already holds on the lot, as it
+   * is, even THC/Other/Unknown: "You will need to use the same strain name that
+   * was already provided for the product, and do not worry about changing it"
+   * [EXAM2 L0035]. A blank strain is still held. Never with strainOverride.
+   */
+  keepFiledStrain: boolean;
 };
 
 export const DEFAULT_EQUALIZE_POLICY: EqualizePolicy = Object.freeze({
@@ -124,6 +132,25 @@ export const DEFAULT_EQUALIZE_POLICY: EqualizePolicy = Object.freeze({
   nominalTotalCost: null,
   strainOverride: null,
   maxLots: 10_000,
+  keepFiledStrain: false,
+}) as EqualizePolicy;
+
+/**
+ * D250 S5: the examiner's 10/29 answers as the clean-up defaults.
+ *   4a separate files: the Inventory Update first, the Reconciliation after
+ *      its success email, at most 15 minutes apart [EXAM2 L0029] (the
+ *      adjustment phase reads what landed, so sameBatchAdjust stays false);
+ *   4c a nominal 0.01 where the filed cost is 0 [EXAM2 L0033];
+ *   4d the strain already filed, unchanged [EXAM2 L0035].
+ * Lots already at 0 (4b, "focus on going forward" [EXAM2 L0031]) are counted,
+ * never sent: their CCRS quantity already matches what we carry (none).
+ */
+export const BRIAN_EQUALIZE_POLICY: EqualizePolicy = Object.freeze({
+  sameBatchAdjust: false,
+  nominalTotalCost: "0.01",
+  strainOverride: null,
+  maxLots: 10_000,
+  keepFiledStrain: true,
 }) as EqualizePolicy;
 
 /** One of OUR lots (inventory_lots), read so a wave never zeroes stock we hold. */
@@ -191,6 +218,8 @@ export type EqualizePlan = {
     sumRemoved: string;
     nominalCost: number;
     strainOverride: number;
+    /** Brian 4d: lots written with their filed THC/Other/Unknown strain unchanged */
+    keptFiledStrain: number;
     held: Record<EqualizeHoldCode, number>;
   };
 };
@@ -288,6 +317,29 @@ function checkPolicy(p: EqualizePolicy) {
     }
   }
   if (p.strainOverride !== null && typeof p.strainOverride !== "string") throw new EqualizeError("strain override must be text");
+  if (typeof p.keepFiledStrain !== "boolean") throw new EqualizeError("policy.keepFiledStrain must be true or false");
+  if (p.keepFiledStrain && p.strainOverride !== null) throw new EqualizeError("keep the filed strain (Brian 4d) OR write a strain override, not both");
+}
+
+/**
+ * D250 S5: the COMPOSITE copy. The examiner's 11/17 delivery is a delta (the
+ * open lots created after 9/18 plus the full Product list), so the full CCRS
+ * picture is the 9/18 seed plus the delivery, both already in the ledger once
+ * the delivery is loaded. This returns every untouched seeded/delivered row as
+ * the copy a wave reads, so no copy files are needed. It refuses until the
+ * delivery dated copyAsOf is in the ledger: without it the lots Cultivera
+ * filed after 9/18 are invisible and could never be judged.
+ * Cultivera only Inserted lots (Updateby NULL on every delivered row), and CCRS
+ * changes a quantity only by an Update [EXAM2 L0065-L0066], so a 9/18 lot's
+ * filed quantity is still what CCRS holds.
+ */
+export function compositeCopy(ledger: readonly LedgerRow[], copyAsOf: string): SeedEntity[] {
+  needIso(copyAsOf, "copy date");
+  const source = `seed:${copyAsOf}-delivery`;
+  if (!ledger.some((r) => r.t === "Inventory" && r.source === source)) {
+    throw new EqualizeError(`the ledger holds no lot from the delivery dated ${copyAsOf} (source ${source}). Load the examiner's delivery first (CCRS Records page), then plan the clean-up.`);
+  }
+  return ledgerAsCopy(ledger);
 }
 
 /** The present Strain entries by lower-case name, exact first. */
@@ -374,7 +426,7 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
   let copyOpen = 0;
   let alreadyZero = 0;
   let ours = 0;
-  type Cand = { id: string; qty: string; row: string[]; nominal: boolean; override: boolean };
+  type Cand = { id: string; qty: string; row: string[]; nominal: boolean; override: boolean; kept: boolean };
   const cands: Cand[] = [];
 
   const lots = input.copy.filter((e) => e.fileType === "Inventory");
@@ -420,10 +472,15 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
     }
     let strain = p.Strain ?? "";
     let override = false;
+    let kept = false;
     if (strain.trim() === "" || isReservedStrainName(strain)) {
-      if (overrideStrain === null) { hold(id, "H_STRAIN_RESERVED", `Strain ${JSON.stringify(strain)}`); continue; }
-      strain = overrideStrain;
-      override = true;
+      if (policy.keepFiledStrain && strain.trim() !== "") {
+        kept = true; // Brian 4d [EXAM2 L0035]: the name already on the lot, as filed
+      } else {
+        if (overrideStrain === null) { hold(id, "H_STRAIN_RESERVED", `Strain ${JSON.stringify(strain)}`); continue; }
+        strain = overrideStrain;
+        override = true;
+      }
     } else {
       const filed = strainOf(strain);
       if (filed === null) { hold(id, "H_STRAIN_NOT_FILED", `Strain ${JSON.stringify(strain)}`); continue; }
@@ -435,7 +492,7 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
     const bad = row.find((c) => ccrsUnencodableReason(c) !== null);
     if (bad !== undefined) { hold(id, "H_UNENCODABLE", `${ccrsUnencodableReason(bad)} in ${JSON.stringify(bad.slice(0, 40))}`); continue; }
     if (`EQ-${wave}-${id}`.length > MAX_ID) { hold(id, "H_ADJ_ID_TOO_LONG", `${id.length} characters`); continue; }
-    cands.push({ id, qty: qohText, row, nominal, override });
+    cands.push({ id, qty: qohText, row, nominal, override, kept });
   }
 
   cands.sort((a, b) => byCodeUnit(a.id, b.id));
@@ -457,6 +514,7 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
       sumRemoved: sumDecimals(take.map((c) => c.qty), "QoH"),
       nominalCost: take.filter((c) => c.nominal).length,
       strainOverride: take.filter((c) => c.override).length,
+      keptFiledStrain: take.filter((c) => c.kept).length,
       held,
     },
   };
@@ -711,7 +769,7 @@ export function equalizeReport(plan: EqualizePlan, limit = 500): string {
     "|---|---|---|",
     `| Q-B1 Updates and adjustments in the same batch? | ${P.sameBatchAdjust ? "yes" : "no (default)"} | ${P.sameBatchAdjust ? "The Reconciliation file goes with the Inventory file." : "Inventory file first; the Reconciliation file is made after CCRS answers."} |`,
     `| Q-B3 What cost to write where CCRS shows 0? | ${P.nominalTotalCost ?? "hold (default)"} | ${c.held.H_ZERO_COST} held, ${c.nominalCost} written with the nominal cost. |`,
-    `| Q-B6 What strain to write where CCRS shows THC/Other/Unknown/blank? | ${P.strainOverride ? md(P.strainOverride) : "hold (default)"} | ${c.held.H_STRAIN_RESERVED} held, ${c.strainOverride} written with the override. |`,
+    `| Q-B6 What strain to write where CCRS shows THC/Other/Unknown/blank? | ${P.keepFiledStrain ? "the strain already filed (Brian 4d)" : P.strainOverride ? md(P.strainOverride) : "hold (default)"} | ${c.held.H_STRAIN_RESERVED} held, ${c.strainOverride} written with the override, ${c.keptFiledStrain} written with the filed strain unchanged. |`,
     `| Q-B7 How many lots per wave? | ${P.maxLots} | ${c.wave} in this wave, ${c.nextWave} wait for the next one. |`,
     "",
     "## Counts",
@@ -807,6 +865,16 @@ export function __runCcrsEqualizeCoreTests(): { passed: number; failed: number }
   ok(throws(() => planEqualizeWave(inp([ent("A")], { finalUploadDate: "" })), /never assumed/), "final upload day required");
   ok(planEqualizeWave(inp([ent("S")], { countedBarcodes: [" s "] })).holds[0]?.code === "H_COUNTED_ON_SHELF", "audited barcode held (case-insensitive)");
   ok(throws(() => parseCountedList("#none\n")) && parseCountedList("a\r\n b \n").join() === "a,b", "audit list parsed, empty refused");
+  // D250 S5: Brian's answers as the clean-up policy
+  const B = { ...BRIAN_EQUALIZE_POLICY };
+  const kept = planEqualizeWave(inp([ent("T", { Strain: "THC", TotalCost: "0" })], { policy: B }));
+  ok(kept.inventoryRows[0]?.[1] === "THC" && kept.inventoryRows[0]?.[6] === "0.01" && kept.counts.keptFiledStrain === 1, "Brian 4c/4d: filed strain kept, nominal 0.01");
+  ok(planEqualizeWave(inp([ent("E", { Strain: " " })], { policy: B })).holds[0]?.code === "H_STRAIN_RESERVED", "Brian 4d: a blank strain is still held");
+  ok(throws(() => planEqualizeWave(inp([ent("A")], { policy: { ...B, strainOverride: "Hybrid" } })), /not both/), "keep-filed and override refused together");
+  ok(B.sameBatchAdjust === false && DEFAULT_EQUALIZE_POLICY.keepFiledStrain === false, "Brian 4a separate files; default unchanged");
+  ok(throws(() => compositeCopy([...fixed, ...[ent("A")].map(row)], "2026-11-17"), /no lot from the delivery/), "composite refused before the delivery is loaded");
+  const dl: LedgerRow = { ...row(ent("N")), source: "seed:2026-11-17-delivery" };
+  ok(compositeCopy([...fixed, row(ent("A")), dl, { ...row(ent("U")), lastFile: "F" }], "2026-11-17").filter((e) => e.fileType === "Inventory").map((e) => e.externalId).join() === "A,N", "composite = seed + delivery, minus lots our files touched");
   return { passed, failed };
 }
 

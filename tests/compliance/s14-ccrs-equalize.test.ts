@@ -516,7 +516,7 @@ describe("S-14 wiring and guards", () => {
   });
   it("is registered in the pure self-test runner", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 24)');
+    expect(runner).toContain('assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 30)');
   });
   it("no migration was added by this slice", () => {
     const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
