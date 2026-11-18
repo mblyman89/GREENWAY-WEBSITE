@@ -94,6 +94,7 @@ describe("the hand-over day (2026-11-01)", () => {
     expect(n).toContain("[G L1390]");
     expect(n).toContain("[EXAM2 L0008-L0009]");
     expect(lateWeekReadiness(input({ week: W2 })).notes).toEqual([]);
+    expect(lateWeekReadiness(input({ week: { key: "W-2026-10-25", start: "2026-10-25", end: "2026-10-31", due: "2026-11-01" } })).notes).toEqual([]);
   });
   it("our 11/01 lines in the sent PREprod file carry our own GWY- sale ids", () => {
     const csv = read("docs/ccrs-bible/evidence/2026-11-10-preprod/sent/Sale_413541_20261110101609.csv").split("\r\n");
@@ -133,6 +134,19 @@ describe("every held row has a named reason and a next step", () => {
     expect(g.groups[0].examples).toHaveLength(5);
     expect(g.groups[1]).toMatchObject({ key: "no-product-id", releasedByLoad: false });
     expect(g.groups[1].nextStep).toMatch(/Assign CCRS Product ids/);
+  });
+  it("a held Cultivera lot (E52) and its sales are released by the load", () => {
+    const g = groupHeld(
+      [
+        { file: "Inventory", code: "E52_CULTIVERA_LOT_NOT_ON_RECORD", rows: [{ id: "l1", label: "L1", detail: CULTIVERA_NOT_ON_RECORD_REASON }] },
+        { file: "Sale", code: "E56_EVENT_ROW_LOT_HELD", rows: [{ id: "S1", label: "S1", detail: `lot L1 is held back: ${CULTIVERA_NOT_ON_RECORD_REASON}` }] },
+      ],
+      "prod",
+    );
+    expect(g.groups.map((x) => [x.key, x.releasedByLoad])).toEqual([
+      ["cultivera-not-on-record", true],
+      ["lot:cultivera-not-on-record", true],
+    ]);
   });
   it("a held row without any reason is counted and shouted", () => {
     const r = lateWeekReadiness(input({ build: { error: null, blockingErrors: 0, files, held: [{ file: "Sale", code: "E56_EVENT_ROW_LOT_HELD", rows: [{ id: "S9", label: "S9" }] }] } }));

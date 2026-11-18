@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-11-17 23:15Z at commit `a4111d9ec8131d17798145db208e64f481c091d7` by `build_atlas_part.py`.
+Generated 2026-11-18 00:04Z at commit `ef93f457610d39b8ed5a0f9097bd87ea132a4399` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff a4111d9 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff ef93f45 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -484,11 +484,11 @@ Generated 2026-11-17 23:15Z at commit `a4111d9ec8131d17798145db208e64f481c091d7`
 - L68: `export function lotKeysForLines(`
 - L86: `export function __runVariantLotCoreTests(): void {`
 
-### `src/app/admin/compliance/ccrs/page.tsx` (1342 L)
+### `src/app/admin/compliance/ccrs/page.tsx` (1392 L)
 
-- L106: `export const dynamic = "force-dynamic";`
-- L111: `export const maxDuration = 300;`
-- L289: `export default async function CcrsCommandCenterPage({`
+- L110: `export const dynamic = "force-dynamic";`
+- L115: `export const maxDuration = 300;`
+- L293: `export default async function CcrsCommandCenterPage({`
 
 ### `src/app/admin/compliance/ccrs/actions.ts` (833 L)
 
@@ -2936,26 +2936,26 @@ Generated 2026-11-17 23:15Z at commit `a4111d9ec8131d17798145db208e64f481c091d7`
  102| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
  103| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
  104| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
- 105| 
- 106| export const dynamic = "force-dynamic";
- 107| // W-1 (2026-10-30): the page builds the week's batch, and its server actions
- 108| // (email Apply, week sign-off) re-read files and rows. A page-level
- 109| // maxDuration also covers every server action posted from this page
- 110| // (Next docs: route-segment-config/maxDuration). Same ceiling as /records.
+ 105| // D250 S4: the late weeks, one verdict + the exact steps for the selected one.
+ 106| import { lateWeekReadiness, lateWeeksOf, type LateWeekDelivery } from "@/lib/compliance/ccrs-late-weeks-core";
+ 107| import { listDeliveryLoads } from "@/lib/compliance/ccrs-delivery-store";
+ 108| import { CcrsLateWeeksPanel } from "@/components/admin/compliance/CcrsLateWeeksPanel";
+ 109| 
+ 110| export const dynamic = "force-dynamic";
 ```
 
 `src/app/admin/compliance/ccrs/page.tsx` — hub page section anchors
 
-- L623: `title="Step 1 — Pick the reporting week"`
-- L654: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
-- L827: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
-- L854: `<UploadWalkthrough`
-- L957: `title="Step 3 — Record this week"`
-- L1131: `<ErrorTriagePanel`
-- L1144: `title="DOH / Medical sales"`
-- L1210: `title="Monthly LIQ-1295 (tax report)"`
-- L1283: `<PushRemindersPanel />`
-- L1293: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
+- L673: `title="Step 1 — Pick the reporting week"`
+- L704: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
+- L877: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
+- L904: `<UploadWalkthrough`
+- L1007: `title="Step 3 — Record this week"`
+- L1181: `<ErrorTriagePanel`
+- L1194: `title="DOH / Medical sales"`
+- L1260: `title="Monthly LIQ-1295 (tax report)"`
+- L1333: `<PushRemindersPanel />`
+- L1343: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
 
 `src/app/admin/compliance/ccrs/actions.ts` — server actions
 
