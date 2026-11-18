@@ -19,6 +19,7 @@
  *
  * Everything mutating is permission-gated + audited; AI is drafts-only.
  */
+import { uploadGate } from "@/lib/compliance/ccrs-upload-gate-core";
 import Link from "next/link";
 import { Suspense } from "react";
 import { requirePermission } from "@/lib/auth/session";
@@ -912,6 +913,7 @@ export default async function CcrsCommandCenterPage({
               batchZipHref={`/admin/reports/compliance/batch-export?${qs}`}
               submittable={submittable}
               portalUrl={ccrsPortalUrl(env)}
+              gate={uploadGate(waitingHere)}
             />
           ) : null}
             </>

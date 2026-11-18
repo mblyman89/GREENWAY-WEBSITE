@@ -541,11 +541,16 @@ export function subjectEnv(subject: string, kind: "success" | "error"): { env: L
   const s = subject.trim();
   if (kind === "success") {
     if (/^PRE:\s*CCRS Processing Successful$/i.test(s)) return { env: "preprod", verified: true };
-    // U-65: production mail never captured; "minus the PRE prefix" is the examiner's answer [EXAM L0538] (U-20).
-    if (/^CCRS Processing Successful$/i.test(s)) return { env: "prod", verified: false };
+    // U-65 ANSWERED (D252, 2026-11-18): production's success subject, seen on
+    // 4 production files, is exactly the PREprod one minus "PRE: " [EXAM L0538].
+    if (/^CCRS Processing Successful$/i.test(s)) return { env: "prod", verified: true };
     return { env: null, verified: false };
   }
-  // U-66: error subjects never captured. A leading "PRE" is a hint only.
+  // U-66 ANSWERED (D252, 2026-11-18): "PRE: CCRS errors for file: <name>" on
+  // PREprod and "CCRS errors for file: <name>" on production (Sale, Strain,
+  // Inventory that night). Any other error subject is only a hint.
+  if (/^PRE:\s*CCRS errors for file:\s*\S/i.test(s)) return { env: "preprod", verified: true };
+  if (/^CCRS errors for file:\s*\S/i.test(s)) return { env: "prod", verified: true };
   if (/^PRE\b/i.test(s)) return { env: "preprod", verified: false };
   return { env: null, verified: false };
 }
@@ -578,7 +583,7 @@ export function classifyCcrsMail(m: NormalizedMail): MailAnalysis {
     kind = "success";
     ({ env, verified: envVerified } = subjectEnv(m.subject, "success"));
     if (!env) needsHuman.push(`unfamiliar subject "${m.subject}": choose PREprod or production before applying`);
-    else if (!envVerified) needsHuman.push("first production-style confirmation: the subject without \"PRE\" has never been seen before (U-65). Check the file in the CCRS portal once.");
+
   } else if (errors.length > 0 && successes.length === 0) {
     kind = "error";
     ({ env, verified: envVerified } = subjectEnv(m.subject, "error"));
@@ -887,9 +892,11 @@ export function __runCcrsMailCoreTests(): { passed: number; failed: number } {
   // subject env
   ok(subjectEnv("PRE: CCRS Processing Successful", "success").verified, "PRE verified");
   const pe = subjectEnv("CCRS Processing Successful", "success");
-  ok(pe.env === "prod" && !pe.verified, "prod inferred, not verified");
+  ok(pe.env === "prod" && pe.verified, "prod success subject verified (U-65, D252)");
+  ok(subjectEnv("CCRS errors for file: Sale_413541_20261117220519_20261117T2315338.csv", "error").env === "prod", "prod error subject (U-66, D252)");
+  ok(subjectEnv("PRE: CCRS errors for file: Area_413541_20261117220514_20261117T228383.csv", "error").verified, "PREprod error subject verified");
   ok(subjectEnv("Something else", "success").env === null, "unknown subject -> env null");
-  ok(subjectEnv("Whatever", "error").env === null, "error subject never decides env");
+  ok(subjectEnv("Whatever", "error").env === null, "an unfamiliar error subject never decides env");
   // error file type
   ok(errorFileType("Strain_20260917T125413969.csv", ["LicenseNumber", "Strain", "ErrorMessage"]).type === "Strain", "Strain single underscore");
   ok(errorFileType("InventoryAdjustment__x.csv", ["LicenseNumber", "ExternalIdentifier", "ErrorMessage"]).type === "InventoryAdjustment", "longest type first");

@@ -22,9 +22,8 @@
  *      the same id, and CCRS refuses a duplicate id [G L0219-L0221] (E60,
  *      14 ids). They are reported as ONE record: quantities and cost summed,
  *      the earliest CreatedDate, the first row's other cells.
- *   4. silenceOutcome: production CCRS sends NO success email (owner,
- *      2026-11-18; U-65). In production, silence 60 minutes after the upload
- *      is recorded as success; PREprod keeps "no-email" (uncertain).
+ *   4. (D251 "production silence = success" was REVERTED in D252: the owner
+ *      found production CCRS does send success emails, hours later.)
  */
 
 export type MenuItemLike = { id?: string | null; source_item_id: string; hidden?: boolean | null };
@@ -176,11 +175,6 @@ export function pickFiledStrain(
   return e && ["seed", "filed", "confirmed"].includes(e.state) ? s : null;
 }
 
-/** What 60 silent minutes after an upload mean (U-65: production sends no success email). */
-export function silenceOutcome(env: "prod" | "preprod"): "success" | "no-email" {
-  return env === "prod" ? "success" : "no-email";
-}
-
 export function __runCcrsHeldBackFixCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -238,6 +232,5 @@ export function __runCcrsHeldBackFixCoreTests(): { passed: number; failed: numbe
   ok(pickFiledStrain(null, "Cherry Og", v) === "Cherry Og", "strain: CCRS's filed strain");
   ok(pickFiledStrain(null, "Cherry OG", v) === null, "strain: exact string only");
   ok(pickFiledStrain(null, "Gone", v) === null && pickFiledStrain(null, "", v) === null && pickFiledStrain(null, "Cherry Og", null) === null, "strain: deleted / blank / no ledger -> held");
-  ok(silenceOutcome("prod") === "success" && silenceOutcome("preprod") === "no-email", "silence");
   return { passed, failed };
 }

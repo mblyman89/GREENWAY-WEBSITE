@@ -198,6 +198,9 @@ D250_CLEAN_TESTS = "tests/compliance/d250-cleanup.test.ts"
 D251_CORE = "src/lib/compliance/ccrs-held-back-fix-core.ts"
 D251_TESTS = "tests/compliance/d251-held-back-fixes.test.ts"
 D251_BATCH = "src/lib/compliance/ccrs-batch.ts"
+D252_REPAIR = "src/lib/compliance/ccrs-name-repair-core.ts"
+D252_GATE = "src/lib/compliance/ccrs-upload-gate-core.ts"
+D252_TESTS = "tests/compliance/d252-order-and-names.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4717,12 +4720,12 @@ MUTATIONS = [
         'Earliest CreatedDate across years.',
     ),
     (
-        'M578-d251-silence-prod',
-        D251_CORE,
-        '  return env === "prod" ? "success" : "no-email";',
-        '  return "no-email";',
+        'M578-d252-silence-never-success',
+        'src/app/admin/compliance/ccrs/actions.ts',
+        'out = await recordOutcome(admin, file.id, "no-email", new Date().toISOString(), [], null);',
+        'out = await recordOutcome(admin, file.id, env === "prod" ? "success" : "no-email", new Date().toISOString(), [], null);',
         D251_TESTS,
-        'Production silence is success (U-65).',
+        'D252: silence never records acceptance (production does email, hours later).',
     ),
     (
         'M579-d251-strain-exact',
@@ -4731,6 +4734,70 @@ MUTATIONS = [
         '  return s;',
         D251_TESTS,
         'Only a strain CCRS holds fills a blank strain.',
+    ),
+    (
+        'M580-d252-repair-fatal',
+        D252_REPAIR,
+        'new TextDecoder("utf-8", { fatal: true })',
+        'new TextDecoder("utf-8", { fatal: false })',
+        D252_TESTS,
+        'A text that is not a real garble is left exactly as it is.',
+    ),
+    (
+        'M581-d252-repair-marker',
+        D252_REPAIR,
+        'const GARBLE_MARKER = /[\\u00c3\\u00c2\\u00e2]/;',
+        'const GARBLE_MARKER = /[\\u00c3]/;',
+        D252_TESTS,
+        'Garbles that start with A-circumflex (no-break space) are repaired too.',
+    ),
+    (
+        'M582-d252-strain-twin-guard',
+        D252_REPAIR,
+        'if (fixed !== id && !strainIds.has(fixed)) id = fixed;',
+        'if (fixed !== id) id = fixed;',
+        D252_TESTS,
+        'A garbled strain keeps its id when the clean spelling is its own row.',
+    ),
+    (
+        'M583-d252-store-repairs',
+        'src/lib/compliance/ccrs-ledger-store-core.ts',
+        'buildLedgerView(env, repairLedgerNames(rows), productIdByKey);',
+        'buildLedgerView(env, rows, productIdByKey);',
+        D252_TESTS,
+        'The ledger view reads repaired names (Inventory files carry the clean Product name).',
+    ),
+    (
+        'M584-d252-equalize-repairs',
+        D250_EQ,
+        'buildLedgerView("prod", repairLedgerNames(input.ledger.map(',
+        'buildLedgerView("prod", (input.ledger.map(',
+        D252_TESTS,
+        'The equalize rebuild uses repaired names too.',
+    ),
+    (
+        'M585-d252-gate-inventory',
+        D252_GATE,
+        'group3: gateOn(files, [...UPLOAD_GROUP_TYPES[1], ...UPLOAD_GROUP_TYPES[2]]),',
+        'group3: gateOn(files, [...UPLOAD_GROUP_TYPES[1]]),',
+        D252_TESTS,
+        'Group 3 waits for the Inventory email.',
+    ),
+    (
+        'M586-d252-walkthrough-lock',
+        'src/components/admin/compliance/UploadWalkthrough.tsx',
+        'locked: Boolean(state.done.group2 && g2Remaining > 0) || Boolean(gate?.group3.locked),',
+        'locked: Boolean(state.done.group2 && g2Remaining > 0),',
+        D252_TESTS,
+        'The walkthrough disables Group 3 while Inventory is unanswered.',
+    ),
+    (
+        'M587-d252-prod-error-subject',
+        'src/lib/compliance/ccrs-mail-core.ts',
+        'if (/^CCRS errors for file:\\s*\\S/i.test(s)) return { env: "prod", verified: true };',
+        'if (/^CCRS errors for file:\\s*\\S/i.test(s)) return { env: "prod", verified: false };',
+        D252_TESTS,
+        'A production error email is recognized as production (U-66).',
     ),
 ]
 
@@ -4794,6 +4861,7 @@ def main() -> int:
         W1_TESTS,
         W2_TESTS,
         D251_TESTS,
+        D252_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.

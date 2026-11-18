@@ -255,10 +255,10 @@ export function CcrsFilesPanel(p: Props) {
                       acts.includes("record-no-email") ? (
                         <form action={a!.recordNoEmail} className="mt-2">
                           <Hidden env={p.env} weekKey={p.weekKey} fileId={f.id} />
-                          <PendingSubmit className={`${BTN} bg-red-500/25 text-red-100 hover:bg-red-500/35`} busy="Recording...">{p.env === "prod" ? "No email after 60 minutes: accepted (production sends no success email)" : "No email after 60 minutes (checked spam)"}</PendingSubmit>
+                          <PendingSubmit className={`${BTN} bg-red-500/25 text-red-100 hover:bg-red-500/35`} busy="Recording...">No email after 60 minutes (checked spam)</PendingSubmit>
                         </form>
                       ) : (
-                        <p className="mt-2 text-[10px] text-white/40">{p.env === "prod" ? "Production sends no success email; silence means accepted. " : ""}&quot;No email&quot; unlocks at {fmt(noEmailAt ? noEmailAt.toISOString() : null)}.</p>
+                        <p className="mt-2 text-[10px] text-white/40">&quot;No email&quot; unlocks at {fmt(noEmailAt ? noEmailAt.toISOString() : null)}.</p>
                       )
                     ) : null}
 

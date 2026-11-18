@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-11-18 08:50Z at commit `16ce32fc53d39524ed9912babcb07a63ae3676ac` by `build_atlas_part.py`.
+Generated 2026-11-18 18:20Z at commit `23ad3048cc80ed206770342116b584048560c408` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 16ce32f -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 23ad304 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -484,33 +484,33 @@ Generated 2026-11-18 08:50Z at commit `16ce32fc53d39524ed9912babcb07a63ae3676ac`
 - L68: `export function lotKeysForLines(`
 - L86: `export function __runVariantLotCoreTests(): void {`
 
-### `src/app/admin/compliance/ccrs/page.tsx` (1392 L)
+### `src/app/admin/compliance/ccrs/page.tsx` (1394 L)
 
-- L110: `export const dynamic = "force-dynamic";`
-- L115: `export const maxDuration = 300;`
-- L293: `export default async function CcrsCommandCenterPage({`
+- L111: `export const dynamic = "force-dynamic";`
+- L116: `export const maxDuration = 300;`
+- L294: `export default async function CcrsCommandCenterPage({`
 
-### `src/app/admin/compliance/ccrs/actions.ts` (853 L)
+### `src/app/admin/compliance/ccrs/actions.ts` (833 L)
 
-- L78: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
-- L135: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
-- L158: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
-- L200: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
-- L281: `export async function markUploadedAction(formData: FormData): Promise<void> {`
-- L311: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
-- L377: `export async function recordErrorAction(formData: FormData): Promise<void> {`
-- L439: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
-- L480: `export async function abandonFileAction(formData: FormData): Promise<void> {`
-- L505: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
-- L549: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
-- L576: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
-- L624: `export async function setObligationStartAction(formData: FormData): Promise<void> {`
-- L648: `export async function setHandoverFactsAction(formData: FormData): Promise<void> {`
-- L671: `export async function dismissPeriodAction(formData: FormData): Promise<void> {`
-- L694: `export async function undoDismissalAction(formData: FormData): Promise<void> {`
-- L719: `export async function ccrsCleanupAction(formData: FormData): Promise<void> {`
-- L753: `export async function transferCorrectionAction(formData: FormData): Promise<void> {`
-- L790: `export async function resendRefusedRowsAction(formData: FormData): Promise<void> {`
+- L77: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
+- L134: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
+- L157: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
+- L199: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
+- L280: `export async function markUploadedAction(formData: FormData): Promise<void> {`
+- L310: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
+- L376: `export async function recordErrorAction(formData: FormData): Promise<void> {`
+- L434: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
+- L460: `export async function abandonFileAction(formData: FormData): Promise<void> {`
+- L485: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
+- L529: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
+- L556: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
+- L604: `export async function setObligationStartAction(formData: FormData): Promise<void> {`
+- L628: `export async function setHandoverFactsAction(formData: FormData): Promise<void> {`
+- L651: `export async function dismissPeriodAction(formData: FormData): Promise<void> {`
+- L674: `export async function undoDismissalAction(formData: FormData): Promise<void> {`
+- L699: `export async function ccrsCleanupAction(formData: FormData): Promise<void> {`
+- L733: `export async function transferCorrectionAction(formData: FormData): Promise<void> {`
+- L770: `export async function resendRefusedRowsAction(formData: FormData): Promise<void> {`
 
 ### `src/app/admin/reports/compliance/page.tsx` (500 L)
 
@@ -541,9 +541,9 @@ Generated 2026-11-18 08:50Z at commit `16ce32fc53d39524ed9912babcb07a63ae3676ac`
 - L45: `export const runtime = "nodejs";`
 - L50: `export async function GET() {`
 
-### `src/components/admin/compliance/UploadWalkthrough.tsx` (345 L)
+### `src/components/admin/compliance/UploadWalkthrough.tsx` (353 L)
 
-- L95: `export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, portalUrl }: Props) {`
+- L102: `export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, portalUrl, gate }: Props) {`
 
 ### `src/components/admin/compliance/ErrorTriagePanel.tsx` (167 L)
 
@@ -2912,225 +2912,225 @@ Generated 2026-11-18 08:50Z at commit `16ce32fc53d39524ed9912babcb07a63ae3676ac`
 `src/app/admin/compliance/ccrs/page.tsx` L81-L110 — CcrsCommandCenterPage head
 
 ```ts
-  81| import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
-  82| import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
-  83| import {
-  84|   applyAllCcrsMailAction,
-  85|   applyCcrsErrorMailAction,
-  86|   applyCcrsNotProcessedMailAction,
-  87|   applyCcrsSuccessMailAction,
-  88|   dismissCcrsMailAction,
-  89|   reopenCcrsMailAction,
-  90|   adoptHandmadeFileAction,
-  91|   pollCcrsMailNowAction,
-  92| } from "./mail-actions";
-  93| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
-  94| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
-  95| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
-  96| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
-  97| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
-  98| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
-  99| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
- 100| import { readOwed } from "@/lib/compliance/ccrs-held-store";
- 101| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
- 102| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
- 103| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
- 104| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
- 105| // D250 S4: the late weeks, one verdict + the exact steps for the selected one.
- 106| import { lateWeekReadiness, lateWeeksOf, type LateWeekDelivery } from "@/lib/compliance/ccrs-late-weeks-core";
- 107| import { listDeliveryLoads } from "@/lib/compliance/ccrs-delivery-store";
- 108| import { CcrsLateWeeksPanel } from "@/components/admin/compliance/CcrsLateWeeksPanel";
- 109| 
- 110| export const dynamic = "force-dynamic";
+  81| import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
+  82| import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
+  83| import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
+  84| import {
+  85|   applyAllCcrsMailAction,
+  86|   applyCcrsErrorMailAction,
+  87|   applyCcrsNotProcessedMailAction,
+  88|   applyCcrsSuccessMailAction,
+  89|   dismissCcrsMailAction,
+  90|   reopenCcrsMailAction,
+  91|   adoptHandmadeFileAction,
+  92|   pollCcrsMailNowAction,
+  93| } from "./mail-actions";
+  94| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+  95| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
+  96| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
+  97| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
+  98| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
+  99| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
+ 100| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
+ 101| import { readOwed } from "@/lib/compliance/ccrs-held-store";
+ 102| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
+ 103| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+ 104| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
+ 105| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
+ 106| // D250 S4: the late weeks, one verdict + the exact steps for the selected one.
+ 107| import { lateWeekReadiness, lateWeeksOf, type LateWeekDelivery } from "@/lib/compliance/ccrs-late-weeks-core";
+ 108| import { listDeliveryLoads } from "@/lib/compliance/ccrs-delivery-store";
+ 109| import { CcrsLateWeeksPanel } from "@/components/admin/compliance/CcrsLateWeeksPanel";
+ 110| 
 ```
 
 `src/app/admin/compliance/ccrs/page.tsx` — hub page section anchors
 
-- L673: `title="Step 1 — Pick the reporting week"`
-- L704: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
-- L877: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
-- L904: `<UploadWalkthrough`
-- L1007: `title="Step 3 — Record this week"`
-- L1181: `<ErrorTriagePanel`
-- L1194: `title="DOH / Medical sales"`
-- L1260: `title="Monthly LIQ-1295 (tax report)"`
-- L1333: `<PushRemindersPanel />`
-- L1343: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
+- L674: `title="Step 1 — Pick the reporting week"`
+- L705: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
+- L878: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
+- L905: `<UploadWalkthrough`
+- L1009: `title="Step 3 — Record this week"`
+- L1183: `<ErrorTriagePanel`
+- L1196: `title="DOH / Medical sales"`
+- L1262: `title="Monthly LIQ-1295 (tax report)"`
+- L1335: `<PushRemindersPanel />`
+- L1345: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
 
 `src/app/admin/compliance/ccrs/actions.ts` — server actions
 
 - L12: `import { revalidatePath } from "next/cache";`
 - L14: `import { requirePermission } from "@/lib/auth/session";`
-- L78: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
-- L79: `const session = await requirePermission("settings.manage");`
-- L130: `revalidatePath(BASE);`
-- L135: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
-- L136: `const session = await requirePermission("settings.manage");`
-- L153: `revalidatePath(BASE);`
-- L158: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
-- L159: `const session = await requirePermission("settings.manage");`
-- L188: `revalidatePath(BASE);`
-- L200: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
-- L201: `const session = await requirePermission("settings.manage");`
-- L237: `revalidatePath(BASE);`
-- L281: `export async function markUploadedAction(formData: FormData): Promise<void> {`
-- L282: `const session = await requirePermission("settings.manage");`
-- L302: `revalidatePath(BASE);`
-- L311: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
-- L312: `const session = await requirePermission("settings.manage");`
-- L361: `revalidatePath(BASE);`
-- L377: `export async function recordErrorAction(formData: FormData): Promise<void> {`
-- L378: `const session = await requirePermission("settings.manage");`
-- L403: `revalidatePath(BASE);`
-- L430: `revalidatePath(BASE);`
-- L439: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
-- L440: `const session = await requirePermission("settings.manage");`
-- L464: `revalidatePath(BASE);`
-- L475: `revalidatePath(BASE);`
-- L480: `export async function abandonFileAction(formData: FormData): Promise<void> {`
-- L481: `const session = await requirePermission("settings.manage");`
-- L500: `revalidatePath(BASE);`
-- L505: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
-- L506: `const session = await requirePermission("settings.manage");`
-- L522: `revalidatePath(BASE);`
-- L528: `session: Awaited<ReturnType<typeof requirePermission>>,`
-- L549: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
-- L550: `const session = await requirePermission("settings.manage");`
-- L567: `revalidatePath(BASE);`
-- L576: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
-- L577: `const session = await requirePermission("settings.manage");`
+- L77: `export async function resolveWeekAction(formData: FormData): Promise<void> {`
+- L78: `const session = await requirePermission("settings.manage");`
+- L129: `revalidatePath(BASE);`
+- L134: `export async function unresolveWeekAction(formData: FormData): Promise<void> {`
+- L135: `const session = await requirePermission("settings.manage");`
+- L152: `revalidatePath(BASE);`
+- L157: `export async function setWeekErrorStatusAction(formData: FormData): Promise<void> {`
+- L158: `const session = await requirePermission("settings.manage");`
+- L187: `revalidatePath(BASE);`
+- L199: `export async function assignProductIdsAction(formData: FormData): Promise<void> {`
+- L200: `const session = await requirePermission("settings.manage");`
+- L236: `revalidatePath(BASE);`
+- L280: `export async function markUploadedAction(formData: FormData): Promise<void> {`
+- L281: `const session = await requirePermission("settings.manage");`
+- L301: `revalidatePath(BASE);`
+- L310: `export async function recordSuccessAction(formData: FormData): Promise<void> {`
+- L311: `const session = await requirePermission("settings.manage");`
+- L360: `revalidatePath(BASE);`
+- L376: `export async function recordErrorAction(formData: FormData): Promise<void> {`
+- L377: `const session = await requirePermission("settings.manage");`
+- L402: `revalidatePath(BASE);`
+- L429: `revalidatePath(BASE);`
+- L434: `export async function recordNoEmailAction(formData: FormData): Promise<void> {`
+- L435: `const session = await requirePermission("settings.manage");`
+- L455: `revalidatePath(BASE);`
+- L460: `export async function abandonFileAction(formData: FormData): Promise<void> {`
+- L461: `const session = await requirePermission("settings.manage");`
+- L480: `revalidatePath(BASE);`
+- L485: `export async function startPreprodLedgerAction(formData: FormData): Promise<void> {`
+- L486: `const session = await requirePermission("settings.manage");`
+- L502: `revalidatePath(BASE);`
+- L508: `session: Awaited<ReturnType<typeof requirePermission>>,`
+- L529: `export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {`
+- L530: `const session = await requirePermission("settings.manage");`
+- L547: `revalidatePath(BASE);`
+- L556: `export async function assignPreprodProductIdsAction(formData: FormData): Promise<void> {`
+- L557: `const session = await requirePermission("settings.manage");`
+- L582: `revalidatePath(BASE);`
 
 `src/components/admin/compliance/UploadWalkthrough.tsx` L26-L35 — PORTAL_URL + WAIT_MINUTES constants
 
 ```ts
-  26| 
-  27| type FileSummary = { type: string; fileName: string; recordCount: number; empty: boolean };
-  28| 
-  29| type Props = {
-  30|   weekKey: string;
-  31|   files: FileSummary[];
-  32|   batchZipHref: string;
-  33|   submittable: boolean;
-  34|   /** S-12c: the portal of the env the zip targets (PREprod is a different host). */
-  35|   portalUrl?: string;
+  26| import { gateNote, type UploadGate } from "@/lib/compliance/ccrs-upload-gate-core";
+  27| 
+  28| type FileSummary = { type: string; fileName: string; recordCount: number; empty: boolean };
+  29| 
+  30| type Props = {
+  31|   weekKey: string;
+  32|   files: FileSummary[];
+  33|   batchZipHref: string;
+  34|   submittable: boolean;
+  35|   /** S-12c: the portal of the env the zip targets (PREprod is a different host). */
 ```
 
 `src/components/admin/compliance/UploadWalkthrough.tsx` L144-L256 — steps array (8 steps) — the current human upload procedure encoded in UI
 
 ```ts
- 144|   );
+ 144|   const reset = useCallback(() => save({ done: {} }), [save]);
  145| 
- 146|   const fileList = (group: FileSummary[]) => (
- 147|     <ul className="mt-1 space-y-0.5 text-[11px] text-white/45">
- 148|       {group.map((f) => (
- 149|         <li key={f.type}>
- 150|           • {f.fileName} — {f.recordCount} record(s){f.empty ? " (empty — skip uploading this file)" : ""}
- 151|         </li>
- 152|       ))}
- 153|     </ul>
- 154|   );
- 155| 
- 156|   const steps: { id: StepId; title: string; body: React.ReactNode; locked?: boolean; lockNote?: string }[] = [
- 157|     {
- 158|       id: "download",
- 159|       title: "Download the validated batch (.zip)",
- 160|       body: (
- 161|         <div>
- 162|           <p className="text-xs text-white/55">
- 163|             The zip contains every file numbered in upload order with correct CCRS filenames and
- 164|             headers. It only downloads when validation passes.
- 165|           </p>
- 166|           <a
- 167|             href={batchZipHref}
- 168|             className={`mt-2 inline-block rounded-lg px-3 py-1.5 text-xs font-bold transition ${
- 169|               submittable
- 170|                 ? "bg-[var(--admin-accent)] text-black hover:opacity-90"
- 171|                 : "cursor-not-allowed border border-white/10 text-white/30"
- 172|             }`}
- 173|             aria-disabled={!submittable}
- 174|             onClick={(e) => {
- 175|               if (!submittable) e.preventDefault();
- 176|             }}
- 177|           >
- 178|             {submittable ? "Download batch zip" : "Blocked — fix validation errors first"}
- 179|           </a>
- 180|         </div>
- 181|       ),
- 182|     },
- 183|     {
- 184|       id: "signin",
- 185|       title: "Sign in to the CCRS portal",
- 186|       body: (
- 187|         <p className="text-xs text-white/55">
- 188|           Open{" "}
- 189|           <a href={PORTAL_URL} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] underline">
- 190|             {portalHost}
- 191|           </a>{" "}
- 192|           and choose to sign in. You are taken to {CCRS_LOGIN_LABEL}: sign in with{" "}
- 193|           {signinEnv === "preprod" ? "your Pre-Production WA.gov account" : "your WA.gov account"}. Pre-Production and
- 194|           live need separate WA.gov accounts (
- 195|           <a
- 196|             href={WAGOV_CREATE_ACCOUNT_URLS[signinEnv]}
- 197|             target="_blank"
- 198|             rel="noreferrer"
- 199|             className="text-[var(--admin-accent)] underline"
- 200|           >
- 201|             create one
- 202|           </a>
- 203|           ). First time only: enter the email you use for CCRS reporting (already on file with LCB Licensing) and click
- 204|           Register. WA.gov account problems: WaTech; CCRS problems: {CCRS_SIGNIN_SERVICE_DESK}.
- 205|         </p>
- 206|       ),
- 207|     },
- 208|     {
- 209|       id: "group1",
- 210|       title: "Upload Group 1 — Strain, Area, Product",
- 211|       body: (
- 212|         <div>
- 213|           <p className="text-xs text-white/55">
- 214|             Upload these first; Inventory depends on them. Empty files can be skipped.
- 215|           </p>
- 216|           {fileList(group1)}
- 217|         </div>
- 218|       ),
- 219|     },
- 220|     {
- 221|       id: "wait1",
- 222|       title: `Wait ${WAIT_MINUTES} minutes (CCRS dependency processing)`,
- 223|       locked: !state.done.group1,
- 224|       lockNote: "Check off Group 1 first — the timer starts automatically.",
- 225|       body: state.done.group1 ? (
- 226|         g1Remaining > 0 ? (
- 227|           <p className="text-xs font-semibold text-amber-300">
- 228|             ⏱ {fmtRemaining(g1Remaining)} remaining — CCRS needs time to process Group 1 before
- 229|             Inventory can reference it.
- 230|           </p>
- 231|         ) : (
- 232|           <p className="text-xs font-semibold text-emerald-300">
- 233|             ✓ 10 minutes have passed — safe to upload Inventory.
- 234|           </p>
- 235|         )
- 236|       ) : null,
- 237|     },
- 238|     {
- 239|       id: "group2",
- 240|       title: "Upload Group 2 — Inventory",
- 241|       locked: Boolean(state.done.group1 && g1Remaining > 0),
- 242|       lockNote: "Wait for the 10-minute timer above before uploading Inventory.",
- 243|       body: fileList(group2),
+ 146|   const group1 = useMemo(() => files.filter((f) => ["Strain", "Area", "Product"].includes(f.type)), [files]);
+ 147|   const group2 = useMemo(() => files.filter((f) => f.type === "Inventory"), [files]);
+ 148|   const group3 = useMemo(
+ 149|     () => files.filter((f) => ["InventoryAdjustment", "InventoryTransfer", "Sale"].includes(f.type)),
+ 150|     [files],
+ 151|   );
+ 152| 
+ 153|   const fileList = (group: FileSummary[]) => (
+ 154|     <ul className="mt-1 space-y-0.5 text-[11px] text-white/45">
+ 155|       {group.map((f) => (
+ 156|         <li key={f.type}>
+ 157|           • {f.fileName} — {f.recordCount} record(s){f.empty ? " (empty — skip uploading this file)" : ""}
+ 158|         </li>
+ 159|       ))}
+ 160|     </ul>
+ 161|   );
+ 162| 
+ 163|   const steps: { id: StepId; title: string; body: React.ReactNode; locked?: boolean; lockNote?: string }[] = [
+ 164|     {
+ 165|       id: "download",
+ 166|       title: "Download the validated batch (.zip)",
+ 167|       body: (
+ 168|         <div>
+ 169|           <p className="text-xs text-white/55">
+ 170|             The zip contains every file numbered in upload order with correct CCRS filenames and
+ 171|             headers. It only downloads when validation passes.
+ 172|           </p>
+ 173|           <a
+ 174|             href={batchZipHref}
+ 175|             className={`mt-2 inline-block rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+ 176|               submittable
+ 177|                 ? "bg-[var(--admin-accent)] text-black hover:opacity-90"
+ 178|                 : "cursor-not-allowed border border-white/10 text-white/30"
+ 179|             }`}
+ 180|             aria-disabled={!submittable}
+ 181|             onClick={(e) => {
+ 182|               if (!submittable) e.preventDefault();
+ 183|             }}
+ 184|           >
+ 185|             {submittable ? "Download batch zip" : "Blocked — fix validation errors first"}
+ 186|           </a>
+ 187|         </div>
+ 188|       ),
+ 189|     },
+ 190|     {
+ 191|       id: "signin",
+ 192|       title: "Sign in to the CCRS portal",
+ 193|       body: (
+ 194|         <p className="text-xs text-white/55">
+ 195|           Open{" "}
+ 196|           <a href={PORTAL_URL} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] underline">
+ 197|             {portalHost}
+ 198|           </a>{" "}
+ 199|           and choose to sign in. You are taken to {CCRS_LOGIN_LABEL}: sign in with{" "}
+ 200|           {signinEnv === "preprod" ? "your Pre-Production WA.gov account" : "your WA.gov account"}. Pre-Production and
+ 201|           live need separate WA.gov accounts (
+ 202|           <a
+ 203|             href={WAGOV_CREATE_ACCOUNT_URLS[signinEnv]}
+ 204|             target="_blank"
+ 205|             rel="noreferrer"
+ 206|             className="text-[var(--admin-accent)] underline"
+ 207|           >
+ 208|             create one
+ 209|           </a>
+ 210|           ). First time only: enter the email you use for CCRS reporting (already on file with LCB Licensing) and click
+ 211|           Register. WA.gov account problems: WaTech; CCRS problems: {CCRS_SIGNIN_SERVICE_DESK}.
+ 212|         </p>
+ 213|       ),
+ 214|     },
+ 215|     {
+ 216|       id: "group1",
+ 217|       title: "Upload Group 1 — Strain, Area, Product",
+ 218|       body: (
+ 219|         <div>
+ 220|           <p className="text-xs text-white/55">
+ 221|             Upload these first; Inventory depends on them. Empty files can be skipped.
+ 222|           </p>
+ 223|           {fileList(group1)}
+ 224|         </div>
+ 225|       ),
+ 226|     },
+ 227|     {
+ 228|       id: "wait1",
+ 229|       title: `Wait for CCRS's emails on Group 1 (at least ${WAIT_MINUTES} minutes)`,
+ 230|       locked: !state.done.group1,
+ 231|       lockNote: "Check off Group 1 first — the timer starts automatically.",
+ 232|       body: state.done.group1 ? (
+ 233|         g1Remaining > 0 ? (
+ 234|           <p className="text-xs font-semibold text-amber-300">
+ 235|             ⏱ {fmtRemaining(g1Remaining)} remaining — CCRS needs time to process Group 1 before
+ 236|             Inventory can reference it.
+ 237|           </p>
+ 238|         ) : (
+ 239|           <p className="text-xs font-semibold text-emerald-300">
+ 240|             ✓ 10 minutes have passed — safe to upload Inventory.
+ 241|           </p>
+ 242|         )
+ 243|       ) : null,
  244|     },
  245|     {
- 246|       id: "wait2",
- 247|       title: `Wait ${WAIT_MINUTES} minutes again`,
- 248|       locked: !state.done.group2,
- 249|       lockNote: "Check off Group 2 first — the timer starts automatically.",
- 250|       body: state.done.group2 ? (
- 251|         g2Remaining > 0 ? (
- 252|           <p className="text-xs font-semibold text-amber-300">
- 253|             ⏱ {fmtRemaining(g2Remaining)} remaining before Group 3.
- 254|           </p>
- 255|         ) : (
- 256|           <p className="text-xs font-semibold text-emerald-300">✓ Safe to upload Group 3.</p>
+ 246|       id: "group2",
+ 247|       title: "Upload Group 2 — Inventory",
+ 248|       locked: Boolean(state.done.group1 && g1Remaining > 0) || Boolean(gate?.group2.locked),
+ 249|       lockNote: gate?.group2.locked ? gateNote(gate.group2, "Inventory") : "Wait for the 10-minute timer above before uploading Inventory.",
+ 250|       body: fileList(group2),
+ 251|     },
+ 252|     {
+ 253|       id: "wait2",
+ 254|       title: `Wait for CCRS's email on Inventory (at least ${WAIT_MINUTES} minutes)`,
+ 255|       locked: !state.done.group2,
+ 256|       lockNote: "Check off Group 2 first — the timer starts automatically.",
 ```
 
 `src/app/admin/reports/compliance/page.tsx` — Reports-tab compliance page (to be retired to a pointer, owner decision Q6)
@@ -3690,98 +3690,100 @@ Generated 2026-11-18 08:50Z at commit `16ce32fc53d39524ed9912babcb07a63ae3676ac`
 - L278: `describe("embedded self-tests still pass under vitest", () => {`
 - L279: `it("__runCcrsBatchCoreTests", async () => {`
 
-### `tests/compliance/pure-selftests.test.ts` (678 L) — `describe`/`it` titles
+### `tests/compliance/pure-selftests.test.ts` (690 L) — `describe`/`it` titles
 
-- L100: `describe("embedded pure self-test suites", () => {`
-- L101: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
-- L104: `it("discount-engine-core (promotions engine)", () => {`
-- L107: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
-- L112: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
-- L117: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
-- L122: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
-- L126: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
-- L130: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
-- L134: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
-- L137: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
-- L140: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
-- L143: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
-- L146: `it("chunked-in (S-7 pagination)", async () => {`
-- L149: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
-- L154: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
-- L157: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
-- L162: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
-- L165: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
-- L170: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
-- L173: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
-- L176: `it("pin-hash (S-10 scrypt + throttle)", () => {`
-- L179: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
-- L182: `it("loyalty engine (points math, tiers, code gen)", () => {`
-- L185: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
-- L188: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
-- L191: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
-- L194: `it("schedule-core (week math, Pacific)", () => {`
-- L197: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
-- L201: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
-- L205: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
-- L209: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
-- L213: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
-- L216: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
-- L219: `it("flux-presets-core (R62: general-purpose prompt templates, snippets, prompt lint)", () => {`
-- L222: `it("flux-video-core (R62: schema-exact FLUX 3 video t2v/i2v/v2v/edit/upscale/draft_enhance bodies)", () => {`
-- L225: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
-- L228: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
-- L233: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
-- L238: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
-- L246: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
-- L254: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
-- L258: `it("ccrs-lot-product-core (Part 17 S-17b: why a lot's product is not in Product.csv)", () => {`
-- L263: `it("ccrs-signin-core (Part 11 §G S-17c: CCRS signs in with WA.gov, separate PREprod account)", () => {`
-- L268: `it("ccrs-handover-core (Part 09 S-17d: first upload date and hand-over warnings)", () => {`
-- L273: `it("ccrs-mail-core (Part 09 S-18a: CCRS mailbox monitor, classify and prove)", () => {`
-- L278: `it("ccrs-strategy-core (Part 09 S-18b: strategy report for CCRS error email)", () => {`
-- L283: `it("ccrs-watchdog-core (Part 09 S-18c: no CCRS answer after 60 minutes; mailbox monitor down)", () => {`
-- L288: `it("ccrs-reseed-core (Part 17 G-1, S-15: re-seed / diff of the ledger from a later delivery)", () => {`
-- L293: `it("ccrs-held-back-fix-core (D251 S1: restock Products, CCRS initial qty, one row per re-used id, prod silence = success)", () => {`
-- L298: `it("ccrs-equalize-core (Part 17 §E, S-14: equalize waves)", () => {`
-- L303: `it("ccrs-copy-verify-core (Part 17 §G G-3, S-16: copy diff verifier)", () => {`
-- L308: `it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {`
-- L313: `it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {`
-- L316: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
-- L319: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
-- L322: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
-- L327: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
-- L332: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
-- L337: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
-- L342: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
-- L347: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
-- L352: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
-- L357: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
-- L369: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
-- L378: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
-- L385: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
-- L403: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
-- L429: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
-- L465: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
-- L500: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
-- L539: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
-- L560: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
-- L572: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
-- L594: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
-- L601: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
-- L605: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
-- L608: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
-- L611: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
-- L614: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
-- L625: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
-- L628: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
-- L631: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
-- L640: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
-- L645: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
-- L652: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
-- L657: `it("ccrs-hub-flow-core (W-1: the CCRS hub never drops PREprod; email Apply scoped to the email's env)", () => {`
-- L662: `it("ccrs-hub-view-core (W-2: the CCRS hub shell renders at once; heavy panels stream and never blank the page)", () => {`
-- L667: `it("ccrs-inflight-hold-core (W-3: a record already in a file waiting for its CCRS answer is not sent twice)", () => {`
-- L672: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
+- L102: `describe("embedded pure self-test suites", () => {`
+- L103: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
+- L106: `it("discount-engine-core (promotions engine)", () => {`
+- L109: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
+- L114: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
+- L119: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
+- L124: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
+- L128: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
+- L132: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
+- L136: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
+- L139: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
+- L142: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
+- L145: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
+- L148: `it("chunked-in (S-7 pagination)", async () => {`
+- L151: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
+- L156: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
+- L159: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
+- L164: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
+- L167: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
+- L172: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
+- L175: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
+- L178: `it("pin-hash (S-10 scrypt + throttle)", () => {`
+- L181: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
+- L184: `it("loyalty engine (points math, tiers, code gen)", () => {`
+- L187: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
+- L190: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
+- L193: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
+- L196: `it("schedule-core (week math, Pacific)", () => {`
+- L199: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
+- L203: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
+- L207: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
+- L211: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
+- L215: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
+- L218: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
+- L221: `it("flux-presets-core (R62: general-purpose prompt templates, snippets, prompt lint)", () => {`
+- L224: `it("flux-video-core (R62: schema-exact FLUX 3 video t2v/i2v/v2v/edit/upscale/draft_enhance bodies)", () => {`
+- L227: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
+- L230: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
+- L235: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
+- L240: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
+- L248: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
+- L256: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
+- L260: `it("ccrs-lot-product-core (Part 17 S-17b: why a lot's product is not in Product.csv)", () => {`
+- L265: `it("ccrs-signin-core (Part 11 §G S-17c: CCRS signs in with WA.gov, separate PREprod account)", () => {`
+- L270: `it("ccrs-handover-core (Part 09 S-17d: first upload date and hand-over warnings)", () => {`
+- L275: `it("ccrs-mail-core (Part 09 S-18a: CCRS mailbox monitor, classify and prove)", () => {`
+- L280: `it("ccrs-strategy-core (Part 09 S-18b: strategy report for CCRS error email)", () => {`
+- L285: `it("ccrs-watchdog-core (Part 09 S-18c: no CCRS answer after 60 minutes; mailbox monitor down)", () => {`
+- L290: `it("ccrs-reseed-core (Part 17 G-1, S-15: re-seed / diff of the ledger from a later delivery)", () => {`
+- L295: `it("ccrs-name-repair-core (D252 S1: garbled accents from the examiner export repaired)", () => {`
+- L300: `it("ccrs-upload-gate-core (D252 S1: each group waits for CCRS's email on the one before)", () => {`
+- L305: `it("ccrs-held-back-fix-core (D251 S1: restock Products, CCRS initial qty, one row per re-used id, filed strain; D252: silence reverted)", () => {`
+- L310: `it("ccrs-equalize-core (Part 17 §E, S-14: equalize waves)", () => {`
+- L315: `it("ccrs-copy-verify-core (Part 17 §G G-3, S-16: copy diff verifier)", () => {`
+- L320: `it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {`
+- L325: `it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {`
+- L328: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
+- L331: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
+- L334: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
+- L339: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
+- L344: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
+- L349: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
+- L354: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
+- L359: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
+- L364: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
+- L369: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
+- L381: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
+- L390: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
+- L397: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
+- L415: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
+- L441: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
+- L477: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
+- L512: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
+- L551: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
+- L572: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
+- L584: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
+- L606: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
+- L613: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
+- L617: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
+- L620: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
+- L623: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
+- L626: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
+- L637: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
+- L640: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
+- L643: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
+- L652: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
+- L657: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
+- L664: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
+- L669: `it("ccrs-hub-flow-core (W-1: the CCRS hub never drops PREprod; email Apply scoped to the email's env)", () => {`
+- L674: `it("ccrs-hub-view-core (W-2: the CCRS hub shell renders at once; heavy panels stream and never blank the page)", () => {`
+- L679: `it("ccrs-inflight-hold-core (W-3: a record already in a file waiting for its CCRS answer is not sent twice)", () => {`
+- L684: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
 
 ### Golden fixtures (`tests/compliance/golden/ccrs/`)
 

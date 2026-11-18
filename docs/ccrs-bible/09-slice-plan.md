@@ -1404,7 +1404,7 @@ Dry run on the real delivered files over a scratch ledger that held only a seed 
 
 **S6 as-built (2026-11-17).** The owner's step-by-step list is `evidence/2026-11-17-examiner-delivery/OWNER-CHECKLIST.md`. It covers migration 0368, the load, the two late weeks, the count list, the clean-up wave(s) and adjustments, and the fresh copy with its check; each step says what to look for. The email to the examiner asking for that copy is a draft in the owner's working folder, not in the repo, because the repo is public. D250 is complete.
 
-## D251 — The lots held back from week 11/01: fix what code can fix; production silence = accepted (DONE in code, 2026-11-18)
+## D251 — The lots held back from week 11/01: fix what code can fix; production silence = accepted (DONE in code, 2026-11-18; silence item reverted in D252)
 
 Owner request D251 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). Diagnosis: production week 11/01 succeeded for every file except Sale; the batch held back lots for E41 / E8 / E64 / E60.
 
@@ -1428,6 +1428,32 @@ Owner request D251 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`)
 - Owner: recount the 4 E8 lots; type strains for the lots CCRS has none for (pos-10dc3e5d7dd8 Amarena de Limón, pos-76bf18141ac5); finish intake for the 18 not-on-menu lots; show or re-home the 3 hidden-card restocks; re-send Sale.
 - The 8 P-07 lots (Cultivera-era, CCRS has no record): physical check. Gone → zero them in our system, nothing in CCRS. Present → needs a deliberate Insert release (not coded).
 - UNVERIFIED: CCRS accepts the combined Update for a re-used barcode, and the summed quantity matches its single record (U-83).
+
+## D252 — Production answers hours later: wait for each group's email; repair garbled names (DONE in code, 2026-11-18)
+
+Owner request D252 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). The owner found that production DOES email success and errors, only hours after the upload. Status of the 11/17 production files:
+
+- Area, Product, InventoryAdjustment, InventoryTransfer: success emails.
+- Strain: 11 "Duplicate Strain" rows only (strains CCRS already holds; harmless).
+- Inventory: 7 of 3,065 rows "Invalid Product".
+- Sale: 313 of 2,087 rows "Invalid InventoryExternalIdentifier".
+
+**Diagnosis.**
+1. **Sale (timing, not data).** All 313 refused rows sit on the 149 lots that were Inserts in the same night's Inventory file. CCRS checked the Sale at 23:15 (token T2315338) but processed Inventory only at 01:59 (T159360). Adjustment (T159563) and Transfer (T159579) were checked after Inventory and succeeded, including 316 Transfer rows on new lots. The walkthrough's 10-minute timer was too short for production.
+2. **Inventory (a real bug).** The 7 refused rows are exactly the rows whose Product name carried a garble (UTF-8 read as Windows-1252) copied from the examiner's export into the ledger seed, e.g. `Fire Bros. - PavÃ© - 14g`. CCRS validates the lot's Product by Name [G L0576] and holds the clean name (the clean strain "Blueberry Crème Brûlée" was refused as "Duplicate Strain"). The ledger holds 80 garbled Product names and 12 garbled Strains; all are repairable and none has a clean twin.
+3. **Strain duplicates (benign).** 11 strains used by lots in the 11/13 delivery exist in CCRS but were missing from our ledger; CCRS counts them as filed.
+
+**Built.**
+1. `src/lib/compliance/ccrs-name-repair-core.ts` (pure): `repairGarbledName` re-encodes a marked text (Ã, Â or â) as Windows-1252 bytes and decodes them as strict UTF-8; anything that does not decode stays as it is. `repairLedgerNames` repairs Product, Strain and Area names (and a Strain's id unless the clean spelling is its own row); Inventory rows are never touched. Wired into `decodeLedgerSlice` (ledger-store-core) and the equalize rebuild.
+2. `src/lib/compliance/ccrs-upload-gate-core.ts` (pure): `uploadGate` locks walkthrough Group 2 while any Group 1 file is emitted/uploaded without an applied answer, and Group 3 while any Group 1 file or Inventory is. `UploadWalkthrough.tsx` disables the box and names the files to wait for; the page passes `uploadGate(waitingHere)`.
+3. `subjectEnv` (S-18a): `CCRS Processing Successful` (production success), `CCRS errors for file: <name>` (production error) and `PRE: CCRS errors for file: <name>` (PREprod error) are verified subjects (U-65, U-66).
+4. **Reverted D251 item 5.** Production silence no longer records success; "No email after 60 minutes (checked spam)" records no-email on both envs again.
+
+**Tests.** `tests/compliance/d252-order-and-names.test.ts` (10); self-tests `ccrs-name-repair-core` (17) and `ccrs-upload-gate-core` (11), both runners; d251 block 4 now asserts the revert; mutations **M578, M580-M587**.
+
+**Remaining.**
+- Owner: Apply the 7 production emails in "CCRS email" (oldest first); re-send the 313 refused Sale rows; rebuild next week so the 7 lots go out with clean Product names; from now on wait for each group's email before the next group.
+- UNVERIFIED: CCRS accepts the repaired Product names on those 7 lots (U-84).
 
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 

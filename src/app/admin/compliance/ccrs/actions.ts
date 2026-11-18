@@ -39,7 +39,6 @@ import { verifyCcrsBatch } from "@/lib/compliance/ccrs-batch-core";
 import { flashParams, hubEnv, hubHref } from "@/lib/compliance/ccrs-hub-flow-core";
 import { PREPROD_RUN_RE, type LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError, classifyEcho, noEmailAllowedAt } from "@/lib/compliance/ccrs-outcome-core";
-import { silenceOutcome } from "@/lib/compliance/ccrs-held-back-fix-core";
 import {
   lifecycleErrorText,
   matchSuccessNames,
@@ -431,11 +430,7 @@ export async function recordErrorAction(formData: FormData): Promise<void> {
   backTo(weekKey, env, okQ(`${out.fileName}: ${verdict.why} Now ${out.state}; ${out.rows.landed} filed, ${out.rows.rejected} refused, ${out.rows.uncertain} uncertain. ${proof.text}`.trim()));
 }
 
-/**
- * 60+ minutes after the upload, no email of either kind. PREprod: every row
- * uncertain (Part 05 E). Production (D251 S1, U-65): CCRS sends NO success
- * email there, only error emails, so silence IS the success answer.
- */
+/** 60+ minutes after the upload, no email of either kind: every row uncertain (Part 05 E). */
 export async function recordNoEmailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const { weekKey, env, fileId } = readCommon(formData);
@@ -443,26 +438,11 @@ export async function recordNoEmailAction(formData: FormData): Promise<void> {
   if (!file.uploadedAt || Date.now() < noEmailAllowedAt(new Date(file.uploadedAt)).getTime()) {
     backTo(weekKey, env, errQ("\"No email\" can be declared only 60 minutes after the upload. Check spam and wait."));
   }
-  const outcome = silenceOutcome(env);
   let out: Awaited<ReturnType<typeof recordOutcome>>;
   try {
-    out = await recordOutcome(admin, file.id, outcome, new Date().toISOString(), [], null);
+    out = await recordOutcome(admin, file.id, "no-email", new Date().toISOString(), [], null);
   } catch (e) {
     backTo(weekKey, env, errQ(asText(e)));
-  }
-  if (outcome === "success") {
-    await recordAudit({
-      actorId: session.profile.id,
-      actorEmail: session.email,
-      action: "ccrs.file.success",
-      entityType: "ccrs_files",
-      entityId: file.id,
-      after: { env, fileName: out.fileName, state: out.state, rows: out.rows, by: "production silence (no error email in 60 minutes)" },
-    });
-    const proof = await proveAfterOutcome(admin, env);
-    if (proof.proved.length > 0) await auditProof(session, env, proof);
-    revalidatePath(BASE);
-    backTo(weekKey, env, okQ(`${out.fileName}: no error email in 60 minutes, so production CCRS accepted it. Now ${out.state}. ${proof.text}`.trim()));
   }
   await recordAudit({
     actorId: session.profile.id,
