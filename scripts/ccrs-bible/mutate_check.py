@@ -190,6 +190,8 @@ D250_FILES = "src/lib/compliance/ccrs-delivery-files.ts"
 D250_MIG = "supabase/migrations/0368_ccrs_delivery_loads.sql"
 D250_CLI = "scripts/compliance/load-ccrs-delivery.ts"
 D250_LOAD_TESTS = "tests/compliance/d250-delivery-load.test.ts"
+D250_LATE = "src/lib/compliance/ccrs-late-weeks-core.ts"
+D250_LATE_TESTS = "tests/compliance/d250-late-weeks.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4491,6 +4493,86 @@ MUTATIONS = [
         '  return files.map((f) => ({ role: "Inventory" as const,',
         D250_LOAD_TESTS,
         'The xlsx is recorded as the Product file.',
+    ),
+    (
+        'M551-d250-late-load-first',
+        D250_LATE,
+        '  if (env === "prod" && !input.delivery.applied) {',
+        '  if (env === "prod" && input.delivery.applied) {',
+        D250_LATE_TESTS,
+        'Production waits for the delivery load before anything else.',
+    ),
+    (
+        'M552-d250-late-preprod-no-wait',
+        D250_LATE,
+        '  if (env === "prod" && !input.delivery.applied) {',
+        '  if (!input.delivery.applied) {',
+        D250_LATE_TESTS,
+        'PREprod never waits for the production delivery.',
+    ),
+    (
+        'M553-d250-late-waiting-files',
+        D250_LATE,
+        '  if (input.waitingFiles > 0) {',
+        '  if (input.waitingFiles > 99) {',
+        D250_LATE_TESTS,
+        'Files waiting for an answer are answered before the week is built.',
+    ),
+    (
+        'M554-d250-late-blocking',
+        D250_LATE,
+        '  if (b.blockingErrors > 0) {',
+        '  if (b.blockingErrors > 1) {',
+        D250_LATE_TESTS,
+        "A single blocking error stops 'ready'.",
+    ),
+    (
+        'M555-d250-late-unnamed',
+        D250_LATE,
+        '      if (!c.named) unnamed += 1;',
+        '      if (c.named) unnamed += 1;',
+        D250_LATE_TESTS,
+        'A held row without a reason is counted.',
+    ),
+    (
+        'M556-d250-late-released',
+        D250_LATE,
+        'const RELEASED_BY_LOAD: ReadonlySet<string> = new Set<string>(["cultivera-not-on-record",',
+        'const RELEASED_BY_LOAD: ReadonlySet<string> = new Set<string>([',
+        D250_LATE_TESTS,
+        'E52 lots are marked as released by the load.',
+    ),
+    (
+        'M557-d250-late-handover-week',
+        D250_LATE,
+        '  if (week.start <= HANDOVER_DAY && HANDOVER_DAY <= week.end) {',
+        '  if (week.start <= HANDOVER_DAY) {',
+        D250_LATE_TESTS,
+        'The hand-over note belongs only to the 11/01 week.',
+    ),
+    (
+        'M558-d250-late-order',
+        D250_LATE,
+        '  return weeks.filter((w) => w.status === "open" || w.status === "due_today" || w.status === "overdue").sort((a, b) => (a.week.start < b.week.start ? -1 : 1));',
+        '  return weeks.filter((w) => w.status === "open" || w.status === "due_today" || w.status === "overdue");',
+        D250_LATE_TESTS,
+        'Late weeks are listed oldest first.',
+    ),
+    (
+        'M559-d250-late-e56-suffix',
+        D250_LATE,
+        '    if (d.endsWith(NOT_ON_RECORD_SUFFIX)) {',
+        '    if (d.startsWith(NOT_ON_RECORD_SUFFIX)) {',
+        D250_LATE_TESTS,
+        'A sale whose lot is not on record is classified (released by the load).',
+    ),
+    (
+        'M560-d250-late-empty-files',
+        D250_LATE,
+        '  const nonEmpty = b.files.filter((f) => !f.empty && f.recordCount > 0)',
+        '  const nonEmpty = b.files.filter((f) => f.recordCount >= 0)',
+        D250_LATE_TESTS,
+        'The download step lists only files with rows.',
     ),
 ]
 
