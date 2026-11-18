@@ -394,7 +394,7 @@ describe("ccrs-batch.ts wiring (source pins)", () => {
   });
   it("E41 lot rows are enriched with the menu explanation", () => {
     expect(BATCH).toContain("detail: enrichLotWithholdReason(planned.reason, key, menuPresence) });");
-    expect(BATCH).toContain("const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);");
+    expect(BATCH).toContain("const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence, ledger ? await readCcrsInitials(admin, env, lots) : new Map());");
   });
   it("the menu read fails closed to 'unreadable' (never treated as 'no item')", () => {
     expect(BATCH).toContain("if (failed) return { readable: false, error: failed };");
