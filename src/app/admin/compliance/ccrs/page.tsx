@@ -102,6 +102,10 @@ import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
 import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
 import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
+// D250 S4: the late weeks, one verdict + the exact steps for the selected one.
+import { lateWeekReadiness, lateWeeksOf, type LateWeekDelivery } from "@/lib/compliance/ccrs-late-weeks-core";
+import { listDeliveryLoads } from "@/lib/compliance/ccrs-delivery-store";
+import { CcrsLateWeeksPanel } from "@/components/admin/compliance/CcrsLateWeeksPanel";
 
 export const dynamic = "force-dynamic";
 // W-1 (2026-10-30): the page builds the week's batch, and its server actions
@@ -371,6 +375,19 @@ export default async function CcrsCommandCenterPage({
   const owedP = settle(() =>
     admin0 ? readOwed(admin0, env) : Promise.resolve({ available: false, rows: [], error: null }),
   );
+  // D250 S4: is the examiner delivery loaded (production only)?
+  const deliveryP: Promise<LateWeekDelivery> = settle(() =>
+    isSupabaseServiceConfigured ? listDeliveryLoads() : Promise.resolve({ available: false, rows: [], error: "database not configured" }),
+  ).then((r) => {
+    if (!r.ok) return { applied: false, waiting: false, migrationMissing: false };
+    const rows = r.value.rows;
+    return {
+      applied: rows.some((x) => x.status === "applied"),
+      waiting: rows.some((x) => x.status === "ready"),
+      migrationMissing: !r.value.available && r.value.error === null,
+    };
+  });
+  const lateWeeks = lateWeeksOf(overview.weeks).map((w) => w.week);
   // R74 S48: the PREprod test scoreboard. On Production only the one-line
   // strip shows, which needs only the ACCEPTED reads (W-2: half the queries).
   const scoreboardP = admin0
@@ -616,6 +633,39 @@ export default async function CcrsCommandCenterPage({
           env={env}
           action={setHandoverFactsAction}
         />
+      </Section>
+
+      {/* D250 S4) Late weeks: what is owed, in order, and whether the selected one is ready */}
+      <Section
+        title="Late weeks: ready to upload?"
+        subtitle="Every completed week since the first day of sales that is not recorded yet, oldest first. The selected week gets one verdict and the exact steps."
+      >
+        <Suspense fallback={<Pending label={`the readiness of week ${week.start} to ${week.end}`} />}>
+          <Await p={Promise.all([weekP, deliveryP])}>
+            {([wv, delivery]) => (
+              <CcrsLateWeeksPanel
+                late={lateWeeks}
+                selectedKey={week.key}
+                linkFor={(k) => hubWeekLink(k, env)}
+                readiness={lateWeekReadiness({
+                  env,
+                  week,
+                  status: selectedDeadline.status,
+                  delivery,
+                  waitingFiles: waitingHere.length,
+                  build: wv.batch || wv.buildError
+                    ? {
+                        error: wv.buildError,
+                        blockingErrors: wv.errors.length,
+                        files: (wv.batch?.files ?? []).map((f) => ({ type: f.type, recordCount: f.recordCount, empty: f.empty })),
+                        held: wv.held,
+                      }
+                    : null,
+                })}
+              />
+            )}
+          </Await>
+        </Suspense>
       </Section>
 
       {/* 2) Week picker */}
