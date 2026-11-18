@@ -1335,7 +1335,7 @@ Branches `ccrs/d227-s1-sale-excise-identity`, `ccrs/d227-s3-known-excise-message
 2. Press **Re-send refused rows** on it.
 3. Download the new Sale file, upload it to PREprod, then mark it uploaded and apply the answer.
 
-## D250 — Load the examiner's 11/13 + 11/17 delivery; make the two late weeks ready; finish the cleanup (S1-S5 DONE, 2026-11-17)
+## D250 — Load the examiner's 11/13 + 11/17 delivery; make the two late weeks ready; finish the cleanup (DONE, 2026-11-17)
 
 Owner request D250 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). Evidence: `evidence/2026-11-17-examiner-delivery/README.md`; sources in Part 13 §I.
 
@@ -1400,7 +1400,9 @@ Dry run on the real delivered files over a scratch ledger that held only a seed 
 - 1,007 lots are held as H_STRAIN_NOT_FILED, because their strains predate 9/18 and the scratch ledger had no 9/18 Strain rows. On the live ledger those strains are seeded, so this hold should clear. The live plan shows any lot it still holds by name.
 - On the live ledger, the 9/18 seed's ~44,700 open lots join the plan. At 10,000 per wave, the clean-up runs as W1, W2 and so on, each with its own adjustment phase.
 
-**After the clean-up:** ask the examiner for a fresh full copy and check it with the Records-page compare / `verify-ccrs-copy.ts` (the email draft is in the owner checklist).
+**After the clean-up:** ask the examiner for a fresh full copy and check it with the Records-page compare / `verify-ccrs-copy.ts`.
+
+**S6 as-built (2026-11-17).** The owner's step-by-step list is `evidence/2026-11-17-examiner-delivery/OWNER-CHECKLIST.md`. It covers migration 0368, the load, the two late weeks, the count list, the clean-up wave(s) and adjustments, and the fresh copy with its check; each step says what to look for. The email to the examiner asking for that copy is a draft in the owner's working folder, not in the repo, because the repo is public. D250 is complete.
 
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
