@@ -195,6 +195,9 @@ D250_LATE_TESTS = "tests/compliance/d250-late-weeks.test.ts"
 D250_EQ = "src/lib/compliance/ccrs-equalize-core.ts"
 D250_EQ_CLI = "scripts/compliance/equalize-ccrs-wave.ts"
 D250_CLEAN_TESTS = "tests/compliance/d250-cleanup.test.ts"
+D251_CORE = "src/lib/compliance/ccrs-held-back-fix-core.ts"
+D251_TESTS = "tests/compliance/d251-held-back-fixes.test.ts"
+D251_BATCH = "src/lib/compliance/ccrs-batch.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4649,6 +4652,86 @@ MUTATIONS = [
         D250_CLEAN_TESTS,
         'With --composite the snapshot date defaults to the wave date.',
     ),
+    (
+        'M570-d251-restock-hidden-card',
+        D251_CORE,
+        '    if (it.id && it.hidden !== true) byId.set(it.id, it);',
+        '    if (it.id) byId.set(it.id, it);',
+        D251_TESTS,
+        'A restock on a hidden card gets no Product.',
+    ),
+    (
+        'M571-d251-restock-ambiguous',
+        D251_CORE,
+        '    if (ids.size !== 1) {',
+        '    if (ids.size < 1) {',
+        D251_TESTS,
+        'A restock on two cards is never guessed.',
+    ),
+    (
+        'M572-d251-restock-not-read',
+        D251_BATCH,
+        '  if (versionId) items = [...items, ...(await readRestockItems(admin, items, liveLots, syncIssues))];',
+        '  if (versionId) items = [...items];',
+        D251_TESTS,
+        'The batch must add the restock rows.',
+    ),
+    (
+        'M573-d251-init-insert',
+        D251_CORE,
+        '  if (f.op === "Update" && typeof c === "number"',
+        '  if (typeof c === "number"',
+        D251_TESTS,
+        "CCRS's initial quantity only for a lot CCRS holds (Update).",
+    ),
+    (
+        'M574-d251-init-below-onhand',
+        D251_CORE,
+        'Number.isFinite(c) && c >= f.onHand)',
+        'Number.isFinite(c))',
+        D251_TESTS,
+        "CCRS's initial quantity must cover on-hand, else E8 stays.",
+    ),
+    (
+        'M575-d251-init-row',
+        D251_BATCH,
+        '      String(init.qty),',
+        '      String(l.received_qty ?? 0),',
+        D251_TESTS,
+        'The Inventory row writes the chosen initial quantity.',
+    ),
+    (
+        'M576-d251-combine-sum',
+        D251_CORE,
+        '    row[c.onHand] = qtyText(oh);',
+        '    row[c.onHand] = g[0][c.onHand];',
+        D251_TESTS,
+        'Combined rows add the on-hand counts.',
+    ),
+    (
+        'M577-d251-combine-date',
+        D251_CORE,
+        '.sort((a, b) => mmddyyyyKey(a).localeCompare(mmddyyyyKey(b)))[0];',
+        '.sort()[0];',
+        D251_TESTS,
+        'Earliest CreatedDate across years.',
+    ),
+    (
+        'M578-d251-silence-prod',
+        D251_CORE,
+        '  return env === "prod" ? "success" : "no-email";',
+        '  return "no-email";',
+        D251_TESTS,
+        'Production silence is success (U-65).',
+    ),
+    (
+        'M579-d251-strain-exact',
+        D251_CORE,
+        '  return e && ["seed", "filed", "confirmed"].includes(e.state) ? s : null;',
+        '  return s;',
+        D251_TESTS,
+        'Only a strain CCRS holds fills a blank strain.',
+    ),
 ]
 
 
@@ -4710,6 +4793,7 @@ def main() -> int:
         R5E_TESTS,
         W1_TESTS,
         W2_TESTS,
+        D251_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.
