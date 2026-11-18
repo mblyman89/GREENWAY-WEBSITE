@@ -283,7 +283,7 @@ describe("S-13 wiring in ccrs-batch.ts", () => {
     expect(BATCH).toContain("const area = buildAreaFile(env, license.licenseNumber, createdBy, createdDate, ledger);");
     // S-17b added a trailing menuPresence argument (explains E41 lot rows); the
     // Area-name argument this pin guards is unchanged.
-    expect(BATCH).toContain("buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);");
+    expect(BATCH).toContain("buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence, ledger ? await readCcrsInitials(admin, env, lots) : new Map());");
     expect(BATCH).toContain("    const area = areaName;");
     expect(BATCH).toContain("syncIssues.push(...strain.issues, ...area.issues, ...product.issues, ...inventory.issues);");
     expect(BATCH).toContain('push("Area", area.rows, area.warnings);');

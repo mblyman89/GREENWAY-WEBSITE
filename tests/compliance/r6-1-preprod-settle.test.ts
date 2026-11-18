@@ -167,7 +167,8 @@ describe("wiring", () => {
   const page = SRC("src/app/admin/compliance/ccrs/page.tsx");
 
   it("the proof runs after every recorded success / error answer (paste and email)", () => {
-    expect(actions.match(/await proveAfterOutcome\(admin, env\)/g)).toHaveLength(2);
+    // D251: + the production-silence success (recordNoEmailAction on prod).
+    expect(actions.match(/await proveAfterOutcome\(admin, env\)/g)).toHaveLength(3);
     expect(mail.match(/await proveAfterOutcome\(admin, env\)/g)).toHaveLength(2);
   });
   it("a failed proof never hides a recorded answer (proveAfterOutcome catches)", () => {
