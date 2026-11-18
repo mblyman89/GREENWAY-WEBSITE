@@ -40,6 +40,19 @@
  *     --wave-date 2026-11-15 --adjust-date 2026-11-22 --psql "<PGURL>" --report w1-adjust.md \
  *     [--emit --expect '<the adjust counts JSON>']
  *
+ * D250 S5, the easy way (after the examiner's delivery is loaded):
+ *   npx tsx scripts/compliance/equalize-ccrs-wave.ts --phase inventory --wave W1 \
+ *     --wave-date <today> --composite 2026-11-17 --brian \
+ *     --final-upload-date 2026-11-01 --counted-file counted.txt \
+ *     --psql "<PGURL>" --report w1-plan.md
+ *   --composite <date>  read the copy from the ledger (the 9/18 seed plus the
+ *                       loaded delivery of that date); no copy files and no
+ *                       --copy-as-of. --snapshot-date defaults to --wave-date.
+ *   --brian             the examiner's 10/29 answers: nominal cost 0.01 (4c),
+ *                       the strain already filed (4d), Update first and the
+ *                       Reconciliation after its email (4a). Not combinable
+ *                       with --nominal-cost, --strain-override or --same-batch.
+ *
  * Policy switches (each waits on an examiner answer, Part 17 §E):
  *   --same-batch          Q-B1: Updates and Reconciliation in ONE emission
  *   --nominal-cost 0.01   Q-B3: the cost to write where CCRS shows 0
@@ -58,7 +71,9 @@ import { ccrsDate, verifyCcrsFile } from "../../src/lib/compliance/ccrs-batch-co
 import { planOutboxFiles, type OutboxFile } from "../../src/lib/compliance/ccrs-outbox-core";
 import {
   ADJUST_PHASE_SQL,
+  BRIAN_EQUALIZE_POLICY,
   DEFAULT_EQUALIZE_POLICY,
+  compositeCopy,
   EqualizeError,
   OURS_READ_SQL,
   equalizeEmitPayload,
@@ -115,10 +130,17 @@ function readOurs(argv: readonly string[]): OurLot[] {
   throw new ArgError("give --psql <PGURL> or --ours-file <file> to read our own lots (a wave must never zero stock we hold)");
 }
 
-function policyOf(argv: readonly string[]): EqualizePolicy {
+export function policyOf(argv: readonly string[]): EqualizePolicy {
   const maxRaw = arg(argv, "max-lots");
   if (maxRaw !== undefined && !/^\d+$/.test(maxRaw)) throw new ArgError("--max-lots takes a whole number");
+  if (argv.includes("--brian")) {
+    for (const f of ["--nominal-cost", "--strain-override", "--same-batch"]) {
+      if (argv.includes(f)) throw new ArgError(`--brian already sets the examiner's answers; drop ${f}`);
+    }
+    return { ...BRIAN_EQUALIZE_POLICY, maxLots: maxRaw === undefined ? BRIAN_EQUALIZE_POLICY.maxLots : Number(maxRaw) };
+  }
   return {
+    keepFiledStrain: false,
     sameBatchAdjust: argv.includes("--same-batch"),
     nominalTotalCost: arg(argv, "nominal-cost") ?? DEFAULT_EQUALIZE_POLICY.nominalTotalCost,
     strainOverride: arg(argv, "strain-override") ?? DEFAULT_EQUALIZE_POLICY.strainOverride,
@@ -233,18 +255,27 @@ export function main(argv: readonly string[] = process.argv): number {
       return emit(pg!, wave, equalizeSources(ap, "adjustments"), readLedger(argv), new Set(ap.lotIds));
     }
 
-    const copyAsOf = arg(argv, "copy-as-of");
-    const snapshotDate = arg(argv, "snapshot-date");
-    if (!copyAsOf || !snapshotDate) { console.error("--copy-as-of and --snapshot-date are required"); return 2; }
+    const composite = arg(argv, "composite");
+    if (composite && arg(argv, "copy-as-of")) { console.error("--composite already names the copy's date; drop --copy-as-of"); return 2; }
+    const copyAsOf = composite ?? arg(argv, "copy-as-of");
+    const snapshotDate = arg(argv, "snapshot-date") ?? (composite ? waveDate : undefined);
+    if (!copyAsOf || !snapshotDate) { console.error("--copy-as-of and --snapshot-date are required (or --composite <delivery date>)"); return 2; }
     const finalUploadDate = arg(argv, "final-upload-date");
     if (!finalUploadDate) { console.error("--final-upload-date is required: the day Cultivera made its last upload (see the hand-over card). The copy must be dated after it."); return 2; }
     const countedBarcodes = readCounted(argv);
     const paths: Record<SeedSource, string | undefined> = { Inventory: arg(argv, "inventory"), Product: arg(argv, "product"), Strain: arg(argv, "strain"), Area: arg(argv, "area") };
-    for (const [k, p] of Object.entries(paths)) {
-      if (!p || !existsSync(p)) { console.error(`--${k.toLowerCase()} <file> is required and must exist (got ${p ?? "nothing"})`); return 2; }
+    if (composite) {
+      const given = Object.entries(paths).filter(([, p]) => p !== undefined).map(([k]) => `--${k.toLowerCase()}`);
+      if (given.length) { console.error(`--composite reads the copy from the ledger; drop ${given.join(", ")}`); return 2; }
+    } else {
+      for (const [k, p] of Object.entries(paths)) {
+        if (!p || !existsSync(p)) { console.error(`--${k.toLowerCase()} <file> is required and must exist (got ${p ?? "nothing"})`); return 2; }
+      }
     }
-    const copy = buildLedgerSeed(Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, readFileSync(p!, "utf8")])) as Record<SeedSource, string>).entities;
     const ledger = readLedger(argv);
+    const copy = composite
+      ? compositeCopy(ledger, composite)
+      : buildLedgerSeed(Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, readFileSync(p!, "utf8")])) as Record<SeedSource, string>).entities;
     if (!arg(argv, "ours-file") && pg) {
       const live = liveSnapshotRefusal(snapshotDate, new Date());
       if (live) { console.error(live); return 1; }

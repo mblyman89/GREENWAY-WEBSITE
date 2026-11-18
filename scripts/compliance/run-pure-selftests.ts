@@ -2110,7 +2110,7 @@ __runLiquidVolumeTests();
   assertRan("ccrs-reseed-core", __runCcrsReseedCoreTests(), 12);
   assertRan("ccrs-delivery-core", __runCcrsDeliveryCoreTests(), 24); // D250 S2: examiner delta delivery merge
   assertRan("ccrs-late-weeks-core", __runCcrsLateWeeksTests(), 19); // D250 S4: late weeks readiness (load first, answer waiting files, named holds, spacing, hand-over day)
-  assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 24); // S-14b: +5 (final-upload guard, audit-counted hold)
+  assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 30); // S-14b: +5 (final-upload guard, audit-counted hold); D250 S5: +6 (Brian policy, composite copy)
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file
   assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 51); // R6-2: InventoryTransfer rows for received deliveries; C1: no TR- prefix, legacy alias, correction path
