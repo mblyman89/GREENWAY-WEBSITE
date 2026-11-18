@@ -351,6 +351,22 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - An errored Sale file with refused rows has **Re-send refused rows**. It rebuilds those dates with today's exporter, keeps only the `rejected` rows (never `uncertain`), checks each one against the identity, runs the ledger self-check and stores the new file in the outbox.
 - See Part 09 D227.
 
+### A.23 D251 Held-back lots from week 11/01; production silence = accepted — DONE in code (2026-11-18)
+
+- **Before:**
+  - 155 restock lots (an "-onboarded" size inside another product's card) had no Product, so E41 held them.
+  - 48 Cultivera-era lots had on hand above our received figure (E8 [G L0597]), though CCRS's own InitialQuantity was high enough.
+  - 14 CCRS ids appeared twice (vendor re-used a barcode), so E60 held 28 rows [G L0219-L0221].
+  - Update lots with a blank strain were held as E64 even when CCRS had filed a strain.
+  - On production, silence after 60 minutes went to "reconciling", but production never sends a success email.
+- **Now:**
+  - Each restock lot gets its own Product copied from its visible card, with its own key and weight [G L0581].
+  - Those E8 lots send CCRS's filed InitialQuantity; the 4 above even that stay held.
+  - One combined row per re-used id (sums, earliest date); unreadable numbers keep the hold.
+  - A blank strain takes the strain CCRS filed when that strain is on file [EXAM2 L0035].
+  - On production, "No email after 60 minutes: accepted" records success.
+- See Part 09 D251.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.
