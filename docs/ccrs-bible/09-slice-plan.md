@@ -1404,6 +1404,31 @@ Dry run on the real delivered files over a scratch ledger that held only a seed 
 
 **S6 as-built (2026-11-17).** The owner's step-by-step list is `evidence/2026-11-17-examiner-delivery/OWNER-CHECKLIST.md`. It covers migration 0368, the load, the two late weeks, the count list, the clean-up wave(s) and adjustments, and the fresh copy with its check; each step says what to look for. The email to the examiner asking for that copy is a draft in the owner's working folder, not in the repo, because the repo is public. D250 is complete.
 
+## D251 — The lots held back from week 11/01: fix what code can fix; production silence = accepted (DONE in code, 2026-11-18)
+
+Owner request D251 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). Diagnosis: production week 11/01 succeeded for every file except Sale; the batch held back lots for E41 / E8 / E64 / E60.
+
+**Rule.**
+- Every Inventory lot needs its Product on file; UnitWeightGrams belongs to the Product [G L0581].
+- CCRS refuses QuantityOnHand greater than InitialQuantity (E8) [G L0597].
+- CCRS refuses a second row with the same ExternalIdentifier [G L0219-L0221].
+- Strain must be a valid value [G L0552]; Brian 4d: keep the strain CCRS already filed [EXAM2 L0035].
+- Production sends no success email (owner, 2026-11-18; U-65).
+
+**Built.** `src/lib/compliance/ccrs-held-back-fix-core.ts` (pure) wired into `ccrs-batch.ts`, `actions.ts`, `CcrsFilesPanel.tsx`, `ccrs-watchdog-core.ts`:
+1. **Restocks own a Product (E41, 155 lots).** A lot whose key is not a menu card but whose `<key>-onboarded` size sits inside a visible card gets a Product copied from that card under the lot's own key (`restockItems`; card read via `menu_variants`). A hidden card or a key on two cards adds nothing and warns.
+2. **E8 (48 lots).** When on hand > received, the lot is an Update and CCRS's filed Initial Quantity (ledger seed) is at least on hand, the row sends CCRS's Initial Quantity (`initialQtyForLot`). The 4 lots above even CCRS's figure stay held (recount).
+3. **Duplicate CCRS id (E60, 14 ids).** Two rows with one ExternalIdentifier become one row: quantities and cost summed, earliest CreatedDate, other cells from the first row (`combineDuplicateInventoryRows`). Any unreadable number keeps both rows (the E60 hold stays). Runs before the delta plan and the E60 check.
+4. **Blank strain (E64).** An Update lot with no strain takes the strain CCRS filed for it (seed payload), only when that strain is itself seed/filed/confirmed in the ledger (`pickFiledStrain`).
+5. **Production silence.** On production, "No email after 60 minutes: accepted" records success (`silenceOutcome`); PREprod is unchanged (no-email → reconciling).
+
+**Tests.** `tests/compliance/d251-held-back-fixes.test.ts` (13); self-test `ccrs-held-back-fix-core` (23, both runners); mutations **M570-M579**.
+
+**Remaining.**
+- Owner: recount the 4 E8 lots; type strains for the lots CCRS has none for (pos-10dc3e5d7dd8 Amarena de Limón, pos-76bf18141ac5); finish intake for the 18 not-on-menu lots; show or re-home the 3 hidden-card restocks; re-send Sale.
+- The 8 P-07 lots (Cultivera-era, CCRS has no record): physical check. Gone → zero them in our system, nothing in CCRS. Present → needs a deliberate Insert release (not coded).
+- UNVERIFIED: CCRS accepts the combined Update for a re-used barcode, and the summed quantity matches its single record (U-83).
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

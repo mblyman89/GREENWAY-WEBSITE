@@ -3542,3 +3542,13 @@ Owner follow-ups during D250 (verbatim):
 > "Please continue. Will you real quick in the chat as you work tell me what all it is you are working on. The system was already ready to submit to CCRS, I passed all 13 tests with real data generated from real activity. You have been working on things for many hours now, several slices worth. What is going on? Did you find something drastic or something? I just want to be more in the loop about what's happening. I didn't think it'd be this much work. All I gave you was the updated CCRS account info. Please continue. Follow the standing rules. Thank you."
 
 > "Thank you, I appreciate you letting me know all of this. Please complete slice 5 and 6. I just wanted to make sure all was well. I am looking forward to emailing Brian to send us an updated CCRS report after we do the clean up to see that it worked. Follow the standing rules. Thank you!"
+
+## D251 - Fix the lots held back from week 11/01; combine the duplicate ids; explain the 8 unknown lots (2026-11-18)
+
+> "Thank you! Please fix the issues you can fix. It'll take Brian 2 weeks to get back about it. Let's just combine and test uploading them. Please explain better what the 8 unknown lots are. These show up in our system, but not CCRS? So, I should make sure they exist physically and if not remove them from our system doing nothing in CCRS about it? I will work on my tasks while you work on yours. Follow the standing rules. Thank you!"
+
+Context: production week 11/01 succeeded except Sale (`Sale__20261117T231541807.csv`).
+
+### D251 As-built
+
+- **S1 (held-back fixes):** `ccrs-held-back-fix-core.ts`. Restock lots get their own Product from their visible card; E8 lots send CCRS's filed InitialQuantity; re-used CCRS ids become one combined row; blank strains take the strain CCRS filed; on production, silence after 60 minutes records success. Tests d251-held-back-fixes (13), self-test (23), mutations M570-M579. The 8 unknown lots: check physically; gone → zero them in our system, nothing in CCRS; present → a deliberate Insert release is still needed.
