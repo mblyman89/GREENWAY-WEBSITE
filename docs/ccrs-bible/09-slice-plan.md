@@ -1537,3 +1537,15 @@ Verification: tsc 0 / eslint 0 / vitest <n> passed / next build ok
 Part 04 rows changed: …   Part 12 items closed/opened: …
 UNVERIFIED still open that this slice touches: U-xx …
 ```
+
+
+## D256 — Ready the clean-up system (2026-11-19)
+
+Owner request D256 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`). A real-data plan-only run on 11/18 found three planner gaps; the owner asked for them fixed plus a hub panel, lean.
+
+- **S1 planner (ccrs-equalize-core).**
+  - A CCRS id carried by two of our lots (vendor re-used barcode, E60) is ours, not a refusal.
+  - IsMedical `1`/`0` (the 9/18 copy) reads as TRUE/FALSE, as in ccrs-delivery-core; any other value is still held.
+  - A strain is matched again after the D252 garble repair and with wrapping quotes stripped; still unmatched means held.
+  - Real data, 11/19: W1 10,000, next 33,064, held 121 (106 counted on the shelf, 15 strain), ours 6.
+- **S2 Clean-up panel** on the CCRS hub: plan, store the wave, then make its Reconciliation file, without a terminal.
