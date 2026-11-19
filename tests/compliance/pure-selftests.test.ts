@@ -64,6 +64,7 @@ import { __runCcrsNameRepairCoreTests } from "@/lib/compliance/ccrs-name-repair-
 import { __runCcrsUploadGateCoreTests } from "@/lib/compliance/ccrs-upload-gate-core";
 import { __runCcrsAutoUploadCoreTests } from "@/lib/compliance/ccrs-auto-upload-core";
 import { __runCcrsAutobotTestCoreTests } from "@/lib/compliance/ccrs-autobot-test-core";
+import { __runCcrsStaleMailCoreTests } from "@/lib/compliance/ccrs-stale-mail-core";
 import { __runCcrsCopyVerifyCoreTests } from "@/lib/compliance/ccrs-copy-verify-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
@@ -307,7 +308,12 @@ describe("embedded pure self-test suites", () => {
   it("ccrs-auto-upload-core (D253: assisted uploader - Group 1 -> 2 -> 3, each group waits for CCRS's emails, nothing retried blindly; D254: keep-alive switch, log-in alert)", () => {
     const r = __runCcrsAutoUploadCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(91);
+    expect(r.passed).toBeGreaterThanOrEqual(93);
+  });
+  it("ccrs-stale-mail-core (D255: an old email whose every file is closed or abandoned may be set aside; the hub lists every open email)", () => {
+    const r = __runCcrsStaleMailCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(22);
   });
   it("ccrs-autobot-test-core (D254: seven PREprod practice files, one per type, fresh ids, pass both last checks)", () => {
     const r = __runCcrsAutobotTestCoreTests();

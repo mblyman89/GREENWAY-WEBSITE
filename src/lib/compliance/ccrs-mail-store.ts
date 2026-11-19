@@ -34,6 +34,7 @@ import {
   type CcrsMailRow,
   type MailHeartbeat,
 } from "./ccrs-mail-core";
+import { mergeHubMail } from "./ccrs-stale-mail-core";
 import { getAttachmentText, getGmailAccessToken, getMessage, listMessageIds } from "./ccrs-mail-fetch";
 import { notifyOpenCcrsMail, type MailNotifyResult } from "./ccrs-mail-notify";
 import { runCcrsWatchdog, type WatchdogResult } from "./ccrs-watchdog";
@@ -195,8 +196,15 @@ export async function listRecentCcrsMail(limit = 25): Promise<{ available: boole
     .order("received_at", { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) return { available: !missingTable(error), rows: [], error: missingTable(error) ? null : `ccrs_mail_messages: ${error.message}`, heartbeat };
-  return { available: true, rows: (data as StoredCcrsMail[] | null) ?? [], error: null, heartbeat };
+  // D255: EVERY open email is listed too. They block the uploader, and the 21
+  // open emails of 10/20 to 10/25 sat behind 76+ newer handled ones, out of sight.
+  const { data: open, error: e2 } = await admin.from("ccrs_mail_messages").select(COLS).eq("state", "new").order("received_at", { ascending: true, nullsFirst: true }).limit(OPEN_LIST_MAX);
+  if (e2) return { available: true, rows: (data as StoredCcrsMail[] | null) ?? [], error: `ccrs_mail_messages (open): ${e2.message}`, heartbeat };
+  return { available: true, rows: mergeHubMail((open as StoredCcrsMail[] | null) ?? [], (data as StoredCcrsMail[] | null) ?? []), error: null, heartbeat };
 }
+
+/** D255: the most open emails the hub lists (far above anything seen; the start blocker reads 100). */
+export const OPEN_LIST_MAX = 200;
 
 export async function getCcrsMail(admin: Admin, id: string): Promise<StoredCcrsMail> {
   const { data, error } = await admin.from("ccrs_mail_messages").select(COLS).eq("id", id).single();

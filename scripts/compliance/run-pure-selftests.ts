@@ -1012,6 +1012,7 @@ import { __runCcrsNameRepairCoreTests } from "../../src/lib/compliance/ccrs-name
 import { __runCcrsUploadGateCoreTests } from "../../src/lib/compliance/ccrs-upload-gate-core";
 import { __runCcrsAutoUploadCoreTests } from "../../src/lib/compliance/ccrs-auto-upload-core";
 import { __runCcrsAutobotTestCoreTests } from "../../src/lib/compliance/ccrs-autobot-test-core";
+import { __runCcrsStaleMailCoreTests } from "../../src/lib/compliance/ccrs-stale-mail-core";
 import { __runCcrsCopyVerifyCoreTests } from "../../src/lib/compliance/ccrs-copy-verify-core";
 import { __runReturnCorrectionsTests } from "../../src/lib/compliance/ccrs-return-corrections-core";
 import { __runCcrsTransferTests } from "../../src/lib/compliance/ccrs-transfer-core";
@@ -2119,7 +2120,8 @@ __runLiquidVolumeTests();
   assertRan("ccrs-held-back-fix-core", __runCcrsHeldBackFixCoreTests(), 22); // D251 S1: restock lots own a Product, CCRS initial qty for E8, CCRS filed strain for E64, one row per re-used CCRS id (D252: "production silence = success" reverted)
   assertRan("ccrs-name-repair-core", __runCcrsNameRepairCoreTests(), 17); // D252 S1: undo the examiner export's garbled accents (CCRS holds the clean name)
   assertRan("ccrs-upload-gate-core", __runCcrsUploadGateCoreTests(), 11); // D252 S1: a group waits for CCRS's email on the group before it
-  assertRan("ccrs-auto-upload-core", __runCcrsAutoUploadCoreTests(), 91); // D254: keep-alive only while waiting for CCRS email or the gap and only with CCRS_KEEPALIVE=on; log-in alert once per held file after 2 min; a logged-in tab beats an old logged-out one. D253: assisted CCRS uploader (owner option A) - plan Group 1->2->3, one file in flight, wait for every CCRS email of the earlier group, refused rows pause, unseen answer page stops, same-group override only
+  assertRan("ccrs-auto-upload-core", __runCcrsAutoUploadCoreTests(), 93); // D255: the blocker names the oldest date and the set-aside button. D254: keep-alive only while waiting for CCRS email or the gap and only with CCRS_KEEPALIVE=on; log-in alert once per held file after 2 min; a logged-in tab beats an old logged-out one. D253: assisted CCRS uploader (owner option A) - plan Group 1->2->3, one file in flight, wait for every CCRS email of the earlier group, refused rows pause, unseen answer page stops, same-group override only
+  assertRan("ccrs-stale-mail-core", __runCcrsStaleMailCoreTests(), 22); // D255: old CCRS email whose every file is closed or abandoned may be set aside (it blocked the uploader, out of sight); the hub lists every open email
   assertRan("ccrs-autobot-test-core", __runCcrsAutobotTestCoreTests(), 25); // D254: seven one-row PREprod practice files, one per type, fresh ids each time, pass the batch verifier and the ledger self-check
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file

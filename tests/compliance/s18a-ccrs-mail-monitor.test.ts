@@ -697,6 +697,8 @@ describe("drafts-only (standing rule 3): only the owner's Apply writes the ledge
       "applyCcrsNotProcessedMailAction",
       // R74 S48: one click answers every waiting CCRS email, oldest first.
       "applyAllCcrsMailAction",
+      // D255: set aside old emails whose files are all closed or abandoned (audited).
+      "setAsideStaleCcrsMailAction",
       "dismissCcrsMailAction",
       // D228: reopen a set-aside email (reason, audited) and adopt a hand-made file.
       "reopenCcrsMailAction",

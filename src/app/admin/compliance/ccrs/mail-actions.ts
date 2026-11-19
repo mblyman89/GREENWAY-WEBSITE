@@ -33,6 +33,7 @@ import { ADOPT_REASON_MIN, adoptUploadTime, planAdoptFile } from "@/lib/complian
 import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 import { hubEnv, hubHref } from "@/lib/compliance/ccrs-hub-flow-core";
+import { setAsideStaleCcrsMail, type StaleSetAsideResult } from "@/lib/compliance/ccrs-stale-mail-store";
 
 const BASE = "/admin/compliance/ccrs";
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -163,6 +164,37 @@ export async function applyAllCcrsMailAction(formData: FormData): Promise<void> 
   revalidatePath(BASE);
   const text = `Answered ${done.length} of ${open.length} CCRS email(s).${left.length ? ` Still waiting (${left.length}), each needs your choice: ${left.join(" | ")}` : ""}${done.length ? ` Done: ${done.join(" | ")}` : ""}`;
   backMail(weekKey, left.length && !done.length ? errQ(text) : okQ(text), page);
+}
+
+/**
+ * D255: "Set aside old CCRS emails". Every open email of this env's start
+ * scope whose named files ALL sit in a state no run sends and no Apply answers
+ * (abandoned, closed, succeeded, errored, reconciling) is set aside, each with
+ * the facts in its note. Anything naming a waiting file, an unknown file or no
+ * file stays for the owner. One audit row lists what was done.
+ */
+export async function setAsideStaleCcrsMailAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const weekKey = String(formData.get("week_key") ?? "");
+  const page = pageEnv(formData);
+  const admin = createSupabaseAdminClient();
+  let r: StaleSetAsideResult;
+  try {
+    r = await setAsideStaleCcrsMail(admin, page, session.profile.id);
+  } catch (e) {
+    backMail(weekKey, errQ(asText(e)), page);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.mail.stale_set_aside",
+    entityType: "ccrs_mail_messages",
+    entityId: null,
+    after: { env: page, setAside: r.setAside, raced: r.raced, kept: r.kept.slice(0, 30) },
+  });
+  revalidatePath(BASE);
+  const keptText = r.kept.length ? ` Left waiting (${r.kept.length}), each needs you: ${r.kept.map((k) => `${k.subject || k.id}: ${k.why}`).join(" | ")}` : "";
+  backMail(weekKey, okQ(`Set aside ${r.setAside} old CCRS email(s) whose files are already closed or abandoned.${keptText}`), page);
 }
 
 /** Not about a file this system made (or already recorded by paste): set aside with a reason. */
