@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Greenway CCRS Uploader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Uploads Greenway's CCRS files through the CCRS web page you are logged in to, one group at a time, as the Greenway back office directs. Never sees your password.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "alarms", "scripting"],

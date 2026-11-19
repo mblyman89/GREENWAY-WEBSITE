@@ -3578,3 +3578,13 @@ Later (2026-11-19), mid-build:
 > "please continue. follow the standing rules. Also, just a heads up. all of week 1 has been uploaded and accepted. I am now working through week 2. at the end of this round. please let me know what I need to do to set up the partial automation, as well as what I or we need to do to begin the clean up process. thank you."
 
 Owner authorization recorded (AGENTS.md rule 3 exception): while a run the owner started is running, the system uploads the files of that run to CCRS from the owner's own logged-in CCRS tab, and applies CCRS's emails about that run's environment through the same Apply the owner's button uses, so the next group can go. Credentials are never stored (option A).
+
+## D254 - Keep the CCRS login alive while a run waits; log-in alert; PREprod test files (2026-11-19)
+
+Owner question (no code edits asked for in it):
+
+> "Thank you. I have a question/ concern. I have noticed that it takes so long between uploads, that we get auto logged out. Is there a way to add to the upload logic to do something that will keep the site alive while we wait for the emails to arrive. The second thing I need help understanding is about the cleanup. I did a full store inventory count on October 30th, scanning every single item. It’s how I migrated from Cultivera to our new platform. My understanding was we were going to use this audited inventory report to clean up CCRS. Can you please let me know your opinion on this. No code edits."
+
+After the answer (keep-alive plus a log-in alert; the 10/30 count drives the clean-up):
+
+> "thank you. yes, please build the keep alive and alert system as a back up plan. also, please update the email to brian with that question. I will let you know when week 2 is finished. please provide for me 7 test files to upload to the preprod env to test the autobot. one for each batch. please complete all tasks before returning back with a summary report. follow the standing rules. thank you."

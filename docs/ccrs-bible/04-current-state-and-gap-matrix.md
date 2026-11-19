@@ -390,6 +390,16 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - Nothing uncertain is re-sent; a file with an unknown result blocks new runs until settled.
 - See Part 09 D253.
 
+### A.26 D254 Uploader keep-alive, log-in alert, PREprod practice set — DONE in code (2026-11-19)
+
+- **Before:**
+  - While a run waited hours for CCRS's email, the CCRS session ended. The next group then waited on "log in" with no alert.
+- **Now:**
+  - Log-in alert (always on): one email and push per held file after 2 minutes of waiting on log-in, account or tab.
+  - Keep-alive (off unless `CCRS_KEEPALIVE=on`): while waiting for email or the gap, extension 1.1.0 re-reads the logged-in page every 10 minutes. It never uploads.
+  - Hub button "Make PREprod test files" puts a fresh seven-file practice set (one per type) in the PREprod outbox.
+- See Part 09 D254.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

@@ -13,6 +13,7 @@ import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { PendingSubmit } from "./PendingSubmit";
 import { CcrsUploaderPairForm } from "./CcrsUploaderPairForm";
 import {
+  makePreprodAutobotTestSetAction,
   markNotReceivedAction,
   pairUploaderDeviceAction,
   pauseAutoUploadAction,
@@ -64,6 +65,11 @@ export function CcrsAutoUploadPanel({ view, weekKey, env, canEdit }: { view: Aut
     <div className="space-y-4 text-sm" data-testid="ccrs-auto-upload">
       {view.error ? <p role="alert" className="text-xs text-red-300">{view.error}</p> : null}
       {!view.enabled ? <p className="text-xs text-amber-200">Switched off on the server (CCRS_AUTO_UPLOAD=off). Nothing is handed out.</p> : null}
+      <p className="text-xs text-white/60" data-testid="ccrs-auto-upload-keepalive">
+        {view.keepAlive
+          ? "Keep-alive is on (CCRS_KEEPALIVE=on): while a run waits for CCRS's email, Chrome re-reads the CCRS page every 10 minutes so the login does not time out."
+          : "Keep-alive is off (set CCRS_KEEPALIVE=on to switch it on). If CCRS logs you out while the next group is ready, you get an email or push to log in again."}
+      </p>
 
       <ol className="list-decimal space-y-1 pl-5 text-xs text-white/70">
         <li>Once: install the Greenway CCRS Uploader in Chrome and pair it below.</li>
@@ -153,6 +159,16 @@ export function CcrsAutoUploadPanel({ view, weekKey, env, canEdit }: { view: Aut
             Start uploading every built file
           </PendingSubmit>
           {live.length === 0 ? <span className="text-amber-200">Pair a browser first.</span> : !seen ? <span className="text-amber-200">No paired browser checked in recently: open Chrome.</span> : null}
+        </form>
+      ) : null}
+
+      {canEdit && !run ? (
+        <form action={makePreprodAutobotTestSetAction} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 p-3 text-xs" data-testid="ccrs-auto-upload-preprod-test">
+          <Hidden weekKey={weekKey} env={env} />
+          <span className="text-white/70">PREprod practice: make 7 one-row test files (one of each type, new names every time) for a PREprod run. The transfer file is expected to get an error email.</span>
+          <PendingSubmit busy={"Making\u2026"} className={`${btn} bg-white/10`}>
+            Make PREprod test files
+          </PendingSubmit>
         </form>
       ) : null}
 

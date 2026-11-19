@@ -18,6 +18,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hubEnv, hubHref } from "@/lib/compliance/ccrs-hub-flow-core";
 import { weekFromKey } from "@/lib/compliance/ccrs-week-core";
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
+import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
+import { emitOutboxFiles, loadLedgerForBatch } from "@/lib/compliance/ccrs-ledger-store";
+import { emitPayload, planOutboxFiles, verifyOutboxAgainstLedger } from "@/lib/compliance/ccrs-outbox-core";
+import { verifyCcrsBatch } from "@/lib/compliance/ccrs-batch-core";
+import { buildAutobotTestSources } from "@/lib/compliance/ccrs-autobot-test-core";
 import { endRun, getActiveRun, markNotReceived, pairDevice, pauseRun, resumeRun, revokeDevice, startRun } from "@/lib/compliance/ccrs-auto-upload-store";
 
 const BASE = "/admin/compliance/ccrs";
@@ -140,4 +145,59 @@ export async function markNotReceivedAction(formData: FormData): Promise<void> {
   await recordAudit({ actorId: session.profile.id, actorEmail: session.email, action: "ccrs.auto_upload.marked_not_received", entityType: "ccrs_upload_run_file", entityId: id, after: { note } });
   revalidatePath(BASE);
   ok(formData, "Recorded as not received. A new run may send it.");
+}
+
+/**
+ * D254: make the seven-file PREprod practice set for the uploader. Owner
+ * (verbatim): "please provide for me 7 test files to upload to the preprod
+ * env to test the autobot. one for each batch." PREprod ONLY: there is no
+ * production path here. The files go through the same last checks as a
+ * weekly emission (batch verifier + ledger self-check) and land in the
+ * PREprod outbox as "emitted", so a PREprod run picks them up.
+ */
+export async function makePreprodAutobotTestSetAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const env: LedgerEnv = "preprod";
+  const admin = createSupabaseAdminClient();
+  const lic = await getCcrsLicenseSettings();
+  const now = new Date();
+  let built: ReturnType<typeof buildAutobotTestSources>;
+  try {
+    built = buildAutobotTestSources({ licenseNumber: lic.licenseNumber, submittedBy: lic.submittedBy, now });
+  } catch (e) {
+    err(formData, text(e));
+  }
+  const { ids, files } = built!;
+  let slice: Awaited<ReturnType<typeof loadLedgerForBatch>>;
+  try {
+    slice = await loadLedgerForBatch(admin, env, [ids.lotId], [ids.productName]);
+  } catch (e) {
+    err(formData, text(e));
+  }
+  if (slice!.kind !== "loaded") err(formData, "The PREprod ledger is not started, so nothing can be put in the PREprod outbox. Start it on this page first.");
+  const ledger = (slice! as Extract<typeof slice, { kind: "loaded" }>).ledger;
+  const planned = planOutboxFiles(files, { licenseNumber: lic.licenseNumber, now, lastStamp: ledger.lastStamp });
+  const offline = verifyCcrsBatch(planned.map((f) => ({ type: f.type, csv: f.csv }))).problems.filter((pr) => pr.severity === "error");
+  const ledgerProblems = verifyOutboxAgainstLedger(ledger.view, planned);
+  if (offline.length > 0 || ledgerProblems.length > 0) {
+    const first = [...offline.map((pr) => pr.message), ...ledgerProblems.map((pr) => `[${pr.code}] ${pr.message}`)].slice(0, 3).join(" | ");
+    err(formData, `The practice set failed the last check, so it was not made: ${first}`);
+  }
+  const note = `D254 PREprod uploader practice set ${ids.tag}`;
+  let result: Awaited<ReturnType<typeof emitOutboxFiles>>;
+  try {
+    result = await emitOutboxFiles(admin, env, emitPayload(planned, () => [{ severity: "info", code: "I_AUTOBOT_TEST", message: note }]), []);
+  } catch (e) {
+    err(formData, text(e));
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.auto_upload.preprod_test_set_made",
+    entityType: "ccrs_files",
+    entityId: ids.tag,
+    after: { env, tag: ids.tag, files: result!.map((r) => ({ id: r.id, name: r.file_name, status: r.status })) },
+  });
+  revalidatePath(BASE);
+  ok(formData, `PREprod practice set ${ids.tag} made: ${result!.map((r) => r.file_name).join(", ")}. Now start a PREprod run. The transfer file will probably get an error email (made-up vendor lot); that is expected.`);
 }

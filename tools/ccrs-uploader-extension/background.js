@@ -9,6 +9,13 @@
  *
  * Never retried here: if the tab does not answer or the report cannot be
  * delivered, the back office marks the file "unknown" and stops the run.
+ *
+ * D254 keep-alive: only when the back office answers "wait" with
+ * keepAlive: true (server switch CCRS_KEEPALIVE=on, and only while waiting
+ * for CCRS's email or the gap), every keepAliveSeconds the logged-in CCRS
+ * tab of the run's site re-reads its own page (a GET, like pressing
+ * Refresh). It never uploads anything. A page found logged out is reported
+ * logged out from then on, so the back office alerts the owner to log in.
  */
 importScripts("lib.js");
 var L = globalThis.GWCCRS;
@@ -88,7 +95,10 @@ async function tick() {
     });
     if (r.status === 401) return status("This browser is not paired (or was revoked). Pair it again in the CCRS hub.", "error");
     var d = await r.json().catch(function () { return { action: "wait", text: "The back office answered HTTP " + r.status }; });
-    if (d.action !== "upload") return status(d.text || d.action, d.action === "wait" ? "wait" : "info");
+    if (d.action !== "upload") {
+      var note = d.action === "wait" && d.keepAlive === true ? await keepAlive(d, tabs) : "";
+      return status((d.text || d.action) + note, d.action === "wait" ? "wait" : "info");
+    }
     await status(d.text, "upload");
     await doUpload(cfg, d, tabs);
   } catch (e) {
@@ -96,6 +106,28 @@ async function tick() {
   } finally {
     busy = false;
   }
+}
+
+/** D254: re-read the run's CCRS page when it is due. Returns a short note for the status line. */
+async function keepAlive(d, tabs) {
+  var env = d.env;
+  var target = tabs.find(function (t) { return L.envOfOrigin(t.origin) === env && t.loggedIn; });
+  if (!target) return "";
+  var st = await chrome.storage.local.get(["keepAliveAt"]);
+  var last = (st.keepAliveAt || {})[env] || null;
+  if (!L.keepAliveDue(last, Date.now(), d.keepAliveSeconds)) return " (CCRS login kept alive " + L.agoText(last, Date.now()) + ")";
+  var r = null;
+  try {
+    r = await chrome.tabs.sendMessage(target.tabId, { type: "gw-keepalive" });
+  } catch {
+    r = null;
+  }
+  var at = Object.assign({}, st.keepAliveAt || {});
+  at[env] = new Date().toISOString();
+  await chrome.storage.local.set({ keepAliveAt: at });
+  if (!r) return " (could not reach the CCRS tab to keep it alive)";
+  if (r.loggedIn === false) return " (CCRS has logged out: please log in again)";
+  return " (CCRS login kept alive just now)";
 }
 
 async function report(cfg, runFileId, rep) {

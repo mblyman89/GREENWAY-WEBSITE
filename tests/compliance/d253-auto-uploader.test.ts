@@ -547,7 +547,7 @@ describe("wiring", () => {
   it("every hub action is settings.manage and audited; the pairing code never goes into a URL", () => {
     const s = SRC("src/app/admin/compliance/ccrs/auto-upload-actions.ts");
     const fns = s.split(/export async function /).slice(1);
-    expect(fns.length).toBe(7);
+    expect(fns.length).toBe(8); // D254: + makePreprodAutobotTestSetAction (PREprod practice set)
     for (const f of fns) {
       expect(f, f.split("(")[0]).toMatch(/await requirePermission\("settings\.manage"\)/);
       expect(f, f.split("(")[0]).toMatch(/recordAudit\(/);

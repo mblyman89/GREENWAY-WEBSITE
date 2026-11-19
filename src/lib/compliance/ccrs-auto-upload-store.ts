@@ -50,6 +50,10 @@ import {
   envOfCcrsOrigin,
   hasRefusals,
   isBearerKey,
+  keepAliveEnabled,
+  keepAliveFor,
+  KEEPALIVE_EVERY_MS,
+  loginAlertFor,
   mailBlocksStart,
   mailToAutoApply,
   nextStep,
@@ -421,7 +425,16 @@ export async function autoApplyForRun(admin: Admin, run: UploadRun, nowMs: numbe
  * ------------------------------------------------------------------ */
 
 export type CheckInAnswer =
-  | { action: "idle" | "wait"; text: string; runId: string | null; env: LedgerEnv | null; pollSeconds: number }
+  | {
+      action: "idle" | "wait";
+      text: string;
+      runId: string | null;
+      env: LedgerEnv | null;
+      pollSeconds: number;
+      /** D254: re-read the CCRS page of `env` every keepAliveSeconds (only while waiting, only when CCRS_KEEPALIVE=on). */
+      keepAlive?: boolean;
+      keepAliveSeconds?: number;
+    }
   | { action: "upload"; text: string; runId: string; env: LedgerEnv; runFileId: string; fileName: string; uploadOrigin: string; pollSeconds: number };
 
 async function ledgerFacts(admin: Admin, run: UploadRun, files: UploadRunFile[]): Promise<{ facts: RunFileFact[]; others: { fileName: string; state: string }[] }> {
@@ -450,9 +463,22 @@ async function actOn(admin: Admin, run: UploadRun, d: Decision, device: Uploader
   switch (d.kind) {
     case "idle":
       return { action: "idle", text: d.text, ...base, pollSeconds: 60 };
-    case "wait":
+    case "wait": {
+      // D254: the same wait since when? (noteDecision keeps last_decision_at
+      // at the first check-in that gave this text.)
+      const since = run.last_decision === d.text && run.last_decision_at ? Date.parse(run.last_decision_at) : null;
       await noteDecision(admin, run, d.text);
-      return { action: "wait", text: d.text, ...base, pollSeconds: d.why === "answer" ? 60 : 30 };
+      const alert = loginAlertFor(run.id, run.env, d, since, nowMs);
+      if (alert) await alertOwnerOnce(admin, alert.dedupeKey, alert.subject, alert.body, hubUrl(run.env));
+      const keepAlive = keepAliveFor(d, keepAliveEnabled(process.env));
+      return {
+        action: "wait",
+        text: d.text,
+        ...base,
+        pollSeconds: d.why === "answer" ? 60 : 30,
+        ...(keepAlive ? { keepAlive: true, keepAliveSeconds: KEEPALIVE_EVERY_MS / 1000 } : {}),
+      };
+    }
     case "skip": {
       await admin.from("ccrs_upload_run_files").update({ step: "skipped", note: clip(d.text), updated_at: new Date(nowMs).toISOString() }).eq("id", d.runFileId).eq("step", "pending");
       return "again";
@@ -674,6 +700,8 @@ export type AutoUploadView = {
   available: boolean;
   error: string | null;
   enabled: boolean;
+  /** D254: CCRS_KEEPALIVE=on (the browser re-reads the CCRS page while a run waits) */
+  keepAlive: boolean;
   devices: UploaderDevice[];
   active: (UploadRun & { files: UploadRunFile[] }) | null;
   recent: UploadRun[];
@@ -685,7 +713,7 @@ export type AutoUploadView = {
 };
 
 export async function getAutoUploadView(admin: Admin): Promise<AutoUploadView> {
-  const out: AutoUploadView = { available: true, error: null, enabled: autoUploadEnabled(process.env), devices: [], active: null, recent: [], unsure: [], refusedFileIds: [], readAtMs: Date.now() };
+  const out: AutoUploadView = { available: true, error: null, enabled: autoUploadEnabled(process.env), keepAlive: keepAliveEnabled(process.env), devices: [], active: null, recent: [], unsure: [], refusedFileIds: [], readAtMs: Date.now() };
   try {
     out.devices = await listDevices(admin);
     const run = await getActiveRun(admin);

@@ -13,12 +13,33 @@
   var L = globalThis.GWCCRS;
   if (!L || !L.envOfOrigin(location.origin)) return;
 
+  // D254: set once a fresh read of the page shows the session has ended.
+  // The page on screen still LOOKS logged in, so the probe must not trust it
+  // any more; it resets when the page loads again (after the owner logs in).
+  var sessionEnded = false;
+
   async function freshFacts() {
     // A fresh copy of this same page: proves the session is alive now and
     // gives a current form token (the tab may have been open for hours).
     var r = await fetch(location.origin + location.pathname, { credentials: "same-origin", redirect: "manual", cache: "no-store" });
-    if (r.type === "opaqueredirect" || r.status !== 200) return { loggedIn: false, username: null, token: null, uploadAction: null };
-    return L.pageFacts(await r.text());
+    var f = r.type === "opaqueredirect" || r.status !== 200 ? { loggedIn: false, username: null, token: null, uploadAction: null } : L.pageFacts(await r.text());
+    if (!f.loggedIn) sessionEnded = true;
+    return f;
+  }
+
+  /**
+   * D254 keep-alive: read this same page again (a GET, exactly what pressing
+   * Refresh does) so CCRS sees activity while a run waits for its email.
+   * It never uploads and never fills a form.
+   */
+  async function keepAlive() {
+    try {
+      var f = await freshFacts();
+      return { origin: location.origin, loggedIn: f.loggedIn, username: f.username };
+    } catch (e) {
+      // Not known (network trouble): say nothing about the login.
+      return { origin: location.origin, loggedIn: null, username: null, error: String(e && e.message ? e.message : e) };
+    }
   }
 
   async function upload(msg) {
@@ -50,8 +71,14 @@
     if (!msg || typeof msg !== "object") return false;
     if (msg.type === "gw-probe") {
       var f = L.pageFacts(document.documentElement ? document.documentElement.outerHTML : "");
-      reply({ origin: location.origin, loggedIn: f.loggedIn, username: f.username });
+      reply({ origin: location.origin, loggedIn: f.loggedIn && !sessionEnded, username: f.username });
       return false;
+    }
+    if (msg.type === "gw-keepalive") {
+      keepAlive().then(reply, function (e) {
+        reply({ origin: location.origin, loggedIn: null, username: null, error: String(e) });
+      });
+      return true; // async reply
     }
     if (msg.type === "gw-upload") {
       upload(msg).then(reply, function (e) {
