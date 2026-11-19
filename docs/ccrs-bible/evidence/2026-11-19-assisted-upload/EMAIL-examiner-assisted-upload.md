@@ -1,4 +1,4 @@
-# Email to Brian: may we upload our own CSVs automatically, under our own login? (D253)
+# Email to Brian: may we upload our own CSVs automatically, under our own login? (D253, D254: question 4 added)
 
 **To:** examiner@lcb.wa.gov
 **When:** any time. It does not have to wait for the clean-up.
@@ -37,6 +37,7 @@ We are not asking for integrator or API access with this. It is the same login a
 1. May a licensee upload its own CSV files this way, through the CCRS web upload page and under its own WA.gov login, with a browser add-on doing the clicking?
 2. Is there a limit on how many files we should upload in a day, or a minimum time between uploads, that you would like us to keep to?
 3. If the answer is no, is there another way you would suggest for us, or is the integrator application the right path?
+4. Because production answers take a few hours, CCRS logs us out while we wait between groups. While a run is waiting, may the add-on reload the logged-in upload page about every 10 minutes to keep the session open? The reload would only open the page. It would not upload a file, type anything, or log in. Or would you rather we just log in again when the session ends? We have built this but left it switched off until we hear from you.
 
 Thank you for your time. We want to be sure we do this the way the LCB expects.
 

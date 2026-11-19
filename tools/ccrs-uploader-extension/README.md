@@ -1,4 +1,4 @@
-# Greenway CCRS Uploader (Chrome extension, D253)
+# Greenway CCRS Uploader (Chrome extension, D253; keep-alive D254, version 1.1.0)
 
 The owner's option A: **you log in to CCRS yourself; this extension uploads the week's files for you, one group at a time, and waits for CCRS's emails between groups.** It never sees, stores or types your WA.gov / CCRS password.
 
@@ -29,6 +29,15 @@ The back office decides everything (`src/lib/compliance/ccrs-auto-upload-core.ts
 5. Watch the run log in the hub, or the extension's badge: `UP` means uploading, `…` means waiting, and `!` means it needs you.
 
 **Pause** stops new hand-outs. **Stop** ends the run; files not yet sent stay ready. **Revoke** cuts a browser off at once. The server kill switch is `CCRS_AUTO_UPLOAD=off`.
+
+## Staying logged in while a run waits (D254)
+
+Production can take hours to send its emails, and CCRS logs an idle page out. There are two safeguards:
+
+- **The log-in alert is always on.** Sometimes the next group is ready, but CCRS is logged out, the CCRS page is closed, or another account is logged in. If that lasts more than 2 minutes, you get one email or push: "CCRS upload waiting: please log in to CCRS production". It names the group and the file it is holding back. Log in again on the same Chrome and the run carries on by itself. You get one alert per held file, so a later group that is held for the same reason alerts again.
+- **The keep-alive is off until you switch it on** with `CCRS_KEEPALIVE=on` on the server. It stays off until the examiner says a periodic refresh is fine. When it is on, and only while the run waits for CCRS's email or for the gap between groups, the logged-in CCRS tab of the run's site re-reads its own page every 10 minutes. That is a GET of the same address, exactly what pressing Refresh does. It never uploads, never fills a form and never types anything. If a re-read finds the page logged out, the extension reports it logged out from then on, and the log-in alert above follows. The hub panel shows whether the keep-alive is on.
+
+To update an installed copy to 1.1.0, open `chrome://extensions` and press the reload arrow on "Greenway CCRS Uploader". The pairing is kept.
 
 ## Safety rules (enforced by the back office and migration 0369)
 

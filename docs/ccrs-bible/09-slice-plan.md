@@ -1477,6 +1477,25 @@ Owner request D253 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`)
 - Owner: apply 0369, install the extension, pair, run a PREprod trial, then production.
 - UNVERIFIED: U-85 (a same-origin POST from the extension is accepted like the page's own), U-86 (the CCRS receipt time on the answer page is Pacific and matches the email), U-87 (any page the system has not seen stops the run; kept as a rule, not a fact about CCRS).
 
+## D254 — Uploader keep-alive (off by default), log-in alert, PREprod practice set (DONE in code, 2026-11-19)
+
+Owner request D254 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`): "yes, please build the keep alive and alert system as a back up plan. also, please update the email to brian with that question. ... please provide for me 7 test files to upload to the preprod env to test the autobot. one for each batch."
+
+**Why.** CCRS production takes hours to email its answer. The D253 extension does not contact CCRS while it waits, so the CCRS session times out and the next group stops on "log in". The owner asked for a back-up plan.
+
+**Built.**
+1. **Keep-alive (switch, default OFF).** `keepAliveEnabled` is true only when `CCRS_KEEPALIVE=on`. `keepAliveFor` allows it only for the two idle waits: waiting for CCRS's email (`answer`) and the gap between groups (`gap`). It is never used when logged out, when a file is in the browser's hands, or when no run is going. The server adds `keepAlive: true, keepAliveSeconds: 600` to that wait answer. Extension 1.1.0 then re-reads the same logged-in CCRS page (a GET of the page it is on, `redirect: "manual"`) at most every 10 minutes (`keepAliveDue`, clamped to 2-30 minutes). It never uploads, types, posts or logs in. If the read finds the session already ended, the tab is reported logged out.
+2. **Log-in alert (always on).** `loginAlertFor` fires when a run has a file ready but waits on "log in", "wrong account" or "open the CCRS tab" for 2 minutes. It sends one email and push per run per held file (dedupe key `ccrs_auto_upload:<run>:login:<run file>` in `compliance_reminder_log`; no new migration). The email-wait never alerts.
+3. **Tab choice.** A logged-in tab with the run's account beats any other logged-in tab, which beats an old logged-out tab of the same site.
+4. **PREprod practice set.** `src/lib/compliance/ccrs-autobot-test-core.ts` (pure, self-tested) builds seven one-row files, one per type. Each set gets a fresh `GWT<stamp>` tag. The Inventory lot names the set's own strain, area and product, and the adjustment, transfer and sale name that lot. The transfer's vendor lot is made up, so CCRS is expected to answer "Invalid FromInventoryExternalIdentifier" (T-50). The hub button "Make PREprod test files" (`makePreprodAutobotTestSetAction`) is PREprod only, settings.manage and audited. It runs `verifyCcrsBatch` and `verifyOutboxAgainstLedger` before `ccrs_emit_files`. `scripts/compliance/make-preprod-autobot-test-files.ts` writes the same files to a folder.
+5. The Brian email (evidence/2026-11-19-assisted-upload) gains question 4: may the add-on refresh the page while waiting?
+
+**Tests.** `tests/compliance/d254-keepalive.test.ts` (13); self-tests `ccrs-auto-upload-core` (91) and `ccrs-autobot-test-core` (25) in both runners; mutations **M600-M609**.
+
+**Remaining.**
+- Owner: send the email, then reload the extension (1.1.0). Switch on `CCRS_KEEPALIVE=on` only if Brian says yes. Run the PREprod practice set.
+- UNVERIFIED U-88: whether the CCRS timeout is idle or absolute, and whether a page read resets it.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

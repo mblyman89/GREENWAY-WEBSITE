@@ -104,8 +104,34 @@
     return FILE_NAME_RE.test(String(name || ""));
   }
 
+  /**
+   * D254: is a keep-alive read of the CCRS page due? `lastIso` = the last one
+   * (null = never). The interval comes from the back office and is clamped
+   * to 2..30 minutes; anything unreadable means "not due" (never a flood).
+   */
+  function keepAliveDue(lastIso, nowMs, seconds) {
+    var s = Number(seconds);
+    if (!isFinite(s) || s <= 0) return false;
+    var every = Math.min(30 * 60, Math.max(2 * 60, s)) * 1000;
+    if (lastIso == null) return true;
+    var last = Date.parse(String(lastIso));
+    if (!isFinite(last)) return true;
+    if (last > nowMs + 60 * 1000) return true; // a clock set back: start over
+    return nowMs - last >= every;
+  }
+
+  /** "3 min ago" for the status line. */
+  function agoText(lastIso, nowMs) {
+    var last = Date.parse(String(lastIso));
+    if (!isFinite(last)) return "";
+    var m = Math.max(0, Math.round((nowMs - last) / 60000));
+    return m === 0 ? "just now" : m + " min ago";
+  }
+
   var api = {
     ORIGINS: ORIGINS,
+    keepAliveDue: keepAliveDue,
+    agoText: agoText,
     envOfOrigin: envOfOrigin,
     pageFacts: pageFacts,
     visibleText: visibleText,

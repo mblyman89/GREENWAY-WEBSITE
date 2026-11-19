@@ -204,6 +204,9 @@ D252_TESTS = "tests/compliance/d252-order-and-names.test.ts"
 D253_CORE = "src/lib/compliance/ccrs-auto-upload-core.ts"
 D253_STORE = "src/lib/compliance/ccrs-auto-upload-store.ts"
 D253_TESTS = "tests/compliance/d253-auto-uploader.test.ts"
+D254_TESTS = "tests/compliance/d254-keepalive.test.ts"
+D254_TESTCORE = "src/lib/compliance/ccrs-autobot-test-core.ts"
+D254_ACTIONS = "src/app/admin/compliance/ccrs/auto-upload-actions.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4882,6 +4885,87 @@ MUTATIONS = [
         D253_TESTS,
         'Start refuses while an earlier hand-out has no sure answer.',
     ),
+    (
+        'M600-d254-keepalive-default-off',
+        D253_CORE,
+        'return (env.CCRS_KEEPALIVE ?? "").trim().toLowerCase() === "on";',
+        'return (env.CCRS_KEEPALIVE ?? "").trim().toLowerCase() !== "off";',
+        D254_TESTS,
+        'The keep-alive is OFF unless CCRS_KEEPALIVE=on (owner D254: a back-up plan, off until Brian answers).',
+    ),
+    (
+        'M601-d254-keepalive-idle-waits-only',
+        D253_CORE,
+        'const IDLE_WAITS: ReadonlySet<string> = new Set(["answer", "gap"]);',
+        'const IDLE_WAITS: ReadonlySet<string> = new Set(["answer", "gap", "login"]);',
+        D254_TESTS,
+        'The page is only re-read while waiting for email or the gap, never while logged out.',
+    ),
+    (
+        'M602-d254-keepalive-needs-switch',
+        D253_CORE,
+        'return enabled && d.kind === "wait" && IDLE_WAITS.has(d.why);',
+        'return d.kind === "wait" && IDLE_WAITS.has(d.why);',
+        D254_TESTS,
+        'Switched off means never kept alive.',
+    ),
+    (
+        'M603-d254-alert-grace',
+        D253_CORE,
+        'nowMs - waitingSinceMs < LOGIN_ALERT_AFTER_MS) return null;',
+        'nowMs - waitingSinceMs < 0) return null;',
+        SELF_TESTS,
+        'No log-in alert in the first 2 minutes (the moment between Start and logging in).',
+    ),
+    (
+        'M604-d254-alert-key-per-file',
+        D253_CORE,
+        'dedupeKey: `ccrs_auto_upload:${runId}:login:${d.next.runFileId}`,',
+        'dedupeKey: `ccrs_auto_upload:${runId}:login`,',
+        D254_TESTS,
+        'A new held file alerts again; the same one alerts once.',
+    ),
+    (
+        'M605-d254-store-sends-alert',
+        D253_STORE,
+        '      if (alert) await alertOwnerOnce(admin, alert.dedupeKey, alert.subject, alert.body, hubUrl(run.env));\n',
+        '',
+        D254_TESTS,
+        'The log-in alert is always on: the store sends it.',
+    ),
+    (
+        'M606-d254-store-keepalive-flag',
+        D253_STORE,
+        '...(keepAlive ? { keepAlive: true, keepAliveSeconds: KEEPALIVE_EVERY_MS / 1000 } : {}),',
+        '...({ keepAlive: true, keepAliveSeconds: KEEPALIVE_EVERY_MS / 1000 }),',
+        D254_TESTS,
+        'The wait answer carries keepAlive only when the core allows it.',
+    ),
+    (
+        'M607-d254-logged-in-tab-first',
+        D253_CORE,
+        'const tab = siteTabs.find((t) => t.loggedIn && mine(t)) ?? siteTabs.find((t) => t.loggedIn) ?? siteTabs[0];',
+        'const tab = siteTabs[0];',
+        SELF_TESTS,
+        'A logged-in tab beats an old logged-out tab of the same site.',
+    ),
+    (
+        'M608-d254-testset-transfer-into-our-lot',
+        D254_TESTCORE,
+        'InventoryTransfer: [AUTOBOT_TEST_VENDOR_LICENSE, lic, ids.vendorLotId, ids.lotId, "10", d, ids.transferId, by, d, "", "", "Insert"],',
+        'InventoryTransfer: [AUTOBOT_TEST_VENDOR_LICENSE, lic, ids.vendorLotId, ids.vendorLotId, "10", d, ids.transferId, by, d, "", "", "Insert"],',
+        SELF_TESTS,
+        'The practice transfer goes into the set\'s own lot (else the ledger self-check refuses it).',
+    ),
+    (
+        'M609-d254-testset-preprod-only',
+        D254_ACTIONS,
+        'const env: LedgerEnv = "preprod";',
+        'const env: LedgerEnv = hubEnv(String(formData.get("page_env") ?? ""));',
+        D254_TESTS,
+        'The practice set can only ever go to the PREprod outbox.',
+    ),
+
 ]
 
 

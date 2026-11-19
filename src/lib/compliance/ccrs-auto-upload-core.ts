@@ -70,6 +70,74 @@ export function autoUploadEnabled(env: Readonly<Record<string, string | undefine
   return (env.CCRS_AUTO_UPLOAD ?? "").trim().toLowerCase() !== "off";
 }
 
+/* ------------------------------------------------------------------ *
+ * D254: keep the CCRS login alive while a run waits; tell the owner when
+ * CCRS logged him out and the next group is ready.
+ *
+ * Owner (D254, verbatim log): "it takes so long between uploads, that we get
+ * auto logged out. Is there a way to add to the upload logic to do something
+ * that will keep the site alive while we wait for the emails to arrive" and
+ * "yes, please build the keep alive and alert system as a back up plan."
+ * ------------------------------------------------------------------ */
+
+/** How often the browser re-reads the CCRS page while a run waits. */
+export const KEEPALIVE_EVERY_MS = 10 * 60_000;
+/** A login wait this old (same decision since) tells the owner once. */
+export const LOGIN_ALERT_AFTER_MS = 2 * 60_000;
+
+/**
+ * The keep-alive switch: CCRS_KEEPALIVE=on. OFF unless switched on, until
+ * the examiner answers whether a periodic page refresh is acceptable (the
+ * owner: "as a back up plan"; Brian email question 4). The log-in alert does
+ * not depend on it.
+ */
+export function keepAliveEnabled(env: Readonly<Record<string, string | undefined>>): boolean {
+  return (env.CCRS_KEEPALIVE ?? "").trim().toLowerCase() === "on";
+}
+
+/** Waits during which the CCRS page sits idle for a long time (CCRS email, the gap). */
+const IDLE_WAITS: ReadonlySet<string> = new Set(["answer", "gap"]);
+
+/**
+ * May the browser re-read the CCRS page now? Only while a running run waits
+ * for CCRS's email or the gap between groups, and only when switched on.
+ * Never while a file is in the browser, never for a page that is logged out
+ * or logged in as another account (a refresh cannot fix those; the owner
+ * must log in himself).
+ */
+export function keepAliveFor(d: Decision, enabled: boolean): boolean {
+  return enabled && d.kind === "wait" && IDLE_WAITS.has(d.why);
+}
+
+/** The waits in which only the owner can help: log in, the right account, open the page. */
+const OWNER_WAITS: ReadonlySet<string> = new Set(["login", "account", "tab"]);
+
+export type LoginAlert = { dedupeKey: string; subject: string; body: string };
+
+/**
+ * One alert per run per next file when the next group is ready but CCRS is
+ * logged out (or the page is closed, or another account is logged in), and
+ * the run has been waiting so for LOGIN_ALERT_AFTER_MS (no alert for the
+ * moment between pressing Start and logging in). `waitingSinceMs` is when
+ * the run first gave this same decision (null = it is new now).
+ */
+export function loginAlertFor(runId: string, envName: LedgerEnv, d: Decision, waitingSinceMs: number | null, nowMs: number): LoginAlert | null {
+  if (d.kind !== "wait" || !OWNER_WAITS.has(d.why) || !d.next) return null;
+  if (waitingSinceMs === null || !Number.isFinite(waitingSinceMs) || nowMs - waitingSinceMs < LOGIN_ALERT_AFTER_MS) return null;
+  const site = envName === "prod" ? "production" : "PREprod";
+  const what =
+    d.why === "login"
+      ? `CCRS ${site} is logged out in Chrome.`
+      : d.why === "account"
+        ? `CCRS ${site} is logged in with another account.`
+        : `No CCRS ${site} page is open in the Chrome with the Greenway uploader.`;
+  return {
+    dedupeKey: `ccrs_auto_upload:${runId}:login:${d.next.runFileId}`,
+    subject: `CCRS upload waiting: please log in to CCRS ${site}`,
+    body: `${what} Group ${d.next.group} is ready (next file ${d.next.fileName}). Nothing is sent until you log in; then the run goes on by itself. ${d.text}`,
+  };
+}
+
 const WAITING = new Set(["emitted", "uploaded"]);
 const ANSWERED = new Set(["succeeded", "errored", "reconciling", "closed"]);
 
@@ -196,13 +264,16 @@ export type StepInput = {
   nowMs: number;
 };
 
+/** The file a browser wait holds back (D254: named in the log-in alert). */
+export type NextFile = { runFileId: string; fileName: string; group: 1 | 2 | 3 };
+
 export type Decision =
   | { kind: "idle"; text: string }
   | { kind: "done"; text: string }
   | { kind: "stop"; text: string; runFileId?: string }
   | { kind: "pause"; text: string; fileIds: string[] }
   | { kind: "skip"; runFileId: string; text: string }
-  | { kind: "wait"; why: "claim" | "answer" | "gap" | "tab" | "login" | "account"; text: string; untilMs?: number }
+  | { kind: "wait"; why: "claim" | "answer" | "gap" | "tab" | "login" | "account"; text: string; untilMs?: number; next?: NextFile }
   | { kind: "upload"; runFileId: string; fileName: string; text: string };
 
 const refusedRows = (f: RunFileFact) => hasRefusals({ state: f.ledgerState, errorMessages: f.errorMessages });
@@ -288,12 +359,17 @@ export function nextStep(i: StepInput): Decision {
 
   // 4. Only now look at the browser.
   if (i.tabs === null) return { kind: "wait", why: "tab", text: "Waiting for the browser to check in." };
-  const tab = i.tabs.find((t) => t.env === run.env);
-  if (!tab) return { kind: "wait", why: "tab", text: `Open ${CCRS_ORIGINS[run.env]} in Chrome (the browser with the Greenway uploader).` };
-  if (!tab.loggedIn) return { kind: "wait", why: "login", text: `Log in to CCRS ${run.env === "prod" ? "production" : "PREprod"} in Chrome. Nothing is sent until you do.` };
+  const held: NextFile = { runFileId: next.runFileId, fileName: next.fileName, group: next.group };
+  // D254: several tabs of the site may be open (one logged out, one logged
+  // in again): the logged-in one with the run's account counts first.
+  const mine = (t: TabFact) => (t.username ?? "").trim().toLowerCase() === run.ccrsUsername.trim().toLowerCase();
+  const siteTabs = i.tabs.filter((t) => t.env === run.env);
+  const tab = siteTabs.find((t) => t.loggedIn && mine(t)) ?? siteTabs.find((t) => t.loggedIn) ?? siteTabs[0];
+  if (!tab) return { kind: "wait", why: "tab", next: held, text: `Open ${CCRS_ORIGINS[run.env]} in Chrome (the browser with the Greenway uploader).` };
+  if (!tab.loggedIn) return { kind: "wait", why: "login", next: held, text: `Log in to CCRS ${run.env === "prod" ? "production" : "PREprod"} in Chrome. Nothing is sent until you do.` };
   const who = (tab.username ?? "").trim().toLowerCase();
   if (who !== run.ccrsUsername.trim().toLowerCase()) {
-    return { kind: "wait", why: "account", text: `CCRS is logged in as ${tab.username ?? "(unknown)"}, but its emails must go to ${run.ccrsUsername}. Log in with that account.` };
+    return { kind: "wait", why: "account", next: held, text: `CCRS is logged in as ${tab.username ?? "(unknown)"}, but its emails must go to ${run.ccrsUsername}. Log in with that account.` };
   }
   return { kind: "upload", runFileId: next.runFileId, fileName: next.fileName, text: `Uploading ${next.fileName} (Group ${next.group}).` };
 }
@@ -625,5 +701,31 @@ export function __runCcrsAutoUploadCoreTests(): { passed: number; failed: number
   ok(classifyUpload({ status: -1, responseType: "error", text: "", networkError: "tab closed", notSent: true }).kind === "not-sent", "nothing sent is not-sent");
   ok(classifyUpload({ status: 200, responseType: "basic", text: "Upload Confirmation Your submission was received at 11/18/2026 12:47:06 PM Pacific Time", notSent: true }).kind === "received", "a real answer page beats a not-sent flag");
   ok(classifyUpload({ status: -1, responseType: "error", text: "", networkError: "x", notSent: false }).kind === "unknown", "a failure during the POST is unknown");
+
+  // D254: keep-alive switch and when it may run
+  ok(!keepAliveEnabled({}) && !keepAliveEnabled({ CCRS_KEEPALIVE: "yes" }) && keepAliveEnabled({ CCRS_KEEPALIVE: " ON " }), "keep-alive is off unless CCRS_KEEPALIVE=on");
+  const wAnswer = nextStep(base([...g1up, ...all.slice(3)]));
+  ok(keepAliveFor(wAnswer, true) && !keepAliveFor(wAnswer, false), "waiting for CCRS email keeps the page alive only when switched on");
+  const wGap = nextStep(base([...g1ok.map((f) => ({ ...f, postedAt: "2026-11-19T17:55:00Z" })), ...all.slice(3)]));
+  ok(keepAliveFor(wGap, true), "the gap between groups keeps the page alive");
+  const wLogin = nextStep(base(all, { tabs: [{ env: "prod", loggedIn: false, username: null }] }));
+  ok(!keepAliveFor(wLogin, true), "a logged-out page is never refreshed (the owner logs in)");
+  ok(!keepAliveFor(nextStep(base([...g1ok, rf(3, { step: "claimed", claimedAt: "2026-11-19T17:58:00Z" }), ...all.slice(4)])), true), "never while a file is in the browser");
+  ok(!keepAliveFor({ kind: "idle", text: "x" }, true) && !keepAliveFor(nextStep(base(all)), true), "never when idle or uploading");
+  ok(!keepAliveFor(nextStep(base(all, { tabs: [{ env: "prod", loggedIn: true, username: "someone@else.com" }] })), true), "never for another account");
+  // D254: the log-in alert
+  ok(wLogin.kind === "wait" && wLogin.next?.runFileId === "r0" && wLogin.next.group === 1, "a login wait names the file it holds back");
+  ok(loginAlertFor("run1", "prod", wLogin, null, now) === null, "a new login wait does not alert yet");
+  ok(loginAlertFor("run1", "prod", wLogin, now - LOGIN_ALERT_AFTER_MS + 1, now) === null, "not before the grace time");
+  const la = loginAlertFor("run1", "prod", wLogin, now - LOGIN_ALERT_AFTER_MS, now);
+  ok(la !== null && la.dedupeKey === "ccrs_auto_upload:run1:login:r0", "one alert per run per held file");
+  ok(la !== null && la.subject.includes("log in to CCRS production") && la.body.includes("Group 1") && la.body.includes(wk[0].fileName), "the alert says which site, group and file");
+  const g3 = nextStep(base([...g1ok, rf(3, { step: "posted", ledgerState: "closed", postedAt: "2026-11-19T17:00:00Z" }), ...all.slice(4)], { tabs: [{ env: "prod", loggedIn: false, username: null }] }));
+  ok(loginAlertFor("run1", "prod", g3, 0, now)?.dedupeKey === "ccrs_auto_upload:run1:login:r4", "the next group's logout alerts again");
+  ok(loginAlertFor("run1", "preprod", nextStep(base(all, { tabs: [] })), 0, now)?.subject.includes("PREprod") === true, "a closed page alerts too");
+  ok(loginAlertFor("run1", "prod", nextStep(base(all, { tabs: [{ env: "prod", loggedIn: true, username: "x@y.z" }] })), 0, now) !== null, "another account alerts too");
+  ok(nextStep(base(all, { tabs: [{ env: "prod", loggedIn: false, username: null }, { env: "prod", loggedIn: true, username: "michael@greenwaymarijuana.com" }] })).kind === "upload", "a logged-in tab beats an old logged-out tab of the same site");
+  ok((nextStep(base(all, { tabs: [{ env: "prod", loggedIn: true, username: "x@y.z" }, { env: "prod", loggedIn: true, username: "michael@greenwaymarijuana.com" }] })) as { kind: string }).kind === "upload", "the run's account beats another account");
+  ok(loginAlertFor("run1", "prod", wAnswer, 0, now) === null && loginAlertFor("run1", "prod", nextStep(base(all, { tabs: null })), 0, now) === null, "waiting for CCRS email or a first check-in never alerts");
   return { passed, failed };
 }
