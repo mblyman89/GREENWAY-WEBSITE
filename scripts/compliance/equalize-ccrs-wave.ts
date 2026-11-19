@@ -66,6 +66,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { buildLedgerSeed, type SeedSource } from "../../src/lib/compliance/ccrs-ledger-seed-core";
 import { LEDGER_READ_SQL, parseLedgerLine, type LedgerRow } from "../../src/lib/compliance/ccrs-reseed-core";
+import { repairLedgerNames } from "../../src/lib/compliance/ccrs-name-repair-core";
 import { buildLedgerView } from "../../src/lib/compliance/ccrs-ledger-core";
 import { ccrsDate, verifyCcrsFile } from "../../src/lib/compliance/ccrs-batch-core";
 import { planOutboxFiles, type OutboxFile } from "../../src/lib/compliance/ccrs-outbox-core";
@@ -210,7 +211,7 @@ function emit(pg: string, wave: string, sources: ReturnType<typeof equalizeSourc
   }
   const files = planOutboxFiles(sources, { licenseNumber: LICENSE, now: new Date(), lastStamp: pre.lastStamp ? new Date(pre.lastStamp) : null });
   const fmt = checkFiles(files);
-  const { view } = buildLedgerView("prod", ledger.map((r) => ({ fileType: r.t, externalId: r.id, filedName: r.name, state: r.state, productExternalId: r.prod })));
+  const { view } = buildLedgerView("prod", repairLedgerNames(ledger.map((r) => ({ fileType: r.t, externalId: r.id, filedName: r.name, state: r.state, productExternalId: r.prod }))));
   const led = verifyEqualizeFiles(view, files, waveLots).map((x) => `${x.fileName} row ${x.row}: ${x.message}`);
   if (fmt.length || led.length) {
     console.error(`REFUSED: the files fail their own checks; nothing was stored.\n  ${[...fmt, ...led].slice(0, 50).join("\n  ")}`);

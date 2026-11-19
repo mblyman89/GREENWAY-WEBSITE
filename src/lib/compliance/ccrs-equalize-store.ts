@@ -16,6 +16,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { parseLedgerLine, type LedgerRow } from "./ccrs-reseed-core";
+import { repairLedgerNames } from "./ccrs-name-repair-core";
 import { buildLedgerView } from "./ccrs-ledger-core";
 import { planOutboxFiles } from "./ccrs-outbox-core";
 import { verifyCcrsFile } from "./ccrs-batch-core";
@@ -128,7 +129,7 @@ async function storeFiles(admin: Admin, wave: string, sources: ReturnType<typeof
   const files = planOutboxFiles(sources, { licenseNumber: LICENSE, now: new Date(), lastStamp: last?.stamp_at ? new Date(last.stamp_at) : null });
   const bad: string[] = [];
   for (const f of files) for (const x of verifyCcrsFile(f.type, f.csv)) if (x.severity === "error") bad.push(`${f.fileName}: ${x.message}`);
-  const { view } = buildLedgerView("prod", ledger.map((r) => ({ fileType: r.t, externalId: r.id, filedName: r.name, state: r.state, productExternalId: r.prod })));
+  const { view } = buildLedgerView("prod", repairLedgerNames(ledger.map((r) => ({ fileType: r.t, externalId: r.id, filedName: r.name, state: r.state, productExternalId: r.prod }))));
   for (const x of verifyEqualizeFiles(view, files, waveLots)) bad.push(`${x.fileName} row ${x.row}: ${x.message}`);
   if (bad.length) throw new Error(`The files fail their own checks; nothing was stored. ${bad.slice(0, 5).join(" | ")}`);
   const types = [...new Set(files.map((f) => f.type))];
