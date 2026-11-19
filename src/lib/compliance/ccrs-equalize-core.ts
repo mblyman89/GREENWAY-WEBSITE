@@ -415,8 +415,11 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
   const maybeOurs = new Set<string>();
   for (const o of input.ours) {
     if (o.externalId !== null) {
-      if (oursById.has(o.externalId)) throw new EqualizeError(`our system has the CCRS lot id ${o.externalId} twice; fix it before a wave`);
-      oursById.set(o.externalId, o);
+      // D256: a vendor re-used one barcode on a new shipment, so two of our lots
+      // carry one CCRS id (E60; the weekly files report them as ONE record). The
+      // id is ours either way; it counts as destroyed only if BOTH lots are.
+      const prev = oursById.get(o.externalId);
+      oursById.set(o.externalId, prev ? { ...prev, destroyed: prev.destroyed && o.destroyed } : o);
     }
     if (o.lotCode !== null && o.lotCode.trim() !== "") maybeOurs.add(o.lotCode.trim());
     if (o.posProductKey !== null && o.posProductKey.trim() !== "") maybeOurs.add(o.posProductKey.trim());
@@ -461,7 +464,9 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
     if (createdBy.trim() === "" || createdBy.length > MAX_BY) { hold(id, "H_CREATED_BY", `CreatedBy ${JSON.stringify(createdBy.slice(0, 40))}`); continue; }
     const initial = p["Initial Quantity"] ?? "";
     if (!PLAIN_DEC_RE.test(initial)) { hold(id, "H_INITIAL", `Initial Quantity ${JSON.stringify(initial)}`); continue; }
-    const medRaw = (p.IsMedical ?? "").toLowerCase();
+    // D256: the 9/18 copy writes the bit as 1/0 (the delivery reader maps it the same way).
+    const medBit = (p.IsMedical ?? "").trim();
+    const medRaw = medBit === "1" ? "true" : medBit === "0" ? "false" : (p.IsMedical ?? "").toLowerCase();
     if (medRaw !== "true" && medRaw !== "false") { hold(id, "H_ISMEDICAL", `IsMedical ${JSON.stringify(p.IsMedical ?? "")}`); continue; }
     const med = medRaw === "true" ? "True" : "False"; // title case, as accepted in P20261007A
     let cost = p.TotalCost ?? "";
@@ -484,7 +489,8 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
         override = true;
       }
     } else {
-      const filed = strainOf(strain);
+      // D256: the copy's garbled accents / stray wrapping quotes, repaired like the strain list (D252).
+      const filed = strainOf(strain) ?? strainOf(repairGarbledName(strain.trim().replace(/^"+|"+$/g, "").trim()));
       if (filed === null) { hold(id, "H_STRAIN_NOT_FILED", `Strain ${JSON.stringify(strain)}`); continue; }
       strain = filed;
     }
@@ -877,6 +883,12 @@ export function __runCcrsEqualizeCoreTests(): { passed: number; failed: number }
   ok(throws(() => compositeCopy([...fixed, ...[ent("A")].map(row)], "2026-11-17"), /no lot from the delivery/), "composite refused before the delivery is loaded");
   const dl: LedgerRow = { ...row(ent("N")), source: "seed:2026-11-17-delivery" };
   ok(compositeCopy([...fixed, row(ent("A")), dl, { ...row(ent("U")), lastFile: "F" }], "2026-11-17").filter((e) => e.fileType === "Inventory").map((e) => e.externalId).join() === "A,N", "composite = seed + delivery, minus lots our files touched");
+  // D256: reused barcode pair, 1/0 medical bit, garbled strain
+  const pair = planEqualizeWave(inp([ent("P")], { ours: [{ externalId: "P", lotCode: null, posProductKey: null, destroyed: true }, { externalId: "P", lotCode: null, posProductKey: null, destroyed: false }] }));
+  ok(pair.counts.ours === 1 && pair.lots.length === 0, "D256 reused id: never refused, never zeroed");
+  ok(planEqualizeWave(inp([ent("M", { IsMedical: "1" })])).inventoryRows[0]?.[7] === "True" && planEqualizeWave(inp([ent("M", { IsMedical: "0" })])).inventoryRows[0]?.[7] === "False", "D256 medical bit 1/0");
+  ok(planEqualizeWave(inp([ent("M", { IsMedical: "2" })])).holds[0]?.code === "H_ISMEDICAL", "D256 other medical value held");
+  ok(planEqualizeWave(inp([ent("G", { Strain: "Blue Dream" })])).lots.length === 1 && planEqualizeWave(inp([ent("G", { Strain: "\"Blue Dream\"" })])).inventoryRows[0]?.[1] === "Blue Dream", "D256 wrapped strain repaired");
   return { passed, failed };
 }
 

@@ -274,7 +274,8 @@ describe("S-14 refusals (the whole wave stops)", () => {
     const i = ok();
     expect(() => planEqualizeWave({ ...i, ledger: i.ledger.filter((r) => r.t !== "Area") })).toThrow(/Sales Floor/);
     expect(() => planEqualizeWave({ ...i, ledger: [...i.ledger, i.ledger[0]] })).toThrow(/duplicate/);
-    expect(() => planEqualizeWave({ ...i, ours: [our({ externalId: "X" }), our({ externalId: "X" })] })).toThrow(/twice/);
+    // D256: a re-used vendor barcode (two of our lots, one CCRS id) is ours, never a refusal
+    expect(planEqualizeWave({ ...i, ours: [our({ externalId: "X" }), our({ externalId: "X" })] }).lots.map((l) => l.id)).not.toContain("X");
   });
 });
 
@@ -516,7 +517,7 @@ describe("S-14 wiring and guards", () => {
   });
   it("is registered in the pure self-test runner", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 30)');
+    expect(runner).toContain('assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 34)');
   });
   it("no migration was added by this slice", () => {
     const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
