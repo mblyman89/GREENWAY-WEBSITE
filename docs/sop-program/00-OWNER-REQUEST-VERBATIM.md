@@ -3562,3 +3562,19 @@ Context: error files `Inventory__20261118T020015199.csv`, `Strain_20261118T01483
 ### D252 As-built
 
 - **S1 (order and names):** Sale's 313 refusals were timing (checked before Inventory was processed); the walkthrough now waits for each group's email (`ccrs-upload-gate-core.ts`). The 7 Inventory refusals were garbled Product names from the examiner's export; ledger names are repaired on read (`ccrs-name-repair-core.ts`). Strain's 11 duplicates are harmless. Error and success subjects recognized (U-65, U-66 answered); D251's silence = success reverted. Tests d252-order-and-names (10), self-tests 17 + 11, mutations M578, M580-M587. U-84 opened.
+
+## D253 - Our own CCRS upload automation, assisted (option A) (2026-11-18)
+
+> "Thank you. I will finish the week 1 upload. We probably won't be given integrator access. So I want to build our own automation system. I will enter my credentials into the back office and it will do everything for me. Please build this for me now. Enterprise grade. Professional expert grade. Go above and beyond. Follow the standing rules. Thank you!"
+
+After the risks were laid out (CCRS has no API for licensees; option A = the owner logs in, option B = stored credentials):
+
+> "thank you. my wa.gov account only requires a username and password. there is no two factor authentication on my account right now. I am fine with option a first until we are granted integrator status. the reason I want to automate is obviously, waiting hours in between uploads is ridiculous. I will log in, and then you can upload the three batches, waiting for each email response before uploading the next set. please build it this way for me. please draft the email for brian. follow the standing rules. thank you."
+
+> "you are logged in now. please continue. follow the standing rules. thank you."
+
+Later (2026-11-19), mid-build:
+
+> "please continue. follow the standing rules. Also, just a heads up. all of week 1 has been uploaded and accepted. I am now working through week 2. at the end of this round. please let me know what I need to do to set up the partial automation, as well as what I or we need to do to begin the clean up process. thank you."
+
+Owner authorization recorded (AGENTS.md rule 3 exception): while a run the owner started is running, the system uploads the files of that run to CCRS from the owner's own logged-in CCRS tab, and applies CCRS's emails about that run's environment through the same Apply the owner's button uses, so the next group can go. Credentials are never stored (option A).

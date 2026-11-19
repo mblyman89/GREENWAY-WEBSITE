@@ -681,9 +681,14 @@ describe("cron route and schedule (AGENTS rule 12)", () => {
 });
 
 describe("drafts-only (standing rule 3): only the owner's Apply writes the ledger", () => {
-  const ACT = read("src/app/admin/compliance/ccrs/mail-actions.ts");
+  // D253: the Apply bodies moved unchanged to ccrs-mail-apply.ts (a plain server
+  // module the assisted uploader shares). The actions file keeps every button;
+  // ACT is both files read together so every pin below still holds.
+  const ACTIONS_ONLY = read("src/app/admin/compliance/ccrs/mail-actions.ts");
+  const APPLY = read("src/lib/compliance/ccrs-mail-apply.ts");
+  const ACT = `${ACTIONS_ONLY}\n${APPLY}`;
   it("every action is settings.manage; every ledger write is audited", () => {
-    const fns = ACT.split(/export async function /).slice(1);
+    const fns = ACTIONS_ONLY.split(/export async function /).slice(1);
     expect(fns.map((f) => f.split("(")[0])).toEqual([
       "pollCcrsMailNowAction",
       "applyCcrsSuccessMailAction",
@@ -698,6 +703,9 @@ describe("drafts-only (standing rule 3): only the owner's Apply writes the ledge
       "adoptHandmadeFileAction",
     ]);
     for (const f of fns) expect(f).toMatch(/requirePermission\("settings\.manage"\)/);
+    // D253: the shared Apply is NOT a server action (no "use server", server-only).
+    expect(APPLY).not.toMatch(/^\s*["']use server["']/m);
+    expect(APPLY).toContain('import "server-only";');
     expect((ACT.match(/recordOutcome\(/g) ?? []).length).toBe(3);
     expect(ACT).toMatch(/action: "ccrs\.file\.error-fatal"/);
     expect((ACT.match(/action: "ccrs\.file\.success"/g) ?? []).length).toBe(1);

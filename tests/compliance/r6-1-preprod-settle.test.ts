@@ -168,7 +168,9 @@ describe("wiring", () => {
 
   it("the proof runs after every recorded success / error answer (paste and email)", () => {
     expect(actions.match(/await proveAfterOutcome\(admin, env\)/g)).toHaveLength(2);
-    expect(mail.match(/await proveAfterOutcome\(admin, env\)/g)).toHaveLength(2);
+    // D253: the email Apply moved unchanged to ccrs-mail-apply.ts; the actions file runs no proof itself.
+    expect(SRC("src/lib/compliance/ccrs-mail-apply.ts").match(/await proveAfterOutcome\(admin, env\)/g)).toHaveLength(2);
+    expect(mail).not.toMatch(/proveAfterOutcome/);
   });
   it("a failed proof never hides a recorded answer (proveAfterOutcome catches)", () => {
     const fn = store.slice(store.indexOf("export async function proveAfterOutcome"));

@@ -62,6 +62,7 @@ import { __runCcrsEqualizeCoreTests } from "@/lib/compliance/ccrs-equalize-core"
 import { __runCcrsHeldBackFixCoreTests } from "@/lib/compliance/ccrs-held-back-fix-core";
 import { __runCcrsNameRepairCoreTests } from "@/lib/compliance/ccrs-name-repair-core";
 import { __runCcrsUploadGateCoreTests } from "@/lib/compliance/ccrs-upload-gate-core";
+import { __runCcrsAutoUploadCoreTests } from "@/lib/compliance/ccrs-auto-upload-core";
 import { __runCcrsCopyVerifyCoreTests } from "@/lib/compliance/ccrs-copy-verify-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
@@ -301,6 +302,11 @@ describe("embedded pure self-test suites", () => {
     const r = __runCcrsUploadGateCoreTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(11);
+  });
+  it("ccrs-auto-upload-core (D253: assisted uploader - Group 1 -> 2 -> 3, each group waits for CCRS's emails, nothing retried blindly)", () => {
+    const r = __runCcrsAutoUploadCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(55);
   });
   it("ccrs-held-back-fix-core (D251 S1: restock Products, CCRS initial qty, one row per re-used id, filed strain; D252: silence reverted)", () => {
     const r = __runCcrsHeldBackFixCoreTests();

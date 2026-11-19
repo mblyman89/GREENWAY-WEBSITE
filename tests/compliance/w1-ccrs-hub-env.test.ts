@@ -85,8 +85,10 @@ describe("W-1 no exit of the hub drops the env", () => {
     for (const c of calls) expect(c, c).toMatch(/, (?:env|page)\);$/);
   });
   it("the error Apply is scoped by the EMAIL's env (never by the page), rows read in parallel", () => {
-    expect(MAIL).toContain("mail.received_at, echoEnvScope(mail.env));");
-    expect(MAIL).toMatch(/const candidates = await mapLimit\(pool, 4,/);
+    // D253: the error Apply moved unchanged to ccrs-mail-apply.ts.
+    const APPLY = read("src/lib/compliance/ccrs-mail-apply.ts");
+    expect(APPLY).toContain("mail.received_at, echoEnvScope(mail.env));");
+    expect(APPLY).toMatch(/const candidates = await mapLimit\(pool, 4,/);
     expect(MAIL).not.toMatch(/for \(const env of \["prod", "preprod"\] as const\) \{\n\s+const list = await listCcrsFiles/);
   });
   it("the page: every hub link uses hubWeekLink and every week form posts env", () => {

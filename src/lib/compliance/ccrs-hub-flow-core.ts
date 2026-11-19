@@ -26,7 +26,7 @@ import type { LedgerEnv } from "./ccrs-ledger-core";
 export const CCRS_HUB_BASE = "/admin/compliance/ccrs";
 
 /** The anchors the hub scrolls to after an action. */
-export type HubAnchor = "ccrs-mail" | "ccrs-files" | "ccrs-week" | null;
+export type HubAnchor = "ccrs-mail" | "ccrs-files" | "ccrs-week" | "ccrs-auto-upload" | null;
 
 const WEEK_KEY_RE = /^W-\d{4}-\d{2}-\d{2}$/;
 

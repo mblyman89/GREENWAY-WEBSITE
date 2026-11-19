@@ -4330,3 +4330,31 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0368_ccrs_delivery_loads.rollback.sql` (drops the two tables and the
   function and puts the bucket back to CSV/text. Ledger rows a load already wrote stay, marked by their source
   `seed:<date>-delivery` or `proof:<date>-delivery-sale`).
+
+- [ ] **`supabase/migrations/0369_ccrs_auto_upload.sql`** - D253, the assisted CCRS uploader (owner: "I will log in, and
+  then you can upload the three batches, waiting for each email response before uploading the next set"). Adds three
+  tables: `ccrs_uploader_devices` (the Chrome browsers paired to the back office; only the sha256 of each pairing key is
+  stored, and a revoked browser is refused at once), `ccrs_upload_runs` (one row per run the owner started: env, CCRS
+  account, gap, who started it, how it ended) and `ccrs_upload_run_files` (the files of a run in upload order, with what
+  the CCRS answer page said for each). Database guards: one active run at a time, one file in the hands of a browser at a
+  time, and a file waits in at most one run. All three are service role only (RLS on, no policies). Until it is applied,
+  the "Automatic upload" section of /admin/compliance/ccrs says "Migration 0369 has not been run yet" and the
+  /api/ccrs-uploader routes refuse. Nothing else is affected.
+
+  Safe to re-run. Paste the file itself (the transit-hazard scanner finds no apostrophes, semicolons or non-ASCII
+  characters in its comments).
+
+  **Check** (run in the SQL editor):
+
+  ```sql
+  select relrowsecurity as rls_on from pg_class where oid = 'public.ccrs_uploader_devices'::regclass;          -- true
+  select relrowsecurity as rls_on from pg_class where oid = 'public.ccrs_upload_runs'::regclass;               -- true
+  select relrowsecurity as rls_on from pg_class where oid = 'public.ccrs_upload_run_files'::regclass;          -- true
+  select count(*) as guards from pg_indexes where indexname in ('ccrs_upload_runs_one_active',
+    'ccrs_upload_run_files_one_claimed', 'ccrs_upload_run_files_one_waiting');                              -- 3
+  select count(*) as runs_now from public.ccrs_upload_runs;                                                  -- 0
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0369_ccrs_auto_upload.rollback.sql` (drops the three tables; the
+  extension then gets 503s and does nothing. Files it already uploaded stay recorded in `ccrs_files` as uploaded, with
+  their audit rows).

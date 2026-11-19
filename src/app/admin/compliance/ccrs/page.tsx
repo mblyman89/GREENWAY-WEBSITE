@@ -78,6 +78,8 @@ import { flashFrom, hubWeekLink } from "@/lib/compliance/ccrs-hub-flow-core";
 import { listRecentCcrsMail } from "@/lib/compliance/ccrs-mail-store";
 import { readCcrsScoreboard } from "@/lib/compliance/ccrs-scoreboard-store";
 import { CcrsScoreboardPanel } from "@/components/admin/compliance/CcrsScoreboardPanel";
+import { CcrsAutoUploadPanel } from "@/components/admin/compliance/CcrsAutoUploadPanel";
+import { getAutoUploadView } from "@/lib/compliance/ccrs-auto-upload-store";
 import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
 import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
 import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
@@ -920,6 +922,21 @@ export default async function CcrsCommandCenterPage({
           )}
         </Await>
       </Suspense>
+
+      {/* D253: the assisted uploader (the owner logs in; Chrome uploads each group) */}
+      {admin0 ? (
+        <Section
+          id="ccrs-auto-upload"
+          title="Automatic upload (you log in, Chrome uploads)"
+          subtitle="Log in to CCRS in your Chrome; the Greenway uploader sends Group 1, waits for CCRS's emails, applies them, then sends the next group. One file at a time; anything unclear stops the run."
+        >
+          <Suspense fallback={<Pending label="the automatic upload" />}>
+            <Await p={getAutoUploadView(admin0)}>
+              {(view) => <CcrsAutoUploadPanel view={view} weekKey={week.key} env={env} canEdit={canEdit} />}
+            </Await>
+          </Suspense>
+        </Section>
+      ) : null}
 
       {/* S-18a: CCRS's answers, read from the submitting mailbox */}
       <Section

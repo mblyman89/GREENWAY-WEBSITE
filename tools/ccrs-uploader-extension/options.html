@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Greenway CCRS Uploader</title>
+<style>body{font:14px system-ui,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#111}textarea{width:100%;font:12px monospace}button{padding:6px 12px;margin-right:8px}.s{margin-top:12px;padding:8px;border-radius:6px;background:#f3f4f6}</style>
+</head>
+<body>
+<h1>Greenway CCRS Uploader</h1>
+<p>In the back office open <b>Compliance &rarr; CCRS</b>, section <b>Automatic upload</b>, press <b>Pair a browser</b>, and paste the code here.</p>
+<textarea id="code" rows="4" placeholder="GWCCRS1.https://www.greenwaymarijuana.com.&hellip;"></textarea>
+<p><button id="save">Save pairing code</button><button id="forget">Forget this pairing</button><button id="now">Check in now</button></p>
+<div id="paired" class="s"></div>
+<div id="status" class="s"></div>
+<p style="color:#555">This extension never sees your CCRS password. It only uses the CCRS page you are logged in to, and only when the back office has a run going.</p>
+<script src="lib.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

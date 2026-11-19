@@ -156,7 +156,7 @@ REMINDERS = "src/lib/notifications/compliance-reminders.ts"
 # W-1 (2026-10-30): the hub keeps the env; email Apply scoped to the email's env.
 HUBFLOW = "src/lib/compliance/ccrs-hub-flow-core.ts"
 HUBACT = "src/app/admin/compliance/ccrs/actions.ts"
-HUBMAIL = "src/app/admin/compliance/ccrs/mail-actions.ts"
+HUBMAIL = "src/lib/compliance/ccrs-mail-apply.ts"  # D253: the email Apply moved unchanged from mail-actions.ts
 HUBPANEL = "src/components/admin/compliance/CcrsMailPanel.tsx"
 W1_TESTS = "tests/compliance/w1-ccrs-hub-env.test.ts"
 HUBVIEW = "src/lib/compliance/ccrs-hub-view-core.ts"
@@ -201,6 +201,9 @@ D251_BATCH = "src/lib/compliance/ccrs-batch.ts"
 D252_REPAIR = "src/lib/compliance/ccrs-name-repair-core.ts"
 D252_GATE = "src/lib/compliance/ccrs-upload-gate-core.ts"
 D252_TESTS = "tests/compliance/d252-order-and-names.test.ts"
+D253_CORE = "src/lib/compliance/ccrs-auto-upload-core.ts"
+D253_STORE = "src/lib/compliance/ccrs-auto-upload-store.ts"
+D253_TESTS = "tests/compliance/d253-auto-uploader.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4799,6 +4802,86 @@ MUTATIONS = [
         D252_TESTS,
         'A production error email is recognized as production (U-66).',
     ),
+    (
+        'M590-d253-group-waits-answer',
+        D253_CORE,
+        'const unanswered = earlier.filter((f) => WAITING.has(f.ledgerState));',
+        'const unanswered = earlier.filter((f) => false && WAITING.has(f.ledgerState));',
+        D253_TESTS,
+        'The next group waits for every CCRS email of the groups before it (owner D253).',
+    ),
+    (
+        'M591-d253-gap',
+        D253_CORE,
+        'if (lastPost > 0 && i.nowMs < until) {',
+        'if (lastPost > 0 && i.nowMs < until && false) {',
+        SELF_TESTS,
+        'The 10-minute floor between groups holds even after the emails came.',
+    ),
+    (
+        'M592-d253-unknown-stops',
+        D253_CORE,
+        'const unsure = files.find((f) => f.step === "unknown" || f.step === "refused");',
+        'const unsure = files.find((f) => f.step === "refused");',
+        SELF_TESTS,
+        'An unknown upload result stops the run; nothing is re-sent blind.',
+    ),
+    (
+        'M593-d253-unsure-blocks-start',
+        D253_CORE,
+        'const xs = unsure.filter((u) => u.step === "unknown" || u.step === "claimed");',
+        'const xs = unsure.filter((u) => u.step === "claimed");',
+        D253_TESTS,
+        'A file whose upload result is unknown blocks a new run until settled.',
+    ),
+    (
+        'M594-d253-override-same-group',
+        D253_CORE,
+        'return !!n && sameGroupNames.includes(n[1]);',
+        'return !!n;',
+        SELF_TESTS,
+        'The same-group override is used only for files of the same group of this run.',
+    ),
+    (
+        'M595-d253-not-sent-only-flagged',
+        D253_CORE,
+        'if (r.notSent === true && r.status === -1 && r.networkError) return',
+        'if (r.status === -1 && r.networkError) return',
+        SELF_TESTS,
+        'A failure during the POST is unknown, never put back in the queue.',
+    ),
+    (
+        'M596-d253-claim-conditional',
+        D253_STORE,
+        '.update({ step: "claimed", claimed_at: now, claimed_by_device: device.id, updated_at: now })\n        .eq("id", d.runFileId)\n        .eq("step", "pending")',
+        '.update({ step: "claimed", claimed_at: now, claimed_by_device: device.id, updated_at: now })\n        .eq("id", d.runFileId)',
+        D253_TESTS,
+        'Only a pending step can be claimed (no double hand-out).',
+    ),
+    (
+        'M597-d253-actor-permission',
+        D253_STORE,
+        'if (!p || p.active === false || !can(p.role, "settings.manage")) return null;',
+        'if (!p || p.active === false) return null;',
+        D253_TESTS,
+        'Auto-apply acts as the owner only while he still holds settings.manage.',
+    ),
+    (
+        'M598-d253-file-held-by-device',
+        D253_STORE,
+        'if (!rf || rf.step !== "claimed" || rf.claimed_by_device !== device.id) return null;',
+        'if (!rf || rf.step !== "claimed") return null;',
+        D253_TESTS,
+        'A browser gets only the file it holds.',
+    ),
+    (
+        'M599-d253-unsure-checked-at-start',
+        D253_STORE,
+        '  if (unsure) return { ok: false, error: unsure };\n',
+        '',
+        D253_TESTS,
+        'Start refuses while an earlier hand-out has no sure answer.',
+    ),
 ]
 
 
@@ -4862,6 +4945,7 @@ def main() -> int:
         W2_TESTS,
         D251_TESTS,
         D252_TESTS,
+        D253_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.

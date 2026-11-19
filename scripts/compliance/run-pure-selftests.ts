@@ -1010,6 +1010,7 @@ import { __runCcrsEqualizeCoreTests } from "../../src/lib/compliance/ccrs-equali
 import { __runCcrsHeldBackFixCoreTests } from "../../src/lib/compliance/ccrs-held-back-fix-core";
 import { __runCcrsNameRepairCoreTests } from "../../src/lib/compliance/ccrs-name-repair-core";
 import { __runCcrsUploadGateCoreTests } from "../../src/lib/compliance/ccrs-upload-gate-core";
+import { __runCcrsAutoUploadCoreTests } from "../../src/lib/compliance/ccrs-auto-upload-core";
 import { __runCcrsCopyVerifyCoreTests } from "../../src/lib/compliance/ccrs-copy-verify-core";
 import { __runReturnCorrectionsTests } from "../../src/lib/compliance/ccrs-return-corrections-core";
 import { __runCcrsTransferTests } from "../../src/lib/compliance/ccrs-transfer-core";
@@ -2117,6 +2118,7 @@ __runLiquidVolumeTests();
   assertRan("ccrs-held-back-fix-core", __runCcrsHeldBackFixCoreTests(), 22); // D251 S1: restock lots own a Product, CCRS initial qty for E8, CCRS filed strain for E64, one row per re-used CCRS id (D252: "production silence = success" reverted)
   assertRan("ccrs-name-repair-core", __runCcrsNameRepairCoreTests(), 17); // D252 S1: undo the examiner export's garbled accents (CCRS holds the clean name)
   assertRan("ccrs-upload-gate-core", __runCcrsUploadGateCoreTests(), 11); // D252 S1: a group waits for CCRS's email on the group before it
+  assertRan("ccrs-auto-upload-core", __runCcrsAutoUploadCoreTests(), 55); // D253: assisted CCRS uploader (owner option A) - plan Group 1->2->3, one file in flight, wait for every CCRS email of the earlier group, refused rows pause, unseen answer page stops, same-group override only
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file
   assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 51); // R6-2: InventoryTransfer rows for received deliveries; C1: no TR- prefix, legacy alias, correction path

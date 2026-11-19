@@ -1371,7 +1371,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D244 R-4: +1 KEEP media_embeddings (0365; semantic photo search index, FK only to media_assets KEEP).
     // D248 S4: +1 KEEP payroll_sage_comparisons (0367; owner's typed Sage figures, plain-uuid period id, no FK).
     // D250 S3: +2 KEEP ccrs_delivery_loads, ccrs_delivery_stage (0368; examiner delivery loads, State records, stage emptied by the load).
-    expect(plan.keep.length).toBe(222);
+    // D253: +3 KEEP ccrs_uploader_devices, ccrs_upload_runs, ccrs_upload_run_files (0369; assisted CCRS uploader, record of what was sent to the State; FKs only to ccrs_files KEEP).
+    expect(plan.keep.length).toBe(225);
     expect(plan.wipe.length).toBe(139);
   });
 

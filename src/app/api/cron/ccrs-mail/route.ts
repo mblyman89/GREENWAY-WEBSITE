@@ -29,6 +29,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runCcrsMailTick } from "@/lib/compliance/ccrs-mail-store";
+import { autoUploadCronStep } from "@/lib/compliance/ccrs-auto-upload-store";
 
 export const dynamic = "force-dynamic";
 /** One token call, one list, up to 25 messages + their CSVs (15 s ceiling each). */
@@ -64,7 +65,11 @@ export async function GET(req: NextRequest) {
   // 500 only when a configured monitor failed, so Vercel's logs flag real faults.
   const result = await runCcrsMailTick();
   const status = result.ok || !result.configured ? 200 : 500;
-  return NextResponse.json(result, { status });
+  // D253: a running assisted upload applies its own CCRS email here too (so a
+  // group goes on within ~5 minutes of CCRS answering, even between browser
+  // check-ins). Never throws; its notes never change the tick's status.
+  const autoUpload = await autoUploadCronStep();
+  return NextResponse.json({ ...result, autoUpload }, { status });
 }
 
 // Vercel Cron uses GET. POST runs the same path.

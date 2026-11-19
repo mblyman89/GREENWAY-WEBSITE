@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-11-18 18:20Z at commit `23ad3048cc80ed206770342116b584048560c408` by `build_atlas_part.py`.
+Generated 2026-11-19 00:28Z at commit `5a9ac6bcbda5643b5f5aa2ac3108d9af44c93bed` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 23ad304 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 5a9ac6b -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -484,11 +484,11 @@ Generated 2026-11-18 18:20Z at commit `23ad3048cc80ed206770342116b584048560c408`
 - L68: `export function lotKeysForLines(`
 - L86: `export function __runVariantLotCoreTests(): void {`
 
-### `src/app/admin/compliance/ccrs/page.tsx` (1394 L)
+### `src/app/admin/compliance/ccrs/page.tsx` (1411 L)
 
-- L111: `export const dynamic = "force-dynamic";`
-- L116: `export const maxDuration = 300;`
-- L294: `export default async function CcrsCommandCenterPage({`
+- L113: `export const dynamic = "force-dynamic";`
+- L118: `export const maxDuration = 300;`
+- L296: `export default async function CcrsCommandCenterPage({`
 
 ### `src/app/admin/compliance/ccrs/actions.ts` (833 L)
 
@@ -2912,50 +2912,50 @@ Generated 2026-11-18 18:20Z at commit `23ad3048cc80ed206770342116b584048560c408`
 `src/app/admin/compliance/ccrs/page.tsx` L81-L110 — CcrsCommandCenterPage head
 
 ```ts
-  81| import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
-  82| import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
-  83| import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
-  84| import {
-  85|   applyAllCcrsMailAction,
-  86|   applyCcrsErrorMailAction,
-  87|   applyCcrsNotProcessedMailAction,
-  88|   applyCcrsSuccessMailAction,
-  89|   dismissCcrsMailAction,
-  90|   reopenCcrsMailAction,
-  91|   adoptHandmadeFileAction,
-  92|   pollCcrsMailNowAction,
-  93| } from "./mail-actions";
-  94| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
-  95| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
-  96| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
-  97| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
-  98| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
-  99| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
- 100| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
- 101| import { readOwed } from "@/lib/compliance/ccrs-held-store";
- 102| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
- 103| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
- 104| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
- 105| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
- 106| // D250 S4: the late weeks, one verdict + the exact steps for the selected one.
- 107| import { lateWeekReadiness, lateWeeksOf, type LateWeekDelivery } from "@/lib/compliance/ccrs-late-weeks-core";
- 108| import { listDeliveryLoads } from "@/lib/compliance/ccrs-delivery-store";
- 109| import { CcrsLateWeeksPanel } from "@/components/admin/compliance/CcrsLateWeeksPanel";
- 110| 
+  81| import { CcrsAutoUploadPanel } from "@/components/admin/compliance/CcrsAutoUploadPanel";
+  82| import { getAutoUploadView } from "@/lib/compliance/ccrs-auto-upload-store";
+  83| import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
+  84| import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
+  85| import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
+  86| import {
+  87|   applyAllCcrsMailAction,
+  88|   applyCcrsErrorMailAction,
+  89|   applyCcrsNotProcessedMailAction,
+  90|   applyCcrsSuccessMailAction,
+  91|   dismissCcrsMailAction,
+  92|   reopenCcrsMailAction,
+  93|   adoptHandmadeFileAction,
+  94|   pollCcrsMailNowAction,
+  95| } from "./mail-actions";
+  96| import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+  97| import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
+  98| import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
+  99| import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
+ 100| import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
+ 101| import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
+ 102| import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
+ 103| import { readOwed } from "@/lib/compliance/ccrs-held-store";
+ 104| import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
+ 105| import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+ 106| import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
+ 107| import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
+ 108| // D250 S4: the late weeks, one verdict + the exact steps for the selected one.
+ 109| import { lateWeekReadiness, lateWeeksOf, type LateWeekDelivery } from "@/lib/compliance/ccrs-late-weeks-core";
+ 110| import { listDeliveryLoads } from "@/lib/compliance/ccrs-delivery-store";
 ```
 
 `src/app/admin/compliance/ccrs/page.tsx` — hub page section anchors
 
-- L674: `title="Step 1 — Pick the reporting week"`
-- L705: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
-- L878: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
-- L905: `<UploadWalkthrough`
-- L1009: `title="Step 3 — Record this week"`
-- L1183: `<ErrorTriagePanel`
-- L1196: `title="DOH / Medical sales"`
-- L1262: `title="Monthly LIQ-1295 (tax report)"`
-- L1335: `<PushRemindersPanel />`
-- L1345: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
+- L676: `title="Step 1 — Pick the reporting week"`
+- L707: `title={`Step 2 — Review week ${week.start} – ${week.end}`}`
+- L880: `{({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}`
+- L907: `<UploadWalkthrough`
+- L1026: `title="Step 3 — Record this week"`
+- L1200: `<ErrorTriagePanel`
+- L1213: `title="DOH / Medical sales"`
+- L1279: `title="Monthly LIQ-1295 (tax report)"`
+- L1352: `<PushRemindersPanel />`
+- L1362: `<Section title="Submission ledger" subtitle="Newest first. This is the evidence trail.">`
 
 `src/app/admin/compliance/ccrs/actions.ts` — server actions
 
@@ -3690,100 +3690,101 @@ Generated 2026-11-18 18:20Z at commit `23ad3048cc80ed206770342116b584048560c408`
 - L278: `describe("embedded self-tests still pass under vitest", () => {`
 - L279: `it("__runCcrsBatchCoreTests", async () => {`
 
-### `tests/compliance/pure-selftests.test.ts` (690 L) — `describe`/`it` titles
+### `tests/compliance/pure-selftests.test.ts` (696 L) — `describe`/`it` titles
 
-- L102: `describe("embedded pure self-test suites", () => {`
-- L103: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
-- L106: `it("discount-engine-core (promotions engine)", () => {`
-- L109: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
-- L114: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
-- L119: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
-- L124: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
-- L128: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
-- L132: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
-- L136: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
-- L139: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
-- L142: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
-- L145: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
-- L148: `it("chunked-in (S-7 pagination)", async () => {`
-- L151: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
-- L156: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
-- L159: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
-- L164: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
-- L167: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
-- L172: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
-- L175: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
-- L178: `it("pin-hash (S-10 scrypt + throttle)", () => {`
-- L181: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
-- L184: `it("loyalty engine (points math, tiers, code gen)", () => {`
-- L187: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
-- L190: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
-- L193: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
-- L196: `it("schedule-core (week math, Pacific)", () => {`
-- L199: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
-- L203: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
-- L207: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
-- L211: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
-- L215: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
-- L218: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
-- L221: `it("flux-presets-core (R62: general-purpose prompt templates, snippets, prompt lint)", () => {`
-- L224: `it("flux-video-core (R62: schema-exact FLUX 3 video t2v/i2v/v2v/edit/upscale/draft_enhance bodies)", () => {`
-- L227: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
-- L230: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
-- L235: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
-- L240: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
-- L248: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
-- L256: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
-- L260: `it("ccrs-lot-product-core (Part 17 S-17b: why a lot's product is not in Product.csv)", () => {`
-- L265: `it("ccrs-signin-core (Part 11 §G S-17c: CCRS signs in with WA.gov, separate PREprod account)", () => {`
-- L270: `it("ccrs-handover-core (Part 09 S-17d: first upload date and hand-over warnings)", () => {`
-- L275: `it("ccrs-mail-core (Part 09 S-18a: CCRS mailbox monitor, classify and prove)", () => {`
-- L280: `it("ccrs-strategy-core (Part 09 S-18b: strategy report for CCRS error email)", () => {`
-- L285: `it("ccrs-watchdog-core (Part 09 S-18c: no CCRS answer after 60 minutes; mailbox monitor down)", () => {`
-- L290: `it("ccrs-reseed-core (Part 17 G-1, S-15: re-seed / diff of the ledger from a later delivery)", () => {`
-- L295: `it("ccrs-name-repair-core (D252 S1: garbled accents from the examiner export repaired)", () => {`
-- L300: `it("ccrs-upload-gate-core (D252 S1: each group waits for CCRS's email on the one before)", () => {`
-- L305: `it("ccrs-held-back-fix-core (D251 S1: restock Products, CCRS initial qty, one row per re-used id, filed strain; D252: silence reverted)", () => {`
-- L310: `it("ccrs-equalize-core (Part 17 §E, S-14: equalize waves)", () => {`
-- L315: `it("ccrs-copy-verify-core (Part 17 §G G-3, S-16: copy diff verifier)", () => {`
-- L320: `it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {`
-- L325: `it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {`
-- L328: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
-- L331: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
-- L334: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
-- L339: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
-- L344: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
-- L349: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
-- L354: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
-- L359: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
-- L364: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
-- L369: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
-- L381: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
-- L390: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
-- L397: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
-- L415: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
-- L441: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
-- L477: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
-- L512: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
-- L551: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
-- L572: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
-- L584: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
-- L606: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
-- L613: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
-- L617: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
-- L620: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
-- L623: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
-- L626: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
-- L637: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
-- L640: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
-- L643: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
-- L652: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
-- L657: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
-- L664: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
-- L669: `it("ccrs-hub-flow-core (W-1: the CCRS hub never drops PREprod; email Apply scoped to the email's env)", () => {`
-- L674: `it("ccrs-hub-view-core (W-2: the CCRS hub shell renders at once; heavy panels stream and never blank the page)", () => {`
-- L679: `it("ccrs-inflight-hold-core (W-3: a record already in a file waiting for its CCRS answer is not sent twice)", () => {`
-- L684: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
+- L103: `describe("embedded pure self-test suites", () => {`
+- L104: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
+- L107: `it("discount-engine-core (promotions engine)", () => {`
+- L110: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
+- L115: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
+- L120: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
+- L125: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
+- L129: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
+- L133: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
+- L137: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
+- L140: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
+- L143: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
+- L146: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
+- L149: `it("chunked-in (S-7 pagination)", async () => {`
+- L152: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
+- L157: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
+- L160: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
+- L165: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
+- L168: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
+- L173: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
+- L176: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
+- L179: `it("pin-hash (S-10 scrypt + throttle)", () => {`
+- L182: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
+- L185: `it("loyalty engine (points math, tiers, code gen)", () => {`
+- L188: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
+- L191: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
+- L194: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
+- L197: `it("schedule-core (week math, Pacific)", () => {`
+- L200: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
+- L204: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
+- L208: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
+- L212: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
+- L216: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
+- L219: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
+- L222: `it("flux-presets-core (R62: general-purpose prompt templates, snippets, prompt lint)", () => {`
+- L225: `it("flux-video-core (R62: schema-exact FLUX 3 video t2v/i2v/v2v/edit/upscale/draft_enhance bodies)", () => {`
+- L228: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
+- L231: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
+- L236: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
+- L241: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
+- L249: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
+- L257: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
+- L261: `it("ccrs-lot-product-core (Part 17 S-17b: why a lot's product is not in Product.csv)", () => {`
+- L266: `it("ccrs-signin-core (Part 11 §G S-17c: CCRS signs in with WA.gov, separate PREprod account)", () => {`
+- L271: `it("ccrs-handover-core (Part 09 S-17d: first upload date and hand-over warnings)", () => {`
+- L276: `it("ccrs-mail-core (Part 09 S-18a: CCRS mailbox monitor, classify and prove)", () => {`
+- L281: `it("ccrs-strategy-core (Part 09 S-18b: strategy report for CCRS error email)", () => {`
+- L286: `it("ccrs-watchdog-core (Part 09 S-18c: no CCRS answer after 60 minutes; mailbox monitor down)", () => {`
+- L291: `it("ccrs-reseed-core (Part 17 G-1, S-15: re-seed / diff of the ledger from a later delivery)", () => {`
+- L296: `it("ccrs-name-repair-core (D252 S1: garbled accents from the examiner export repaired)", () => {`
+- L301: `it("ccrs-upload-gate-core (D252 S1: each group waits for CCRS's email on the one before)", () => {`
+- L306: `it("ccrs-auto-upload-core (D253: assisted uploader - Group 1 -> 2 -> 3, each group waits for CCRS's emails, nothing retried blindly)", () => {`
+- L311: `it("ccrs-held-back-fix-core (D251 S1: restock Products, CCRS initial qty, one row per re-used id, filed strain; D252: silence reverted)", () => {`
+- L316: `it("ccrs-equalize-core (Part 17 §E, S-14: equalize waves)", () => {`
+- L321: `it("ccrs-copy-verify-core (Part 17 §G G-3, S-16: copy diff verifier)", () => {`
+- L326: `it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {`
+- L331: `it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {`
+- L334: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
+- L337: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
+- L340: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
+- L345: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
+- L350: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
+- L355: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
+- L360: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
+- L365: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
+- L370: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
+- L375: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
+- L387: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
+- L396: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
+- L403: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
+- L421: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
+- L447: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
+- L483: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
+- L518: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
+- L557: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
+- L578: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
+- L590: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
+- L612: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
+- L619: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
+- L623: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
+- L626: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
+- L629: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
+- L632: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
+- L643: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
+- L646: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
+- L649: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
+- L658: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
+- L663: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
+- L670: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
+- L675: `it("ccrs-hub-flow-core (W-1: the CCRS hub never drops PREprod; email Apply scoped to the email's env)", () => {`
+- L680: `it("ccrs-hub-view-core (W-2: the CCRS hub shell renders at once; heavy panels stream and never blank the page)", () => {`
+- L685: `it("ccrs-inflight-hold-core (W-3: a record already in a file waiting for its CCRS answer is not sent twice)", () => {`
+- L690: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
 
 ### Golden fixtures (`tests/compliance/golden/ccrs/`)
 
