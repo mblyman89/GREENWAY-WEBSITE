@@ -1549,3 +1549,7 @@ Owner request D256 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`)
   - A strain is matched again after the D252 garble repair and with wrapping quotes stripped; still unmatched means held.
   - Real data, 11/19: W1 10,000, next 33,064, held 121 (106 counted on the shelf, 15 strain), ours 6.
 - **S2 Clean-up panel** on the CCRS hub: plan, store the wave, then make its Reconciliation file, without a terminal.
+
+### D256 S2 — Stale-lot clean-up panel
+
+New page `/admin/compliance/ccrs/cleanup` (linked from the CCRS hub). Step 1 plans a wave (W1–W8) from the live State copy, our lots and the stored 10/30 audit workbooks, and stores the Inventory file only after the owner types the wave name and the counts still match. Step 2 plans and stores the matching Reconciliation (adjustment) file after that wave is applied. Files land in the normal outbox and are uploaded from the hub. Server-only store: `src/lib/compliance/ccrs-equalize-store.ts`; actions require settings.manage and are audited.
