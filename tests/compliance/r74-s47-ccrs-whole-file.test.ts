@@ -43,7 +43,7 @@ describe("R74 S47 whole-file refusal", () => {
 
   it("wiring: Product build writes the safe cell; both answer paths record error-fatal", () => {
     expect(read("src/lib/compliance/ccrs-batch.ts")).toContain("ccrsUnitWeightCell(grams, type)");
-    expect(read("src/app/admin/compliance/ccrs/mail-actions.ts")).toContain('recordOutcome(admin, f.id, "error-fatal", at, [], [NOT_PROCESSED_MESSAGE])');
+    expect(read("src/lib/compliance/ccrs-mail-apply.ts")).toContain('recordOutcome(admin, f.id, "error-fatal", at, [], [NOT_PROCESSED_MESSAGE])'); // D253: the Apply moved unchanged from mail-actions.ts
     expect(read("src/app/admin/compliance/ccrs/actions.ts")).toContain('recordOutcome(admin, file.id, "error-fatal", at, [], [NOT_PROCESSED_MESSAGE])');
   });
 });

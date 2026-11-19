@@ -380,6 +380,16 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - Silence records no-email again on both envs.
 - See Part 09 D252.
 
+### A.25 D253 Assisted CCRS uploader — DONE in code (2026-11-19)
+
+- **Before:**
+  - Every CCRS file was uploaded by hand, one group at a time, and the owner waited hours for each production email before the next group (D252).
+- **Now:**
+  - The owner logs into CCRS himself in Chrome; a paired Greenway extension uploads the run's files through the same web form, group by group, each group only after the CCRS emails of the one before were applied and accepted.
+  - The run applies its own CCRS emails as the owner who started it, stops on any refusal or unknown result, and alerts by email and push.
+  - Nothing uncertain is re-sent; a file with an unknown result blocks new runs until settled.
+- See Part 09 D253.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

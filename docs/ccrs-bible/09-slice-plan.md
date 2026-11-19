@@ -1455,6 +1455,28 @@ Owner request D252 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`)
 - Owner: Apply the 7 production emails in "CCRS email" (oldest first); re-send the 313 refused Sale rows; rebuild next week so the 7 lots go out with clean Product names; from now on wait for each group's email before the next group.
 - UNVERIFIED: CCRS accepts the repaired Product names on those 7 lots (U-84).
 
+## D253 — Assisted CCRS uploader: the owner logs in, Chrome uploads the three groups (DONE in code, 2026-11-19)
+
+Owner request D253 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`): "I will log in, and then you can upload the three batches, waiting for each email response before uploading the next set." Integrator (API) access is not granted, so this is option A: the owner's own logged-in CCRS page is used, through the same web form he uses by hand. His WA.gov password is never seen or stored. AGENTS.md rule 3 records the exception.
+
+**Why an extension.** The CCRS session cookies are httpOnly and the upload form carries an anti-forgery token, so only a page on the CCRS origin can post the form with his login. A small Chrome MV3 extension (`tools/ccrs-uploader-extension/`) runs a content script on the two CCRS origins and makes a same-origin POST to `/Home/Upload` with the fields the page itself sends (`files`, `username`, `__RequestVerificationToken`).
+
+**Built.**
+1. `src/lib/compliance/ccrs-auto-upload-core.ts` (pure, self-tested): `planRun` (Group 1 Strain/Area/Product, Group 2 Inventory, Group 3 Adjustment/Transfer/Sale; refuses while a file waits for an answer), `nextStep` (the one decision per check-in: skip, wait, pause, stop, done or upload), `classifyUpload` (only the two answer pages CCRS is known to show are trusted; anything else is "unknown"), `uploadOverride`, `mailBlocksStart`, `mailToAutoApply`, `unsureBlocksStart`, pairing code format and the kill switch `CCRS_AUTO_UPLOAD=off`.
+2. `src/lib/compliance/ccrs-auto-upload-store.ts` (server): pairing (sha256 of the key only), runs, conditional claims, the email Apply acting as the owner who pressed Start (re-checked for settings.manage each time), one-time alerts by email and push, and the hub view.
+3. Routes `/api/ccrs-uploader/next`, `/file`, `/report` (Bearer pairing key, no CORS, no-store); the CCRS email cron also applies a running run's emails and alerts when the browser goes silent.
+4. Hub section "Automatic upload" on /admin/compliance/ccrs: pair a browser, start (production needs UPLOAD typed), pause, resume, Continue anyway on refused rows, stop, record "not received", revoke.
+5. `applyOneStoredMail` moved into `src/lib/compliance/ccrs-mail-apply.ts` so the hub button and the run share one Apply.
+6. Migration 0369 (three tables, service role only, database guards for one run, one claim, one waiting place per file).
+
+**Safety rules.** The next group goes only after every email of the groups before it is applied and accepted, and at least the gap (10 minutes) after its last upload. Any refusal, unknown result, page it has not seen, logout or lost permission stops the run and alerts the owner. A file whose result is unknown blocks every new run until its email arrives or the owner records "not received". A failure before the POST returns the file to the queue; a failure during it never does. A run does not start while CCRS email waits to be applied.
+
+**Tests.** `tests/compliance/d253-auto-uploader.test.ts` (21, with an in-memory database that enforces the 0369 indexes); self-test `ccrs-auto-upload-core` in both runners; mutations **M590-M599**.
+
+**Remaining.**
+- Owner: apply 0369, install the extension, pair, run a PREprod trial, then production.
+- UNVERIFIED: U-85 (a same-origin POST from the extension is accepted like the page's own), U-86 (the CCRS receipt time on the answer page is Pacific and matches the email), U-87 (any page the system has not seen stops the run; kept as a rule, not a fact about CCRS).
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

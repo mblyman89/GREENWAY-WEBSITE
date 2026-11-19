@@ -761,6 +761,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   // D250 S3 (0368): the examiner-delivery loads and their momentary stage.
   { table: "ccrs_delivery_loads", disposition: "KEEP", because: "The examiner deliveries you loaded (the files Brian sent, their fingerprints and the plan) — the State's own record of what it holds, and when." },
   { table: "ccrs_delivery_stage", disposition: "KEEP", because: "A delivery load staged for a moment before it is applied to State records; the load itself empties it, so nothing is left to reset." },
+  { table: "ccrs_uploader_devices", disposition: "KEEP", because: "The browsers paired to upload CCRS files for you (only a fingerprint of each key). Kept so a reset never silently re-opens or forgets who was allowed to send files to the State." },
+  { table: "ccrs_upload_runs", disposition: "KEEP", because: "Every automatic CCRS upload run you started: what was sent to the State, when, and on whose authority. The State keeps the files, so we keep the record." },
+  { table: "ccrs_upload_run_files", disposition: "KEEP", because: "Each file of an upload run and what CCRS's own page answered for it (the receipt time). Part of the record of what the State received." },
   { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
   // S-12d (0250): the owner's written reasons for checking off a real State
   // deadline. Evidence for an examiner, not test activity.

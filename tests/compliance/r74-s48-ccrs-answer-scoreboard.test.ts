@@ -22,7 +22,7 @@ describe("R74 S48 wiring", () => {
   const PAGE = read("src/app/admin/compliance/ccrs/page.tsx");
   const STORE = read("src/lib/compliance/ccrs-scoreboard-store.ts");
   it("answers mark a file uploaded from the email when it never was (audited)", () => {
-    expect(ACT).toContain("ccrs.file.uploaded_from_email");
+    expect(read("src/lib/compliance/ccrs-mail-apply.ts")).toContain("ccrs.file.uploaded_from_email"); // D253: ensureUploaded moved unchanged from mail-actions.ts
     expect(ACT).toContain("ccrs.mail.answer_all");
   });
   it("the hub shows the warning, the Answer-all button and the scoreboard", () => {

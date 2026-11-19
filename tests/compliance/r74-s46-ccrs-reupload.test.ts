@@ -94,6 +94,6 @@ describe("R74 S46: re-upload of files CCRS already answered", () => {
   it("the zip README says DO NOT UPLOAD for a served file CCRS already answered", () => {
     expect(duplicateEmitLine("succeeded", "Sale_1.csv")).toContain("DO NOT UPLOAD");
     expect(read("src/app/admin/reports/compliance/batch-export/route.ts")).toContain("duplicateEmitLine(d.state, d.file_name)");
-    expect(read("src/app/admin/compliance/ccrs/mail-actions.ts")).toContain("planReuploadSetAside(errors");
+    expect(read("src/lib/compliance/ccrs-mail-apply.ts")).toContain("planReuploadSetAside(errors"); // D253: the Apply moved unchanged from mail-actions.ts
   });
 });
