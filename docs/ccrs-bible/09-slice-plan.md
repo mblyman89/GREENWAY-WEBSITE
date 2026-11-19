@@ -1553,3 +1553,7 @@ Owner request D256 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`)
 ### D256 S2 — Stale-lot clean-up panel
 
 New page `/admin/compliance/ccrs/cleanup` (linked from the CCRS hub). Step 1 plans a wave (W1–W8) from the live State copy, our lots and the stored 10/30 audit workbooks, and stores the Inventory file only after the owner types the wave name and the counts still match. Step 2 plans and stores the matching Reconciliation (adjustment) file after that wave is applied. Files land in the normal outbox and are uploaded from the hub. Server-only store: `src/lib/compliance/ccrs-equalize-store.ts`; actions require settings.manage and are audited.
+
+### D257 S1 — clean-up check reads repaired product names
+
+The store-time ledger check (`verifyEqualizeFiles`) built its view from the raw copy, while the planner writes the repaired names (D252), so 5 rows with garbled accents/nbsp (e.g. "Pav\u00c3\u00a9", "Cartridge\u00c2\u00a0") failed L_REF_PRODUCT. Both the panel store and the script now repair the ledger names the same way before checking.
