@@ -491,7 +491,10 @@ export function mailBlocksStart(mails: readonly MailFact[], env: LedgerEnv): str
   const open = mails.filter((m) => m.env === env || m.env === null);
   if (open.length === 0) return null;
   const list = open.slice(0, 3).map((m) => m.subject || m.id).join("; ");
-  return `${open.length} CCRS email(s) wait to be applied${open.length > 3 ? ` (first: ${list})` : ` (${list})`}. Apply or set them aside in "CCRS email" first: one may answer a file this run would send again.`;
+  // D255: say how old the oldest is and where to clear old ones (they were out of sight before).
+  const oldest = open.map((m) => m.receivedAt).filter((x): x is string => !!x && Number.isFinite(Date.parse(x))).sort()[0];
+  const since = oldest ? ` The oldest arrived ${new Date(oldest).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" })}.` : "";
+  return `${open.length} CCRS email(s) wait to be applied${open.length > 3 ? ` (first: ${list})` : ` (${list})`}.${since} Apply or set them aside in "CCRS email" first: one may answer a file this run would send again. Emails whose files are already closed or abandoned: press "Set aside old emails" there.`;
 }
 
 /**
@@ -682,6 +685,8 @@ export function __runCcrsAutoUploadCoreTests(): { passed: number; failed: number
   ok(mailBlocksStart([ml("a", "preprod", null)], "prod") === null, "a PREprod email does not block production");
   ok((mailBlocksStart([ml("a", "prod", null)], "prod") ?? "").includes("send again"), "an open production email blocks a production run");
   ok(mailBlocksStart([ml("a", null, null)], "preprod") !== null, "an email of unknown env blocks both");
+  ok((mailBlocksStart([{ id: "a", env: null, kind: "error", subject: "x", receivedAt: "2026-10-20T23:45:03Z" }, { id: "b", env: "preprod", kind: "success", subject: "y", receivedAt: "2026-11-01T00:00:00Z" }], "preprod") ?? "").includes("oldest arrived 10/20/2026"), "D255: the blocker names the oldest email's date (Pacific)");
+  ok((mailBlocksStart([ml("a", "prod", null)], "prod") ?? "").includes("Set aside old emails"), "D255: the blocker points to the set-aside button");
   const started = "2026-11-19T17:00:00.000Z";
   const am = mailToAutoApply([ml("old", "prod", "2026-11-18T10:00:00Z"), ml("new", "prod", "2026-11-19T17:30:00Z"), ml("pre", "preprod", "2026-11-19T17:30:00Z"), ml("nul", null, "2026-11-19T17:30:00Z"), ml("nt", "prod", null)], "prod", started);
   ok(am.map((m) => m.id).join() === "new", "only this env's emails since the run started are applied by the run");

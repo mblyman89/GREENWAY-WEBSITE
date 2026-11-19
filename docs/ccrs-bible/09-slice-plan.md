@@ -1496,6 +1496,22 @@ Owner request D254 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`)
 - Owner: send the email, then reload the extension (1.1.0). Switch on `CCRS_KEEPALIVE=on` only if Brian says yes. Run the PREprod practice set.
 - UNVERIFIED U-88: whether the CCRS timeout is idle or absolute, and whether a page read resets it.
 
+## D255 — Uploader start blocked by 21 hidden CCRS emails; "Set aside old emails" (DONE in code, 2026-11-19)
+
+Owner request D255 (verbatim in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md`): "when I try to use it, I get this error, \"21 CCRS email(s) wait to be applied ...\" I have cleared every email in the list. ... please fix the autobot for me first".
+
+**Why (database facts, 2026-11-19).** `ccrs_mail_messages` held exactly 21 rows in state `new`, all received 10/20-10/25 (the first PREprod tests): 7 confirmations, 13 error files, 1 "has not been processed" notice. 14 of them had `env_verified=false` (read as env unknown, which blocks both envs). The hub panel read `listRecentCcrsMail(25)`, the newest 25 by received time; 76-89 newer emails were already handled, so none of the 21 was ever on screen. `mailBlocksStart` reads `listOpenCcrsMail` (every `new` row, oldest first), so the run refused. Every file the 21 emails name is `abandoned` in `ccrs_files`: 15 PREprod files and 5 production-ledger files (the 10/20 16:33 set, which was actually sent to PREprod). The notice names an abandoned PREprod Product file.
+
+**Built.**
+1. The hub list now carries EVERY open email plus the newest 25 (`listRecentCcrsMail` merges `state=new`, up to `OPEN_LIST_MAX`=200, `mergeHubMail`).
+2. Pure `src/lib/compliance/ccrs-stale-mail-core.ts`: `ourNamesOfMail` (confirmation list, error subject, not-processed body), `staleVerdict` (stale only when every named file exists in our ledger and none is `emitted`/`uploaded` in any env), `planStaleSetAside` (same scope as `mailBlocksStart`: this env or env unknown). An email that names no file, or a file not in our ledger, is never stale.
+3. `ccrs-stale-mail-store.ts` + hub button "Set aside old emails (file already closed or abandoned)" (`setAsideStaleCcrsMailAction`, settings.manage, audit `ccrs.mail.stale_set_aside`). Each email is set aside one by one through `markCcrsMailHandled` (only a row still `new`), with the note "D255 old email set aside: <file> is abandoned (...)...".
+4. The start blocker now says when the oldest email arrived and points to the button.
+
+**Tests.** `tests/compliance/d255-stale-mail.test.ts` (6); self-tests `ccrs-stale-mail-core` (23) and `ccrs-auto-upload-core` (93) in both runners; mutations **M610-M619**.
+
+**Remaining.** Owner: on PREprod, press "Set aside old emails", then Start. Expect "Set aside 21".
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

@@ -87,6 +87,8 @@ export function CcrsMailPanel({
     applyNotProcessed?: (fd: FormData) => Promise<void>;
     /** R74 S48: answer every waiting email, oldest first. */
     applyAll?: (fd: FormData) => Promise<void>;
+    /** D255: set aside every open email whose files are all closed or abandoned. */
+    setAsideStale?: (fd: FormData) => Promise<void>;
     dismiss: (fd: FormData) => Promise<void>;
     /** D228 (0357): a set-aside email back to waiting, with a reason. Optional so older callers still compile. */
     reopen?: (fd: FormData) => Promise<void>;
@@ -155,6 +157,19 @@ export function CcrsMailPanel({
             <SaveButton label={`Answer every waiting CCRS email (${open.length})`} busyLabel="Answering, oldest first…" />
             <span className="text-white/55">
               Oldest first. A file you never marked uploaded is marked from the email&apos;s time (logged). An email that needs your choice stays here with the reason.
+            </span>
+          </div>
+        </form>
+      ) : null}
+
+      {canEdit && actions.setAsideStale && open.length > 0 ? (
+        <form action={actions.setAsideStale} className="rounded-lg border border-sky-400/30 bg-sky-400/5 p-3" data-testid="ccrs-mail-stale">
+          <input type="hidden" name="week_key" value={weekKey} />
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <SaveButton label="Set aside old emails (file already closed or abandoned)" busyLabel="Checking each email against the ledger…" />
+            <span className="text-white/55">
+              Only emails whose every file is no longer waiting for an answer: no run sends those files again and Apply would refuse them. Each gets a note saying why. Anything else stays here.
             </span>
           </div>
         </form>

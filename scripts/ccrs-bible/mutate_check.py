@@ -207,6 +207,10 @@ D253_TESTS = "tests/compliance/d253-auto-uploader.test.ts"
 D254_TESTS = "tests/compliance/d254-keepalive.test.ts"
 D254_TESTCORE = "src/lib/compliance/ccrs-autobot-test-core.ts"
 D254_ACTIONS = "src/app/admin/compliance/ccrs/auto-upload-actions.ts"
+D255_CORE = "src/lib/compliance/ccrs-stale-mail-core.ts"
+D255_STORE = "src/lib/compliance/ccrs-stale-mail-store.ts"
+D255_MAILSTORE = "src/lib/compliance/ccrs-mail-store.ts"
+D255_TESTS = "tests/compliance/d255-stale-mail.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4966,6 +4970,86 @@ MUTATIONS = [
         'The practice set can only ever go to the PREprod outbox.',
     ),
 
+    (
+        'M610-d255-live-file-counts-as-stale',
+        D255_CORE,
+        'if (live) return { stale: false, names, why:',
+        'if (live && false) return { stale: false, names, why:',
+        SELF_TESTS,
+        'An email that answers a file still waiting (emitted/uploaded) must never be set aside.',
+    ),
+    (
+        'M611-d255-unknown-name-counts-as-stale',
+        D255_CORE,
+        'if (hits.length === 0) return { stale: false, names, why:',
+        'if (hits.length === 0) continue; if (false) return { stale: false, names, why:',
+        SELF_TESTS,
+        'A name not in our ledger is never proof the email is stale.',
+    ),
+    (
+        'M612-d255-no-name-counts-as-stale',
+        D255_CORE,
+        'if (names.length === 0) return { stale: false, names, why: "it names no file of ours; read it yourself" };',
+        'if (names.length === 0) return { stale: true, names, why: "it names no file of ours; read it yourself" };',
+        SELF_TESTS,
+        'An email naming no file of ours stays for the owner.',
+    ),
+    (
+        'M613-d255-scope-ignores-env',
+        D255_CORE,
+        'return m.env === env || m.env === null;',
+        'return true;',
+        SELF_TESTS,
+        'Set-aside for PREprod must not touch production emails.',
+    ),
+    (
+        'M614-d255-answerable-misses-uploaded',
+        D255_CORE,
+        'export const ANSWERABLE_STATES: readonly string[] = ["emitted", "uploaded"];',
+        'export const ANSWERABLE_STATES: readonly string[] = ["emitted"];',
+        SELF_TESTS,
+        'An uploaded file still waits for its answer.',
+    ),
+    (
+        'M615-d255-hub-drops-open-list',
+        D255_MAILSTORE,
+        'rows: mergeHubMail((open as StoredCcrsMail[] | null) ?? [], (data as StoredCcrsMail[] | null) ?? [])',
+        'rows: mergeHubMail([], (data as StoredCcrsMail[] | null) ?? [])',
+        D255_TESTS,
+        'The hub must list every open email (they block the uploader).',
+    ),
+    (
+        'M616-d255-set-aside-applies',
+        D255_STORE,
+        'markCcrsMailHandled(admin, x.id, "dismissed", byProfileId, x.note)',
+        'markCcrsMailHandled(admin, x.id, "applied", byProfileId, x.note)',
+        D255_TESTS,
+        'An old email is set aside, never recorded as applied.',
+    ),
+    (
+        'M617-d255-unverified-env-trusted',
+        D255_STORE,
+        'env: m.env_verified ? m.env : null,',
+        'env: m.env,',
+        D255_TESTS,
+        'Same scope as the start blocker: an unverified env counts as unknown.',
+    ),
+    (
+        'M618-d255-merge-keeps-handled-open-list',
+        D255_CORE,
+        'for (const r of [...open.filter((x) => x.state === "new"), ...recent]) {',
+        'for (const r of [...open, ...recent]) {',
+        SELF_TESTS,
+        'Only open emails are added beyond the newest 25.',
+    ),
+    (
+        'M619-d255-blocker-no-oldest-date',
+        D253_CORE,
+        'const since = oldest ? ` The oldest arrived',
+        'const since = oldest && false ? ` The oldest arrived',
+        SELF_TESTS,
+        'The blocker says how old the oldest open email is.',
+    ),
 ]
 
 

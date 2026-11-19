@@ -85,6 +85,7 @@ import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-
 import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 import {
   applyAllCcrsMailAction,
+  setAsideStaleCcrsMailAction,
   applyCcrsErrorMailAction,
   applyCcrsNotProcessedMailAction,
   applyCcrsSuccessMailAction,
@@ -343,7 +344,7 @@ export default async function CcrsCommandCenterPage({
       ? settle(listCcrsFilesLite(admin0, ["prod", "preprod"], WAITING_STATES, CCRS_UPLOAD_ORDER, 200))
       : Promise.resolve({ ok: true as const, value: [] }),
     // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
-    listRecentCcrsMail(25),
+    listRecentCcrsMail(25), // D255: plus EVERY open email (see ccrs-mail-store)
     getEndorsementConfig(),
     // Monthly LIQ-1295 strip.
     obligationCtxP.then((ctx) => getCcrsFilingOverview(todayIso, { lookbackMonths: 2, ctx })),
@@ -961,6 +962,7 @@ export default async function CcrsCommandCenterPage({
             applyError: applyCcrsErrorMailAction,
             applyNotProcessed: applyCcrsNotProcessedMailAction,
             applyAll: applyAllCcrsMailAction,
+            setAsideStale: setAsideStaleCcrsMailAction,
             dismiss: dismissCcrsMailAction,
             reopen: reopenCcrsMailAction,
             adopt: adoptHandmadeFileAction,

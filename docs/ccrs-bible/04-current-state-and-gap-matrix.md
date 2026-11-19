@@ -400,6 +400,16 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - Hub button "Make PREprod test files" puts a fresh seven-file practice set (one per type) in the PREprod outbox.
 - See Part 09 D254.
 
+### A.27 D255 Old CCRS emails no longer hide or block the uploader — DONE in code (2026-11-19)
+
+- **Before:**
+  - The hub listed only the newest 25 emails. 21 open PREprod emails from 10/20-10/25 were out of sight, and the uploader refused to start on them.
+- **Now:**
+  - The hub lists every open email.
+  - "Set aside old emails" sets aside each open email whose files are all already closed or abandoned, with a note. Anything else stays.
+  - The start blocker names the oldest date and the button.
+- See Part 09 D255.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.
