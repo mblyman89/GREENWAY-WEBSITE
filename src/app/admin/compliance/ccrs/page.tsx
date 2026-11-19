@@ -495,6 +495,9 @@ export default async function CcrsCommandCenterPage({
           <Link href="/admin/compliance/ccrs/records" className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 font-semibold text-emerald-100 transition hover:bg-emerald-400/20">
             CCRS Records (State copy)
           </Link>
+          <Link href="/admin/compliance/ccrs/cleanup" className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 font-semibold text-amber-100 transition hover:bg-amber-400/20">
+            Stale-lot clean-up
+          </Link>
           <Link href="/admin/compliance/health" className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-white/60 transition hover:bg-white/5">
             Compliance Health
           </Link>
