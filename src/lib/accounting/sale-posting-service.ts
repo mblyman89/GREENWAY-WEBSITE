@@ -495,7 +495,7 @@ async function gatherCosts(
             delta: short,
             clamp: true,
             autoStatus: true,
-            fallbackAbsolute: { onHandQty: lot.onHand + short, status: "active" },
+            fallbackAbsolute: { onHandQty: lot.onHand + short },
           });
           moved = w.ok;
           if (!w.ok) await admin.from("inventory_adjustments").delete().eq("id", (adj as { id: string }).id);
