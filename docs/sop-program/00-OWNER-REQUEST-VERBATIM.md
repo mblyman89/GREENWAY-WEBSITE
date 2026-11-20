@@ -3605,3 +3605,23 @@ After the answer (keep-alive plus a log-in alert; the 10/30 count drives the cle
 ## D258 (verbatim)
 
 "I don't have access to the original inventory file uploaded to the CCRS with wave 1. Please log in to supabase to find it for me. I received an error email with the lots that failed. Please work through the list and fix what we need to fix to continue cleanup. Follow the standing rules. Thank you. Remember to be lean and efficient. Spend as little as possible. Thank you."
+
+## D259 (verbatim) - Employees cannot log in (2026-11-19)
+
+"thank you. I will review the new pages and get back to you about any issues. in the meantime, please log back in to supabase and query the users and user login. my employees are struggling to log in. I create the users, set the password, and email and all that. but it keeps giving me wrong credentials. can you look into what I and or we are doing wrong so we all get logged in to the back office and get work done. no code edits, just let me know what I need to do please. thank you."
+
+### As-built (D259)
+
+No code edits, as asked. Read-only findings delivered to the owner: every auth user is confirmed, unbanned and has a password. Accounts created in the Supabase dashboard (not Admin -> Users -> Invite) get a staff profile from the 0127 trigger as readonly with active=false, so a correct password signs in and is bounced back to the sign-in page. Fix: activate the person and set the role in Admin -> Users; always invite from Admin -> Users; do not delete and re-create accounts; use only the newest reset link (the reset email rate limit was hit).
+
+## D260 (verbatim) - Cultivera average day of the week vs ours (2026-11-20)
+
+"I want to change gears and add a feature to the Cultivera benchmarks reports page. I want to see the average day of the week from Cultivera. Total sales, total discounts, sales before tax, excise tax, sales tax, cost, a break down of the types/ categories that make up those numbers, etc. I want to be able to see what an average Thursday looked like on Cultivera, compared with what an average Thursday looks like on ours. And many other like kind comparisons. I want to see if our discount management system is paying off. If we are making higher margins now, if we are selling more or less now. The discounts are much more accurate on our platform, as in, we are less generous. I want to see if this system is paying off. We have all the data from Cultivera in our system already. I know their formulas are trash, but it's what I used for a long time, so it's fine if I see what I'm used to seeing from them. I just want to see if we are outperforming Cultivera and making more profit per day. Please add enterprise grade comparison analytics for me to easily see how we performed on Cultivera vs how we are performing now. Be as lean and efficient as possible. We are in budget mode. Test as little as possible. Follow the standing rules. Thank you."
+
+### As-built (D260)
+
+- New owner-only page Reports -> Cultivera Benchmark -> "Average day: Cultivera vs us" (/admin/reports/cultivera-benchmark/weekday), button on the benchmark page. No migration.
+- Cultivera side: the archived sales_lines parts (sha256-checked), every line summed per Pacific day exactly as Cultivera's daily report (measured equal to the cent on 2026-11-20). NetSales is "sales before tax". Their one TotalTax is split excise : sales by the tax-setting rates on cannabis lines (measured 0.463 = 37% + 9.3%); non-cannabis tax is all sales tax. Cached for 7 days per archived run (read once, not per view).
+- Our side: completed orders from the cut-over to today, the same pre-tax formulas as the benchmark (regular price = gross, charged = net), excise and sales tax with medical exemptions, cost from each sale's own COGS entry. Orders with no COGS entry (140 of 2,838 on 2026-11-20) count in sales; margin and profit are measured on costed sales and the page says how much was costed.
+- Shows, per chosen weekday (or all days): profit per day, sales before tax, margin and discount rate cards; a full average-day table (orders, units, gross, discounts, discount rate, net, excise, sales tax, total with tax, average ticket, cost, gross profit, margin) with differences; a category-group breakdown (Cultivera's ~78 names and our 14 slugs mapped to 9 groups, unknown -> "Other"); and all seven weekdays side by side. Cultivera period: all history before the cut-over, or the same dates one year earlier.
+- Tests: cultivera-weekday-core self-tests (12) in run-pure-selftests; nav-gate known list updated.

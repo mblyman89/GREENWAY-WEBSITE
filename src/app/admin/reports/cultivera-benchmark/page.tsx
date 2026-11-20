@@ -63,7 +63,12 @@ export default async function CultiveraBenchmarkPage({
 
   return (
     <div className="space-y-5">
-      <DateRangePicker />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <DateRangePicker />
+        <a href="/admin/reports/cultivera-benchmark/weekday" data-testid="cvb-weekday-link" className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black">
+          Average day: Cultivera vs us →
+        </a>
+      </div>
 
       {(sp.error || loadError) && (
         <div data-testid="cvb-error" className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
