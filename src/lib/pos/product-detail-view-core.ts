@@ -162,6 +162,28 @@ export function parseProductDetailsResponse(body: unknown): ProductDetailsRespon
   return { lots, lotCount, warnings };
 }
 
+/**
+ * register-quick-search-lot-line — the one-line lot + vendor the MAIN-screen
+ * search rows show (owner: "On the line itself, I want to see the lot number
+ * and vendor"). Uses the lot the register is selling from (else the first
+ * lot). Lot = vendor lot # when known, else the lot code; extra lots are
+ * counted so a mixed shelf is never hidden.
+ */
+export type LotLine = { lot: string | null; vendor: string | null; moreLots: number };
+
+export function lotLineSummary(details: ProductDetailsResponse | null): LotLine | null {
+  if (!details || details.lots.length === 0) return null;
+  const lot = details.lots.find((l) => l.sellable) ?? details.lots[0];
+  const rows = new Map<string, string>();
+  for (const s of lot.sections) for (const r of s.rows) if (!rows.has(r.label)) rows.set(r.label, r.value);
+  const real = (v: string | undefined) => (v && v.trim() && v.trim() !== "\u2014" ? v.trim() : null);
+  return {
+    lot: real(rows.get("Vendor lot #")) ?? real(rows.get("Lot code")),
+    vendor: real(rows.get("Vendor")),
+    moreLots: Math.max(0, details.lotCount - 1),
+  };
+}
+
 /** The shell's fetcher: null = offline / failed (the card says so). */
 export type ProductDetailsFn = (productId: string, variantId: string) => Promise<ProductDetailsResponse | null>;
 
@@ -313,6 +335,14 @@ export function __runProductDetailViewCoreTests(): void {
   ok(fm.get("POS key")?.value === "P1 · P1-x", "pos key with variant");
   const bare = cardFactRows({ productId: "P2", variantId: "P2", variantLabel: null, inventoryStatus: "in-stock" });
   ok(bare.length === 1 && bare[0].value === "P2", "bare product: only the key");
+
+  // lotLineSummary
+  const mk = (id: string, sellable: boolean, rows: [string, string][]) => ({ lotId: id, headline: id, summary: "", sellable, sections: [{ title: "T", rows: rows.map(([label, value]) => ({ label, value })) }], terpenes: [], coaUrl: null });
+  const ll = lotLineSummary({ lots: [mk("a", false, [["Lot code", "OLD"]]), mk("b", true, [["Vendor lot #", "VND-9"], ["Lot code", "LC-2"], ["Vendor", "Good Farms"]])], lotCount: 3, warnings: [] });
+  ok(ll?.lot === "VND-9" && ll?.vendor === "Good Farms" && ll?.moreLots === 2, "lot line: selling lot, vendor lot # first, extra lots counted");
+  const ll2 = lotLineSummary({ lots: [mk("a", false, [["Lot code", "LC-1"], ["Vendor", "\u2014"]])], lotCount: 1, warnings: [] });
+  ok(ll2?.lot === "LC-1" && ll2?.vendor === null && ll2?.moreLots === 0, "lot line: lot code fallback, dash vendor blank");
+  ok(lotLineSummary(null) === null && lotLineSummary({ lots: [], lotCount: 0, warnings: [] }) === null, "lot line: nothing -> null");
 
   console.log(`product-detail-view-core: ${passed} passed, ${failed} failed`);
   if (failed > 0) {

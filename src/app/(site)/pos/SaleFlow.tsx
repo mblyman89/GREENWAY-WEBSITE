@@ -44,7 +44,7 @@ import {
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan, scanPickPrompt, type ScanPickReason } from "@/lib/pos/scan-to-cart-core";
-import { cardFactRows, terpeneLabel, type LotDetailRow, type LotDetailView, type ProductDetailsFn, type ProductDetailsResponse } from "@/lib/pos/product-detail-view-core";
+import { cardFactRows, lotLineSummary, terpeneLabel, type LotDetailRow, type LotDetailView, type ProductDetailsFn, type ProductDetailsResponse } from "@/lib/pos/product-detail-view-core";
 import {
   PRICE_LOOKUP_IDLE_MS,
   PRICE_LOOKUP_WARN_MS,
@@ -2965,6 +2965,8 @@ function CartScreen({
   const [scanUnlockOpen, setScanUnlockOpen] = useState(false);
   // B42 — the product whose info card is open (Cova: info on demand).
   const [infoProduct, setInfoProduct] = useState<PosMenuProduct | null>(null);
+  // register-quick-search-expand — which main-screen search row is open.
+  const [quickOpen, setQuickOpen] = useState<string | null>(null);
   const carded = !!medicalCard;
 
   /**
@@ -3537,23 +3539,19 @@ function CartScreen({
           {query.trim().length > 0 && !scanPick ? (
             <ul className="mt-2 space-y-1.5">
               {quickResults.map((p) => (
-                <li key={p.variantId}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      manualAdd(p);
-                      setQuery("");
-                    }}
-                    className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-left active:bg-[var(--pos-surface-hover)]"
-                  >
-                    <span className="min-w-0 truncate text-sm font-semibold">
-                      {p.name}
-                      {p.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {p.variantLabel}</span> : null}
-                      <span className="ml-2 text-xs font-normal capitalize text-[var(--pos-text-faint)]">{p.category}</span>
-                    </span>
-                    <span className="shrink-0 text-sm font-bold text-[var(--pos-accent)]">{money(p.regularPriceMinor)}</span>
-                  </button>
-                </li>
+                <QuickSearchRow
+                  key={p.variantId}
+                  product={p}
+                  open={quickOpen === p.variantId}
+                  onToggle={() => setQuickOpen(quickOpen === p.variantId ? null : p.variantId)}
+                  onAdd={() => {
+                    manualAdd(p);
+                    setQuery("");
+                    setQuickOpen(null);
+                  }}
+                  onFullCard={() => setInfoProduct(p)}
+                  onProductDetails={onProductDetails}
+                />
               ))}
               {quickResults.length === 0 ? (
                 <li className="px-2 py-3 text-center text-sm text-[var(--pos-text-faint)]">No products match — press Enter to try it as a barcode.</li>
@@ -5017,6 +5015,104 @@ export function PriceLookupScreen({
 }
 
 /** A compact label/value grid used by the info card's fact sections. */
+/**
+ * register-quick-search-expand — one MAIN-screen search result (owner: "tap
+ * to expand the row so I can see all details. On the line itself, I want to
+ * see the lot number and vendor"). The line shows lot + vendor of the lot
+ * being sold; tapping the row opens every size fact and every lot's details
+ * in place; Add is its own button so a tap never rings an item by accident.
+ * Lot facts come from the shell's fetcher (live, else this iPad's saved copy).
+ */
+function QuickSearchRow({
+  product: p,
+  open,
+  onToggle,
+  onAdd,
+  onFullCard,
+  onProductDetails,
+}: {
+  product: PosMenuProduct;
+  open: boolean;
+  onToggle: () => void;
+  onAdd: () => void;
+  onFullCard: () => void;
+  onProductDetails?: ProductDetailsFn;
+}) {
+  const [details, setDetails] = useState<ProductDetailsResponse | null>(null);
+  const [state, setState] = useState<"off" | "loading" | "done" | "failed">(onProductDetails ? "loading" : "off");
+  const [openLot, setOpenLot] = useState<string | null>(null);
+  useEffect(() => {
+    if (!onProductDetails) return;
+    let active = true;
+    // Short wait so fast typing does not fire a fetch for every keystroke's rows.
+    const t = setTimeout(() => {
+      onProductDetails(p.productId, p.variantId)
+        .then((d) => {
+          if (!active) return;
+          setDetails(d);
+          setState(d ? "done" : "failed");
+          const first = d?.lots.find((l) => l.sellable) ?? d?.lots[0];
+          setOpenLot(first ? first.lotId : null);
+        })
+        .catch(() => {
+          if (active) setState("failed");
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [onProductDetails, p.productId, p.variantId]);
+  const line = lotLineSummary(details);
+  return (
+    <li className="rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)]">
+      <div className="flex items-stretch gap-1">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left active:bg-[var(--pos-surface-hover)]"
+        >
+          <span aria-hidden className="shrink-0 text-xs text-[var(--pos-text-faint)]">{open ? "▾" : "▸"}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">
+              {p.name}
+              {p.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {p.variantLabel}</span> : null}
+              <span className="ml-2 text-xs font-normal capitalize text-[var(--pos-text-faint)]">{p.category}</span>
+            </span>
+            <span className="block truncate text-xs text-[var(--pos-text-muted)]">
+              {state === "loading"
+                ? "Loading lot…"
+                : line
+                  ? `Lot ${line.lot ?? "—"} · ${line.vendor ?? "Vendor not on file"}${line.moreLots > 0 ? ` · +${line.moreLots} more lot${line.moreLots === 1 ? "" : "s"}` : ""}`
+                  : state === "done"
+                    ? "No received lots on file"
+                    : "Lot and vendor unavailable (offline, not saved on this iPad)"}
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-bold text-[var(--pos-accent)]">{money(p.regularPriceMinor)}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="my-1 mr-1 min-h-11 shrink-0 rounded-lg bg-[var(--pos-accent)] px-4 text-sm font-bold text-[var(--pos-accent-ink)] active:opacity-80"
+        >
+          Add
+        </button>
+      </div>
+      {open ? (
+        <div className="border-t border-[var(--pos-border)] px-3 pb-3 pt-2">
+          <DetailGrid rows={cardFactRows(p)} />
+          <LotDetailsPanel state={state} details={details} openLot={openLot} setOpenLot={setOpenLot} />
+          <button type="button" onClick={onFullCard} className="mt-3 min-h-11 text-sm font-semibold text-[var(--pos-accent)] underline">
+            Open full product card (photo, potency, deals)
+          </button>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
 function DetailGrid({ rows }: { rows: LotDetailRow[] }) {
   return (
     <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
