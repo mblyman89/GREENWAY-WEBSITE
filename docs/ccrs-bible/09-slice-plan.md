@@ -1557,3 +1557,7 @@ New page `/admin/compliance/ccrs/cleanup` (linked from the CCRS hub). Step 1 pla
 ### D257 S1 — clean-up check reads repaired product names
 
 The store-time ledger check (`verifyEqualizeFiles`) built its view from the raw copy, while the planner writes the repaired names (D252), so 5 rows with garbled accents/nbsp (e.g. "Pav\u00c3\u00a9", "Cartridge\u00c2\u00a0") failed L_REF_PRODUCT. Both the panel store and the script now repair the ledger names the same way before checking.
+
+### D258 — W1 result
+
+W1 (Inventory_413541_20261119141527.csv, 10,000 rows) came back with 13 "Invalid Product" rows (error file Inventory__20261119T163411103.csv). 12 name a C110001xxxx product (CCRS bulk-created 2024-08-30) whose name has an apostrophe; every other apostrophe name (P65303… products, 107 rows) landed, so the copy does not hold the exact state spelling for that batch. The 13th (GF41583505706958) names product id C11000113380, which the Product report never listed (Part 04). No code change: once the error email is applied the 13 are touched (H_LEDGER_TOUCHED) and stay out of later waves; their names are to be asked of the examiner, not guessed.
