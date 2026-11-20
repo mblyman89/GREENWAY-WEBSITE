@@ -214,7 +214,12 @@ export async function postSaleForOrder(orderId: string): Promise<SalePostingResu
     const p = pacificParts(basis);
     const saleDate = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 
-    const saleLines: SaleLineInput[] = lines.map((l) => ({
+    // D261: only lines with no cost info anywhere are left out (and flagged);
+    // the rest of the sale still books.
+    const left = lines.filter((l) => cost.skipped.includes(l.id));
+    const booked = lines.filter((l) => !cost.skipped.includes(l.id));
+    const leftCents = left.reduce((a, l) => a + l.price_minor_units * l.quantity, 0);
+    const saleLines: SaleLineInput[] = booked.map((l) => ({
       lineId: l.id,
       categorySlug: categoryBySlug.get(l.id) as string,
       description: l.product_name,
@@ -230,7 +235,7 @@ export async function postSaleForOrder(orderId: string): Promise<SalePostingResu
       // CHECKED, not trusted. Lines are insert-only after placement, so the
       // stored total must still reproduce from them; if it does not, the
       // drawer and the books would disagree and the builder refuses.
-      posTotalCents: order.total_minor_units,
+      posTotalCents: order.total_minor_units - leftCents,
     });
 
     if (built.kind === "refused") {
@@ -263,7 +268,7 @@ export async function postSaleForOrder(orderId: string): Promise<SalePostingResu
       );
     }
 
-    const cogs = await submitJournal({
+    const cogs = built.cogsJournal.lines.length < 2 ? { ok: true as const, journalId: null, message: "" } : await submitJournal({
       entityCode: "greenway",
       sourceKind: "pos_sale",
       sourceRef: `order:${order.id}#cogs`,
@@ -292,7 +297,11 @@ export async function postSaleForOrder(orderId: string): Promise<SalePostingResu
     const note =
       `Sale recorded in the books: revenue ${built.totalRevenueCents}c, excise ${built.totalExciseCents}c, ` +
       `sales tax ${built.totalSalesTaxCents}c, cost ${built.totalCostCents}c across ${built.splits.length} category(ies).` +
-      (residual !== 0 ? ` Rounding residual ${residual}c (D-10, reported not resolved).` : "");
+      (residual !== 0 ? ` Rounding residual ${residual}c (D-10, reported not resolved).` : "") +
+      (cost.notes.length > 0 ? ` FLAG stock: ${cost.notes.join("; ")}.` : "") +
+      (left.length > 0
+        ? ` FLAG left out (no lot or cost anywhere): ${left.map((l) => `${l.product_name} x${l.quantity} ${l.price_minor_units * l.quantity}c`).join("; ")}.`
+        : "");
     await admin.from("order_events").update({ note: note.slice(0, 2000) }).eq("id", claimId);
 
     return result(true, "SALE_POSTED", note, {
@@ -334,7 +343,7 @@ async function fail(
 }
 
 type CostGather =
-  | { kind: "ok"; costByLineId: Map<string, number | null> }
+  | { kind: "ok"; costByLineId: Map<string, number | null>; skipped: string[]; notes: string[] }
   | { kind: "failed"; message: string };
 
 /**
@@ -383,7 +392,7 @@ async function gatherCosts(
   const costByLineId = new Map<string, number | null>(ncCostByLine);
   if (forPlan.length === 0) {
     for (const l of lines) if (!costByLineId.has(l.id)) costByLineId.set(l.id, null);
-    return { kind: "ok", costByLineId };
+    return { kind: "ok", costByLineId, skipped: [], notes: [] };
   }
 
   const keys = lotKeysForLines(forPlan);
@@ -430,32 +439,109 @@ async function gatherCosts(
       sizeId: r.menu_source_variant_id,
     }));
 
-  const plan = buildLotDecrementPlan(forPlan, preSaleLots);
+  let plan = buildLotDecrementPlan(forPlan, preSaleLots);
   // R74 S31: cost each line from ITS size's draws. `groupDraws` keys every
   // draw by the line's size group (identical to lotUpdates when no lot of
   // the key is size-linked, i.e. the pre-S31 books).
-  const draws: LotDraw[] = [...drawsFromLotUpdates(plan.groupDraws ?? plan.lotUpdates)];
   const costByLot = new Map<string, number | null>();
   for (const r of rows) costByLot.set(r.id, r.unit_cost_minor_units);
+
+  // D261: a short line no longer refuses the whole sale. Each short draw
+  // group is supplied from the product's own costed lot (or a lot whose
+  // barcode / CCRS id IS the sold key, e.g. a duplicate card). At checkout
+  // (stock not yet decremented) that lot is physically topped up and made
+  // active so the decrement draws it normally; on a re-post of an old sale
+  // (already decremented) it is cost-only. Either way it is flagged.
+  // Only a group with no costed lot anywhere is left out of the books.
+  const notes: string[] = [];
+  if (plan.shortfalls.length > 0) {
+    const demand = new Map<string, number>();
+    for (const l of forPlan) {
+      const gk = plan.lineDrawKeys?.get(l.lineId);
+      if (gk) demand.set(gk, (demand.get(gk) ?? 0) + Math.max(0, Math.trunc(Number(l.quantity) || 0)));
+    }
+    const drawn = new Map<string, number>();
+    for (const d of plan.groupDraws ?? plan.lotUpdates) drawn.set(d.posProductKey, (drawn.get(d.posProductKey) ?? 0) - d.delta);
+    const { data: dec } = await admin
+      .from("order_events")
+      .select("id")
+      .eq("order_id", orderId)
+      .eq("event_type", "inventory_decremented")
+      .limit(1);
+    const live = !dec || dec.length === 0;
+    for (const [gk, need] of demand) {
+      const short = need - (drawn.get(gk) ?? 0);
+      if (short <= 0) continue;
+      const [base, size] = gk.split("\u0000");
+      const lot = await findTopUpLot(admin, base);
+      if (!lot) continue;
+      costByLot.set(lot.id, lot.unitCost);
+      let moved = false;
+      if (live && !lot.aliased) {
+        const { applyLotDelta } = await import("@/lib/inventory/atomic-quantity");
+        const { data: adj } = await admin
+          .from("inventory_adjustments")
+          .insert({
+            lot_id: lot.id,
+            qty_delta: short,
+            reason: "count",
+            note: `${AUTO_TOP_UP_NOTE} sale ${orderId} sold ${short} more than on hand; recount this lot.`,
+          })
+          .select("id")
+          .single();
+        if (adj) {
+          const w = await applyLotDelta(admin, {
+            lotId: lot.id,
+            delta: short,
+            clamp: true,
+            autoStatus: true,
+            fallbackAbsolute: { onHandQty: lot.onHand + short, status: "active" },
+          });
+          moved = w.ok;
+          if (!w.ok) await admin.from("inventory_adjustments").delete().eq("id", (adj as { id: string }).id);
+        }
+      }
+      const have = preSaleLots.find((x) => x.id === lot.id);
+      if (have) have.onHandQty += short;
+      else preSaleLots.push({ id: lot.id, posProductKey: base, onHandQty: short, sizeId: size ?? null });
+      notes.push(
+        `${short} unit(s) of ${base} ${moved ? "added to" : "costed from"} lot ${lot.code ?? lot.id}` +
+          `${lot.aliased ? " (matched by barcode: the sold card is a duplicate)" : ""}`,
+      );
+    }
+    plan = buildLotDecrementPlan(forPlan, preSaleLots);
+  }
+
+  // Groups still short, or drawn from a lot with no cost, have no cost info
+  // anywhere: those lines (only) are left out of the books and flagged.
+  const badGroups = new Set<string>();
+  {
+    const demand = new Map<string, number>();
+    for (const l of forPlan) {
+      const gk = plan.lineDrawKeys?.get(l.lineId);
+      if (gk) demand.set(gk, (demand.get(gk) ?? 0) + Math.max(0, Math.trunc(Number(l.quantity) || 0)));
+    }
+    const drawn = new Map<string, number>();
+    for (const d of plan.groupDraws ?? plan.lotUpdates) {
+      drawn.set(d.posProductKey, (drawn.get(d.posProductKey) ?? 0) - d.delta);
+      if ((costByLot.get(d.id) ?? null) === null) badGroups.add(d.posProductKey);
+    }
+    for (const [gk, need] of demand) if (need > (drawn.get(gk) ?? 0)) badGroups.add(gk);
+  }
+  const skipped = forPlan.filter((l) => badGroups.has(plan.lineDrawKeys?.get(l.lineId) ?? "")).map((l) => l.lineId);
+  const draws: LotDraw[] = [...drawsFromLotUpdates(plan.groupDraws ?? plan.lotUpdates)].filter((d) => !badGroups.has(d.posProductKey));
   const costRows = plan.lotUpdates.map((u) => ({
     lotId: u.id,
     unitCostCents: costByLot.get(u.id) ?? null,
   }));
 
-  if (plan.shortfalls.length > 0) {
-    return {
-      kind: "failed",
-      message:
-        `This sale drew more stock than the lots can account for (${plan.shortfalls.join("; ")}), so its cost cannot be` +
-        ` established. Receive the delivery that supplied this product so its cost is on the books, then re-post this sale.`,
-    };
-  }
-
-  const costable: CostableLine[] = forPlan.map((l) => ({
-    lineId: l.lineId,
-    posProductKey: plan.lineDrawKeys?.get(l.lineId) ?? lotKeyForSaleLine(l),
-    quantity: l.quantity,
-  }));
+  const costable: CostableLine[] = forPlan
+    .filter((l) => !skipped.includes(l.lineId))
+    .map((l) => ({
+      lineId: l.lineId,
+      posProductKey: plan.lineDrawKeys?.get(l.lineId) ?? lotKeyForSaleLine(l),
+      quantity: l.quantity,
+    }));
 
   const costed = costSaleFromDraws(costable, draws, costRows);
   if (costed.kind === "refused") {
@@ -467,6 +553,30 @@ async function gatherCosts(
   // an explicit null so the builder decides what to do, rather than this file
   // inventing a zero that would look like a real costed line.
   for (const l of lines) if (!costByLineId.has(l.id)) costByLineId.set(l.id, null);
-  void orderId;
-  return { kind: "ok", costByLineId };
+  return { kind: "ok", costByLineId, skipped, notes };
+}
+
+/** D261: the note prefix on every automatic lot top-up (the owner list reads it). */
+export const AUTO_TOP_UP_NOTE = "Auto top-up (D261):";
+
+/** The newest costed, non-sample, drawable lot of a key; else a lot whose barcode / CCRS id is the key. */
+async function findTopUpLot(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  key: string,
+): Promise<{ id: string; unitCost: number; onHand: number; code: string | null; aliased: boolean } | null> {
+  const pick = async (aliased: boolean) => {
+    let q = admin
+      .from("inventory_lots")
+      .select("id, unit_cost_minor_units, on_hand_qty, lot_code")
+      .eq("is_sample", false)
+      .not("status", "in", "(recalled,destroyed)")
+      .not("unit_cost_minor_units", "is", null);
+    if (!aliased) q = q.eq("pos_product_key", key);
+    else if (/^[\w.-]+$/.test(key)) q = q.or(`lot_code.eq.${key},ccrs_inventory_external_id.eq.${key}`);
+    else return null;
+    const { data } = await q.order("created_at", { ascending: false }).limit(1);
+    const r = (data as { id: string; unit_cost_minor_units: number; on_hand_qty: number; lot_code: string | null }[] | null)?.[0];
+    return r ? { id: r.id, unitCost: r.unit_cost_minor_units, onHand: Number(r.on_hand_qty) || 0, code: r.lot_code, aliased } : null;
+  };
+  return (await pick(false)) ?? (await pick(true));
 }
