@@ -374,6 +374,7 @@ The cart screen has three zones.
 
 **2. Item area (left, large).**
 - The always-live search bar: **Scan a barcode (no click needed) or search name, brand, size…**
+  - Typing shows matching rows right under the bar. Each row's second line shows the **lot number and vendor** of the lot being sold (plus "+N more lots" when the shelf holds more than one). **Tap the row** to expand it in place: every size fact and every lot's full details (vendor lot #, traceability, vendor & brand, dates, lab/COA, terpenes). Tap **Add** to ring the item; tapping the row itself never adds it. Offline, rows show this iPad's saved lot copy, or say it is not saved yet.
 - **Scan required** chip, plus a **Manager unlock** button, when the store requires scanning (4.8).
 - Messages: *"Scanned: <item> — added to sale"* (green), a scan miss (amber), or a size picker.
 - The **check**: one row per item, with product, category, price, the **− / +** quantity steppers, the line total and **✕** remove. The last scanned item wears **JUST SCANNED**. Tags may also show **MED · TAX OFF**, **OVERRIDE · <manager>**, or the name of an applied deal.

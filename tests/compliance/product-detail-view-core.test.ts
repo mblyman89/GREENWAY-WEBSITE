@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   DETAIL_PARSE_MAX_LOTS,
   __runProductDetailViewCoreTests,
+  lotLineSummary,
   parseProductDetailsResponse,
   terpeneLabel,
 } from "@/lib/pos/product-detail-view-core";
@@ -34,5 +35,11 @@ describe("product-detail-view-core pins", () => {
 
   it("formats terpene ppm", () => {
     expect(terpeneLabel(4210)).toContain("0.42%");
+  });
+
+  it("lot line for main-screen search rows", () => {
+    expect(lotLineSummary(null)).toBeNull();
+    const r = lotLineSummary({ lots: [{ lotId: "a", headline: "a", summary: "", sellable: true, sections: [{ title: "T", rows: [{ label: "Vendor lot #", value: "V1" }, { label: "Vendor", value: "Acme" }] }], terpenes: [], coaUrl: null }], lotCount: 1, warnings: [] });
+    expect(r).toEqual({ lot: "V1", vendor: "Acme", moreLots: 0 });
   });
 });
