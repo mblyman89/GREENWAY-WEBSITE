@@ -93,6 +93,38 @@ export function applyKeypadKey(
   return { value: next, caret: a + ins.length };
 }
 
+/**
+ * Where the caret belongs after a box REFORMATS what the keypad typed
+ * (owner: the DOB keypad "jumbles up the numbers"). A masked box such as
+ * MM/DD/YYYY turns "110" into "11/0"; putting the caret back at the raw
+ * index lands it BEFORE the last digit, so the next key is inserted in the
+ * wrong place. Instead: count the letters/digits before the intended caret
+ * and place the caret after that many letters/digits in what the box shows.
+ */
+export function caretAfterReformat(intended: string, intendedCaret: number, actual: string): number {
+  const sig = /[0-9A-Za-z]/;
+  const want = Math.max(0, Math.min(intended.length, intendedCaret));
+  if (intended === actual) return want;
+  let n = 0;
+  for (let i = 0; i < want; i++) if (sig.test(intended[i])) n++;
+  if (n === 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < actual.length; i++) {
+    if (sig.test(actual[i])) seen++;
+    if (seen === n) return i + 1;
+  }
+  return actual.length;
+}
+
+/**
+ * register-keypad-usability — data-keypad on a box:
+ *   "auto" → the pad opens by itself when the box gets focus (date of birth);
+ *   "off"  → no Keypad button (cash-count grids, where it covered the next box).
+ */
+export function keypadAutoOpen(dataKeypad: string | null | undefined): boolean {
+  return (dataKeypad ?? "").toLowerCase() === "auto";
+}
+
 /** The rows of each pad (labels are what is typed). */
 export const NUMERIC_ROWS: readonly (readonly string[])[] = [
   ["1", "2", "3"],
@@ -180,6 +212,25 @@ export function __runRegisterKeypadTests(): { passed: number; failed: number } {
   ok(keypadPreview("1234", true) === "••••", "a PIN previews as dots");
   ok(keypadPreview("Sam", false) === "Sam", "a name previews as typed");
   ok(NUMERIC_ROWS.flat().length === 9 && ALPHA_ROWS[1].length === 10, "pads have their keys");
+
+  // caretAfterReformat — typing 11/1/1980 on the keypad into a MM/DD/YYYY mask
+  const mask = (raw: string) => {
+    const d = raw.replace(/\D/g, "").slice(0, 8);
+    return d.length <= 2 ? d : d.length <= 4 ? `${d.slice(0, 2)}/${d.slice(2)}` : `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  };
+  let v = "";
+  let caret = 0;
+  for (const c of "11011980") {
+    const r = applyKeypadKey(v, caret, caret, ch(c));
+    v = mask(r.value);
+    caret = caretAfterReformat(r.value, r.caret, v);
+  }
+  ok(v === "11/01/1980", "DOB typed digit by digit comes out in order (was jumbled)");
+  ok(caret === v.length, "caret ends at the end of the masked date");
+  ok(caretAfterReformat("abc", 2, "abc") === 2, "unchanged value keeps the caret");
+  ok(caretAfterReformat("12/3", 4, "12/3") === 4, "end caret stays at the end");
+  ok(caretAfterReformat("1234", 2, "12/34") === 2, "caret mid-value maps through the slash");
+  ok(keypadAutoOpen("auto") && !keypadAutoOpen("off") && !keypadAutoOpen(null), "data-keypad=auto opens the pad by itself");
 
   return { passed, failed };
 }

@@ -2454,6 +2454,7 @@ function IdGateScreen({
             </label>
             <input
               id="pos-over40-dob"
+              data-keypad="auto"
               value={over40Dob}
               onChange={(e) => setOver40Dob(maskDateDigitsMdy(e.target.value))}
               onKeyDown={(e) => {
@@ -2512,6 +2513,7 @@ function IdGateScreen({
               <label htmlFor="pos-dob" className="text-sm text-[var(--pos-text-muted)]">Date of birth — numbers only (MM/DD/YYYY)</label>
               <input
                 id="pos-dob"
+              data-keypad="auto"
                 value={dob}
                 onChange={(e) => setDob(maskDateDigitsMdy(e.target.value))}
                 inputMode="numeric"

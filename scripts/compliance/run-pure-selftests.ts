@@ -2482,7 +2482,7 @@ __runLiquidVolumeTests();
   console.log("order-source-core: self-tests passed");
   assertRan("register-picked-up-filter-core", __runRegisterPickedUpFilterTests(), 16); // D240 ("I am not able to see completed online orders"): collected-at-register online orders file under Completed
   assertRan("register-switches-core", __runRegisterSwitchesTests(), 22); // D241 ("turn off or disable use of the web browser registers" / "a toggle for dual approval on cash swaps"): switch defaults, iPad-app vs browser by Origin, unlock gate
-  assertRan("register-keypad-core", __runRegisterKeypadTests(), 37); // D241 ("Anytime something needs to be typed by hand, I want a keypad button"): which boxes get the keypad, number vs letter pad, caret-aware typing, maxLength
+  assertRan("register-keypad-core", __runRegisterKeypadTests(), 42); // D241 ("Anytime something needs to be typed by hand, I want a keypad button"): which boxes get the keypad, number vs letter pad, caret-aware typing, maxLength
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the

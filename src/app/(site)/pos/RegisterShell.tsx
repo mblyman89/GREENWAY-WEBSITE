@@ -8948,6 +8948,7 @@ function TillModal({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         placeholder="0"
+                        data-keypad="off"
                         aria-label={`Number of ${f.label} bills`}
                         value={dropBills[f.key] ?? ""}
                         maxLength={4}
@@ -9035,6 +9036,7 @@ function TillModal({
                       <input
                         className="w-14 rounded-md border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-1.5 py-1 text-right text-sm"
                         inputMode="numeric"
+                        data-keypad="off"
                         value={value[key] === 0 ? "" : String(value[key])}
                         placeholder="0"
                         onChange={(e) => {
@@ -9101,6 +9103,7 @@ function TillModal({
                   <input
                     className="w-20 rounded-md border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-2 py-1.5 text-right text-sm"
                     inputMode="numeric"
+                    data-keypad="off"
                     value={denoms[key] === 0 ? "" : String(denoms[key])}
                     placeholder="0"
                     onChange={(e) => {
