@@ -266,6 +266,8 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
       // CVB-6: Reports -> Cultivera Benchmark. Owner-only by the owner's words ("a new tab added to reports
       // ... owner only access"); reached through the Reports tab strip like Accounting, not the main menu.
       "/admin/reports/cultivera-benchmark",
+      // D260: the average-day comparison, reached from a button on the Cultivera Benchmark page.
+      "/admin/reports/cultivera-benchmark/weekday",
       // books-23: the "new audit" form. Owner-only by design and deliberately
       // NOT a menu item -- it is reached from a button on the audit hub, which
       // IS in the menu. Giving "start a new audit" its own top-level link would
