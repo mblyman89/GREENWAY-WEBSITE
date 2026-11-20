@@ -28,7 +28,9 @@ import {
   ALPHA_ROWS,
   NUMERIC_ROWS,
   applyKeypadKey,
+  caretAfterReformat,
   eligibleForKeypad,
+  keypadAutoOpen,
   keypadKindFor,
   keypadPreview,
   type KeypadKey,
@@ -91,6 +93,10 @@ function setCaret(el: Field, caret: number) {
 /** Keep the box focused: every keypad control acts on pointer-down without stealing focus. */
 const keep = (e: React.PointerEvent | React.MouseEvent) => e.preventDefault();
 
+/** The small "open keypad" chip beside a focused box. */
+const BTN_W = 48;
+const BTN_H = 40;
+
 export function RegisterKeypad() {
   const [target, setTarget] = useState<Field | null>(null);
   const [btnPos, setBtnPos] = useState<{ top: number; left: number } | null>(null);
@@ -102,6 +108,7 @@ export function RegisterKeypad() {
   /** The box whose inputmode the open pad changed (so close() can restore it). */
   const padFieldRef = useRef<Field | null>(null);
   const openRef = useRef(false);
+  const openPadRef = useRef<(f: Field) => void>(() => {});
   useEffect(() => {
     openRef.current = open;
   }, [open]);
@@ -115,11 +122,20 @@ export function RegisterKeypad() {
     const vv = window.visualViewport;
     const vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
     const vw = window.innerWidth;
-    const w = 104;
-    const h = 40;
-    let top = r.bottom + 6;
-    if (top + h > vh - 4) top = Math.max(4, r.top - h - 6);
-    const left = Math.max(4, Math.min(vw - w - 4, r.right - w));
+    const w = BTN_W;
+    const h = BTN_H;
+    // register-keypad-usability: sit BESIDE the box (right side) so the button
+    // never covers the next box in a list; fall back to below, then above.
+    let top: number;
+    let left: number;
+    if (r.right + 6 + w <= vw - 4) {
+      left = r.right + 6;
+      top = Math.max(4, Math.min(vh - h - 4, r.top + (r.height - h) / 2));
+    } else {
+      top = r.bottom + 6;
+      if (top + h > vh - 4) top = Math.max(4, r.top - h - 6);
+      left = Math.max(4, Math.min(vw - w - 4, r.right - w));
+    }
     setBtnPos({ top, left });
   }, []);
 
@@ -147,6 +163,9 @@ export function RegisterKeypad() {
       if (openRef.current) close(); // another box (or none): close; the button moves to it
       setTarget(f);
       place(f);
+      // register-keypad-usability: data-keypad="auto" boxes (date of birth)
+      // open the pad by themselves — no hunting for the Keypad button.
+      if (f && keypadAutoOpen(f.dataset.keypad)) openPadRef.current(f);
     };
     const onFocusOut = () => {
       // Let the next focusin land first; hide only if focus went nowhere typeable.
@@ -188,8 +207,8 @@ export function RegisterKeypad() {
     };
   }, [target, place, close]);
 
-  const openPad = () => {
-    const el = target;
+  const openPad = (field?: Field) => {
+    const el = field ?? target;
     if (!el) return;
     setKind(
       keypadKindFor({
@@ -208,6 +227,10 @@ export function RegisterKeypad() {
     setOpen(true);
   };
 
+  useEffect(() => {
+    openPadRef.current = (f: Field) => openPad(f);
+  });
+
   const press = (key: KeypadKey) => {
     const el = target;
     if (!el || !el.isConnected) {
@@ -218,7 +241,10 @@ export function RegisterKeypad() {
     const max = el.maxLength > 0 ? el.maxLength : null;
     const next = applyKeypadKey(el.value, a, b, key, max);
     writeValue(el, next.value);
-    requestAnimationFrame(() => setCaret(el, next.caret));
+    // register-keypad-usability: a masked box (MM/DD/YYYY) reformats what was
+    // typed; map the caret through that so the next digit lands at the end
+    // instead of before the last one (the "jumbled" date of birth).
+    requestAnimationFrame(() => setCaret(el, caretAfterReformat(next.value, next.caret, el.value)));
     if (shift && key.t === "char") setShift(false);
     setTick((t) => t + 1);
   };
@@ -254,11 +280,11 @@ export function RegisterKeypad() {
           aria-label="Open the on-screen keypad"
           onPointerDown={keep}
           onMouseDown={keep}
-          onClick={openPad}
-          style={{ position: "fixed", top: btnPos.top, left: btnPos.left, width: 104, height: 40, zIndex: 95 }}
-          className="flex items-center justify-center gap-1.5 rounded-full border-2 border-[var(--pos-accent)] bg-[var(--pos-surface)] text-sm font-bold text-[var(--pos-accent)] shadow-lg select-none touch-manipulation"
+          onClick={() => openPad()}
+          style={{ position: "fixed", top: btnPos.top, left: btnPos.left, width: BTN_W, height: BTN_H, zIndex: 95 }}
+          className="flex items-center justify-center rounded-full border border-[var(--pos-accent)] bg-[var(--pos-surface)] text-lg text-[var(--pos-accent)] shadow select-none touch-manipulation"
         >
-          <span aria-hidden="true">⌨</span> Keypad
+          <span aria-hidden="true">⌨</span>
         </button>
       ) : null}
       {open && target ? (
@@ -348,11 +374,17 @@ export function RegisterKeypad() {
                 {kind === "decimal" ? key(".", { t: "char", c: "." }) : key("Clear", { t: "clear" }, `${keyCls} text-base`)}
                 {key("0", { t: "char", c: "0" })}
                 {key("⌫", { t: "backspace" }, keyCls, "Backspace")}
-                {kind === "decimal" ? (
-                  <div className="col-span-3">
-                    {key("Clear", { t: "clear" }, `${keyCls} w-full text-base`)}
-                  </div>
-                ) : null}
+                {kind === "decimal" ? key("Clear", { t: "clear" }, `${keyCls} text-base`) : null}
+                {/* register-keypad-usability: Enter on the number pad too, so a
+                    date of birth is typed AND confirmed without leaving the pad. */}
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={enter}
+                  className={`${keyCls} ${kind === "decimal" ? "col-span-2" : "col-span-3"} bg-[var(--pos-accent)] text-base text-[var(--pos-accent-ink)]`}
+                >
+                  Enter ↵
+                </button>
               </div>
             )}
           </div>

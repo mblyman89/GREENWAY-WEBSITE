@@ -304,7 +304,7 @@ Three ways to pass the check:
 1. Tap **Clearly 40+ — visual check**.
 2. Pick the **Document type (WAC 314-55-150)**.
 3. Hold the ID. Check that it is real, that it is not expired, and that the photo is the customer.
-4. Type the **date of birth**, numbers only (MM/DD/YYYY).
+4. Type the **date of birth**, numbers only (MM/DD/YYYY). The number keypad opens by itself. Type the eight digits (for example 1 1 0 1 1 9 8 0 for 11/01/1980; the slashes are added for you) and tap **Enter ↵** on the keypad to verify.
 5. If the date of birth works out to under 40, the register refuses: *"DOB says age N — under 40. House policy: scan the ID (the visual check is only for customers clearly 40+)."* Go back and scan.
 6. This path is recorded as a manual ID verification. Managers can see every one.
 
@@ -429,6 +429,8 @@ The cart screen has three zones.
 - The price at the bottom shows today's deal price when a promotion applies.
 
 **★ Favorites.** This register's pinned best-sellers, one tap to add.
+
+**On-screen keypad (⌨).** When you tap a box that takes typing, a small ⌨ button appears just to the right of it; tap it for big keys. It opens by itself only on date-of-birth boxes. The bill and coin count boxes (till open, close, swap, ATM) do not show it, so it never covers the next box while you count.
 
 **Keypad.** Custom amounts for **non-cannabis items only** (merch, accessories). Cannabis must always be a real menu item, because it has to be tracked for state reporting, excise tax and purchase limits.
 
