@@ -90,8 +90,12 @@ function install() {
     (e) => {
       if (!e.isTrusted) return;
       const t = e.target instanceof Element ? e.target : null;
-      const btn = t?.closest("button,input[type=submit],input[type=image]") as HTMLButtonElement | null;
-      if (btn && btn.form && (btn.type === "submit" || btn.type === "image")) {
+      const btn = t?.closest("button,input[type=submit],input[type=image]") as
+        | HTMLButtonElement
+        | HTMLInputElement
+        | null;
+      const btnType = btn ? String(btn.type) : "";
+      if (btn && btn.form && (btnType === "submit" || btnType === "image")) {
         intent = { at: 0, link: false };
         return;
       }
