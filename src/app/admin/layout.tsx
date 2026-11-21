@@ -120,9 +120,8 @@ export default async function AdminLayout({
         </Suspense>
       </div>
       <main className="admin-main min-w-0 flex-1">
-        {/* H12e/H13a: restore the scroll position after server-action saves —
-            redirect() otherwise jumps every save back to the top (or to the
-            #ai-drafts anchor on the vendor page). H12f: instant click feedback
+        {/* D262 (was H12e/H13a): while a server action lands on the same
+            page, no scroll happens at all, so the owner stays where he is. H12f: instant click feedback
             — spinner on the pressed button, double-submit guard, and a top
             progress bar until the response lands. Both read the URL via
             useSearchParams, so they live behind a Suspense boundary to avoid

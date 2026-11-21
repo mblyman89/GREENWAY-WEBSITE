@@ -239,9 +239,7 @@ export function StrainEditor({
               : f.confidence,
       };
     });
-    if (typeof document !== "undefined") {
-      document.getElementById("strain-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    // D262: the look-up finishing never moves the page.
   }
 
   // "Enrich with Gemini" on a row: load that strain into the form, then seed +
