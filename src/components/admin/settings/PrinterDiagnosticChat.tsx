@@ -33,7 +33,9 @@ export function PrinterDiagnosticChat({ aiEnabled }: { aiEnabled: boolean }) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    // D262: scroll only the chat box, never the page.
+    const box = endRef.current?.parentElement;
+    if (box) box.scrollTop = box.scrollHeight;
   }, [messages]);
 
   function send(question: string) {

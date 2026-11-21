@@ -170,7 +170,7 @@ export function AuditCountSheet({
       const el = document.activeElement;
       const typingElsewhere =
         el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement;
-      if (!typingElsewhere) scanRef.current?.focus();
+      if (!typingElsewhere) scanRef.current?.focus({ preventScroll: true });
     }, 1200);
     return () => clearInterval(t);
   }, [canCount]);
@@ -188,7 +188,7 @@ export function AuditCountSheet({
       startTransition(async () => {
         await saveCountAction(form);
         setFeedback({ tone: "good", text: `${label} Scan the next package.` });
-        window.setTimeout(() => scanRef.current?.focus(), 30);
+        window.setTimeout(() => scanRef.current?.focus({ preventScroll: true }), 30);
       });
     },
     [sessionId],
@@ -228,7 +228,7 @@ export function AuditCountSheet({
         setCaptureMethod("manual");
         setEntry({ target: "count", mode: "replace", title: "Close match \u2014 check the label, then type the total" });
         setFeedback({ tone: "warn", text: `Close match on ${m.line.lotCode ?? "this lot"}. Nothing was added.` });
-        window.setTimeout(() => qtyRef.current?.focus(), 30);
+        window.setTimeout(() => qtyRef.current?.focus({ preventScroll: true }), 30);
         return;
       }
 
@@ -248,7 +248,7 @@ export function AuditCountSheet({
         setCaptureMethod("manual");
         setEntry({ target: "recount", mode: "third", title: "The two counts disagree \u2014 count once more and type the total" });
         setFeedback({ tone: "warn", text: `${name}: the first and second counts disagree. Count it a third time and type what you find.` });
-        window.setTimeout(() => qtyRef.current?.focus(), 30);
+        window.setTimeout(() => qtyRef.current?.focus({ preventScroll: true }), 30);
         return;
       }
       setEntry(null);
@@ -273,7 +273,7 @@ export function AuditCountSheet({
       setFocusLotId(lotId);
       setCaptureMethod("manual");
       setEntry({ target, mode: "replace", title: "Type the right total" });
-      window.setTimeout(() => qtyRef.current?.focus(), 30);
+      window.setTimeout(() => qtyRef.current?.focus({ preventScroll: true }), 30);
     }
   }
 
@@ -283,7 +283,7 @@ export function AuditCountSheet({
       setFocusLotId(null);
       setEntry(null);
       setFeedback({ tone: "good", text: "Recorded. Scan the next package." });
-      window.setTimeout(() => scanRef.current?.focus(), 30);
+      window.setTimeout(() => scanRef.current?.focus({ preventScroll: true }), 30);
     });
   }
 
@@ -415,7 +415,7 @@ export function AuditCountSheet({
                 onClick={() => {
                   setAskLotId(null);
                   setFeedback({ tone: "warn", text: "Cancelled. Nothing was recorded." });
-                  scanRef.current?.focus();
+                  scanRef.current?.focus({ preventScroll: true });
                 }}
               >
                 Cancel
@@ -463,7 +463,7 @@ export function AuditCountSheet({
                     setFocusLotId(null);
                     setEntry(null);
                     setFeedback(null);
-                    scanRef.current?.focus();
+                    scanRef.current?.focus({ preventScroll: true });
                   }}
                 >
                   Cancel
@@ -561,7 +561,7 @@ export function AuditCountSheet({
                                     : { target: "count", mode: "replace", title: "Type the right total" },
                             );
                             setFeedback(null);
-                            window.setTimeout(() => qtyRef.current?.focus(), 30);
+                            window.setTimeout(() => qtyRef.current?.focus({ preventScroll: true }), 30);
                           }}
                           className="ml-2 text-xs text-[var(--admin-text-muted)] underline decoration-dotted underline-offset-2 hover:text-white"
                         >

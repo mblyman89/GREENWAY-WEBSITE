@@ -1,104 +1,150 @@
 "use client";
 
 /**
- * src/components/admin/ux/ScrollKeeper.tsx — Slice H12e, updated H13a.
+ * src/components/admin/ux/ScrollKeeper.tsx — Slice H12e, rewritten D262.
  *
- * Admin-wide scroll preservation for server-action form saves. Every admin
- * save posts a <form action={serverAction}> that ends in redirect(), which
- * Next treats as a new navigation and scrolls to the top — the owner hated
- * losing his place on long pages (vendor editor, intake, media detail).
+ * "I want all tasks to just complete and leave me where I am on the page."
  *
- * Mechanism (zero per-page wiring):
- *  • a capture-phase `submit` listener records {path, scrollY, time} in
- *    sessionStorage for ANY form on the page;
- *  • after the redirect lands, decideRestore() says whether to restore. A
- *    fresh record for the SAME path always restores — even when the save
- *    redirected to a #hash (the vendor page saves land on "#ai-drafts", which
- *    sits near the top; letting the browser jump to that anchor was exactly
- *    the "scrolls to top" bug the owner hit). A #hash still wins only when the
- *    record is for a DIFFERENT path (a genuine anchor navigation).
+ * Why the page moved (next@16.4.3, read from node_modules/next/dist):
+ *  1. server-action-reducer.js lands every redirecting / revalidating action
+ *     as a navigation with ScrollBehavior.Default (no opt-out exists);
+ *  2. layout-router.js InnerScrollHandler then sets `html.scrollTop = 0` or
+ *     calls `el.scrollIntoView()` on the #hash target (e.g. "#ai-drafts");
+ *  3. the OLD keeper then scrolled to the position recorded when the button
+ *     was pressed — so if you had scrolled on meanwhile, you were thrown
+ *     back to the button. That restore is removed.
  *
- * H13a timing fix: saves on a long page redirect to the SAME pathname (only
- * the query string / hash change). usePathname() does NOT change in that case,
- * so keying the restore effect on pathname alone meant repeated saves never
- * re-ran it. We now key on the full location (pathname + search + hash) via
- * useSearchParams so every save triggers a restore, and we override the
- * browser's native anchor jump.
+ * Now: while a server action (header `next-action`) and the page loads it
+ * triggers are in flight, plus a short tail (SCROLL_GUARD_TAIL_MS), on the
+ * SAME pathname, programmatic scrolls are not performed and focus() never
+ * scrolls. Nothing is restored, so the page stays exactly where the user is.
+ * An action that lands on a different page (delete → list) is untouched.
+ * A link or button the user clicks during the hold still scrolls (their
+ * intent), unless that click is itself the start of another action.
  *
- * Renders nothing. Decision rules live in the PURE core
- * (src/lib/admin/scroll-keeper-core.ts) and are pinned in tests/compliance.
+ * Rules live in the PURE core (src/lib/admin/scroll-keeper-core.ts), pinned
+ * by tests/compliance/scroll-keeper.test.ts. Renders nothing.
  */
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
 import {
+  GUARD_IDLE,
   SCROLL_KEEPER_KEY,
-  parseScrollRecord,
-  decideRestore,
-  makeScrollRecord,
+  guardOnSettle,
+  guardOnStart,
+  isRscRequest,
+  isServerActionRequest,
+  shouldHoldScroll,
+  type GuardState,
 } from "@/lib/admin/scroll-keeper-core";
 
-export function ScrollKeeper() {
-  const pathname = usePathname();
-  // useSearchParams changes on every query-string change, so the restore
-  // effect re-runs even when the pathname is unchanged (repeated saves on the
-  // same page all redirect to "?saved=1#…" on the same path).
-  const searchParams = useSearchParams();
-  const search = searchParams?.toString() ?? "";
+let guard: GuardState = GUARD_IDLE;
+/** Last trusted click that was not a submit: { at, link }. Cleared when an action starts. */
+let intent = { at: 0, link: false };
+const INTENT_MS = 1_000;
+let installed = false;
 
-  // Record scroll position on ANY form submit (capture phase sees it even
-  // when the submitter is a nested client component).
-  useEffect(() => {
-    function onSubmit() {
-      try {
-        sessionStorage.setItem(
-          SCROLL_KEEPER_KEY,
-          JSON.stringify(makeScrollRecord(window.location.pathname, window.scrollY, Date.now())),
-        );
-      } catch {
-        // sessionStorage unavailable (private mode edge cases) — no-op.
+/** True while scrolls caused by an action landing must not move the page. */
+export function scrollHeldNow(): boolean {
+  if (typeof window === "undefined") return false;
+  return shouldHoldScroll(guard, Date.now(), window.location.pathname);
+}
+
+function userIntends(linkOnly: boolean): boolean {
+  if (!intent.at || Date.now() - intent.at > INTENT_MS) return false;
+  return linkOnly ? intent.link : true;
+}
+
+function install() {
+  if (installed || typeof window === "undefined") return;
+  installed = true;
+  try {
+    sessionStorage.removeItem(SCROLL_KEEPER_KEY); // old H12e record
+  } catch {
+    // storage unavailable
+  }
+
+  // 1. Track server actions and the RSC loads they trigger.
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function gwFetch(input: RequestInfo | URL, init?: RequestInit) {
+    const headers = (init?.headers ?? (input instanceof Request ? input.headers : undefined)) as
+      | Headers
+      | Record<string, string>
+      | undefined;
+    const kind = isServerActionRequest(headers) ? "action" : isRscRequest(headers) ? "rsc" : null;
+    if (!kind) return origFetch(input, init);
+    const before = guard.inFlight;
+    guard = guardOnStart(guard, kind, Date.now(), window.location.pathname);
+    if (kind === "action") intent = { at: 0, link: false };
+    if (guard.inFlight === before) return origFetch(input, init); // rsc load while idle
+    const settle = () => {
+      guard = guardOnSettle(guard, Date.now());
+    };
+    const p = origFetch(input, init);
+    p.then(settle, settle);
+    return p;
+  } as typeof window.fetch;
+
+  // 2. User intent: a real click on a link / non-submit control.
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (!e.isTrusted) return;
+      const t = e.target instanceof Element ? e.target : null;
+      const btn = t?.closest("button,input[type=submit],input[type=image]") as HTMLButtonElement | null;
+      if (btn && btn.form && (btn.type === "submit" || btn.type === "image")) {
+        intent = { at: 0, link: false };
+        return;
       }
-    }
-    document.addEventListener("submit", onSubmit, true);
-    return () => document.removeEventListener("submit", onSubmit, true);
-  }, []);
+      intent = { at: Date.now(), link: !!t?.closest("a[href]") };
+    },
+    true,
+  );
 
-  // After a navigation settles, restore when the rules say so.
-  useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = sessionStorage.getItem(SCROLL_KEEPER_KEY);
-    } catch {
-      return;
-    }
-    const record = parseScrollRecord(raw);
-    const decision = decideRestore(record, {
-      path: pathname,
-      hash: window.location.hash,
-      now: Date.now(),
+  // 3. Next's own scroll: argument-less scrollIntoView() + html.scrollTop = 0.
+  const proto = Element.prototype;
+  const origIntoView = proto.scrollIntoView;
+  proto.scrollIntoView = function gwScrollIntoView(this: Element, arg?: boolean | ScrollIntoViewOptions) {
+    if (scrollHeldNow() && !userIntends(arg === undefined)) return;
+    return origIntoView.call(this, arg as ScrollIntoViewOptions);
+  };
+  const topDesc = Object.getOwnPropertyDescriptor(proto, "scrollTop");
+  if (topDesc?.set && topDesc.get) {
+    const set = topDesc.set;
+    const get = topDesc.get;
+    Object.defineProperty(proto, "scrollTop", {
+      configurable: true,
+      enumerable: topDesc.enumerable,
+      get() {
+        return get.call(this);
+      },
+      set(v: number) {
+        const root = this === document.documentElement || this === document.body;
+        if (root && scrollHeldNow() && !userIntends(true)) return;
+        set.call(this, v);
+      },
     });
-    if (decision.action === "keep") return;
-    try {
-      sessionStorage.removeItem(SCROLL_KEEPER_KEY);
-    } catch {
-      // ignore
-    }
-    if (decision.action === "restore") {
-      const { y } = decision;
-      // The browser natively jumps to a #anchor (e.g. #ai-drafts) on load, so
-      // we override it across a few frames to make sure our restore is the
-      // final word even after layout + anchor scrolling settle.
-      const jump = () => window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
-      requestAnimationFrame(() => {
-        jump();
-        requestAnimationFrame(jump);
-      });
-      // One more override after the current task queue in case the browser's
-      // anchor scroll fires late (fresh server-rendered content).
-      setTimeout(jump, 0);
-    }
-    // pathname + search are in the dep array so this re-runs on every save,
-    // even when only the query string / hash changed on the same page.
-  }, [pathname, search]);
+  }
 
+  // 4. Window scrolls from app code.
+  for (const name of ["scrollTo", "scroll"] as const) {
+    const orig = window[name].bind(window) as (...a: unknown[]) => void;
+    (window as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => {
+      if (scrollHeldNow() && !userIntends(false)) return;
+      orig(...args);
+    };
+  }
+
+  // 5. focus() / autoFocus never scrolls the page while an action lands.
+  const origFocus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function gwFocus(this: HTMLElement, opts?: FocusOptions) {
+    if (scrollHeldNow() && !userIntends(false)) return origFocus.call(this, { ...opts, preventScroll: true });
+    return origFocus.call(this, opts);
+  };
+}
+
+export function ScrollKeeper() {
+  useEffect(() => {
+    install();
+  }, []);
   return null;
 }
