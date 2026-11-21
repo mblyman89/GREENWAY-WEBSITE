@@ -3641,3 +3641,7 @@ No code edits, as asked. Read-only findings delivered to the owner: every auth u
 ## D259 (verbatim)
 
 "Thank you. I have worked my way through W6. But either something is happening or we are all done? There was suppose to be 8 total. Please login to supabase and query the database to see what all was done, what's left, and what needs to be fixed to finish. Be as lean and efficient as possible. We are in budget mode. Spend as little as possible. Test as little as possible. Follow the standing rules. Thank you."
+
+## D260 (verbatim)
+
+"Thank you. Please draft an email to Brian for me letting him know we are finished with the clean up except for the 30 lots we can't zero out. Please ask him to zero them for us or send us the method to do it ourselves. Make sure he knows every detail needed about these lots. Ask him for a fresh copy to add to our system to compare the results with our system. Please let him know that we have seen processing times of up to 3-4 hours per batch, and would really appreciate giving us access to the integrator api. Ask him what we need to provide to prove we have a professional enterprise grade system capable of respecting the CCRS guidelines. Let him know we have adopted a hybrid auto posting approach in the meantime. I log in, then the system uploads one batch at a time, waiting for the confirmation email before uploading the second batch. But we really want to use the api instead. Follow the standing rules. Thank you."
