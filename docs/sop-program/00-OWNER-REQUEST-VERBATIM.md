@@ -3637,3 +3637,7 @@ No code edits, as asked. Read-only findings delivered to the owner: every auth u
 - Owner tool: /admin/books/unbooked-sales (books access = owner): lists refused sales and flagged sales; "Re-post" releases only refused latches and re-posts 40 per click, or one order by number (e.g. GWY-PMLA3F, never attempted).
 - Note: the top-up adjustment (reason "count") is reported to CCRS as Reconciliation, like any count correction.
 - No migration.
+
+## D259 (verbatim)
+
+"Thank you. I have worked my way through W6. But either something is happening or we are all done? There was suppose to be 8 total. Please login to supabase and query the database to see what all was done, what's left, and what needs to be fixed to finish. Be as lean and efficient as possible. We are in budget mode. Spend as little as possible. Test as little as possible. Follow the standing rules. Thank you."

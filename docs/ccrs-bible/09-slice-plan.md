@@ -1561,3 +1561,7 @@ The store-time ledger check (`verifyEqualizeFiles`) built its view from the raw 
 ### D258 — W1 result
 
 W1 (Inventory_413541_20261119141527.csv, 10,000 rows) came back with 13 "Invalid Product" rows (error file Inventory__20261119T163411103.csv). 12 name a C110001xxxx product (CCRS bulk-created 2024-08-30) whose name has an apostrophe; every other apostrophe name (P65303… products, 107 rows) landed, so the copy does not hold the exact state spelling for that batch. The 13th (GF41583505706958) names product id C11000113380, which the Product report never listed (Part 04). No code change: once the error email is applied the 13 are touched (H_LEDGER_TOUCHED) and stay out of later waves; their names are to be asked of the examiner, not guessed.
+
+### D259 — clean-up status after W6
+
+W1-W4 landed 9,987 each, W5 3,101 (43,049 lots zeroed, Reconciliations all succeeded). W6 held only the 15 lots CCRS rejected as Invalid Product (13 from W1 plus 2 WA416010DTW lots from W5): a rejected row leaves the ledger untouched, so the planner offers it again. Still open in CCRS and not ours: 136 = 15 rejected + 15 strain-not-filed + 106 counted on shelf. The 8 in the wave picker is a limit, not a plan; the plan was 5 waves.
