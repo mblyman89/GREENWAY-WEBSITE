@@ -103,7 +103,7 @@ export class GlSmoke {
 
   constructor(private canvas: HTMLCanvasElement, opts: { still?: boolean } = {}) {
     this.still = !!opts.still;
-    const gl = canvas.getContext("webgl2", { premultipliedAlpha: true, alpha: true, antialias: false, powerPreference: "low-power" });
+    const gl = canvas.getContext("webgl2", { premultipliedAlpha: true, alpha: true, antialias: false, powerPreference: "low-power", preserveDrawingBuffer: this.still });
     if (!gl) throw new Error("no webgl2");
     this.gl = gl;
     const sh = (type: number, src: string) => {

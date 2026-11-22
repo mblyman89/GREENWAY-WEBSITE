@@ -184,7 +184,7 @@ export function DesignedBanner({
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
         {/* R58: smoke / fog / haze (lazy, client-only) + words that fade in after it. */}
         {plan.length || design.intro ? <BannerEntrances plan={plan} intro={design.intro} /> : null}
-        {design.smoke ? <BannerSmoke layers={design.smoke} /> : null}
+        {design.smoke ? <BannerSmoke layers={design.smoke} still={!!design.frame.print} /> : null}
         {(design.elements ?? []).map((el) =>
           el.hidden ? null : el.kind === "anim" && el.anim ? (
             // R60: Lottie / Rive layer — a lazy client island; described for screen readers only when the owner wrote an alt.

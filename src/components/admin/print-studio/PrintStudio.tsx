@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { PrintPictureTools } from "./PrintPictureTools";
 import { PictureSharpness } from "./PictureSharpness";
+import { PrintExport } from "./PrintExport";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 import {
@@ -217,6 +218,11 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
               printViewFt={draft.preset.viewFt}
               mediaChoices={mediaChoices}
             />
+          </section>
+
+          <section className={CARD}>
+            <div className="mb-2 text-sm font-semibold">4. Download for printing</div>
+            <PrintExport design={draft.design} imageSrc={draft.imageSrc} name={draft.name} preset={draft.preset} dpi={dpi} />
           </section>
         </>
       ) : loaded ? (
