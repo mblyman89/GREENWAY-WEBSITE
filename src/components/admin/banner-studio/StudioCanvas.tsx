@@ -118,17 +118,12 @@ export function StudioCanvas({
   const drag = useRef<Drag | null>(null);
   // Latest design for pointer handlers (avoid stale closures mid-drag).
   const designRef = useRef(design);
-  useEffect(() => {
-    designRef.current = design;
-  }, [design]);
+  useEffect(() => void (designRef.current = design), [design]);
 
   useLayoutEffect(() => {
     const el = outerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) setAvailW(w);
-    });
+    const ro = new ResizeObserver((entries) => { const w = entries[0]?.contentRect.width; if (w) setAvailW(w); });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
