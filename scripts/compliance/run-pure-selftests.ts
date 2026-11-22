@@ -2797,7 +2797,7 @@ __runLiquidVolumeTests();
   assertRan("custom-font-core", __runCustomFontTests(), 19); // R56-S2 owner-uploaded fonts (licence box, byte sniff, same-origin @font-face)
   assertRan("banner-arrange-core", __runBannerArrangeTests(), 38); // R56-S3 multi-select, align/distribute, duplicate, copy/paste, rotate, snap
   assertRan("button-fx-core", __runButtonFxTests(), 32); // R56-S4 button icon/gradient/shadow/hover/attention/corner + badge stickers
-  assertRan("studio-zoom-core", __runStudioZoomTests(), 20); // D263 S10 print workspace zoom: fit, actual size, cursor anchor, zoom to selection
+  assertRan("studio-zoom-core", __runStudioZoomTests(), 29); // D263 S12 rulers; S10 print workspace zoom: fit, actual size, cursor anchor, zoom to selection
   assertRan("banner-guides-core", __runBannerGuidesTests(), 18); // R57-S1 smart guides: snap to other items, equal spacing, px gap readouts
   assertRan("banner-motion-core", __runBannerMotionTests(), 32); // R57-S2 micro-interactions: motion, morph, orbit spark, border beam, hover
   assertRan("banner-atmos-core", __runBannerAtmosTests(), 32); // R58-S1 + R60-S1 pro clouds; smoke / fog / haze / bong hit layers + reveal
