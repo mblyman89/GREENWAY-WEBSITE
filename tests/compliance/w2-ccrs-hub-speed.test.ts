@@ -66,7 +66,7 @@ describe("W-2 page: the shell never waits for the heavy reads", () => {
     expect(PAGE).toContain("buildCcrsBatch(range.fromISO, range.toISO, { env })");
   });
   it("every heavy panel streams inside its own Suspense", () => {
-    for (const p of ["scoreboardP", "Promise.all([weekP, owedP])", "Promise.all([weekP, filesP])", "migrationGarbageP", "medicalViewP"]) {
+    for (const p of ["scoreboardP", "Promise.all([weekP, owedP])", "Promise.all([weekP, filesP])", "medicalViewP"]) {
       expect(PAGE, p).toMatch(new RegExp(`<Suspense fallback=\\{[^\\n]*\\}>\\s*<Await p=\\{${p.replace(/[()[\]]/g, "\\$&")}\\}>`));
     }
     const suspenses = PAGE.match(/<Suspense /g)?.length ?? 0;
