@@ -15,6 +15,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { pctToIn, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
 import { canvasRefPx } from "@/lib/cms/studio-widths-core";
+import { StudioRulers } from "./StudioRulers";
 import type { ItemRef } from "@/lib/cms/banner-arrange-core";
 import {
   ZOOM_MIN_LOG,
@@ -312,11 +313,13 @@ export function ZoomViewport({
         </button>
       </div>
       {arrange}
+      {/* D263 S12: inch rulers (top + left) around the scrolling pasteboard. */}
+      <StudioRulers viewRef={viewRef} print={print!} scale={scale}>
       <div
         ref={viewRef}
         tabIndex={-1}
         aria-label="Canvas. Ctrl/⌘ + wheel to zoom, Space + drag to move around."
-        className="relative min-h-0 flex-1 overflow-scroll rounded-md border border-white/10 bg-[#15171b] outline-none"
+        className="relative min-h-0 min-w-0 overflow-scroll rounded-br-md bg-[#15171b] outline-none"
         style={{
           cursor: panning ? "grabbing" : space ? "grab" : undefined,
           backgroundImage: "radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)",
@@ -371,6 +374,7 @@ export function ZoomViewport({
           ) : null}
         </div>
       </div>
+      </StudioRulers>
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[0.7rem] text-white/50">
         <span>Ctrl/⌘ + wheel or pinch = zoom · Space + drag or middle-drag = move around · Shift+1 fit · Shift+2 selection · Shift+0 real size</span>
         <span ref={posRef} className="tabular-nums text-white/75" aria-live="off" />

@@ -109,6 +109,38 @@ export function pctLabel(actual: number): string {
   return `${p >= 100 ? Math.round(p) : p >= 10 ? Math.round(p) : Math.round(p * 10) / 10}%`;
 }
 
+/**
+ * D263 S12 — ruler ticks in inches. `origin` = screen px where 0" (the trim's
+ * top-left) sits, `pxPerIn` = on-screen px per real inch, `length` = ruler
+ * length in px. Minor ticks are at least ~6 px apart, labels ~56 px apart;
+ * steps are binary fractions below 1" (1/64 … 1/2) and 1, 2, 3, 6, 12 … above.
+ */
+export type RulerTick = { at: number; major: boolean; label?: string };
+const RULER_STEPS = [1 / 64, 1 / 32, 1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 3, 6, 12, 24, 48, 96, 192];
+export function rulerStep(pxPerIn: number, minPx: number): number {
+  return RULER_STEPS.find((st) => st * pxPerIn >= minPx) ?? RULER_STEPS[RULER_STEPS.length - 1]!;
+}
+export function inchLabel(v: number): string {
+  const r = Math.round(v * 1000) / 1000;
+  if (Number.isInteger(r)) return `${r}`;
+  return `${r}`.replace(/^(-?)0\./, "$1.");
+}
+export function rulerTicks(origin: number, pxPerIn: number, length: number, max = 2000): RulerTick[] {
+  if (!(pxPerIn > 0) || !(length > 0)) return [];
+  const minor = rulerStep(pxPerIn, 6);
+  const major = Math.max(minor, rulerStep(pxPerIn, 56));
+  const ratio = Math.round(major / minor);
+  const first = Math.ceil(-origin / pxPerIn / minor);
+  const last = Math.floor((length - origin) / pxPerIn / minor);
+  const out: RulerTick[] = [];
+  for (let k = first; k <= last && out.length < max; k++) {
+    const v = k * minor;
+    const isMajor = ((k % ratio) + ratio) % ratio === 0;
+    out.push({ at: Math.round((origin + v * pxPerIn) * 10) / 10, major: isMajor, ...(isMajor ? { label: inchLabel(v) } : {}) });
+  }
+  return out;
+}
+
 export function __runStudioZoomTests(): { passed: number; failed: number; failures: string[] } {
   let passed = 0;
   const failures: string[] = [];
@@ -151,5 +183,17 @@ export function __runStudioZoomTests(): { passed: number; failed: number; failur
   const oz = canvasOffset(view, ref, z.scale);
   ok(near(oz.x + 110 * z.scale - z.scroll.x, view.w / 2, 1), "rect centred");
   ok(pctLabel(1) === "100%" && pctLabel(0.123) === "12%" && pctLabel(0.0456) === "4.6%", "labels");
+  // S12 rulers
+  ok(rulerStep(96, 6) === 1 / 16 && rulerStep(96, 56) === 1, "steps at 100%");
+  ok(rulerStep(2, 6) === 3 && rulerStep(0.1, 56) === 192, "steps when far out");
+  const rt = rulerTicks(10, 96, 300);
+  ok(rt.find((t) => t.label === "0")?.at === 10 && rt[0]!.at === 4 && !rt[0]!.major, "0 at origin, ticks before it");
+  ok(rt.filter((t) => t.major).map((t) => t.label).join() === "0,1,2,3", "inch labels");
+  ok(near(rt[2]!.at - rt[1]!.at, 6), "minor 1/16 = 6px");
+  const neg = rulerTicks(50, 96, 100);
+  ok(neg[0]!.at >= 0 && neg.some((t) => t.label === "0") && neg[0]!.at < 6, "ticks left of 0 (bleed)");
+  ok(rulerTicks(-1e6, 96, 300).every((t) => t.at >= 0 && t.at <= 300), "deep scroll stays in range");
+  ok(inchLabel(0.5) === ".5" && inchLabel(-0.125) === "-.125" && inchLabel(12) === "12", "labels trim zero");
+  ok(rulerTicks(0, 0, 100).length === 0 && rulerTicks(0, 5000, 100000, 50).length === 50, "guards");
   return { passed, failed: failures.length, failures };
 }

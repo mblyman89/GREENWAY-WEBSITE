@@ -22,7 +22,8 @@ export const STUDIO_SHORTCUTS: readonly Shortcut[] = [
   { keys: "Double-click text", what: "Type on it (Enter = new line, Esc or click away to finish)" },
   { keys: "Green handle", what: "Drag to change how wide the text wraps" },
   { keys: "Gold knob", what: "Drag to rotate (hold Shift for 15° steps)" },
-  { keys: "Arrow keys", what: "Nudge the selected item 0.5% (Shift = 5%)" },
+  { keys: "Arrow keys", what: "Nudge the selected item 0.5% (Shift = 5%). Print Studio: 1 point = 1/72\" (Shift = 10 points)" },
+  { keys: "Ctrl/⌘ + ] / [", what: "Bring forward / send back one layer (add Shift = all the way to the front / back)" },
   { keys: "Shift-click", what: "Select several, then drag them together or use Arrange" },
   { keys: "Alt (while dragging)", what: "Stop snapping" },
   { keys: "Ctrl/⌘ + C / V / D", what: "Copy, paste (into any banner), duplicate" },
@@ -31,6 +32,11 @@ export const STUDIO_SHORTCUTS: readonly Shortcut[] = [
   { keys: "Delete", what: "Remove the selected item (asks first)" },
   { keys: "Esc", what: "Deselect, or close this list" },
   { keys: "🔒", what: "Locked items stay put" },
+  { keys: "Print: Ctrl/⌘ + + / − / 0", what: "Zoom in / out / fit the whole design" },
+  { keys: "Print: Shift + 0 / 1 / 2", what: "Real printed size (100%) / fit / zoom to the selected item(s)" },
+  { keys: "Print: Ctrl/⌘ + wheel or pinch", what: "Zoom at the pointer" },
+  { keys: "Print: Space + drag or middle-drag", what: "Move around the zoomed canvas (wheel = up/down, Shift + wheel = left/right)" },
+  { keys: "Print: \\", what: "Hide or show the settings panel (bigger canvas)" },
 ];
 
 export type StudioTab = "text" | "buttons" | "shapes" | "anims" | "animate" | "smoke" | "layers" | "picture" | "checks";
