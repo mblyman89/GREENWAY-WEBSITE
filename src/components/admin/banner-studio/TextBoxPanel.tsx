@@ -35,6 +35,7 @@ import { FontSelect, TextFxFields } from "./TextFxFields";
 import { LiveFields } from "./LiveFields";
 import { TextMotionFields } from "./MotionFields";
 import { EnterFields } from "./EnterFields";
+import { PrintTypeFields } from "@/components/admin/print-studio/PrintTypeFields";
 
 const ROLE_ICON: Record<DesignRole, string> = { eyebrow: "🏷", headline: "🅷", subhead: "💬", body: "¶", badge: "⭐", legal: "⚖️" };
 
@@ -63,7 +64,9 @@ export function TextBoxPanel({
   onSelect,
   onChange,
   onRequestDelete,
+  imageSrc = "",
 }: {
+  imageSrc?: string;
   design: BannerDesign;
   device: DesignDevice;
   legacy: { eyebrow?: string; title?: string; subtitle?: string };
@@ -210,6 +213,7 @@ export function TextBoxPanel({
           )}
 
           <FontSelect value={box.font} onChange={(font) => patch(box.id, { font })} preview />
+          {design.frame.print ? <PrintTypeFields box={box} design={design} imageSrc={imageSrc} patch={(p) => patch(box.id, p)} /> : null}
 
           <div className={design.frame.print ? "grid gap-3" : "grid grid-cols-2 gap-3"}>
             <NumberSlider label={design.frame.print ? `Size (prints about ${printPt(box.size, design.frame.print)} pt)` : "Size — computer"} value={box.size} min={textMin(design)} max={160} step={design.frame.print ? 0.5 : 1} unit="px" onChange={(size) => patch(box.id, { size })} />

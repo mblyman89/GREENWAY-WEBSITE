@@ -41,6 +41,7 @@ export function FontSelect({ value, onChange, preview = false }: { value: string
             {unknownCustom ? <option value={value}>Uploaded font</option> : null}
           </optgroup>
         ) : null}
+        {value.startsWith("gf:") ? <option value={value}>{value.slice(3).replace(/\+/g, " ")} (print library)</option> : null}
         {GROUPS.map((g) => (
           <optgroup key={g.cat} label={g.label}>
             {FONT_OPTIONS.filter((f) => f.category === g.cat).map((f) => (

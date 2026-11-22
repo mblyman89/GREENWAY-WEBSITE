@@ -26,6 +26,7 @@ import { normalizeEnter, normalizeIntro, type Enter, type Intro } from "./banner
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
+import { artShadow, isPrintFontId, normalizeTextArt, printFontStack, type TextArt } from "@/lib/printing/print-type-core";
 import { effectiveBoxFont, isDeviceFont, type SiteFontIds } from "@/lib/cms/studio-fonts-core";
 import { buttonFxStyle, normalizeButtonFx, type ButtonFx } from "@/lib/cms/button-fx-core";
 import { normalizeBeam, normalizeTextMotion, textMotion, type Beam, type TextMotionFields } from "@/lib/cms/banner-motion-core";
@@ -201,7 +202,7 @@ export const BRAND_SWATCHES: { name: string; hex: string }[] = [
 export const DEFAULT_FONT_ID = "site";
 const FONT_IDS = new Set([DEFAULT_FONT_ID, ...FONT_OPTIONS.map((f) => f.id)]);
 /** R56-S2: a library font OR an owner-uploaded `custom:<hex>.<ext>` font. */
-const isDesignFont = (id: unknown): id is string => typeof id === "string" && (FONT_IDS.has(id) || isCustomFontId(id));
+const isDesignFont = (id: unknown): id is string => typeof id === "string" && (FONT_IDS.has(id) || isCustomFontId(id) || isPrintFontId(id));
 export const DESIGN_FONTS: { id: string; label: string; stack: string | null }[] = [
   { id: DEFAULT_FONT_ID, label: "Site font (default)", stack: null },
   ...FONT_OPTIONS.map((f) => ({ id: f.id, label: f.label, stack: f.stack })),
@@ -210,6 +211,7 @@ export const DESIGN_FONTS: { id: string; label: string; stack: string | null }[]
 /** CSS font-family for a design font id; null = inherit the site font. */
 export function designFontFamily(id: string): string | null {
   if (!id || id === DEFAULT_FONT_ID || !isDesignFont(id)) return null;
+  if (isPrintFontId(id)) return printFontStack(id);
   return fontStack(id, "system");
 }
 
@@ -262,6 +264,8 @@ export type DesignTextBox = {
   live?: LiveText;
   /** R59: entrance animation; absent = just there. */
   enter?: Enter;
+  /** D263 S4: print artistic type (3D, long shadow, retro, glitch, emboss, picture-filled letters). */
+  art?: TextArt;
 } & TextMotionFields;
 
 export type DesignButton = {
@@ -642,6 +646,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string, minSize: numb
     ...(normalizeLive(raw.live) ? { live: normalizeLive(raw.live) } : {}),
     ...normalizeTextMotion(raw),
     ...enterField(raw.enter),
+    ...(normalizeTextArt(raw.art) ? { art: normalizeTextArt(raw.art) } : {}),
   };
 }
 
@@ -1255,6 +1260,22 @@ export function boxStyle(box: DesignTextBox, card: SizeArg = false): StyleMap {
     s.WebkitBackgroundClip = "text";
     s.backgroundClip = "text";
     s.WebkitTextFillColor = "transparent";
+  }
+  if (box.art) {
+    // D263 S4: artistic type replaces the plain shadow; picture fill overrides gradient letters.
+    const sh = artShadow(box.art, box.color);
+    if (sh) {
+      if (box.art.img || gradient) s.filter = shadowAsFilter(sh);
+      else s.textShadow = sh;
+    }
+    if (box.art.img) {
+      s.backgroundImage = `url("${box.art.img}")`;
+      s.backgroundSize = "cover";
+      s.backgroundPosition = "center";
+      s.WebkitBackgroundClip = "text";
+      s.backgroundClip = "text";
+      s.WebkitTextFillColor = "transparent";
+    }
   }
   if (box.backdrop !== "none" && box.backdropOpacity > 0) {
     s.backgroundColor = rgba(box.backdropColor, box.backdropOpacity);
@@ -2052,6 +2073,11 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     ok(tall.frame.card!.ratio < CARD_RATIO_MIN && tall.frame.card!.ratio === printRatio(tall.frame.print!), "D263 feather-flag shape allowed for print only");
     ok(Math.abs(printPt(pxForPt(10, pr), pr) - 10) < 0.2, "D263 pt round trip");
     ok(normalizePrint({ w: "x", h: 3 }) === null && normalizePrint({ w: 2, h: 2, bleed: 9 })!.bleed === PRINT_BLEED_MAX_IN, "D263 print size cleaned");
+    const artBox = normalizeTextBox({ ...defaultTextBox("headline"), art: { kind: "extrude", depth: 3, color: "#112233", angle: 45 }, font: "gf:Bebas+Neue" }, "a")!;
+    ok(artBox.art?.kind === "extrude" && artBox.font === "gf:Bebas+Neue" && (boxStyle(artBox).textShadow ?? "").includes("#112233"), "D263 S4 3D text + Google font");
+    ok(normalizeTextBox({ ...defaultTextBox("headline") }, "b")!.art === undefined, "D263 S4 no art = byte-identical");
+    const pic = boxStyle({ ...artBox, art: { kind: "extrude", depth: 0, color: "#000000", angle: 0, img: "https://x.co/a.jpg" } });
+    ok(pic.WebkitTextFillColor === "transparent" && String(pic.backgroundImage).startsWith("url("), "D263 S4 picture-filled letters");
   }
   return { passed, failed };
 }

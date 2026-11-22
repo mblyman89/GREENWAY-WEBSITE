@@ -23,6 +23,7 @@ import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { WidthBar } from "./WidthBar";
 import { PrintInfo } from "./PrintInfo";
+import { PrintFontFaces } from "@/components/admin/print-studio/PrintTypeFields";
 import { checkAllWidths } from "@/lib/cms/studio-drift-core";
 import { ScaleSwitch } from "./ScaleSwitch";
 import { useStudioSiteFonts } from "./StudioSiteFonts";
@@ -285,6 +286,7 @@ export function BannerStudio({
   return (
     <div ref={rootRef} className="space-y-3">
       <CustomFontFaces />
+      {design.frame.print ? <PrintFontFaces design={design} /> : null}
       <TourStrip visible={help.tour} onStart={() => help.setSheet("tour")} onDismiss={help.dismissTour} />
       <StepStrip steps={steps} onGo={goStep} />
       <div className="rounded-md border border-[#ffd700]/30 bg-[#ffd700]/5 px-3 py-2 text-xs text-white/80">
@@ -454,7 +456,7 @@ export function BannerStudio({
       </div>
       <div role="tabpanel">
         {tab === "text" ? (
-          <TextBoxPanel design={design} device={device} legacy={legacy} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+          <TextBoxPanel imageSrc={deviceSrc} design={design} device={device} legacy={legacy} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "buttons" ? (
           <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "shapes" ? (
