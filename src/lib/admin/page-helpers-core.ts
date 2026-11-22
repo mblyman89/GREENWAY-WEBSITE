@@ -350,6 +350,22 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
     ],
   },
   {
+    id: "print-studio",
+    section: "Studios",
+    page: "Print Studio",
+    href: "/admin/marketing/print-studio",
+    title: "How the Print Studio works",
+    steps: [
+      "Pick a size: vinyl banners, uprights, flags, yard and A-frame signs, posters, flyers and stickers (Vistaprint sizes), or Custom. The card shows trim, bleed, safe margin, the DPI you need and the pixel size.",
+      "Press Start designing. The editor is the Banner Studio editor, sized to your print. Text sizes show roughly what they print at in points.",
+      "Keep words inside the safe margin. Anything in the bleed area is trimmed off.",
+      "Your work is kept in this browser while you design.",
+    ],
+    notes: [
+      "Advertising checks only warn; nothing is blocked. You are responsible for WAC 314-55-155 compliance on anything you print.",
+    ],
+  },
+  {
     id: "merch-studio",
     section: "Studios",
     page: "Merch Studio",
@@ -449,7 +465,7 @@ export function __runPageHelpersTests(): { passed: number; failed: number; failu
   const grouped = helpersBySection();
   ok(grouped.reduce((n, g) => n + g.items.length, 0) === PAGE_HELPERS.length, "every helper lands in exactly one section");
   ok(grouped.every((g) => g.items.length > 0), "no empty sections");
-  ok(grouped.find((g) => g.section === "Studios")?.items.length === 2, "Studios = Creative + Merch");
+  ok(grouped.find((g) => g.section === "Studios")?.items.length === 3, "Studios = Creative + Merch + Print");
   // D232 M-8 (G-90): Merch Inventory + Reports -> Merch have helpers.
   ok(["merch-inventory", "merch-report"].every((id) => PAGE_HELPERS.some((h) => h.id === id && h.section === "Merch: Inventory & Reports")), "merch inventory + report helpers");
   return { passed, failed: failures.length, failures };

@@ -45,6 +45,23 @@ export const CARD_REF_PX = 320;
 export const CARD_RATIO_MIN = 0.4;
 export const CARD_RATIO_MAX = 2.5;
 export const MAX_BOX_TEXT = 600;
+/**
+ * D263 Print Studio: a PRINT design is a card-shaped design whose frame also
+ * carries the real trim size in inches (`frame.print`). The canvas is the full
+ * bleed area (trim + bleed on every side). Print designs may be much taller or
+ * wider than web cards, hold more layers and use smaller text (legal lines on
+ * a flyer), and never carry Lottie / Rive players (paper does not move).
+ */
+export const PRINT_RATIO_MIN = 0.1;
+export const PRINT_RATIO_MAX = 10;
+export const PRINT_MAX_TEXT_BOXES = 40;
+export const PRINT_MAX_ELEMENTS = 80;
+export const PRINT_TEXT_MIN = 2;
+export const TEXT_MIN = 8;
+export const PRINT_MIN_IN = 0.5;
+export const PRINT_MAX_IN = 600;
+export const PRINT_BLEED_MAX_IN = 1;
+export const PRINT_SAFE_MAX_IN = 12;
 export const MAX_BUTTON_LABEL = 40;
 
 export type DesignRole = "eyebrow" | "headline" | "subhead" | "body" | "badge" | "legal";
@@ -322,7 +339,53 @@ export type DesignFrame = {
    * 12 px floor (Q-11-13). Absent = today's fixed sizes, byte-identical.
    */
   scale?: true;
+  /** D263: Print Studio trim size in inches (+ bleed + safe margin). Only print designs carry it. */
+  print?: DesignPrint;
 };
+
+/** D263: the printed piece. w/h = TRIM size in inches; bleed added on every side; safe = keep words this far inside the trim. */
+export type DesignPrint = { w: number; h: number; bleed: number; safe: number };
+
+/** D263: canvas shape of a print design (the bleed area). */
+export function printRatio(p: DesignPrint): number {
+  return Math.round(Math.min(PRINT_RATIO_MAX, Math.max(PRINT_RATIO_MIN, (p.w + 2 * p.bleed) / (p.h + 2 * p.bleed))) * 10000) / 10000;
+}
+
+/** D263: null unless a usable print size. */
+export function normalizePrint(raw: unknown): DesignPrint | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const n = (v: unknown, lo: number, hi: number, def: number | null) => {
+    const x = typeof v === "number" ? v : Number.NaN;
+    if (!Number.isFinite(x)) return def;
+    return Math.round(Math.min(hi, Math.max(lo, x)) * 10000) / 10000;
+  };
+  const w = n(r.w, PRINT_MIN_IN, PRINT_MAX_IN, null);
+  const h = n(r.h, PRINT_MIN_IN, PRINT_MAX_IN, null);
+  if (w === null || h === null) return null;
+  return { w, h, bleed: n(r.bleed, 0, PRINT_BLEED_MAX_IN, 0) as number, safe: n(r.safe, 0, PRINT_SAFE_MAX_IN, 0) as number };
+}
+
+/** D263: layer limits (print designs hold more). */
+export function maxBoxes(d: Pick<BannerDesign, "frame">): number {
+  return d.frame?.print ? PRINT_MAX_TEXT_BOXES : MAX_TEXT_BOXES;
+}
+export function maxElements(d: Pick<BannerDesign, "frame">): number {
+  return d.frame?.print ? PRINT_MAX_ELEMENTS : MAX_ELEMENTS;
+}
+export function textMin(d: Pick<BannerDesign, "frame">): number {
+  return d.frame?.print ? PRINT_TEXT_MIN : TEXT_MIN;
+}
+
+/** D263: how tall a text size (px at the card reference width) prints, in points. */
+export function printPt(px: number, p: DesignPrint): number {
+  return Math.round(((px * (p.w + 2 * p.bleed)) / CARD_REF_PX) * 72 * 10) / 10;
+}
+
+/** D263: the text size (px at the reference width) that prints at `pt` points. */
+export function pxForPt(pt: number, p: DesignPrint): number {
+  return Math.round(((pt / 72) * CARD_REF_PX * 100) / (p.w + 2 * p.bleed)) / 100;
+}
 
 /** D234 C-3: how a design sizes its contents. */
 export type SizeMode = "fluid" | "card" | "scale";
@@ -533,7 +596,7 @@ export function cardDesign(input: { ratio?: number; ratioMobile?: number; eyebro
 
 // ── Normalizer ───────────────────────────────────────────────────────────────
 
-export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBox | null {
+export function normalizeTextBox(raw: unknown, fallbackId: string, minSize: number = TEXT_MIN): DesignTextBox | null {
   if (!isObj(raw)) return null;
   const role = pick(raw.role, DESIGN_ROLES.map((r) => r.role), "body");
   const d = defaultTextBox(role);
@@ -553,7 +616,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     mw: numOrNull(raw.mw, 5, 100),
     align: pick(raw.align, DESIGN_ALIGNS, "left"),
     font,
-    size: num(raw.size, d.size, 8, 160),
+    size: num(raw.size, d.size, minSize, 160),
     sizeMobile: num(raw.sizeMobile, d.sizeMobile, 6, 96),
     weight: num(raw.weight, d.weight, 100, 900, 100),
     italic: bool(raw.italic, false),
@@ -649,11 +712,15 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   const fr = isObj(raw.frame) ? raw.frame : {};
   const im = isObj(raw.image) ? raw.image : {};
   const ov = isObj(raw.overlay) ? raw.overlay : {};
+  // D263: print designs (frame.print) get print limits.
+  const print = normalizePrint(fr.print);
+  const boxCap = print ? PRINT_MAX_TEXT_BOXES : MAX_TEXT_BOXES;
+  const elCap = print ? PRINT_MAX_ELEMENTS : MAX_ELEMENTS;
   const used = new Set<string>();
   const boxes: DesignTextBox[] = [];
   for (const [i, b] of (Array.isArray(raw.boxes) ? raw.boxes : []).entries()) {
-    if (boxes.length >= MAX_TEXT_BOXES) break;
-    const nb = normalizeTextBox(b, `box-${i + 1}`);
+    if (boxes.length >= boxCap) break;
+    const nb = normalizeTextBox(b, `box-${i + 1}`, print ? PRINT_TEXT_MIN : TEXT_MIN);
     if (!nb) continue;
     nb.id = uniqueId(nb.id, used);
     boxes.push(nb);
@@ -670,9 +737,10 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   const elements: DesignElement[] = [];
   let anims = 0;
   for (const [i, e] of (Array.isArray(raw.elements) ? raw.elements : []).entries()) {
-    if (elements.length >= MAX_ELEMENTS) break;
+    if (elements.length >= elCap) break;
     const ne = normalizeElement(e, `shape-${i + 1}`);
     if (!ne) continue;
+    if (print && ne.kind === "anim") continue; // D263: paper does not move
     // R60: at most MAX_ANIMS Lottie/Rive players per banner (each is a WASM canvas).
     if (ne.kind === "anim" && ++anims > MAX_ANIMS) continue;
     ne.id = uniqueId(ne.id, used);
@@ -686,7 +754,9 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
       height: num(fr.height, def.frame.height, 80, 720),
       heightMobile: num(fr.heightMobile, def.frame.heightMobile, 80, 720),
       radius: num(fr.radius, def.frame.radius, 0, 48),
-      ...(isObj(fr.card)
+      ...(print
+        ? { card: { ratio: printRatio(print), ratioMobile: printRatio(print) }, print }
+        : isObj(fr.card)
         ? {
             card: {
               ratio: num(fr.card.ratio, 0.75, CARD_RATIO_MIN, CARD_RATIO_MAX),
@@ -1969,6 +2039,19 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     ok(checkDesign(sd, Ls).some((x) => x.code === "SMALL_TEXT"), "C-3: small scale text warns");
     const big = { ...sd, boxes: sd.boxes.map((b) => ({ ...b, size: 40, sizeMobile: 20 })) };
     ok(!checkDesign(big, Ls).some((x) => x.code === "SMALL_TEXT") && smallScaleBoxes(big).length === 0, "C-3: big enough text = no warning");
+  }
+  {
+    // D263 Print Studio: print frame = card at the bleed-area shape, more layers, small text, no Lottie/Rive.
+    const pr = { w: 144, h: 72, bleed: 0, safe: 1.5 };
+    const base = cardDesign({ ratio: 2 });
+    const many = { ...base, frame: { ...base.frame, print: pr }, boxes: Array.from({ length: 20 }, (_, i) => defaultTextBox("body", { id: `p${i}`, size: 3 })) };
+    const n = normalizeDesign(JSON.parse(J(many)))!;
+    ok(n.frame.print?.w === 144 && n.frame.card?.ratio === 2 && n.boxes.length === 20 && n.boxes[0].size === 3, "D263 print design keeps 20 boxes and 3px text");
+    ok(normalizeDesign(JSON.parse(J({ ...base, boxes: many.boxes })))!.boxes.length === MAX_TEXT_BOXES, "D263 web designs keep their caps");
+    const tall = normalizeDesign({ ...base, frame: { ...base.frame, print: { w: 26, h: 103, bleed: 0, safe: 1 } } })!;
+    ok(tall.frame.card!.ratio < CARD_RATIO_MIN && tall.frame.card!.ratio === printRatio(tall.frame.print!), "D263 feather-flag shape allowed for print only");
+    ok(Math.abs(printPt(pxForPt(10, pr), pr) - 10) < 0.2, "D263 pt round trip");
+    ok(normalizePrint({ w: "x", h: 3 }) === null && normalizePrint({ w: 2, h: 2, bleed: 9 })!.bleed === PRINT_BLEED_MAX_IN, "D263 print size cleaned");
   }
   return { passed, failed };
 }

@@ -5,7 +5,7 @@
  * one-click "Live badges" row (Shapes tab, next to the badge stickers).
  * The box's words become a template: {left} {clock} {offer} {deal} {ends}.
  */
-import { MAX_TEXT_BOXES, defaultTextBox, nextId, type BannerDesign, type DesignTextBox } from "@/lib/cms/banner-design-core";
+import { maxBoxes, defaultTextBox, nextId, type BannerDesign, type DesignTextBox } from "@/lib/cms/banner-design-core";
 import { LIVE_PRESETS, LIVE_TOKENS, type LiveText } from "@/lib/cms/banner-live-core";
 import { offerLabelFor } from "@/lib/promotions/published-rules-core";
 import { usePublishedRules } from "@/components/promotions/PublishedRulesProvider";
@@ -117,7 +117,7 @@ export function LiveFields({ box, patch }: { box: DesignTextBox; patch: (p: Part
 
 /** One-click live badges (pill text box with live words). */
 export function LiveBadges({ design, onChange, onSelect }: { design: BannerDesign; onChange: (d: BannerDesign) => void; onSelect: (s: StudioSelection) => void }) {
-  const full = design.boxes.length >= MAX_TEXT_BOXES;
+  const full = design.boxes.length >= maxBoxes(design);
   function add(i: number) {
     const p = LIVE_PRESETS[i];
     if (full) return;
