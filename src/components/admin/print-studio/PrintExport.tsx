@@ -14,6 +14,7 @@ import { stillDesign } from "@/lib/brand/brand-sizes-core";
 import { pictureSharpness, type PrintPreset } from "@/lib/printing/print-sizes-core";
 import { FORMAT_INFO, formatsFor, pdfLayout, printChecks, printFilename, renderPlan, tilesOnLetter, type PrintFormat } from "@/lib/printing/print-export-core";
 import { isAveryCard, sheetLayout, type PrintPage } from "@/lib/printing/print-doc-core";
+import { CUT_SPOT, cutPath, type Rect } from "@/lib/printing/print-finish-core";
 import { PrintFontFaces } from "./PrintTypeFields";
 
 type Status = { kind: "idle" } | { kind: "busy"; step: string } | { kind: "ok"; file: string; kb: number } | { kind: "err"; msg: string };
@@ -99,7 +100,8 @@ export function PrintExport({ pages, name, preset, dpi }: { pages: PrintPage[]; 
         shots.push(await (await capture(i, "image/jpeg")).arrayBuffer());
       }
       setStatus({ kind: "busy", step: "Building the PDF…" });
-      const { PDFDocument, StandardFonts, rgb, cmyk, clip, endPath, popGraphicsState, pushGraphicsState, rectangle } = await import("pdf-lib");
+      const lib = await import("pdf-lib");
+      const { PDFDocument, StandardFonts, rgb, cmyk, clip, endPath, popGraphicsState, pushGraphicsState, rectangle } = lib;
       const pdf = await PDFDocument.create();
       pdf.setTitle(name || "Print design");
       pdf.setCreator("Greenway Print Studio");
@@ -108,6 +110,29 @@ export function PrintExport({ pages, name, preset, dpi }: { pages: PrintPage[]; 
       const font = await pdf.embedFont(StandardFonts.Helvetica);
       const reg = cmyk(1, 1, 1, 1);
       const imgs = await Promise.all(shots.map((b) => pdf.embedJpg(b)));
+      // D263 S9: die-cut line as a "CutContour" spot colour (100% magenta alternate), overprinted, 0.5 pt.
+      const cut = print.cut;
+      const sepRef = cut
+        ? pdf.context.register(pdf.context.obj([lib.PDFName.of("Separation"), lib.PDFName.of(CUT_SPOT), lib.PDFName.of("DeviceCMYK"), pdf.context.obj({ FunctionType: 2, Domain: [0, 1], C0: [0, 0, 0, 0], C1: [0, 1, 0, 0], N: 1 })]))
+        : null;
+      const opRef = cut ? pdf.context.register(pdf.context.obj({ Type: "ExtGState", OP: true, op: true, OPM: 1 })) : null;
+      const drawCut = (page: import("pdf-lib").PDFPage, trims: Rect[]) => {
+        if (!cut || !sepRef || !opRef) return;
+        const res = page.node.normalizedEntries().Resources;
+        let cs = res.lookupMaybe(lib.PDFName.of("ColorSpace"), lib.PDFDict);
+        if (!cs) {
+          cs = pdf.context.obj({});
+          res.set(lib.PDFName.of("ColorSpace"), cs);
+        }
+        cs.set(lib.PDFName.of(CUT_SPOT), sepRef);
+        const gs = page.node.newExtGState("GSCut", opRef);
+        const N = lib.PDFOperatorNames;
+        const ops = [pushGraphicsState(), lib.setGraphicsState(gs), lib.PDFOperator.of(N.StrokingColorspace, [lib.PDFName.of(CUT_SPOT)]), lib.PDFOperator.of(N.StrokingColorN, [lib.PDFNumber.of(1)]), lib.setLineWidth(0.5)];
+        for (const t of trims)
+          for (const o of cutPath(cut, t)) ops.push(o.op === "M" ? lib.moveTo(o.x, o.y) : o.op === "L" ? lib.lineTo(o.x, o.y) : o.op === "C" ? lib.appendBezierCurve(o.x1, o.y1, o.x2, o.y2, o.x, o.y) : lib.closePath());
+        ops.push(lib.stroke(), popGraphicsState());
+        page.pushOperators(...ops);
+      };
       if (isSheet) {
         for (let i = 0; i < imgs.length; i += 1) {
           const L = sheetLayout(print, format === "sheet-avery" ? "avery" : "cut", i % 2 === 1);
@@ -122,6 +147,7 @@ export function PrintExport({ pages, name, preset, dpi }: { pages: PrintPage[]; 
             } else page.drawImage(imgs[i], { x: c.x, y: c.y, width: c.w, height: c.h });
           }
           for (const m of L.marks) page.drawLine({ start: { x: m.x1, y: m.y1 }, end: { x: m.x2, y: m.y2 }, thickness: 0.25, color: reg });
+          if (!L.clip) drawCut(page, L.cells.map((c) => c.trim));
           page.drawText(`${pages[i].label} · ${L.note}`, { x: 18, y: 8, size: 6, font, color: rgb(0.4, 0.4, 0.4) });
         }
       } else {
@@ -132,6 +158,7 @@ export function PrintExport({ pages, name, preset, dpi }: { pages: PrintPage[]; 
           page.setTrimBox(L.trim.x, L.trim.y, L.trim.w, L.trim.h);
           page.setBleedBox(L.bleed.x, L.bleed.y, L.bleed.w, L.bleed.h);
           page.setArtBox(L.trim.x, L.trim.y, L.trim.w, L.trim.h);
+          drawCut(page, [L.trim]);
           for (const m of L.marks) page.drawLine({ start: { x: m.x1, y: m.y1 }, end: { x: m.x2, y: m.y2 }, thickness: 0.25, color: reg });
           if (L.slug) page.drawText(`${name || "Print design"} · ${pages[i].label} · ${print.w}" x ${print.h}" trim · ${print.bleed}" bleed · ${plan.dpi} DPI · ${new Date().toLocaleDateString()}`, { x: L.slug.x, y: L.slug.y, size: 6, font, color: rgb(0.3, 0.3, 0.3) });
         });
