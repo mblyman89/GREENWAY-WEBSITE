@@ -71,11 +71,28 @@ export function CcrsAutoUploadPanel({ view, weekKey, env, canEdit }: { view: Aut
           : "Keep-alive is off (set CCRS_KEEPALIVE=on to switch it on). If CCRS logs you out while the next group is ready, you get an email or push to log in again."}
       </p>
 
-      <ol className="list-decimal space-y-1 pl-5 text-xs text-white/70">
-        <li>Once: install the Greenway CCRS Uploader in Chrome and pair it below.</li>
-        <li>Log in to CCRS ({env === "preprod" ? CCRS_ORIGINS.preprod : CCRS_ORIGINS.prod}) in that Chrome and leave the tab open.</li>
-        <li>Press Start. Group 1 (Strain, Area, Product) goes first; Inventory goes after CCRS&apos;s emails for Group 1 are in and applied; then Adjustments, Transfers and Sales.</li>
-      </ol>
+      {/* D261: what YOU do, and what the run does by itself. */}
+      <div className="grid gap-3 text-xs md:grid-cols-2" data-testid="ccrs-auto-upload-howto">
+        <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3">
+          <p className="mb-1 font-bold text-emerald-100">What you do</p>
+          <ol className="list-decimal space-y-1 pl-5 text-white/75">
+            <li>Build the week above and press Download. That stores every file here as &ldquo;emitted&rdquo;. The zip on your computer is only your copy; the run never reads it.</li>
+            <li>Apply (or set aside) any CCRS email still waiting in &ldquo;CCRS email&rdquo; below. A run will not start while one waits.</li>
+            <li>Log in to CCRS {env === "preprod" ? "PREprod" : "production"} ({env === "preprod" ? CCRS_ORIGINS.preprod : CCRS_ORIGINS.prod}) in the paired Chrome. Leave that tab open and keep the computer awake.</li>
+            <li>Choose the CCRS site, type UPLOAD for production, and press Start. That is all.</li>
+          </ol>
+        </div>
+        <div className="rounded-xl border border-sky-400/25 bg-sky-400/5 p-3">
+          <p className="mb-1 font-bold text-sky-100">What the run does by itself</p>
+          <ul className="list-disc space-y-1 pl-5 text-white/75">
+            <li>Takes every emitted file from the database (any week), in order: Group 1 Strain, Area, Product; Group 2 Inventory; Group 3 Adjustment, Transfer, Sale.</li>
+            <li>Uploads one file at a time through your logged-in CCRS tab.</li>
+            <li>Reads CCRS&apos;s emails every 5 minutes and applies them for you. No need to press Fetch or Apply while it runs.</li>
+            <li>Sends the next group only after every file of the earlier group has its CCRS email. <strong>Minutes between groups</strong> is an extra pause on top of that wait, never instead of it; 0 to 10 is fine.</li>
+            <li>Pauses and tells you if CCRS refused rows, or if CCRS logged you out.</li>
+          </ul>
+        </div>
+      </div>
 
       {/* the run */}
       {run ? (
@@ -148,7 +165,7 @@ export function CcrsAutoUploadPanel({ view, weekKey, env, canEdit }: { view: Aut
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-white/60">Minutes between groups</span>
+            <span className="text-white/60">Extra minutes between groups (after the emails)</span>
             <input name="gap_minutes" type="number" min={0} max={240} defaultValue={DEFAULT_GAP_MINUTES} className="w-20 rounded-lg border border-white/15 bg-black/30 px-2 py-1" />
           </label>
           <label className="flex flex-col gap-1">

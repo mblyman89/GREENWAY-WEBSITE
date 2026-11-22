@@ -8,6 +8,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { CcrsCleanupPanel } from "@/components/admin/compliance/CcrsCleanupPanel";
 import { listCleanupFiles } from "@/lib/compliance/ccrs-equalize-store";
+import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -16,6 +18,8 @@ export default async function CcrsCleanupPage() {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");
   const files = await listCleanupFiles().catch(() => []);
+  // D261: moved here from the hub. Read-only (R50 S10c).
+  const migrationGarbage = await loadMigrationGarbage("prod").catch(() => null);
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6 text-white">
       <Link href="/admin/compliance/ccrs" className="text-sm text-emerald-300 hover:underline">← CCRS hub</Link>
@@ -32,6 +36,12 @@ export default async function CcrsCleanupPage() {
           <ul className="space-y-1 text-sm text-white/80">{files.map((f) => <li key={f.file_name}>{f.wave ?? "?"} · {f.file_type} · {f.file_name} · {f.state}</li>)}</ul>
         )}
       </div>
+      {migrationGarbage ? (
+        <div>
+          <h2 className="mb-2 font-bold">Migration clean-up (dead records Cultivera brought in)</h2>
+          <MigrationGarbagePanel load={migrationGarbage} />
+        </div>
+      ) : null}
     </div>
   );
 }

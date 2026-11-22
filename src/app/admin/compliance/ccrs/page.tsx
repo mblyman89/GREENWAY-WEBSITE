@@ -94,9 +94,7 @@ import {
   adoptHandmadeFileAction,
   pollCcrsMailNowAction,
 } from "./mail-actions";
-import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
 import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
-import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
 import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
 import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
 import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
@@ -297,7 +295,7 @@ function weekViewOf(batch: CcrsBatch | null, buildError: string | null): WeekVie
 export default async function CcrsCommandCenterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; saved?: string; error?: string; note?: string; env?: string }>;
+  searchParams: Promise<{ week?: string; saved?: string; error?: string; note?: string; env?: string; tab?: string }>;
 }) {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");
@@ -308,6 +306,8 @@ export default async function CcrsCommandCenterPage({
   const envQ = env === "preprod" ? "&env=preprod" : "";
   // W-1: one flash for the whole page (top, sticky) and the email panel.
   const flash = flashFrom(sp);
+  // D261: setup / history sections live on their own tab once the weekly flow is settled.
+  const setupTab = sp.tab === "setup";
 
   // ── Weekly deadline picture ────────────────────────────────────────────────
   // W-2 (2026-10-30): the page used to wait for EVERYTHING (the full batch
@@ -397,8 +397,6 @@ export default async function CcrsCommandCenterPage({
   const scoreboardP = admin0
     ? readCcrsScoreboard(admin0, "preprod", { acceptedOnly: env !== "preprod" })
     : Promise.resolve({ available: false as const, message: "database not configured" });
-  // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
-  const migrationGarbageP = settle(async () => (isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null));
 
   // ── DOH / medical evidence for the week (streams with the medical panel) ──
   const EXEMPT_SCAN_MAX_ROWS = 100_000;
@@ -527,64 +525,20 @@ export default async function CcrsCommandCenterPage({
         ) : null}
       </div>
 
+      {/* D261: two tabs. Weekly = the upload flow; Setup & history = first-run and finished panels. */}
+      <div className="flex gap-2 text-xs" data-testid="ccrs-hub-tabs">
+        <Link href={hubWeekLink(week.key, env)} className={`rounded-lg px-3 py-1.5 font-semibold ${!setupTab ? "bg-white/15 text-white" : "border border-white/15 text-white/60 hover:bg-white/5"}`}>Weekly upload</Link>
+        <Link href={`${hubWeekLink(week.key, env)}&tab=setup`} className={`rounded-lg px-3 py-1.5 font-semibold ${setupTab ? "bg-white/15 text-white" : "border border-white/15 text-white/60 hover:bg-white/5"}`}>Setup & history</Link>
+      </div>
+
+      {setupTab ? (
+        <>
       {/* R74 S48: the CCRS test scoreboard. Full on PREprod; a one-line strip on Production. */}
       <Suspense fallback={<Pending label="the PREprod test scoreboard" />}>
         <Await p={scoreboardP}>
           {(scoreboard) => <CcrsScoreboardPanel read={scoreboard} compact={env !== "preprod"} />}
         </Await>
       </Suspense>
-
-      {/* W-1: the result of the last action stays in view (sticky) wherever the redirect scrolled to. */}
-      {flash ? (
-        <div
-          role={flash.tone === "error" ? "alert" : "status"}
-          data-testid="ccrs-hub-flash"
-          className={`sticky top-2 z-30 flex items-start gap-3 whitespace-pre-wrap rounded-xl border px-4 py-2 text-xs font-semibold shadow-lg backdrop-blur ${flash.tone === "error" ? "border-red-400/40 bg-red-950/90 text-red-100" : "border-emerald-400/40 bg-emerald-950/90 text-emerald-100"}`}
-        >
-          <span className="flex-1">{flash.tone === "error" ? flash.text : `✓ ${flash.text}`}</span>
-          <Link href={hubWeekLink(week.key, env)} className="shrink-0 underline opacity-70 hover:opacity-100" aria-label="Dismiss this message">
-            Dismiss
-          </Link>
-        </div>
-      ) : null}
-
-      {/* 1) Deadline banner */}
-      <div className={`rounded-2xl border p-5 ${bannerTone}`}>
-        {urgent ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-black text-white">
-                {urgent.status === "overdue"
-                  ? `⚠ Week ${urgent.week.start} – ${urgent.week.end} is OVERDUE by ${Math.abs(urgent.daysUntilDue)} day(s)`
-                  : urgent.status === "due_today"
-                    ? `⏰ Week ${urgent.week.start} – ${urgent.week.end} is DUE TODAY`
-                    : `Week ${urgent.week.start} – ${urgent.week.end} is ready — due Sunday ${urgent.week.due}`}
-              </p>
-              <p className="mt-1 text-xs text-white/50">
-                {overview.overdueCount > 0
-                  ? `${overview.overdueCount} week(s) overdue in the lookback window. Work oldest-first.`
-                  : "Generate, validate, upload, then record it below — the reminders stop once it's on the ledger."}
-              </p>
-            </div>
-            {urgent.week.key !== week.key ? (
-              <Link
-                href={hubWeekLink(urgent.week.key, env)}
-                className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-xs font-bold text-black transition hover:opacity-90"
-              >
-                Jump to that week →
-              </Link>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-sm font-bold text-emerald-200">
-            ✓ All completed weeks are resolved{overview.beforeStartCount + overview.dismissedCount > 0
-              ? ` (${overview.beforeStartCount} before sales start, ${overview.dismissedCount} dismissed with a reason)`
-              : ""}. Current week ({overview.current.week.start} –{" "}
-            {overview.current.week.end}) closes Saturday; its upload is due Sunday{" "}
-            {overview.current.week.due}.
-          </p>
-        )}
-      </div>
 
       {/* S-12d) First day of sales */}
       <Section
@@ -674,6 +628,63 @@ export default async function CcrsCommandCenterPage({
           </Await>
         </Suspense>
       </Section>
+
+        </>
+      ) : null}
+
+      {/* W-1: the result of the last action stays in view (sticky) wherever the redirect scrolled to. */}
+      {flash ? (
+        <div
+          role={flash.tone === "error" ? "alert" : "status"}
+          data-testid="ccrs-hub-flash"
+          className={`sticky top-2 z-30 flex items-start gap-3 whitespace-pre-wrap rounded-xl border px-4 py-2 text-xs font-semibold shadow-lg backdrop-blur ${flash.tone === "error" ? "border-red-400/40 bg-red-950/90 text-red-100" : "border-emerald-400/40 bg-emerald-950/90 text-emerald-100"}`}
+        >
+          <span className="flex-1">{flash.tone === "error" ? flash.text : `✓ ${flash.text}`}</span>
+          <Link href={hubWeekLink(week.key, env)} className="shrink-0 underline opacity-70 hover:opacity-100" aria-label="Dismiss this message">
+            Dismiss
+          </Link>
+        </div>
+      ) : null}
+
+      {!setupTab ? (
+        <>
+      {/* 1) Deadline banner */}
+      <div className={`rounded-2xl border p-5 ${bannerTone}`}>
+        {urgent ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-white">
+                {urgent.status === "overdue"
+                  ? `⚠ Week ${urgent.week.start} – ${urgent.week.end} is OVERDUE by ${Math.abs(urgent.daysUntilDue)} day(s)`
+                  : urgent.status === "due_today"
+                    ? `⏰ Week ${urgent.week.start} – ${urgent.week.end} is DUE TODAY`
+                    : `Week ${urgent.week.start} – ${urgent.week.end} is ready — due Sunday ${urgent.week.due}`}
+              </p>
+              <p className="mt-1 text-xs text-white/50">
+                {overview.overdueCount > 0
+                  ? `${overview.overdueCount} week(s) overdue in the lookback window. Work oldest-first.`
+                  : "Generate, validate, upload, then record it below — the reminders stop once it's on the ledger."}
+              </p>
+            </div>
+            {urgent.week.key !== week.key ? (
+              <Link
+                href={hubWeekLink(urgent.week.key, env)}
+                className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-xs font-bold text-black transition hover:opacity-90"
+              >
+                Jump to that week →
+              </Link>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm font-bold text-emerald-200">
+            ✓ All completed weeks are resolved{overview.beforeStartCount + overview.dismissedCount > 0
+              ? ` (${overview.beforeStartCount} before sales start, ${overview.dismissedCount} dismissed with a reason)`
+              : ""}. Current week ({overview.current.week.start} –{" "}
+            {overview.current.week.end}) closes Saturday; its upload is due Sunday{" "}
+            {overview.current.week.due}.
+          </p>
+        )}
+      </div>
 
       {/* 2) Week picker */}
       <Section
@@ -1010,17 +1021,6 @@ export default async function CcrsCommandCenterPage({
           ) : null}
               </>
             );
-          }}
-        </Await>
-      </Suspense>
-
-      {/* R50 S10c: migration clean-up (D-15) */}
-      <Suspense fallback={<Pending label="the migration clean-up list" />}>
-        <Await p={migrationGarbageP}>
-          {(g) => {
-            if (!g.ok) return <PanelFailed what="the migration clean-up list" error={g.error} />;
-            const migrationGarbage = g.value;
-            return migrationGarbage ? <MigrationGarbagePanel load={migrationGarbage} /> : null;
           }}
         </Await>
       </Suspense>
@@ -1410,6 +1410,8 @@ export default async function CcrsCommandCenterPage({
           </p>
         )}
       </Section>
+        </>
+      ) : null}
     </div>
   );
 }

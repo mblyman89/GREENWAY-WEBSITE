@@ -273,9 +273,9 @@ describe("R50 S10c — panel", () => {
 
 describe("R50 S10c — wiring", () => {
   const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
-  it("hub mounts the panel from the read-only store", () => {
-    const page = read("src/app/admin/compliance/ccrs/page.tsx");
-    expect(page).toContain("await loadMigrationGarbage(env)");
+  it("the clean-up page mounts the panel from the read-only store (D261)", () => {
+    const page = read("src/app/admin/compliance/ccrs/cleanup/page.tsx");
+    expect(page).toContain('await loadMigrationGarbage("prod")');
     expect(page).toContain("<MigrationGarbagePanel load={migrationGarbage} />");
   });
   it("store and core write nothing and never route to an Inventory Delete", () => {
