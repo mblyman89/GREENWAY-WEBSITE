@@ -46,7 +46,7 @@ const FLUX_MAX_POLLS = 75;
 const ENGINE_NAME: Record<ToolEngine, string> = { ...ENGINE_LABEL, local: "Our server (free)" };
 
 /** Paint the area to change; white strokes on a black mask the size of the preview. */
-function MaskBrush({ src, onMask }: { src: string; onMask: (dataUrl: string | null, coverage: number) => void }) {
+export function MaskBrush({ src, onMask }: { src: string; onMask: (dataUrl: string | null, coverage: number) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const drawing = useRef(false);

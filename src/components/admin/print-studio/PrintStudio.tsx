@@ -11,6 +11,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/admin/ui";
+import { PrintPictureTools } from "./PrintPictureTools";
+import { PictureSharpness } from "./PictureSharpness";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 import {
@@ -192,6 +194,13 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
             <div>
               <div className="mb-1 text-sm font-semibold">Background picture</div>
               <ContentImageField value={draft.imageSrc} onChange={(imageSrc) => setDraft({ ...draft, imageSrc })} mediaChoices={mediaChoices} />
+              <PictureSharpness src={draft.imageSrc} print={draft.design.frame.print} need={dpi} />
+              <details className="mt-2 rounded-md border border-white/10 p-2" open>
+                <summary className="cursor-pointer text-sm font-semibold">Upload, drag-drop and AI picture tools</summary>
+                <div className="mt-2">
+                  {draft.design.frame.print ? <PrintPictureTools src={draft.imageSrc} print={draft.design.frame.print} onUse={(imageSrc) => setDraft((d) => (d ? { ...d, imageSrc } : d))} /> : null}
+                </div>
+              </details>
               {!fluxConfigured ? <p className="mt-1 text-white/50">FLUX isn&apos;t connected (Settings → Integrations), so the AI picture tools will say so.</p> : null}
             </div>
           </section>
