@@ -12,9 +12,9 @@
  * history step when they arrive within 600 ms of each other, so a single
  * Ctrl+Z puts a dragged box back where it started.
  */
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/admin/ux";
-import { mobileImageSrc, type BannerDesign, type DesignBind, type DesignDevice } from "@/lib/cms/banner-design-core";
+import { type BannerDesign, type DesignBind, type DesignDevice } from "@/lib/cms/banner-design-core";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { StudioCanvas, type StudioSelection } from "./StudioCanvas";
 import { TextBoxPanel } from "./TextBoxPanel";
@@ -40,12 +40,23 @@ import { CONTROL_HELP, STEP_TAB, TAB_HELP, makeBannerSteps, type StepId } from "
 import { useStudioDock, type DockSize } from "./useStudioDock";
 import { toggleRef, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import type { PickerPost } from "./LinkPicker";
-import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
-import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
+import { useStudioAi } from "./StudioAi";
+import { PrintWorkspace, type WsTab } from "./PrintWorkspace";
+import { ZoomViewport } from "./ZoomViewport";
 
 type Tab = "text" | "buttons" | "shapes" | "anims" | "animate" | "smoke" | "layers" | "picture" | "checks";
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
+// D263 S11: the Print Studio's left rail (wide = the panel opens wider in Auto width).
+const PRINT_TABS: WsTab[] = [
+  { id: "text", icon: "✏️", label: "Text" },
+  { id: "picture", icon: "🖼", label: "Picture", title: "Picture & shade", wide: true },
+  { id: "shapes", icon: "◆", label: "Shapes", title: "Shapes, icons & QR", wide: true },
+  { id: "smoke", icon: "💨", label: "Smoke", title: "Smoke & fog", wide: true },
+  { id: "buttons", icon: "🔘", label: "Buttons" },
+  { id: "layers", icon: "☰", label: "Layers" },
+  { id: "checks", icon: "✓", label: "Checks" },
+];
 
 export function BannerStudio({
   design,
@@ -103,10 +114,6 @@ export function BannerStudio({
   const [counts, setCounts] = useState({ undo: 0, redo: 0 });
   const sync = useCallback(() => setCounts({ undo: past.current.length, redo: future.current.length }), []);
   const rootRef = useRef<HTMLDivElement>(null);
-  // R41 S8: AI suggestion (drafts only — Apply changes unsaved studio state).
-  const [ai, setAi] = useState<{ s: PlacementSuggestion; device: DesignDevice } | null>(null);
-  const [aiMsg, setAiMsg] = useState<string | null>(null);
-  const [aiBusy, startAi] = useTransition();
 
   const change = useCallback(
     (next: BannerDesign) => {
@@ -209,34 +216,6 @@ export function BannerStudio({
     setSelection(null);
   }
 
-  function askAi() {
-    setAiMsg(null);
-    setAi(null);
-    const forDevice = device;
-    startAi(async () => {
-      try {
-        const res = await suggestBannerPlacementAction({
-          imageSrc: forDevice === "mobile" ? mobileImageSrc(design, imageSrc) : imageSrc,
-          design,
-          legacy,
-          device: forDevice,
-        });
-        if (res.ok) setAi({ s: res.suggestion, device: forDevice });
-        else setAiMsg(res.message);
-      } catch {
-        setAiMsg("Couldn't reach the server. Check your connection and try again.");
-      }
-    });
-  }
-
-  function applyAi() {
-    if (!ai) return;
-    if (ai.device !== device) setDevice(ai.device);
-    change(applySuggestion(design, ai.s, legacy, ai.device));
-    setAi(null);
-    setAiMsg("Applied. Not saved yet — press Save draft when you're happy (Undo puts it back).");
-  }
-
   function resetPhone() {
     change({
       ...design,
@@ -268,6 +247,8 @@ export function BannerStudio({
     } else rootRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); // publish: the editor's buttons sit below the studio
   };
   const printing = !!design.frame.print;
+  // R41 S8: AI suggestion (drafts only — Apply changes unsaved studio state).
+  const studioAi = useStudioAi({ design, imageSrc, legacy, device, setDevice, change });
   const tabBtn = (id: Tab, label: string) => (
     <Tip key={id} text={TAB_HELP[id]}>
       <button
@@ -286,43 +267,125 @@ export function BannerStudio({
     </Tip>
   );
 
+  const canvasAt = (zoomScale?: number) => (
+    <StudioCanvas
+      ghost={studioAi.ghost}
+      design={design}
+      device={device}
+      legacy={legacy}
+      imageSrc={deviceSrc}
+      imageAlt={imageAlt}
+      selection={selection}
+      onSelect={select}
+      onChange={change}
+      onRequestDelete={setPendingDelete}
+      onLegacyEdit={onLegacyEdit}
+      group={group}
+      onToggle={toggle}
+      replayKey={replayKey}
+      maxH={canvasMaxH}
+      width={width}
+      zoomScale={zoomScale}
+    />
+  );
+  const arrangeEl = (
+    <ArrangeBar
+      design={design}
+      device={device}
+      refs={group.length > 1 ? group : selection ? [selection] : []}
+      rootRef={rootRef}
+      legacy={legacy}
+      onChange={change}
+      onSelectMany={selectMany}
+    />
+  );
+  const panelEl = (
+    <>
+      {tab === "text" ? (
+        <TextBoxPanel imageSrc={deviceSrc} design={design} device={device} legacy={legacy} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+      ) : tab === "buttons" ? (
+        <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+      ) : tab === "shapes" ? (
+        <ShapePanel printViewFt={printViewFt} design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+      ) : tab === "anims" ? (
+        <AnimPanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+      ) : tab === "animate" ? (
+        <AnimatePanel design={design} onChange={change} onSelect={select}>
+          <IntroFields design={design} onChange={change} mediaChoices={mediaChoices} />
+        </AnimatePanel>
+      ) : tab === "smoke" ? (
+        <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={replay} mediaChoices={mediaChoices} />
+      ) : tab === "layers" ? (
+        <LayersPanel design={design} legacy={legacy} selection={selection} onSelect={select} onChange={change} />
+      ) : tab === "picture" ? (
+        <ImagePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} mediaChoices={mediaChoices} />
+      ) : (
+        <WarningsPanel design={design} legacy={legacy} onSelect={select} />
+      )}
+    </>
+  );
+  const dialogs = (
+    <>
+      <KeySheet mode={help.sheet} onMode={help.setSheet} onClose={() => help.setSheet(false)} onGo={goStep} />
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? (design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "anim" ? "Delete this animation?" : "Delete this shape or icon?") : "Delete this text box?"}
+        description="You can bring it back with Undo until you leave the page."
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </>
+  );
+  const undoRedo = (
+    <>
+      <button type="button" onClick={undo} disabled={!counts.undo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Undo (Ctrl+Z)">
+        ↶ Undo
+      </button>
+      <button type="button" onClick={redo} disabled={!counts.redo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">
+        ↷ Redo
+      </button>
+    </>
+  );
+  // D263 S11: Print Studio — left rail + scrolling settings panel, big zoomable canvas.
+  if (printing)
+    return (
+      <div ref={rootRef} className="space-y-2">
+        <CustomFontFaces />
+        <PrintFontFaces design={design} />
+        <TourStrip visible={help.tour} onStart={() => help.setSheet("tour")} onDismiss={help.dismissTour} />
+        <PrintWorkspace
+          headerTop={dockTop}
+          tabs={PRINT_TABS.map((t) => (t.id === "checks" && warnCount ? { ...t, badge: warnCount } : t))}
+          tab={tab}
+          onTab={(t) => setTab(t as Tab)}
+          panel={tab === "picture" ? <div className="space-y-3">{studioAi.box}{panelEl}</div> : panelEl}
+          footer={<button type="button" onClick={() => help.setSheet("keys")} title={CONTROL_HELP.keys} className="rounded-md px-1 py-1.5 text-[0.65rem] text-white/60 hover:bg-white/10 hover:text-white">? Keys</button>}
+          viewport={
+            <ZoomViewport
+              design={design}
+              device={device}
+              refs={group.length > 1 ? group : selection ? [selection] : []}
+              scopeRef={rootRef}
+              onBlank={() => select(null)}
+              canvas={canvasAt}
+              tools={<><PrintInfo print={design.frame.print!} />{undoRedo}</>}
+              arrange={arrangeEl}
+            />
+          }
+        />
+        {dialogs}
+      </div>
+    );
+
   return (
     <div ref={rootRef} className="space-y-3">
       <CustomFontFaces />
       {design.frame.print ? <PrintFontFaces design={design} /> : null}
       <TourStrip visible={help.tour} onStart={() => help.setSheet("tour")} onDismiss={help.dismissTour} />
       <StepStrip steps={steps} onGo={goStep} />
-      <div className="rounded-md border border-[#ffd700]/30 bg-[#ffd700]/5 px-3 py-2 text-xs text-white/80">
-        <div className="flex flex-wrap items-center gap-2">
-          <Tip text={imageSrc ? CONTROL_HELP.ai : "Pick a picture first."}>
-            <button
-              type="button"
-              onClick={askAi}
-              disabled={aiBusy || !imageSrc}
-              className="rounded-full bg-[#ffd700] px-3 py-1 text-xs font-bold text-black hover:bg-[#ffe34d] disabled:opacity-40"
-            >
-              {aiBusy ? "✨ Looking at the picture…" : `✨ AI suggest (${device === "mobile" ? "phone" : "computer"})`}
-            </button>
-          </Tip>
-          <span className="text-white/55">Suggests the picture focus, where the text fits best, the shade and text colour. Nothing is saved until you press Save.</span>
-        </div>
-        {ai ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2" aria-live="polite">
-            <span className="text-[#ffd700]">
-              Suggestion for {ai.device === "mobile" ? "phone" : "computer"} (dotted box = text area, ring = focus):
-            </span>
-            <span className="text-white/80">{ai.s.reason || "No reason given."}</span>
-            <button type="button" onClick={applyAi} className="rounded-full bg-[var(--admin-accent)] px-3 py-1 font-bold text-black">
-              Apply
-            </button>
-            <button type="button" onClick={() => setAi(null)} className="rounded-full bg-white/10 px-3 py-1 text-white/80 hover:bg-white/20">
-              Dismiss
-            </button>
-          </div>
-        ) : aiMsg ? (
-          <p className="mt-2 text-white/75" aria-live="polite">{aiMsg}</p>
-        ) : null}
-      </div>
+      {studioAi.box}
 
       {/* R65: the dock — toolbar, canvas, Replay and Arrange follow the scroll. */}
       <div
@@ -376,12 +439,7 @@ export function BannerStudio({
                 <option value="l">Large</option>
               </select>
             ) : null}
-            <button type="button" onClick={undo} disabled={!counts.undo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Undo (Ctrl+Z)">
-              ↶ Undo
-            </button>
-            <button type="button" onClick={redo} disabled={!counts.redo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">
-              ↷ Redo
-            </button>
+            {undoRedo}
           </div>
         </div>
 
@@ -408,34 +466,9 @@ export function BannerStudio({
         ) : null}
 
         <div className={`rounded-lg bg-black/40 p-2${demo ? " gw-demo" : ""}`}>
-          <StudioCanvas
-            ghost={ai && ai.device === device ? { zone: ai.s.textZone, focusX: ai.s.focusX, focusY: ai.s.focusY } : null}
-            design={design}
-            device={device}
-            legacy={legacy}
-            imageSrc={deviceSrc}
-            imageAlt={imageAlt}
-            selection={selection}
-            onSelect={select}
-            onChange={change}
-            onRequestDelete={setPendingDelete}
-            onLegacyEdit={onLegacyEdit}
-            group={group}
-            onToggle={toggle}
-            replayKey={replayKey}
-            maxH={canvasMaxH}
-            width={width}
-          />
+          {canvasAt()}
         </div>
-        <ArrangeBar
-          design={design}
-          device={device}
-          refs={group.length > 1 ? group : selection ? [selection] : []}
-          rootRef={rootRef}
-          legacy={legacy}
-          onChange={change}
-          onSelectMany={selectMany}
-        />
+        {arrangeEl}
       </div>
       <p className="flex flex-wrap items-center gap-2 text-[0.7rem] text-white/45">
         Drag to move · double-click text to type · click an item, then arrow keys nudge it · Ctrl/⌘+Z undo · Delete removes.
@@ -457,40 +490,9 @@ export function BannerStudio({
         {tabBtn("picture", "🖼 Picture & shade")}
         {tabBtn("checks", warnCount ? `⚠️ Checks (${warnCount})` : "✓ Checks")}
       </div>
-      <div role="tabpanel">
-        {tab === "text" ? (
-          <TextBoxPanel imageSrc={deviceSrc} design={design} device={device} legacy={legacy} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
-        ) : tab === "buttons" ? (
-          <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
-        ) : tab === "shapes" ? (
-          <ShapePanel printViewFt={printViewFt} design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
-        ) : tab === "anims" ? (
-          <AnimPanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
-        ) : tab === "animate" ? (
-          <AnimatePanel design={design} onChange={change} onSelect={select}>
-            <IntroFields design={design} onChange={change} mediaChoices={mediaChoices} />
-          </AnimatePanel>
-        ) : tab === "smoke" ? (
-          <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={replay} mediaChoices={mediaChoices} />
-        ) : tab === "layers" ? (
-          <LayersPanel design={design} legacy={legacy} selection={selection} onSelect={select} onChange={change} />
-        ) : tab === "picture" ? (
-          <ImagePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} mediaChoices={mediaChoices} />
-        ) : (
-          <WarningsPanel design={design} legacy={legacy} onSelect={select} />
-        )}
-      </div>
+      <div role="tabpanel">{panelEl}</div>
 
-      <KeySheet mode={help.sheet} onMode={help.setSheet} onClose={() => help.setSheet(false)} onGo={goStep} />
-      <ConfirmDialog
-        open={!!pendingDelete}
-        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? (design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "anim" ? "Delete this animation?" : "Delete this shape or icon?") : "Delete this text box?"}
-        description="You can bring it back with Undo until you leave the page."
-        confirmLabel="Delete"
-        tone="danger"
-        onConfirm={confirmDelete}
-        onCancel={() => setPendingDelete(null)}
-      />
+      {dialogs}
     </div>
   );
 }
