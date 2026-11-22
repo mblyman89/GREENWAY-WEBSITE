@@ -119,8 +119,8 @@ export function ShapePanel({
           ) : null}
           {el.kind !== "icon" && el.shape === "rect" ? <NumberSlider label="Rounded corners" value={el.radius} min={0} max={200} unit="px" onChange={(radius) => patch(el.id, { radius })} /> : null}
           <ElementFxFields el={el} patch={(p) => patch(el.id, p)} />
-          <ElementMotionFields el={el} patch={(p) => patch(el.id, p)} />
-          <EnterFields enter={el.enter} reveal={design.reveal} onChange={(enter) => patch(el.id, { enter })} />
+          {design.frame.print ? null : <ElementMotionFields el={el} patch={(p) => patch(el.id, p)} />}
+          {design.frame.print ? null : <EnterFields enter={el.enter} reveal={design.reveal} onChange={(enter) => patch(el.id, { enter })} />}
           <NumberSlider label="Rotate" value={el.rotate} min={-180} max={180} unit="°" onChange={(rotate) => patch(el.id, { rotate })} />
           <NumberSlider label="See-through" value={el.opacity} min={5} max={100} unit="%" onChange={(opacity) => patch(el.id, { opacity })} />
           <div className="rounded-md border border-white/10 p-2">

@@ -25,23 +25,25 @@ export type BannerSmokeProps = {
   layers: SmokeLayer[];
   /** Studio: changes to this number replay the effect. */
   replayKey?: number;
+  /** D263: print designs show one still frame (paper doesn't move). */
+  still?: boolean;
 };
 
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export default function BannerSmokeClient({ layers, replayKey = 0 }: BannerSmokeProps) {
+export default function BannerSmokeClient({ layers, replayKey = 0, still: stillProp = false }: BannerSmokeProps) {
   const backRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const gpuRef = useRef<HTMLCanvasElement>(null);
   const api = useRef<{ replay: () => void } | null>(null);
   const live = useRef<(GlSmoke | null)[]>([]);
-  const key = JSON.stringify(layers);
+  const key = JSON.stringify(layers) + (stillProp ? "|still" : "");
 
   useEffect(() => {
     const back = backRef.current;
     const host = back?.parentElement;
     if (!back || !host) return;
-    const still = reducedMotion();
+    const still = stillProp || reducedMotion();
     const gpuHit = !still && typeof navigator !== "undefined" && "gpu" in navigator ? layers.find((l) => l.kind === "hit") : undefined;
     let gpuReady = false;
     let gpu: ShaderInstance | null = null;
