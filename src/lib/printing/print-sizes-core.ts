@@ -29,6 +29,7 @@ export type PrintGroup =
   | "Yard & A-frame signs"
   | "Posters & boards"
   | "Flyers & cards"
+  | "Business cards"
   | "Stickers & decals"
   | "Custom";
 
@@ -135,6 +136,16 @@ export const PRINT_PRESETS: readonly PrintPreset[] = [
     ["shelf-talker", "Shelf talker 3.5\" x 5\"", 3.5, 5, { placement: "instore" }],
     ["flyer-letter-vp", "Flyer 8.5\" x 11\" (Vistaprint)", 8.5, 11, { vendor: "vistaprint" }],
     ["rack-card-vp", "Rack card 3.74\" x 8.27\" (Vistaprint)", 3.74, 8.27, { vendor: "vistaprint" }],
+  ]),
+  ...group("Business cards", { vendor: "vistaprint", placement: "handout", viewFt: 1, bleed: 0.055, safe: 0.125, verified: true, note: "Vistaprint business cards: 3.5\" x 2\" trim, upload 3.61\" x 2.11\" with bleed. Keep words 1/8\" inside the cut. Add a Back page for two-sided cards." }, [
+    ["bc-standard", "Business card 3.5\" x 2\" (Vistaprint standard)", 3.5, 2],
+    ["bc-vertical", "Business card 2\" x 3.5\" (vertical)", 2, 3.5],
+    ["bc-square", "Square business card 2.5\" x 2.5\"", 2.5, 2.5, { verified: false, note: "Confirm the square card size on Vistaprint before ordering." }],
+    ["bc-slim", "Slim business card 3.5\" x 1.5\"", 3.5, 1.5, { verified: false, note: "Confirm the slim card size on Vistaprint before ordering." }],
+    ["bc-mini", "Mini card 3\" x 1\" (loyalty / referral)", 3, 1, { verified: false, note: "Confirm the mini card size with your printer before ordering." }],
+    ["bc-folded", "Folded business card 3.5\" x 4\" (opens flat, fold in the middle)", 3.5, 4, { verified: false, note: "Folded cards print flat at 3.5\" x 4\": the fold runs across the middle. Confirm on Vistaprint." }],
+    ["bc-self", "Business card 3.5\" x 2\" (print yourself on Avery 8371 / 8869)", 3.5, 2, { vendor: "self", note: "Download as \"Avery business card sheet\" to print 10 per Letter page on Avery 8371, 8869, 5371 or 28371 card stock." }],
+    ["bc-self-vertical", "Business card 2\" x 3.5\" vertical (Avery sheet)", 2, 3.5, { vendor: "self", note: "Download as \"Avery business card sheet\" to print 10 per page." }],
   ]),
   ...group("Stickers & decals", { vendor: "vistaprint", placement: "sticker", viewFt: 1, bleed: BLEED, safe: 0.125, verified: true, note: "Die-cut stickers follow the cut line: keep everything 1/8\" inside it." }, [
     ["sticker-2", "Die-cut sticker 2\" x 2\"", 2, 2],

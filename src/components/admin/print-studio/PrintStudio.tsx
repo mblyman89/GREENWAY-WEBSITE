@@ -14,6 +14,9 @@ import { Button } from "@/components/admin/ui";
 import { PrintPictureTools } from "./PrintPictureTools";
 import { PictureSharpness } from "./PictureSharpness";
 import { PrintExport } from "./PrintExport";
+import { PrintPages, allPages, setPages } from "./PrintPages";
+import { BusinessCardBuilder } from "./BusinessCardBuilder";
+import type { PrintPage } from "@/lib/printing/print-doc-core";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 import {
@@ -40,7 +43,7 @@ const DRAFT_KEY = "gw.printStudio.draft.v1";
 const CARD = "rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4";
 const input = "rounded border border-white/15 bg-black/40 px-2 py-1 text-sm text-white";
 
-export type PrintDraft = { presetId: string; preset: PrintPreset; design: BannerDesign; imageSrc: string; name: string };
+export type PrintDraft = { presetId: string; preset: PrintPreset; design: BannerDesign; imageSrc: string; name: string; pages?: PrintPage[]; cur?: number };
 
 function loadDraft(): PrintDraft | null {
   try {
@@ -48,7 +51,14 @@ function loadDraft(): PrintDraft | null {
     if (!raw || !raw.preset || !raw.design) return null;
     const design = normalizeDesign(raw.design);
     if (!design?.frame.print) return null;
-    return { presetId: String(raw.presetId ?? "custom"), preset: raw.preset as PrintPreset, design, imageSrc: String(raw.imageSrc ?? ""), name: String(raw.name ?? "") };
+    const pages = Array.isArray(raw.pages)
+      ? raw.pages.flatMap((pg) => {
+          const d = normalizeDesign(pg?.design);
+          return d?.frame.print ? [{ label: String(pg.label ?? "Page").slice(0, 30), design: d, imageSrc: String(pg.imageSrc ?? "") }] : [];
+        })
+      : [];
+    const base = { presetId: String(raw.presetId ?? "custom"), preset: raw.preset as PrintPreset, design, imageSrc: String(raw.imageSrc ?? ""), name: String(raw.name ?? "") };
+    return pages.length > 1 ? { ...base, pages, cur: Math.min(pages.length - 1, Math.max(0, Number(raw.cur) || 0)) } : base;
   } catch {
     return null;
   }
@@ -105,7 +115,8 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
     const p = chosenPreset();
     if (!p || !draft) return;
     setMsg(`Changed to ${p.label}. Everything kept its place in %, so check the layout.`);
-    setDraft({ ...draft, presetId: p.id, preset: p, design: applyPrintSize(draft.design, p) });
+    const resized = allPages(draft).map((pg) => ({ ...pg, design: applyPrintSize(pg.design, p) }));
+    setDraft(setPages({ ...draft, presetId: p.id, preset: p }, resized, draft.cur ?? 0));
   }
 
   const p = draft?.preset;
@@ -207,8 +218,17 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
           </section>
 
           <section className={CARD}>
-            <div className="mb-2 text-sm font-semibold">3. Design it</div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold">3. Design it</div>
+              <PrintPages draft={draft} onChange={setDraft} />
+            </div>
+            {draft.presetId.startsWith("bc-") ? (
+              <div className="mb-3">
+                <BusinessCardBuilder base={draft.design} onBuild={(pages) => setDraft((d) => (d ? setPages(d, pages.map((pg, i) => ({ ...pg, imageSrc: i === 0 ? d.imageSrc : "" })), 0) : d))} />
+              </div>
+            ) : null}
             <BannerStudio
+              key={draft.cur ?? 0}
               design={draft.design}
               onChange={(design) => setDraft((d) => (d ? { ...d, design } : d))}
               legacy={{}}
@@ -222,7 +242,7 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
 
           <section className={CARD}>
             <div className="mb-2 text-sm font-semibold">4. Download for printing</div>
-            <PrintExport design={draft.design} imageSrc={draft.imageSrc} name={draft.name} preset={draft.preset} dpi={dpi} />
+            <PrintExport pages={allPages(draft)} name={draft.name} preset={draft.preset} dpi={dpi} />
           </section>
         </>
       ) : loaded ? (
