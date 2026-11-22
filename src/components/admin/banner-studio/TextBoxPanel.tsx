@@ -301,7 +301,7 @@ export function TextBoxPanel({
             </div>
           </div>
 
-          <LiveFields box={box} patch={(p) => patch(box.id, p)} />
+          {design.frame.print ? null : <LiveFields box={box} patch={(p) => patch(box.id, p)} />}
 
           <details className="rounded-md border border-white/10 p-2">
             <summary className="cursor-pointer text-xs font-semibold text-white/70">More text effects</summary>
@@ -310,8 +310,8 @@ export function TextBoxPanel({
               <NumberSlider label="Letter spacing" value={box.letterSpacing} min={-0.1} max={0.5} step={0.01} unit="em" onChange={(letterSpacing) => patch(box.id, { letterSpacing })} />
               <NumberSlider label="Line height" value={box.lineHeight} min={0.7} max={3} step={0.05} onChange={(lineHeight) => patch(box.id, { lineHeight })} />
               <TextFxFields box={box} patch={(p) => patch(box.id, p)} />
-              <TextMotionFields box={box} patch={(p) => patch(box.id, p)} />
-              <EnterFields enter={box.enter} reveal={design.reveal} onChange={(enter) => patch(box.id, { enter })} />
+              {design.frame.print ? null : <TextMotionFields box={box} patch={(p) => patch(box.id, p)} />}
+              {design.frame.print ? null : <EnterFields enter={box.enter} reveal={design.reveal} onChange={(enter) => patch(box.id, { enter })} />}
               <Segmented<DesignBackdrop>
                 label="Box behind text (helps reading on busy photos)"
                 value={box.backdrop}

@@ -130,6 +130,7 @@ export function ImageFxFields({ design, imageSrc, onChange }: { design: BannerDe
         {fx.opacity || fx.fade ? <ColorField label="Backdrop colour" value={fx.bg ?? "#1a1a1a"} onChange={(bg) => setFx({ bg })} /> : null}
       </Group>
 
+      {design.frame.print ? null : (
       <Group title="Picture motion">
         <Segmented<KenBurns | "none">
           label="Slow cinematic move (Ken Burns)"
@@ -151,6 +152,7 @@ export function ImageFxFields({ design, imageSrc, onChange }: { design: BannerDe
         ) : null}
         <p className="text-[0.65rem] text-white/45">Pauses when the slide isn’t showing and stays still for visitors who turn motion off.</p>
       </Group>
+      )}
 
       {im.fx ? (
         <button type="button" className="text-xs text-white/60 underline" onClick={() => setFx({ contrast: undefined, hue: undefined, sepia: undefined, warmth: undefined, opacity: undefined, bg: undefined, flipY: undefined, tint: undefined, duo: undefined, vignette: undefined, vignetteColor: undefined, grain: undefined, fade: undefined, kb: undefined, kbSpeed: undefined })}>

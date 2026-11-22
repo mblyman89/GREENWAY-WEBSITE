@@ -39,6 +39,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
+import { PrintGuides } from "./PrintGuides";
 import { BannerBeam, BannerPicture, BannerSmoke, StudioBoxText, StudioEntrances, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
@@ -392,7 +393,7 @@ export function StudioCanvas({
                 </BannerPicture>
               ) : null}
               {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
-              <StudioEntrances design={design} replayKey={replayKey} />
+              {design.frame.print ? null : <StudioEntrances design={design} replayKey={replayKey} />}
 
               {(design.elements ?? []).map((el) =>
                 el.hidden || (device === "mobile" && el.hideOnMobile) ? null : (
@@ -504,8 +505,9 @@ export function StudioCanvas({
                 );
               })}
 
-              {design.smoke ? <BannerSmoke layers={design.smoke} replayKey={replayKey} /> : null}
-              {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
+              {design.smoke ? <BannerSmoke layers={design.smoke} replayKey={replayKey} still={!!design.frame.print} /> : null}
+              {design.frame.print ? <PrintGuides print={design.frame.print} /> : null}
+              {!design.frame.print && design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
               <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: frameH }} />
             </div>
           </div>

@@ -22,6 +22,7 @@ import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { WidthBar } from "./WidthBar";
+import { PrintInfo } from "./PrintInfo";
 import { checkAllWidths } from "@/lib/cms/studio-drift-core";
 import { ScaleSwitch } from "./ScaleSwitch";
 import { useStudioSiteFonts } from "./StudioSiteFonts";
@@ -262,6 +263,7 @@ export function BannerStudio({
       setWidth(null);
     } else rootRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); // publish: the editor's buttons sit below the studio
   };
+  const printing = !!design.frame.print;
   const tabBtn = (id: Tab, label: string) => (
     <Tip key={id} text={TAB_HELP[id]}>
       <button
@@ -323,7 +325,7 @@ export function BannerStudio({
         style={follow ? { top: dockTop + 8 } : undefined}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div role="radiogroup" aria-label="Preview size" className="flex gap-1">
+          {printing ? <PrintInfo print={design.frame.print!} /> : <div role="radiogroup" aria-label="Preview size" className="flex gap-1">
             {(["desktop", "mobile"] as DesignDevice[]).map((d) => (
               <Tip key={d} text={CONTROL_HELP[d]}>
                 <button
@@ -344,10 +346,10 @@ export function BannerStudio({
                 </button>
               </Tip>
             ))}
-          </div>
+          </div>}
           <div className="flex flex-wrap items-center gap-1">
             {/* R63: one-tap replay of every motion/smoke/entrance on the canvas (R65: lives in the dock so it follows too). */}
-            <button type="button" onClick={replay} className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-bold text-black hover:bg-amber-400" title="Replay all motion, entrances and smoke on the canvas">▶ Replay</button>
+            {printing ? null : <button type="button" onClick={replay} className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-bold text-black hover:bg-amber-400" title="Replay all motion, entrances and smoke on the canvas">▶ Replay</button>}
             <button
               type="button"
               onClick={() => saveFollow(!follow)}
@@ -378,7 +380,7 @@ export function BannerStudio({
           </div>
         </div>
 
-        <WidthBar
+        {printing ? null : <><WidthBar
           width={width}
           device={device}
           card={!!design.frame.card}
@@ -387,7 +389,7 @@ export function BannerStudio({
             setDevice(d);
           }}
         />
-        <ScaleSwitch design={design} imageSrc={deviceSrc} imageAlt={imageAlt} legacy={legacy} onChange={change} />
+        <ScaleSwitch design={design} imageSrc={deviceSrc} imageAlt={imageAlt} legacy={legacy} onChange={change} /></>}
 
         {device === "mobile" ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--admin-orange)]/12 px-3 py-1.5 text-xs text-[var(--admin-orange)]">
@@ -443,8 +445,8 @@ export function BannerStudio({
         {tabBtn("text", "✏️ Text")}
         {tabBtn("buttons", "🔘 Buttons")}
         {tabBtn("shapes", "◆ Shapes & icons")}
-        {tabBtn("anims", "🎞️ Lottie & Rive")}
-        {tabBtn("animate", "✨ Animate")}
+        {printing ? null : tabBtn("anims", "🎞️ Lottie & Rive")}
+        {printing ? null : tabBtn("animate", "✨ Animate")}
         {tabBtn("smoke", "💨 Smoke & fog")}
         {tabBtn("layers", "☰ Layers")}
         {tabBtn("picture", "🖼 Picture & shade")}

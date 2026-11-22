@@ -104,7 +104,7 @@ export function SmokePanel({
         </p>
       </div>
 
-      <IntroFields design={design} onChange={onChange} mediaChoices={mediaChoices} />
+      {design.frame.print ? null : <IntroFields design={design} onChange={onChange} mediaChoices={mediaChoices} />}
 
       <div className={box}>
         <NumberSlider
