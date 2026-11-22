@@ -25,6 +25,7 @@
  * normalize byte-identically.
  */
 
+import { normalizeQrSpec, type QrSpec } from "@/lib/printing/qr-design-core";
 import { elementMotion, normalizeElementMotion, type ElementMotionFields } from "./banner-motion-core";
 import { normalizeEnter, type Enter } from "./banner-enter-core";
 import { animLabel, normalizeAnim, type AnimSpec } from "./banner-anim-core";
@@ -123,6 +124,8 @@ export type DesignElement = {
   enter?: Enter;
   /** R60: Lottie / Rive animation settings (kind "anim" only). */
   anim?: AnimSpec;
+  /** D263 S5: designer QR (icon kind; drawn from this spec, iconPath is a placeholder). */
+  qr?: QrSpec;
 } & ElementMotionFields;
 
 export type ElementGradient = { from: string; to: string; angle: number };
@@ -283,6 +286,8 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
   const en = normalizeEnter(raw.enter);
   if (en) el.enter = en;
   if (anim) el.anim = anim;
+  const qr = isIcon ? normalizeQrSpec(raw.qr) : undefined;
+  if (qr) el.qr = qr;
   return el;
 }
 
@@ -584,6 +589,7 @@ export function elementPosition(el: DesignElement, device: "desktop" | "mobile")
 /** Friendly name for a shape/icon layer. */
 export function elementLabel(el: DesignElement, iconLabels: Record<string, string> = {}): string {
   if (el.kind === "anim") return animLabel(el.anim);
+  if (el.qr) return "QR code";
   if (el.kind === "icon") return `${el.icon?.startsWith("o-") ? "Object" : "Icon"} — ${iconLabels[el.icon ?? ""] ?? el.icon ?? "icon"}`;
   return SHAPE_KINDS.find((k) => k.id === el.shape)?.label ?? "Shape";
 }
@@ -673,6 +679,10 @@ export function __runBannerElementsTests(): { passed: number; failed: number } {
   const iv = shapeVisual(ic);
   ok("iconPath" in iv && iv.iconPath === "M10,20 L30 40Z" && iv.fill === "rgba(255, 255, 255, 1)", "icon visual");
   ok(elementLabel(ic, { leaf: "Leaf" }) === "Icon — Leaf" && elementLabel(defaultElement("burst")) === "Sale burst", "labels");
+  {
+    const q = normalizeElement({ ...defaultIcon("qr", "regular", "M0 0h256v256H0z", { id: "qr1" }), qr: { content: { kind: "url", value: "https://a.co" }, modules: "dots", eyes: "leaf", logoHole: 0 } }, "x");
+    ok(q?.qr?.modules === "dots" && elementLabel(q!) === "QR code" && normalizeElement({ ...defaultElement("rect"), qr: { content: {} } }, "y")?.qr === undefined, "D263 S5 QR spec on icons only");
+  }
   ok(isSafeIconPath("M1e-3 2") && !isSafeIconPath("x".repeat(5)) && !isSafeIconPath("M".repeat(ICON_PATH_MAX + 1)), "path guard");
   // R56-S1: gradient + shadow on shapes/icons (any colour), only when used.
   {

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { DesignQr } from "./DesignQr";
 import { shapeVisual, type DesignElement, type SvgGradient } from "@/lib/cms/banner-elements-core";
 
 /**
@@ -22,6 +23,7 @@ function Grad({ g }: { g?: SvgGradient }) {
 export function DesignShape({ el }: { el: DesignElement }) {
   const v = shapeVisual(el);
   if ("css" in v) return <div style={v.css as unknown as CSSProperties} />;
+  if (el.qr) return <DesignQr el={el} />;
   if ("iconPath" in v)
     // R55-S3: icon path data travels inside the design (validated SVG path commands only).
     return (

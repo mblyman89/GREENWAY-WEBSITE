@@ -214,6 +214,7 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
               imageSrc={draft.imageSrc}
               imageAlt={draft.name}
               posts={[]}
+              printViewFt={draft.preset.viewFt}
               mediaChoices={mediaChoices}
             />
           </section>

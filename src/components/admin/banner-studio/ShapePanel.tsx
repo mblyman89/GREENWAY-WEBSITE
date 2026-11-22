@@ -9,6 +9,7 @@
  * Shapes and icons are decorative only (hidden from screen readers on the site).
  */
 import { BANNER_ICON_DATA, BANNER_ICON_WEIGHTS, type BannerIconWeight } from "@/lib/cms/banner-icons-data";
+import { QrFields, addQrElement } from "@/components/admin/print-studio/QrFields";
 import { maxElements, nextId, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
 import { defaultElement, defaultIcon, elementLabel, type DesignElement, type ShapeKind } from "@/lib/cms/banner-elements-core";
 import { ColorField, NumberSlider, Toggle } from "./controls";
@@ -27,7 +28,9 @@ export function ShapePanel({
   onSelect,
   onChange,
   onRequestDelete,
+  printViewFt = 3,
 }: {
+  printViewFt?: number;
   design: BannerDesign;
   device: DesignDevice;
   selection: StudioSelection;
@@ -78,6 +81,11 @@ export function ShapePanel({
       />
       {full ? <p className="text-xs text-amber-300/80">This banner already has {cap} shapes/icons — delete one to add another.</p> : null}
 
+      {design.frame.print ? (
+        <button type="button" disabled={full} onClick={() => push(addQrElement(design))} className="rounded-full bg-[#ffd700] px-3 py-1 text-xs font-bold text-black disabled:opacity-40">
+          ▦ Add a QR code
+        </button>
+      ) : null}
       <BadgeStickers design={design} onChange={onChange} onSelect={onSelect} />
       <LiveBadges design={design} onChange={onChange} onSelect={onSelect} />
 
@@ -87,7 +95,9 @@ export function ShapePanel({
             {elementLabel(el, iconLabels)}
             {el.locked ? " 🔒" : ""}
           </p>
-          {el.kind === "icon" ? (
+          {el.qr ? (
+            <QrFields el={el} design={design} viewFt={printViewFt} patch={(p) => patch(el.id, p)} />
+          ) : el.kind === "icon" ? (
             <>
               <ColorField label="Icon colour" value={el.fill} onChange={(fill) => patch(el.id, { fill })} />
               <div className={hasWeights ? "flex gap-1" : "hidden"}>
