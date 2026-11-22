@@ -56,7 +56,10 @@ export function BannerStudio({
   posts,
   mediaChoices,
   onLegacyEdit,
+  printViewFt = 3,
 }: {
+  /** D263: Print Studio reading distance (ft) for QR size checks. */
+  printViewFt?: number;
   design: BannerDesign;
   onChange: (d: BannerDesign) => void;
   legacy: { eyebrow?: string; title?: string; subtitle?: string };
@@ -460,7 +463,7 @@ export function BannerStudio({
         ) : tab === "buttons" ? (
           <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "shapes" ? (
-          <ShapePanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+          <ShapePanel printViewFt={printViewFt} design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "anims" ? (
           <AnimPanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "animate" ? (
