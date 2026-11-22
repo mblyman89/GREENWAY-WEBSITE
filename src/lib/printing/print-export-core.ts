@@ -15,20 +15,24 @@ export const EXPORT_MAX_SIDE = 16000;
 /** Offscreen layout width (text px are % of the width, so any width lays out the same). */
 export const PRINT_RENDER_PX = 800;
 
-export type PrintFormat = "pdf-vendor" | "pdf-marks" | "pdf-letter" | "png" | "jpg";
+export type PrintFormat = "pdf-vendor" | "pdf-marks" | "pdf-letter" | "sheet-avery" | "sheet-cut" | "png" | "jpg";
 
 export const FORMAT_INFO: Record<PrintFormat, { label: string; help: string }> = {
   "pdf-vendor": { label: "PDF for Vistaprint", help: "Bleed included, no crop marks — what Vistaprint's uploader wants." },
   "pdf-marks": { label: "PDF for a print shop", help: "Bleed + crop marks + Trim/Bleed boxes, for any pro printer." },
   "pdf-letter": { label: "PDF to print at home (Letter)", help: "Centred on 8.5 x 11 paper with crop marks to cut along." },
+  "sheet-avery": { label: "Avery business card sheet (10 per page)", help: "Letter page laid out for Avery 8371 / 8869 / 5371 perforated card stock. Two pages = fronts + backs for duplex." },
+  "sheet-cut": { label: "Print-and-cut sheet (many per page)", help: "As many copies as fit on Letter, with cut marks. Two pages = fronts + backs lined up for duplex." },
   png: { label: "PNG picture", help: "Full-size picture with bleed (stickers, screens, sharing)." },
   jpg: { label: "JPG picture", help: "Smaller file, same size (no transparency)." },
 };
 
 /** Formats that make sense for who prints it / what it is (first = recommended). */
-export function formatsFor(vendor: "vistaprint" | "self", placement: string): PrintFormat[] {
-  if (placement === "sticker") return vendor === "self" ? ["pdf-letter", "png", "pdf-marks", "jpg"] : ["pdf-vendor", "png", "pdf-marks", "jpg"];
-  return vendor === "self" ? ["pdf-letter", "pdf-marks", "png", "jpg"] : ["pdf-vendor", "pdf-marks", "png", "jpg"];
+export function formatsFor(vendor: "vistaprint" | "self", placement: string, opts: { avery?: boolean; sheet?: boolean } = {}): PrintFormat[] {
+  const sheets: PrintFormat[] = [...(opts.avery ? (["sheet-avery"] as const) : []), ...(opts.sheet ? (["sheet-cut"] as const) : [])];
+  if (vendor === "self") return [...sheets, "pdf-letter", "pdf-marks", "png", "jpg"];
+  if (placement === "sticker") return ["pdf-vendor", "png", "pdf-marks", ...sheets, "jpg"];
+  return ["pdf-vendor", "pdf-marks", ...sheets, "png", "jpg"];
 }
 
 export type RenderPlan = { renderW: number; renderH: number; scale: number; outW: number; outH: number; dpi: number; wantDpi: number; capped: boolean };
@@ -147,7 +151,7 @@ export function printFilename(name: string, print: DesignPrint, format: PrintFor
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "print-design";
   const ext = format === "png" ? "png" : format === "jpg" ? "jpg" : "pdf";
-  const tag = format === "pdf-vendor" ? "vistaprint" : format === "pdf-marks" ? "cropmarks" : format === "pdf-letter" ? "letter" : "bleed";
+  const tag = format === "pdf-vendor" ? "vistaprint" : format === "pdf-marks" ? "cropmarks" : format === "pdf-letter" ? "letter" : format === "sheet-avery" ? "avery-sheet" : format === "sheet-cut" ? "cut-sheet" : "bleed";
   return `${slug}-${print.w}x${print.h}in-${tag}.${ext}`;
 }
 
@@ -177,5 +181,6 @@ export function __runPrintExportTests(): { passed: number; failed: number; failu
   ok(tilesOnLetter({ w: 24, h: 36, bleed: 0, safe: 0 }).cols === 4, "tiles");
   ok(printFilename("Grand Opening!", flyer, "pdf-vendor") === "grand-opening-8.5x11in-vistaprint.pdf", printFilename("Grand Opening!", flyer, "pdf-vendor"));
   ok(formatsFor("self", "handout")[0] === "pdf-letter" && formatsFor("vistaprint", "outdoor")[0] === "pdf-vendor", "formats");
+  ok(formatsFor("self", "handout", { avery: true, sheet: true })[0] === "sheet-avery", "avery first for self cards");
   return { passed, failed: failures.length, failures };
 }

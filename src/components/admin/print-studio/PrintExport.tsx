@@ -13,6 +13,7 @@ import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { stillDesign } from "@/lib/brand/brand-sizes-core";
 import { pictureSharpness, type PrintPreset } from "@/lib/printing/print-sizes-core";
 import { FORMAT_INFO, formatsFor, pdfLayout, printChecks, printFilename, renderPlan, tilesOnLetter, type PrintFormat } from "@/lib/printing/print-export-core";
+import { isAveryCard, sheetLayout, type PrintPage } from "@/lib/printing/print-doc-core";
 import { PrintFontFaces } from "./PrintTypeFields";
 
 type Status = { kind: "idle" } | { kind: "busy"; step: string } | { kind: "ok"; file: string; kb: number } | { kind: "err"; msg: string };
@@ -31,10 +32,16 @@ function save(blob: Blob, name: string) {
 
 const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
-export function PrintExport({ design, imageSrc, name, preset, dpi }: { design: BannerDesign; imageSrc: string; name: string; preset: PrintPreset; dpi: number }) {
+export function PrintExport({ pages, name, preset, dpi }: { pages: PrintPage[]; name: string; preset: PrintPreset; dpi: number }) {
+  const design: BannerDesign = pages[0].design;
+  const imageSrc = pages[0].imageSrc;
   const print = design.frame.print;
-  const formats = useMemo(() => formatsFor(preset.vendor, preset.placement), [preset.vendor, preset.placement]);
-  const [format, setFormat] = useState<PrintFormat>(formats[0]);
+  const avery = !!print && isAveryCard(print);
+  const canSheet = !!print && !!sheetLayout(print, "cut");
+  const formats = useMemo(() => formatsFor(preset.vendor, preset.placement, { avery, sheet: canSheet }), [preset.vendor, preset.placement, avery, canSheet]);
+  const [pick, setFormat] = useState<PrintFormat>(formats[0]);
+  const format = formats.includes(pick) ? pick : formats[0];
+  const [renderIdx, setRenderIdx] = useState(0);
   const [wantDpi, setWantDpi] = useState(dpi);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [rendering, setRendering] = useState(false);
@@ -51,59 +58,83 @@ export function PrintExport({ design, imageSrc, name, preset, dpi }: { design: B
   if (!print) return null;
   const plan = renderPlan(print, wantDpi, design.frame.card?.ratio);
   const picDpi = imageSrc && picPx ? (pictureSharpness(picPx.w, picPx.h, print, dpi)?.dpi ?? null) : null;
-  const warnings = printChecks(design, { viewFt: preset.viewFt, pictureDpi: picDpi, plan, placement: preset.placement });
+  const warnings = pages.flatMap((pg, i) => printChecks(pg.design, { viewFt: preset.viewFt, pictureDpi: i === 0 ? picDpi : null, plan: i === 0 ? plan : null, placement: preset.placement }).map((w) => ({ ...w, message: pages.length > 1 ? `${pg.label}: ${w.message}` : w.message })));
   const tiles = tilesOnLetter(print);
-  const isPdf = format.startsWith("pdf");
+  const isSheet = format.startsWith("sheet");
+  const isPdf = format.startsWith("pdf") || isSheet;
+  const multi = pages.length > 1;
+
+  /** Render page i offscreen and return a JPEG/PNG blob. */
+  async function capture(i: number, type: "image/jpeg" | "image/png"): Promise<Blob> {
+    setRenderIdx(i);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await document.fonts.ready;
+    await wait(900); // still smoke + picture decode
+    const node = holder.current?.querySelector<HTMLElement>("[data-print-root] > *");
+    if (!node) throw new Error("Couldn't prepare the design. Try again.");
+    const { domToBlob } = await import("modern-screenshot");
+    const blob = await domToBlob(node, { width: plan.renderW, height: plan.renderH, scale: plan.scale, backgroundColor: type === "image/png" ? null : "#ffffff", type, quality: 0.95, timeout: 60_000 });
+    if (!blob?.size) throw new Error("The render came out empty. Try a lower DPI.");
+    return blob;
+  }
 
   async function run() {
     if (!print) return;
     setRendering(true);
     try {
-      setStatus({ kind: "busy", step: "Loading fonts and picture…" });
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await document.fonts.ready;
-      await wait(900); // still smoke + picture decode
-      const node = holder.current?.querySelector<HTMLElement>("[data-print-root] > *");
-      if (!node) throw new Error("Couldn't prepare the design — try again.");
-      setStatus({ kind: "busy", step: `Rendering ${plan.outW.toLocaleString()} x ${plan.outH.toLocaleString()} px…` });
-      const { domToBlob } = await import("modern-screenshot");
-      const jpeg = format === "jpg" || isPdf;
-      const blob = await domToBlob(node, {
-        width: plan.renderW,
-        height: plan.renderH,
-        scale: plan.scale,
-        backgroundColor: format === "png" ? null : "#ffffff",
-        type: jpeg ? "image/jpeg" : "image/png",
-        quality: 0.95,
-        timeout: 60_000,
-      });
-      if (!blob?.size) throw new Error("The render came out empty — try a lower DPI.");
       const file = printFilename(name, print, format);
       if (!isPdf) {
-        save(blob, file);
-        setStatus({ kind: "ok", file, kb: Math.round(blob.size / 1024) });
+        // Pictures: one file per page.
+        for (let i = 0; i < pages.length; i += 1) {
+          setStatus({ kind: "busy", step: `Rendering ${pages[i].label}…` });
+          const blob = await capture(i, format === "jpg" ? "image/jpeg" : "image/png");
+          save(blob, multi ? file.replace(/\.(png|jpg)$/, `-${pages[i].label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.$1`) : file);
+        }
+        setStatus({ kind: "ok", file: multi ? `${pages.length} pictures` : file, kb: 0 });
         return;
       }
+      const shots: ArrayBuffer[] = [];
+      for (let i = 0; i < pages.length; i += 1) {
+        setStatus({ kind: "busy", step: `Rendering ${pages[i].label} (${plan.outW.toLocaleString()} x ${plan.outH.toLocaleString()} px)…` });
+        shots.push(await (await capture(i, "image/jpeg")).arrayBuffer());
+      }
       setStatus({ kind: "busy", step: "Building the PDF…" });
-      const { PDFDocument, StandardFonts, rgb, cmyk } = await import("pdf-lib");
-      const L = pdfLayout(print, format);
+      const { PDFDocument, StandardFonts, rgb, cmyk, clip, endPath, popGraphicsState, pushGraphicsState, rectangle } = await import("pdf-lib");
       const pdf = await PDFDocument.create();
       pdf.setTitle(name || "Print design");
       pdf.setCreator("Greenway Print Studio");
       pdf.setProducer("pdf-lib");
-      pdf.setSubject(`${print.w} x ${print.h} in trim, ${print.bleed} in bleed, ${plan.dpi} DPI`);
-      const page = pdf.addPage([L.pageW, L.pageH]);
-      const img = await pdf.embedJpg(await blob.arrayBuffer());
-      page.drawImage(img, { x: L.art.x, y: L.art.y, width: L.art.w, height: L.art.h });
-      page.setTrimBox(L.trim.x, L.trim.y, L.trim.w, L.trim.h);
-      page.setBleedBox(L.bleed.x, L.bleed.y, L.bleed.w, L.bleed.h);
-      page.setArtBox(L.trim.x, L.trim.y, L.trim.w, L.trim.h);
-      // Registration colour (100% of every ink) so marks show on every plate.
+      pdf.setSubject(`${print.w} x ${print.h} in trim, ${print.bleed} in bleed, ${plan.dpi} DPI, ${pages.length} page(s)`);
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
       const reg = cmyk(1, 1, 1, 1);
-      for (const m of L.marks) page.drawLine({ start: { x: m.x1, y: m.y1 }, end: { x: m.x2, y: m.y2 }, thickness: 0.25, color: reg });
-      if (L.slug) {
-        const font = await pdf.embedFont(StandardFonts.Helvetica);
-        page.drawText(`${name || "Print design"} · ${print.w}" x ${print.h}" trim · ${print.bleed}" bleed · ${plan.dpi} DPI · ${new Date().toLocaleDateString()}`, { x: L.slug.x, y: L.slug.y, size: 6, font, color: rgb(0.3, 0.3, 0.3) });
+      const imgs = await Promise.all(shots.map((b) => pdf.embedJpg(b)));
+      if (isSheet) {
+        for (let i = 0; i < imgs.length; i += 1) {
+          const L = sheetLayout(print, format === "sheet-avery" ? "avery" : "cut", i % 2 === 1);
+          if (!L) throw new Error("This size doesn't fit that sheet. Pick another download.");
+          const page = pdf.addPage([L.pageW, L.pageH]);
+          for (const c of L.cells) {
+            if (L.clip) {
+              // Avery stock has no gaps: draw the full bleed image, but only the trim area shows.
+              page.pushOperators(pushGraphicsState(), rectangle(c.trim.x, c.trim.y, c.trim.w, c.trim.h), clip(), endPath());
+              page.drawImage(imgs[i], { x: c.x, y: c.y, width: c.w, height: c.h });
+              page.pushOperators(popGraphicsState());
+            } else page.drawImage(imgs[i], { x: c.x, y: c.y, width: c.w, height: c.h });
+          }
+          for (const m of L.marks) page.drawLine({ start: { x: m.x1, y: m.y1 }, end: { x: m.x2, y: m.y2 }, thickness: 0.25, color: reg });
+          page.drawText(`${pages[i].label} · ${L.note}`, { x: 18, y: 8, size: 6, font, color: rgb(0.4, 0.4, 0.4) });
+        }
+      } else {
+        const L = pdfLayout(print, format);
+        imgs.forEach((img, i) => {
+          const page = pdf.addPage([L.pageW, L.pageH]);
+          page.drawImage(img, { x: L.art.x, y: L.art.y, width: L.art.w, height: L.art.h });
+          page.setTrimBox(L.trim.x, L.trim.y, L.trim.w, L.trim.h);
+          page.setBleedBox(L.bleed.x, L.bleed.y, L.bleed.w, L.bleed.h);
+          page.setArtBox(L.trim.x, L.trim.y, L.trim.w, L.trim.h);
+          for (const m of L.marks) page.drawLine({ start: { x: m.x1, y: m.y1 }, end: { x: m.x2, y: m.y2 }, thickness: 0.25, color: reg });
+          if (L.slug) page.drawText(`${name || "Print design"} · ${pages[i].label} · ${print.w}" x ${print.h}" trim · ${print.bleed}" bleed · ${plan.dpi} DPI · ${new Date().toLocaleDateString()}`, { x: L.slug.x, y: L.slug.y, size: 6, font, color: rgb(0.3, 0.3, 0.3) });
+        });
       }
       const bytes = await pdf.save();
       const out = new Blob([bytes as BlobPart], { type: "application/pdf" });
@@ -146,7 +177,8 @@ export function PrintExport({ design, imageSrc, name, preset, dpi }: { design: B
         </button>
       </div>
       <p className="text-white/60">
-        {FORMAT_INFO[format].help} · {plan.outW.toLocaleString()} x {plan.outH.toLocaleString()} px at {plan.dpi} DPI
+        {FORMAT_INFO[format].help}
+        {multi ? ` · ${pages.length} pages` : ""} · {plan.outW.toLocaleString()} x {plan.outH.toLocaleString()} px at {plan.dpi} DPI
         {format === "pdf-letter" && (tiles.cols > 1 || tiles.rows > 1) ? ` · bigger than Letter: the PDF gets its own page size (home printers "Poster"/"Tile" mode splits it onto ${tiles.cols * tiles.rows} sheets)` : ""}
       </p>
       {warnings.length ? (
@@ -162,15 +194,16 @@ export function PrintExport({ design, imageSrc, name, preset, dpi }: { design: B
       {status.kind === "busy" ? <p className="text-white/70">{status.step}</p> : null}
       {status.kind === "ok" ? (
         <p className="text-green-400">
-          Downloaded {status.file} ({status.kb.toLocaleString()} KB).
+          Downloaded {status.file}
+          {status.kb ? ` (${status.kb.toLocaleString()} KB)` : ""}.
         </p>
       ) : null}
       {status.kind === "err" ? <p className="text-red-400">{status.msg}</p> : null}
       {rendering ? (
         <div aria-hidden="true" ref={holder} style={{ position: "fixed", left: -30000, top: 0, pointerEvents: "none" }}>
-          <PrintFontFaces design={design} />
+          <PrintFontFaces design={pages[renderIdx]?.design ?? design} />
           <div data-print-root style={{ width: plan.renderW }}>
-            <DesignedBanner design={stillDesign(design)} imageSrc={imageSrc} imageAlt="" legacy={{}} frameClassName="" priority />
+            <DesignedBanner key={renderIdx} design={stillDesign(pages[renderIdx]?.design ?? design)} imageSrc={pages[renderIdx]?.imageSrc ?? imageSrc} imageAlt="" legacy={{}} frameClassName="" priority />
           </div>
         </div>
       ) : null}
