@@ -16,6 +16,8 @@ import { PictureSharpness } from "./PictureSharpness";
 import { PrintExport } from "./PrintExport";
 import { PrintPages, allPages, setPages } from "./PrintPages";
 import { BusinessCardBuilder } from "./BusinessCardBuilder";
+import { PrintSaved, type SavedRef } from "./PrintSaved";
+import type { PrintDoc } from "@/lib/printing/print-designs-core";
 import type { PrintPage } from "@/lib/printing/print-doc-core";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
@@ -43,7 +45,7 @@ const DRAFT_KEY = "gw.printStudio.draft.v1";
 const CARD = "rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4";
 const input = "rounded border border-white/15 bg-black/40 px-2 py-1 text-sm text-white";
 
-export type PrintDraft = { presetId: string; preset: PrintPreset; design: BannerDesign; imageSrc: string; name: string; pages?: PrintPage[]; cur?: number };
+export type PrintDraft = { presetId: string; preset: PrintPreset; design: BannerDesign; imageSrc: string; name: string; pages?: PrintPage[]; cur?: number; saved?: SavedRef };
 
 function loadDraft(): PrintDraft | null {
   try {
@@ -57,7 +59,7 @@ function loadDraft(): PrintDraft | null {
           return d?.frame.print ? [{ label: String(pg.label ?? "Page").slice(0, 30), design: d, imageSrc: String(pg.imageSrc ?? "") }] : [];
         })
       : [];
-    const base = { presetId: String(raw.presetId ?? "custom"), preset: raw.preset as PrintPreset, design, imageSrc: String(raw.imageSrc ?? ""), name: String(raw.name ?? "") };
+    const base = { presetId: String(raw.presetId ?? "custom"), preset: raw.preset as PrintPreset, design, imageSrc: String(raw.imageSrc ?? ""), name: String(raw.name ?? ""), ...(raw.saved && typeof raw.saved.id === "string" ? { saved: { id: raw.saved.id, rev: Number(raw.saved.rev) || 1 } } : {}) };
     return pages.length > 1 ? { ...base, pages, cur: Math.min(pages.length - 1, Math.max(0, Number(raw.cur) || 0)) } : base;
   } catch {
     return null;
@@ -117,6 +119,17 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
     setMsg(`Changed to ${p.label}. Everything kept its place in %, so check the layout.`);
     const resized = allPages(draft).map((pg) => ({ ...pg, design: applyPrintSize(pg.design, p) }));
     setDraft(setPages({ ...draft, presetId: p.id, preset: p }, resized, draft.cur ?? 0));
+  }
+
+  function getDoc(): PrintDoc | null {
+    return draft ? { v: 1, presetId: draft.presetId, preset: draft.preset, name: draft.name || draft.preset.label, pages: allPages(draft) } : null;
+  }
+
+  function openDoc(doc: PrintDoc, ref: SavedRef | null) {
+    const base: PrintDraft = { presetId: doc.presetId, preset: doc.preset, design: doc.pages[0].design, imageSrc: doc.pages[0].imageSrc, name: doc.name, ...(ref ? { saved: ref } : {}) };
+    setPick(presetById(doc.presetId) ? doc.presetId : "custom");
+    setMsg(null);
+    setDraft(setPages(base, doc.pages, 0));
   }
 
   const p = draft?.preset;
@@ -180,6 +193,11 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
         </div>
         {pick !== "custom" && presetById(pick)?.note ? <p className="mt-2 text-xs text-[var(--admin-gold)]">{presetById(pick)!.note}</p> : null}
         {msg ? <p className="mt-2 text-xs text-[var(--admin-gold)]">{msg}</p> : null}
+      </section>
+
+      <section className={CARD}>
+        <div className="mb-2 text-sm font-semibold">Saved designs & templates</div>
+        <PrintSaved getDoc={getDoc} saved={draft?.saved ?? null} hasDraft={!!draft} onOpen={openDoc} onSaved={(ref, name) => setDraft((d) => (d ? { ...d, name, saved: ref } : d))} />
       </section>
 
       {draft && p && px ? (
