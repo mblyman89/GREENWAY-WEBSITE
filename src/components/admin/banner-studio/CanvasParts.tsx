@@ -81,8 +81,8 @@ export function CanvasShape({
         pointerEvents: "auto",
         cursor: el.locked ? "default" : "move",
         touchAction: "none",
-        outline: selected ? "2px solid #7ed957" : grouped ? "2px dashed #ffd700" : "1px dashed rgba(255,255,255,0.25)",
-        outlineOffset: 2,
+        outline: `calc(${selected || grouped ? 2 : 1}px * var(--gw-u, 1)) ${selected ? "solid #7ed957" : grouped ? "dashed #ffd700" : "dashed rgba(255,255,255,0.25)"}`,
+        outlineOffset: "calc(2px * var(--gw-u, 1))",
         ...z,
       }}
       className={`gw-dbox ${elementHoverClass(el)}`}

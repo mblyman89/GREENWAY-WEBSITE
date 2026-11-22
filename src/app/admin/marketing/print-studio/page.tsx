@@ -34,7 +34,7 @@ export default async function PrintStudioPage() {
         breadcrumbs={<Breadcrumbs items={[{ label: "Marketing" }, { label: "Print Studio" }]} />}
         helpId="print-studio"
       />
-      <div className="px-5 py-6 sm:px-8">
+      <div className="px-3 py-5 sm:px-4">
         <PrintStudio mediaChoices={mediaChoices} fluxConfigured={fluxConfigured} />
       </div>
     </div>

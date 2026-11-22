@@ -52,12 +52,14 @@ describe("R41 S8 action is drafts-only", () => {
 });
 
 describe("R41 S8 studio UI", () => {
-  const studio = read("src/components/admin/banner-studio/BannerStudio.tsx");
+  // D263 S11: the AI suggest box moved to StudioAi (BannerStudio uses useStudioAi).
+  const studio = read("src/components/admin/banner-studio/StudioAi.tsx");
   const canvas = read("src/components/admin/banner-studio/StudioCanvas.tsx");
   it("Apply goes through change() (unsaved, undoable) and nothing else", () => {
     expect(studio).toContain("change(applySuggestion(design, ai.s, legacy, ai.device))");
     expect(studio).toContain("Nothing is saved until you press Save");
     expect(studio).toContain("Dismiss");
+    expect(read("src/components/admin/banner-studio/BannerStudio.tsx")).toContain("useStudioAi({ design, imageSrc, legacy, device, setDevice, change })");
   });
   it("ghost is display-only", () => {
     // R55: the ghost markup moved to CanvasParts (StudioCanvas renders <CanvasGuides ghost=…>).

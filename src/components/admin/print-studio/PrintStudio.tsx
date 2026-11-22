@@ -252,8 +252,9 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
             </div>
           </section>
 
-          <section className={CARD}>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          {/* D263 S11: the design workspace fills the width (smaller padding than the other steps). */}
+          <section className={`${CARD} !p-2`}>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
               <div className="text-sm font-semibold">3. Design it</div>
               <PrintPages draft={draft} onChange={setDraft} />
             </div>
