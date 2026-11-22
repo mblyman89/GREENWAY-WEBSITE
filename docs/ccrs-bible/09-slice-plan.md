@@ -1569,3 +1569,8 @@ W1-W4 landed 9,987 each, W5 3,101 (43,049 lots zeroed, Reconciliations all succe
 ### D261 — hub tidy + clearer automatic-upload panel
 
 Hub gets two tabs: Weekly upload (default) and Setup & history (`?tab=setup`), which now holds the PREprod scoreboard, First day of sales, Hand-over and Late weeks. Migration clean-up moved to /admin/compliance/ccrs/cleanup. The CCRS files list scrolls after about 7 entries. The automatic-upload panel now says, side by side, what the owner does and what the run does by itself: it reads emitted files from the database, the run applies CCRS emails, and the gap is extra time on top of the email wait.
+
+### D262 — Jaba "Duplicate Strain" + PR #1849 (2026-11-22)
+- Prod Strain file e5594d1b (first autobot run) answered "Duplicate Strain" for Jaba only: CCRS already held it, our ledger did not. Outcome core classes it benign → file closed, 15/15 rows confirmed, `ccrs_filed_entities` prod Strain "Jaba" now `filed`. It will not be sent again. No action.
+- Other ledger watch items (unchanged): 8 prod Inventory `unknown` (with Brian), 1 old Product seed `unknown` named "1", two case-twin strain seeds (Mack's Gak/GAK, Snoop's Dream x Gobbstopper) — seeds only, harmless.
+- PR #1849 (dependabot next 16.4.3→16.4.6) failed only the commit-author check; re-made with the required author as a new PR and #1849 closed.
