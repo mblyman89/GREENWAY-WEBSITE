@@ -255,6 +255,24 @@ export const PLACEMENT_LABEL: Record<PrintPlacement, string> = {
 
 // -- Self-test ---------------------------------------------------------------
 
+/** D263 S3: how sharp a W×H px picture prints across the whole canvas (bleed included). Warn-only. */
+export type Sharpness = { dpi: number; tone: "good" | "ok" | "low"; text: string };
+export function pictureSharpness(pxW: number, pxH: number, print: DesignPrint, need: number): Sharpness | null {
+  if (!(pxW > 0 && pxH > 0)) return null;
+  const W = print.w + 2 * print.bleed;
+  const H = print.h + 2 * print.bleed;
+  // cover-fit: the picture fills the canvas, so the smaller px/inch side decides.
+  const dpi = Math.round(Math.min(pxW / W, pxH / H));
+  const tone = dpi >= need ? "good" : dpi >= need * 0.6 ? "ok" : "low";
+  const text =
+    tone === "good"
+      ? `Sharp: about ${dpi} DPI at this size (needs ${need}).`
+      : tone === "ok"
+        ? `Slightly soft: about ${dpi} DPI (best is ${need}). Fine from a distance; Enlarge 2× helps.`
+        : `Will look blurry: about ${dpi} DPI (needs ${need}). Use Enlarge 2× or a bigger picture.`;
+  return { dpi, tone, text };
+}
+
 export function __runPrintSizesTests(): { passed: number; failed: number; failures: string[] } {
   let passed = 0;
   const failures: string[] = [];
@@ -274,5 +292,9 @@ export function __runPrintSizesTests(): { passed: number; failed: number; failur
   const g = guideInsets({ w: 8.5, h: 11, bleed: 0.125, safe: 0.25 });
   ok(g.trimX > 1.4 && g.trimX < 1.5 && g.safeX > g.trimX, "guide insets");
   ok(fmtIn(72) === "6'" && fmtIn(8.5) === '8.5"', "inch labels");
+  const sp = pictureSharpness(3300, 2550, { w: 11, h: 8.5, bleed: 0, safe: 0.25 }, 300);
+  ok(sp?.dpi === 300 && sp.tone === "good", "sharpness good");
+  ok(pictureSharpness(1000, 500, { w: 144, h: 72, bleed: 0, safe: 1 }, 100)?.tone === "low", "sharpness low");
+  ok(pictureSharpness(0, 0, { w: 1, h: 1, bleed: 0, safe: 0 }, 300) === null, "sharpness unknown");
   return { passed, failed: failures.length, failures };
 }

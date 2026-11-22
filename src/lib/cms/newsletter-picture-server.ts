@@ -59,7 +59,7 @@ export type PictureRequest = {
   /** Erase/Replace: the painted mask as a PNG data URL (any size; it is scaled to the picture). */
   maskDataUrl?: string | null;
   /** Extend: a side + percent, or a target shape. */
-  extend?: { side?: ExtendSide; percent?: number; shape?: string | null };
+  extend?: { side?: ExtendSide; percent?: number; shape?: string | null; ratio?: number | null };
   aspect: ImageAspectKey;
   count?: number;
   postId: string;
@@ -163,7 +163,8 @@ async function fluxExpand(p: PictureRequest, prompt: string): Promise<PictureOut
   }
   if (!w || !h) return { ok: false, error: "The picture size could not be read." };
   const shape = EXTEND_SHAPES.find((s) => s.key === p.extend?.shape);
-  const pad = shape ? padToRatio(w, h, shape.ratio) : extendPadding(w, h, p.extend?.side ?? "all", Number(p.extend?.percent ?? 50));
+  const ratio = Number(p.extend?.ratio);
+  const pad = shape ? padToRatio(w, h, shape.ratio) : ratio > 0.05 && ratio < 20 ? padToRatio(w, h, ratio) : extendPadding(w, h, p.extend?.side ?? "all", Number(p.extend?.percent ?? 50));
   if (padTotal(pad) === 0) return { ok: false, error: "The picture is already that shape." };
   const sub = await submitFluxTask("flux-pro-1.0-expand", fluxExpandBody({ imageB64: image.toString("base64"), pad, prompt }));
   await logAiUsage({ feature: "newsletter.picture.extend.flux", entityType: "blog_post", entityId: p.postId, actorId: p.actorId, actorEmail: p.actorEmail, model: "flux-pro-1.0-expand", ok: sub.ok, estimated: true, errorNote: sub.ok ? (sub.cost ? `credits ${sub.cost}` : null) : sub.error.slice(0, 200) });
