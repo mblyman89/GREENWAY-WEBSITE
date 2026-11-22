@@ -348,7 +348,9 @@ export type DesignFrame = {
 };
 
 /** D263: the printed piece. w/h = TRIM size in inches; bleed added on every side; safe = keep words this far inside the trim. */
-export type DesignPrint = { w: number; h: number; bleed: number; safe: number };
+export type DesignPrint = { w: number; h: number; bleed: number; safe: number; cut?: DesignCut };
+/** D263 S9: die-cut line (stickers). Written only when chosen. radius/offset in inches; offset moves the cut inside the trim. */
+export type DesignCut = { shape: "rect" | "rounded" | "circle"; radius: number; offset: number };
 
 /** D263: canvas shape of a print design (the bleed area). */
 export function printRatio(p: DesignPrint): number {
@@ -367,7 +369,12 @@ export function normalizePrint(raw: unknown): DesignPrint | null {
   const w = n(r.w, PRINT_MIN_IN, PRINT_MAX_IN, null);
   const h = n(r.h, PRINT_MIN_IN, PRINT_MAX_IN, null);
   if (w === null || h === null) return null;
-  return { w, h, bleed: n(r.bleed, 0, PRINT_BLEED_MAX_IN, 0) as number, safe: n(r.safe, 0, PRINT_SAFE_MAX_IN, 0) as number };
+  const out: DesignPrint = { w, h, bleed: n(r.bleed, 0, PRINT_BLEED_MAX_IN, 0) as number, safe: n(r.safe, 0, PRINT_SAFE_MAX_IN, 0) as number };
+  const c = r.cut as Record<string, unknown> | undefined;
+  if (c && typeof c === "object" && ["rect", "rounded", "circle"].includes(String(c.shape))) {
+    out.cut = { shape: c.shape as DesignCut["shape"], radius: n(c.radius, 0, Math.min(w, h) / 2, 0) as number, offset: n(c.offset, 0, Math.min(1, Math.min(w, h) / 4), 0) as number };
+  }
+  return out;
 }
 
 /** D263: layer limits (print designs hold more). */

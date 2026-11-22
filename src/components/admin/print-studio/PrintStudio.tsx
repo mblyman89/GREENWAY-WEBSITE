@@ -17,6 +17,8 @@ import { PrintExport } from "./PrintExport";
 import { PrintPages, allPages, setPages } from "./PrintPages";
 import { BusinessCardBuilder } from "./BusinessCardBuilder";
 import { PrintSaved, type SavedRef } from "./PrintSaved";
+import { PrintCutLine, VistaprintHelper } from "./PrintFinish";
+import type { DesignCut } from "@/lib/cms/banner-design-core";
 import type { PrintDoc } from "@/lib/printing/print-designs-core";
 import type { PrintPage } from "@/lib/printing/print-doc-core";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
@@ -132,6 +134,19 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
     setDraft(setPages(base, doc.pages, 0));
   }
 
+  /** Same cut line on every page (front and back are cut together). */
+  function setCut(cut: DesignCut | null) {
+    if (!draft) return;
+    const pages = allPages(draft).map((pg) => {
+      const pr = pg.design.frame.print;
+      if (!pr) return pg;
+      const { cut: _old, ...rest } = pr;
+      void _old;
+      return { ...pg, design: { ...pg.design, frame: { ...pg.design.frame, print: cut ? { ...rest, cut } : rest } } };
+    });
+    setDraft(setPages(draft, pages, draft.cur ?? 0));
+  }
+
   const p = draft?.preset;
   const dpi = p ? recommendedDpi(p) : 0;
   const px = p ? pixelsAt(p, dpi) : null;
@@ -220,6 +235,7 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
                 Sharp at <b>{dpi} DPI</b> from that distance = {px.w.toLocaleString()} x {px.h.toLocaleString()} px ({px.mp} MP).
               </p>
               {!p.verified ? <p className="text-[var(--admin-gold)]">Confirm this size on Vistaprint&apos;s product page before ordering.</p> : null}
+              {draft.design.frame.print ? <PrintCutLine print={draft.design.frame.print} onChange={setCut} /> : null}
             </div>
             <div>
               <div className="mb-1 text-sm font-semibold">Background picture</div>
@@ -261,6 +277,9 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
           <section className={CARD}>
             <div className="mb-2 text-sm font-semibold">4. Download for printing</div>
             <PrintExport pages={allPages(draft)} name={draft.name} preset={draft.preset} dpi={dpi} />
+            <div className="mt-3">
+              <VistaprintHelper preset={draft.preset} dpi={dpi} />
+            </div>
           </section>
         </>
       ) : loaded ? (
