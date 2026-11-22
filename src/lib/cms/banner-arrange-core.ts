@@ -10,14 +10,16 @@
  */
 import {
   MAX_DESIGN_BUTTONS,
-  MAX_TEXT_BOXES,
+  maxBoxes,
+  maxElements,
+  textMin,
   nextId,
   normalizeButton,
   normalizeTextBox,
   type BannerDesign,
   type DesignDevice,
 } from "./banner-design-core";
-import { MAX_ELEMENTS, normalizeElement } from "./banner-elements-core";
+import { normalizeElement } from "./banner-elements-core";
 
 export type ArrangeTarget = "box" | "button" | "element";
 export type ItemRef = { target: ArrangeTarget; id: string };
@@ -224,7 +226,7 @@ export function pasteItems(design: BannerDesign, clip: ClipPayload, offset = 2):
     const base = typeof d.id === "string" ? d.id.replace(/-copy(-\d+)?$/, "").slice(0, 18) + "-copy" : it.target;
     const id = nextId(next, base);
     if (it.target === "box") {
-      const b = next.boxes.length < MAX_TEXT_BOXES ? normalizeTextBox({ ...raw, id }, id) : null;
+      const b = next.boxes.length < maxBoxes(next) ? normalizeTextBox({ ...raw, id }, id, textMin(next)) : null;
       if (!b) skipped++;
       else {
         next.boxes.push({ ...b, id });
@@ -239,7 +241,7 @@ export function pasteItems(design: BannerDesign, clip: ClipPayload, offset = 2):
       }
     } else {
       const els = next.elements ?? [];
-      const e = els.length < MAX_ELEMENTS ? normalizeElement({ ...raw, id }, id) : null;
+      const e = els.length < maxElements(next) ? normalizeElement({ ...raw, id }, id) : null;
       if (!e) skipped++;
       else {
         next = { ...next, elements: [...els, { ...e, id }] };

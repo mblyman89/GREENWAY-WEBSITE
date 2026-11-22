@@ -5,15 +5,15 @@
  * Each sticker = a normal shape + a centred badge text box, so every part
  * stays fully editable (any colour, words, size, rotation) afterwards.
  */
-import { MAX_TEXT_BOXES, defaultTextBox, frameRefPx, nextId, type BannerDesign } from "@/lib/cms/banner-design-core";
-import { MAX_ELEMENTS, defaultElement } from "@/lib/cms/banner-elements-core";
+import { maxBoxes, maxElements, defaultTextBox, frameRefPx, nextId, type BannerDesign } from "@/lib/cms/banner-design-core";
+import { defaultElement } from "@/lib/cms/banner-elements-core";
 import { BADGE_PRESETS, badgeParts, type BadgePreset } from "@/lib/cms/button-fx-core";
 import { DesignShape } from "@/components/site/DesignShape";
 import type { StudioSelection } from "./StudioCanvas";
 
 export function BadgeStickers({ design, onChange, onSelect }: { design: BannerDesign; onChange: (d: BannerDesign) => void; onSelect: (s: StudioSelection) => void }) {
   const elements = design.elements ?? [];
-  const full = elements.length >= MAX_ELEMENTS || design.boxes.length >= MAX_TEXT_BOXES;
+  const full = elements.length >= maxElements(design) || design.boxes.length >= maxBoxes(design);
 
   function add(p: BadgePreset) {
     if (full) return;

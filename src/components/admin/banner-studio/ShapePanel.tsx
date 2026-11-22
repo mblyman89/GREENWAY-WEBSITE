@@ -9,8 +9,8 @@
  * Shapes and icons are decorative only (hidden from screen readers on the site).
  */
 import { BANNER_ICON_DATA, BANNER_ICON_WEIGHTS, type BannerIconWeight } from "@/lib/cms/banner-icons-data";
-import { nextId, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
-import { MAX_ELEMENTS, defaultElement, defaultIcon, elementLabel, type DesignElement, type ShapeKind } from "@/lib/cms/banner-elements-core";
+import { maxElements, nextId, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
+import { defaultElement, defaultIcon, elementLabel, type DesignElement, type ShapeKind } from "@/lib/cms/banner-elements-core";
 import { ColorField, NumberSlider, Toggle } from "./controls";
 import { ElementFxFields } from "./ElementFxFields";
 import { ElementMotionFields } from "./MotionFields";
@@ -42,7 +42,8 @@ export function ShapePanel({
   const iconLabels = LIBRARY_LABELS;
   /** Objects are single-style artwork — only Phosphor icons have Thin/Bold/Solid. */
   const hasWeights = !!(el?.icon && BANNER_ICON_DATA[el.icon]);
-  const full = elements.length >= MAX_ELEMENTS;
+  const cap = maxElements(design);
+  const full = elements.length >= cap;
 
   const patch = (id: string, p: Partial<DesignElement>) =>
     onChange({ ...design, elements: elements.map((e) => (e.id === id ? { ...e, ...p } : e)) });
@@ -65,7 +66,7 @@ export function ShapePanel({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-white/70">
-          Shapes ({elements.length}/{MAX_ELEMENTS})
+          Shapes ({elements.length}/{cap})
         </span>
         <span className="text-[0.7rem] text-white/45">Decoration only — screen readers skip shapes.</span>
       </div>
@@ -75,7 +76,7 @@ export function ShapePanel({
         onIcon={(icon, weight, path) => !full && push(defaultIcon(icon, weight, path, { id: nextId(design, icon) }))}
         onObject={(id, path) => !full && push(defaultIcon(id, "fill", path, { id: nextId(design, id.replace(/^o-/, "")) }))}
       />
-      {full ? <p className="text-xs text-amber-300/80">This banner already has {MAX_ELEMENTS} shapes/icons — delete one to add another.</p> : null}
+      {full ? <p className="text-xs text-amber-300/80">This banner already has {cap} shapes/icons — delete one to add another.</p> : null}
 
       <BadgeStickers design={design} onChange={onChange} onSelect={onSelect} />
       <LiveBadges design={design} onChange={onChange} onSelect={onSelect} />

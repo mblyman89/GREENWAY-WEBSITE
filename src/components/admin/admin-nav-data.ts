@@ -99,6 +99,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Email Newsletter", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709\ufe0f", group: "MKTG & ADV" }, // ✉️ email
   { label: "Creative Studio", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" }, // 🎨 creative
   { label: "Merch Studio", href: "/admin/merch-studio", permission: "content.edit", icon: "\ud83d\udc55", group: "MKTG & ADV" }, // 👕 R70: apparel design studio for Greenway Glass & Goods (separate LLC; sold on its own separate domain)
+  { label: "Print Studio", href: "/admin/marketing/print-studio", permission: "content.edit", icon: "\ud83d\udda8\ufe0f", group: "MKTG & ADV" }, // D263: print designer (banners, flyers, stickers, signs) built on the Banner Studio editor
 
   // Employee: the command center (roster/onboarding/offboarding + handbook),
   // then schedule + time & pay + trade samples. Task S-b restructure.

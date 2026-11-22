@@ -12,7 +12,9 @@ import { useState } from "react";
 import {
   DESIGN_ROLES,
   MAX_BOX_TEXT,
-  MAX_TEXT_BOXES,
+  maxBoxes,
+  textMin,
+  printPt,
   boxPosition,
   defaultTextBox,
   nextId,
@@ -78,7 +80,7 @@ export function TextBoxPanel({
     onChange({ ...design, boxes: design.boxes.map((b) => (b.id === id ? { ...b, ...p } : b)) });
 
   function add(role: DesignRole) {
-    if (design.boxes.length >= MAX_TEXT_BOXES) return;
+    if (design.boxes.length >= maxBoxes(design)) return;
     const id = nextId(design, role);
     const sample: Record<DesignRole, string> = {
       eyebrow: "New label",
@@ -105,7 +107,7 @@ export function TextBoxPanel({
   }
 
   function duplicate(b: DesignTextBox) {
-    if (design.boxes.length >= MAX_TEXT_BOXES) return;
+    if (design.boxes.length >= maxBoxes(design)) return;
     const id = nextId(design, b.role);
     const copy: DesignTextBox = { ...b, id, bind: null, text: resolveBoxText(b, legacy), y: Math.min(95, b.y + 8) };
     onChange({ ...design, boxes: [...design.boxes, copy] });
@@ -118,11 +120,11 @@ export function TextBoxPanel({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-white/70">
-          Text boxes ({design.boxes.length}/{MAX_TEXT_BOXES})
+          Text boxes ({design.boxes.length}/{maxBoxes(design)})
         </span>
         <button
           type="button"
-          disabled={design.boxes.length >= MAX_TEXT_BOXES}
+          disabled={design.boxes.length >= maxBoxes(design)}
           onClick={() => setAdding((v) => !v)}
           className="rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black disabled:opacity-40"
           aria-expanded={adding}
@@ -209,9 +211,9 @@ export function TextBoxPanel({
 
           <FontSelect value={box.font} onChange={(font) => patch(box.id, { font })} preview />
 
-          <div className="grid grid-cols-2 gap-3">
-            <NumberSlider label="Size — computer" value={box.size} min={8} max={160} unit="px" onChange={(size) => patch(box.id, { size })} />
-            <NumberSlider label="Size — phone" value={box.sizeMobile} min={6} max={96} step={0.5} unit="px" onChange={(sizeMobile) => patch(box.id, { sizeMobile })} />
+          <div className={design.frame.print ? "grid gap-3" : "grid grid-cols-2 gap-3"}>
+            <NumberSlider label={design.frame.print ? `Size (prints about ${printPt(box.size, design.frame.print)} pt)` : "Size — computer"} value={box.size} min={textMin(design)} max={160} step={design.frame.print ? 0.5 : 1} unit="px" onChange={(size) => patch(box.id, { size })} />
+            {design.frame.print ? null : <NumberSlider label="Size — phone" value={box.sizeMobile} min={6} max={96} step={0.5} unit="px" onChange={(sizeMobile) => patch(box.id, { sizeMobile })} />}
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
@@ -338,7 +340,7 @@ export function TextBoxPanel({
             <Toggle label="Hide on phones" checked={box.hideOnMobile} onChange={(hideOnMobile) => patch(box.id, { hideOnMobile })} />
           </div>
           <div className="flex flex-wrap gap-2 border-t border-white/10 pt-2">
-            <button type="button" className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-40" disabled={design.boxes.length >= MAX_TEXT_BOXES} onClick={() => duplicate(box)}>
+            <button type="button" className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-40" disabled={design.boxes.length >= maxBoxes(design)} onClick={() => duplicate(box)}>
               Duplicate
             </button>
             {mobile && (box.mx !== null || box.my !== null || box.mw !== null || box.sizeMobile !== roleInfo(box.role).sizeMobile) ? (
