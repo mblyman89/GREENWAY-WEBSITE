@@ -5,12 +5,17 @@
  * item, to each other for a group), distribute, duplicate, copy / paste (works
  * between banners — the clipboard is this browser's storage), rotate, and
  * delete a whole group. Ctrl/⌘ + C / V / D do the same from the keyboard.
+ * D263 S10: layer order for one item or a group - Ctrl/⌘+] forward,
+ * Ctrl/⌘+[ backward, add Shift for all the way (Figma / Illustrator keys).
  */
 import { useEffect, useRef, useState } from "react";
-import type { BannerDesign, DesignDevice } from "@/lib/cms/banner-design-core";
+import { PlaceFields } from "./PlaceFields";
+import { designLayers, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
 import {
   CLIPBOARD_KEY,
   alignRects,
+  arrangeOrder,
+  canReorder,
   copyItems,
   distributeRects,
   parseClipboard,
@@ -19,11 +24,19 @@ import {
   rotateItem,
   setPositions,
   type AlignMode,
+  type OrderMove,
   type ItemRef,
   type PctRect,
 } from "@/lib/cms/banner-arrange-core";
 
 const btn = "rounded bg-white/10 px-2 py-1 text-[0.7rem] text-white/85 hover:bg-white/20 disabled:opacity-30";
+
+const ORDER: { move: OrderMove; label: string; title: string }[] = [
+  { move: "front", label: "⤒ Front", title: "Bring to front (Ctrl/⌘+Shift+])" },
+  { move: "forward", label: "↑ Forward", title: "Bring forward one layer (Ctrl/⌘+])" },
+  { move: "backward", label: "↓ Back", title: "Send backward one layer (Ctrl/⌘+[)" },
+  { move: "back", label: "⤓ To back", title: "Send to back (Ctrl/⌘+Shift+[)" },
+];
 
 const ALIGN: { mode: AlignMode; label: string; title: string }[] = [
   { mode: "left", label: "⇤", title: "Align left edges" },
@@ -77,6 +90,9 @@ export function ArrangeBar({
   const many = refs.length > 1;
   const one = refs.length === 1 ? refs[0]! : null;
 
+  const layerIds = designLayers(design).map((l) => l.id);
+  const selIds = refs.map((r) => r.id);
+  const order = (m: OrderMove) => refs.length && onChange(arrangeOrder(design, refs, m));
   const align = (mode: AlignMode) => onChange(setPositions(design, alignRects(measure(rootRef.current, refs), mode), device));
   const distribute = (axis: "h" | "v") => onChange(setPositions(design, distributeRects(measure(rootRef.current, refs), axis), device));
   const paste = (raw: string | null, label: string) => {
@@ -107,16 +123,23 @@ export function ArrangeBar({
   };
 
   // Ctrl/⌘ + C / V / D while focus is in the Studio (never while typing).
-  const api = useRef({ copy, duplicate, paste: () => paste(readClip(), "Pasted") });
+  const api = useRef({ copy, duplicate, paste: () => paste(readClip(), "Pasted"), order });
   useEffect(() => {
-    api.current = { copy, duplicate, paste: () => paste(readClip(), "Pasted") };
+    api.current = { copy, duplicate, paste: () => paste(readClip(), "Pasted"), order };
   });
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select") || t.isContentEditable || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      if (t.closest("input, textarea, select") || t.isContentEditable || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+      // Layer order: physical bracket keys (Shift turns "]" into "}" on most layouts).
+      if (e.code === "BracketRight" || e.code === "BracketLeft") {
+        e.preventDefault();
+        api.current.order(e.code === "BracketRight" ? (e.shiftKey ? "front" : "forward") : e.shiftKey ? "back" : "backward");
+        return;
+      }
+      if (e.shiftKey) return;
       const k = e.key.toLowerCase();
       if (k === "c" && window.getSelection()?.toString()) return; // copying selected text
       if (k === "c") api.current.copy();
@@ -144,6 +167,12 @@ export function ArrangeBar({
         ⇳ Space
       </button>
       <span className="mx-1 h-4 w-px bg-white/15" aria-hidden="true" />
+      {ORDER.map((o) => (
+        <button key={o.move} type="button" className={btn} disabled={!refs.length || !canReorder(layerIds, selIds, o.move)} onClick={() => order(o.move)} title={o.title} aria-label={o.title}>
+          {o.label}
+        </button>
+      ))}
+      <span className="mx-1 h-4 w-px bg-white/15" aria-hidden="true" />
       <button type="button" className={btn} disabled={!refs.length} onClick={duplicate} title="Duplicate (Ctrl/⌘+D)">
         ⧉ Duplicate
       </button>
@@ -166,6 +195,12 @@ export function ArrangeBar({
           />
           °
         </label>
+      ) : null}
+      {one && design.frame.print ? (
+        <>
+          <span className="mx-1 h-4 w-px bg-white/15" aria-hidden="true" />
+          <PlaceFields design={design} device={device} item={one} onChange={onChange} />
+        </>
       ) : null}
       {many ? (
         <>

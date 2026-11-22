@@ -20,7 +20,6 @@ export type GuideGap = { axis: "x" | "y"; from: number; to: number; at: number; 
 export type SmartSnap = { x: number; y: number; v: GuideLine[]; h: GuideLine[]; gaps: GuideGap[] };
 
 export const GUIDE_SNAP_PCT = 1.5;
-const half = (n: number) => Math.round(n * 2) / 2;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -91,7 +90,18 @@ function equalSnap(me: GuideRect, others: GuideRect[], axis: "x" | "y", limit: n
  * Snap a dragged item (top-left x,y; size w,h — all %) against the banner and
  * the other items. `on` = false (Alt held) → no snapping, readouts still shown.
  */
-export function smartSnap(x: number, y: number, w: number, h: number, others: GuideRect[], on: boolean, limit = GUIDE_SNAP_PCT): SmartSnap {
+/**
+ * D263 S10: snap reach in % for a frame drawn `framePx` wide on screen. Pro tools
+ * snap within a few SCREEN pixels, so zooming in gives finer control; web banners
+ * (not zoomed) keep GUIDE_SNAP_PCT.
+ */
+export function snapLimitPct(framePx: number, px = 6): number {
+  if (!(framePx > 0)) return GUIDE_SNAP_PCT;
+  return Math.min(GUIDE_SNAP_PCT, Math.max(0.005, (px / framePx) * 100));
+}
+
+export function smartSnap(x: number, y: number, w: number, h: number, others: GuideRect[], on: boolean, limit = GUIDE_SNAP_PCT, step = 0.5): SmartSnap {
+  const q = (n: number) => Math.round(Math.round(n / step) * step * 10000) / 10000;
   let v: GuideLine[] = [];
   let hs: GuideLine[] = [];
   let eqX = false;
@@ -126,9 +136,9 @@ export function smartSnap(x: number, y: number, w: number, h: number, others: Gu
       }
     }
   }
-  // Keep inside the banner (Studio rounds positions to 0.5%).
-  const fx = half(clamp(x, 0, 100 - Math.min(w, 100)));
-  const fy = half(clamp(y, 0, 100 - Math.min(h, 100)));
+  // Keep inside the banner (web rounds to 0.5%; print passes a finer step).
+  const fx = q(clamp(x, 0, 100 - Math.min(w, 100)));
+  const fy = q(clamp(y, 0, 100 - Math.min(h, 100)));
   // Re-fit the guide segments to the final spot (they were built from the pre-snap position).
   const fit = (lines: GuideLine[], lo: number, hi: number) => lines.map((l) => (l.from === 0 && l.to === 100 ? l : { ...l, from: r2(Math.min(l.from, lo)), to: r2(Math.max(l.to, hi)) }));
   const me: GuideRect = { id: "", x: fx, y: fy, w, h };

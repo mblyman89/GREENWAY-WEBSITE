@@ -1146,6 +1146,7 @@ import { __runCustomFontTests } from "../../src/lib/cms/custom-font-core";
 import { __runBannerArrangeTests } from "../../src/lib/cms/banner-arrange-core";
 import { __runButtonFxTests } from "../../src/lib/cms/button-fx-core";
 import { __runBannerGuidesTests } from "../../src/lib/cms/banner-guides-core";
+import { __runStudioZoomTests } from "../../src/lib/cms/studio-zoom-core";
 import { __runBannerMotionTests } from "../../src/lib/cms/banner-motion-core";
 import { __runBannerAtmosTests } from "../../src/lib/cms/banner-atmos-core";
 import { __runBannerCurveTests } from "../../src/lib/cms/banner-curve-core";
@@ -2794,8 +2795,9 @@ __runLiquidVolumeTests();
   assertRan("banner-elements-core", __runBannerElementsTests(), 52); // R55-S2/S3: shapes, layers, icons
   assertRan("color-input-core", __runColorInputTests(), 16); // R56-S1 any-colour input + recent colours
   assertRan("custom-font-core", __runCustomFontTests(), 19); // R56-S2 owner-uploaded fonts (licence box, byte sniff, same-origin @font-face)
-  assertRan("banner-arrange-core", __runBannerArrangeTests(), 26); // R56-S3 multi-select, align/distribute, duplicate, copy/paste, rotate, snap
+  assertRan("banner-arrange-core", __runBannerArrangeTests(), 38); // R56-S3 multi-select, align/distribute, duplicate, copy/paste, rotate, snap
   assertRan("button-fx-core", __runButtonFxTests(), 32); // R56-S4 button icon/gradient/shadow/hover/attention/corner + badge stickers
+  assertRan("studio-zoom-core", __runStudioZoomTests(), 20); // D263 S10 print workspace zoom: fit, actual size, cursor anchor, zoom to selection
   assertRan("banner-guides-core", __runBannerGuidesTests(), 18); // R57-S1 smart guides: snap to other items, equal spacing, px gap readouts
   assertRan("banner-motion-core", __runBannerMotionTests(), 32); // R57-S2 micro-interactions: motion, morph, orbit spark, border beam, hover
   assertRan("banner-atmos-core", __runBannerAtmosTests(), 32); // R58-S1 + R60-S1 pro clouds; smoke / fog / haze / bong hit layers + reveal

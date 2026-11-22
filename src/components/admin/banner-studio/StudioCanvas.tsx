@@ -18,7 +18,7 @@
  * D234 C-1: the website's fonts (StudioSiteFonts) and tags (h2/p/span).
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
-import {
+import { nudgeStep, placeStep, roundStep,
   boxPosition,
   boxMotionClass,
   boxStyle,
@@ -42,7 +42,7 @@ import { elementPosition } from "@/lib/cms/banner-elements-core";
 import { PrintGuides } from "./PrintGuides";
 import { BannerBeam, BannerPicture, BannerSmoke, StudioBoxText, StudioEntrances, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
-import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
+import { smartSnap, snapLimitPct, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { useStudioFontVars } from "./StudioSiteFonts";
@@ -52,7 +52,6 @@ export type StudioTarget = "box" | "button" | "element";
 export type StudioSelection = { target: StudioTarget; id: string } | null;
 
 const css = (s: Record<string, string>) => s as unknown as CSSProperties;
-const half = (n: number) => Math.round(n * 2) / 2;
 const SNAP = 1.5;
 
 type Drag = {
@@ -229,6 +228,10 @@ export function StudioCanvas({
     const dx = ((e.clientX - g.startX) / g.rectW) * 100;
     const dy = ((e.clientY - g.startY) / g.rectH) * 100;
     const snapOn = !e.altKey;
+    // D263 S10: print = fine grid; snap reach = 6 screen px (zoom in = finer).
+    const step = placeStep(designRef.current);
+    const q = (n: number) => roundStep(n, step);
+    const reach = designRef.current.frame.print ? snapLimitPct(g.rectW) : SNAP;
     const next: BannerDesign = JSON.parse(JSON.stringify(designRef.current));
     const v: (number | GuideLine)[] = [];
     const h: (number | GuideLine)[] = [];
@@ -244,25 +247,25 @@ export function StudioCanvas({
     if (g.mode === "resize" && g.target === "element") {
       const el = (next.elements ?? []).find((x) => x.id === g.id);
       if (!el) return;
-      const w = half(Math.min(100, Math.max(1, g.origW + dx)));
+      const w = q(Math.min(100, Math.max(1, g.origW + dx)));
       if (device === "mobile") el.mw = w;
       else el.w = w;
     } else if (g.mode === "resize" && g.target === "box") {
       const b = next.boxes.find((x) => x.id === g.id);
       if (!b) return;
       let w = Math.min(100 - g.origX, Math.max(5, g.origW + dx));
-      if (snapOn && Math.abs(g.origX + w - 100) <= SNAP) {
+      if (snapOn && Math.abs(g.origX + w - 100) <= reach) {
         w = 100 - g.origX;
         v.push(100);
       }
-      if (snapOn && Math.abs(g.origX + w / 2 - 50) <= SNAP && g.origX < 50) {
+      if (snapOn && Math.abs(g.origX + w / 2 - 50) <= reach && g.origX < 50) {
         w = (50 - g.origX) * 2;
         v.push(50);
       }
-      if (device === "mobile") b.mw = half(w);
-      else b.w = half(w);
+      if (device === "mobile") b.mw = q(w);
+      else b.w = q(w);
     } else {
-      const sn = smartSnap(g.origX + dx, g.origY + dy, g.itemWpct, g.itemHpct, g.others, snapOn);
+      const sn = smartSnap(g.origX + dx, g.origY + dy, g.itemWpct, g.itemHpct, g.others, snapOn, reach, step);
       v.push(...sn.v);
       h.push(...sn.h);
       gaps = sn.gaps;
@@ -321,8 +324,8 @@ export function StudioCanvas({
     if (many && (e.key === "Delete" || e.key === "Backspace")) return; // the Arrange bar removes the whole group
     if (dirs[e.key] && many) {
       e.preventDefault();
-      const st = e.shiftKey ? 5 : 0.5;
-      onChange(moveGroup(designRef.current, group, dirs[e.key][0] * st, dirs[e.key][1] * st, device));
+      const st = nudgeStep(designRef.current, e.shiftKey);
+      onChange(moveGroup(designRef.current, group, dirs[e.key][0] * st.x, dirs[e.key][1] * st.y, device));
     } else if (dirs[e.key]) {
       e.preventDefault();
       const [dx, dy] = dirs[e.key];

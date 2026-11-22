@@ -15,7 +15,10 @@ import {
   textMin,
   nextId,
   normalizeButton,
+  designLayers,
   normalizeTextBox,
+  placeStep,
+  roundStep,
   type BannerDesign,
   type DesignDevice,
 } from "./banner-design-core";
@@ -62,11 +65,12 @@ export function itemXY(design: BannerDesign, r: ItemRef, device: DesignDevice): 
 
 /** Write new top-left positions (by id) for one device; locked items are skipped. Returns a new design. */
 export function setPositions(design: BannerDesign, pos: Map<string, { x: number; y: number }>, device: DesignDevice): BannerDesign {
+  const step = placeStep(design); // D263 S10: print = fine placement
   const put = <T extends Movable & { id: string }>(it: T): T => {
     const p = pos.get(it.id);
     if (!p || it.locked) return it;
-    const x = half(clamp(p.x, 0, 100));
-    const y = half(clamp(p.y, 0, 100));
+    const x = roundStep(clamp(p.x, 0, 100), step);
+    const y = roundStep(clamp(p.y, 0, 100), step);
     return device === "mobile" ? { ...it, mx: x, my: y } : { ...it, x, y };
   };
   return {
@@ -286,6 +290,60 @@ export function snapMove(x: number, y: number, w: number, h: number, on: boolean
 
 // ── Self-tests ─────────────────────────────────────────────────────────────
 
+// D263 S10: layer order for one item or a whole selection (Figma/Illustrator rules).
+
+export type OrderMove = "front" | "forward" | "backward" | "back";
+
+/**
+ * Reorder `ids` (back -> front). The selected items move together and keep their
+ * order among themselves. forward/backward step past the next UNselected item
+ * (one real change per press, never a no-op swap within the selection).
+ */
+export function reorderIds(ids: string[], sel: string[], move: OrderMove): string[] {
+  const pick = new Set(sel.filter((id) => ids.includes(id)));
+  if (!pick.size) return ids.slice();
+  const picked = ids.filter((id) => pick.has(id));
+  const rest = ids.filter((id) => !pick.has(id));
+  if (move === "front") return [...rest, ...picked];
+  if (move === "back") return [...picked, ...rest];
+  const out = ids.slice();
+  if (move === "forward") {
+    for (let i = out.length - 2; i >= 0; i--) {
+      if (pick.has(out[i]!) && !pick.has(out[i + 1]!)) {
+        // Slide the selected run ending at i above the next unselected item.
+        let j = i;
+        while (j - 1 >= 0 && pick.has(out[j - 1]!)) j--;
+        const run = out.splice(j, i - j + 1);
+        out.splice(j + 1, 0, ...run);
+        i = j;
+      }
+    }
+  } else {
+    for (let i = 1; i < out.length; i++) {
+      if (pick.has(out[i]!) && !pick.has(out[i - 1]!)) {
+        let j = i;
+        while (j + 1 < out.length && pick.has(out[j + 1]!)) j++;
+        const run = out.splice(i, j - i + 1);
+        out.splice(i - 1, 0, ...run);
+        i = j;
+      }
+    }
+  }
+  return out;
+}
+
+/** Can this selection move that way at all? (for disabling buttons) */
+export function canReorder(ids: string[], sel: string[], move: OrderMove): boolean {
+  return reorderIds(ids, sel, move).join("|") !== ids.join("|");
+}
+
+/** Apply a layer move to the design (writes design.order). */
+export function arrangeOrder(design: BannerDesign, refs: ItemRef[], move: OrderMove): BannerDesign {
+  const ids = designLayers(design).map((l) => l.id);
+  const next = reorderIds(ids, refs.map((r) => r.id), move);
+  return next.join("|") === ids.join("|") ? design : { ...design, order: next };
+}
+
 export function __runBannerArrangeTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -360,5 +418,22 @@ export function __runBannerArrangeTests(): { passed: number; failed: number } {
   ok(s1.x === 0 && s1.v[0] === 0 && s1.y === 48 && s1.h[0] === 50, "snap edges + middle");
   ok(snapMove(0.8, 49, 10, 4, false).x === 1 && snapMove(0.8, 49, 10, 4, false).v.length === 0, "alt = no snap");
   ok(snapMove(95, 99, 10, 4, false).x === 90 && snapMove(95, 99, 10, 4, false).y === 96, "kept inside");
+
+  // D263 S10 layer order (back -> front).
+  const L5 = ["a", "b", "c", "d", "e"];
+  ok(reorderIds(L5, ["b"], "front").join("") === "acdeb", "to front");
+  ok(reorderIds(L5, ["d"], "back").join("") === "dabce", "to back");
+  ok(reorderIds(L5, ["b"], "forward").join("") === "acbde", "forward 1");
+  ok(reorderIds(L5, ["b"], "backward").join("") === "bacde", "backward 1");
+  ok(reorderIds(L5, ["b", "c"], "forward").join("") === "adbce", "group forward keeps inner order");
+  ok(reorderIds(L5, ["b", "d"], "forward").join("") === "acbed", "split group forward");
+  ok(reorderIds(L5, ["b", "d"], "backward").join("") === "badce", "split group backward");
+  ok(reorderIds(L5, ["b", "d"], "front").join("") === "acebd", "group to front keeps order");
+  ok(reorderIds(L5, ["e"], "forward").join("") === "abcde" && !canReorder(L5, ["e"], "forward") && !canReorder(L5, ["e"], "front"), "front-most can't go forward");
+  ok(!canReorder(L5, ["a", "b"], "back") && canReorder(L5, ["a", "c"], "back"), "back-most run");
+  ok(reorderIds(L5, ["zz"], "front").join("") === "abcde", "unknown id");
+  const od = arrangeOrder(d0, [A], "back");
+  ok(od.order?.[0] === A.id, "arrangeOrder writes order");
+  ok(arrangeOrder(od, [A], "back") === od, "no-op returns same design");
   return { passed, failed };
 }
