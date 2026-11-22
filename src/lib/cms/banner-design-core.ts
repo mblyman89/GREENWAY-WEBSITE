@@ -1596,17 +1596,54 @@ export function snapPercent(v: number, guides: number[] = [0, 50, 100], threshol
   return v;
 }
 
-const half = (n: number) => Math.round(n * 2) / 2;
+
+/**
+ * D263 S10: placement precision. Web banners keep the 0.5% grid (byte-identical).
+ * Print designs place to 0.001% of the canvas (0.001" on a 96" banner) so zoomed-in
+ * corrections stick. Arrow keys move print items 1 pt (Shift = 10 pt) in real size.
+ */
+export const PRINT_PLACE_STEP = 0.001;
+export function placeStep(design: Pick<BannerDesign, "frame">): number {
+  return design.frame?.print ? PRINT_PLACE_STEP : 0.5;
+}
+export function roundStep(n: number, step: number): number {
+  return Math.round(Math.round(n / step) * step * 10000) / 10000;
+}
+/** % per arrow press on each axis (Shift = 10x). */
+export function nudgeStep(design: Pick<BannerDesign, "frame">, shift = false): { x: number; y: number } {
+  const p = design.frame?.print;
+  if (!p) return shift ? { x: 5, y: 5 } : { x: 0.5, y: 0.5 };
+  const pts = shift ? 10 : 1;
+  return { x: (pts * 100) / ((p.w + 2 * p.bleed) * 72), y: (pts * 100) / ((p.h + 2 * p.bleed) * 72) };
+}
+/** Print: canvas % <-> inches from the TRIM top-left (what a designer measures). */
+export function pctToIn(pct: number, axis: "x" | "y", p: DesignPrint): number {
+  const total = axis === "x" ? p.w + 2 * p.bleed : p.h + 2 * p.bleed;
+  return Math.round(((pct / 100) * total - p.bleed) * 1000) / 1000;
+}
+export function inToPct(inches: number, axis: "x" | "y", p: DesignPrint): number {
+  const total = axis === "x" ? p.w + 2 * p.bleed : p.h + 2 * p.bleed;
+  return Math.round(((inches + p.bleed) / total) * 100 * 10000) / 10000;
+}
+/** Print: a size in % of the canvas width/height <-> inches. */
+export function spanToIn(pct: number, axis: "x" | "y", p: DesignPrint): number {
+  return Math.round(((pct / 100) * (axis === "x" ? p.w + 2 * p.bleed : p.h + 2 * p.bleed)) * 1000) / 1000;
+}
+export function inToSpan(inches: number, axis: "x" | "y", p: DesignPrint): number {
+  return Math.round((inches / (axis === "x" ? p.w + 2 * p.bleed : p.h + 2 * p.bleed)) * 100 * 10000) / 10000;
+}
 
 /** Apply a move (desktop writes x/y, mobile writes mx/my). Unknown id → unchanged design. */
 export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign {
+  const step = placeStep(design);
+  const q = (n: number) => roundStep(n, step);
   // R55: locked items never move (Draft Mode drag included).
   if (move.target === "element") {
     // R56: shapes/icons move in Draft Mode too (free within 0–100%, like the Studio).
     const el = (design.elements ?? []).find((e) => e.id === move.id);
     if (!el || el.locked) return design;
-    const x = half(Math.min(100, Math.max(0, move.x)));
-    const y = half(Math.min(100, Math.max(0, move.y)));
+    const x = q(Math.min(100, Math.max(0, move.x)));
+    const y = q(Math.min(100, Math.max(0, move.y)));
     const elements = (design.elements ?? []).map((e) => (e.id !== move.id ? e : move.device === "mobile" ? { ...e, mx: x, my: y } : { ...e, x, y }));
     return { ...design, elements };
   }
@@ -1617,8 +1654,8 @@ export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign 
     const b = next.boxes.find((x) => x.id === move.id);
     if (!b) return design;
     const w = move.device === "mobile" ? (b.mw ?? b.w) : b.w;
-    const x = half(Math.min(100 - w, Math.max(0, move.x)));
-    const y = half(Math.min(100, Math.max(0, move.y)));
+    const x = q(Math.min(100 - w, Math.max(0, move.x)));
+    const y = q(Math.min(100, Math.max(0, move.y)));
     if (move.device === "mobile") {
       b.mx = x;
       b.my = y;
@@ -1629,8 +1666,8 @@ export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign 
   } else {
     const b = next.buttons.find((x) => x.id === move.id);
     if (!b) return design;
-    const x = half(Math.min(100, Math.max(0, move.x)));
-    const y = half(Math.min(100, Math.max(0, move.y)));
+    const x = q(Math.min(100, Math.max(0, move.x)));
+    const y = q(Math.min(100, Math.max(0, move.y)));
     if (move.device === "mobile") {
       b.mx = x;
       b.my = y;
@@ -1642,17 +1679,18 @@ export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign 
   return next;
 }
 
-/** Keyboard alternative to dragging (WCAG 2.5.7). Step 0.5%, Shift = 5%. */
+/** Keyboard alternative to dragging (WCAG 2.5.7). Web: 0.5%, Shift = 5%. Print: 1 pt, Shift = 10 pt (D263 S10). */
 export function nudge(design: BannerDesign, target: "box" | "button" | "element", id: string, dx: number, dy: number, device: DesignDevice, shift = false): BannerDesign {
-  const step = shift ? 5 : 0.5;
+  const st = nudgeStep(design, shift);
+  const q = (n: number) => roundStep(n, placeStep(design));
   if (target === "element") {
     // R55: shapes move freely (they may bleed off the edge for effect, within 0–100%).
     const el = (design.elements ?? []).find((e) => e.id === id);
     if (!el || el.locked) return design;
     const cx = device === "mobile" ? (el.mx ?? el.x) : el.x;
     const cy = device === "mobile" ? (el.my ?? el.y) : el.y;
-    const x = half(Math.min(100, Math.max(0, cx + dx * step)));
-    const y = half(Math.min(100, Math.max(0, cy + dy * step)));
+    const x = q(Math.min(100, Math.max(0, cx + dx * st.x)));
+    const y = q(Math.min(100, Math.max(0, cy + dy * st.y)));
     const elements = (design.elements ?? []).map((e) => (e.id !== id ? e : device === "mobile" ? { ...e, mx: x, my: y } : { ...e, x, y }));
     return { ...design, elements };
   }
@@ -1660,7 +1698,7 @@ export function nudge(design: BannerDesign, target: "box" | "button" | "element"
   if (!item || item.locked) return design;
   const cx = device === "mobile" ? (item.mx ?? item.x) : item.x;
   const cy = device === "mobile" ? (item.my ?? item.y) : item.y;
-  return applyMove(design, { target, id, x: cx + dx * step, y: cy + dy * step, device });
+  return applyMove(design, { target, id, x: cx + dx * st.x, y: cy + dy * st.y, device });
 }
 
 /** Validate a cross-frame move message (gw-design-move). */

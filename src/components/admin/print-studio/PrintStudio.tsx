@@ -17,7 +17,7 @@ import { PrintExport } from "./PrintExport";
 import { PrintPages, allPages, setPages } from "./PrintPages";
 import { BusinessCardBuilder } from "./BusinessCardBuilder";
 import { PrintSaved, type SavedRef } from "./PrintSaved";
-import { PrintCutLine, VistaprintHelper } from "./PrintFinish";
+import { PrintCutLine, VistaprintHelper, VistaprintLoginButton } from "./PrintFinish";
 import type { DesignCut } from "@/lib/cms/banner-design-core";
 import type { PrintDoc } from "@/lib/printing/print-designs-core";
 import type { PrintPage } from "@/lib/printing/print-doc-core";
@@ -197,6 +197,7 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
               </select>
             </>
           ) : null}
+          <VistaprintLoginButton className="order-last ml-auto" />
           <Button type="button" size="sm" onClick={start}>
             {draft ? "Start a new design at this size" : "Start designing"}
           </Button>

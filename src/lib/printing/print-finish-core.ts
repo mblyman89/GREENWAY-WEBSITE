@@ -88,6 +88,8 @@ export function cutTips(print: DesignPrint): string[] {
 // Vistaprint helpers ---------------------------------------------------------
 
 const VP = "https://www.vistaprint.com";
+/** Vistaprint account page (sends you to their sign-in when logged out). */
+export const VISTAPRINT_LOGIN_URL = `${VP}/my-account/`;
 export type VistaprintHelp = { product: string; url: string; uploadIn: string; uploadPx: string; steps: string[] };
 
 export function vistaprintHelp(p: PrintPreset, dpi: number): VistaprintHelp {

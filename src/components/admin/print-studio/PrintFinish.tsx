@@ -7,7 +7,7 @@
  */
 import type { DesignCut, DesignPrint } from "@/lib/cms/banner-design-core";
 import type { PrintPreset } from "@/lib/printing/print-sizes-core";
-import { CUT_SHAPES, DEFAULT_CUT, cutTips, vistaprintHelp } from "@/lib/printing/print-finish-core";
+import { CUT_SHAPES, DEFAULT_CUT, VISTAPRINT_LOGIN_URL, cutTips, vistaprintHelp } from "@/lib/printing/print-finish-core";
 
 const input = "rounded border border-white/15 bg-black/40 px-2 py-1 text-sm text-white";
 
@@ -60,12 +60,30 @@ export function PrintCutLine({ print, onChange }: { print: DesignPrint; onChange
   );
 }
 
+/** D263 S10: opens Vistaprint's sign-in / account page in a new tab. */
+export function VistaprintLoginButton({ className = "" }: { className?: string }) {
+  return (
+    <a
+      href={VISTAPRINT_LOGIN_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`inline-flex items-center gap-1 rounded bg-[#0070e0] px-3 py-1 text-xs font-bold text-white hover:bg-[#1a82ec] ${className}`}
+      title="Open Vistaprint's sign-in page in a new tab"
+    >
+      Sign in to Vistaprint ↗
+    </a>
+  );
+}
+
 export function VistaprintHelper({ preset, dpi }: { preset: PrintPreset; dpi: number }) {
   if (preset.vendor !== "vistaprint") return null;
   const h = vistaprintHelp(preset, dpi);
   return (
     <details className="rounded-md border border-white/10 p-2 text-xs">
       <summary className="cursor-pointer font-semibold">Ordering on Vistaprint - step by step</summary>
+      <p className="mt-2">
+        <VistaprintLoginButton />
+      </p>
       <p className="mt-1">
         Product:{" "}
         <a className="underline" href={h.url} target="_blank" rel="noopener noreferrer">
