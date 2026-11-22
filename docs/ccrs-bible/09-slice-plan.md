@@ -1565,3 +1565,7 @@ W1 (Inventory_413541_20261119141527.csv, 10,000 rows) came back with 13 "Invalid
 ### D259 — clean-up status after W6
 
 W1-W4 landed 9,987 each, W5 3,101 (43,049 lots zeroed, Reconciliations all succeeded). W6 held only the 15 lots CCRS rejected as Invalid Product (13 from W1 plus 2 WA416010DTW lots from W5): a rejected row leaves the ledger untouched, so the planner offers it again. Still open in CCRS and not ours: 136 = 15 rejected + 15 strain-not-filed + 106 counted on shelf. The 8 in the wave picker is a limit, not a plan; the plan was 5 waves.
+
+### D261 — hub tidy + clearer automatic-upload panel
+
+Hub gets two tabs: Weekly upload (default) and Setup & history (`?tab=setup`), which now holds the PREprod scoreboard, First day of sales, Hand-over and Late weeks. Migration clean-up moved to /admin/compliance/ccrs/cleanup. The CCRS files list scrolls after about 7 entries. The automatic-upload panel now says, side by side, what the owner does and what the run does by itself: it reads emitted files from the database, the run applies CCRS emails, and the gap is extra time on top of the email wait.

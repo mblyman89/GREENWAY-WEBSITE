@@ -198,7 +198,8 @@ export function CcrsFilesPanel(p: Props) {
           {p.files.length === 0 ? (
             <p className="text-xs text-white/40">No {p.env} files yet. Files appear here when the zip is downloaded with the ledger loaded.</p>
           ) : (
-            <ul className="space-y-2">
+            // D261: about 7 files in view; the rest scroll inside the panel.
+            <ul className="max-h-[42rem] space-y-2 overflow-y-auto pr-1" data-testid="ccrs-files-scroll">
               {p.files.map((f) => {
                 const acts = fileActions(f.state, f.uploadedAt ? new Date(f.uploadedAt) : null, now);
                 const iss = issuesOf(f.id);
