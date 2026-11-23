@@ -3660,3 +3660,14 @@ No code edits, as asked. Read-only findings delivered to the owner: every auth u
 
 ## D262 — 2026-11-22
 "thank you. looking much better. I have started the autobot. the first wave was sent, and I have received two success emails and one fail, in the strain file. it did not like the Jaba strain we had a hard time with last time. can you log in to supabase and query why this strain is still failing and what we need to do to get it recorded properly. the inventory file has been uploaded by the autobot and the process continues on as intended. I am curious about this jaba strain and if there are anything else in the ccrs branch that is of concern and should be addressed. follow the standing rules. thank you. also, I notice in my github there is an open pr, #1849. will you look into it and close it or fix it then close it. thank you."
+
+## D264 (verbatim) - iPad registers cannot download the menu (2026-11-23)
+
+"thank you. I need you to log in to supabase and help me figure out why my ipad registers are not able to connect to it. they are telling me they have failed to download the latest menu and are using a fallback menu. please look into this and fix it as quick as possible. the menu is old and the discounts are old, so everything is broken right now. please try and be quick and efficient and get this fixed quick please."
+
+### As-built (D264)
+
+- Supabase was healthy: devices authenticate, every menu read returned 200 in ~3 s, no errors.
+- Cause: the automated dependency bump 227bbdcd (11-22 21:46 UTC) moved Next.js 16.4.3 -> 16.4.6. Since 16.4.5 Next strips a route handler's own `Content-Encoding` header, and 16.4.6 then gzips the response again. /api/pos/menu gzips its own body (R74 S43), so the register received gzip bytes it could not parse and fell back to its saved menu (old products and old deals).
+- Fix: Next pinned back to 16.4.3 (revert of the bump), the version the registers last downloaded with. The route keeps its own gzip because the plain bundle is over Vercel's 4.5 MB function response cap. Do NOT take Next 16.4.5 or later until /api/pos/menu is changed to stay under the cap another way (e.g. a trimmed or split bundle), and until vercel/next.js PR #101452 (keep Content-Encoding) ships.
+- No migration. After deploy: tap Refresh menu on each iPad.
