@@ -375,6 +375,20 @@ const PRINT_PLACEMENTS: CreativePlacement[] = [
     promptHint: "very wide 2:1 banner composition, one bold focal subject, minimal detail (viewed from far away), no text in the image",
     printNote: "Covers ~6×3 ft at ~70 DPI (fine for 10–25 ft viewing). For larger banners, the print vendor upscales.",
   },
+  {
+    // D271: full-size 6′×12′ banner art (144×72″). FLUX caps at ~4 MP, so it renders at the largest exact 2:1 size
+    // and Print Studio's "Enlarge for print" (up to 4× → 11520×5760 = 80 DPI at 12 ft) makes it print without blur.
+    id: "print-banner-6x12",
+    group: "print",
+    label: "Giant banner — 6′ × 12′ (2:1)",
+    where: "A full 6×12 ft vinyl banner (12–40 ft viewing → 40–80 DPI).",
+    width: 2880,
+    height: 1440,
+    format: "png",
+    tip: "Made for the 6′×12′ Print Studio preset. Open it in Print Studio → 🧩 Images → Enlarge for print to reach 80 DPI so it prints sharp.",
+    promptHint: "very wide 2:1 giant banner composition, one bold focal subject with clean edges, simple background, crisp detail, no text in the image",
+    printNote: "Print target: 144×72″. Generated at 2880×1440 (FLUX ~4 MP cap) — use Print Studio “Enlarge for print” (4× → 11520×5760, 80 DPI) before printing.",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -480,6 +494,7 @@ export function __runCreativePlacementsTests(): string {
   // Print slots carry explicit print notes.
   ok(Boolean(placementById("print-flyer-letter")!.printNote), "flyer has print note");
   ok(Boolean(placementById("print-window-banner")!.printNote), "banner has print note");
+  ok(placementById("print-banner-6x12")!.width === 2 * placementById("print-banner-6x12")!.height, "6x12 is 2:1");
 
   // Grouping + lookups.
   const groups = placementsByGroup();

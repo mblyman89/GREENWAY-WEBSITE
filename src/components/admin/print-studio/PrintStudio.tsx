@@ -273,6 +273,7 @@ export function PrintStudio({ mediaChoices, fluxConfigured }: { mediaChoices: Me
               posts={[]}
               printViewFt={draft.preset.viewFt}
               mediaChoices={mediaChoices}
+              onBackground={(url) => setDraft((d) => (d ? { ...d, imageSrc: url } : d))}
             />
           </section>
 

@@ -52,7 +52,7 @@ export type PictureToolDef = {
 export const PICTURE_TOOLS: PictureToolDef[] = [
   { key: "generate", label: "Make a picture", help: "Describe it; the AI draws a new picture in the shape you pick.", needsSource: false, needsMask: false, ask: "required", engines: ["gpt", "gemini", "flux"] },
   { key: "edit", label: "Edit with words", help: "Say what to change in the selected picture (put it on a wooden counter, add warm light...).", needsSource: true, needsMask: false, ask: "required", engines: ["gpt", "gemini", "flux"] },
-  { key: "remove-bg", label: "Remove background", help: "Cuts the subject out. GPT Image gives a see-through PNG; Gemini puts it on white.", needsSource: true, needsMask: false, ask: "none", engines: ["gpt", "gemini"] },
+  { key: "remove-bg", label: "Remove background", help: "Cuts the subject out into a see-through PNG (the AI isolates it, our server cuts the background away).", needsSource: true, needsMask: false, ask: "none", engines: ["gpt", "gemini"] },
   { key: "erase", label: "Erase (paint over it)", help: "Paint over what should go; FLUX fills the spot to match the background.", needsSource: true, needsMask: true, ask: "optional", engines: ["flux"] },
   { key: "replace", label: "Replace what I paint", help: "Paint an area and say what goes there instead (FLUX).", needsSource: true, needsMask: true, ask: "required", engines: ["flux"] },
   { key: "extend", label: "Extend / stretch", help: "Grow the picture on any side, or to a banner shape; FLUX draws the new edges.", needsSource: true, needsMask: false, ask: "optional", engines: ["flux"] },

@@ -3727,3 +3727,16 @@ Done. Merch Studio > Design > Selected (a picture) now shows the "Printful Optim
 - AI fix tab: FLUX Kontext Pro "Optimize for Printful (flat redraw)" keeps the same design and wording with N solid colours (using your Colours picks), crisp edges and no shading, on magenta. The magenta is then cut out, with optional notes (e.g. bolder text or a heavier font) that are WAC-checked. There are also Sharpen (FLUX Deblur) and Enlarge to 300 DPI. The result is previewed, saved to Media, logged against the AI budget and audited.
 - Checks list: a one-click "Fix" on blockers and warnings. Some patch the element directly: move & fit inside, enlarge letters, thicken lines, opacity 100%. Others open the right tool: optimizer / colours for photo, gradient, DPI and thread issues, or Select for font and colour choices.
 Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the canvas picture directly, because artwork lives on this device.
+
+## D271
+
+"Thank you. I'd like to now jump over to the print studio. I'd like the ability to add an image to the canvas that does not fill the full canvas. I want to be able to move the image around and resize it. Set it to the front, or move it back, and modify it like the other images can be modified. This should be in addition to the image selector that fills the full canvas. I'd like to add to the creative studio an image size of 6'x12' so I can use full size images that print with no blur. I'd like to be able to create images to add to the canvas as directly from the print studio. I want to be able to use flux to add smaller images to the canvas. Or to take what's on the canvas and recreate it as one image. That sort of thing. The ai features like background removable or paint over or paint to remove and double the pixels and such, please make sure they all work with our ai models or system and tweak them so they work properly with our system. The print studio is meant to be a superior version of canva. So make sure you build it to be better than their service. It's very close to beating them currently I think. It just needs all of the various cherry on top types of features added."
+
+### Status (D271)
+
+- New element kind `image` (placed pictures): move, resize, rotate, layer order (front/forward/back/to back), lock, duplicate, flip, fit, corners, border, shadow, opacity, colour adjust. Full-canvas background picture unchanged.
+- Print Studio 🧩 Images tab: library/upload/drag-drop, FLUX.2 "make a picture" (optional cut-out, selected picture as reference), "Recreate canvas as one image" (FLUX.2 with canvas snapshot), live print-DPI readout per picture.
+- AI tools per picture: remove background (local key-out → FLUX Kontext magenta + server key-out), paint to erase/replace, FLUX edit, sharpen (FLUX deblur), Enlarge for print (up to 4×, 12000 px, lanczos3).
+- Remove-bg fixed app-wide: GPT/Gemini now render on flat magenta and the server keys it out (no transparent-output requests).
+- Creative Studio: new "Giant banner — 6′ × 12′ (2:1)" size (2880×1440, FLUX 4 MP cap) with print note → Enlarge for print to 11520×5760 (80 DPI).
+- Pure core `print-layers-core` (33 asserts) wired into run-pure-selftests.

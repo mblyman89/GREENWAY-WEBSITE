@@ -43,14 +43,16 @@ import type { PickerPost } from "./LinkPicker";
 import { useStudioAi } from "./StudioAi";
 import { PrintWorkspace, type WsTab } from "./PrintWorkspace";
 import { ZoomViewport } from "./ZoomViewport";
+import { PicturesPanel } from "./PicturesPanel";
 
-type Tab = "text" | "buttons" | "shapes" | "anims" | "animate" | "smoke" | "layers" | "picture" | "checks";
+type Tab = "text" | "buttons" | "shapes" | "anims" | "animate" | "smoke" | "layers" | "picture" | "pictures" | "checks";
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
 // D263 S11: the Print Studio's left rail (wide = the panel opens wider in Auto width).
 const PRINT_TABS: WsTab[] = [
   { id: "text", icon: "✏️", label: "Text" },
-  { id: "picture", icon: "🖼", label: "Picture", title: "Picture & shade", wide: true },
+  { id: "picture", icon: "🖼", label: "Picture", title: "Background picture & shade", wide: true },
+  { id: "pictures", icon: "🧩", label: "Images", title: "Images on the canvas (move, resize, layer, AI)", wide: true },
   { id: "shapes", icon: "◆", label: "Shapes", title: "Shapes, icons & QR", wide: true },
   { id: "smoke", icon: "💨", label: "Smoke", title: "Smoke & fog", wide: true },
   { id: "buttons", icon: "🔘", label: "Buttons" },
@@ -68,7 +70,10 @@ export function BannerStudio({
   mediaChoices,
   onLegacyEdit,
   printViewFt = 3,
+  onBackground,
 }: {
+  /** D271: Print Studio — set the full-canvas background picture from the Images tab. */
+  onBackground?: (url: string) => void;
   /** D263: Print Studio reading distance (ft) for QR size checks. */
   printViewFt?: number;
   design: BannerDesign;
@@ -197,7 +202,13 @@ export function BannerStudio({
     if (s?.target === "button" && tab !== "buttons") setTab("buttons");
     // R55: shapes open their own tab (unless the owner is working in Layers).
     // R60: Lottie / Rive layers open the 🎞️ Animations tab.
-    const isAnim = s?.target === "element" && design.elements?.find((e) => e.id === s.id)?.kind === "anim";
+    const kind = s?.target === "element" ? design.elements?.find((e) => e.id === s.id)?.kind : undefined;
+    const isAnim = kind === "anim";
+    // D271: placed images open the 🧩 Images tab.
+    if (kind === "image" && tab !== "layers") {
+      if (tab !== "pictures") setTab("pictures");
+      return;
+    }
     if (s?.target === "element" && tab !== "layers") {
       if (isAnim && tab !== "anims") setTab("anims");
       if (!isAnim && tab !== "shapes") setTab("shapes");
@@ -249,7 +260,7 @@ export function BannerStudio({
   const printing = !!design.frame.print;
   // R41 S8: AI suggestion (drafts only — Apply changes unsaved studio state).
   const studioAi = useStudioAi({ design, imageSrc, legacy, device, setDevice, change });
-  const tabBtn = (id: Tab, label: string) => (
+  const tabBtn = (id: Exclude<Tab, "pictures">, label: string) => (
     <Tip key={id} text={TAB_HELP[id]}>
       <button
         type="button"
@@ -317,6 +328,8 @@ export function BannerStudio({
         <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={replay} mediaChoices={mediaChoices} />
       ) : tab === "layers" ? (
         <LayersPanel design={design} legacy={legacy} selection={selection} onSelect={select} onChange={change} />
+      ) : tab === "pictures" ? (
+        <PicturesPanel design={design} imageSrc={deviceSrc} printViewFt={printViewFt} selection={selection} mediaChoices={mediaChoices} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} onBackground={onBackground} />
       ) : tab === "picture" ? (
         <ImagePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} mediaChoices={mediaChoices} />
       ) : (
@@ -329,7 +342,7 @@ export function BannerStudio({
       <KeySheet mode={help.sheet} onMode={help.setSheet} onClose={() => help.setSheet(false)} onGo={goStep} />
       <ConfirmDialog
         open={!!pendingDelete}
-        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? (design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "anim" ? "Delete this animation?" : "Delete this shape or icon?") : "Delete this text box?"}
+        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? (design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "anim" ? "Delete this animation?" : design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "image" ? "Delete this image?" : "Delete this shape or icon?") : "Delete this text box?"}
         description="You can bring it back with Undo until you leave the page."
         confirmLabel="Delete"
         tone="danger"
