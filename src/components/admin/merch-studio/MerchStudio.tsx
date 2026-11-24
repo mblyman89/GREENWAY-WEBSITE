@@ -17,6 +17,7 @@ import { PublishPanel, type MerchAdBlockVM } from "./PublishPanel";
 import { JourneyBar, type JourneyServer } from "./JourneyBar";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { STUDIO_TABS, type StudioTab } from "@/lib/merch-studio/studio-tabs-core";
+import type { ArtChoice } from "@/lib/merch-studio/art-prep-core";
 
 // The tab list lives in a plain module so the server page can read it too.
 const TABS = STUDIO_TABS;
@@ -27,7 +28,7 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
   /** From ?tab= (server-validated). Wins over the tab remembered on this device. */
   initialTab?: StudioTab;
   /** R71 S4: the merch.ad block + media picker choices for Publish & Ads. */
-  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean; isOwner?: boolean };
+  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[]; canPublish?: boolean; isOwner?: boolean; art?: ArtChoice[] };
   /** D232 M-3b: catalog + last Merch Health facts for the Product journey stepper. */
   journey?: JourneyServer;
 }) {
@@ -95,7 +96,7 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
       <div role="tabpanel">
         {tab === "garments" ? <CatalogPanel blankId={blankId} colorHex={colorHex} onBlank={setBlank} onColor={(hex) => setColorHex(hex)} picked={picked} onPicked={setPicked} /> : null}
         {/* Design only mounts client-side after the selection restore (tab starts on Garments for SSR), so its localStorage boot is hydration-safe. */}
-        {tab === "design" && restored ? <DesignStudio blankId={blankId} colorHex={colorHex} setBlank={setBlank} setColor={setColorHex} /> : null}
+        {tab === "design" && restored ? <DesignStudio blankId={blankId} colorHex={colorHex} setBlank={setBlank} setColor={setColorHex} art={publish?.art} /> : null}
         {/* Proof reads the saved drafts from this browser, so it also mounts only after the restore. It remounts on every visit, so it always reads the latest autosaved drafts. */}
         {tab === "proof" && restored ? <ProofPanel rights={{ canApprove: publish?.canPublish ?? false, isOwner: publish?.isOwner ?? false }} /> : null}
         {tab === "check" ? <ArtCheckPanel key={blankId} blankId={blankId} colorHex={colorHex} /> : null}

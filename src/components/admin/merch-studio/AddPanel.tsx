@@ -12,6 +12,8 @@ import { SHAPE_KINDS, shapePoints, type ShapeKind } from "@/lib/cms/banner-eleme
 import { LibraryPicker, type LibraryItem } from "@/components/admin/banner-studio/LibraryPicker";
 import { Row, Segmented, studioInput } from "@/components/admin/banner-studio/controls";
 import type { Method, Placement } from "@/lib/merch-studio/garment-catalog-core";
+import type { ArtChoice } from "@/lib/merch-studio/art-prep-core";
+import { ArtLibraryPanel } from "./ArtLibraryPanel";
 
 export interface TextPreset { id: string; label: string; text: string; letterIn: number; curve?: number; weight?: 400 | 700 | 900; hint: string }
 export function textPresets(p: Placement): TextPreset[] {
@@ -29,7 +31,7 @@ const pathThumb = (d: string | undefined) => (
   <svg viewBox="0 0 256 256" className="h-full w-full" aria-hidden="true" focusable="false">{d ? <path d={d} fill="currentColor" /> : null}</svg>
 );
 
-export function AddPanel({ placement, method, disabled, onText, onShape, onIcon, onFile, busy }: {
+export function AddPanel({ placement, method, disabled, onText, onShape, onIcon, onFile, busy, art = [] }: {
   placement: Placement;
   method: Method;
   disabled: boolean;
@@ -37,7 +39,9 @@ export function AddPanel({ placement, method, disabled, onText, onShape, onIcon,
   onText: (text: string, letterIn: number, curve: number, weight: 400 | 700 | 900) => void;
   onShape: (shape: string) => void;
   onIcon: (path: string, label: string) => void;
-  onFile: (f: File) => void;
+  onFile: (f: File) => void | Promise<void>;
+  /** D267: Media library + Brand kit pictures, logos first. */
+  art?: ArtChoice[];
 }) {
   const [lib, setLib] = useState<"shapes" | "icons" | "objects">("icons");
   const [txt, setTxt] = useState("");
@@ -63,8 +67,9 @@ export function AddPanel({ placement, method, disabled, onText, onShape, onIcon,
         <h3 className="pt-2 text-sm font-semibold text-white">Artwork</h3>
         <Row label="Upload art" hint="Stays in this browser (not uploaded yet). Best: transparent PNG at 300 DPI at print size, or SVG. 12 in wide = 3600 px.">
           <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" disabled={disabled || busy} className="text-xs text-white/80"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.currentTarget.value = ""; }} />
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.currentTarget.value = ""; }} />
         </Row>
+        <ArtLibraryPanel choices={art} placement={placement} disabled={disabled || busy} onFile={onFile} />
         {method === "embroidery" ? <p className="text-[0.72rem] text-[var(--admin-gold)]">Embroidery: Printful digitizes your art into stitches. Flat colours only, no gradients or photos - the checks will tell you.</p> : null}
         {busy ? <p className="text-xs text-white/60">Reading image...</p> : null}
       </section>

@@ -35,6 +35,7 @@ import { getAsset, inspectImage, loadDesigns, measureLinesEm, putAsset, saveDesi
 import { contentHash, parseImport } from "@/lib/merch-studio/merch-design-sync-core";
 import { archiveMerchDesignAction } from "@/app/admin/merch-studio/design-actions";
 import { downloadArt, loadMeta, pushDesign, saveMeta, syncDesigns } from "./design-sync";
+import type { ArtChoice } from "@/lib/merch-studio/art-prep-core";
 
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
@@ -56,7 +57,7 @@ function initial(blankId: string, colorHex: string): { list: MerchDesign[]; cur:
 /** Wall clock for undo grouping - only ever called from event handlers, never during render. */
 const clockMs = () => Date.now();
 
-export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankId: string; colorHex: string; setBlank: (id: string) => void; setColor: (hex: string) => void }) {
+export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }: { blankId: string; colorHex: string; setBlank: (id: string) => void; setColor: (hex: string) => void; art?: ArtChoice[] }) {
   const [boot] = useState(() => initial(blankId, colorHex));
   const [list, setList] = useState<MerchDesign[]>(boot.list);
   const [design, setDesign] = useState<MerchDesign>(boot.cur);
@@ -534,7 +535,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
             onText={addText}
             onShape={(s) => addEl(makeShape({ w: placement.widthIn, h: placement.heightIn }, s, defaultInk()))}
             onIcon={(path, label) => addEl(makeIcon({ w: placement.widthIn, h: placement.heightIn }, path, label, defaultInk()))}
-            onFile={(f) => { void onFile(f); }} />
+            onFile={onFile} art={art} />
         ) : null}
 
         {sub === "selected" ? (
