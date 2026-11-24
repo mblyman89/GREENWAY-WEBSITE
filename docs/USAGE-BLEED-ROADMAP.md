@@ -746,13 +746,23 @@ the *clock*-driven differences only.
 Post-7f probe: product pages now regenerate byte-identical (`pdp IDENTICAL`), so the
 remaining lever is the size of each write. USAGE-8 trims bytes every page repeats.
 
-### USAGE-8a — loading skeletons ship as client references (this PR)
+### USAGE-8a — loading skeletons ship as client references (PR #1893)
 
 `src/app/(site)/loading.tsx` and `src/app/(site)/menu/loading.tsx` were server
 components, so their whole skeleton tree rode in every page's RSC payload (4.6 KB
 row + 3.3 KB segment seed on a product page). Both are now `"use client"`; the
 payload carries one module reference. Pinned by `client-loading-core.ts` +
 `tests/compliance/usage-8a-client-loading.test.ts`.
+
+### USAGE-8b — footer images ship a 1x/2x srcSet (this PR)
+
+Every fixed-size footer image (5 social glyphs, 2 app-store glyphs, the app
+wordmark, the black-gold logo) passed `sizes="NNpx"`, which makes next/image emit
+a srcSet over all 15 configured widths (32w…3840w): ~2 KB of HTML per tag. The
+footer renders a mobile and a desktop tree, so a product page carried 18 such tags
+(~36 KB of HTML) in every response and ISR write. They now pass their displayed
+pixel size (`CHROME_IMAGE_PX`) and no `sizes`, so the srcSet is a 1x/2x pair. Same
+pixels on screen; the hours card keeps its responsive `sizes` (`lg:max-w-none`).
 
 
 ## How to verify each slice

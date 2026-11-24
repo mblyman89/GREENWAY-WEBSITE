@@ -1,4 +1,6 @@
 import Image from "next/image";
+// USAGE-8b: fixed size + no `sizes` = a 2-entry (1x/2x) srcSet, not 15 widths.
+import { CHROME_IMAGE_PX } from "@/lib/site/chrome-image-core";
 import Link from "@/components/site/IntentLink";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
@@ -123,10 +125,9 @@ function AppDownload({ align = "center", links }: { align?: "center" | "end"; li
       <Image
         src={greenwayBusiness.assets.appDownloadWordmark}
         alt="App download"
-        width={420}
-        height={420}
+        width={CHROME_IMAGE_PX.appWordmark.width}
+        height={CHROME_IMAGE_PX.appWordmark.height}
         className="h-14 w-auto object-contain"
-        sizes="140px"
       />
       <div className="flex items-center gap-3">
         {appStores.map((store) => (
@@ -184,10 +185,9 @@ async function MobileFooter({ links }: { links: FooterLinks }) {
         <Image
           src={greenwayBusiness.assets.blackGoldLogo}
           alt="Greenway Marijuana Port Orchard WA established 2014"
-          width={360}
-          height={360}
+          width={CHROME_IMAGE_PX.logoMobile.width}
+          height={CHROME_IMAGE_PX.logoMobile.height}
           className="h-auto w-44 object-contain"
-          sizes="176px"
         />
       </Link>
 
@@ -250,10 +250,9 @@ async function DesktopFooter({ links }: { links: FooterLinks }) {
             <Image
               src={greenwayBusiness.assets.blackGoldLogo}
               alt="Greenway Marijuana Port Orchard WA established 2014"
-              width={360}
-              height={360}
+              width={CHROME_IMAGE_PX.logoDesktop.width}
+              height={CHROME_IMAGE_PX.logoDesktop.height}
               className="h-auto w-48 object-contain"
-              sizes="192px"
             />
           </Link>
           <p className="mt-4 text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Port Orchard, WA</p>

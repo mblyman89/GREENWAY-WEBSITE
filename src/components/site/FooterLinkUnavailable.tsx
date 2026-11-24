@@ -21,6 +21,8 @@
  */
 
 import Image from "next/image";
+// USAGE-8b: fixed size + no `sizes` = a 2-entry (1x/2x) srcSet, not 15 widths.
+import { CHROME_IMAGE_PX } from "@/lib/site/chrome-image-core";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 type Props = {
@@ -83,10 +85,9 @@ export function FooterLinkUnavailable({
     <Image
       src={src}
       alt={label}
-      width={88}
-      height={88}
+      width={CHROME_IMAGE_PX.glyph.width}
+      height={CHROME_IMAGE_PX.glyph.height}
       className="h-11 w-11 object-contain"
-      sizes="44px"
     />
   );
 
