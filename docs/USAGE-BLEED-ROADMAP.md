@@ -693,7 +693,7 @@ by the shop search haystack and the cart, and `variants`/`compounds` are read
 by the card potency line. Dropping them needs a card-level refactor, so they
 are listed under "left to do".
 
-### USAGE-7f — bucketed render clock + verification runbook (this PR)
+### USAGE-7f — bucketed render clock + verification runbook (PR #1892)
 
 **Cause.** Vercel does not bill a regeneration whose output is byte-identical
 to the stored copy. Two public outputs embedded the render instant:
@@ -741,6 +741,19 @@ the *clock*-driven differences only.
    `/menu/products/…?_rsc=` requests until a card is hovered (7a).
 
 ---
+## USAGE-8 — second batch (2026-11-25)
+
+Post-7f probe: product pages now regenerate byte-identical (`pdp IDENTICAL`), so the
+remaining lever is the size of each write. USAGE-8 trims bytes every page repeats.
+
+### USAGE-8a — loading skeletons ship as client references (this PR)
+
+`src/app/(site)/loading.tsx` and `src/app/(site)/menu/loading.tsx` were server
+components, so their whole skeleton tree rode in every page's RSC payload (4.6 KB
+row + 3.3 KB segment seed on a product page). Both are now `"use client"`; the
+payload carries one module reference. Pinned by `client-loading-core.ts` +
+`tests/compliance/usage-8a-client-loading.test.ts`.
+
 
 ## How to verify each slice
 
