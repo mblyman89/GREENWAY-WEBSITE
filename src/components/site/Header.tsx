@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { HEADER_LOGO_PX } from "@/lib/site/header-logo-core";
 import Link from "@/components/site/IntentLink";
 import { greenwayBusiness } from "@/content/business";
 import { DesktopMenu } from "@/components/site/DesktopMenu";
@@ -35,11 +36,13 @@ export async function Header() {
             src={logoSrcFinal}
             alt="Greenway Marijuana"
             unoptimized={!optimizable}
-            width={5891}
-            height={1170}
+            // USAGE-8f: the widest display box (xl:w-[25rem]), not the 5891 px
+            // asset, and no `sizes`: next/image emits a 1x/2x srcSet (640/828)
+            // instead of a long width list in every page and its preload link.
+            width={HEADER_LOGO_PX.width}
+            height={HEADER_LOGO_PX.height}
             priority
             className={`h-auto w-[clamp(8.4rem,44vw,10.25rem)]${customLogo ? " max-h-16 object-left" : ""} object-contain transition duration-200 group-hover:opacity-85 sm:w-[11.75rem] md:w-[19rem] lg:w-[22rem] xl:w-[25rem]`}
-            sizes="(min-width: 1280px) 400px, (min-width: 1024px) 352px, (min-width: 768px) 304px, (min-width: 640px) 188px, 44vw"
           />
         </Link>
 

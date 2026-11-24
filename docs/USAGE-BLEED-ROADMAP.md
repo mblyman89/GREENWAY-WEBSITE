@@ -787,9 +787,13 @@ stored (rule 18). Every promotion / specials / never-discount action clears the 
 keep the uncached read — pinned by `usage-8d-display-rules-cache.test.ts`.
 Saves function CPU/DB time per regeneration; ISR bytes are unchanged.
 
-### USAGE-8e — /loyalty and /medical: 3600 s floor (this PR)
+### USAGE-8e — /loyalty and /medical: 3600 s floor (PR #1897)
 
 Both pages show CMS copy, banners and loyalty program numbers. They show no menu data, yet they regenerated every 60 s. Every writer already clears them by path: the loyalty page, hero and program editors, the medical editor, and the `/(site)` layout for chrome, banners and rules. So the TTL is only a safety net. It goes from 60 to 3600 s, which cuts up to 23 identical ISR writes per page per hour. An edit still appears on the next load. Pinned by `content-page-ttl-core.ts` and `usage-8e-content-page-ttl.test.ts`.
+
+### USAGE-8f — header logo ships a 1x/2x srcSet (this PR)
+
+The header wordmark appears on every page. It declared its 5891×1170 asset size plus a 5-breakpoint `sizes` attribute, so next/image wrote a long srcSet into both the `<img>` and the priority preload `<link>`: about 6 KB per ISR write. It now declares the widest box it is shown at (`xl:w-[25rem]`, 400×79) and has no `sizes`, so it emits 640w/828w. CSS still sets the displayed width, and the ratio is unchanged. Trade-off: a 1x phone fetches the 640w variant, a few KB, once per browser cache. Pinned by `header-logo-core.ts` and `usage-8f-header-logo.test.ts`.
 
 
 ## How to verify each slice

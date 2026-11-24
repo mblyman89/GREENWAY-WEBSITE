@@ -645,6 +645,7 @@ import { __runClientLoadingTests } from "../../src/lib/site/client-loading-core"
 import { __runChromeImageTests } from "../../src/lib/site/chrome-image-core"; // USAGE-8b
 import { __runDisplayRulesCacheTests } from "../../src/lib/promotions/display-rules-cache-core"; // USAGE-8d
 import { __runContentPageTtlTests } from "../../src/lib/site/content-page-ttl-core"; // USAGE-8e
+import { __runHeaderLogoTests } from "../../src/lib/site/header-logo-core"; // USAGE-8f
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3067,6 +3068,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("chrome-image-core", __runChromeImageTests(), 9); // USAGE-8b: fixed-size footer images drop the fixed-px sizes prop, so next/image emits a 1x/2x srcSet instead of 15 widths (~2 KB of HTML per tag, 18 tags per page)
   assertRan("display-rules-cache-core", __runDisplayRulesCacheTests(), 7); // USAGE-8d: storefront layout/home/specials read the published rules from a tagged 60 s display cache; money paths keep the uncached read (rule 18)
   assertRan("content-page-ttl-core", __runContentPageTtlTests(), 6); // USAGE-8e: /loyalty and /medical revalidate on publish with a 3600 s floor instead of regenerating every 60 s
+  assertRan("header-logo-core", __runHeaderLogoTests(), 5); // USAGE-8f: header wordmark declares its 400 px display box and no sizes, so every page ships a 1x/2x srcSet + preload instead of a long width list
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
