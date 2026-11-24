@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/lib/seo/seo";
 

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import type { NavigationItem } from "@/components/site/navigation-data";
 
 type NavLinkProps = {

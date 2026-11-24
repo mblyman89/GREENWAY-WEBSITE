@@ -1,7 +1,7 @@
 "use client";
 
 import { WebFonts } from "@/components/fonts/WebFonts";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { useCallback } from "react";
 import type { RenderSlide } from "@/lib/cms/carousel-types";
 import { BannerMedia } from "@/components/site/BannerMedia";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { useEffect } from "react";
 
 type ErrorPageProps = {

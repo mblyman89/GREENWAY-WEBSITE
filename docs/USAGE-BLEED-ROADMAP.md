@@ -484,6 +484,88 @@ recommendation is to delete rows older than 90 days, once a month.
    send the output of steps 2 and 3 back. The next lever is chosen from that
    evidence, not guessed.
 
+## USAGE-7 — the ISR-write bleed (2026-11-24)
+
+**Owner request (verbatim).** *"I need your help optimizing the system so it
+stops bleeding resources from vercel. … I want recon and audit done first, then
+research the internet for the proper enterprise grade solutions that are expert
+level. Then return back with a summary report and roadmap strategy for fixing
+it."* and then *"please begin fixing all issues, one slice at a time. dont stop
+until all of the first 6 slices are done. then report back with a summary report
+of what was done and what is left to do. please follow the standing rules."*
+
+**The bill (cycle 13% in, ends 2026-12-20).** ISR Writes 1.85M ($8.88, +269%),
+Observability Events 3.97M ($4.76), Build CPU 952 min, Fluid Active CPU 16.87 h
+(+325%), Deployment Storage 657.84 GB, Fast Origin Transfer 27.98 GB (+205%),
+Provisioned Memory 92.6 GB-h, Function Storage 377.31 GB, Invocations 417.16K
+(+284%), ISR Reads 437.14K — total $26.98, on pace for ≈ $200.
+
+**Owner dashboard actions already taken (Phase 0).** Observability Plus:
+project excluded. Speed Insights: off. Deployment retention: shortened.
+Staging project: removed. AI-bot ruleset: log mode. Spend cap: not yet set.
+
+**Baseline — Vercel → Observability → ISR, production, last 12 h
+(2026-11-24, before USAGE-7a):** 328K write units, 109K read units; 5.3K
+cache-relevant requests; 1.6K time-based revalidations; 683 tag revalidations.
+By route (reads / writes / unique paths): `/menu/products/[id]` 891 / 6.1K /
+1.5K · `/menu/[category]` 594 / 0 / 19 · `/` 254 / 0 / 1 · `/menu` 248 / 388 / 1
+· `/locations` 120 / 174 · `/loyalty` 105 / 132 · `/specials` 88 / 162 ·
+`/about` 78 / 131 · `/price-match` 70 / 102 · `/medical` 69 / 96 · `/faq` 50 /
+80 · `/blog` 48 / 82 · `/vendor-delivery` 42 / 68 · legal pages ≈ 45 each.
+
+**What the measurements say (live production, 2026-11-24).**
+1. *Writes outnumber reads* on every route: pages are regenerated more often
+   than they are read. A page is re-rendered whenever a visitor hits a copy
+   older than 60 s, and **every regeneration is a billed write**, because the
+   output is never byte-identical: two renders of `/about` 75 s apart differ
+   only in RSC row ids (React Flight numbering), and the same is true of a
+   product page. Vercel: "When revalidation runs and the content hasn't
+   changed … no ISR write units are incurred" — ours always "changes".
+2. *Size multiplies it.* `/`, `/menu`, `/specials` and each category page are
+   4.5–4.9 MB on the wire (8–9 MB uncompressed): the client grid receives all
+   2,712 menu items (3.4 MB of JSON) to show 48 cards. A product page is
+   324 KB; the small pages ≈ 240 KB, of which ≈ 160 KB is inline RSC.
+3. *Prefetch feeds the regenerations.* Every public page carries ≈ 52 `<Link>`s
+   that Next.js prefetches when they scroll into view (full route for static
+   routes). A shop page with 48 cards prefetched up to 48 product pages per
+   visit, which is how 1.5K distinct product paths were touched in 12 h while
+   only 891 product reads were real page loads.
+
+**Slices (rule 5: six per batch).**
+
+| Slice | What | Expected effect |
+| --- | --- | --- |
+| USAGE-7a | Public links prefetch on intent (hover / focus / touch), not on sight. `IntentLink` + repo guard. | Product-page writes and reads collapse to pages people actually open |
+| USAGE-7b | The 60 s page TTL is decoupled from the data TTL: pages regenerate on demand (publish / edit → `revalidatePublicMenuSurfaces`) with a long safety floor | Regenerations stop being driven by the clock |
+| USAGE-7c | Stock and price freshness move off the page: the card's live numbers come from the uncached path at view time, so a long page TTL never shows stale stock | Keeps "no stale stock" while 7b lengthens the TTL |
+| USAGE-7d | Slim grid projection: fields no card, filter or sort reads are dropped before the catalog is serialized | Shop pages shrink; every remaining write is smaller |
+| USAGE-7e | Narrow invalidation: per-batch coalescing instead of one whole-site clear per product (vendor kits, bulk publish) | Tag revalidations fall from ≈ 1/min |
+| USAGE-7f | Deterministic "New" tag clock (Pacific-day bucket) + verification runbook | Same data → same bytes where React allows |
+
+Each slice records its own before/after below as it lands.
+
+### USAGE-7a — intent prefetch (this PR)
+
+`src/lib/site/intent-prefetch-core.ts` (pure, `__runIntentPrefetchTests`, 25
+assertions, registered in `run-pure-selftests.ts`) and
+`src/components/site/IntentLink.tsx`, Next.js's documented hover-prefetch
+pattern (`node_modules/next/dist/docs/01-app/02-guides/prefetching.md`,
+"Hover-triggered prefetch": `prefetch={active ? null : false}`), extended to
+keyboard focus and touch-start. 29 public files now `import Link from
+"@/components/site/IntentLink"`, so every `<Link>` is unchanged at the call
+site. `tests/compliance/usage-7a-intent-prefetch.test.ts` walks the public tree
+and fails if any public file imports `next/link` directly (allow-list:
+the wrapper, and `BackToMenuLink`, already `prefetch={false}`); a mutation
+(Footer reverted to `next/link`) turns it red. Admin and the register are out
+of scope (behind login, dynamic, no ISR).
+
+**Verify.** Observability → ISR → Routes, 12 h after the deploy:
+`/menu/products/[id]` *Unique Paths* and *Writes* should fall sharply (the
+baseline was 1.5K paths / 6.1K writes); browser devtools on `/menu`: scrolling
+the grid issues no `/menu/products/…?_rsc=` requests until a card is hovered.
+
+---
+
 ## How to verify each slice
 
 **Vercel.** Team → Usage → filter to `greenway_website`, by meter: *Function

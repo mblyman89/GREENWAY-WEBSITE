@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { WebFonts } from "@/components/fonts/WebFonts";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";

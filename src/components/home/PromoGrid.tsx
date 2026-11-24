@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { WebFonts } from "@/components/fonts/WebFonts";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { HomeBrands } from "@/components/home/HomeBrands";
 import { SectionBanner, type SectionBannerButton } from "@/components/home/SectionBanner";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";

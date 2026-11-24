@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { greenwayBusiness } from "@/content/business";

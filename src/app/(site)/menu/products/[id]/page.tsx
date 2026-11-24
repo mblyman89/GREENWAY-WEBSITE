@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { notFound } from "next/navigation";
 import { RelatedProductCard } from "@/components/menu/RelatedProductCard";
 import { BackToMenuLink } from "@/components/menu/BackToMenuLink";

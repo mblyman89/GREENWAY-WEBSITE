@@ -22,7 +22,7 @@
  * purchase-limit TABLE stays LIVE from the compliance core so an edit can never
  * overpromise or drift the legal table.
  */
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { SiteText } from "@/components/site/SiteText";
 import { purchaseLimitRows } from "@/lib/medical/purchase-limit-display-core";
 

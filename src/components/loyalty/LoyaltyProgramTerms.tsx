@@ -6,7 +6,7 @@
  * `@/lib/loyalty/loyalty-store`, and this renders the same numbers the
  * register pays with — the back office is the single source of truth.
  */
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import type { LoyaltyTermsSummary, TierDisplayRow } from "@/lib/loyalty/program-terms-core";
 
 type LoyaltyProgramTermsProps = {

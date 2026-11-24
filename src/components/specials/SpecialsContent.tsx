@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import { DesignedCard } from "@/components/site/DesignedCard";

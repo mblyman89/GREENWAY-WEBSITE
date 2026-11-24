@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-core";
