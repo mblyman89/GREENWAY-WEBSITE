@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { greenwayBusiness } from "@/content/business";
 import { getContentValues } from "@/lib/cms/render-content";
 import { selectClassName } from "@/lib/cms/content-select-core";

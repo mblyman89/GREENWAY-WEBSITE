@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";

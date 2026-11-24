@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
 import { ComplianceWarningText } from "@/components/site/ComplianceWarningText";

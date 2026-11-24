@@ -635,6 +635,7 @@ import { __runTimeCardCoreTests } from "../../src/lib/payroll/time-card-core";
 import { __runPayPreviewCoreTests } from "../../src/lib/payroll/pay-preview-core";
 import { __runSageCompareCoreTests } from "../../src/lib/payroll/sage-compare-core";
 import { __runPayrollStatsCoreTests } from "../../src/lib/payroll/payroll-stats-core";
+import { __runIntentPrefetchTests } from "../../src/lib/site/intent-prefetch-core"; // USAGE-7a
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3047,6 +3048,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("pay-preview-core", __runPayPreviewCoreTests(), 40); // D248 slice 3: pay-run preview register - Sage paystub columns, re-add checks, totals, CSV
   assertRan("sage-compare-core", __runSageCompareCoreTests(), 41); // D248 slice 4: Sage comparison - amount parsing, tolerances, verdicts, summary, stored-doc and CSV-paste parsing
   assertRan("payroll-stats-core", __runPayrollStatsCoreTests(), 43); // D248 slice 5: payroll stats - week ranges, per-week OT split, estimated labor, weekday/hour coverage, break compliance, sick, exclusions
+  assertRan("intent-prefetch-core", __runIntentPrefetchTests(), 24); // USAGE-7a: public links prefetch on intent (hover / focus / touch), not on sight; repo guard keeps next/link out of public files
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

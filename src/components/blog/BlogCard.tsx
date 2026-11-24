@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { WebFonts } from "@/components/fonts/WebFonts";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import type { BlogPost } from "@/lib/blog/posts";
 import { formatBlogDate } from "@/lib/blog/format-date";
 import { resolveTitleStyle } from "@/lib/blog/title-style";

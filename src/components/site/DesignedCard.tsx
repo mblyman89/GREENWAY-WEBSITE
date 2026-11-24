@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import type { CSSProperties } from "react";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { DesignedBanner } from "./DesignedBanner";

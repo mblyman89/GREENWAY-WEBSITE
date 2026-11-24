@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { VendorGlowCard } from "@/components/vendors/VendorGlowCard";
 import type { PromoBannerContent } from "@/components/home/PromoGrid";

@@ -23,7 +23,7 @@
  */
 
 import { WebFonts } from "@/components/fonts/WebFonts";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { useCallback } from "react";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import {

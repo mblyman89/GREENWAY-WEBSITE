@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { WebFonts } from "@/components/fonts/WebFonts";
 import type { CSSProperties } from "react";
 import {

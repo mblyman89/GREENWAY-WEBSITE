@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { pageMetadata } from "@/lib/seo/seo";

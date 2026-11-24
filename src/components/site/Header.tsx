@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { greenwayBusiness } from "@/content/business";
 import { DesktopMenu } from "@/components/site/DesktopMenu";
 import { HeaderCartButton } from "@/components/site/HeaderCartButton";

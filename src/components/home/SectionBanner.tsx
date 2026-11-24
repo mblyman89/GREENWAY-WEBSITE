@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { BannerMedia } from "@/components/site/BannerMedia";

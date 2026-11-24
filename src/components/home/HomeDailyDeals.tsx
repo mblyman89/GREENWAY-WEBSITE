@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { useMemo } from "react";
 import { ProductCard } from "@/components/menu/ProductCard";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";

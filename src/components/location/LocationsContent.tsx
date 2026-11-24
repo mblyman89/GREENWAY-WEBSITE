@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { PhoneText } from "@/components/site/PhoneText";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import type { ReactNode } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";

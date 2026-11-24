@@ -12,7 +12,7 @@
  * lightweight client-side session check, so it never affects SSR/SEO.
  */
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/site/IntentLink";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
