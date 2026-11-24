@@ -3751,3 +3751,30 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - One shared loader (`WebFonts`): every public renderer (site layout, DesignedBanner, Home hero, Promo grid, Shop banner, Loyalty hero, Blog card + article) loads uploaded + Google fonts on demand, de-duplicated.
 - Rules widened: `fontStack` resolves `gf:` ids; hero font validation accepts any known font (uploads + library), script detection works for all; blog titles accept any known font.
 - Merch print export now embeds Google-library fonts too (uploaded fonts already embedded).
+
+## D273
+
+"thank you. lets move back to merch. I created my first hat and published it on the site. I then purchased it. It is my test of the system and will be my test of the garment itself when it arrives. I need your help fixing a recommended printful permission, the "recommended: stores_list (has orders/read, orders, sync_products/read, sync_products, file_library/read, file_library, webhooks/read, webhooks). Fix: Make a new token with the missing permissions ticked (a token's permissions cannot be edited), then replace it in both projects." please walk me through how to get the right token set up in both projects. the other thing I need you to help me with is the customer facing merch site, I have changed all of the product cards to show my own mock ups, but they do not show up on the website. when I click into the card detail, the product photos show up as they should. I am changing the product cards from the back office website -> Merch Product Cards. setting these images and publishing them does not change what they look like on the customer facing website. another thing I noticed, when I hid the hat from the website, it does not hide it from the website, but rather, when you add it to your cart, it just auto removes it. this is great, but the customer needs to be told that the item is not for sale currently, or actually hide it from the menu. I like the comment option, so it shows what we have had, or will have again soon, but currently unavailable. I have another agent working right now, so please complete all work, push it out of the sandbox, but wait to merge to the repo until I tell you it is safe to do so. follow the standing rules. thank you."
+
+### Status (D273)
+
+- Card pictures: the feed was publishing them, and the code rendered them locally. The live shop fell back to the built-in pictures because the merch project's `MERCH_CONTENT_URL` pointed at `/api/merch-catalog`. **The owner fixed the env var (no code).** The hidden-product behaviour resolved itself once the shop read the right feeds (owner, D274: "no code changes needed").
+- Printful `stores_list`: it is not in Printful's public scope table, and a single-store token cannot have it. Merch Health no longer recommends it.
+  - H-2 is green for orders + webhooks.
+  - H-4 is green for a single-store token that may not list stores.
+  - The S-4 setup step now says to tick orders, sync_products, file_library and webhooks.
+  - New self-test (merch-health-core 29).
+
+## D274
+
+"thank you. I had merch_content_url set to "catalog" for some reason. changing it to "content" solved the issue. Now, I need you to help me figure out if the test order I placed went through on printfuls side. stripe charged the bank account, I see it in my stripe dashboard. I can not find anywhere on my printful dashboard where this order is or how to see it. I have done nothing on printfuls side product wise. I have all my accounts set up, reseller permit is approved and active. I am guessing I need to import the orders? or import the products I created and published to my website? help me figure out this last piece of the puzzle. as for the hidden product issue, that was solved with the images issue being solved. there is no code changes needed. please help me with final pieces to the process so I can start publishing the rest of my catalog. follow the standing rules. thank you."
+
+### Status (D274)
+
+- Guidance only, no new order code. Nothing needs importing into Printful: the shop's Stripe webhook sends each paid Washington order to Printful through the API as a **draft**. The order body carries the catalog variant id plus the print-file URLs, so no Printful "product" or sync is needed.
+- Drafts appear under Printful → Orders for the API store the token was made for, filtered by Draft. They are not charged or produced until **Confirm**, from the back office Orders → Merch → the order, greenwaymerch.com/admin/orders, or Printful.
+- If the draft is missing, check:
+  - Stripe → Webhooks → the endpoint's event response, plus the owner alert email or the Merch alerts inbox;
+  - the store selector in Printful (the token's store);
+  - Merch Health H-5 and H-16.
+- Ships together with the D273 health fix on branch `d274-merch-order-guide`.
