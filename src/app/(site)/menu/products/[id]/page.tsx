@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "@/components/site/IntentLink";
 import { notFound } from "next/navigation";
 import { RelatedProductCard } from "@/components/menu/RelatedProductCard";
+import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
 import { BackToMenuLink } from "@/components/menu/BackToMenuLink";
 import { ProductDetailPurchasePanel } from "@/components/menu/ProductDetailPurchasePanel";
 import { Footer } from "@/components/site/Footer";
@@ -659,7 +660,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
           {relatedItems.length > 0 ? (
             <div className="mt-5 -mx-4 flex snap-x items-stretch gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {relatedItems.map((related) => {
+              {/* USAGE-9c: the related rail gets the same trimmed projection the
+                  shop grid sends to the same card (ProductCardVisual). Pinned by
+                  src/lib/menu/related-projection-core.ts. */}
+              {toMenuGridItems(relatedItems).map((related) => {
                 return (
                   <RelatedProductCard
                     key={related.id}
