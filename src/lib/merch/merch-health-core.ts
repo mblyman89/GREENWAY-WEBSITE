@@ -76,9 +76,14 @@ export interface MerchHealthInput {
 export const PRINTFUL_WEBHOOK_TYPES = ["package_shipped", "order_failed", "order_canceled", "order_put_hold"] as const;
 /** D232 M-6 (G-83): plus stock_updated, relayed to /api/merch-stock. */
 export const PRINTFUL_STOCK_TYPE = "stock_updated";
-/** Required: orders (create, confirm, cancel). Recommended: webhooks (register + check), stores_list (H-4). */
+/**
+ * Required: orders (create, confirm, cancel). Recommended: webhooks (register + check).
+ * D273: stores_list is NOT recommended any more. It is not in Printful's public
+ * scope table and a single-store token can't have it, so asking for it kept a
+ * correct token amber. H-4 reads the store list only when the token allows it.
+ */
 export const PRINTFUL_SCOPES_REQUIRED = ["orders"] as const;
-export const PRINTFUL_SCOPES_RECOMMENDED = ["webhooks", "stores_list"] as const;
+export const PRINTFUL_SCOPES_RECOMMENDED = ["webhooks"] as const;
 
 const DAY_MS = 86_400_000;
 
@@ -205,7 +210,9 @@ export function buildMerchHealth(i: MerchHealthInput): MerchHealthReport {
     const names = list.map((s) => String((s as { name?: unknown })?.name ?? "")).filter(Boolean);
     add({ id: "H-4", group: "Printful", title: "Printful store", level: list.length === 1 ? "ok" : list.length === 0 ? "fail" : "warn", detail: list.length === 1 ? `Store: ${names[0] ?? "(no name)"}.` : list.length === 0 ? "The token sees no store." : `The token sees ${list.length} stores (${names.join(", ")}); orders go to PRINTFUL_STORE_ID.`, fix: list.length === 1 ? "" : "Use a token made for the one Greenway store, or set PRINTFUL_STORE_ID.", sop: "§4.2 S-4" });
   } else {
-    add({ id: "H-4", group: "Printful", title: "Printful store", level: i.stores && (i.stores.status === 401 || i.stores.status === 403) && i.scopes?.status === 200 ? "warn" : "unknown", detail: i.stores ? `${pfProblem(i.stores)} The store list needs the stores_list permission.` : "Not checked.", fix: "Optional: tick stores_list on the next token you make.", sop: "§4.2 S-4" });
+    // D273: a single-store token may not list stores (no stores_list); that is fine - it can only use its own store.
+    const single = !!i.stores && (i.stores.status === 401 || i.stores.status === 403) && i.scopes?.status === 200;
+    add({ id: "H-4", group: "Printful", title: "Printful store", level: single ? "ok" : "unknown", detail: single ? "Single-store token: it can only send orders to the store it was made for (the store list is not needed)." : i.stores ? pfProblem(i.stores) : "Not checked.", fix: "", sop: "§4.2 S-4" });
   }
   if (i.webhooks && i.webhooks.status === 200) {
     const w = (i.webhooks.body ?? {}) as { url?: unknown; types?: unknown };
@@ -352,6 +359,7 @@ export function __runMerchHealthCoreTests(): { passed: number; failed: number } 
   ok("shop 404 explains the token", buildMerchHealth({ ...base, shop: { status: 404, body: null } }).checks.find((c) => c.id === "H-11")!.detail.includes("same value in both"));
   ok("printful 401 -> H-1 red", buildMerchHealth({ ...base, scopes: { status: 401, body: null } }).checks.find((c) => c.id === "H-1")!.level === "fail");
   ok("no token -> H-1 red", buildMerchHealth({ ...base, printfulConfigured: false, scopes: null }).checks[0].level === "fail");
+  ok("D273 single-store token (no stores_list) is green on H-2 and H-4", (() => { const r = buildMerchHealth({ ...base, scopes: { status: 200, body: { scopes: ["orders/read", "orders", "sync_products/read", "sync_products", "file_library/read", "file_library", "webhooks/read", "webhooks"].map((scope) => ({ scope })) } }, stores: { status: 403, body: null } }); return r.checks.find((c) => c.id === "H-2")!.level === "ok" && r.checks.find((c) => c.id === "H-4")!.level === "ok"; })());
   ok("missing orders scope red; missing webhooks amber", buildMerchHealth({ ...base, scopes: { status: 200, body: { scopes: [{ scope: "webhooks" }, { scope: "stores_list/read" }] } } }).checks[1].level === "fail" && buildMerchHealth({ ...base, scopes: { status: 200, body: { scopes: [{ scope: "orders" }, { scope: "stores_list" }] } } }).checks[1].level === "warn");
   ok("expiry: none amber, 20 days amber, 5 days red, expired red", [["", "warn"], ["2026-12-01", "warn"], ["2026-11-16", "fail"], ["2026-11-01", "fail"], ["2027-01-01", "ok"]].every(([d, l]) => buildMerchHealth({ ...base, tokenExpires: d }).checks[2].level === l));
   ok("webhook missing / elsewhere red, missing type amber", buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: "", types: [] } } }).checks[4].level === "fail" && buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: "https://old.example.com/hook", types: [...PRINTFUL_WEBHOOK_TYPES] } } }).checks[4].level === "fail" && buildMerchHealth({ ...base, webhooks: { status: 200, body: { url: (base.webhooks!.body as { url: string }).url, types: ["package_shipped"] } } }).checks[4].level === "warn");

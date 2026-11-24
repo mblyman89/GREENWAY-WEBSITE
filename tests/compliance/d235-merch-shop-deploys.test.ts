@@ -54,10 +54,10 @@ describe("D235: the shop deploys every merch change", () => {
 });
 
 describe("D235: Merch Health names a missing route", () => {
-  it("core self-test passes (28)", () => {
+  it("core self-test passes (29)", () => {
     const r = __runMerchHealthCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(28);
+    expect(r.passed).toBe(29);
   });
 
   it("HTML 404 = route missing; the fix is a redeploy, not the token", () => {

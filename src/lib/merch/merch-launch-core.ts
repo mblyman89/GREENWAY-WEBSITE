@@ -99,7 +99,7 @@ export const LAUNCH_STEPS: readonly LaunchStep[] = [
     todo: [
       "developers.printful.com → Your tokens → Create token, name greenway-websites.",
       "Access level: A single store → the store from step 2.",
-      "Tick orders, webhooks, file_library, and stores_list if offered.",
+      "Tick orders, sync_products, file_library and webhooks (full access). stores_list is not needed for a single-store token.",
       "Choose the longest expiry. Copy the token now (Printful shows it once).",
       "Type the expiry date below; Merch Health warns you 30 and 7 days before.",
     ],
