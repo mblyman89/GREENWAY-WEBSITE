@@ -69,7 +69,8 @@ describe("SLICE 105 — top-bar content blocks", () => {
 });
 
 describe("SLICE 105 — SecondaryBar render wiring", () => {
-  const bar = readFileSync("src/components/site/SecondaryBar.tsx", "utf8");
+  // USAGE-10c: the markup lives in the client view; the server half resolves the blocks.
+  const bar = readFileSync("src/components/site/SecondaryBar.tsx", "utf8") + readFileSync("src/components/site/SecondaryBarView.tsx", "utf8");
 
   it("resolves both top-bar blocks draft-aware", () => {
     expect(bar).toContain("getContentValues");
