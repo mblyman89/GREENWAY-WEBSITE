@@ -1,4 +1,5 @@
 import { DesignedBanner } from "@/components/site/DesignedBanner";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import {
   type LoyaltyHeroPresentation,
   heroFontStack,
@@ -267,6 +268,7 @@ function BlockLines({
   const scriptClass = isScript ? "normal-case tracking-normal" : "";
   return (
     <p className={`${baseClass} ${scriptClass}`} style={style}>
+      <WebFonts ids={[block.font]} />
       {lines.map((line, i) => (
         <span key={i} className="block">
           {line === "" ? "\u00A0" : line}

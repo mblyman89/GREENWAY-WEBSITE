@@ -12,28 +12,15 @@
  * The admin layout spreads the same font variables as the public site, so the
  * preview matches what visitors will see.
  */
-import { useMemo } from "react";
-import { FONT_OPTIONS, fontStack, resolveFont, type FontCategory } from "@/lib/cms/fonts";
+import { fontStack, resolveFont } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
+import { printFontInfo } from "@/lib/printing/print-type-core";
 import { useCustomFonts } from "@/components/admin/fonts/custom-fonts-client";
 import { CustomFontFaces, CustomFontUpload } from "@/components/admin/fonts/CustomFontUpload";
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { WebFonts } from "@/components/fonts/WebFonts";
 
-const CATEGORY_LABEL: Record<FontCategory, string> = {
-  sans: "Sans-serif (clean & modern)",
-  serif: "Serif (classic & elegant)",
-  display: "Display (bold headlines)",
-  script: "Script (cursive & handwritten)",
-  mono: "Monospaced",
-};
-
-const CATEGORY_ORDER: FontCategory[] = [
-  "sans",
-  "serif",
-  "display",
-  "script",
-  "mono",
-];
-
+// D272: every font the system has — your uploads, the site library and the 120+ Google library.
 export function ContentFontField({
   value,
   onChange,
@@ -46,19 +33,14 @@ export function ContentFontField({
   sampleText?: string;
 }) {
   const mine = useCustomFonts();
-  // R56-S2: an uploaded font (`custom:…`) is a valid choice too.
+  const g = printFontInfo(value);
   const customPick = isCustomFontId(value) ? (mine.find((f) => f.id === value) ?? { id: value, label: "Uploaded font" }) : null;
   const curated = resolveFont(value || fallbackId, fallbackId);
   const selected = customPick
     ? { id: customPick.id, label: customPick.label, note: "Your uploaded font (you confirmed you have the right to use it).", stack: fontStack(customPick.id, fallbackId) }
-    : curated;
-
-  const grouped = useMemo(() => {
-    const map = new Map<FontCategory, typeof FONT_OPTIONS>();
-    for (const cat of CATEGORY_ORDER) map.set(cat, []);
-    for (const f of FONT_OPTIONS) map.get(f.category)!.push(f);
-    return map;
-  }, []);
+    : g
+      ? { id: value, label: g.family, note: "Google Fonts library — free for commercial use, loads on every page.", stack: fontStack(value, fallbackId) }
+      : curated;
 
   const preview =
     sampleText || "Greenway Marijuana — Premium Cannabis, Everyday Deals";
@@ -66,34 +48,13 @@ export function ContentFontField({
   return (
     <div className="space-y-3">
       <CustomFontFaces />
+      <WebFonts ids={[selected.id]} />
       <select
         value={selected.id}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
       >
-        {mine.length || customPick ? (
-          <optgroup label="Your fonts (uploaded)">
-            {mine.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.label}
-              </option>
-            ))}
-            {customPick && !mine.some((f) => f.id === customPick.id) ? <option value={customPick.id}>{customPick.label}</option> : null}
-          </optgroup>
-        ) : null}
-        {CATEGORY_ORDER.map((cat) => {
-          const opts = grouped.get(cat) ?? [];
-          if (opts.length === 0) return null;
-          return (
-            <optgroup key={cat} label={CATEGORY_LABEL[cat]}>
-              {opts.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </optgroup>
-          );
-        })}
+        <AllFontOptions value={selected.id} />
       </select>
 
       <p className="text-[0.72rem] text-white/50">{selected.note}</p>

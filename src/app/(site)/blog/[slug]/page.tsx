@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -62,6 +63,7 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
+      <WebFonts ids={[post.titleStyle?.font]} />
       <Header />
       <Breadcrumbs items={[{ label: "Blog", href: "/blog" }, { label: post.title }]} />
       {/* D239 N-7 (F-22-20): Article structured data for search engines. */}

@@ -38,7 +38,7 @@
  * BOTH the public render AND the editor live-preview use the identical stacks.
  */
 
-import { fontStack } from "@/lib/cms/fonts";
+import { fontStack, isKnownFontId, isScriptFontId } from "@/lib/cms/fonts";
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 
 /**
@@ -114,14 +114,18 @@ export const HERO_FONTS: HeroFontChoice[] = [
 ];
 
 const HERO_FONT_BY_ID = new Map(HERO_FONTS.map((f) => [f.id, f]));
+/** D272: curated ids (pickers list these first, then every other font via AllFontOptions). */
+export const HERO_FONT_IDS: readonly string[] = HERO_FONTS.map((f) => f.id);
 
 export function isHeroFont(v: unknown): v is string {
-  return typeof v === "string" && HERO_FONT_BY_ID.has(v);
+  // D272: the curated picks + ANY font the system can draw (uploads, site + Google library).
+  return typeof v === "string" && (HERO_FONT_BY_ID.has(v) || isKnownFontId(v));
 }
 
 /** Resolve a hero font id (possibly unknown) to a real CSS font stack. */
 export function heroFontStack(id: string | null | undefined): string {
   const choice = (id && HERO_FONT_BY_ID.get(id)) || null;
+  if (!choice && isKnownFontId(id)) return fontStack(id, "anton"); // D272: uploaded / library font
   // Fall back to the strong display font so an unknown id still looks like a
   // headline (never a bare serif). fontStack() itself falls back safely too.
   const fontId = choice?.fontId ?? "anton";
@@ -130,7 +134,8 @@ export function heroFontStack(id: string | null | undefined): string {
 
 /** True when a hero font id is a cursive/script face (drives the size bump UI). */
 export function isScriptHeroFont(id: string | null | undefined): boolean {
-  return (id && HERO_FONT_BY_ID.get(id)?.group === "script") || false;
+  if (id && HERO_FONT_BY_ID.has(id)) return HERO_FONT_BY_ID.get(id)!.group === "script";
+  return isScriptFontId(id);
 }
 
 // ── Per-block COLOR choices (on-brand) ───────────────────────────────────────
@@ -429,6 +434,8 @@ export function __runLoyaltyHeroCoreTests(): { passed: number } {
   // Font resolution + guards.
   ok(isHeroFont("anton") && isHeroFont("great-vibes"), "known hero fonts accepted");
   ok(!isHeroFont("comic-sans") && !isHeroFont(3), "unknown hero fonts rejected");
+  ok(isHeroFont("custom:0123456789abcdef.woff2") && heroFontStack("custom:0123456789abcdef.woff2").includes("gwf-0123456789abcdef"), "D272 uploaded font allowed in heroes");
+  ok(isHeroFont("gf:Lobster") && heroFontStack("gf:Lobster").includes("Lobster") && isScriptHeroFont("gf:Lobster"), "D272 Google library font allowed in heroes");
   ok(heroFontStack("anton").includes("--gw-font-anton"), "anton resolves to its real CSS var");
   ok(heroFontStack("great-vibes").includes("--gw-font-great-vibes"), "script resolves to its real CSS var");
   ok(heroFontStack("nope").includes("--gw-font-anton"), "unknown font id falls back to a display stack");

@@ -13,8 +13,8 @@
  * and the rule for the Checks warning "this text uses System default" (each
  * visitor's device picks that font, so it can never match the studio).
  */
-import { DEFAULT_BODY_FONT_ID, DEFAULT_HEADING_FONT_ID, fontStack, resolveFont } from "./fonts";
-import { customFontFaceCss, isCustomFontId } from "./custom-font-core";
+import { DEFAULT_BODY_FONT_ID, DEFAULT_HEADING_FONT_ID, fontStack, isKnownFontId, resolveFont, webFontCss } from "./fonts";
+import { isCustomFontId } from "./custom-font-core";
 
 export type SiteFontIds = { heading: string; body: string };
 
@@ -44,12 +44,12 @@ export function siteFontVars(ids: SiteFontIds): Record<string, string> {
 
 /** @font-face for an uploaded site font (same helper the site layout uses). */
 export function siteFontFaces(ids: SiteFontIds): string {
-  return customFontFaceCss([ids.heading, ids.body]);
+  return webFontCss([ids.heading, ids.body]); // D272: + Google library
 }
 
 /** True when the id ends up as the device's own font ("System default"). */
 export function isDeviceFont(id: string, fallbackId = "system"): boolean {
-  if (isCustomFontId(id)) return false;
+  if (isCustomFontId(id) || (isKnownFontId(id) && id !== "system")) return false;
   return resolveFont(id, fallbackId).id === "system";
 }
 
@@ -82,6 +82,8 @@ export function __runStudioFontsCoreTests(): { passed: number; failed: number } 
   ok(v.fontFamily.startsWith("var(--font-body"), "canvas text takes the body font");
   ok(siteFontFaces({ heading: "custom:0123456789abcdef.woff2", body: "inter" }).includes("gwf-0123456789abcdef"), "uploaded site font gets its @font-face");
   ok(siteFontFaces(def) === "", "no uploaded font, no css");
+  ok(siteFontFaces({ heading: "gf:Lobster", body: "inter" }).startsWith("@import"), "D272 Google site font gets its stylesheet");
+  ok(!isDeviceFont("gf:Lobster"), "D272 Google library font is not the device font");
   ok(isDeviceFont("system"), "system is the device font");
   ok(isDeviceFont("no-such-font"), "unknown falls back to system, like the website");
   ok(!isDeviceFont("oswald"), "a library font is not");

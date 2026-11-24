@@ -7,7 +7,7 @@
  * swatches or - for embroidery - Printful's 15 thread colours, and the
  * image facts (DPI at this size, detected colours, photo/gradient flags).
  */
-import { FONT_OPTIONS } from "@/lib/cms/fonts";
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
 import { ColorField, NumberSlider, Row, Segmented, Toggle, studioInput } from "@/components/admin/banner-studio/controls";
 import { THREAD_PALETTE, nearestThread, type Method, type Placement } from "@/lib/merch-studio/garment-catalog-core";
 import { DPI_IDEAL, DPI_MIN, effectiveDpi, maxInchesAt300 } from "@/lib/merch-studio/print-rules-core";
@@ -95,7 +95,7 @@ export function ElementPanel({ el, placement, method, onChange, onRemeasure, onF
             </Row>
             <Row label="Font">
               <select className={studioInput} value={el.fontId ?? "system"} onChange={(e) => onRemeasure({ fontId: e.target.value })}>
-                {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label} - {f.category}</option>)}
+                <AllFontOptions value={el.fontId} />
               </select>
             </Row>
             <div className="flex flex-wrap items-end gap-3">

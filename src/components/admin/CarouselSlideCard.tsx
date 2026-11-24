@@ -1,5 +1,7 @@
 "use client";
 
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { HERO_FONT_IDS } from "@/lib/loyalty/loyalty-hero-core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
@@ -789,6 +791,7 @@ function LineStyleEditor({
               </option>
             ))}
           </optgroup>
+          <AllFontOptions value={line.font} skip={HERO_FONT_IDS} />
         </select>
       </label>
       <div className="text-[0.65rem] uppercase tracking-wide text-white/50">Colour</div>

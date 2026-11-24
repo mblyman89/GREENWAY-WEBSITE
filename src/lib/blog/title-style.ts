@@ -7,7 +7,7 @@
  * on-brand and never breaks the layout.
  */
 import type { CSSProperties } from "react";
-import { resolveFont } from "@/lib/cms/fonts";
+import { fontStack, isKnownFontId } from "@/lib/cms/fonts";
 
 export type TitleSize = "sm" | "md" | "lg" | "xl";
 
@@ -64,8 +64,8 @@ export function resolveTitleStyle(
   // Font: only apply when an explicit, real (non-system, non-inherit) font is set.
   const fontId = titleStyle?.font;
   if (fontId && fontId !== "inherit" && fontId !== "system") {
-    const font = resolveFont(fontId, "system");
-    if (font.stack) style.fontFamily = font.stack;
+    // D272: uploaded + Google library fonts too (the page loads them via <WebFonts>).
+    if (isKnownFontId(fontId)) style.fontFamily = fontStack(fontId, "system");
   }
   const color = safeHex(titleStyle?.color);
   if (color) style.color = color;

@@ -23,6 +23,7 @@ import type { ReactElement } from "react";
 import { MerchElementArt } from "./MerchCanvas";
 import { getAsset } from "./merch-assets";
 import { customFontFamily, customFontUrl, isCustomFontId } from "@/lib/cms/custom-font-core";
+import { printFontHref, printFontIdForFamily } from "@/lib/printing/print-type-core";
 import { assetIds, type MerchDesign } from "@/lib/merch-studio/merch-design-core";
 import { alphaStats, planViewBox, tagPng, type AlphaStats, type PrintFilePlan } from "@/lib/merch-studio/print-export-core";
 
@@ -101,6 +102,23 @@ export async function fontFaceCss(families: ReadonlySet<string>, customFontIds: 
     const url = customFontUrl(id);
     if (!fam || !url || !families.has(fam) || rules.some((r) => r.includes(fam))) continue;
     try { rules.push(`@font-face{font-family:"${fam}";src:url("${await inlineFontUrl(url)}");font-weight:100 900;font-style:normal}`); } catch { warnings.push(`Uploaded font ${fam} could not be embedded - the PNG may use a fallback font.`); }
+  }
+  // D272: Google-library fonts — their sheet is cross-origin (unreadable above), so fetch it (CORS-enabled) and inline the Latin files.
+  for (const fam of families) {
+    const id = printFontIdForFamily(fam);
+    const href = id ? printFontHref(id) : null;
+    if (!href || rules.some((r) => r.includes(`"${fam}"`) || r.includes(`'${fam}'`))) continue;
+    try {
+      const sheet = await (await fetch(href)).text();
+      for (const block of sheet.match(/@font-face\s*{[^}]*}/g) ?? []) {
+        if (/unicode-range/.test(block) && !/U\+0000-00FF/i.test(block)) continue;
+        let css = block;
+        for (const m of [...block.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)]) css = css.replace(m[0], `url("${await inlineFontUrl(m[1])}")`);
+        rules.push(css);
+      }
+    } catch {
+      warnings.push(`Font "${fam}" could not be embedded - the PNG may use a fallback font.`);
+    }
   }
   return { css: rules.join("\n"), warnings };
 }

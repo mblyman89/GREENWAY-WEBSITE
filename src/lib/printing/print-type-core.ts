@@ -129,6 +129,13 @@ export const PRINT_FONT_CATS: { cat: PrintFontCat; label: string }[] = [
 const BY_ID = new Map(PRINT_FONTS.map((f) => [PRINT_FONT_PREFIX + f.family.replace(/ /g, "+"), f]));
 export const printFontId = (family: string) => PRINT_FONT_PREFIX + family.replace(/ /g, "+");
 export const isPrintFontId = (id: unknown): id is string => typeof id === "string" && BY_ID.has(id);
+/** D272: the library entry for a print font id (null when unknown). */
+export const printFontInfo = (id: unknown): PrintFont | null => (typeof id === "string" ? BY_ID.get(id) ?? null : null);
+/** D272: family name → id (for embedding a rendered family in exports). */
+export const printFontIdForFamily = (family: string): string | null => {
+  const id = printFontId(family);
+  return BY_ID.has(id) ? id : null;
+};
 export function printFontStack(id: string): string | null {
   const f = BY_ID.get(id);
   if (!f) return null;

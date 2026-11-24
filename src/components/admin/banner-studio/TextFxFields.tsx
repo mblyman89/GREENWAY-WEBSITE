@@ -8,49 +8,21 @@
  */
 import { DEFAULT_FONT_ID, STROKE_MAX, designFontFamily, type DesignShadow, type DesignTextBox } from "@/lib/cms/banner-design-core";
 import { CURVE } from "@/lib/cms/banner-curve-core";
-import { FONT_OPTIONS, type FontCategory } from "@/lib/cms/fonts";
 import { ColorField, NumberSlider, Row, Segmented, Toggle, studioInput } from "./controls";
-import { useCustomFonts } from "@/components/admin/fonts/custom-fonts-client";
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import { CustomFontFaces, CustomFontUpload } from "@/components/admin/fonts/CustomFontUpload";
-
-const GROUPS: { cat: FontCategory; label: string }[] = [
-  { cat: "sans", label: "Clean sans" },
-  { cat: "display", label: "Bold display" },
-  { cat: "serif", label: "Serif" },
-  { cat: "script", label: "Script & handwritten" },
-  { cat: "mono", label: "Mono" },
-];
 
 export function FontSelect({ value, onChange, preview = false }: { value: string; onChange: (id: string) => void; preview?: boolean }) {
   const style = (id: string) => (preview && designFontFamily(id) ? { fontFamily: designFontFamily(id) ?? undefined } : undefined);
-  const mine = useCustomFonts();
-  // R56-S2: a font picked in another editor but not (yet) in the list still shows.
-  const unknownCustom = value.startsWith("custom:") && !mine.some((f) => f.id === value);
   return (
     <Row label="Font">
       <CustomFontFaces />
+      <WebFonts ids={[value]} />
       <select className={studioInput} value={value} onChange={(e) => onChange(e.target.value)} style={style(value)}>
         <option value={DEFAULT_FONT_ID}>Site font (default)</option>
-        {mine.length || unknownCustom ? (
-          <optgroup label="Your fonts">
-            {mine.map((f) => (
-              <option key={f.id} value={f.id} style={style(f.id)}>
-                {f.label}
-              </option>
-            ))}
-            {unknownCustom ? <option value={value}>Uploaded font</option> : null}
-          </optgroup>
-        ) : null}
-        {value.startsWith("gf:") ? <option value={value}>{value.slice(3).replace(/\+/g, " ")} (print library)</option> : null}
-        {GROUPS.map((g) => (
-          <optgroup key={g.cat} label={g.label}>
-            {FONT_OPTIONS.filter((f) => f.category === g.cat).map((f) => (
-              <option key={f.id} value={f.id} style={style(f.id)} title={f.note}>
-                {f.label}
-              </option>
-            ))}
-          </optgroup>
-        ))}
+        {/* D272: your uploads + site library + the 120+ Google library, in every studio. */}
+        <AllFontOptions value={value} skip={["system"]} />
       </select>
       <div className="mt-1">
         <CustomFontUpload onUploaded={onChange} />
