@@ -145,9 +145,11 @@ describe("script fonts are wired into the real font system", () => {
   });
 
   it("the shared font picker knows the script category", () => {
-    const field = read("src/components/admin/ContentFontField.tsx");
+    // D272: the categories moved to the one shared list every picker uses.
+    expect(read("src/components/admin/ContentFontField.tsx")).toContain("AllFontOptions");
+    const field = read("src/components/admin/fonts/AllFontOptions.tsx");
     expect(field).toContain('"script"');
-    expect(field).toMatch(/script:\s*"Script/);
+    expect(field).toMatch(/cat: "script", label: "Script/);
   });
 });
 
