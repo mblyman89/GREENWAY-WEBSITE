@@ -841,9 +841,15 @@ Due care on the add-to-cart and deal-price path:
 
 The layout used to serialize the Organization, WebSite and Store JSON-LD strings (~3.6 KB) into every page's RSC payload, and `SecondaryBar` sent its ~1.5 KB of clamp()/breakpoint class strings the same way. `SiteJsonLd` (client) now builds the three schemas from the small `{hours, today}` input with the same builders, and `SecondaryBarView` (client) holds the top-bar markup; the server `SecondaryBar` still resolves the draft-aware blocks and passes three short strings. SSR HTML is unchanged, so crawlers see identical JSON-LD.
 
-### USAGE-10d — PDP sensory pills from a client component (this PR)
+### USAGE-10d — PDP sensory pills from a client component (PR #1908)
 
 `ChipGroup` (Experience / Terpenes / Aroma / Flavor pills) moved from the PDP server page into `src/components/menu/SensoryChipGroup.tsx` ("use client"). Each pill used to put a ~110-byte class string plus an inline style object into the RSC payload (11 pills on a typical page); now each group ships only `{label, chips, accent}`. SSR HTML identical; display only.
+
+### USAGE-10 — measured in production, and rule-18 review of the 60 s pages
+
+Live, same URLs, before → after the USAGE-10 batch: /menu HTML 3,640,889 → 3,164,731 bytes (−476 KB, −13.1%; RSC −415 KB); a product page 211,543 → 189,688 bytes (−21.9 KB, −10.3%; RSC 72,646 → 61,579); the footer 26,567 → 16,708 bytes on every page. The site JSON-LD is still in the HTML (crawlers unchanged) but no longer in the RSC payload.
+
+Rule-18 review ("cache the display, never cache the money") of every `revalidate = 60` route: home, /specials, /menu, /menu/[category], /menu/products/[id] and /medical cache display only; their comments already record that the register is not cached and order pricing rejects a stale line with a 409. /checkout and /checkout/confirmation cache only the owner's discount-detail display switches (`getPosReceiptConfig().onlineDiscount`), are revalidated on save, and price the cart client/server-side live. No change needed.
 
 ## How to verify each slice
 
