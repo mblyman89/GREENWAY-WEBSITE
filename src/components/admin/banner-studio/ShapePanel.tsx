@@ -40,7 +40,7 @@ export function ShapePanel({
 }) {
   const elements = design.elements ?? [];
   // R60: animation layers are edited in the 🎞️ tab (AnimPanel).
-  const el = selection?.target === "element" ? elements.find((e) => e.id === selection.id && e.kind !== "anim") : undefined;
+  const el = selection?.target === "element" ? elements.find((e) => e.id === selection.id && e.kind !== "anim" && e.kind !== "image") : undefined;
   const mobile = device === "mobile";
   const iconLabels = LIBRARY_LABELS;
   /** Objects are single-style artwork — only Phosphor icons have Thin/Bold/Solid. */

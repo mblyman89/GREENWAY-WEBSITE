@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { DesignQr } from "./DesignQr";
 import { shapeVisual, type DesignElement, type SvgGradient } from "@/lib/cms/banner-elements-core";
+import { placedImgCss } from "@/lib/printing/print-layers-core";
 
 /**
  * R55-S2 — the inner drawing of a banner shape (decorative). Used by the
@@ -21,6 +22,12 @@ function Grad({ g }: { g?: SvgGradient }) {
 }
 
 export function DesignShape({ el }: { el: DesignElement }) {
+  // D271: a picture placed on the canvas (print layers). Border + corners come from the element.
+  if (el.kind === "image" && el.img)
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={el.img.src} alt={el.img.alt ?? ""} crossOrigin="anonymous" decoding="async" draggable={false} style={placedImgCss(el.img, el.radius, { color: el.stroke, width: el.strokeWidth }) as unknown as CSSProperties} />
+    );
   const v = shapeVisual(el);
   if ("css" in v) return <div style={v.css as unknown as CSSProperties} />;
   if (el.qr) return <DesignQr el={el} />;

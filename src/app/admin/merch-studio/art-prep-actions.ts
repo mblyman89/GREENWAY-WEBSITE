@@ -18,7 +18,8 @@ import { budgetBlock } from "@/lib/cms/newsletter-ai-server";
 import { uploadMedia, publicUrlForKey } from "@/lib/media/store";
 import { flatPrompt } from "@/lib/merch-studio/optimizer-core";
 import { checkImageAsk } from "@/lib/cms/newsletter-ai-core";
-import { FLUX_ISOLATE_PROMPT, KEY_MAX_PX, borderColor, keyOutBackground, printUpscalePlan } from "@/lib/merch-studio/art-prep-core";
+import { FLUX_ISOLATE_PROMPT, printUpscalePlan } from "@/lib/merch-studio/art-prep-core";
+import { keyOutBuffer } from "@/lib/media/key-out-server";
 
 type Fail = { ok: false; error: string };
 export type PrepOut = { ok: true; kind: "done"; url: string; mediaId: string; note: string } | { ok: true; kind: "flux"; pollingUrl: string; prompt: string } | Fail;
@@ -103,17 +104,7 @@ async function savePng(buf: Buffer, title: string, uploadedBy: string, tag: stri
   return url ? { url, mediaId: asset.id } : { ok: false, error: "Saved, but the picture has no public link." };
 }
 
-/** Key the flat border colour out (edge flood-fill, soft edge). null = border is not one flat colour. */
-async function keyOut(buf: Buffer, minUniform: number): Promise<{ png: Buffer; cleared: number } | { already: true } | null> {
-  const sharp = (await import("sharp")).default;
-  const { data, info } = await sharp(buf, { limitInputPixels: KEY_MAX_PX }).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const b = borderColor(data, info.width, info.height);
-  if (b.transparent > 0.6) return { already: true };
-  if (b.uniform < minUniform) return null;
-  const cleared = keyOutBackground(data, info.width, info.height, b.color);
-  const png = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png({ compressionLevel: 9 }).toBuffer();
-  return { png, cleared };
-}
+const keyOut = keyOutBuffer;
 
 /**
  * D268 - Remove background for print (transparent PNG).

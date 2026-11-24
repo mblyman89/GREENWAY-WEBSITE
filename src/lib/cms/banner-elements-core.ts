@@ -26,6 +26,7 @@
  */
 
 import { normalizeQrSpec, type QrSpec } from "@/lib/printing/qr-design-core";
+import { normalizePlacedImg, type PlacedImg } from "@/lib/printing/print-layers-core";
 import { elementMotion, normalizeElementMotion, type ElementMotionFields } from "./banner-motion-core";
 import { normalizeEnter, type Enter } from "./banner-enter-core";
 import { animLabel, normalizeAnim, type AnimSpec } from "./banner-anim-core";
@@ -84,7 +85,8 @@ const SHAPE_IDS = SHAPE_KINDS.map((s) => s.id);
 /** D243 E-2: 16000 so a QR code (one icon path, up to version 10) fits. */
 export const ICON_PATH_MAX = 16000;
 /** R60: "anim" = a Lottie or Rive animation (settings in `anim`, banner-anim-core). */
-export type ElementKind = "shape" | "icon" | "anim";
+/** D271: "image" = a picture placed on the canvas (settings in `img`, print-layers-core). */
+export type ElementKind = "shape" | "icon" | "anim" | "image";
 
 export type DesignElement = {
   id: string;
@@ -126,6 +128,8 @@ export type DesignElement = {
   anim?: AnimSpec;
   /** D263 S5: designer QR (icon kind; drawn from this spec, iconPath is a placeholder). */
   qr?: QrSpec;
+  /** D271: placed picture (kind "image" only). */
+  img?: PlacedImg;
 } & ElementMotionFields;
 
 export type ElementGradient = { from: string; to: string; angle: number };
@@ -181,6 +185,14 @@ export function defaultAnimElement(anim: AnimSpec, overrides: Partial<DesignElem
   return { id: "anim", kind: "anim", shape, ...rest, x: 66, y: 12, w: 22, h: null, strokeWidth: 0, radius: 0, ...overrides, anim };
 }
 
+/** D271: a new picture layer (keeps the picture's own shape; h null = follow ratio). */
+export function defaultImageElement(img: PlacedImg, overrides: Partial<DesignElement> = {}): DesignElement {
+  const { id: _id, kind: _kind, shape, ...rest } = defaultElement("rect");
+  void _id;
+  void _kind;
+  return { id: "picture", kind: "image", shape, ...rest, x: 35, y: 25, w: 30, h: null, fill: "#ffffff", strokeWidth: 0, radius: 0, ...overrides, img };
+}
+
 /** A new icon layer (square, coloured with `fill`). */
 export function defaultIcon(icon: string, weight: string, path: string, overrides: Partial<DesignElement> = {}): DesignElement {
   const { id: _id, kind: _kind, shape, ...rest } = defaultElement("rect");
@@ -233,7 +245,10 @@ export function defaultElement(shape: ShapeKind = "rect", overrides: Partial<Des
 
 export function normalizeElement(raw: unknown, fallbackId: string): DesignElement | null {
   if (!isObj(raw)) return null;
-  if (raw.kind !== undefined && raw.kind !== "shape" && raw.kind !== "icon" && raw.kind !== "anim") return null;
+  if (raw.kind !== undefined && raw.kind !== "shape" && raw.kind !== "icon" && raw.kind !== "anim" && raw.kind !== "image") return null;
+  // D271: a picture layer needs a picture of ours, else it is dropped.
+  const img = raw.kind === "image" ? normalizePlacedImg(raw.img) : null;
+  if (raw.kind === "image" && !img) return null;
   const isIcon = raw.kind === "icon";
   if (isIcon && !isSafeIconPath(raw.iconPath)) return null;
   // R60: an animation needs a playable file of ours, else it is dropped.
@@ -243,7 +258,7 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
   const d = isIcon ? defaultIcon("", "", "M0 0") : defaultElement(shape);
   const el: DesignElement = {
     id: cleanElementId(raw.id, fallbackId),
-    kind: anim ? "anim" : isIcon ? "icon" : "shape",
+    kind: anim ? "anim" : img ? "image" : isIcon ? "icon" : "shape",
     shape,
     ...(isIcon
       ? {
@@ -273,7 +288,7 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
   if (raw.locked === true) el.locked = true;
   // R56: optional fx, written only when used (older designs byte-identical).
   const g = raw.gradient;
-  if (isObj(g) && typeof g.from === "string" && typeof g.to === "string" && el.shape !== "line" && !anim) {
+  if (isObj(g) && typeof g.from === "string" && typeof g.to === "string" && el.shape !== "line" && !anim && !img) {
     el.gradient = { from: hex(g.from, el.fill), to: hex(g.to, el.fill), angle: Math.round(num(g.angle, 90, 0, 360)) };
   }
   const sh = num(raw.shadow, 0, 0, ELEMENT_SHADOW_MAX);
@@ -282,10 +297,11 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
     el.shadowColor = hex(raw.shadowColor, "#000000");
   }
   // R57: micro-interactions (breathe/glow/float/spin/wiggle/blob/morph, orbit spark, hover).
-  Object.assign(el, normalizeElementMotion(raw, el.shape, isIcon || !!anim));
+  Object.assign(el, normalizeElementMotion(raw, el.shape, isIcon || !!anim || !!img));
   const en = normalizeEnter(raw.enter);
   if (en) el.enter = en;
   if (anim) el.anim = anim;
+  if (img) el.img = img;
   const qr = isIcon ? normalizeQrSpec(raw.qr) : undefined;
   if (qr) el.qr = qr;
   return el;
@@ -357,7 +373,7 @@ export function elementStyle(el: DesignElement): StyleMap {
   };
   if (el.h === null) {
     // R60: an animation keeps its file's own shape (width ÷ height).
-    s.aspectRatio = el.kind === "anim" && el.anim?.ratio ? `${el.anim.ratio} / 1` : "1 / 1";
+    s.aspectRatio = el.kind === "anim" && el.anim?.ratio ? `${el.anim.ratio} / 1` : el.kind === "image" && el.img?.ratio ? `${el.img.ratio} / 1` : "1 / 1";
     s.height = "auto";
   } else if (el.shape === "line") {
     s.height = `${Math.max(1, el.strokeWidth)}px`;
@@ -589,6 +605,7 @@ export function elementPosition(el: DesignElement, device: "desktop" | "mobile")
 /** Friendly name for a shape/icon layer. */
 export function elementLabel(el: DesignElement, iconLabels: Record<string, string> = {}): string {
   if (el.kind === "anim") return animLabel(el.anim);
+  if (el.kind === "image") return `Picture${el.img?.alt ? ` — ${el.img.alt}` : ""}`;
   if (el.qr) return "QR code";
   if (el.kind === "icon") return `${el.icon?.startsWith("o-") ? "Object" : "Icon"} — ${iconLabels[el.icon ?? ""] ?? el.icon ?? "icon"}`;
   return SHAPE_KINDS.find((k) => k.id === el.shape)?.label ?? "Shape";
@@ -616,6 +633,13 @@ export function __runBannerElementsTests(): { passed: number; failed: number } {
   ok(d.h === null, "circle keeps square");
   ok(defaultElement("rect").h === 30 && defaultElement("line").strokeWidth === 3, "rect/line defaults");
   ok(normalizeElement({ kind: "video" }, "x") === null, "unknown kind rejected");
+  {
+    const SBI = "https://abc.supabase.co/storage/v1/object/public/media/p.png";
+    const pic = normalizeElement({ ...defaultImageElement({ src: SBI, ratio: 2 }, { id: "pic" }), gradient: { from: "#000000", to: "#ffffff" }, motion: "blob" }, "x");
+    ok(pic?.kind === "image" && pic.img?.src === SBI && pic.gradient === undefined && pic.motion === undefined, "D271 picture layer kept, no gradient/blob");
+    ok(elementStyle(pic!).aspectRatio === "2 / 1" && elementLabel(pic!) === "Picture", "D271 picture keeps its shape");
+    ok(normalizeElement({ kind: "image", img: { src: "https://evil.com/a.png" } }, "x") === null && normalizeElement({ kind: "image" }, "x") === null, "D271 unsafe picture dropped");
+  }
   // R60: animation layers
   const SBA = "https://abc.supabase.co/storage/v1/object/public/media/banner/0123456789abcdef-leaf.lottie";
   const an = defaultAnimElement({ engine: "lottie", src: SBA, ratio: 1.5 }, { id: "leaf" });

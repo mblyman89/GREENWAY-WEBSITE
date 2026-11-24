@@ -25,6 +25,8 @@ import { uploadMedia, publicUrlForKey } from "@/lib/media/store";
 import { isFluxConfigured, submitFluxImages, checkFluxTask } from "@/lib/marketing/flux-client";
 import { getThisWeekFeed } from "./this-week-feed-server";
 import { fetchCapped, recentPostLinks } from "./newsletter-canvas-server";
+import { keyOutBuffer } from "@/lib/media/key-out-server";
+import { KEY_HEX } from "@/lib/merch-studio/art-prep-core";
 import { isProbeableUrl, type CanvasBlock, type CanvasDoc } from "./newsletter-canvas-core";
 import {
   AI_IMAGE_INPUT_MAX_EDGE,
@@ -255,35 +257,40 @@ export async function aiImage(p: {
   const input = p.sourceUrl ? await loadInput(p.sourceUrl) : null;
   if (input && "ok" in input) return input;
 
+  // D271: GPT Image 2 refuses transparent output and Gemini has no alpha, so
+  // Remove background asks for flat magenta and we key it out on our server.
+  const keyPrompt = p.removeBackground ? `${prompt}\nPut the subject on one perfectly flat, solid pure magenta (${KEY_HEX}) background - no shadow, gradient or texture behind it.` : prompt;
+  const cutOut = async (b64: string, mime: string): Promise<{ b64: string; mime: string; transparent: boolean }> => {
+    if (!p.removeBackground) return { b64, mime, transparent: false };
+    const k = await keyOutBuffer(Buffer.from(b64, "base64"), 0.5).catch(() => null);
+    return k && "png" in k ? { b64: k.png.toString("base64"), mime: "image/png", transparent: true } : { b64, mime, transparent: false };
+  };
+
   if (p.engine === "gpt") {
-    const transparent = p.removeBackground;
     const body = input
-      ? gptEditBody({ model: GPT_IMAGE_MODEL, prompt, imageDataUrl: `data:${input.mime};base64,${input.buf.toString("base64")}`, transparent })
-      : gptGenerateBody({ model: GPT_IMAGE_MODEL, prompt, aspect: p.aspect });
-    if (!input && transparent) body.background = "transparent";
-    if (!input && transparent) {
-      body.output_format = "png";
-      delete body.output_compression;
-    }
+      ? gptEditBody({ model: GPT_IMAGE_MODEL, prompt: keyPrompt, imageDataUrl: `data:${input.mime};base64,${input.buf.toString("base64")}`, transparent: false })
+      : gptGenerateBody({ model: GPT_IMAGE_MODEL, prompt: keyPrompt, aspect: p.aspect });
     const r = await postJson(`${OPENAI_BASE}/images/${input ? "edits" : "generations"}`, { Authorization: `Bearer ${OPENAI_KEY}` }, body).catch((e) => ({ status: 0, json: { error: { message: e instanceof Error ? e.message : "network error" } } }));
     const parsed = parseGptImage(r.json);
     const usage = (r.json as { usage?: { input_tokens?: number; output_tokens?: number } } | null)?.usage;
     await logAiUsage({ ...ctx, model: GPT_IMAGE_MODEL, promptTokens: usage?.input_tokens ?? 0, completionTokens: usage?.output_tokens ?? 0, estimated: !usage, ok: parsed.ok, errorNote: parsed.ok ? null : `HTTP ${r.status}` });
     if (!parsed.ok) return { ok: false, error: `GPT Image: ${parsed.error}` };
-    const saved = await saveResult(parsed.b64, parsed.mime, `AI ${transparent ? "cut-out" : "picture"}: ${p.ask}`, "gpt", p.actorId);
+    const c = await cutOut(parsed.b64, parsed.mime);
+    const transparent = c.transparent;
+    const saved = await saveResult(c.b64, c.mime, `AI ${transparent ? "cut-out" : "picture"}: ${p.ask}`, "gpt", p.actorId);
     return saved.ok ? { ok: true, kind: "done", url: saved.url, mediaId: saved.mediaId, engine: "gpt", transparent } : saved;
   }
 
-  // Gemini (Nano Banana). It cannot make a true see-through PNG, so Remove
-  // background asks for a pure white backdrop.
-  const gPrompt = p.removeBackground ? `${prompt}\nPut the subject on a plain pure white (#FFFFFF) background.` : prompt;
+  // Gemini (Nano Banana): no alpha either, so the same magenta key-out.
+  const gPrompt = keyPrompt;
   const body = geminiImageBody({ model: GEMINI_IMAGE_MODEL, prompt: gPrompt, image: input ? { mime: input.mime, b64: input.buf.toString("base64") } : null, aspect: input ? null : p.aspect });
   const r = await postJson(GEMINI_URL, { "x-goog-api-key": geminiApiKey(), "Api-Revision": "2026-05-20" }, body).catch((e) => ({ status: 0, json: { error: { message: e instanceof Error ? e.message : "network error" } } }));
   const parsed = parseGeminiImage(r.json);
   await logAiUsage({ ...ctx, model: GEMINI_IMAGE_MODEL, estimated: true, ok: parsed.ok, errorNote: parsed.ok ? null : `HTTP ${r.status}` });
   if (!parsed.ok) return { ok: false, error: `Gemini: ${parsed.error}` };
-  const saved = await saveResult(parsed.b64, parsed.mime, `AI picture: ${p.ask}`, "gemini", p.actorId);
-  return saved.ok ? { ok: true, kind: "done", url: saved.url, mediaId: saved.mediaId, engine: "gemini", transparent: false } : saved;
+  const gc = await cutOut(parsed.b64, parsed.mime);
+  const saved = await saveResult(gc.b64, gc.mime, `AI ${gc.transparent ? "cut-out" : "picture"}: ${p.ask}`, "gemini", p.actorId);
+  return saved.ok ? { ok: true, kind: "done", url: saved.url, mediaId: saved.mediaId, engine: "gemini", transparent: gc.transparent } : saved;
 }
 
 export type FluxPollOut = { state: "pending"; progress?: number } | { state: "ready"; url: string; mediaId: string } | { state: "failed"; error: string };

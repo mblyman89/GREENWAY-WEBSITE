@@ -1153,6 +1153,7 @@ import { __runBannerCurveTests } from "../../src/lib/cms/banner-curve-core";
 import { __runGarmentCatalogTests } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runGarmentPreviewTests } from "../../src/lib/merch-studio/garment-preview-core";
 import { __runArtPrepTests } from "../../src/lib/merch-studio/art-prep-core";
+import { __runPrintLayersTests } from "../../src/lib/printing/print-layers-core";
 import { __runOptimizerTests } from "../../src/lib/merch-studio/optimizer-core";
 import { __runPrintRulesTests } from "../../src/lib/merch-studio/print-rules-core";
 import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-core";
@@ -2795,7 +2796,7 @@ __runLiquidVolumeTests();
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
-  assertRan("banner-elements-core", __runBannerElementsTests(), 52); // R55-S2/S3: shapes, layers, icons
+  assertRan("banner-elements-core", __runBannerElementsTests(), 56); // R55-S2/S3: shapes, layers, icons
   assertRan("color-input-core", __runColorInputTests(), 16); // R56-S1 any-colour input + recent colours
   assertRan("custom-font-core", __runCustomFontTests(), 19); // R56-S2 owner-uploaded fonts (licence box, byte sniff, same-origin @font-face)
   assertRan("banner-arrange-core", __runBannerArrangeTests(), 38); // R56-S3 multi-select, align/distribute, duplicate, copy/paste, rotate, snap
@@ -2856,6 +2857,7 @@ __runLiquidVolumeTests();
   assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 46); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
   assertRan("garment-preview-core", __runGarmentPreviewTests(), 50); // D266: Garments tab photos, two-tone swatches, multi-colour pick, Printful catalog browser
   assertRan("art-prep-core", __runArtPrepTests(), 35); // D267: Merch artwork from library (logos first) + Prep for Printful (DPI verdict, 300 DPI upscale plan)
+  assertRan("print-layers-core", __runPrintLayersTests(), 33); // D271: Print Studio placed images (DPI, enlarge plan, FLUX sizes, prompts)
   assertRan("optimizer-core", __runOptimizerTests(), 30); // D270: Printful Optimizer - recolour preview (threads / custom / remove), flatten, FLUX flat-redraw prompt, one-click Check fixes
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
   assertRan("print-rules-core", __runPrintRulesTests(), 29); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
