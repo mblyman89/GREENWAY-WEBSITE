@@ -377,8 +377,11 @@ describe("Slice E — the product detail page keeps its full copy", () => {
     expect(code).toMatch(/item\.description/);
   });
 
-  it("the grid projection is not applied on the detail page", () => {
+  it("the grid projection is never applied to the detail page's own item", () => {
     const code = stripComments(read("src/app/(site)/menu/products/[id]/page.tsx"));
-    expect(code).not.toContain("toMenuGridItems");
+    // USAGE-9c: only the related-products rail (cards) is projected; the
+    // product shown on the page keeps its full copy.
+    const calls = code.match(/toMenuGridItems\(([^)]*)\)/g) ?? [];
+    expect(calls).toEqual(["toMenuGridItems(relatedItems)"]);
   });
 });
