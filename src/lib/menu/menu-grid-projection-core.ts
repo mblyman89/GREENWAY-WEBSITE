@@ -69,6 +69,35 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 export const GRID_TRIMMED_FIELDS = ["description", "hiddenReason", "identityKey"] as const;
 
 /**
+ * USAGE-7e (2026-11-24): OPTIONAL package/dose/classification facts that are
+ * DROPPED FROM THE ROW WHEN NULL. On the live catalog most rows carry these as
+ * explicit nulls (e.g. dohCategory null on 2,712 of 2,712, unitsPerPackage
+ * 2,712/2,712, unitThcMg 2,710/2,712): ~580 KB of `"key":null` per shop page,
+ * 17% of the grid JSON, in every response and every ISR write.
+ *
+ * SAFE because every field here is typed `?: T | null` (absent and null are
+ * the same "unknown" state) and every reader in the card / filter / cart /
+ * sales-limit tree collapses them: `?? null`, `typeof x === "number"`,
+ * `x != null`, `x === true`, or `x === undefined || x === null`
+ * (sales-limits-core.ts:894). A non-null value, including `false` and `0`, is
+ * always kept (an explicit `otherwiseTaken: false` is a human answer).
+ */
+export const GRID_NULL_DROPPED_FIELDS = [
+  "lowThcLiquid",
+  "unitThcMg",
+  "otherwiseTaken",
+  "unitsPerPackage",
+  "netWeightGrams",
+  "netVolumeMl",
+  "ratioLabel",
+  "servingsPerPack",
+  "mgPerServing",
+  "packageThcMg",
+  "packageCbdMg",
+  "dohCategory",
+] as const;
+
+/**
  * Project the published menu down to what the grid actually renders.
  *
  * The item TYPE is unchanged (`GreenwayMenuItem`), so no card component needs
@@ -91,6 +120,11 @@ export function toMenuGridItems(items: readonly GreenwayMenuItem[]): GreenwayMen
     // S20: the product identity feeds the server-side enrichment ladder only;
     // no card reads it, so it never ships to the browser.
     delete next.identityKey;
+    // USAGE-7e: a null optional fact is the same as an absent one; drop it.
+    const rec = next as unknown as Record<string, unknown>;
+    for (const field of GRID_NULL_DROPPED_FIELDS) {
+      if (rec[field] === null) delete rec[field];
+    }
     return next;
   });
 }
@@ -201,6 +235,29 @@ export function __runMenuGridProjectionTests(): { passed: number; failed: number
   const before = JSON.stringify(many).length;
   const after = JSON.stringify(projectedMany).length;
   check("projection reduces serialized size", after < before);
+
+  // ── USAGE-7e: null optional facts are dropped, real values kept ──────────
+  const facts = {
+    ...item,
+    lowThcLiquid: null,
+    unitThcMg: null,
+    otherwiseTaken: false,
+    unitsPerPackage: 0,
+    netWeightGrams: 3.5,
+    dohCategory: null,
+    ratioLabel: "1:1 CBD:THC",
+  } as unknown as GreenwayMenuItem;
+  const pf = toMenuGridItems([facts])[0] as unknown as Record<string, unknown>;
+  check("null lowThcLiquid dropped", !("lowThcLiquid" in pf));
+  check("null unitThcMg dropped", !("unitThcMg" in pf));
+  check("null dohCategory dropped", !("dohCategory" in pf));
+  check("explicit false otherwiseTaken kept (a human answer)", pf.otherwiseTaken === false);
+  check("zero unitsPerPackage kept (not nullish)", pf.unitsPerPackage === 0);
+  check("real netWeightGrams kept", pf.netWeightGrams === 3.5);
+  check("real ratioLabel kept", pf.ratioLabel === "1:1 CBD:THC");
+  check("dropped null reads back as nullish (same meaning)", (pf.dohCategory ?? null) === null);
+  check("source facts not mutated", (facts as unknown as Record<string, unknown>).lowThcLiquid === null);
+  check("only optional fields are null-dropped", !GRID_NULL_DROPPED_FIELDS.some((f) => (REQUIRED as readonly string[]).includes(f)));
 
   return { passed, failed };
 }
