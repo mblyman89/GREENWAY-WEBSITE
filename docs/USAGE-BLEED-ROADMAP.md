@@ -797,9 +797,13 @@ The header wordmark appears on every page. It declared its 5891×1170 asset size
 
 ## USAGE-9 — third batch (2026-11-26)
 
-### USAGE-9a — published rules ship default-stripped (this PR)
+### USAGE-9a — published rules ship default-stripped (PR #1899)
 
 The (site) layout serializes every published rule into every page so the client cart, product cards and badges can price, and that payload is the largest single row on a product page (7.4 KB decoded). The layout now sends `packRuleSnapshots()`, which omits only fields equal to their default (`null`, `false`, `[]`, `discountFixed: 0`, undefined config keys). `PublishedRulesProvider` calls `unpackRuleSnapshots()` to restore them, so the rules the client prices with are value-identical. The self-test checks the round-trip on the seeds and on edge cases (weekday 0 = Sunday, discountPercent 0). Money paths are untouched (rule 18). Measured saving: about 1.9 KB per page (7,420 → 5,489 bytes).
+
+### USAGE-9b — desktop dropdown rows are client references (this PR)
+
+The header's desktop "Shop" dropdown renders 17 category links on every page. As server JSX, each row serialized four class strings plus the arrow span into the RSC: about 730 bytes per row, about 12 KB per page write. Each row is now `NavChildLink`, a client component, so the RSC carries only a client reference plus `{href,label,helper}` (about 150 bytes). The SSR HTML is identical. Pinned by `nav-child-core.ts` and `usage-9b-nav-child-link.test.ts`.
 
 
 ## How to verify each slice

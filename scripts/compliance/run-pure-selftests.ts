@@ -647,6 +647,7 @@ import { __runDisplayRulesCacheTests } from "../../src/lib/promotions/display-ru
 import { __runContentPageTtlTests } from "../../src/lib/site/content-page-ttl-core"; // USAGE-8e
 import { __runHeaderLogoTests } from "../../src/lib/site/header-logo-core"; // USAGE-8f
 import { __runPackedRulesTests } from "../../src/lib/promotions/packed-rules-core"; // USAGE-9a
+import { __runNavChildTests } from "../../src/lib/site/nav-child-core"; // USAGE-9b
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3071,6 +3072,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("content-page-ttl-core", __runContentPageTtlTests(), 6); // USAGE-8e: /loyalty and /medical revalidate on publish with a 3600 s floor instead of regenerating every 60 s
   assertRan("header-logo-core", __runHeaderLogoTests(), 5); // USAGE-8f: header wordmark declares its 400 px display box and no sizes, so every page ships a 1x/2x srcSet + preload instead of a long width list
   assertRan("packed-rules-core", __runPackedRulesTests(), 10); // USAGE-9a: the (site) layout sends published rules default-stripped (~25% smaller on every page); the client restores them value-identically
+  assertRan("nav-child-core", __runNavChildTests(), 4); // USAGE-9b: the 17 desktop dropdown rows are client references ({href,label,helper}) instead of ~730-byte RSC trees on every page
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

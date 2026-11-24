@@ -1,4 +1,5 @@
 import Link from "@/components/site/IntentLink";
+import { NavChildLink } from "@/components/site/NavChildLink";
 import type { NavigationItem } from "@/components/site/navigation-data";
 
 type NavLinkProps = {
@@ -35,19 +36,8 @@ export function NavLink({ item }: NavLinkProps) {
         <div className="absolute -top-4 left-0 h-4 w-full" aria-hidden="true" />
         <div className="grid gap-1">
           {item.children?.map((child) => (
-            <Link
-              key={child.label}
-              href={child.href}
-              className="group/child rounded-2xl border border-transparent px-3 py-2.5 transition hover:border-white/10 hover:bg-white/[0.05]"
-            >
-              <span className="flex items-center justify-between gap-3 text-sm font-black text-white transition group-hover/child:text-[var(--greenway)]">
-                {child.label}
-                <span className="text-xs text-zinc-600 transition group-hover/child:text-[var(--orange)]" aria-hidden="true">
-                  →
-                </span>
-              </span>
-              <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{child.helper}</span>
-            </Link>
+            // USAGE-9b: client reference, so each row is {href,label,helper} in the RSC.
+            <NavChildLink key={child.label} href={child.href} label={child.label} helper={child.helper} />
           ))}
         </div>
       </div>
