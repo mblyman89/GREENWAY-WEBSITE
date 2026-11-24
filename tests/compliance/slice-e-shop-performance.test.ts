@@ -304,7 +304,7 @@ describe("Slice E — the grid ships less", () => {
     // SLICE H: the projection moved into the renderer both shop routes share.
     const code = stripComments(read("src/components/menu/ShopPage.tsx"));
     expect(code).toMatch(/const menuItems = toMenuGridItems\(enrichedMenuItems\)/);
-    expect(code).toMatch(/<InteractiveMenuBrowser[\s\S]*?items=\{menuItems\}/);
+    expect(code).toMatch(/<InteractiveMenuBrowser[\s\S]*?packedItems=\{packGridItems\(menuItems\)\}/); // USAGE-10a
   });
 
   it("removes the payload of every field it claims to trim", () => {

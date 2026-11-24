@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import type { MerchAdCardView } from "@/lib/merch/merch-ad-core";
+import { unpackGridItems, type PackedGridItems } from "@/lib/menu/grid-defaults-pack-core";
 // SLICE 78: owner-managed category labels. The server passes the DB-backed
 // value→label map; categoryLabel() prefers it and falls back to the hardcoded
 // taxonomy, so renames/additions at /admin/settings/types reach shoppers.
@@ -705,7 +706,9 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
 }
 
 type InteractiveMenuBrowserProps = {
-  items: GreenwayMenuItem[];
+  items?: GreenwayMenuItem[];
+  /** USAGE-10a: the grid items with repeated values sent once; restored below before any reader. */
+  packedItems?: PackedGridItems;
   initialSearchParams?: InitialMenuSearchParams;
   /** SLICE 78: DB-backed value→label map from /admin/settings/types. */
   categoryLabels?: Record<string, string>;
@@ -723,11 +726,13 @@ type InteractiveMenuBrowserProps = {
   merchAdCards?: MerchAdCardView[];
 };
 
-export function InteractiveMenuBrowser({ items, initialSearchParams = {}, categoryLabels, saleFilters = [], merchAdCards }: InteractiveMenuBrowserProps) {
+export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialSearchParams = {}, categoryLabels, saleFilters = [], merchAdCards }: InteractiveMenuBrowserProps) {
   // SLICE 78: register the owner's labels BEFORE any lookup below runs. This
   // happens during render on both server and client with the same map, so
   // hydration stays consistent; an absent map = hardcoded behavior.
   setCategoryLabelOverrides(categoryLabels);
+  // USAGE-10a: restore the packed defaults first so every reader below sees the full item.
+  const items = useMemo(() => (packedItems ? unpackGridItems(packedItems) : (itemsProp ?? [])), [packedItems, itemsProp]);
   // Lazy initializer reads the LIVE browser URL (merged with server params) so a
   // cache-restored return navigation rehydrates every filter. On first paint the
   // live URL equals the server URL, so server and client agree (no mismatch).
