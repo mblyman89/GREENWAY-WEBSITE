@@ -628,7 +628,7 @@ is followed by a small tree, and the page has one `<header` row and one
 `<footer id="location"` row instead of two. Size: ≈ 40 KB less inline RSC
 per page.
 
-### USAGE-7d — home and specials ship the deal pool, not the catalog (this PR)
+### USAGE-7d — home and specials ship the deal pool, not the catalog (PR #1890)
 
 **Cause (measured).** `HomeDailyDeals` and `SpecialsDailyDeals` are client
 components. In the browser they pick the first 64 on-deal items for the store
@@ -660,6 +660,38 @@ register price independently.
 **Verify.** `curl -s https://<prod>/ | wc -c` and `/specials`: each should drop
 by megabytes. ISR → Routes: the write *size* of `/` and `/specials` falls in
 proportion.
+
+### USAGE-7e — the shop grid stops shipping `"key":null` (this PR)
+
+**Cause (measured).** The `/menu` page grid JSON (`/menu` plus 21 categories) on
+2026-11-24 held 2,712 items in 3.42 MB. Twelve optional package, dose and
+classification facts were serialized as explicit nulls on almost every row.
+For example, `dohCategory` was null on 2,712 of 2,712, `unitsPerPackage`
+2,712/2,712, `unitThcMg` 2,710/2,712, `lowThcLiquid` 2,700/2,712 and
+`netVolumeMl` 2,601/2,712.
+
+**Fix.** `toMenuGridItems` (`src/lib/menu/menu-grid-projection-core.ts`, Slice
+E) now also drops those keys **when null** (`GRID_NULL_DROPPED_FIELDS`).
+Every one is typed `?: T | null`, so absent and null mean the same
+"unknown". Every reader in the card, filter, cart and sales-limit tree
+collapses them (`?? null`, `typeof === "number"`, `!= null`, `=== true`, and
+`=== undefined || === null` in sales-limits-core). Non-null values are always
+kept, including `false` and `0`: an explicit `otherwiseTaken: false` is a
+human answer. The self-test (47 assertions) is now also registered in
+`run-pure-selftests.ts`. `tests/compliance/usage-7e-grid-null-facts.test.ts`
+pins that each field is optional, that the readers collapse absent to null,
+and that DOH badges are unchanged.
+
+**Measured effect (on the saved production payload).** 3,419,924 → 2,836,750
+bytes of grid JSON (**−583 KB, −17%**) per shop page response and per ISR
+write. Gzip size changes little (−2.5%; repeated nulls compress well), so
+this mainly cuts *ISR write units* (billed on uncompressed size, 8 KB units),
+browser parse time and memory. Fast Origin Transfer barely moves.
+
+**Not done (left on purpose).** `productName` (215 KB gz-relevant) is read
+by the shop search haystack and the cart, and `variants`/`compounds` are read
+by the card potency line. Dropping them needs a card-level refactor, so they
+are listed under "left to do".
 
 ---
 
