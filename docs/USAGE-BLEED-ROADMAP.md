@@ -833,9 +833,13 @@ Due care on the add-to-cart and deal-price path:
 
 `packGridItems` (src/lib/menu/grid-defaults-pack-core.ts) sends each field's most common value once (`d`), omits it from every row that carries it, and replaces the shared Supabase image prefix with `~`. `InteractiveMenuBrowser` restores the items with `unpackGridItems` in a `useMemo` at the top of render, before any filter, card or deal reader, so every reader sees a byte-identical item. Rows that lacked a defaulted field list it in `_a`, so the round-trip is exact. Display data only (rule 18): prices round-trip unchanged and no money decision moves.
 
-### USAGE-10b — footer renders one tree (this PR)
+### USAGE-10b — footer renders one tree (PR #1906)
 
 `Footer` used to render a complete `MobileFooter` and a complete `DesktopFooter`, one hidden per breakpoint, so the hours graphic (plus its draft-aware content read), the app-download row and the Follow Greenway glyphs shipped twice on every page. Those three now render once in a shared column (stacked and centered on mobile; the right-hand grid column on desktop, alignment via `lg:` classes). Only the parts whose layout genuinely differs (logo/address, warning card, policy links) stay breakpoint-gated, so the visible result at each breakpoint is unchanged.
+
+### USAGE-10c — top bar and site JSON-LD from client components (this PR)
+
+The layout used to serialize the Organization, WebSite and Store JSON-LD strings (~3.6 KB) into every page's RSC payload, and `SecondaryBar` sent its ~1.5 KB of clamp()/breakpoint class strings the same way. `SiteJsonLd` (client) now builds the three schemas from the small `{hours, today}` input with the same builders, and `SecondaryBarView` (client) holds the top-bar markup; the server `SecondaryBar` still resolves the draft-aware blocks and passes three short strings. SSR HTML is unchanged, so crawlers see identical JSON-LD.
 
 ## How to verify each slice
 

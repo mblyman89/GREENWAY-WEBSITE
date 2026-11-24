@@ -23,8 +23,8 @@ import { packRuleSnapshots } from "@/lib/promotions/packed-rules-core";
 // USAGE-9d: rotation URLs ship with their shared storage prefix sent once.
 import { packRotationLists } from "@/lib/menu/rotation-lists-pack-core";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
-import { JsonLd } from "@/components/seo/JsonLd";
-import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
+import { SiteJsonLd } from "@/components/seo/SiteJsonLd";
+import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE } from "@/lib/seo/seo";
 import { getContentValues } from "@/lib/cms/render-content";
 import { BRAND_KIT_BLOCK, brandColorVars, parseBrandKit } from "@/lib/brand/brand-kit-core";
 import { getStoreSchemaInput } from "@/lib/seo/store-hours-server";
@@ -155,7 +155,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {siteFontFaces ? <style dangerouslySetInnerHTML={{ __html: siteFontFaces }} /> : null}
       </head>
       <body>
-        <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema(storeHours, storeToday)]} id="site" />
+        <SiteJsonLd hours={storeHours} today={storeToday} />
         <PublishedRulesProvider packed={packRuleSnapshots(publishedRules)}>
           <MenuCardRotationProvider packed={packRotationLists(rotationLists)}>
             <CartProvider>{children}</CartProvider>
