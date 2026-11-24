@@ -157,7 +157,7 @@ describe("public wiring is in place", () => {
     // on the next load because the writers revalidate "/loyalty" — pinned in
     // tests/compliance/usage-5-public-page-revalidate.test.ts.
     expect(route).not.toMatch(/export const dynamic = "force-dynamic"/);
-    expect(route).toMatch(/export const revalidate = 60;/);
+    expect(route).toMatch(/export const revalidate = 3600;/); // USAGE-8e
     expect(route).toContain("birthdayHelp:");
     expect(route).toContain("submitLabel:");
     expect(route).toContain("successTitle:");

@@ -53,9 +53,10 @@ describe("USAGE-5 · the three public pages share one render per minute", () => 
   });
 
   for (const route of ROUTES) {
-    it(`${route} exports revalidate = 60 and not force-dynamic`, () => {
+    it(`${route} exports its revalidate floor and not force-dynamic`, () => {
       const code = stripComments(read(route));
-      expect(code).toMatch(/export const revalidate = 60;/);
+      // USAGE-8e: the content-only pages (no menu data) use a 3600 s floor.
+      expect(code).toMatch(/loyalty|medical/.test(route) ? /export const revalidate = 3600;/ : /export const revalidate = 60;/);
       expect(code).not.toContain("force-dynamic");
       // `dynamic = "force-static"` would freeze the CMS flag at build time — the
       // exact failure SLICE 107 guarded against. Neither extreme is allowed.
