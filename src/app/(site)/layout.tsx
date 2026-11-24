@@ -24,9 +24,9 @@ import { getContentValues } from "@/lib/cms/render-content";
 import { BRAND_KIT_BLOCK, brandColorVars, parseBrandKit } from "@/lib/brand/brand-kit-core";
 import { getStoreSchemaInput } from "@/lib/seo/store-hours-server";
 import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
-import { customFontFaceCss } from "@/lib/cms/custom-font-core";
 import {
   fontStack,
+  webFontCss,
   DEFAULT_HEADING_FONT_ID,
   DEFAULT_BODY_FONT_ID,
 } from "@/lib/cms/fonts";
@@ -118,7 +118,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   );
   const bodyStack = fontStack(fonts["site.font.body"], DEFAULT_BODY_FONT_ID);
   const rotationLists = await rotationListsPromise;
-  const siteFontFaces = customFontFaceCss([fonts["site.font.heading"] ?? "", fonts["site.font.body"] ?? ""]);
+  const siteFontFaces = webFontCss([fonts["site.font.heading"], fonts["site.font.body"]]); // D272: uploads + Google library
 
   return (
     <html

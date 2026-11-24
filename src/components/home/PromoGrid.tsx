@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import Link from "next/link";
 import { HomeBrands } from "@/components/home/HomeBrands";
 import { SectionBanner, type SectionBannerButton } from "@/components/home/SectionBanner";
@@ -303,6 +304,7 @@ function AdvancedTypeCard({ lane, index }: { lane: TypeCard; index: number }) {
             className={`text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl${lane.label.includes("\n") ? " whitespace-pre-line" : ""}${script ? " normal-case tracking-normal" : ""}`}
             style={labelStyle}
           >
+            <WebFonts ids={[a.labelFont]} />
             {lane.label}
           </p>
           {lane.cta ? (

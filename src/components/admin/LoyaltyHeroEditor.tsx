@@ -23,6 +23,8 @@
  * battle-tested content-block machinery as Site Content.
  */
 
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { HERO_FONT_IDS } from "@/lib/loyalty/loyalty-hero-core";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
@@ -219,6 +221,7 @@ function BlockEditor({
                 </option>
               ))}
             </optgroup>
+            <AllFontOptions value={block.font} skip={HERO_FONT_IDS} />
           </select>
         </label>
 

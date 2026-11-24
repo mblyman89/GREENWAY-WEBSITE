@@ -15,6 +15,7 @@
  *    computer works. The browser copy is the offline cache. Import design
  *    (.json or the Proof & Export .zip) on the Drafts sub-tab.
  */
+import { WebFonts } from "@/components/fonts/WebFonts";
 import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent } from "react";
 import { BLANKS, colorsFor, formatCents, getBlank, sizesFor, basePriceCents, METHOD_LABEL, METHOD_BLURB, type Method } from "@/lib/merch-studio/garment-catalog-core";
 import { VIEW_LABEL, viewsFor } from "@/lib/merch-studio/garment-views-core";
@@ -525,6 +526,8 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
 
   return (
     <div className="space-y-3 outline-none" tabIndex={-1} onKeyDown={onKey}>
+      {/* D272: load uploaded + Google-library fonts used on any side (canvas, proofs, export). */}
+      <WebFonts ids={Object.values(design.sides).flatMap((sd) => sd.elements.map((e) => e.fontId))} />
       {/* Design header */}
       <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-[14rem] flex-1">

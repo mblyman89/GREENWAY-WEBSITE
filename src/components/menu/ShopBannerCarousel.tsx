@@ -22,6 +22,7 @@
  * hidden and it reads like the old single banner.
  */
 
+import { WebFonts } from "@/components/fonts/WebFonts";
 import Link from "next/link";
 import { useCallback } from "react";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
@@ -101,6 +102,7 @@ function BlockLines({
   const scriptClass = isScript ? "normal-case tracking-normal" : "";
   return (
     <p className={`${baseClass} ${scriptClass}`} style={style}>
+      <WebFonts ids={[block.font]} />
       {lines.map((line, i) => (
         <span key={i} className="block">
           {line === "" ? "\u00A0" : line}

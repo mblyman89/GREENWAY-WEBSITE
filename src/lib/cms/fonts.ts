@@ -18,7 +18,8 @@
  * R56-S2: the owner can ALSO upload any font they have the right to use
  * (custom-font-core.ts); those ids look like `custom:<hex>.<ext>`.
  */
-import { customFontStack, isCustomFontId } from "./custom-font-core";
+import { customFontFaceCss, customFontStack, isCustomFontId } from "./custom-font-core";
+import { isPrintFontId, printFontHref, printFontInfo, printFontStack } from "@/lib/printing/print-type-core";
 
 export type FontCategory = "sans" | "serif" | "display" | "script" | "mono";
 
@@ -277,5 +278,46 @@ export function fontStack(
   // R56-S2: an owner-uploaded font (`custom:<hex>.<ext>`); its @font-face is
   // injected by the page (layout / DesignedBanner).
   if (isCustomFontId(id)) return customFontStack(id) ?? resolveFont(null, fallbackId).stack;
+  // D272: the 120+ Google library (ids `gf:Family+Name`) works everywhere, not only in Print Studio.
+  if (isPrintFontId(id)) return printFontStack(id) ?? resolveFont(null, fallbackId).stack;
   return resolveFont(id, fallbackId).stack;
+}
+
+/** D272: true for ANY font the system can draw: site library, owner uploads, Google library. */
+export function isKnownFontId(id: unknown): id is string {
+  return typeof id === "string" && (FONT_BY_ID.has(id) || isCustomFontId(id) || isPrintFontId(id));
+}
+
+/** D272: cursive / handwritten faces (drives the "script size bump" controls). */
+export function isScriptFontId(id: string | null | undefined): boolean {
+  if (!id) return false;
+  if (FONT_BY_ID.has(id)) return FONT_BY_ID.get(id)!.category === "script";
+  return printFontInfo(id)?.cat === "script";
+}
+
+/**
+ * D272: one CSS string that makes the given fonts loadable on ANY page:
+ * `@import` of the Google css2 sheet for library ids (imports must come first)
+ * + `@font-face` for uploaded fonts. Site-library fonts are already loaded by
+ * next/font (`fontVariablesClassName`) and need nothing. Unknown ids skipped.
+ */
+export function webFontCss(ids: Iterable<string | null | undefined>): string {
+  const imports = new Set<string>();
+  const custom: string[] = [];
+  for (const id of ids) {
+    if (!id) continue;
+    if (isPrintFontId(id)) {
+      const href = printFontHref(id);
+      if (href) imports.add(`@import url("${href.replace("display=block", "display=swap")}");`);
+    } else if (isCustomFontId(id)) custom.push(id);
+  }
+  const faces = customFontFaceCss(custom);
+  return [...imports, faces].filter(Boolean).join("\n");
+}
+
+/** D272: the ids among `ids` that need a stylesheet (uploaded or Google), de-duplicated. */
+export function loadableFontIds(ids: Iterable<string | null | undefined>): string[] {
+  const out = new Set<string>();
+  for (const id of ids) if (id && (isCustomFontId(id) || isPrintFontId(id))) out.add(id);
+  return [...out];
 }

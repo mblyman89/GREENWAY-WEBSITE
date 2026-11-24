@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import Link from "next/link";
 import type { BlogPost } from "@/lib/blog/posts";
 import { formatBlogDate } from "@/lib/blog/format-date";
@@ -134,6 +135,7 @@ export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
           className={`mt-3 font-black leading-tight tracking-tight text-white ${titleStyle.className}`}
           style={titleStyle.style}
         >
+          <WebFonts ids={[post.titleStyle?.font]} />
           {post.title}
         </h2>
         <p className="mt-4 flex-1 text-sm font-medium leading-6 text-zinc-400 md:text-base md:leading-7">

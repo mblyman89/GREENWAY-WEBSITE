@@ -14,6 +14,8 @@
  * posted as one hidden `type_cards_json` field and re-normalized on the server
  * (type-cards-core) — the client is never trusted.
  */
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { HERO_FONT_IDS } from "@/lib/loyalty/loyalty-hero-core";
 import { useMemo, useState } from "react";
 import {
   ContentImageField,
@@ -538,6 +540,7 @@ function TypeCardAdvancedEditor({
                   ))}
                 </optgroup>
               ))}
+              <AllFontOptions value={a.labelFont} skip={HERO_FONT_IDS} />
             </select>
           </label>
           <div>

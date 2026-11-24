@@ -1,5 +1,6 @@
 "use client";
 
+import { WebFonts } from "@/components/fonts/WebFonts";
 import Link from "next/link";
 import { useCallback } from "react";
 import type { RenderSlide } from "@/lib/cms/carousel-types";
@@ -395,10 +396,12 @@ function AdvancedSlide({
   const ti = lineStyle(adv.title);
   const de = lineStyle(adv.description);
   const alt = slide.imageAlt || slide.title || "Greenway";
+  const fontsEl = <WebFonts ids={[adv.eyebrow.font, adv.title.font, adv.description.font]} />;
   const sizes = "(max-width: 768px) 100vw, 1408px";
 
   return (
     <div className={`flex min-h-[8.5rem] md:min-h-[10.5rem] ${rowAlign} ${wrapperCls}`} {...common}>
+      {fontsEl}
       {adv.imageMobile ? (
         <>
           <div className="absolute inset-0 md:hidden">

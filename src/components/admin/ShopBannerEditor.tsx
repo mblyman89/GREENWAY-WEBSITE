@@ -16,6 +16,8 @@
  * constants + helpers used here come from the pure cores.
  */
 
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { HERO_FONT_IDS } from "@/lib/loyalty/loyalty-hero-core";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
@@ -210,6 +212,7 @@ function BlockEditor({
                 </option>
               ))}
             </optgroup>
+            <AllFontOptions value={block.font} skip={HERO_FONT_IDS} />
           </select>
         </label>
 

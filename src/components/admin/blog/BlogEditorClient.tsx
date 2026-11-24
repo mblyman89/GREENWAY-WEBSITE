@@ -20,7 +20,8 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/admin/ui";
 import { StickyActionBar, useToast } from "@/components/admin/ux";
 import { suggestHeroAltAction } from "@/app/admin/blog/actions";
-import { FONT_OPTIONS } from "@/lib/cms/fonts";
+import { AllFontOptions } from "@/components/admin/fonts/AllFontOptions";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import { TITLE_SIZE_OPTIONS } from "@/lib/blog/title-style";
 import { BlogBody } from "@/components/blog/BlogBody";
 import { BLOG_BLOCK_SNIPPETS, blogBlockIssues, blogPlainText } from "@/lib/blog/blog-blocks-core";
@@ -461,17 +462,14 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction,
           <div className="mt-3 grid gap-4 sm:grid-cols-3">
             <div>
               <label className={labelCls}>Font</label>
+              <WebFonts ids={[titleFont]} />
               <select
                 value={titleFont}
                 onChange={(e) => setTitleFont(e.target.value)}
                 className={fieldCls}
               >
                 <option value="inherit">Site default</option>
-                {FONT_OPTIONS.filter((f) => f.id !== "system").map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.label}
-                  </option>
-                ))}
+                <AllFontOptions value={titleFont} noSystem />
               </select>
             </div>
             <div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WebFonts } from "@/components/fonts/WebFonts";
 import type { CSSProperties } from "react";
 import {
   boxMotionClass,
@@ -30,7 +31,7 @@ import { CurvedText } from "./CurvedText";
 import { LiveBox } from "./LiveText";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { elementHoverClass, elementStyle } from "@/lib/cms/banner-elements-core";
-import { customFontFaceCss, customFontIdsIn } from "@/lib/cms/custom-font-core";
+import { customFontIdsIn } from "@/lib/cms/custom-font-core";
 // R44: a video wrapper must stay visible to assistive tech (its pause button);
 // the <video> itself is aria-hidden inside BannerVideo.
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
@@ -128,11 +129,8 @@ export function DesignedBanner({
       {/* R56-S2: owner-uploaded fonts. React 19 hoists <style href precedence>
           into <head> and dedupes by href, so two banners using one font emit
           one @font-face. */}
-      {customFontIdsIn(design).map((id) => (
-        <style key={id} href={`gw-font-${id}`} precedence="default">
-          {customFontFaceCss([id])}
-        </style>
-      ))}
+      {/* D272: + Google-library fonts (`gf:`) so a banner styled in Print Studio's font list renders on any page. */}
+      <WebFonts ids={[...customFontIdsIn(design), ...design.boxes.map((b) => b.font), ...design.buttons.map((b) => b.font)]} />
       <div
         style={frameExtraStyle ? { ...css(frameStyle(design)), ...frameExtraStyle } : css(frameStyle(design))}
         className={`gw-dframe ${frameClassName ?? "border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"}${plan.length ? " gw-enp" : ""}`}

@@ -3740,3 +3740,14 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - Remove-bg fixed app-wide: GPT/Gemini now render on flat magenta and the server keys it out (no transparent-output requests).
 - Creative Studio: new "Giant banner — 6′ × 12′ (2:1)" size (2880×1440, FLUX 4 MP cap) with print note → Enlarge for print to 11520×5760 (80 DPI).
 - Pure core `print-layers-core` (33 asserts) wired into run-pure-selftests.
+
+## D272
+
+"thank you. I uploaded a new font to my branding page in the back office. will you make sure that everywhere that uses fonts, can access my uploaded fonts, and any other font the system has access to. follow the standing rules. thank you."
+
+### Status (D272)
+
+- One shared font list (`AllFontOptions`): your uploaded fonts first, then the site library (26), then the 120+ Google library. Used by every font picker: Branding → Heading/Body fonts, Banner/Newsletter/Print Studio text + buttons, Home slides, Shop banner, Loyalty hero, Type cards, Blog title font, Merch Studio text.
+- One shared loader (`WebFonts`): every public renderer (site layout, DesignedBanner, Home hero, Promo grid, Shop banner, Loyalty hero, Blog card + article) loads uploaded + Google fonts on demand, de-duplicated.
+- Rules widened: `fontStack` resolves `gf:` ids; hero font validation accepts any known font (uploads + library), script detection works for all; blog titles accept any known font.
+- Merch print export now embeds Google-library fonts too (uploaded fonts already embedded).
