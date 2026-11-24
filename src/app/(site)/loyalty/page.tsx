@@ -46,9 +46,12 @@ export async function generateMetadata() {
 // (src/app/admin/loyalty-page/actions.ts) calls revalidatePath("/loyalty"), and
 // the program editors (saveLoyaltyConfigAction, renameLoyaltyTierAction — D139
 // — in src/app/admin/loyalty/actions.ts) do the same as of
-// this slice. 60 s is only the floor. Draft Mode bypasses the route cache, so
+// this slice. The TTL is only the floor (USAGE-8e: 3600 s). Draft Mode bypasses the route cache, so
 // staff preview still sees drafts on demand.
-export const revalidate = 60;
+// USAGE-8e: every writer clears this route by path, so the TTL is only a
+// safety net. 3600 s (not 60) stops 24 regenerations/hour of identical HTML.
+// Pinned by src/lib/site/content-page-ttl-core.ts.
+export const revalidate = 3600;
 
 export default async function LoyaltyPage() {
   const [copy, preview, banners, loyaltyConfig, loyaltyTiers] = await Promise.all([

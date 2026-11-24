@@ -774,7 +774,7 @@ ships `strainTypeSource`: ~160 KB less grid JSON per shop page and ISR write. Ev
 client reader already treats absent as false (`=== true`, `!== true`, truthy
 checks); the DOH badge decision is pinned identical.
 
-### USAGE-8d — storefront reads cached display rules (this PR)
+### USAGE-8d — storefront reads cached display rules (PR #1896)
 
 `loadPublishedRuleSnapshots()` (promotions + targets + exclusions + configs +
 never-discount: 4–5 PostgREST reads) ran uncached on every render of the site
@@ -786,6 +786,10 @@ stored (rule 18). Every promotion / specials / never-discount action clears the 
 (`revalidateDisplayRules()`). The register, order pricing, promo-guard and admin
 keep the uncached read — pinned by `usage-8d-display-rules-cache.test.ts`.
 Saves function CPU/DB time per regeneration; ISR bytes are unchanged.
+
+### USAGE-8e — /loyalty and /medical: 3600 s floor (this PR)
+
+Both pages show CMS copy, banners and loyalty program numbers. They show no menu data, yet they regenerated every 60 s. Every writer already clears them by path: the loyalty page, hero and program editors, the medical editor, and the `/(site)` layout for chrome, banners and rules. So the TTL is only a safety net. It goes from 60 to 3600 s, which cuts up to 23 identical ISR writes per page per hour. An edit still appears on the next load. Pinned by `content-page-ttl-core.ts` and `usage-8e-content-page-ttl.test.ts`.
 
 
 ## How to verify each slice

@@ -20,9 +20,12 @@ import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 // page whose body is static copy. The hide flag is published through
 // src/app/admin/medical-page/actions.ts, which calls revalidatePath("/medical")
 // and revalidatePath("/", "layout"), so hiding still takes effect on the next
-// non-preview load; 60 s is only the floor for anything that bypasses that
+// non-preview load; the TTL (USAGE-8e: 3600 s) is only the floor for anything that bypasses that
 // path. Draft Mode bypasses the route cache, so staff preview is unaffected.
-export const revalidate = 60;
+// USAGE-8e: every writer clears this route by path, so the TTL is only a
+// safety net. 3600 s (not 60) stops 24 regenerations/hour of identical HTML.
+// Pinned by src/lib/site/content-page-ttl-core.ts.
+export const revalidate = 3600;
 
 const baseMetadata = pageMetadata({
   title: "Medical Cannabis Program — Cards, Tax Savings & Limits",
