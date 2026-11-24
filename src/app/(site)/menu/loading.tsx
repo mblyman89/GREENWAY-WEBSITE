@@ -1,3 +1,9 @@
+"use client";
+
+// USAGE-8a: a client boundary. A server loading.tsx is serialized as a full
+// element tree into EVERY page's RSC payload (and every ISR write); as a
+// client component it ships as one small module reference instead. No data
+// access, no hooks: it renders identically on the server and the client.
 import {
   ShopHeaderSkeleton,
   ShopBreadcrumbSkeleton,
