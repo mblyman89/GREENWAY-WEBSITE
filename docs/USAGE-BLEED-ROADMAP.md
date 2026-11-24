@@ -604,7 +604,7 @@ Display data only. No money path touched.
 /terms-of-use, /privacy-policy, /locations should fall from ≈ 11/h to about
 1/h plus one per content publish and one per deploy.
 
-### USAGE-7c — the not-found boundary stops shipping a second Header + Footer (this PR)
+### USAGE-7c — the not-found boundary stops shipping a second Header + Footer (PR #1889)
 
 **Cause (measured).** Next.js serializes a segment's not-found boundary into
 the RSC payload of every page under it (the `"notFound":[…]` slot of the
@@ -627,6 +627,39 @@ unchanged. `tests/compliance/usage-7c-lean-not-found.test.ts`.
 is followed by a small tree, and the page has one `<header` row and one
 `<footer id="location"` row instead of two. Size: ≈ 40 KB less inline RSC
 per page.
+
+### USAGE-7d — home and specials ship the deal pool, not the catalog (this PR)
+
+**Cause (measured).** `HomeDailyDeals` and `SpecialsDailyDeals` are client
+components. In the browser they pick the first 64 on-deal items for the store
+weekday (`selectOnDealItems(items, activeRules, { limit: 64 })`), shuffle, and
+show at most 24. Both pages fed them the whole live catalog (2,712 items,
+≈ 3.4 MB of JSON), so `/` and `/specials` were 4.5–4.9 MB on the wire and
+every ISR write of those pages stored megabytes to show 24 cards.
+
+**Fix.** `src/lib/specials/deal-pool-core.ts` (pure, `__runDealPoolTests`, 15
+assertions). The pool is the union, over every published rule, of that rule's
+first 64 deal items, plus a 96-item evenly spaced cross-section for the
+no-per-item-deal fallback. It is kept in catalog order. **Exact, not
+approximate:** for any active rule set, an item in the client's first 64 has
+rank ≤ 64 under each rule that discounts it, so it is in the pool; order is
+preserved, so the selection is identical. The core proves this over every
+subset of rules. `tests/compliance/usage-7d-deal-pool.test.ts` also proves it
+with the real engine (`menuDiscountForItem`) and seed rules for all seven
+weekdays. The client components are unchanged. The vendor directory on the
+home page still reads the full list on the server (it is not serialized).
+
+**Bound.** At most 7 rules × 64 + 96 ≈ 544 items instead of 2,712. In
+practice it is much smaller, because basket-only days (Saturday, Sunday) add
+nothing.
+
+**Never money.** This only decides which cards render. Badges and prices are
+computed by the same client code from the same rules, and the cart and
+register price independently.
+
+**Verify.** `curl -s https://<prod>/ | wc -c` and `/specials`: each should drop
+by megabytes. ISR → Routes: the write *size* of `/` and `/specials` falls in
+proportion.
 
 ---
 

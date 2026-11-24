@@ -6,7 +6,8 @@ import { pageMetadata } from "@/lib/seo/seo";
 import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
-import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
+import { buildDealPool } from "@/lib/specials/deal-pool-core";
+import { menuDiscountForItem, weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import { getContentValues, getContentForRender, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { resolveSpecialsHeroText, resolveSpecialsPresentation } from "@/lib/specials/specials-presentation-core";
@@ -95,7 +96,7 @@ export default async function SpecialsPage() {
       <SpecialsContent
         thursdayBrands={thursdayBrands}
         weeklyDeals={weeklyDealSummaries(ruleSnapshots)}
-        menuItems={menuItems}
+        menuItems={buildDealPool(menuItems, ruleSnapshots, (item, rule) => menuDiscountForItem(item, [rule]) !== undefined) /* USAGE-7d: the deal pool, not the catalog */}
         presentation={presentation}
         content={{
           eyebrow: heroText.eyebrow,

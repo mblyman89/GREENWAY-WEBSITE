@@ -638,6 +638,7 @@ import { __runPayrollStatsCoreTests } from "../../src/lib/payroll/payroll-stats-
 import { __runIntentPrefetchTests } from "../../src/lib/site/intent-prefetch-core"; // USAGE-7a
 import { __runLayoutCacheTests } from "../../src/lib/site/layout-cache-core"; // USAGE-7b
 import { __runNotFoundTests } from "../../src/lib/site/not-found-core"; // USAGE-7c
+import { __runDealPoolTests } from "../../src/lib/specials/deal-pool-core"; // USAGE-7d
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3053,6 +3054,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("intent-prefetch-core", __runIntentPrefetchTests(), 24); // USAGE-7a: public links prefetch on intent (hover / focus / touch), not on sight; repo guard keeps next/link out of public files
   assertRan("layout-cache-core", __runLayoutCacheTests(), 14); // USAGE-7b: the shared site layout never reads a `live-menu`-tagged cache; menu-card fallbacks have their own tag
   assertRan("not-found-core", __runNotFoundTests(), 15); // USAGE-7c: the (site) not-found boundary (embedded in every page's RSC) never renders the full Header/Footer
+  assertRan("deal-pool-core", __runDealPoolTests(), 15); // USAGE-7d: home + specials ship the exact deal pool (per-rule first 64 + fallback sample), not the 2,712-item catalog
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
