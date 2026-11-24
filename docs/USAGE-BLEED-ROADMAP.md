@@ -813,9 +813,18 @@ The product page's "More from <brand>" rail passed up to 6 full menu items to `R
 
 The (site) layout sends the D225 fallback-picture rotation lists to every page. Each of the 22 URLs repeated the same 80-character Supabase storage prefix: 2.7 KB decoded (3.9 KB escaped) per page write. The layout now sends `packRotationLists()` (`{p: prefix, l: {cat: [suffix]}}`, about 1.0 KB), and `MenuCardRotationProvider` rebuilds the exact URLs with `unpackRotationLists()`. Categories, order and URLs are unchanged, and the round-trip is self-tested, including the no-shared-prefix and empty cases. The D225 layout pin was updated. Pinned by `rotation-lists-pack-core.ts` and `usage-9d-rotation-prefix.test.ts`.
 
-### USAGE-9e — footer glyphs stop resending class + default message (this PR)
+### USAGE-9e — footer glyphs stop resending class + default message (PR #1903)
 
 The footer renders 7 glyph buttons (5 social, 2 app store) in both its mobile and desktop trees: 14 `FooterLinkUnavailable` client elements per page. Each one carried the same 236-byte className and the 115-byte default "not available" message as props, about 4.9 KB of repeated strings in every page's RSC. Both now live in `footer-glyph-core.ts` as the client component's defaults. The footer sends the message only when an editor has changed it from the default (`unavailableMessageProp`). The rendered class and message are byte-identical, and the self-test checks the shown text for the default, blank and edited messages. Pinned by `usage-9e-footer-glyph-props.test.ts`.
+
+### USAGE-9f — PDP purchase panel gets the trimmed projection (this PR)
+
+The product page handed its full item to `ProductDetailPurchasePanel`, a client component, so description, identityKey, null facts and false flags were serialized into every product page's RSC. The panel now receives `purchasePanelItem(item)`, the `toMenuGridItems` projection. That saves about 600 bytes per product page. The page still renders the full description from the untouched item, and the Slice E pin was extended to cover this.
+
+Due care on the add-to-cart and deal-price path:
+- `PANEL_FIELDS` lists every field the panel and its deal/badge helpers read. The self-test proves each one keeps an identical value.
+- The vitest derives the fields the panel actually reads from its source and fails if any is undeclared.
+- The low-THC, suppository and volume facts are read as `?? null`, so the cart receives the same values.
 
 
 ## How to verify each slice

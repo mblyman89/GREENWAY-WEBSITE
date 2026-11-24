@@ -651,6 +651,7 @@ import { __runNavChildTests } from "../../src/lib/site/nav-child-core"; // USAGE
 import { __runRelatedProjectionTests } from "../../src/lib/menu/related-projection-core"; // USAGE-9c
 import { __runRotationListsPackTests } from "../../src/lib/menu/rotation-lists-pack-core"; // USAGE-9d
 import { __runFooterGlyphTests } from "../../src/lib/site/footer-glyph-core"; // USAGE-9e
+import { __runPurchasePanelProjectionTests } from "../../src/lib/menu/purchase-panel-projection-core"; // USAGE-9f
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3079,6 +3080,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("related-projection-core", __runRelatedProjectionTests(), 5); // USAGE-9c: the product-page related rail ships the shop-grid projection (no description/identityKey/null facts) to RelatedProductCard
   assertRan("rotation-lists-pack-core", __runRotationListsPackTests(), 8); // USAGE-9d: the layout sends the fallback rotation URLs with their shared storage prefix once (~2.7 KB -> ~1 KB per page); the provider rebuilds them exactly
   assertRan("footer-glyph-core", __runFooterGlyphTests(), 9); // USAGE-9e: the 14 footer glyph buttons take their class + default message from the client component instead of ~4.9 KB of repeated props per page
+  assertRan("purchase-panel-projection-core", __runPurchasePanelProjectionTests(), 6); // USAGE-9f: the PDP purchase panel (client) gets the trimmed projection; every add-to-cart / deal-price field is kept, the page text keeps the full item
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

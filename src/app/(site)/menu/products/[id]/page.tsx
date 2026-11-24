@@ -4,6 +4,7 @@ import Link from "@/components/site/IntentLink";
 import { notFound } from "next/navigation";
 import { RelatedProductCard } from "@/components/menu/RelatedProductCard";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
+import { purchasePanelItem } from "@/lib/menu/purchase-panel-projection-core";
 import { BackToMenuLink } from "@/components/menu/BackToMenuLink";
 import { ProductDetailPurchasePanel } from "@/components/menu/ProductDetailPurchasePanel";
 import { Footer } from "@/components/site/Footer";
@@ -597,7 +598,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               ) : null}
             </div>
 
-            <ProductDetailPurchasePanel item={item} />
+            {/* USAGE-9f: the client panel gets the trimmed projection (it reads
+                none of the dropped fields); the page itself keeps the full item. */}
+            <ProductDetailPurchasePanel item={purchasePanelItem(item)} />
 
             {/* Description tab (lab results intentionally omitted). Sits in the
                 right column under the purchase panel to mirror the reference. */}
