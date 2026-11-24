@@ -31,6 +31,9 @@ import { MerchCanvas, type CanvasZoom } from "./MerchCanvas";
 import { AddPanel } from "./AddPanel";
 import { ElementPanel } from "./ElementPanel";
 import { IssueList } from "./IssueList";
+import { OptimizerPanel, type OptTab } from "./OptimizerPanel";
+import { fixFor } from "@/lib/merch-studio/optimizer-core";
+import type { Issue } from "@/lib/merch-studio/print-rules-core";
 import { getAsset, inspectImage, loadDesigns, measureLinesEm, putAsset, saveDesigns } from "./merch-assets";
 import { contentHash, parseImport } from "@/lib/merch-studio/merch-design-sync-core";
 import { archiveMerchDesignAction } from "@/app/admin/merch-studio/design-actions";
@@ -74,6 +77,8 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [optTab, setOptTab] = useState<OptTab>("colors");
+  const [optAsset, setOptAsset] = useState<{ id: string; blob: Blob | null } | null>(null);
   const [saved, setSaved] = useState(true);
   // D232 M-4: server copy. "sync" = first load, "dirty" = waiting to send.
   const [srv, setSrv] = useState<"sync" | "dirty" | "saving" | "saved" | "offline" | "conflict">("sync");
@@ -353,6 +358,13 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
   // Selection ops ----------------------------------------------------------------------
   const selEls = els.filter((e) => selected.includes(e.id));
   const one = selEls.length === 1 ? selEls[0] : null;
+  const oneAsset = one?.kind === "image" ? one.assetId : undefined;
+  useEffect(() => {
+    let gone = false;
+    if (oneAsset) getAsset(oneAsset).then((b) => { if (!gone) setOptAsset({ id: oneAsset, blob: b }); }).catch(() => {});
+    return () => { gone = true; };
+  }, [oneAsset]);
+  const optBlob = optAsset && optAsset.id === oneAsset ? optAsset.blob : null;
   const removeSel = () => { if (!selEls.length) return; setEls(els.filter((e) => !selected.includes(e.id) || e.locked)); setSelected([]); };
   const duplicateSel = () => {
     if (!selEls.length) return;
@@ -463,6 +475,41 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
     change({ ...design, ack: design.ack.includes(key) ? design.ack.filter((a) => a !== key) : [...design.ack, key] });
   };
   const selectFromIssue = (pid: string, elId: string) => { switchPlacement(pid); setSelected([elId]); setSub("selected"); };
+  // D270: one-click fixes from the Checks list + the Printful Optimizer.
+  const elIn = (pid: string, id?: string) => (id ? design.sides[pid]?.elements.find((e) => e.id === id) : undefined);
+  const placementOf = (pid: string) => blank.placements.find((p) => p.id === pid) ?? placement;
+  const fixOf = (pid: string, i: Issue) => fixFor(i, elIn(pid, i.elementId), placementOf(pid), sideFor(design, placementOf(pid)).method, blank.category === "beanie");
+  const fixIssue = (pid: string, i: Issue) => {
+    const fx = fixOf(pid, i);
+    if (!fx) return;
+    const p = placementOf(pid);
+    const s = sideFor(design, p);
+    let target = i.elementId;
+    if (!target) target = (s.elements.find((e) => e.kind === "image" && e.imgColors?.length) ?? s.elements[0])?.id;
+    if ("patch" in fx && target) {
+      if (pid === placement.id && fx.patch.fontSizeIn !== undefined) remeasure(target, fx.patch);
+      else change(setSide(design, pid, { ...s, elements: s.elements.map((e) => (e.id === target ? { ...e, ...fx.patch } : e)) }));
+      setMsg(`Fixed: ${fx.label}.`);
+      return;
+    }
+    if (!target) return;
+    switchPlacement(pid);
+    setSelected([target]);
+    setSub("selected");
+    if ("open" in fx && fx.open !== "select") setOptTab(fx.open === "colors" ? "colors" : "ai");
+  };
+  const replaceImage = async (id: string, b: Blob, note: string) => {
+    const cur = els.find((e) => e.id === id);
+    if (!cur) return;
+    const assetId = newId("asset");
+    await putAsset(assetId, b);
+    const url = URL.createObjectURL(b);
+    const { w, h, analysis } = await inspectImage(url, false);
+    setAssetUrls((u) => ({ ...u, [assetId]: url }));
+    const nh = r4((cur.w * h) / w);
+    patchEl(id, { assetId, pxW: w, pxH: h, h: nh, y: r4(cur.y + (cur.h - nh) / 2), imgColors: analysis.colors, imgCoverage: analysis.coverage, autoPhoto: analysis.photoLikely, isPhoto: analysis.photoLikely, hasGradient: analysis.photoLikely });
+    setMsg(note);
+  };
 
   const views = viewsFor(blank);
   const colorName = colorsFor(blank).find((c) => c[1] === garmentHex)?.[0] ?? garmentHex;
@@ -595,9 +642,17 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
 
         {sub === "selected" ? (
           one ? (
-            <ElementPanel key={one.id} el={one} placement={placement} method={side.method} onChange={(p) => patchEl(one.id, p)} onRemeasure={(p) => remeasure(one.id, p)} onFill={(trim) => { void fillSpace(one.id, trim); }} />
+            <>
+              <ElementPanel key={one.id} el={one} placement={placement} method={side.method} onChange={(p) => patchEl(one.id, p)} onRemeasure={(p) => remeasure(one.id, p)} onFill={(trim) => { void fillSpace(one.id, trim); }} />
+              {one.kind === "image" ? (
+                <div className="mt-3">
+                  <OptimizerPanel key={`${one.id}-${one.assetId}`} el={one} blob={optBlob} beforeUrl={one.assetId ? assetUrls[one.assetId] ?? null : null} method={side.method} garmentHex={garmentHex} placement={placement} tab={optTab} setTab={setOptTab}
+                    onApply={(b, note) => replaceImage(one.id, b, note)} />
+                </div>
+              ) : null}
+            </>
           ) : selEls.length > 1 ? (
-            <p className="text-sm text-white/70">{selEls.length} elements selected - use Layers &amp; Arrange to align or distribute them, or arrows to nudge together.</p>
+            <p className="text-sm text-white/70">{selEls.length} elements selected - use Layers & Arrange to align or distribute them, or arrows to nudge together.</p>
           ) : (
             <p className="text-sm text-white/60">Click something on the canvas (or in Layers) to edit it.</p>
           )
@@ -653,7 +708,8 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
                   {r.placement.label} <span className="text-xs font-normal text-white/50">{METHOD_LABEL[r.method]}</span>
                   {r.placement.id !== placement.id ? <button type="button" className="text-xs font-normal text-[var(--admin-accent)] underline" onClick={() => switchPlacement(r.placement.id)}>open</button> : null}
                 </h3>
-                <IssueList issues={r.issues} onSelect={(id) => selectFromIssue(r.placement.id, id)} acknowledged={ackFor(r.placement.id)} onAcknowledge={(id) => toggleAck(r.placement.id, id)} />
+                <IssueList issues={r.issues} onSelect={(id) => selectFromIssue(r.placement.id, id)} acknowledged={ackFor(r.placement.id)} onAcknowledge={(id) => toggleAck(r.placement.id, id)}
+                  fixLabel={(i) => fixOf(r.placement.id, i)?.label ?? null} onFix={(i) => fixIssue(r.placement.id, i)} />
               </section>
             ))}
           </div>
