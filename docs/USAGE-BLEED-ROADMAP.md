@@ -757,7 +757,7 @@ payload carries one module reference. Pinned by `client-loading-core.ts` +
 ### USAGE-8b — footer images ship a 1x/2x srcSet (this PR)
 
 Every fixed-size footer image (5 social glyphs, 2 app-store glyphs, the app
-wordmark, the black-gold logo) passed `sizes="NNpx"`, which makes next/image emit
+wordmark, the black-gold logo, and the not-found wordmark that rides in every page) passed `sizes="NNpx"`, which makes next/image emit
 a srcSet over all 15 configured widths (32w…3840w): ~2 KB of HTML per tag. The
 footer renders a mobile and a desktop tree, so a product page carried 18 such tags
 (~36 KB of HTML) in every response and ISR write. They now pass their displayed

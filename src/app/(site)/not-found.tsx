@@ -1,4 +1,6 @@
 import Image from "next/image";
+// USAGE-8b: fixed size + no `sizes` = a 1x/2x srcSet (this boundary rides in every page).
+import { CHROME_IMAGE_PX } from "@/lib/site/chrome-image-core";
 import Link from "@/components/site/IntentLink";
 import { ComplianceWarningText } from "@/components/site/ComplianceWarningText";
 import { greenwayBusiness } from "@/content/business";
@@ -15,9 +17,8 @@ export default function NotFound() {
           <Image
             src={greenwayBusiness.assets.wordmark}
             alt="Greenway Marijuana"
-            width={5891}
-            height={1170}
-            sizes="240px"
+            width={CHROME_IMAGE_PX.notFoundWordmark.width}
+            height={CHROME_IMAGE_PX.notFoundWordmark.height}
             className="h-10 w-auto md:h-12"
           />
         </Link>
