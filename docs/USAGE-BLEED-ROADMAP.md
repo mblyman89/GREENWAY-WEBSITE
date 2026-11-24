@@ -661,7 +661,7 @@ register price independently.
 by megabytes. ISR → Routes: the write *size* of `/` and `/specials` falls in
 proportion.
 
-### USAGE-7e — the shop grid stops shipping `"key":null` (this PR)
+### USAGE-7e — the shop grid stops shipping `"key":null` (PR #1891)
 
 **Cause (measured).** The `/menu` page grid JSON (`/menu` plus 21 categories) on
 2026-11-24 held 2,712 items in 3.42 MB. Twelve optional package, dose and
@@ -692,6 +692,53 @@ browser parse time and memory. Fast Origin Transfer barely moves.
 by the shop search haystack and the cart, and `variants`/`compounds` are read
 by the card potency line. Dropping them needs a card-level refactor, so they
 are listed under "left to do".
+
+### USAGE-7f — bucketed render clock + verification runbook (this PR)
+
+**Cause.** Vercel does not bill a regeneration whose output is byte-identical
+to the stored copy. Two public outputs embedded the render instant:
+
+- `src/app/sitemap.ts` stamped every entry (≈ 2,800 URLs)
+  `lastModified: new Date()`. The sitemap is on the 60 s clock, so every
+  regeneration rewrote every line. It also told Google every page changed
+  "now", which Google's docs say makes it ignore the field.
+- The automatic "New" tag (`withProductTags`) compared first-seen stamps to
+  `new Date().getTime()`.
+
+**Fix.** `src/lib/site/render-clock-core.ts` (pure, `__runRenderClockTests`,
+12 assertions covering PST, PDT and both DST days): `pacificDayStartMs()` /
+`pacificDayStart()` give the start of the store's calendar day. The sitemap and
+the New-tag overlay read it. The value is constant within a store day, so the
+same data gives the same bytes. "New" windows now close at a store-day
+boundary, at most one day later (display only). Deals, prices and stock never
+read this clock. `tests/compliance/perf-p4c-menu-tags-cache.test.ts` was
+updated on purpose. `tests/compliance/usage-7f-render-clock.test.ts`
+is new.
+
+**Honest limit.** React Server Component payloads still carry per-build ids,
+and any data change (stock, price) still changes bytes. This slice removes
+the *clock*-driven differences only.
+
+#### USAGE-7 verification runbook (owner, ≈ 12 h after the last deploy)
+
+1. **Observability → ISR → Routes, Last 12 hours.** Compare with the baseline
+   in this section (writes 328K units / reads 109K units; `/menu/products/[id]`
+   6.1K writes on 1.5K paths; `/about` 131 writes).
+   - `/menu/products/[id]` writes and unique paths should fall sharply (7a).
+   - `/about`, `/faq`, `/terms-of-use`, `/privacy-policy`, `/locations` should
+     fall to about 1/h plus content publishes (7b).
+   - `/sitemap.xml` should be written roughly once per data change, not every
+     minute (7f).
+2. **Write *units*, not just counts.** Units are billed in 8 KB steps. 7c
+   (−≈ 40 KB per page), 7d (home/specials −MBs) and 7e (shop −583 KB) cut
+   units per write even where the count is unchanged.
+3. **Do not deploy during the 12 h window.** Each deploy starts a fresh ISR
+   cache, so the first visit to every page is a full write. Batch merges and
+   deploy at most once or twice a week once this is verified.
+4. **Spot checks.** `curl -s https://greenwaymarijuana.com/ | wc -c` and
+   `/specials`: megabytes smaller (7d). View-source on a product page: one
+   `<header` row, not two (7c). Devtools on `/menu`: no
+   `/menu/products/…?_rsc=` requests until a card is hovered (7a).
 
 ---
 

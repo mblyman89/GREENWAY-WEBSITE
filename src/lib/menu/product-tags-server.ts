@@ -26,6 +26,7 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { attachTags } from "@/lib/menu/product-tags-core";
 import { loadAllTagInputEntries, loadTagInputsForKeys } from "@/lib/menu/product-tags-store";
 import { MENU_CACHE_TAG, MENU_CACHE_TTL_SECONDS } from "@/lib/menu/menu-cache-policy-core";
+import { pacificDayStartMs } from "@/lib/site/render-clock-core";
 
 const loadAllTagInputEntriesCached = unstable_cache(
   async () => loadAllTagInputEntries(),
@@ -49,7 +50,10 @@ export async function withProductTags(items: GreenwayMenuItem[]): Promise<Greenw
   try {
     const inputs = await tagInputs(items.map((i) => i.id));
     if (!inputs) return items;
-    return attachTags(items, { ...inputs, nowMs: new Date().getTime() });
+    // USAGE-7f: the store-day start, not the millisecond, so two renders of the
+    // same data inside a store day are byte-identical (unchanged ISR output is
+    // not a billed write). "New" closes at a store-day boundary; display only.
+    return attachTags(items, { ...inputs, nowMs: pacificDayStartMs(Date.now()) });
   } catch (err) {
     console.error("[product-tags] withProductTags failed:", err);
     return items;

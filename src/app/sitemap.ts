@@ -13,6 +13,7 @@ import { pathOfUrl } from "@/lib/seo/seo-override-core";
 // D221 M8: image sitemap - each product page lists its OWN published photo.
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { sitemapImages } from "@/lib/seo/image-seo-core";
+import { pacificDayStart } from "@/lib/site/render-clock-core";
 
 const baseUrl = CANONICAL_ORIGIN; // R40: one source of truth
 
@@ -43,7 +44,11 @@ function priorityFor(route: string) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
+  // USAGE-7f: the store-day start, not the render instant. Every entry used to
+  // say "changed just now" on every 60 s regeneration, so every regeneration
+  // was a full billed ISR write of ~2,800 lines (and Google ignores a
+  // lastModified that is always "now"). Constant within a store day.
+  const now = pacificDayStart();
 
   const staticEntries = staticRoutes.map((route) => ({
     url: `${baseUrl}${route}`,
