@@ -637,6 +637,7 @@ import { __runSageCompareCoreTests } from "../../src/lib/payroll/sage-compare-co
 import { __runPayrollStatsCoreTests } from "../../src/lib/payroll/payroll-stats-core";
 import { __runIntentPrefetchTests } from "../../src/lib/site/intent-prefetch-core"; // USAGE-7a
 import { __runLayoutCacheTests } from "../../src/lib/site/layout-cache-core"; // USAGE-7b
+import { __runNotFoundTests } from "../../src/lib/site/not-found-core"; // USAGE-7c
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3051,6 +3052,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("payroll-stats-core", __runPayrollStatsCoreTests(), 43); // D248 slice 5: payroll stats - week ranges, per-week OT split, estimated labor, weekday/hour coverage, break compliance, sick, exclusions
   assertRan("intent-prefetch-core", __runIntentPrefetchTests(), 24); // USAGE-7a: public links prefetch on intent (hover / focus / touch), not on sight; repo guard keeps next/link out of public files
   assertRan("layout-cache-core", __runLayoutCacheTests(), 14); // USAGE-7b: the shared site layout never reads a `live-menu`-tagged cache; menu-card fallbacks have their own tag
+  assertRan("not-found-core", __runNotFoundTests(), 15); // USAGE-7c: the (site) not-found boundary (embedded in every page's RSC) never renders the full Header/Footer
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

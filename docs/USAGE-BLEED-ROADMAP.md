@@ -575,7 +575,7 @@ of scope (behind login, dynamic, no ISR).
 baseline was 1.5K paths / 6.1K writes); browser devtools on `/menu`: scrolling
 the grid issues no `/menu/products/…?_rsc=` requests until a card is hovered.
 
-### USAGE-7b — the shared layout stops carrying `live-menu` (this PR)
+### USAGE-7b — the shared layout stops carrying `live-menu` (PR #1888)
 
 **Cause (measured).** Next.js copies every `unstable_cache` tag a render reads
 into the page's ISR entry. `src/app/(site)/layout.tsx` wraps every public page
@@ -603,6 +603,30 @@ Display data only. No money path touched.
 **Verify.** ISR → Routes, 12 h after the deploy: Writes on /about, /faq,
 /terms-of-use, /privacy-policy, /locations should fall from ≈ 11/h to about
 1/h plus one per content publish and one per deploy.
+
+### USAGE-7c — the not-found boundary stops shipping a second Header + Footer (this PR)
+
+**Cause (measured).** Next.js serializes a segment's not-found boundary into
+the RSC payload of every page under it (the `"notFound":[…]` slot of the
+layout's router row), so every shopper downloads it and every ISR write stores
+it. `src/app/(site)/not-found.tsx` rendered the full server `<Header/>` and
+`<Footer/>`. On a product page (p1.html, 2026-11-24) the boundary pulled in 67
+RSC rows / 43.0 KB, and 46 rows / **41.8 KB were used by nothing else**. That
+is 28% of the page's 148 KB RSC payload, on every public page and in every write.
+
+**Fix.** `src/lib/site/not-found-core.ts` (pure, `__runNotFoundTests`, 15
+assertions): the recovery link list and a forbidden-import guard (Header,
+Footer, DesktopMenu, MobileNavigation, SearchModal, SecondaryBar). The 404
+now renders the wordmark (home link), the message, four recovery links and the
+WAC 314-55-155 warnings (R42: they appear on every page). The old copy ("Greenway preview
+route … not in the preview menu yet") was launch-era wording and is replaced
+with a shopper-facing message. `global-not-found.tsx` (unmatched URLs) is
+unchanged. `tests/compliance/usage-7c-lean-not-found.test.ts`.
+
+**Verify.** View-source on any product page: the string `"notFound":[["$","main"`
+is followed by a small tree, and the page has one `<header` row and one
+`<footer id="location"` row instead of two. Size: ≈ 40 KB less inline RSC
+per page.
 
 ---
 
