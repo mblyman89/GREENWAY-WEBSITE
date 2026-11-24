@@ -16,7 +16,8 @@ import { Header } from "@/components/site/Header";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
-import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
+// USAGE-8d: cached DISPLAY read (money paths keep the uncached loadPublishedRuleSnapshots).
+import { loadDisplayRuleSnapshots } from "@/lib/promotions/display-rules-cache";
 import { menuDiscountForItem } from "@/lib/promotions/published-rules-core";
 import { buildDealPool } from "@/lib/specials/deal-pool-core";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
@@ -117,7 +118,7 @@ export default async function Home() {
     // section, which now shows VENDOR cards. Defensive (empty when off).
     listPublicVendorProfiles(),
     // USAGE-7d: the published rules, to narrow the Daily Deals pool below.
-    loadPublishedRuleSnapshots(),
+    loadDisplayRuleSnapshots(),
   ]);
 
   // USAGE-7d: HomeDailyDeals (client) only ever shows <= 24 cards picked from
