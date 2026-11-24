@@ -16,6 +16,9 @@ import { Header } from "@/components/site/Header";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
+import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
+import { menuDiscountForItem } from "@/lib/promotions/published-rules-core";
+import { buildDealPool } from "@/lib/specials/deal-pool-core";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 import { withProductTags } from "@/lib/menu/product-tags-server";
@@ -86,7 +89,7 @@ export const revalidate = 60;
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
   // Section-banner copy/images are editable from Admin → Site Content.
-  const [slides, copy, sections, preview, dealItems, vendorProfiles] = await Promise.all([
+  const [slides, copy, sections, preview, dealItems, vendorProfiles, ruleSnapshots] = await Promise.all([
     getCarouselForRender(),
     getContentValues([
       "home.category.image",
@@ -113,7 +116,15 @@ export default async function Home() {
     // PR 2: back-office vendor profiles (logo + copy) for the "Shop by Brand"
     // section, which now shows VENDOR cards. Defensive (empty when off).
     listPublicVendorProfiles(),
+    // USAGE-7d: the published rules, to narrow the Daily Deals pool below.
+    loadPublishedRuleSnapshots(),
   ]);
+
+  // USAGE-7d: HomeDailyDeals (client) only ever shows <= 24 cards picked from
+  // the first 64 on-deal items for the browser's weekday. Ship it the exact
+  // superset that selection can reach (see deal-pool-core.ts), not the whole
+  // catalog (2,712 items / ~3.4 MB of JSON in every write of "/").
+  const dealPool = buildDealPool(dealItems, ruleSnapshots, (item, rule) => menuDiscountForItem(item, [rule]) !== undefined);
 
   // PR 2 (owner Option B): the "Shop by Brand" section now groups by VENDOR —
   // the same pipeline the public Vendors page uses — so the homepage shows one
@@ -166,7 +177,7 @@ export default async function Home() {
       <SiteBackground />
       <Header />
       <Hero slides={slides} editable={preview} />
-      <HomeDailyDeals items={dealItems} count={dailyDealsCount} />
+      <HomeDailyDeals items={dealPool} count={dailyDealsCount} />
       <PromoGrid
         vendors={vendors}
         brandCount={brandCount}
