@@ -118,6 +118,38 @@ export function keyOutBackground(d: Uint8Array | Uint8ClampedArray, w: number, h
   return cleared / (w * h);
 }
 
+
+// ── Maximize logo (D269) ────────────────────────────────────────────────────
+/** Bounding box of the real art: ignores transparent pixels and, when the border is one flat colour, that colour too. null = nothing to keep. */
+export function contentBounds(d: Uint8Array | Uint8ClampedArray, w: number, h: number, tol = KEY_LO): { x: number; y: number; w: number; h: number } | null {
+  const b = borderColor(d, w, h);
+  const flat = b.transparent < 0.6 && b.uniform >= 0.85 ? b.color : null;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (d[i + 3] <= 16) continue;
+      if (flat && dist(d, i, flat) < tol) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/** Largest box with this aspect ratio inside the frame (optional margin, inches), centred. */
+export function fitInFrame(aspectWH: number, frameW: number, frameH: number, marginIn = 0): { x: number; y: number; w: number; h: number } {
+  const fw = Math.max(0.05, frameW - 2 * marginIn);
+  const fh = Math.max(0.05, frameH - 2 * marginIn);
+  const a = aspectWH > 0 ? aspectWH : 1;
+  const w = Math.min(fw, fh * a);
+  const h = w / a;
+  const r = (n: number) => Math.round(n * 10000) / 10000;
+  return { x: r((frameW - w) / 2), y: r((frameH - h) / 2), w: r(w), h: r(h) };
+}
+
 export function __runArtPrepTests(): { passed: number; failed: number; failures: string[] } {
   let passed = 0;
   const failures: string[] = [];
@@ -174,5 +206,21 @@ export function __runArtPrepTests(): { passed: number; failed: number; failures:
   const clear = new Uint8Array(2 * 2 * 4);
   t("already transparent", borderColor(clear, 2, 2).transparent === 1);
   t("flux prompt mentions key colour", FLUX_ISOLATE_PROMPT.includes(KEY_HEX));
+  // D269 maximize: the logo pixels sit at x 1..4, y 1..4 of the 6x6 test image above (re-made opaque white).
+  const img2 = new Uint8Array(6 * 6 * 4).fill(255);
+  for (let y = 2; y <= 3; y++) for (let x = 1; x <= 4; x++) { const i = (y * 6 + x) * 4; img2[i] = img2[i + 1] = img2[i + 2] = 0; }
+  const cb = contentBounds(img2, 6, 6);
+  t("bounds flat bg", !!cb && cb.x === 1 && cb.y === 2 && cb.w === 4 && cb.h === 2);
+  const img3 = new Uint8Array(4 * 4 * 4);
+  img3[(1 * 4 + 2) * 4 + 3] = 255;
+  const cb3 = contentBounds(img3, 4, 4);
+  t("bounds transparent bg", !!cb3 && cb3.x === 2 && cb3.y === 1 && cb3.w === 1 && cb3.h === 1);
+  t("bounds empty", contentBounds(new Uint8Array(16 * 4), 4, 4) === null);
+  const f1 = fitInFrame(2, 12, 16);
+  t("fit wide", f1.w === 12 && f1.h === 6 && f1.x === 0 && f1.y === 5);
+  const f2 = fitInFrame(0.5, 12, 16);
+  t("fit tall", f2.h === 16 && f2.w === 8 && f2.x === 2);
+  const f3 = fitInFrame(1, 12, 16, 0.5);
+  t("fit margin", f3.w === 11 && f3.x === 0.5);
   return { passed, failed: failures.length, failures };
 }

@@ -35,7 +35,7 @@ import { getAsset, inspectImage, loadDesigns, measureLinesEm, putAsset, saveDesi
 import { contentHash, parseImport } from "@/lib/merch-studio/merch-design-sync-core";
 import { archiveMerchDesignAction } from "@/app/admin/merch-studio/design-actions";
 import { downloadArt, loadMeta, pushDesign, saveMeta, syncDesigns } from "./design-sync";
-import type { ArtChoice } from "@/lib/merch-studio/art-prep-core";
+import { contentBounds, fitInFrame, type ArtChoice } from "@/lib/merch-studio/art-prep-core";
 
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
@@ -295,6 +295,61 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
     }
   };
 
+  // D269: make the LOGO (not its empty box) fill the print area. Trim = crop the
+  // transparent / flat-colour margin into a new local asset, then fit centred.
+  const fillSpace = async (id: string, trim: boolean) => {
+    const cur = els.find((e) => e.id === id);
+    if (!cur) return;
+    const frame = (aspect: number) => fitInFrame(aspect, placement.widthIn, placement.heightIn);
+    if (!trim || cur.kind !== "image" || cur.vector || !cur.assetId) {
+      patchEl(id, { ...frame(cur.w / cur.h), rotate: 0 });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const blob = await getAsset(cur.assetId);
+      if (!blob) throw new Error("The image file is not on this device - add it again.");
+      const bmp = await createImageBitmap(blob);
+      // Find the art on a small copy (fast, low memory), then crop the full-size file.
+      const k = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+      const sw = Math.max(1, Math.round(bmp.width * k));
+      const sh = Math.max(1, Math.round(bmp.height * k));
+      const small = document.createElement("canvas");
+      small.width = sw; small.height = sh;
+      const sctx = small.getContext("2d", { willReadFrequently: true });
+      if (!sctx) throw new Error("This browser cannot read the image.");
+      sctx.drawImage(bmp, 0, 0, sw, sh);
+      const b = contentBounds(sctx.getImageData(0, 0, sw, sh).data, sw, sh);
+      if (!b) throw new Error("Nothing to keep - the image looks empty.");
+      const x = Math.max(0, Math.floor((b.x - 1) / k));
+      const y = Math.max(0, Math.floor((b.y - 1) / k));
+      const w = Math.min(bmp.width - x, Math.ceil((b.w + 2) / k));
+      const h = Math.min(bmp.height - y, Math.ceil((b.h + 2) / k));
+      let assetId = cur.assetId;
+      let pxW = cur.pxW ?? bmp.width;
+      let pxH = cur.pxH ?? bmp.height;
+      if (w < bmp.width * 0.98 || h < bmp.height * 0.98) {
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d")?.drawImage(bmp, x, y, w, h, 0, 0, w, h);
+        const out = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+        if (!out) throw new Error("Could not crop the image.");
+        assetId = newId("asset");
+        await putAsset(assetId, out);
+        setAssetUrls((u) => ({ ...u, [assetId as string]: URL.createObjectURL(out) }));
+        pxW = w; pxH = h;
+      }
+      bmp.close();
+      patchEl(id, { assetId, pxW, pxH, ...frame(pxW / pxH), rotate: 0 });
+      setMsg(assetId === cur.assetId ? "Filled the print area (there was no empty margin to trim)." : `Trimmed the empty margin and filled the print area (${pxW} x ${pxH} px).`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Could not fill the space.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Selection ops ----------------------------------------------------------------------
   const selEls = els.filter((e) => selected.includes(e.id));
   const one = selEls.length === 1 ? selEls[0] : null;
@@ -540,7 +595,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
 
         {sub === "selected" ? (
           one ? (
-            <ElementPanel key={one.id} el={one} placement={placement} method={side.method} onChange={(p) => patchEl(one.id, p)} onRemeasure={(p) => remeasure(one.id, p)} />
+            <ElementPanel key={one.id} el={one} placement={placement} method={side.method} onChange={(p) => patchEl(one.id, p)} onRemeasure={(p) => remeasure(one.id, p)} onFill={(trim) => { void fillSpace(one.id, trim); }} />
           ) : selEls.length > 1 ? (
             <p className="text-sm text-white/70">{selEls.length} elements selected - use Layers &amp; Arrange to align or distribute them, or arrows to nudge together.</p>
           ) : (
