@@ -78,6 +78,23 @@ def main():
             rows.append("[" + ", ".join([json.dumps(v["color"]), json.dumps(v["size"]), str(int(v["id"])), str(round(float(v["price"]) * 100)), "true" if v.get("in_stock") else "false"]) + "]")
         L.append(f"  {i}: [" + ", ".join(rows) + "],")
     L.append("};")
+    # Garment preview slice: per colour [name, colour_code, colour_code2 (two-tone) or null, Printful variant photo URL] + product photo.
+    L.append("/** Garment preview: [colour name, colour_code, colour_code2 (second colour of a two-tone item) or null, Printful's photo of that colour]. */")
+    L.append("export type ColorInfoRow = readonly [name: string, hex: string, hex2: string | null, image: string];")
+    L.append("export const PRINTFUL_COLOR_INFO: Record<number, readonly ColorInfoRow[]> = {")
+    for i in IDS:
+        ci = {}
+        for v in data[i]["variants"]:
+            if v["color"] not in ci:
+                h2 = v.get("color_code2")
+                ci[v["color"]] = [v["color"], (v["color_code"] or "#cccccc").lower(), h2.lower() if h2 else None, v.get("image") or ""]
+        L.append(f"  {i}: [" + ", ".join(json.dumps(r) for r in ci.values()) + "],")
+    L.append("};")
+    L.append("/** Garment preview: Printful's main product photo. */")
+    L.append("export const PRINTFUL_PRODUCT_IMAGE: Record<number, string> = {")
+    for i in IDS:
+        L.append(f"  {i}: {json.dumps(data[i]['product'].get('image') or '')},")
+    L.append("};")
     OUT.write_text("\n".join(L) + "\n")
     print(f"wrote {OUT} ({len(IDS)} products)")
 
