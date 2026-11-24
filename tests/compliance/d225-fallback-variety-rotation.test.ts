@@ -132,7 +132,7 @@ describe("D225 server + layout", () => {
   it("snapshot v2 holds a URL list per category, still cached and tagged", () => {
     expect(s).toContain('["public-snapshot", "menu-card-fallbacks", "v2"]');
     expect(s).toContain("async (): Promise<Array<[string, string[]]>>");
-    expect(s).toContain("tags: [MENU_CACHE_TAG]");
+    expect(s).toContain("tags: [MENU_CARD_FALLBACK_TAG]"); // USAGE-7b: own tag, not live-menu
   });
   it("works before 0356 is applied (missing column -> the 0355 read)", () => {
     expect(s).toContain('err.code === "42703"');

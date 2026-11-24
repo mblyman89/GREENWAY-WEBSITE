@@ -8,9 +8,12 @@
  *
  * READS (public pages)
  *   One small snapshot (at most 21 x 12 rows + their media URLs) held in the
- *   Next.js data cache for PUBLIC_SNAPSHOT_TTL_SECONDS, tagged MENU_CACHE_TAG,
- *   so every render answers from memory and a save (which calls
- *   revalidatePublicMenuSurfaces) shows on the next visit. A failed read
+ *   Next.js data cache, so every render answers from memory and a save shows
+ *   on the next visit. USAGE-7b: tagged MENU_CARD_FALLBACK_TAG (NOT
+ *   MENU_CACHE_TAG) for MENU_CARD_FALLBACK_TTL_SECONDS, because the shared
+ *   site layout reads it and a `live-menu` tag there made every menu edit
+ *   rewrite every public page (see src/lib/site/layout-cache-core.ts). The
+ *   admin page's actions clear the tag on every save. A failed read
  *   THROWS inside the cached function so a failure is never stored; the
  *   wrapper then returns an empty map and the cards render exactly as before.
  *   Before 0355 is applied (42P01 / PGRST205) the map is empty: identity.
@@ -34,8 +37,7 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { publicUrlForKey } from "@/lib/media/store";
-import { MENU_CACHE_TAG } from "@/lib/menu/menu-cache-policy-core";
-import { PUBLIC_SNAPSHOT_TTL_SECONDS } from "@/lib/site/public-snapshot-core";
+import { MENU_CARD_FALLBACK_TAG, MENU_CARD_FALLBACK_TTL_SECONDS } from "@/lib/site/layout-cache-core";
 import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import {
   applyMenuCardFallbacks,
@@ -150,7 +152,8 @@ const fallbackSnapshotCached = unstable_cache(
   },
   // D225: v2 - the value is now a URL LIST per category.
   ["public-snapshot", "menu-card-fallbacks", "v2"],
-  { revalidate: PUBLIC_SNAPSHOT_TTL_SECONDS, tags: [MENU_CACHE_TAG] },
+  // USAGE-7b: own tag + long backstop TTL; never `live-menu` (the layout reads this).
+  { revalidate: MENU_CARD_FALLBACK_TTL_SECONDS, tags: [MENU_CARD_FALLBACK_TAG] },
 );
 
 /** website category -> public URLs in owner order. Empty on any failure, unconfigured, or pre-0355. */
