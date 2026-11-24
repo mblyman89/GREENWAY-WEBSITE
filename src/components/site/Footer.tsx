@@ -6,6 +6,7 @@ import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
 import { ComplianceWarningText } from "@/components/site/ComplianceWarningText";
 import { FooterLinkUnavailable } from "@/components/site/FooterLinkUnavailable";
+import { unavailableMessageProp } from "@/lib/site/footer-glyph-core";
 import { getContentForRender, getContentValues } from "@/lib/cms/render-content";
 import { PhoneText } from "./PhoneText";
 
@@ -17,8 +18,7 @@ const policyLinks = [
 
 // The circular glyph styling shared by every app/social footer button, so the
 // editable versions render pixel-identical to the previous hardcoded links.
-const GLYPH_CLASS =
-  "inline-flex h-11 w-11 items-center justify-center rounded-full transition duration-200 hover:scale-105 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--greenway)]";
+// USAGE-9e: the glyph class is FooterLinkUnavailable's default (footer-glyph-core).
 
 // The editable footer link/message blocks (Admin -> Website -> Header & Footer).
 // Their seed defaults mirror the live URLs below, so the footer looks identical
@@ -136,9 +136,8 @@ function AppDownload({ align = "center", links }: { align?: "center" | "end"; li
             href={links[store.blockKey] ?? ""}
             label={store.label}
             src={store.src}
-            unavailableMessage={unavailable}
+            unavailableMessage={unavailableMessageProp(unavailable)}
             newTab
-            className={GLYPH_CLASS}
           />
         ))}
       </div>
@@ -167,9 +166,8 @@ function FollowGreenway({ links }: { links: FooterLinks }) {
               href={href}
               label={social.label}
               src={social.src}
-              unavailableMessage={unavailable}
+              unavailableMessage={unavailableMessageProp(unavailable)}
               newTab
-              className={GLYPH_CLASS}
             />
           );
         })}

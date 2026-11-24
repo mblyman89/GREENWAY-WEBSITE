@@ -20,6 +20,7 @@
  * the trigger. No external libraries.
  */
 
+import { FOOTER_GLYPH_CLASS, resolvedUnavailableMessage } from "@/lib/site/footer-glyph-core";
 import Image from "next/image";
 // USAGE-8b: fixed size + no `sizes` = a 2-entry (1x/2x) srcSet, not 15 widths.
 import { CHROME_IMAGE_PX } from "@/lib/site/chrome-image-core";
@@ -32,16 +33,16 @@ type Props = {
   label: string;
   /** Glyph image source. */
   src: string;
-  /** Friendly message shown when there is no destination yet. */
-  unavailableMessage: string;
+  /** Friendly message shown when there is no destination yet (omitted = default). */
+  unavailableMessage?: string;
   /** Open link in a new tab when a real URL exists (social links). */
   newTab?: boolean;
-  /** Extra classes applied to the trigger (keeps footer styling identical). */
+  /** Trigger classes (default: the footer glyph circle, FOOTER_GLYPH_CLASS). */
   className?: string;
 };
 
-const DEFAULT_MESSAGE =
-  "This isn't available just yet — check back soon! In the meantime, give us a call or stop by the shop.";
+// USAGE-9e: the default message + glyph class live in footer-glyph-core so the
+// footer does not send them as props 14 times per page.
 
 export function FooterLinkUnavailable({
   href,
@@ -49,17 +50,14 @@ export function FooterLinkUnavailable({
   src,
   unavailableMessage,
   newTab = false,
-  className = "",
+  className = FOOTER_GLYPH_CLASS,
 }: Props) {
   const hasDestination = typeof href === "string" && href.trim().length > 0;
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const dialogId = useId();
-  const message =
-    unavailableMessage && unavailableMessage.trim().length > 0
-      ? unavailableMessage
-      : DEFAULT_MESSAGE;
+  const message = resolvedUnavailableMessage(unavailableMessage);
 
   const close = useCallback(() => {
     setOpen(false);

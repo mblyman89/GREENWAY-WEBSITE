@@ -809,9 +809,13 @@ The header's desktop "Shop" dropdown renders 17 category links on every page. As
 
 The product page's "More from <brand>" rail passed up to 6 full menu items to `RelatedProductCard`, a client component. Each card put its description, identityKey, null facts and false flags into the RSC: about 1.5 KB per card. The rail now passes `toMenuGridItems(relatedItems)`, the projection the shop grid already sends to the same `ProductCardVisual` and the same price/badge helpers. Every field a card, deal badge or rule matcher reads is kept. The saving is about 2.7 KB per product page, and product pages are the bulk of ISR writes. Pinned by `related-projection-core.ts` and `usage-9c-related-projection.test.ts`.
 
-### USAGE-9d — rotation lists ship with a shared prefix (this PR)
+### USAGE-9d — rotation lists ship with a shared prefix (PR #1902)
 
 The (site) layout sends the D225 fallback-picture rotation lists to every page. Each of the 22 URLs repeated the same 80-character Supabase storage prefix: 2.7 KB decoded (3.9 KB escaped) per page write. The layout now sends `packRotationLists()` (`{p: prefix, l: {cat: [suffix]}}`, about 1.0 KB), and `MenuCardRotationProvider` rebuilds the exact URLs with `unpackRotationLists()`. Categories, order and URLs are unchanged, and the round-trip is self-tested, including the no-shared-prefix and empty cases. The D225 layout pin was updated. Pinned by `rotation-lists-pack-core.ts` and `usage-9d-rotation-prefix.test.ts`.
+
+### USAGE-9e — footer glyphs stop resending class + default message (this PR)
+
+The footer renders 7 glyph buttons (5 social, 2 app store) in both its mobile and desktop trees: 14 `FooterLinkUnavailable` client elements per page. Each one carried the same 236-byte className and the 115-byte default "not available" message as props, about 4.9 KB of repeated strings in every page's RSC. Both now live in `footer-glyph-core.ts` as the client component's defaults. The footer sends the message only when an editor has changed it from the default (`unavailableMessageProp`). The rendered class and message are byte-identical, and the self-test checks the shown text for the default, blank and edited messages. Pinned by `usage-9e-footer-glyph-props.test.ts`.
 
 
 ## How to verify each slice
