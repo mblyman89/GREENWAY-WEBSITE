@@ -16,12 +16,26 @@ import { isFluxConfigured, submitFluxTask } from "@/lib/marketing/flux-client";
 import { fetchCapped } from "@/lib/cms/newsletter-canvas-server";
 import { budgetBlock } from "@/lib/cms/newsletter-ai-server";
 import { uploadMedia, publicUrlForKey } from "@/lib/media/store";
+import { flatPrompt } from "@/lib/merch-studio/optimizer-core";
+import { checkImageAsk } from "@/lib/cms/newsletter-ai-core";
 import { FLUX_ISOLATE_PROMPT, KEY_MAX_PX, borderColor, keyOutBackground, printUpscalePlan } from "@/lib/merch-studio/art-prep-core";
 
 type Fail = { ok: false; error: string };
 export type PrepOut = { ok: true; kind: "done"; url: string; mediaId: string; note: string } | { ok: true; kind: "flux"; pollingUrl: string; prompt: string } | Fail;
 
 const ENTITY = "merch-studio";
+const DATA_MAX = 16 * 1024 * 1024;
+/** D270: a public https URL (fetchCapped) OR a data: URL from the canvas (artwork lives on this device). */
+async function loadSrc(p: { url?: string | null; dataUrl?: string | null }): Promise<{ buf: Buffer | null; error?: string }> {
+  const d = typeof p?.dataUrl === "string" ? p.dataUrl : "";
+  if (d) {
+    const m = /^data:image\/(png|jpeg|webp);base64,([\s\S]+)$/.exec(d.slice(0, DATA_MAX * 1.4));
+    if (!m) return { buf: null, error: "unsupported picture data" };
+    const buf = Buffer.from(m[2], "base64");
+    return buf.length > DATA_MAX ? { buf: null, error: "over 16 MB" } : { buf };
+  }
+  return fetchCapped(String(p?.url ?? "").slice(0, 2000));
+}
 const clampIn = (n: unknown) => Math.max(0.5, Math.min(40, Number(n) || 0));
 
 async function audit(session: { userId: string; email: string | null }, action: string, after: Record<string, unknown>) {
@@ -29,9 +43,9 @@ async function audit(session: { userId: string; email: string | null }, action: 
 }
 
 /** Enlarge to 300 DPI at the placement size (sharp, Lanczos + light sharpen). No AI, no cost. */
-export async function merchUpscaleAction(p: { url: string; title?: string; widthIn: number; heightIn: number }): Promise<PrepOut> {
+export async function merchUpscaleAction(p: { url?: string; dataUrl?: string; title?: string; widthIn: number; heightIn: number }): Promise<PrepOut> {
   const session = await requirePermission("content.edit");
-  const r = await fetchCapped(String(p?.url ?? "").slice(0, 2000));
+  const r = await loadSrc(p);
   if (!r.buf) return { ok: false, error: `The picture could not be loaded (${r.error ?? "error"}).` };
   try {
     const sharp = (await import("sharp")).default;
@@ -61,12 +75,12 @@ export async function merchUpscaleAction(p: { url: string; title?: string; width
 }
 
 /** FLUX Deblur (flux-tools/deblur-v1): regenerates soft / pixelated art sharper. No prompt. Poll with printFluxPollAction. */
-export async function merchSharpenAction(p: { url: string }): Promise<PrepOut> {
+export async function merchSharpenAction(p: { url?: string; dataUrl?: string }): Promise<PrepOut> {
   const session = await requirePermission("content.edit");
   if (!(await isFluxConfigured())) return { ok: false, error: "FLUX is not set up (Settings > Integrations)." };
   const blocked = await budgetBlock();
   if (blocked) return blocked;
-  const r = await fetchCapped(String(p?.url ?? "").slice(0, 2000));
+  const r = await loadSrc(p);
   if (!r.buf) return { ok: false, error: `The picture could not be loaded (${r.error ?? "error"}).` };
   let b64: string;
   try {
@@ -159,4 +173,35 @@ export async function merchKeyOutAction(p: { url: string; title?: string }): Pro
   } catch {
     return { ok: false, error: "That file is not a picture we can read." };
   }
+}
+
+/**
+ * D270 - Printful Optimizer: FLUX Kontext redraws the logo as flat, print-ready
+ * art (N solid colours, no gradients / photo texture) on magenta; poll with
+ * printFluxPollAction, then merchKeyOutAction cuts the magenta out.
+ */
+export async function merchFlatRedrawAction(p: { url?: string; dataUrl?: string; colors: number; method: string; palette?: string[]; extra?: string }): Promise<PrepOut> {
+  const session = await requirePermission("content.edit");
+  const extra = String(p?.extra ?? "").trim().slice(0, 400);
+  const must = extra ? checkImageAsk(extra).filter((i) => i.level === "must-fix") : [];
+  if (must.length) return { ok: false, error: must.map((i) => i.text).join(" ") };
+  if (!(await isFluxConfigured())) return { ok: false, error: "FLUX is not set up (Settings > Integrations)." };
+  const blocked = await budgetBlock();
+  if (blocked) return blocked;
+  const r = await loadSrc(p);
+  if (!r.buf) return { ok: false, error: `The picture could not be loaded (${r.error ?? "error"}).` };
+  let b64: string;
+  try {
+    const sharp = (await import("sharp")).default;
+    b64 = (await sharp(r.buf).rotate().resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true }).flatten({ background: "#ffffff" }).png().toBuffer()).toString("base64");
+  } catch {
+    return { ok: false, error: "That file is not a picture FLUX can read." };
+  }
+  const method = p?.method === "embroidery" ? "embroidery" : "dtg";
+  const prompt = flatPrompt({ colors: Number(p?.colors) || 4, method, palette: Array.isArray(p?.palette) ? p.palette.map(String) : [], extra });
+  const sub = await submitFluxTask("flux-kontext-pro", { prompt, input_image: b64, output_format: "png", safety_tolerance: 2 });
+  await logAiUsage({ feature: "merch.art.optimize.flux", entityType: "merch_design", entityId: ENTITY, actorId: session.userId, actorEmail: session.email, model: "flux-kontext-pro", ok: sub.ok, estimated: true, errorNote: sub.ok ? (sub.cost ? `credits ${sub.cost}` : null) : sub.error.slice(0, 200) });
+  await audit(session, "merch.art.optimize", { ok: sub.ok, method, colors: Number(p?.colors) || 4, extra: extra.slice(0, 120) });
+  if (!sub.ok) return sub;
+  return { ok: true, kind: "flux", pollingUrl: sub.pollingUrl, prompt: "Printful Optimizer: flat redraw (FLUX Kontext)" };
 }

@@ -10,11 +10,14 @@ const STYLE: Record<Level, { label: string; cls: string; icon: string }> = {
   tip: { label: "Pro tip", cls: "border-[var(--admin-accent)]/50 bg-[var(--admin-accent-soft)]", icon: "\ud83d\udca1" },
 };
 
-export function IssueList({ issues, onSelect, acknowledged, onAcknowledge }: {
+export function IssueList({ issues, onSelect, acknowledged, onAcknowledge, fixLabel, onFix }: {
   issues: Issue[];
   onSelect?: (elementId: string) => void;
   acknowledged?: Set<string>;
   onAcknowledge?: (id: string) => void;
+  /** D270: one-click fix (label null = no automatic fix). */
+  fixLabel?: (i: Issue) => string | null;
+  onFix?: (i: Issue) => void;
 }) {
   if (issues.length === 0) return <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-3 text-sm text-white/70">{"\u2705"} No issues - this placement is print-ready by every rule the studio knows.</p>;
   return (
@@ -27,6 +30,7 @@ export function IssueList({ issues, onSelect, acknowledged, onAcknowledge }: {
             <div className="flex items-start justify-between gap-2">
               <p className="font-semibold text-white">{s.icon} <span className="text-[0.68rem] uppercase tracking-wide text-white/60">{s.label}</span> {i.title}</p>
               <div className="flex shrink-0 gap-1">
+                {(() => { const l = onFix ? fixLabel?.(i) : null; return l ? <button type="button" className="rounded bg-[var(--admin-accent)] px-1.5 text-[0.68rem] font-bold text-black" onClick={() => onFix!(i)}>{"\u2728"} {l}</button> : null; })()}
                 {i.elementId && onSelect ? <button type="button" className="rounded border border-white/20 px-1.5 text-[0.68rem] text-white/80 hover:bg-white/10" onClick={() => onSelect(i.elementId!)}>Select</button> : null}
                 {i.level === "review" && onAcknowledge ? <button type="button" className="rounded border border-white/20 px-1.5 text-[0.68rem] text-white/80 hover:bg-white/10" onClick={() => onAcknowledge(i.id)}>{ack ? "Acknowledged" : "Acknowledge"}</button> : null}
               </div>

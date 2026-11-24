@@ -3715,3 +3715,15 @@ Fixed. Merch Studio "Remove background" no longer calls GPT Image (gpt-image-2 r
 ### Status (D269)
 
 Done. Merch Studio > Design > Selected (an image) now has "Trim & fill space": it finds the logo's real edges (ignores see-through pixels and a flat border colour such as white), crops that empty margin into a new copy on this device (the original is kept), then makes the logo as big as the print area allows, centred, keeping its shape. "Fill space" (all non-text elements) does the fit without trimming. The Width/Height sliders and handles still work for manual sizing. Pure helpers contentBounds + fitInFrame in art-prep-core.ts (35 self-tests).
+
+## D270
+
+"Thank you. The next thing I think will make this much better is if we include a printful optimizer. I noticed that when I tried to add one of my logos, it gave me a blocker that said it can't use logos that look like photos. So we need to use flux to modify the logo so it will work perfectly with printful. I also want to add an optimizer for changing the colors of the logos so they use ones printful has available, the warnings said they'd change the colors for me, I want control over this actually. So I can see what it looks like before committing to the color change. I would like to have flux take the logo/ image I want to use, and optimize it as perfectly as it can be so there is no surprises from making the piece to receiving it. If there are blockers or warnings, I want the system and flux and other ai to help fix it so it will work. Let me choose the new font or color or whatever if needed, then fix it so it works."
+
+### Status (D270)
+
+Done. Merch Studio > Design > Selected (a picture) now shows the "Printful Optimizer" with a Before | After preview on the garment colour. Nothing changes until Apply / Use this, and Undo reverts it.
+- Colours tab: each detected colour can be kept, set to any of the 15 Printful threads (closest one ringed), set to a custom colour (print), or removed (see-through). "Flatten to these colours" snaps every pixel to the chosen colours, which removes the photo look and gradients (this clears the embroidery "photo detail" blocker). It shows the colour count, the 6-thread limit and any non-thread colours. The preview is live; Apply works at full size.
+- AI fix tab: FLUX Kontext Pro "Optimize for Printful (flat redraw)" keeps the same design and wording with N solid colours (using your Colours picks), crisp edges and no shading, on magenta. The magenta is then cut out, with optional notes (e.g. bolder text or a heavier font) that are WAC-checked. There are also Sharpen (FLUX Deblur) and Enlarge to 300 DPI. The result is previewed, saved to Media, logged against the AI budget and audited.
+- Checks list: a one-click "Fix" on blockers and warnings. Some patch the element directly: move & fit inside, enlarge letters, thicken lines, opacity 100%. Others open the right tool: optimizer / colours for photo, gradient, DPI and thread issues, or Select for font and colour choices.
+Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the canvas picture directly, because artwork lives on this device.
