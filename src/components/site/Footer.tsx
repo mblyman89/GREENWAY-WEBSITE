@@ -89,7 +89,7 @@ function PolicyLinks({ compact = false }: { compact?: boolean }) {
  * the full width of its container rather than capping it with a small box, so
  * it fills the available space without forcing layout shifts on siblings.
  */
-async function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
+async function HoursImage() {
   // Resolve the editable store-hours image from the controlled content block
   // (draft-aware via getContentForRender). Falls back to the bundled asset so
   // the footer always renders even before the block has been seeded/edited.
@@ -99,7 +99,7 @@ async function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
       ? resolved.trim()
       : greenwayBusiness.assets.storeHoursImage;
   return (
-    <div className={`flex w-full ${align === "end" ? "justify-end" : "justify-center"}`}>
+    <div className="flex w-full justify-center lg:justify-end">
       <Image
         src={src}
         alt="Greenway Marijuana store hours: open daily 8am to 11pm"
@@ -116,12 +116,12 @@ async function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
 /**
  * App-download block: the "App / DOWNLOAD" wordmark to the LEFT of two
  * steel-blue circular store glyphs (Apple + Google Play). Identical markup on
- * mobile and desktop. `align` controls horizontal placement of the whole row.
+ * mobile and desktop. Centered on mobile, right-aligned on desktop (USAGE-10b).
  */
-function AppDownload({ align = "center", links }: { align?: "center" | "end"; links: FooterLinks }) {
+function AppDownload({ links }: { links: FooterLinks }) {
   const unavailable = links["footer.link.unavailable.message"] ?? "";
   return (
-    <div className={`flex flex-wrap items-center gap-x-5 gap-y-3 ${align === "end" ? "justify-end" : "justify-center"}`}>
+    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 lg:justify-end">
       <Image
         src={greenwayBusiness.assets.appDownloadWordmark}
         alt="App download"
@@ -176,119 +176,13 @@ function FollowGreenway({ links }: { links: FooterLinks }) {
   );
 }
 
-async function MobileFooter({ links }: { links: FooterLinks }) {
-  return (
-    <div className="mx-auto max-w-md border-t border-white/10 pt-9 text-center lg:hidden">
-      <Link href="/#top" aria-label="Greenway Marijuana home" className="inline-flex justify-center transition duration-200 hover:opacity-85">
-        <Image
-          src={greenwayBusiness.assets.blackGoldLogo}
-          alt="Greenway Marijuana Port Orchard WA established 2014"
-          width={CHROME_IMAGE_PX.logoMobile.width}
-          height={CHROME_IMAGE_PX.logoMobile.height}
-          className="h-auto w-44 object-contain"
-        />
-      </Link>
-
-      <p className="mx-auto mt-5 max-w-xs text-[0.72rem] font-black uppercase leading-5 tracking-[0.2em] text-zinc-300">
-        Port Orchard&apos;s local cannabis shop for adults 21+
-      </p>
-
-      <div className="mt-8 rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-5 py-6 shadow-2xl shadow-black/30">
-        <p className="text-[0.72rem] font-black uppercase tracking-[0.24em] text-[var(--gold)]">Greenway</p>
-        <p className="mt-1 text-2xl font-black uppercase leading-none tracking-[0.04em] text-white">Port Orchard</p>
-        <Link href="/locations" className="mx-auto mt-4 block max-w-[15rem] text-sm font-semibold leading-6 text-zinc-300 transition hover:text-[var(--greenway)]">
-          {greenwayBusiness.address.full}
-        </Link>
-        <a href={`tel:${greenwayBusiness.phone.tel}`} className="mt-3 inline-flex rounded-full bg-[var(--greenway)] px-5 py-2 text-sm font-black text-black transition hover:bg-white">
-          <PhoneText text={greenwayBusiness.phone.display} mode={links["header.phone.mode"]} modeKey="header.phone.mode" />
-        </a>
-      </div>
-
-      {/* Store hours graphic (replaces the former green hours box). */}
-      <div className="mt-7">
-        <HoursImage align="center" />
-        {/* Editable plain-text hours (Admin → Site Content: business.hours.display). */}
-        <SiteText
-          blockKey="business.hours.display"
-          as="p"
-          className="mt-2 text-center text-xs font-black uppercase tracking-[0.18em] text-[var(--greenway)]"
-        />
-      </div>
-
-      {/* App download: wordmark left of the two circular store glyphs. */}
-      <div className="mt-7 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
-        <AppDownload align="center" links={links} />
-      </div>
-
-      {/* Follow Greenway: circular social glyphs. */}
-      <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
-        <FollowGreenway links={links} />
-      </div>
-
-      <div className="mt-7 rounded-[1.25rem] border border-[var(--gold)]/30 bg-[#090909] p-4">
-        <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-[var(--gold)]">Washington Cannabis Warning</p>
-        <ComplianceWarningText className="mt-3 text-[0.72rem] font-semibold leading-5 text-zinc-300" />
-      </div>
-
-      <div className="mt-7">
-        <PolicyLinks compact />
-      </div>
-
-      <CopyrightLine className="mt-4 text-center" />
-    </div>
-  );
-}
-
-async function DesktopFooter({ links }: { links: FooterLinks }) {
-  return (
-    <div className="mx-auto hidden max-w-7xl border-t border-white/10 pt-10 lg:block">
-      <div className="grid gap-8 lg:grid-cols-[0.78fr_1.5fr_0.85fr] lg:items-start">
-        <div className="flex flex-col items-start text-left">
-          <Link href="/#top" aria-label="Greenway Marijuana home" className="inline-flex transition duration-200 hover:opacity-85">
-            <Image
-              src={greenwayBusiness.assets.blackGoldLogo}
-              alt="Greenway Marijuana Port Orchard WA established 2014"
-              width={CHROME_IMAGE_PX.logoDesktop.width}
-              height={CHROME_IMAGE_PX.logoDesktop.height}
-              className="h-auto w-48 object-contain"
-            />
-          </Link>
-          <p className="mt-4 text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Port Orchard, WA</p>
-          <p className="mt-2 max-w-xs text-sm leading-6 text-zinc-400">{greenwayBusiness.address.full}</p>
-          <CopyrightLine className="mt-5 max-w-xs" />
-        </div>
-
-        <div className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#090909] p-6 shadow-2xl shadow-black/35">
-          <p className="text-center text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Washington Cannabis Warning</p>
-          <ComplianceWarningText className="mt-4 text-center text-[0.95rem] font-semibold leading-7 text-zinc-200" />
-          <PolicyLinks />
-        </div>
-
-        <div className="flex flex-col items-end gap-6 text-right">
-          {/* Store hours graphic (replaces the former Hours / phone text block). */}
-          <HoursImage align="end" />
-          {/* Editable plain-text hours (Admin → Site Content: business.hours.display). */}
-          <SiteText
-            blockKey="business.hours.display"
-            as="p"
-            className="text-right text-xs font-black uppercase tracking-[0.18em] text-[var(--greenway)]"
-          />
-
-          {/* App download — identical to mobile, in the desktop spot. */}
-          <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
-            <AppDownload align="end" links={links} />
-          </div>
-
-          {/* Follow Greenway — identical to mobile, in the desktop spot. */}
-          <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
-            <FollowGreenway links={links} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * USAGE-10b: one footer tree. It used to render a full mobile copy and a full
+ * desktop copy (one hidden per breakpoint), so the hours graphic, app
+ * download and Follow Greenway rows shipped twice on every page. Those now
+ * render once (stacked on mobile, the right-hand column on desktop); only the
+ * parts whose layout genuinely differs stay breakpoint-gated.
+ */
 export async function Footer() {
   // Resolve the editable footer link/message blocks once (draft-aware). Seed
   // defaults mirror the live URLs, so this changes nothing until a block is
@@ -296,8 +190,95 @@ export async function Footer() {
   const links = await getContentValues([...FOOTER_LINK_BLOCKS]);
   return (
     <footer id="location" className="bg-black px-4 pb-8 pt-12 text-white md:px-8 md:pb-10 md:pt-14">
-      <MobileFooter links={links} />
-      <DesktopFooter links={links} />
+      <div className="mx-auto max-w-md border-t border-white/10 pt-9 text-center lg:max-w-7xl lg:pt-10 lg:text-left">
+        {/* Mobile top: logo, tagline, address card. */}
+        <div className="lg:hidden">
+          <Link href="/#top" aria-label="Greenway Marijuana home" className="inline-flex justify-center transition duration-200 hover:opacity-85">
+            <Image
+              src={greenwayBusiness.assets.blackGoldLogo}
+              alt="Greenway Marijuana Port Orchard WA established 2014"
+              width={CHROME_IMAGE_PX.logoMobile.width}
+              height={CHROME_IMAGE_PX.logoMobile.height}
+              className="h-auto w-44 object-contain"
+            />
+          </Link>
+
+          <p className="mx-auto mt-5 max-w-xs text-[0.72rem] font-black uppercase leading-5 tracking-[0.2em] text-zinc-300">
+            Port Orchard&apos;s local cannabis shop for adults 21+
+          </p>
+
+          <div className="mt-8 rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-5 py-6 shadow-2xl shadow-black/30">
+            <p className="text-[0.72rem] font-black uppercase tracking-[0.24em] text-[var(--gold)]">Greenway</p>
+            <p className="mt-1 text-2xl font-black uppercase leading-none tracking-[0.04em] text-white">Port Orchard</p>
+            <Link href="/locations" className="mx-auto mt-4 block max-w-[15rem] text-sm font-semibold leading-6 text-zinc-300 transition hover:text-[var(--greenway)]">
+              {greenwayBusiness.address.full}
+            </Link>
+            <a href={`tel:${greenwayBusiness.phone.tel}`} className="mt-3 inline-flex rounded-full bg-[var(--greenway)] px-5 py-2 text-sm font-black text-black transition hover:bg-white">
+              <PhoneText text={greenwayBusiness.phone.display} mode={links["header.phone.mode"]} modeKey="header.phone.mode" />
+            </a>
+          </div>
+        </div>
+
+        <div className="lg:grid lg:grid-cols-[0.78fr_1.5fr_0.85fr] lg:items-start lg:gap-8">
+          {/* Desktop left column. */}
+          <div className="hidden flex-col items-start text-left lg:flex">
+            <Link href="/#top" aria-label="Greenway Marijuana home" className="inline-flex transition duration-200 hover:opacity-85">
+              <Image
+                src={greenwayBusiness.assets.blackGoldLogo}
+                alt="Greenway Marijuana Port Orchard WA established 2014"
+                width={CHROME_IMAGE_PX.logoDesktop.width}
+                height={CHROME_IMAGE_PX.logoDesktop.height}
+                className="h-auto w-48 object-contain"
+              />
+            </Link>
+            <p className="mt-4 text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Port Orchard, WA</p>
+            <p className="mt-2 max-w-xs text-sm leading-6 text-zinc-400">{greenwayBusiness.address.full}</p>
+            <CopyrightLine className="mt-5 max-w-xs" />
+          </div>
+
+          {/* Desktop centre: warning + policy links. */}
+          <div className="hidden rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#090909] p-6 shadow-2xl shadow-black/35 lg:block">
+            <p className="text-center text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Washington Cannabis Warning</p>
+            <ComplianceWarningText className="mt-4 text-center text-[0.95rem] font-semibold leading-7 text-zinc-200" />
+            <PolicyLinks />
+          </div>
+
+          {/* Shared (rendered once): hours, app download, Follow Greenway. */}
+          <div className="mt-7 flex flex-col items-center lg:mt-0 lg:items-end lg:gap-6 lg:text-right">
+            <div className="w-full">
+              {/* Store hours graphic + editable plain-text hours (business.hours.display). */}
+              <HoursImage />
+              <SiteText
+                blockKey="business.hours.display"
+                as="p"
+                className="mt-2 text-center text-xs font-black uppercase tracking-[0.18em] text-[var(--greenway)] lg:mt-6 lg:text-right"
+              />
+            </div>
+
+            <div className="mt-7 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5 lg:mt-0 lg:max-w-xs lg:rounded-2xl">
+              <AppDownload links={links} />
+            </div>
+
+            <div className="mt-4 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5 lg:mt-0 lg:max-w-xs lg:rounded-2xl">
+              <FollowGreenway links={links} />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile bottom: warning, policy links, copyright. */}
+        <div className="lg:hidden">
+          <div className="mt-7 rounded-[1.25rem] border border-[var(--gold)]/30 bg-[#090909] p-4">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-[var(--gold)]">Washington Cannabis Warning</p>
+            <ComplianceWarningText className="mt-3 text-[0.72rem] font-semibold leading-5 text-zinc-300" />
+          </div>
+
+          <div className="mt-7">
+            <PolicyLinks compact />
+          </div>
+
+          <CopyrightLine className="mt-4 text-center" />
+        </div>
+      </div>
     </footer>
   );
 }

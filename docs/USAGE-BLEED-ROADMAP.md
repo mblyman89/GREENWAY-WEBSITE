@@ -829,9 +829,13 @@ Due care on the add-to-cart and deal-price path:
 
 ## USAGE-10 — fourth batch
 
-### USAGE-10a — /menu grid defaults packed (this PR)
+### USAGE-10a — /menu grid defaults packed (PR #1905)
 
 `packGridItems` (src/lib/menu/grid-defaults-pack-core.ts) sends each field's most common value once (`d`), omits it from every row that carries it, and replaces the shared Supabase image prefix with `~`. `InteractiveMenuBrowser` restores the items with `unpackGridItems` in a `useMemo` at the top of render, before any filter, card or deal reader, so every reader sees a byte-identical item. Rows that lacked a defaulted field list it in `_a`, so the round-trip is exact. Display data only (rule 18): prices round-trip unchanged and no money decision moves.
+
+### USAGE-10b — footer renders one tree (this PR)
+
+`Footer` used to render a complete `MobileFooter` and a complete `DesktopFooter`, one hidden per breakpoint, so the hours graphic (plus its draft-aware content read), the app-download row and the Follow Greenway glyphs shipped twice on every page. Those three now render once in a shared column (stacked and centered on mobile; the right-hand grid column on desktop, alignment via `lg:` classes). Only the parts whose layout genuinely differs (logo/address, warning card, policy links) stay breakpoint-gated, so the visible result at each breakpoint is unchanged.
 
 ## How to verify each slice
 
