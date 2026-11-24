@@ -640,6 +640,7 @@ import { __runLayoutCacheTests } from "../../src/lib/site/layout-cache-core"; //
 import { __runNotFoundTests } from "../../src/lib/site/not-found-core"; // USAGE-7c
 import { __runDealPoolTests } from "../../src/lib/specials/deal-pool-core"; // USAGE-7d
 import { __runMenuGridProjectionTests } from "../../src/lib/menu/menu-grid-projection-core"; // Slice E + USAGE-7e
+import { __runRenderClockTests } from "../../src/lib/site/render-clock-core"; // USAGE-7f
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3057,6 +3058,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("not-found-core", __runNotFoundTests(), 15); // USAGE-7c: the (site) not-found boundary (embedded in every page's RSC) never renders the full Header/Footer
   assertRan("deal-pool-core", __runDealPoolTests(), 15); // USAGE-7d: home + specials ship the exact deal pool (per-rule first 64 + fallback sample), not the 2,712-item catalog
   assertRan("menu-grid-projection-core", __runMenuGridProjectionTests(), 47); // Slice E + USAGE-7e: the shop grid drops description/hiddenReason/identityKey and null-valued optional facts (~17% of the grid JSON)
+  assertRan("render-clock-core", __runRenderClockTests(), 12); // USAGE-7f: sitemap lastModified + automatic "New" tag read the Pacific store-day start, so same data = same bytes within a day
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

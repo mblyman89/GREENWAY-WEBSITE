@@ -18,8 +18,9 @@ describe("PERF P4c: menu tag overlay is cached, never stores a failure", () => {
     expect(server).toContain('["menu-product-tags", "v1"]');
     expect(server).toContain("{ revalidate: MENU_CACHE_TTL_SECONDS, tags: [MENU_CACHE_TAG] }");
     expect(server).toContain("return loadTagInputsForKeys(keys);");
-    // The clock is read per render, never cached.
-    expect(server).toContain("nowMs: new Date().getTime()");
+    // The clock is read per render, never cached. USAGE-7f: bucketed to the
+    // Pacific store-day start so same data = same bytes within a day.
+    expect(server).toContain("nowMs: pacificDayStartMs(Date.now())");
   });
 
   it("the cached loader pages, reads every error and throws instead of returning a partial set", () => {
