@@ -10,8 +10,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { LibraryPicker } from "@/components/admin/banner-studio/LibraryPicker";
-import { printPictureToolAction, printFluxPollAction } from "@/app/admin/marketing/print-studio/actions";
-import { merchSharpenAction, merchUpscaleAction, type PrepOut } from "@/app/admin/merch-studio/art-prep-actions";
+import { printFluxPollAction } from "@/app/admin/marketing/print-studio/actions";
+import { merchKeyOutAction, merchRemoveBgAction, merchSharpenAction, merchUpscaleAction, type PrepOut } from "@/app/admin/merch-studio/art-prep-actions";
 import { startDirectUploadAction, finishDirectUploadAction } from "@/app/admin/media/direct-upload-actions";
 import { putSigned, tusSigned } from "@/lib/media/direct-upload-client";
 import { checkUpload } from "@/lib/media/upload-policy-core";
@@ -57,7 +57,7 @@ export function ArtLibraryPanel({ choices, placement, disabled, onFile }: { choi
       const r = await printFluxPollAction(pollingUrl, prompt);
       if (r.state === "ready") return r.url;
       if (r.state === "failed") throw new Error(r.error);
-      setBusy(`FLUX sharpening… ${Math.round((r.progress ?? 0) * 100)}%`);
+      setBusy(`FLUX working… ${Math.round((r.progress ?? 0) * 100)}%`);
     }
     throw new Error("FLUX took too long - try again.");
   };
@@ -83,10 +83,12 @@ export function ArtLibraryPanel({ choices, placement, disabled, onFile }: { choi
   const upscale = (p: Pick) => merchUpscaleAction({ url: p.url, title: p.title, ...size }).then(done);
   const sharpen = (p: Pick) => merchSharpenAction({ url: p.url }).then(done);
   const removeBg = async (p: Pick) => {
-    const r = await printPictureToolAction({ tool: "remove-bg", engine: "gpt", sourceUrl: p.url });
+    const r = await merchRemoveBgAction({ url: p.url, title: p.title });
     if (!r.ok) throw new Error(r.error);
-    if (r.kind !== "done" || !r.results[0]) throw new Error("No picture came back.");
-    return { url: r.results[0].url, note: "Background removed (transparent PNG)." };
+    if (r.kind === "done") return { url: r.url, note: r.note };
+    const flat = await pollFlux(r.pollingUrl, r.prompt);
+    setBusy("Cutting out the background…");
+    return done(await merchKeyOutAction({ url: flat, title: p.title }));
   };
   const autoPrep = async (p: Pick) => {
     const v = printVerdict(p.w, p.h, size.widthIn, size.heightIn, p.vector);
@@ -172,7 +174,7 @@ export function ArtLibraryPanel({ choices, placement, disabled, onFile }: { choi
               {!pick.vector && v.level !== "ideal" ? <button type="button" disabled={off} className={`${btn} !bg-[var(--admin-accent)] font-bold !text-black`} onClick={() => void run("Prepping…", autoPrep)} title="FLUX sharpen if it is soft, then enlarge to 300 DPI at this placement">✨ Prep for Printful</button> : null}
               {!pick.vector && v.level !== "ideal" ? <button type="button" disabled={off} className={btn} onClick={() => void run("Enlarging to 300 DPI…", upscale)}>Enlarge to 300 DPI</button> : null}
               {!pick.vector ? <button type="button" disabled={off} className={btn} onClick={() => void run("FLUX sharpening…", sharpen)} title="FLUX Deblur - rebuilds soft or pixelated edges">Sharpen (FLUX)</button> : null}
-              {!pick.vector ? <button type="button" disabled={off} className={btn} onClick={() => void run("Removing background…", removeBg)} title="Transparent PNG - no white box on the shirt">Remove background</button> : null}
+              {!pick.vector ? <button type="button" disabled={off} className={btn} onClick={() => void run("Removing background…", removeBg)} title="Transparent PNG - no box on the shirt. Flat backgrounds are cut out exactly (free); busy ones use FLUX.">Remove background</button> : null}
               <button type="button" disabled={off} className={`${btn} !bg-white/20 font-semibold text-white`} onClick={() => void place()}>Place on garment</button>
             </div>
           </div>
