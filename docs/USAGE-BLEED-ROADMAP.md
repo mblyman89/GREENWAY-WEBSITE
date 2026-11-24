@@ -837,9 +837,13 @@ Due care on the add-to-cart and deal-price path:
 
 `Footer` used to render a complete `MobileFooter` and a complete `DesktopFooter`, one hidden per breakpoint, so the hours graphic (plus its draft-aware content read), the app-download row and the Follow Greenway glyphs shipped twice on every page. Those three now render once in a shared column (stacked and centered on mobile; the right-hand grid column on desktop, alignment via `lg:` classes). Only the parts whose layout genuinely differs (logo/address, warning card, policy links) stay breakpoint-gated, so the visible result at each breakpoint is unchanged.
 
-### USAGE-10c — top bar and site JSON-LD from client components (this PR)
+### USAGE-10c — top bar and site JSON-LD from client components (PR #1907)
 
 The layout used to serialize the Organization, WebSite and Store JSON-LD strings (~3.6 KB) into every page's RSC payload, and `SecondaryBar` sent its ~1.5 KB of clamp()/breakpoint class strings the same way. `SiteJsonLd` (client) now builds the three schemas from the small `{hours, today}` input with the same builders, and `SecondaryBarView` (client) holds the top-bar markup; the server `SecondaryBar` still resolves the draft-aware blocks and passes three short strings. SSR HTML is unchanged, so crawlers see identical JSON-LD.
+
+### USAGE-10d — PDP sensory pills from a client component (this PR)
+
+`ChipGroup` (Experience / Terpenes / Aroma / Flavor pills) moved from the PDP server page into `src/components/menu/SensoryChipGroup.tsx` ("use client"). Each pill used to put a ~110-byte class string plus an inline style object into the RSC payload (11 pills on a typical page); now each group ships only `{label, chips, accent}`. SSR HTML identical; display only.
 
 ## How to verify each slice
 

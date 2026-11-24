@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { ChipGroup } from "@/components/menu/SensoryChipGroup";
 import type { Metadata } from "next";
 import Link from "@/components/site/IntentLink";
 import { notFound } from "next/navigation";
@@ -242,26 +243,6 @@ function ProductHeroArt({ item, tone, imageAlt }: { item: GreenwayMenuItem; tone
             </div>
           ) : null;
         })()}
-      </div>
-    </div>
-  );
-}
-
-function ChipGroup({ label, chips, accent }: { label: string; chips: string[]; accent: string }) {
-  if (!chips.length) return null;
-  return (
-    <div>
-      <p className="text-[0.62rem] font-black uppercase tracking-[0.22em] text-zinc-500">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {chips.map((chip) => (
-          <span
-            key={`${label}-${chip}`}
-            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold capitalize text-zinc-200"
-            style={{ borderColor: accent, backgroundColor: "rgba(255,255,255,0.04)" }}
-          >
-            {chip}
-          </span>
-        ))}
       </div>
     </div>
   );
