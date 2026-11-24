@@ -817,7 +817,7 @@ The (site) layout sends the D225 fallback-picture rotation lists to every page. 
 
 The footer renders 7 glyph buttons (5 social, 2 app store) in both its mobile and desktop trees: 14 `FooterLinkUnavailable` client elements per page. Each one carried the same 236-byte className and the 115-byte default "not available" message as props, about 4.9 KB of repeated strings in every page's RSC. Both now live in `footer-glyph-core.ts` as the client component's defaults. The footer sends the message only when an editor has changed it from the default (`unavailableMessageProp`). The rendered class and message are byte-identical, and the self-test checks the shown text for the default, blank and edited messages. Pinned by `usage-9e-footer-glyph-props.test.ts`.
 
-### USAGE-9f — PDP purchase panel gets the trimmed projection (this PR)
+### USAGE-9f — PDP purchase panel gets the trimmed projection (PR #1904)
 
 The product page handed its full item to `ProductDetailPurchasePanel`, a client component, so description, identityKey, null facts and false flags were serialized into every product page's RSC. The panel now receives `purchasePanelItem(item)`, the `toMenuGridItems` projection. That saves about 600 bytes per product page. The page still renders the full description from the untouched item, and the Slice E pin was extended to cover this.
 
@@ -826,6 +826,12 @@ Due care on the add-to-cart and deal-price path:
 - The vitest derives the fields the panel actually reads from its source and fails if any is undeclared.
 - The low-THC, suppository and volume facts are read as `?? null`, so the cart receives the same values.
 
+
+## USAGE-10 — fourth batch
+
+### USAGE-10a — /menu grid defaults packed (this PR)
+
+`packGridItems` (src/lib/menu/grid-defaults-pack-core.ts) sends each field's most common value once (`d`), omits it from every row that carries it, and replaces the shared Supabase image prefix with `~`. `InteractiveMenuBrowser` restores the items with `unpackGridItems` in a `useMemo` at the top of render, before any filter, card or deal reader, so every reader sees a byte-identical item. Rows that lacked a defaulted field list it in `_a`, so the round-trip is exact. Display data only (rule 18): prices round-trip unchanged and no money decision moves.
 
 ## How to verify each slice
 

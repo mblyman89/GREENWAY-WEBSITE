@@ -23,6 +23,7 @@ import { withProductTags } from "@/lib/menu/product-tags-server";
 import { withMenuCardFallbacks } from "@/lib/menu/menu-card-fallback-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
+import { packGridItems } from "@/lib/menu/grid-defaults-pack-core";
 import { ShopBannerSkeleton, ShopBrowserSkeleton } from "@/components/menu/MenuSkeleton";
 import { InStoreGoods } from "@/components/menu/InStoreGoods";
 
@@ -159,7 +160,7 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
           working exactly as before, and every long-tail filter stays client-side.
         */}
         <InteractiveMenuBrowser
-          items={menuItems}
+          packedItems={packGridItems(menuItems)}
           initialSearchParams={initialCategory ? { category: initialCategory } : {}}
           categoryLabels={categoryLabels}
           saleFilters={saleFilters}
