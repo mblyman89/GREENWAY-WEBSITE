@@ -3679,3 +3679,15 @@ No code edits, as asked. Read-only findings delivered to the owner: every auth u
 ### Status (D265)
 
 - Recon and research done; hardening strategy presented to the owner for a decision on which layers to build. As-built to follow.
+
+## D266
+
+> I need your help enhancing the merch studio so it is easier to see and know what garment we are working with. I want to have the printful catalog available in app if possible. everything about the way our systems garment selection works now is great, I just think it would add a ton of value to see what was selected, with the color shown on the item in a preview. printful has more color options shown on their catalog then we have on our app. I want to be able to select multiple colors when available. please help me make the garment selection tab more graphical so it is easier to work with and visualize what you are about to customize. if there are dual colors available, I want them added in as well. lets start with this enhancement and then stop for the next set. please clone the repo, read agents.md, it is the standing rules you will follow when building. then recon the relevant code areas for context. research online what you need to add to the back office merch studio garment page so it is more visually appealing to work in. then enhance the code to add this new ability. we are in budget mode, so be lean, test as little as possible. I will test it. spend as little tokens as possible. you cant run full tsc in here, there is not enough memory, so dont bother trying. scoped tsc on changed files only. return back with a summary report after you are done with this slice. follow the standing rules. thank you.
+
+### Status (D266)
+
+- Garments tab is now graphical: photo cards per blank, a large preview of Printful's own photo of the picked colour, colour tiles with photos, two-tone swatches (Printful `color_code2`), a Solid / Two-tone filter, colour search, and multi-colour ticks that pre-fill the colour list on Publish & Ads.
+- Printful's full public garment catalog is browsable in the tab (read-only preview; `GET /products`, `GET /products/{id}`, 12 h display cache).
+- Colour count check (Printful public API v1, 2026-11-23): all 11 studio blanks already carry every colour Printful's API lists (e.g. 1717: 50/50, 3001: 84/84). Two-tones were already in the list as names; they now show both colours.
+- Generator `scripts/merch/refresh-printful-catalog.py` now also emits `PRINTFUL_COLOR_INFO` and `PRINTFUL_PRODUCT_IMAGE`; data refreshed (snapshot 2026-11-23; two small variant-stock changes on 71 and 943).
+- No migration, no DB table, nothing sent to Printful's order or product APIs.

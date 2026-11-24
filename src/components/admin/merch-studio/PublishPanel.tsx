@@ -18,6 +18,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { colorsFor, formatCents, getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
+import { loadPickedColors } from "./picked-colors";
+import { colorInfoFor, swatchBackground } from "@/lib/merch-studio/garment-preview-core";
 import { buildListingPackage, listingFilename, suggestListingRetailCents, LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
 import { MIN_MARGIN_BPS, shippingGapCents } from "@/lib/merch-studio/fulfillment-core";
 import { printfulShippingRateAction } from "@/app/admin/merch-studio/pricing-actions";
@@ -239,6 +241,14 @@ const dollarsOf = (c: number) => (c > 0 ? (c / 100).toFixed(2) : "");
 
 type ShipState = { blankId: string; chargedCents: number | null; costCents: number | null; problem: string; loading: boolean };
 
+/** D266: the design's colour plus every colour ticked on the Garments tab for that blank (catalog order). */
+function startColors(blankId: string, cols: readonly (readonly [string, string])[], designHex: string): string[] {
+  const order = cols.map((x) => x[0]);
+  const own = cols.find((x) => x[1].toLowerCase() === designHex.toLowerCase())?.[0];
+  const set = new Set([...loadPickedColors(blankId, order), ...(own ? [own] : [])]);
+  return order.filter((n) => set.has(n));
+}
+
 function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { mediaChoices: MediaChoice[]; canPublish: boolean; rights: SampleRights; lastRetail: Record<string, number> }) {
   // This panel only mounts client-side after MerchStudio's restore, so reading localStorage in the initializer is hydration-safe (same as ProofPanel).
   const [designs, setDesigns] = useState<MerchDesign[]>(() => loadDesigns());
@@ -252,8 +262,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
   const [description, setDescription] = useState("");
   const [colors, setColors] = useState<string[]>(() => {
     const b = design ? getBlank(design.blankId) : undefined;
-    const c = b ? colorsFor(b).find((x) => x[1].toLowerCase() === design!.colorHex.toLowerCase()) : undefined;
-    return c ? [c[0]] : [];
+    return b ? startColors(b.id, colorsFor(b), design!.colorHex) : [];
   });
   const [sizes, setSizes] = useState<string[]>(() => {
     const b = design ? getBlank(design.blankId) : undefined;
@@ -350,8 +359,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
     setPhotos([]);
     setTitle(d?.name ?? "");
     const b = d ? getBlank(d.blankId) : undefined;
-    const c = b ? colorsFor(b).find((x) => x[1].toLowerCase() === d!.colorHex.toLowerCase()) : undefined;
-    setColors(c ? [c[0]] : []);
+    setColors(b ? startColors(b.id, colorsFor(b), d!.colorHex) : []);
     setSizes(b ? sizesFor(b).map((s) => s[0]) : []);
   };
   const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -396,7 +404,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
                   {colorsFor(blank).map(([name, hex]) => (
                     <button key={name} type="button" aria-pressed={colors.includes(name)} onClick={() => { setColors((c) => toggle(c, name)); setDone(null); }}
                       className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.7rem] ${colors.includes(name) ? "border-[var(--admin-accent)] text-white" : "border-white/15 text-white/55"}`}>
-                      <span className="inline-block h-3 w-3 rounded-full border border-white/30" style={{ background: hex }} />{name}
+                      <span className="inline-block h-3 w-3 rounded-full border border-white/30" style={{ background: swatchBackground(hex, colorInfoFor(blank.printfulId).find((c) => c.name === name)?.hex2 ?? null) }} />{name}
                     </button>
                   ))}
                 </div>

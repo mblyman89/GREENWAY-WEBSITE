@@ -8,6 +8,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BLANKS, colorsFor, getBlank } from "@/lib/merch-studio/garment-catalog-core";
 import { CatalogPanel } from "./CatalogPanel";
+import { loadPickedColors, savePickedColors } from "./picked-colors";
 import { ArtCheckPanel } from "./ArtCheckPanel";
 import { FulfillmentPanel } from "./FulfillmentPanel";
 import { DesignStudio } from "./DesignStudio";
@@ -34,6 +35,8 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
   const [blankId, setBlankId] = useState(BLANKS[0].id);
   const [colorHex, setColorHex] = useState(() => colorsFor(BLANKS[0]).find((c) => c[0] === "Black")?.[1] ?? colorsFor(BLANKS[0])[0][1]);
 
+  // D266: colours ticked on Garments (multi-select), per blank, saved in this browser.
+  const [picked, setPickedState] = useState<string[]>([]);
   const [restored, setRestored] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +50,8 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
         if (b) setBlankId(b.id);
         if (b && s.colorHex && colorsFor(b).some((c) => c[1] === s.colorHex)) setColorHex(s.colorHex);
         if (s.tab && !initialTab) setTab(s.tab);
+        const rb = b ?? BLANKS[0];
+        setPickedState(loadPickedColors(rb.id, colorsFor(rb).map((c) => c[0])));
       } catch { /* ignore corrupt storage */ }
       setRestored(true);
     });
@@ -61,8 +66,10 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
     const b = getBlank(id); if (!b) return;
     setBlankId(id);
     const cols = colorsFor(b);
+    setPickedState(loadPickedColors(id, cols.map((c) => c[0])));
     if (!cols.some((c) => c[1] === colorHex)) setColorHex(cols.find((c) => c[0] === "Black")?.[1] ?? cols[0][1]);
   };
+  const setPicked = (names: string[]) => { setPickedState(names); savePickedColors(blankId, names); };
   const all = [...TABS.slice(0, 3), ...extraTabs.map((t) => ({ id: t.id, label: t.label })), ...TABS.slice(3)];
   const blank = getBlank(blankId)!;
   const colorName = colorsFor(blank).find((c) => c[1] === colorHex)?.[0] ?? colorHex;
@@ -80,13 +87,13 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
         </div>
         <span className="flex items-center gap-2 text-xs text-white/60">
           <span className="inline-block h-4 w-4 rounded-full border border-white/30" style={{ background: colorHex }} />
-          {blank.brand} {blank.model} - {colorName}
+          {blank.brand} {blank.model} - {colorName}{picked.length > 1 ? ` (+${picked.length - 1} more picked)` : ""}
         </span>
       </div>
       {/* D232 M-3b: Product journey + tab coaching strip. Mounts after the restore and re-reads this browser's drafts on every tab change. */}
       {restored && journey ? <JourneyBar key={tab} tab={tab} server={journey} onTab={setTab} /> : null}
       <div role="tabpanel">
-        {tab === "garments" ? <CatalogPanel blankId={blankId} colorHex={colorHex} onBlank={setBlank} onColor={(hex) => setColorHex(hex)} /> : null}
+        {tab === "garments" ? <CatalogPanel blankId={blankId} colorHex={colorHex} onBlank={setBlank} onColor={(hex) => setColorHex(hex)} picked={picked} onPicked={setPicked} /> : null}
         {/* Design only mounts client-side after the selection restore (tab starts on Garments for SSR), so its localStorage boot is hydration-safe. */}
         {tab === "design" && restored ? <DesignStudio blankId={blankId} colorHex={colorHex} setBlank={setBlank} setColor={setColorHex} /> : null}
         {/* Proof reads the saved drafts from this browser, so it also mounts only after the restore. It remounts on every visit, so it always reads the latest autosaved drafts. */}
