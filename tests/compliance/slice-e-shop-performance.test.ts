@@ -380,8 +380,11 @@ describe("Slice E — the product detail page keeps its full copy", () => {
   it("the grid projection is never applied to the detail page's own item", () => {
     const code = stripComments(read("src/app/(site)/menu/products/[id]/page.tsx"));
     // USAGE-9c: only the related-products rail (cards) is projected; the
-    // product shown on the page keeps its full copy.
+    // product shown on the page keeps its full copy. USAGE-9f: the client
+    // purchase panel gets purchasePanelItem(item); the page text does not.
     const calls = code.match(/toMenuGridItems\(([^)]*)\)/g) ?? [];
     expect(calls).toEqual(["toMenuGridItems(relatedItems)"]);
+    expect(code.match(/purchasePanelItem\(item\)/g)?.length).toBe(1);
+    expect(code).toMatch(/\{productDescription\}/);
   });
 });
