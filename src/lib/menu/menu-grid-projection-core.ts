@@ -98,6 +98,22 @@ export const GRID_NULL_DROPPED_FIELDS = [
 ] as const;
 
 /**
+ * USAGE-8c (2026-11-25): optional FLAGS dropped from the row when `false`.
+ * Live catalog: hidden=false on 2,712/2,712 rows, dohCompliant=false on
+ * 2,712/2,712, imageIsFallback=false on 1,150 (~125 KB of grid JSON). Every
+ * client reader treats absent the same as false: `item.imageIsFallback ?`,
+ * `!== true`, `=== true` (isItemDohCompliant), `if (item.hidden)`.
+ */
+export const GRID_FALSE_DROPPED_FLAGS = ["hidden", "dohCompliant", "imageIsFallback"] as const;
+
+/**
+ * USAGE-8c: server-only provenance stamps. `strainTypeSource` is read only by
+ * the server overlay (product-facts-overlay-core / strain-terpenes) BEFORE the
+ * projection runs; no client component reads it (~35 KB per shop page).
+ */
+export const GRID_SERVER_ONLY_FIELDS = ["strainTypeSource"] as const;
+
+/**
  * Project the published menu down to what the grid actually renders.
  *
  * The item TYPE is unchanged (`GreenwayMenuItem`), so no card component needs
@@ -125,6 +141,11 @@ export function toMenuGridItems(items: readonly GreenwayMenuItem[]): GreenwayMen
     for (const field of GRID_NULL_DROPPED_FIELDS) {
       if (rec[field] === null) delete rec[field];
     }
+    // USAGE-8c: a false optional flag is the same as an absent one; drop it.
+    for (const flag of GRID_FALSE_DROPPED_FLAGS) {
+      if (rec[flag] === false) delete rec[flag];
+    }
+    for (const field of GRID_SERVER_ONLY_FIELDS) delete rec[field];
     return next;
   });
 }
@@ -168,7 +189,7 @@ export function __runMenuGridProjectionTests(): { passed: number; failed: number
     inventoryStatus: "in-stock",
     variants: [{ id: "v1", label: "1g", priceMinorUnits: 1500, inventoryLevel: 4, medical: false }],
     imageUrl: "https://example.test/a.webp",
-    imageIsFallback: false,
+    imageIsFallback: true, // USAGE-8c: true is kept; false is dropped (absent = false)
     dohCompliant: true,
   } as unknown as GreenwayMenuItem;
 
@@ -258,6 +279,20 @@ export function __runMenuGridProjectionTests(): { passed: number; failed: number
   check("dropped null reads back as nullish (same meaning)", (pf.dohCategory ?? null) === null);
   check("source facts not mutated", (facts as unknown as Record<string, unknown>).lowThcLiquid === null);
   check("only optional fields are null-dropped", !GRID_NULL_DROPPED_FIELDS.some((f) => (REQUIRED as readonly string[]).includes(f)));
+
+  // USAGE-8c: false flags + server-only stamps.
+  const flags = { ...item, hidden: false, dohCompliant: false, imageIsFallback: false, strainTypeSource: "reviewer" } as unknown as GreenwayMenuItem;
+  const pg = toMenuGridItems([flags])[0] as unknown as Record<string, unknown>;
+  check("false hidden dropped", !("hidden" in pg));
+  check("false dohCompliant dropped", !("dohCompliant" in pg));
+  check("false imageIsFallback dropped", !("imageIsFallback" in pg));
+  check("strainTypeSource never ships", !("strainTypeSource" in pg));
+  const truthy = { ...item, hidden: true, dohCompliant: true, imageIsFallback: true } as unknown as GreenwayMenuItem;
+  const pt = toMenuGridItems([truthy])[0] as unknown as Record<string, unknown>;
+  check("true flags kept", pt.hidden === true && pt.dohCompliant === true && pt.imageIsFallback === true);
+  check("dropped false reads back falsy (same meaning)", !pg.hidden && !pg.dohCompliant && !pg.imageIsFallback);
+  check("source flags not mutated", (flags as unknown as Record<string, unknown>).hidden === false);
+  check("present-and-true flags are not in the drop path", GRID_FALSE_DROPPED_FLAGS.every((f) => pt[f] === true));
 
   return { passed, failed };
 }
