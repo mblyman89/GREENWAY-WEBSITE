@@ -30,13 +30,15 @@ function ThreadPicker({ label, value, onChange }: { label: string; value: string
   );
 }
 
-export function ElementPanel({ el, placement, method, onChange, onRemeasure }: {
+export function ElementPanel({ el, placement, method, onChange, onRemeasure, onFill }: {
   el: MElement;
   placement: Placement;
   method: Method;
   onChange: (patch: Partial<MElement>) => void;
   /** Text changed in a way that needs re-measuring (text/font/weight/spacing/size). */
   onRemeasure: (patch: Partial<MElement>) => void;
+  /** D269: fill the print area; trim = crop the empty margin around the logo first. */
+  onFill?: (trim: boolean) => void;
 }) {
   const emb = method === "embroidery";
   const Color = emb ? ThreadPicker : ColorField;
@@ -69,6 +71,14 @@ export function ElementPanel({ el, placement, method, onChange, onRemeasure }: {
           {([["Center H", { x: r2((placement.widthIn - el.w) / 2) }], ["Center V", { y: r2((placement.heightIn - el.h) / 2) }], ["Top", { y: 0 }], ["Fill width", el.kind === "text" ? null : { x: 0, w: placement.widthIn, h: el.kind === "shape" ? el.h : r2((placement.widthIn * el.h) / el.w) }]] as const).map(([lab, patch]) =>
             patch ? <button key={lab} type="button" className="rounded bg-white/10 px-2 py-0.5 text-[0.7rem] text-white/80 hover:bg-white/20" onClick={() => onChange(patch)}>{lab}</button> : null)}
         </div>
+        {onFill && el.kind !== "text" ? (
+          <div className="flex flex-wrap gap-1">
+            {el.kind === "image" && !el.vector ? (
+              <button type="button" className="rounded bg-[var(--admin-accent)] px-2 py-0.5 text-[0.7rem] font-bold text-black" title="Cuts away the empty / plain-colour margin around the logo, then makes the logo itself as big as the print area allows (centred)" onClick={() => onFill(true)}>{"\u2922"} Trim & fill space</button>
+            ) : null}
+            <button type="button" className="rounded bg-white/15 px-2 py-0.5 text-[0.7rem] text-white/85 hover:bg-white/25" title="As big as the print area allows, centred, keeping its shape" onClick={() => onFill(false)}>Fill space</button>
+          </div>
+        ) : null}
         <NumberSlider label="Rotate" value={el.rotate} min={-180} max={180} step={1} unit="deg" onChange={(v) => onChange({ rotate: v })} hint="Drag the round handle; hold Shift for 15 deg steps." />
         <NumberSlider label="Opacity" value={el.opacity} min={0} max={100} step={1} unit="%" onChange={(v) => onChange({ opacity: v })} hint={emb ? "Thread is never see-through - keep 100%." : undefined} />
         <div className="flex gap-4">

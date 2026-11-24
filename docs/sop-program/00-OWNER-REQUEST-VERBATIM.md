@@ -3707,3 +3707,11 @@ Done. Merch Studio > Design > Add > Artwork now has "From Media library": Brand 
 ### Status (D268)
 
 Fixed. Merch Studio "Remove background" no longer calls GPT Image (gpt-image-2 refuses transparent output). New merchRemoveBgAction: a logo on a flat background is keyed out on our server (border colour + edge flood-fill with a soft edge, so enclosed inside details are kept), exact pixels, free. A busy/photo background goes to FLUX Kontext Pro (put the art on flat #FF00FF), is polled, then merchKeyOutAction cuts the magenta out. FLUX never returns alpha itself, hence the key step. Pure helpers in art-prep-core.ts (29 self-tests). Checked on the Greenway logo flattened onto white: a clean cutout.
+
+## D269
+
+"Thank you. That's much better. Will you make it easier for me to enlarge the logo/ image to fill the full space? Either a button that maximizes the space for me or let me expand the image so that the logo in the image maximizes the space. I hope that makes sense. I don't want the square the logo is in the fill the space, I want that to be ignored and just the logo to fill the space. Or allow me to expand the square so that the logo fills the space as I need. Please add this in for me. Follow the standing rules. Thank you."
+
+### Status (D269)
+
+Done. Merch Studio > Design > Selected (an image) now has "Trim & fill space": it finds the logo's real edges (ignores see-through pixels and a flat border colour such as white), crops that empty margin into a new copy on this device (the original is kept), then makes the logo as big as the print area allows, centred, keeping its shape. "Fill space" (all non-text elements) does the fit without trimming. The Width/Height sliders and handles still work for manual sizing. Pure helpers contentBounds + fitInFrame in art-prep-core.ts (35 self-tests).
