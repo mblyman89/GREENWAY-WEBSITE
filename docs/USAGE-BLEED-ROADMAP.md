@@ -754,7 +754,7 @@ row + 3.3 KB segment seed on a product page). Both are now `"use client"`; the
 payload carries one module reference. Pinned by `client-loading-core.ts` +
 `tests/compliance/usage-8a-client-loading.test.ts`.
 
-### USAGE-8b — footer images ship a 1x/2x srcSet (this PR)
+### USAGE-8b — footer images ship a 1x/2x srcSet (PR #1894)
 
 Every fixed-size footer image (5 social glyphs, 2 app-store glyphs, the app
 wordmark, the black-gold logo, and the not-found wordmark that rides in every page) passed `sizes="NNpx"`, which makes next/image emit
@@ -763,6 +763,16 @@ footer renders a mobile and a desktop tree, so a product page carried 18 such ta
 (~36 KB of HTML) in every response and ISR write. They now pass their displayed
 pixel size (`CHROME_IMAGE_PX`) and no `sizes`, so the srcSet is a 1x/2x pair. Same
 pixels on screen; the hours card keeps its responsive `sizes` (`lg:max-w-none`).
+
+### USAGE-8c — shop grid drops false flags + server-only stamps (this PR)
+
+Measured on the live /menu payload: `hidden:false` on 2,712/2,712 rows,
+`dohCompliant:false` on 2,712/2,712, `imageIsFallback:false` on 1,150, and
+`strainTypeSource:"reviewer"` (read only by the server overlay, before the
+projection) on 1,184. `toMenuGridItems` now drops a flag that is `false` and never
+ships `strainTypeSource`: ~160 KB less grid JSON per shop page and ISR write. Every
+client reader already treats absent as false (`=== true`, `!== true`, truthy
+checks); the DOH badge decision is pinned identical.
 
 
 ## How to verify each slice
