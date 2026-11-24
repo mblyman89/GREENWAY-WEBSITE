@@ -1152,6 +1152,7 @@ import { __runBannerAtmosTests } from "../../src/lib/cms/banner-atmos-core";
 import { __runBannerCurveTests } from "../../src/lib/cms/banner-curve-core";
 import { __runGarmentCatalogTests } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runGarmentPreviewTests } from "../../src/lib/merch-studio/garment-preview-core";
+import { __runArtPrepTests } from "../../src/lib/merch-studio/art-prep-core";
 import { __runPrintRulesTests } from "../../src/lib/merch-studio/print-rules-core";
 import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-core";
 import { __runGarmentViewsTests } from "../../src/lib/merch-studio/garment-views-core";
@@ -2853,6 +2854,7 @@ __runLiquidVolumeTests();
   assertRan("gemini-request-core", __runGeminiRequestCoreTests(), 19); // R51 D1: Gemini Interactions body (system_instruction, url_context, service_tier, seed, response_format); R66: model-aware
   assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 46); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
   assertRan("garment-preview-core", __runGarmentPreviewTests(), 50); // D266: Garments tab photos, two-tone swatches, multi-colour pick, Printful catalog browser
+  assertRan("art-prep-core", __runArtPrepTests(), 20); // D267: Merch artwork from library (logos first) + Prep for Printful (DPI verdict, 300 DPI upscale plan)
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
   assertRan("print-rules-core", __runPrintRulesTests(), 29); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
   assertRan("fulfillment-core", __runFulfillmentTests(), 19); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)

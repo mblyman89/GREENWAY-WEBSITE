@@ -11,6 +11,8 @@ import { listMedia } from "@/lib/media/store";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { MERCH_AD_BLOCK } from "@/lib/merch/merch-ad-core";
 import type { JourneyServer } from "@/components/admin/merch-studio/JourneyBar";
+import { BRAND_KIT_BLOCK, parseBrandKit } from "@/lib/brand/brand-kit-core";
+import { libraryArt } from "@/lib/merch-studio/art-prep-core";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +39,22 @@ async function loadSetupBanner(): Promise<{ tone: "bad" | "warn"; text: string }
 }
 
 async function loadPublishData() {
-  if (!isSupabaseServiceConfigured) return { adBlock: { draft: null, published: null, status: "draft", available: isSupabaseServiceConfigured }, mediaChoices: [] as MediaChoice[] };
+  if (!isSupabaseServiceConfigured) return { adBlock: { draft: null, published: null, status: "draft", available: isSupabaseServiceConfigured }, mediaChoices: [] as MediaChoice[], art: libraryArt([], parseBrandKit(null).logos) };
   let block = await getContentBlock(MERCH_AD_BLOCK).catch(() => null);
   if (!block && (await ensureContentBlocksSeeded().catch(() => 0)) > 0) block = await getContentBlock(MERCH_AD_BLOCK).catch(() => null);
   const media = await listMedia({ status: "published", limit: 200 }).catch(() => []);
   const mediaChoices: MediaChoice[] = media
     .filter((m) => /^image\//.test(m.mime_type ?? "") && m.public_url)
     .map((m) => ({ id: m.id, url: m.public_url as string, title: m.title ?? m.filename ?? "Image", usageType: m.usage_type ?? null, mimeType: m.mime_type ?? null }));
-  return { adBlock: { draft: block?.draft_value ?? null, published: block?.published_value ?? null, status: block?.status ?? "draft", available: !!block }, mediaChoices };
+  // D267: artwork for the Design tab - Brand kit logos + every logo in Media first, then the rest.
+  const [kit, ...logoSets] = await Promise.all([
+    getContentBlock(BRAND_KIT_BLOCK).catch(() => null),
+    ...["logo", "brand-logo", "vendor-logo"].map((u) => listMedia({ usageType: u, status: "published", limit: 200 }).catch(() => [])),
+  ]);
+  const toChoice = (m: (typeof media)[number]) => ({ id: m.id, url: m.public_url as string, title: m.title ?? m.filename ?? "Image", usageType: m.usage_type ?? null, mimeType: m.mime_type ?? null });
+  const logos = (logoSets as typeof media[]).flat().filter((m) => /^image\//.test(m.mime_type ?? "") && m.public_url).map(toChoice);
+  const art = libraryArt([...logos, ...mediaChoices], parseBrandKit((kit as { published_value?: string | null } | null)?.published_value).logos);
+  return { adBlock: { draft: block?.draft_value ?? null, published: block?.published_value ?? null, status: block?.status ?? "draft", available: !!block }, mediaChoices, art };
 }
 
 /** D232 M-3b: what the Product journey needs from the server (one catalog read + the last saved health run, no live calls). */
