@@ -141,8 +141,10 @@ describe("D224 wiring: every place a menu card picture shows", () => {
   it("server: snapshot cached for a minute, tagged, failure never stored", () => {
     const s = read("src/lib/menu/menu-card-fallback-server.ts");
     expect(s).toContain('import "server-only";');
-    expect(s).toContain("revalidate: PUBLIC_SNAPSHOT_TTL_SECONDS");
-    expect(s).toContain("tags: [MENU_CACHE_TAG]");
+    // USAGE-7b: own tag + backstop TTL (the shared layout reads this snapshot,
+    // so it must not ride `live-menu`); see usage-7b-layout-cache.test.ts.
+    expect(s).toContain("revalidate: MENU_CARD_FALLBACK_TTL_SECONDS");
+    expect(s).toContain("tags: [MENU_CARD_FALLBACK_TAG]");
   });
   it("shop grid + category pages: outermost, after the re-file", () => {
     expect(read("src/components/menu/ShopPage.tsx")).toContain(

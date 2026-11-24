@@ -25,7 +25,7 @@
  * the public menu caches so the shop updates at once. Every decision lives
  * in src/lib/menu/menu-card-fallback-core.ts.
  */
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
@@ -33,6 +33,7 @@ import { checkFileSignature } from "@/lib/media/file-signature-core";
 import { uploadMedia, recordUsage, clearUsage } from "@/lib/media/store";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { MENU_CARD_FALLBACK_TAG } from "@/lib/site/layout-cache-core";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import {
   MENU_CARD_FALLBACK_PAGE,
@@ -118,6 +119,14 @@ async function afterChange(
     before: { media_ids: before },
     after: { media_ids: after, ...extra },
   });
+  // USAGE-7b: the snapshot has its OWN tag (the shared layout reads it, so it
+  // must not ride `live-menu`). Clear it first (data before pages), then the
+  // menu surfaces that draw the cards.
+  try {
+    revalidateTag(MENU_CARD_FALLBACK_TAG, "max");
+  } catch (err) {
+    console.error(`[menu-card-fallbacks] revalidateTag ${MENU_CARD_FALLBACK_TAG} failed:`, err);
+  }
   revalidatePublicMenuSurfaces();
   revalidatePath(MENU_CARD_FALLBACK_PAGE);
   return after;

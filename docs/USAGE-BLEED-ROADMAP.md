@@ -536,15 +536,26 @@ By route (reads / writes / unique paths): `/menu/products/[id]` 891 / 6.1K /
 | Slice | What | Expected effect |
 | --- | --- | --- |
 | USAGE-7a | Public links prefetch on intent (hover / focus / touch), not on sight. `IntentLink` + repo guard. | Product-page writes and reads collapse to pages people actually open |
-| USAGE-7b | The 60 s page TTL is decoupled from the data TTL: pages regenerate on demand (publish / edit → `revalidatePublicMenuSurfaces`) with a long safety floor | Regenerations stop being driven by the clock |
-| USAGE-7c | Stock and price freshness move off the page: the card's live numbers come from the uncached path at view time, so a long page TTL never shows stale stock | Keeps "no stale stock" while 7b lengthens the TTL |
-| USAGE-7d | Slim grid projection: fields no card, filter or sort reads are dropped before the catalog is serialized | Shop pages shrink; every remaining write is smaller |
-| USAGE-7e | Narrow invalidation: per-batch coalescing instead of one whole-site clear per product (vendor kits, bulk publish) | Tag revalidations fall from ≈ 1/min |
-| USAGE-7f | Deterministic "New" tag clock (Pacific-day bucket) + verification runbook | Same data → same bytes where React allows |
+| USAGE-7b | The shared site layout stops carrying the `live-menu` tag: the menu-card fallback snapshot it reads gets its own tag (`menu-card-fallbacks`), cleared only by the fallback admin page | Menu edits stop rewriting /about, /faq, /terms … (131 writes on /about in 12 h) |
+| USAGE-7c | The not-found boundary stops embedding a second full Header + Footer into every page's RSC payload | Every page (and so every write) gets smaller |
+| USAGE-7d | Home and Specials ship only the deal pools they show (per weekday), not the whole 2,712-item catalog | The two heaviest non-shop pages shrink by megabytes |
+| USAGE-7e | Slim grid projection: fields no card, filter or sort reads are dropped before the catalog is serialized | Shop pages shrink; every remaining write is smaller |
+| USAGE-7f | Deterministic clocks in rendered output ("New" tag Pacific-day bucket, sitemap `lastModified`) + verification runbook | Same data → same bytes where React allows |
+
+*Reshaped 2026-11-24 while grounding.* The first draft had "lengthen the 60 s
+page TTL" (7b/7c) and "coalesce per-product revalidations" (7e). Coalescing is
+already done by Next.js: `revalidateTag`/`revalidatePath` dedupe repeated tags
+within one request (`pendingRevalidatedTags`, Next 16.4.3), so a 40-photo
+vendor-kit loop is one invalidation, not 40. Lengthening the TTL is tied to
+stock freshness (sales and stock flags do not revalidate; the 60 s TTL IS the
+stock-freshness floor, pinned by `menu-cache-policy-core` and
+`usage-5-public-page-revalidate.test.ts`), so it is left for an owner decision
+(see "Left to do" in the USAGE-7 report). The measured, risk-free wins took
+their places.
 
 Each slice records its own before/after below as it lands.
 
-### USAGE-7a — intent prefetch (this PR)
+### USAGE-7a — intent prefetch (PR #1887)
 
 `src/lib/site/intent-prefetch-core.ts` (pure, `__runIntentPrefetchTests`, 25
 assertions, registered in `run-pure-selftests.ts`) and
@@ -563,6 +574,35 @@ of scope (behind login, dynamic, no ISR).
 `/menu/products/[id]` *Unique Paths* and *Writes* should fall sharply (the
 baseline was 1.5K paths / 6.1K writes); browser devtools on `/menu`: scrolling
 the grid issues no `/menu/products/…?_rsc=` requests until a card is hovered.
+
+### USAGE-7b — the shared layout stops carrying `live-menu` (this PR)
+
+**Cause (measured).** Next.js copies every `unstable_cache` tag a render reads
+into the page's ISR entry. `src/app/(site)/layout.tsx` wraps every public page
+and read `menuCardRotationLists()`, whose snapshot was tagged `live-menu`. So
+each of the ≈49 `revalidatePublicMenuSurfaces()` call sites (inventory, imports,
+photos, tags, recalls, promotions …) invalidated EVERY public page, not just
+the four menu surfaces it names. The build route table puts /about, /faq,
+/privacy-policy, /terms-of-use, /locations, /price-match and
+/consumer-health-data on a 1 h clock, yet /about logged 131 writes in 12 h.
+
+**Fix.** `src/lib/site/layout-cache-core.ts` (pure, `__runLayoutCacheTests`,
+14 assertions): `MENU_CARD_FALLBACK_TAG = "menu-card-fallbacks"`,
+`MENU_CARD_FALLBACK_TTL_SECONDS = 3600` (backstop only) and
+`layoutTagsAreIsolated()`. The fallback snapshot uses them; the fallback admin
+actions clear that tag before `revalidatePublicMenuSurfaces()` on every save.
+`public-surfaces.ts` deliberately does not clear it (that would re-couple every
+menu edit to every page). The D224/D225 pins move to the new tag;
+`tests/compliance/usage-7b-layout-cache.test.ts` holds the new pins.
+
+**Unchanged.** Picture saves still show on the next visit (tag cleared on save).
+The menu surfaces still refresh on every menu edit. The content pages still
+refresh on every content publish (`revalidatePath("/(site)", "layout")`).
+Display data only. No money path touched.
+
+**Verify.** ISR → Routes, 12 h after the deploy: Writes on /about, /faq,
+/terms-of-use, /privacy-policy, /locations should fall from ≈ 11/h to about
+1/h plus one per content publish and one per deploy.
 
 ---
 
