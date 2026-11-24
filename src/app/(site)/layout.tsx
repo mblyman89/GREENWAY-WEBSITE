@@ -20,6 +20,8 @@ import { PublishedRulesProvider } from "@/components/promotions/PublishedRulesPr
 import { loadDisplayRuleSnapshots } from "@/lib/promotions/display-rules-cache";
 // USAGE-9a: send the rules default-stripped (value-identical after unpack).
 import { packRuleSnapshots } from "@/lib/promotions/packed-rules-core";
+// USAGE-9d: rotation URLs ship with their shared storage prefix sent once.
+import { packRotationLists } from "@/lib/menu/rotation-lists-pack-core";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
@@ -155,7 +157,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema(storeHours, storeToday)]} id="site" />
         <PublishedRulesProvider packed={packRuleSnapshots(publishedRules)}>
-          <MenuCardRotationProvider lists={rotationLists}>
+          <MenuCardRotationProvider packed={packRotationLists(rotationLists)}>
             <CartProvider>{children}</CartProvider>
           </MenuCardRotationProvider>
         </PublishedRulesProvider>

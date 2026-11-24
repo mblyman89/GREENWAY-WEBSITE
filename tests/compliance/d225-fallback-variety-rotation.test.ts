@@ -142,7 +142,8 @@ describe("D225 server + layout", () => {
     expect(s).toContain("if (urls.length >= 2) out[cat] = urls;");
     const layout = read("src/app/(site)/layout.tsx");
     expect(layout).toContain("menuCardRotationLists().catch(() => ({}))");
-    expect(layout).toContain("<MenuCardRotationProvider lists={rotationLists}>");
+    // USAGE-9d: the lists ship in shared-prefix form and are rebuilt exactly.
+    expect(layout).toContain("<MenuCardRotationProvider packed={packRotationLists(rotationLists)}>");
   });
   it("the grid payload does not grow (no per-card URL list on the item)", () => {
     expect(read("src/lib/leafly/types.ts")).not.toMatch(/imageRotation|imageFallbackSlot/);

@@ -649,6 +649,7 @@ import { __runHeaderLogoTests } from "../../src/lib/site/header-logo-core"; // U
 import { __runPackedRulesTests } from "../../src/lib/promotions/packed-rules-core"; // USAGE-9a
 import { __runNavChildTests } from "../../src/lib/site/nav-child-core"; // USAGE-9b
 import { __runRelatedProjectionTests } from "../../src/lib/menu/related-projection-core"; // USAGE-9c
+import { __runRotationListsPackTests } from "../../src/lib/menu/rotation-lists-pack-core"; // USAGE-9d
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
@@ -3075,6 +3076,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("packed-rules-core", __runPackedRulesTests(), 10); // USAGE-9a: the (site) layout sends published rules default-stripped (~25% smaller on every page); the client restores them value-identically
   assertRan("nav-child-core", __runNavChildTests(), 4); // USAGE-9b: the 17 desktop dropdown rows are client references ({href,label,helper}) instead of ~730-byte RSC trees on every page
   assertRan("related-projection-core", __runRelatedProjectionTests(), 5); // USAGE-9c: the product-page related rail ships the shop-grid projection (no description/identityKey/null facts) to RelatedProductCard
+  assertRan("rotation-lists-pack-core", __runRotationListsPackTests(), 8); // USAGE-9d: the layout sends the fallback rotation URLs with their shared storage prefix once (~2.7 KB -> ~1 KB per page); the provider rebuilds them exactly
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

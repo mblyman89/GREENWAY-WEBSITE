@@ -11,18 +11,23 @@
  * payload stays the size it was). Outside the provider (admin pages, tests)
  * the lists are empty and nothing rotates.
  */
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { unpackRotationLists, type PackedRotationLists } from "@/lib/menu/rotation-lists-pack-core";
 
 const RotationListsContext = createContext<Readonly<Record<string, readonly string[]>>>({});
 
 export function MenuCardRotationProvider({
   lists,
+  packed,
   children,
 }: {
-  lists: Readonly<Record<string, readonly string[]>>;
+  lists?: Readonly<Record<string, readonly string[]>>;
+  /** USAGE-9d: shared-prefix form from the (site) layout; rebuilt exactly here. */
+  packed?: PackedRotationLists;
   children: ReactNode;
 }) {
-  return <RotationListsContext.Provider value={lists}>{children}</RotationListsContext.Provider>;
+  const value = useMemo(() => (packed ? unpackRotationLists(packed) : (lists ?? {})), [packed, lists]);
+  return <RotationListsContext.Provider value={value}>{children}</RotationListsContext.Provider>;
 }
 
 /** The owner list for one website category (empty when it does not rotate). */
