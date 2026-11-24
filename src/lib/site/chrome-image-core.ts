@@ -2,7 +2,7 @@
  * src/lib/site/chrome-image-core.ts — USAGE-8b (2026-11-25)
  *
  * WHY: every fixed-size footer image (5 social glyphs, 2 app-store glyphs, the
- * app wordmark, the black-gold logo) was rendered with a
+ * app wordmark, the black-gold logo, the not-found wordmark) was rendered with a
  * `sizes="NNpx"` prop. With `sizes`, next/image emits a srcSet over ALL 15
  * configured widths (32w … 3840w): ~2 KB of HTML per <img>. The footer renders
  * a mobile AND a desktop tree, so a product page carried 22 such tags = 45 KB
@@ -24,6 +24,8 @@ export const CHROME_IMAGE_PX = {
   logoMobile: { width: 176, height: 176 },
   /** Black-gold logo, desktop footer (`w-48`, square asset). */
   logoDesktop: { width: 192, height: 192 },
+  /** Not-found wordmark (`h-10 md:h-12 w-auto`, 5891×1170 asset ratio). */
+  notFoundWordmark: { width: 242, height: 48 },
 } as const;
 
 /**
@@ -51,7 +53,8 @@ export function __runChromeImageTests(): { passed: number; failed: number } {
   ok(CHROME_IMAGE_PX.glyph.width === 44 && CHROME_IMAGE_PX.glyph.height === 44, "glyph is h-11 w-11");
   ok(CHROME_IMAGE_PX.appWordmark.height === 56, "wordmark is h-14");
   ok(CHROME_IMAGE_PX.logoMobile.width === 176 && CHROME_IMAGE_PX.logoDesktop.width === 192, "logo w-44 / w-48");
-  ok(Object.keys(CHROME_IMAGE_PX).length === 4, "four fixed-size chrome images (hours card stays responsive: lg:max-w-none)");
+  ok(Math.abs(CHROME_IMAGE_PX.notFoundWordmark.width / CHROME_IMAGE_PX.notFoundWordmark.height - 5891 / 1170) < 0.02, "not-found wordmark keeps the asset ratio");
+  ok(Object.keys(CHROME_IMAGE_PX).length === 5, "five fixed-size chrome images (hours card stays responsive: lg:max-w-none)");
   if (failed > 0) throw new Error(`chrome-image-core: ${failed} failed`);
   return { passed, failed };
 }
