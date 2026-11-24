@@ -791,9 +791,15 @@ Saves function CPU/DB time per regeneration; ISR bytes are unchanged.
 
 Both pages show CMS copy, banners and loyalty program numbers. They show no menu data, yet they regenerated every 60 s. Every writer already clears them by path: the loyalty page, hero and program editors, the medical editor, and the `/(site)` layout for chrome, banners and rules. So the TTL is only a safety net. It goes from 60 to 3600 s, which cuts up to 23 identical ISR writes per page per hour. An edit still appears on the next load. Pinned by `content-page-ttl-core.ts` and `usage-8e-content-page-ttl.test.ts`.
 
-### USAGE-8f — header logo ships a 1x/2x srcSet (this PR)
+### USAGE-8f — header logo ships a 1x/2x srcSet (PR #1898)
 
 The header wordmark appears on every page. It declared its 5891×1170 asset size plus a 5-breakpoint `sizes` attribute, so next/image wrote a long srcSet into both the `<img>` and the priority preload `<link>`: about 6 KB per ISR write. It now declares the widest box it is shown at (`xl:w-[25rem]`, 400×79) and has no `sizes`, so it emits 640w/828w. CSS still sets the displayed width, and the ratio is unchanged. Trade-off: a 1x phone fetches the 640w variant, a few KB, once per browser cache. Pinned by `header-logo-core.ts` and `usage-8f-header-logo.test.ts`.
+
+## USAGE-9 — third batch (2026-11-26)
+
+### USAGE-9a — published rules ship default-stripped (this PR)
+
+The (site) layout serializes every published rule into every page so the client cart, product cards and badges can price, and that payload is the largest single row on a product page (7.4 KB decoded). The layout now sends `packRuleSnapshots()`, which omits only fields equal to their default (`null`, `false`, `[]`, `discountFixed: 0`, undefined config keys). `PublishedRulesProvider` calls `unpackRuleSnapshots()` to restore them, so the rules the client prices with are value-identical. The self-test checks the round-trip on the seeds and on edge cases (weekday 0 = Sunday, discountPercent 0). Money paths are untouched (rule 18). Measured saving: about 1.9 KB per page (7,420 → 5,489 bytes).
 
 
 ## How to verify each slice

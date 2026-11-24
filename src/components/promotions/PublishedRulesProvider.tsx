@@ -24,6 +24,7 @@ import {
   type PublishedRuleSnapshot,
 } from "@/lib/promotions/published-rules-core";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import { unpackRuleSnapshots, type PackedRuleSnapshot } from "@/lib/promotions/packed-rules-core";
 
 const RulesContext = createContext<PublishedRuleSnapshot[] | null>(null);
 
@@ -36,15 +37,18 @@ function seeds(): PublishedRuleSnapshot[] {
 
 export function PublishedRulesProvider({
   snapshots,
+  packed,
   children,
 }: {
-  snapshots: PublishedRuleSnapshot[];
+  snapshots?: PublishedRuleSnapshot[];
+  /** USAGE-9a: the storefront layout sends default-stripped rules; restored here. */
+  packed?: PackedRuleSnapshot[];
   children: React.ReactNode;
 }) {
-  const value = useMemo(
-    () => (snapshots.length ? snapshots : seeds()),
-    [snapshots],
-  );
+  const value = useMemo(() => {
+    const list = packed ? unpackRuleSnapshots(packed) : (snapshots ?? []);
+    return list.length ? list : seeds();
+  }, [snapshots, packed]);
   return <RulesContext.Provider value={value}>{children}</RulesContext.Provider>;
 }
 
