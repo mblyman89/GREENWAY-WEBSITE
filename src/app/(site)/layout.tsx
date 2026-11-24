@@ -16,7 +16,8 @@ import { CartProvider } from "@/components/cart/CartProvider";
 import { MenuCardRotationProvider } from "@/components/menu/fallback-rotation/MenuCardRotationProvider";
 import { menuCardRotationLists } from "@/lib/menu/menu-card-fallback-server";
 import { PublishedRulesProvider } from "@/components/promotions/PublishedRulesProvider";
-import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
+// USAGE-8d: cached DISPLAY read (money paths keep the uncached loadPublishedRuleSnapshots).
+import { loadDisplayRuleSnapshots } from "@/lib/promotions/display-rules-cache";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
@@ -109,7 +110,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // promotion rules once per render so every client surface (smart cart,
   // product cards, menu deal filter) prices with the SAME rules the register
   // uses. Seed fallback keeps behaviour identical when the DB is empty.
-  const publishedRules = await loadPublishedRuleSnapshots();
+  const publishedRules = await loadDisplayRuleSnapshots();
   // R47: Google store listing hours (Admin → Google Store Listing).
   const [storeHours, storeToday] = await getStoreSchemaInput();
   const headingStack = fontStack(

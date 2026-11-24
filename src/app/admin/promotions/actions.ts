@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateDisplayRules } from "@/lib/promotions/display-rules-cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
@@ -541,6 +542,7 @@ export async function updatePromotionAction(formData: FormData): Promise<void> {
     after: { ...input, targets, exclusions },
   });
   revalidatePath("/admin/promotions");
+  revalidateDisplayRules(); // USAGE-8d: a published promo's edit reaches the cached storefront rules at once
   revalidatePath(`/admin/promotions/${id}`);
   redirect(`/admin/promotions/${id}?saved=1`);
 }
@@ -657,6 +659,7 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
   // in the ROOT LAYOUT (it prices the cart + card badges everywhere), so a
   // publish/unpublish must refresh every route that renders the layout.
   revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
+  revalidateDisplayRules(); // USAGE-8d
   redirect(`/admin/promotions/${id}?status=${scheduledFor ? "scheduled" : effective}`);
 }
 
@@ -850,6 +853,7 @@ export async function fixPromotionBlockersAction(formData: FormData): Promise<vo
   if (outcome.done.length > 0) {
     // Prices depend on exclusions and the never-discount list (cart, cards).
     revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
+    revalidateDisplayRules(); // USAGE-8d
   }
   const msg = fixOutcomeMessage(outcome);
   back(msg.tone, msg.text);
@@ -868,6 +872,7 @@ export async function deletePromotionAction(formData: FormData): Promise<void> {
     entityId: id,
   });
   revalidatePath("/admin/promotions");
+  revalidateDisplayRules(); // USAGE-8d: a published promo's edit reaches the cached storefront rules at once
   redirect("/admin/promotions?deleted=1");
 }
 
@@ -1100,6 +1105,7 @@ export async function addNeverDiscountAction(input: {
     // Prices depend on this list — revalidate the storefront + admin surfaces.
     revalidatePath("/admin/promotions");
     revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
+    revalidateDisplayRules(); // USAGE-8d
   }
   return res;
 }
@@ -1117,6 +1123,7 @@ export async function removeNeverDiscountAction(id: string): Promise<{ ok: true 
   });
   revalidatePath("/admin/promotions");
   revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
+  revalidateDisplayRules(); // USAGE-8d
   return { ok: true };
 }
 
@@ -1247,6 +1254,7 @@ export async function applyDailyDealSetupAction(): Promise<void> {
   revalidatePath("/specials");
   revalidatePath("/menu");
   revalidatePath("/(site)", "layout");
+  revalidateDisplayRules(); // USAGE-8d
   back(
     skipped.length ? "error" : "ok",
     dailySetupOutcomeMessage({

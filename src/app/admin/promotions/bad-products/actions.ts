@@ -14,6 +14,7 @@
  * refuses the press (fail closed). Every failure is named in the banner.
  */
 import { revalidatePath } from "next/cache";
+import { revalidateDisplayRules } from "@/lib/promotions/display-rules-cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
@@ -143,6 +144,7 @@ export async function fixBadProductsAction(formData: FormData): Promise<void> {
     if (fix === "hide") revalidatePublicMenuSurfaces();
     // Prices depend on the never-discount list (cart, cards) and visibility.
     revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
+    revalidateDisplayRules(); // USAGE-8d
   }
   revalidatePath(BASE);
   revalidatePath("/admin/promotions");

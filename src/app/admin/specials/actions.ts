@@ -20,6 +20,7 @@
  */
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { revalidateDisplayRules } from "@/lib/promotions/display-rules-cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
@@ -76,6 +77,7 @@ export async function publishSpecialsAction(formData: FormData): Promise<void> {
   revalidatePath("/specials");
   // Safety net (shared chrome / force-dynamic pages), matching Site Content.
   revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
+  revalidateDisplayRules(); // USAGE-8d
   redirect(backTo("published"));
 }
 

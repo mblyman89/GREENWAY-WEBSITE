@@ -764,7 +764,7 @@ footer renders a mobile and a desktop tree, so a product page carried 18 such ta
 pixel size (`CHROME_IMAGE_PX`) and no `sizes`, so the srcSet is a 1x/2x pair. Same
 pixels on screen; the hours card keeps its responsive `sizes` (`lg:max-w-none`).
 
-### USAGE-8c — shop grid drops false flags + server-only stamps (this PR)
+### USAGE-8c — shop grid drops false flags + server-only stamps (PR #1895)
 
 Measured on the live /menu payload: `hidden:false` on 2,712/2,712 rows,
 `dohCompliant:false` on 2,712/2,712, `imageIsFallback:false` on 1,150, and
@@ -773,6 +773,19 @@ projection) on 1,184. `toMenuGridItems` now drops a flag that is `false` and nev
 ships `strainTypeSource`: ~160 KB less grid JSON per shop page and ISR write. Every
 client reader already treats absent as false (`=== true`, `!== true`, truthy
 checks); the DOH badge decision is pinned identical.
+
+### USAGE-8d — storefront reads cached display rules (this PR)
+
+`loadPublishedRuleSnapshots()` (promotions + targets + exclusions + configs +
+never-discount: 4–5 PostgREST reads) ran uncached on every render of the site
+layout, home and /specials — every ISR regeneration of every public page.
+Those three display callers now use `loadDisplayRuleSnapshots()`
+(`display-rules-cache.ts`): `unstable_cache`, tag `published-rules`, 60 s floor,
+built on a new throwing `readPublishedRuleSnapshots()` so a failed read is never
+stored (rule 18). Every promotion / specials / never-discount action clears the tag
+(`revalidateDisplayRules()`). The register, order pricing, promo-guard and admin
+keep the uncached read — pinned by `usage-8d-display-rules-cache.test.ts`.
+Saves function CPU/DB time per regeneration; ISR bytes are unchanged.
 
 
 ## How to verify each slice

@@ -5,7 +5,8 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { pageMetadata } from "@/lib/seo/seo";
 import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
-import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
+// USAGE-8d: cached DISPLAY read (money paths keep the uncached loadPublishedRuleSnapshots).
+import { loadDisplayRuleSnapshots } from "@/lib/promotions/display-rules-cache";
 import { buildDealPool } from "@/lib/specials/deal-pool-core";
 import { menuDiscountForItem, weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import { getContentValues, getContentForRender, isPreviewActive } from "@/lib/cms/render-content";
@@ -60,7 +61,7 @@ export default async function SpecialsPage() {
   const [thursdayBrands, ruleSnapshots, copy, preview, banners, menuItems, presentationJson] =
     await Promise.all([
       getThursdayBrands(),
-      loadPublishedRuleSnapshots(),
+      loadDisplayRuleSnapshots(),
       getContentValues([
         "specials.hero.eyebrow",
         "specials.hero.title",

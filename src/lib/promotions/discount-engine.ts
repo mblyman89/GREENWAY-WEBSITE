@@ -126,44 +126,53 @@ export async function loadPublishedRules(): Promise<EngineRule[]> {
  */
 export async function loadPublishedRuleSnapshots(): Promise<PublishedRuleSnapshot[]> {
   try {
-    const published = await getPublishedPromotions();
-    if (!published.length) {
-      // No DB promotions: the storefront runs on the committed daily-deal seeds.
-      // Still honour the never-discount list against those seed deals.
-      const neverKeys = await listNeverDiscountKeys();
-      const seeds = seedRuleSnapshots();
-      if (!neverKeys.length) return seeds;
-      return seeds.map((s) => ({
-        ...s,
-        excludeProductKeys: Array.from(new Set([...s.excludeProductKeys, ...neverKeys])),
-      }));
-    }
-    const [configs, neverKeys] = await Promise.all([
-      rawConfigsFor(published),
-      listNeverDiscountKeys(),
-    ]);
-    return published.map((p) => {
-      const raw = configs.get(p.id);
-      const config = raw
-        ? parseEngineConfig(raw)
-        : p.id.startsWith("seed-")
-          ? seedConfigFor(p.promoKey)
-          : {};
-      const snapshot = snapshotFromPublished(p, config);
-      // PR-P4: fold the global never-discount keys into the snapshot the CLIENT
-      // cart + product cards price with, so the storefront honours the list
-      // WITHOUT any client-side fetch — the exclusion rides the serialized rule.
-      if (neverKeys.length) {
-        snapshot.excludeProductKeys = Array.from(
-          new Set([...snapshot.excludeProductKeys, ...neverKeys]),
-        );
-      }
-      return snapshot;
-    });
+    return await readPublishedRuleSnapshots();
   } catch {
     // The storefront must never lose its deals over a transient DB error.
     return seedRuleSnapshots();
   }
+}
+
+/**
+ * USAGE-8d: the same read WITHOUT the error fallback — it THROWS on a failed
+ * read, so the display cache (display-rules-cache.ts) never stores a failure
+ * (AGENTS.md rule 18). Everything else calls loadPublishedRuleSnapshots().
+ */
+export async function readPublishedRuleSnapshots(): Promise<PublishedRuleSnapshot[]> {
+  const published = await getPublishedPromotions();
+  if (!published.length) {
+    // No DB promotions: the storefront runs on the committed daily-deal seeds.
+    // Still honour the never-discount list against those seed deals.
+    const neverKeys = await listNeverDiscountKeys();
+    const seeds = seedRuleSnapshots();
+    if (!neverKeys.length) return seeds;
+    return seeds.map((s) => ({
+      ...s,
+      excludeProductKeys: Array.from(new Set([...s.excludeProductKeys, ...neverKeys])),
+    }));
+  }
+  const [configs, neverKeys] = await Promise.all([
+    rawConfigsFor(published),
+    listNeverDiscountKeys(),
+  ]);
+  return published.map((p) => {
+    const raw = configs.get(p.id);
+    const config = raw
+      ? parseEngineConfig(raw)
+      : p.id.startsWith("seed-")
+        ? seedConfigFor(p.promoKey)
+        : {};
+    const snapshot = snapshotFromPublished(p, config);
+    // PR-P4: fold the global never-discount keys into the snapshot the CLIENT
+    // cart + product cards price with, so the storefront honours the list
+    // WITHOUT any client-side fetch — the exclusion rides the serialized rule.
+    if (neverKeys.length) {
+      snapshot.excludeProductKeys = Array.from(
+        new Set([...snapshot.excludeProductKeys, ...neverKeys]),
+      );
+    }
+    return snapshot;
+  });
 }
 
 /** Raw config jsonb per promotion id (DB rows only; seeds carry seed config). */
