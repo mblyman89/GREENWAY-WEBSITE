@@ -18,6 +18,8 @@ import { menuCardRotationLists } from "@/lib/menu/menu-card-fallback-server";
 import { PublishedRulesProvider } from "@/components/promotions/PublishedRulesProvider";
 // USAGE-8d: cached DISPLAY read (money paths keep the uncached loadPublishedRuleSnapshots).
 import { loadDisplayRuleSnapshots } from "@/lib/promotions/display-rules-cache";
+// USAGE-9a: send the rules default-stripped (value-identical after unpack).
+import { packRuleSnapshots } from "@/lib/promotions/packed-rules-core";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
@@ -152,7 +154,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema(storeHours, storeToday)]} id="site" />
-        <PublishedRulesProvider snapshots={publishedRules}>
+        <PublishedRulesProvider packed={packRuleSnapshots(publishedRules)}>
           <MenuCardRotationProvider lists={rotationLists}>
             <CartProvider>{children}</CartProvider>
           </MenuCardRotationProvider>
