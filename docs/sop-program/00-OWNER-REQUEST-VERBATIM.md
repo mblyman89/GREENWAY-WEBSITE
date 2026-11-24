@@ -3699,3 +3699,11 @@ No code edits, as asked. Read-only findings delivered to the owner: every auth u
 ### Status (D267)
 
 Done. Merch Studio > Design > Add > Artwork now has "From Media library": Brand kit logos + Media logos (logo / brand-logo / vendor-logo) first ("Logos" chip), then the rest, searchable; or upload to Media (usage "merch"). The picked picture shows its DPI at the current placement (Printful 150 min / 300 ideal) with: Prep for Printful (FLUX Deblur when too soft, then enlarge to 300 DPI), Enlarge to 300 DPI (sharp Lanczos, no cost), Sharpen (FLUX flux-tools/deblur-v1), Remove background (GPT transparent PNG), Place on garment (the same upload path as a local file). Every result is a new Media file; originals kept. Note: BFL has no image-upscale model, so enlarging is sharp Lanczos and FLUX does the sharpening. Pure core art-prep-core.ts (20 self-tests).
+
+## D268
+
+"thank you. I am getting this error when I try to remove the background of one of my logos. "GPT Image: Transparent background is not supported for this model." it looks like flux is not being called and gpt is instead? please fix this for me. follow the standing rules. thank you."
+
+### Status (D268)
+
+Fixed. Merch Studio "Remove background" no longer calls GPT Image (gpt-image-2 refuses transparent output). New merchRemoveBgAction: a logo on a flat background is keyed out on our server (border colour + edge flood-fill with a soft edge, so enclosed inside details are kept), exact pixels, free. A busy/photo background goes to FLUX Kontext Pro (put the art on flat #FF00FF), is polled, then merchKeyOutAction cuts the magenta out. FLUX never returns alpha itself, hence the key step. Pure helpers in art-prep-core.ts (29 self-tests). Checked on the Greenway logo flattened onto white: a clean cutout.
