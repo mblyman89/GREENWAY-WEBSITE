@@ -805,9 +805,13 @@ The (site) layout serializes every published rule into every page so the client 
 
 The header's desktop "Shop" dropdown renders 17 category links on every page. As server JSX, each row serialized four class strings plus the arrow span into the RSC: about 730 bytes per row, about 12 KB per page write. Each row is now `NavChildLink`, a client component, so the RSC carries only a client reference plus `{href,label,helper}` (about 150 bytes). The SSR HTML is identical. Pinned by `nav-child-core.ts` and `usage-9b-nav-child-link.test.ts`.
 
-### USAGE-9c — related rail ships the grid projection (this PR)
+### USAGE-9c — related rail ships the grid projection (PR #1901)
 
 The product page's "More from <brand>" rail passed up to 6 full menu items to `RelatedProductCard`, a client component. Each card put its description, identityKey, null facts and false flags into the RSC: about 1.5 KB per card. The rail now passes `toMenuGridItems(relatedItems)`, the projection the shop grid already sends to the same `ProductCardVisual` and the same price/badge helpers. Every field a card, deal badge or rule matcher reads is kept. The saving is about 2.7 KB per product page, and product pages are the bulk of ISR writes. Pinned by `related-projection-core.ts` and `usage-9c-related-projection.test.ts`.
+
+### USAGE-9d — rotation lists ship with a shared prefix (this PR)
+
+The (site) layout sends the D225 fallback-picture rotation lists to every page. Each of the 22 URLs repeated the same 80-character Supabase storage prefix: 2.7 KB decoded (3.9 KB escaped) per page write. The layout now sends `packRotationLists()` (`{p: prefix, l: {cat: [suffix]}}`, about 1.0 KB), and `MenuCardRotationProvider` rebuilds the exact URLs with `unpackRotationLists()`. Categories, order and URLs are unchanged, and the round-trip is self-tested, including the no-shared-prefix and empty cases. The D225 layout pin was updated. Pinned by `rotation-lists-pack-core.ts` and `usage-9d-rotation-prefix.test.ts`.
 
 
 ## How to verify each slice
