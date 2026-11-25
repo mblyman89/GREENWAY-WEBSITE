@@ -67,7 +67,7 @@ describe("D232 M-6: wiring", () => {
   it("the relay endpoint is token-secured (404) and re-reads Printful, never trusts the body", () => {
     expect(relayIn).toContain("timingSafeEqualStr(provided, token)");
     expect(relayIn).toContain("return notFound()");
-    expect(relayIn).toContain('onlyProductIds: [id]');
+    expect(relayIn).toContain('onlyProductIds: ids');
     expect(relayIn).not.toContain("variant_stock");
   });
   it("the shop relays stock_updated with the catalog token and no redirect follow", () => {

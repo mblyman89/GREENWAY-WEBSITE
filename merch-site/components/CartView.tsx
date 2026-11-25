@@ -36,9 +36,9 @@ export function CartView({ canceled }: { canceled: boolean }) {
     setError(null);
     try {
       const r = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines, zip }) });
-      const d = (await r.json()) as { url?: string; error?: string };
+      const d = (await r.json()) as { url?: string; error?: string; problems?: string[] };
       if (d.url) { window.location.assign(d.url); return; }
-      setError(d.error ?? "Checkout failed. Please try again.");
+      setError([d.error ?? "Checkout failed. Please try again.", ...(d.problems ?? [])].join(" "));
     } catch {
       setError("Checkout failed. Please try again.");
     }

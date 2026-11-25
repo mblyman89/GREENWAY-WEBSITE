@@ -9,7 +9,8 @@
 import { randomBytes } from "node:crypto";
 import { freshProducts } from "@/lib/catalog";
 import { cleanCart, makeOrderRef, priceCart } from "@/lib/catalog-core";
-import { buildCheckoutForm, parseShippingConfig, STRIPE_API_VERSION } from "@/lib/checkout-core";
+import { availabilityProblems, buildCheckoutForm, parseShippingConfig, STRIPE_API_VERSION } from "@/lib/checkout-core";
+import { printfulV2Data } from "@/lib/fulfillment";
 import { isWashingtonZip, WA_ONLY_MESSAGE } from "@/lib/region-core";
 import { siteUrl } from "@/lib/site";
 
@@ -32,6 +33,11 @@ export async function POST(req: Request) {
   if (!lines.length) return json({ error: "Your cart is empty." }, 400);
   const priced = priceCart(lines, await freshProducts());
   if (priced.problems.length || !priced.lines.length) return json({ error: "Some items changed - please review your cart.", problems: priced.problems }, 409);
+  // D285: live Printful v2 availability right before Stripe (5 s, fails open).
+  const ids = [...new Set(priced.lines.map((l) => l.variant.id))].slice(0, 20);
+  const answers = new Map(await Promise.all(ids.map(async (id) => [id, await printfulV2Data(`/v2/catalog-variants/${id}/availability?selling_region_name=north_america`, 5_000)] as const)));
+  const sold = availabilityProblems(priced.lines.map((l) => ({ title: l.product.title, color: l.variant.color, size: l.variant.size, variantId: l.variant.id, techniques: l.product.techniques })), answers);
+  if (sold.length) return json({ error: "Something in your cart just sold out.", problems: sold }, 409);
 
   const orderRef = makeOrderRef(Date.now(), randomBytes(6).toString("hex"));
   const form = buildCheckoutForm({
