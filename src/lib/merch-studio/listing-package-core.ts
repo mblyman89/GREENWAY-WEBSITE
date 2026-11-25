@@ -35,7 +35,7 @@
  */
 import { basePriceCents, colorsFor, getBlank, sizesFor, PRINTFUL_SNAPSHOT_DATE, type Blank, type UsedPlacement } from "./garment-catalog-core";
 import { usedPlacements, type MerchDesign } from "./merch-design-core";
-import { planPrintFiles, printfulItemDraft, slug, variantFor, type PrintFilePlan, type PrintfulItemDraft, type PrintfulPosition } from "./print-export-core";
+import { planPrintFiles, printfulItemDraft, puffAllowed, slug, variantFor, type PrintFilePlan, type PrintfulItemDraft, type PrintfulPosition } from "./print-export-core";
 import { MIN_MARGIN_BPS, shippingGapCents, suggestRetailCents, unitEconomics } from "./fulfillment-core";
 import type { Issue } from "./print-rules-core";
 
@@ -127,7 +127,7 @@ function usedList(d: MerchDesign, b: Blank): { used: UsedPlacement[]; puff: bool
     const s = d.sides[p.id];
     if (!s || !p.methods.includes(s.method)) continue;
     used.push({ placementId: p.id, method: s.method });
-    if (s.puff) puff = true;
+    if (s.puff && puffAllowed(b, p)) puff = true; // D280: puff only where Printful offers it
   }
   return { used, puff };
 }

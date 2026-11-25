@@ -3862,3 +3862,14 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - Merged PR #1913 (D277). Rebased PR #1914 (D278) on main (only conflict: this log, both entries kept), CI green, merged.
 - Underwear answer (no code change): Printful's only boxer brief is #428 All-Over Print Boxer Briefs, technique CUT-SEW only, White base, XS-3XL, cost $20.76 (2XL $22.76, 3XL $24.76), all in stock. Printful has no embroidered or DTG underwear. The studio only places art inside print rectangles (DTG / DTF / embroidery), so it cannot make a cut-and-sew file.
 - Estimate to add it: medium (about one focused build). It needs a new all-over "pattern" method (background colour plus a tiled logo at a chosen scale and spacing, rendered to Printful's full-panel print file), the #428 print-file sizes (the public API hides them, so a Printful API token or File guidelines lookup is needed), a boxer-brief drawing, mockups and order wiring for the new method, and a /underwear shop page. Waiting on the owner's go-ahead.
+
+## D280
+
+> thank you. the photo mockups still show the grey logo on the image. I am uploading the logo I am using and the mockup. [Uploaded: Untitled_design_(13).png (gold Greenway logo), classic-snapback-black-silver-front-...with_gold_logo.jpg (Printful mockup showing a white/grey logo), greenway-classic-snapback-proof.html]
+
+### Status (D280)
+
+- Cause (found from the proof): the Classic Snapback front is gold + old-gold **3D puff** and the back text "Greenway Marijuana" was **also set to 3D puff** (white). Printful offers 3D puff only on this cap's front (`thread_colors_3d` = front; there is no back 3D option). The studio sent the back's threads as a second `thread_colors_3d` = [White]. The mockup kept the last value, so it drew the gold front logo in white thread (grey on the photo). The order carried the same duplicate option, so this was **not only visual** - it could have made a white front logo.
+- Fix: new `puffThreadOptionId` / `puffAllowed` (print-export-core). Puff only applies where Printful lists a puff thread option (hat front, large front). A puffed back/side now embroiders flat with its own `thread_colors_back/left/right` and shows a warning. `printfulItemDraft` never emits the same option id twice (merges). The 3D puff toggle in Design shows only on placements that can puff; pricing and the listing package count puff only there.
+- The uploaded gold PNG itself is fine (transparent background, gold pixels); the exported front file was gold.
+- 7 new pure tests reproduce the owner's design (print-export-core minimum 119 -> 126). Scoped eslint and tsc are clean.

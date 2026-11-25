@@ -18,6 +18,7 @@
 import { WebFonts } from "@/components/fonts/WebFonts";
 import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent } from "react";
 import { BLANKS, colorsFor, formatCents, getBlank, sizesFor, basePriceCents, METHOD_LABEL, METHOD_BLURB, type Method } from "@/lib/merch-studio/garment-catalog-core";
+import { puffAllowed } from "@/lib/merch-studio/print-export-core";
 import { VIEW_LABEL, viewsFor } from "@/lib/merch-studio/garment-views-core";
 import { summarize } from "@/lib/merch-studio/print-rules-core";
 import {
@@ -491,7 +492,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
   const curSum = curRes ? summarize(curRes.issues) : { blocker: 0, warning: 0, review: 0, tip: 0 };
   const used = usedPlacements(design, blank);
   const sizeM = sizesFor(blank).find((s) => s[0] === "M")?.[0] ?? sizesFor(blank)[0]?.[0] ?? "";
-  const price = basePriceCents(blank, sizeM, used.map((p) => ({ placementId: p.id, method: sideFor(design, p).method })), used.some((p) => sideFor(design, p).puff));
+  const price = basePriceCents(blank, sizeM, used.map((p) => ({ placementId: p.id, method: sideFor(design, p).method })), used.some((p) => sideFor(design, p).puff && puffAllowed(blank, p)));
   const toggleAck = (pid: string, id: string) => {
     const key = `${pid}:${id}`;
     change({ ...design, ack: design.ack.includes(key) ? design.ack.filter((a) => a !== key) : [...design.ack, key] });
@@ -630,7 +631,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
           </div>
           <div className="space-y-2 text-xs">
             <Segmented label={`Method - ${placement.label}`} value={side.method} options={placement.methods.map((m) => ({ value: m, label: METHOD_LABEL[m].split(" (")[0], title: METHOD_BLURB[m] }))} onChange={setMethod} />
-            {side.method === "embroidery" && blank.puffAvailable ? <Toggle label="3D puff (+$1.50)" checked={!!side.puff} onChange={(v) => change(setSide(design, placement.id, { ...side, puff: v }))} /> : null}
+            {side.method === "embroidery" && puffAllowed(blank, placement) ? <Toggle label="3D puff (+$1.50)" checked={!!side.puff} onChange={(v) => change(setSide(design, placement.id, { ...side, puff: v }))} /> : null}
             {side.method === "embroidery" && els.length ? (
               <button type="button" className="w-full rounded-[var(--admin-radius-sm)] bg-white/10 px-2 py-1 text-white/85 hover:bg-white/20" onClick={() => change(setSide(design, placement.id, snapSideToThreads(side)))}
                 title="Recolour every element on this placement to the nearest of Printful's 15 thread colours">{"\ud83e\uddf5"} Snap colours to threads</button>

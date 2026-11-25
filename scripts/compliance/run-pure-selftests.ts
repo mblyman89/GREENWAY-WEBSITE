@@ -2883,7 +2883,7 @@ __runLiquidVolumeTests();
   assertRan("fulfillment-core", __runFulfillmentTests(), 19); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
   assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 421); // R70 S2: garment views + exact print-frame inches for every blank/placement
   assertRan("merch-design-core", __runMerchDesignTests(), 48); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising
-  assertRan("print-export-core", __runPrintExportTests(), 119); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
+  assertRan("print-export-core", __runPrintExportTests(), 126); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
   assertRan("saved-garments-core", __runSavedGarmentsTests(), 11); // D278: Garments tab "My garments" save/load (site_settings merch_saved_garments)
   assertRan("listing-package-core", __runListingPackageTests(), 39); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
   assertRan("printfile-check-core", __runPrintfileCheckTests(), 17); // D232 M-8 (G-92): studio-default placements vs Printful's print-file sizes
