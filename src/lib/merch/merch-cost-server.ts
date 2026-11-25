@@ -1,7 +1,7 @@
 /**
  * src/lib/merch/merch-cost-server.ts  (D285 slice C)
  *
- * Nightly Printful cost check. For each LIVE product, asks Printful what its
+ * Nightly Printful cost check (run by the 12:40 UTC tick of /api/cron/merch-stock). For each LIVE product, asks Printful what its
  * priciest variant costs today (POST /orders/estimate-costs, v1, free, creates
  * nothing) with the product's real print files and a Washington address, and
  * compares it with the cost saved at publish (variant.printfulCents). A move
