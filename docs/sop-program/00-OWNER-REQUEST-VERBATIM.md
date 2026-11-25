@@ -3806,3 +3806,12 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - Webhook: Printful now gets the order as a free DRAFT before the card is captured. If Printful rejects it, the authorization is cancelled (not charged) and the owner is alerted. Auto-confirm runs after capture.
 - Stripe answer: the first order was captured before Printful saw it, so the rejection did not reverse the charge. Refund it from the back office (Orders → Merch → the order → Refund in Stripe) or the Stripe dashboard, or fix the design, re-publish and resend the event. Acknowledged alerts are listed under "Recently acknowledged" in the Merch alerts inbox.
 - Self-test minimums: garment-catalog 245, print-rules 34, merch-design 48, print-export 112, printfile-check 17.
+
+## D276
+
+> Thank you please merge. Then explain better to me how to refund myself. I want baby steps walkthrough. Follow the standing rules. Thank you.
+
+### Status (D276)
+
+- PR #1911 (D275 Printful print limits, glyph ink box, ratio check, cancel-hold-on-reject) merged to main as f2d949f9.
+- Refund walkthrough delivered in the report (no code change). It covers two routes for test order gm-mwv5yt0q-ea69e590, which was charged and not reversed: (A) Back office → Orders → Merch → the order → "Stripe half" card → "Open this payment in Stripe ↗", or the "Refund the customer in Stripe…" button once MERCH_PAYMENTS_TOKEN is set; (B) dashboard.stripe.com → Payments → search gm-mwv5yt0q-ea69e590 → Refund → full amount → Refund. The bank shows it in 5 to 10 business days. Stripe keeps its original processing fee.
