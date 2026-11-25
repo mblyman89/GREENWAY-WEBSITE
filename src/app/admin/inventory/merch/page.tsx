@@ -18,7 +18,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Badge } from "@/components/admin/ui";
 import { formatCents, getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
 import { LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
-import { MERCH_STATUS_LABELS, STOCK_LABELS, inventoryView, salesByVariant, stockSellable, type StockStatus } from "@/lib/merch/merch-inventory-core";
+import { MERCH_STATUS_LABELS, inventoryView, salesByVariant, stockSellable, type StockStatus } from "@/lib/merch/merch-inventory-core";
 import { readMerchCatalog } from "@/lib/merch/merch-inventory-store";
 import { loadPrintfulStock } from "@/lib/merch/merch-inventory-server";
 import { emptyMerchBoard, loadMerchOrderBoard } from "@/lib/orders/merch-orders-server";
@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 
 const btn = "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs font-bold";
 const day = (iso: string) => (iso ? iso.slice(0, 10) : "-");
-const stockTone = (s: StockStatus) => (s === "in_stock" ? "green" : s === "stocked_on_demand" ? "gold" : s === "unknown" ? "neutral" : "danger") as "green" | "gold" | "neutral" | "danger";
+const stockTone = (s: StockStatus) => (s === "in_stock" ? "green" : s === "stocked_on_demand" ? "gold" : s === "unknown" ? "neutral" : s === "unconfirmed" ? "gold" : "danger") as "green" | "gold" | "neutral" | "danger";
 
 export default async function MerchInventoryPage({ searchParams }: { searchParams: Promise<{ done?: string; error?: string; q?: string; show?: string }> }) {
   const session = await requirePermission("inventory.manage");
@@ -40,7 +40,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
   const { catalog, readError } = await withRenderBudget(readMerchCatalog(), { catalog: emptyCatalog(), readError: "The catalog read timed out.", updatedAt: null }, "merch-inventory catalog");
   const ids = catalog.items.map((i) => i.pkg.product.blank.printfulProductId);
   const [stock, board] = await Promise.all([
-    withRenderBudget(loadPrintfulStock(ids), { map: new Map<number, StockStatus>(), problem: "Printful stock check timed out." }, "merch-inventory stock"),
+    withRenderBudget(loadPrintfulStock(ids), { map: new Map<string, StockStatus>(), problem: "Printful stock check timed out." }, "merch-inventory stock"),
     withRenderBudget(loadMerchOrderBoard(), emptyMerchBoard("Printful orders timed out."), "merch-inventory orders"),
   ]);
   const view = inventoryView(catalog, stock.map, salesByVariant(board.orders));
@@ -153,7 +153,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
                         {rows.map((r) => (
                           <tr key={r.variantId} className="border-t border-[var(--admin-border)]">
                             <td className="py-1 text-white/85">{r.color}</td><td className="text-white/85">{r.size}</td>
-                            <td><Badge tone={stockTone(r.stock)}>{STOCK_LABELS[r.stock]}</Badge></td>
+                            <td><Badge tone={stockTone(r.stock)}>{r.stockLabel}</Badge></td>
                             <td className={r.mismatch ? "text-[var(--admin-orange)]" : "text-white/70"}>{r.onSite ? "Shown" : "Hidden"}{r.mismatch ? (stockSellable(r.stock) ? " (Printful has it)" : " (Printful is out)") : ""}</td>
                             <td className="text-right text-white">{formatCents(r.retailCents)}</td><td className="text-right text-white/70">{formatCents(r.printfulCents)}</td>
                             <td className={`text-right ${r.profitCents > 0 ? "text-[var(--admin-accent)]" : "text-[var(--admin-danger)]"}`}>{formatCents(r.profitCents)}</td>
