@@ -3852,3 +3852,13 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - Boxer briefs (#428) are not added. They are cut-and-sew all-over print, not a placement on a blank. This is explained on the Garments tab, and they can still be saved to My garments as a shortlist entry.
 - Save/load garments: "My garments" on the Garments tab saves the garment, preview colour and ticked colours. It is stored in site_settings `merch_saved_garments`, so no migration is needed. The Printful browser has "Save to My garments" for shortlist entries.
 - Self-test minimums: garment-catalog 373, garment-views 421, print-export 119, saved-garments 11 (new); printfile-check studio-default count 8 → 13.
+
+## D279
+
+> Please merge both PRs. Will you explain better what we need to do to get underwear on my menu. Is it a big task to add that? I don't want to add it in if it's too much work. Follow the standing rules. Thank you.
+
+### Status (D279)
+
+- Merged PR #1913 (D277). Rebased PR #1914 (D278) on main (only conflict: this log, both entries kept), CI green, merged.
+- Underwear answer (no code change): Printful's only boxer brief is #428 All-Over Print Boxer Briefs, technique CUT-SEW only, White base, XS-3XL, cost $20.76 (2XL $22.76, 3XL $24.76), all in stock. Printful has no embroidered or DTG underwear. The studio only places art inside print rectangles (DTG / DTF / embroidery), so it cannot make a cut-and-sew file.
+- Estimate to add it: medium (about one focused build). It needs a new all-over "pattern" method (background colour plus a tiled logo at a chosen scale and spacing, rendered to Printful's full-panel print file), the #428 print-file sizes (the public API hides them, so a Printful API token or File guidelines lookup is needed), a boxer-brief drawing, mockups and order wiring for the new method, and a /underwear shop page. Waiting on the owner's go-ahead.
