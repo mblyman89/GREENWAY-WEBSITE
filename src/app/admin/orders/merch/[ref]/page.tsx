@@ -192,7 +192,7 @@ export default async function MerchOrderDetailsPage({
     <div>
       {header(
         `Merch order ${o.ours ? o.ref : `#${o.id}`}`,
-        `Greenway Merch (greenwaymerch.com) · placed ${placed} PT · Printful #${o.id}`,
+        o.rejection ? `Greenway Merch (greenwaymerch.com) · placed ${placed} PT · rejected by Printful (never created there)` : `Greenway Merch (greenwaymerch.com) · placed ${placed} PT · Printful #${o.id}`,
       )}
       <div className="space-y-5 px-5 py-6 sm:px-8">
         {sp.merchMsg ? (
@@ -216,7 +216,18 @@ export default async function MerchOrderDetailsPage({
           </div>
 
           <h2 className={`${H2} mt-6`}>Merch steps</h2>
-          {o.confirmable ? (
+          {o.rejection ? (
+            <div className="mt-3 space-y-2 text-sm">
+              <p className="font-semibold text-[var(--admin-danger)]">{o.rejection.subject}</p>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-[var(--admin-text-muted)]">
+                {o.rejection.lines.map((l, i) => <li key={i}>{l}</li>)}
+              </ul>
+              <p className="text-[var(--admin-text-muted)]">
+                Printful never accepted this order, so nothing will be made or shipped. Check the Stripe half below: the card hold should be
+                released (or the charge refunded). Fix the product in Merch Studio (Design &rarr; Print checks), re-publish it, and contact the customer.
+              </p>
+            </div>
+          ) : o.confirmable ? (
             <form action={confirmMerchOrderAction} className="mt-3 space-y-2">
               <input type="hidden" name="handle" value={h} />
               <input type="hidden" name="back" value={sp.back ?? ""} />

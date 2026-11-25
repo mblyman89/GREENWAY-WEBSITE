@@ -2896,7 +2896,7 @@ __runLiquidVolumeTests();
   assertRan("merch-site seo-core", __runMerchSeoTests(), 19); // R73 S4: greenwaymerch.com JSON-LD (ProductGroup/Offer, OnlineStore, breadcrumbs) + Google Merchant feed, WA-only shipping
   assertRan("page-helpers-core", __runPageHelpersTests(), 18); // R73 S5: Helpers page registry (guides moved off the top of the editors/studios)
   assertRan("brand-sizes-core", __runBrandSizesTests(), 25); // R73 S6: Brand hub custom sizes + PNG export maths
-  assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
+  assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 49); // D277: rejected orders stay listed. R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   assertRan("refund-journal-core", __runRefundJournalCoreTests(), 20); // Fix Phase 2.8 (G-48): the daily refund draft - DR 50910 + 32000 + 32100, CR 10110 / 10100
   assertRan("cashier-report-core", __runCashierReportCoreTests(), 31); // Fix Phase 2.1b (G-05): per-cashier shift report - sales, discounts split, no-sales, adjustments, refunds to the cashier who rang the sale
   assertRan("refund-cogs-core", __runRefundCogsCoreTests(), 30); // Fix Phase 2.8b: cost of returned units back to inventory

@@ -64,6 +64,28 @@ export async function listMerchAlerts(opts: { orderRef?: string; limit?: number 
   }
 }
 
+/**
+ * D277: every alert tied to an order (open AND acknowledged), newest first, so
+ * the Orders board can keep showing orders Printful rejected after the alert is
+ * acknowledged. Never throws; a failure is just an empty list.
+ */
+export async function listOrderAlertsForBoard(opts: { orderRef?: string; limit?: number } = {}): Promise<MerchAlertRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    let q = createSupabaseAdminClient()
+      .from(MERCH_ALERTS_TABLE)
+      .select("id, subject, lines, order_ref, repeat_count, first_seen_at, last_seen_at, acknowledged_at, acknowledged_by_email")
+      .not("order_ref", "is", null)
+      .order("last_seen_at", { ascending: false })
+      .limit(opts.limit ?? 500);
+    if (opts.orderRef) q = q.eq("order_ref", opts.orderRef);
+    const { data, error } = await q;
+    return error ? [] : ((data ?? []) as MerchAlertRow[]);
+  } catch {
+    return [];
+  }
+}
+
 export async function acknowledgeMerchAlert(id: string, byEmail: string): Promise<{ ok: true; subject: string } | { ok: false; error: string }> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "Unknown alert." };
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database is not configured." };

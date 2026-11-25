@@ -108,7 +108,7 @@ export function MerchOrdersPanel({
                 {o.address.state && o.address.state !== "WA" ? <Badge tone="orange">Ships to {o.address.state}</Badge> : null}
               </>
             }
-            reference={`${o.ours ? o.ref : "no gm- ref"} · Printful #${o.id}`}
+            reference={o.rejection ? `${o.ref} · never reached Printful` : `${o.ours ? o.ref : "no gm- ref"} · Printful #${o.id}`}
             customer={
               <>
                 {[o.address.city, o.address.state].filter(Boolean).join(", ") || "Address on the Details page"}
@@ -117,12 +117,16 @@ export function MerchOrdersPanel({
             }
             meta={
               <>
-                {o.itemCount} item{o.itemCount === 1 ? "" : "s"} · {o.paid.total === null ? "total n/a" : formatMinorCurrency(o.paid.total)}
+                {o.rejection ? "items/total in Stripe" : <>{o.itemCount} item{o.itemCount === 1 ? "" : "s"} · {o.paid.total === null ? "total n/a" : formatMinorCurrency(o.paid.total)}</>}
                 {o.marginCents !== null ? ` · margin ${formatMinorCurrency(o.marginCents)}` : ""} · placed {shortAgo(o.placedAt, now)}
               </>
             }
             alerts={
-              o.confirmable ? (
+              o.rejection ? (
+                <p className={`text-xs font-bold ${o.rejection.open ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}>
+                  Printful rejected this order{o.rejection.open ? " — open Details for the reason." : " (alert acknowledged). Details keeps the reason; check the Stripe half."}
+                </p>
+              ) : o.confirmable ? (
                 <p className="text-xs font-bold text-[var(--admin-orange)]">Paid — waiting for you to confirm it for production.</p>
               ) : o.printfulStatus === "failed" || o.printfulStatus === "onhold" ? (
                 <p className="text-xs font-bold text-[var(--admin-danger)]">Printful flagged this order — open Details.</p>

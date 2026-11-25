@@ -8,7 +8,10 @@
  */
 import "server-only";
 import { printful, printfulConfigured } from "@/lib/merch-studio/printful-client";
+import { listOrderAlertsForBoard } from "@/lib/merch/merch-alerts-server";
 import {
+  isMerchOrderRef,
+  rejectedMerchOrders,
   MERCH_BOARD_PAGES,
   MERCH_PAGE_LIMIT,
   parsePrintfulOrder,
@@ -28,8 +31,22 @@ export function emptyMerchBoard(problem = ""): MerchBoard {
   return { configured: printfulConfigured(), orders: [], totalAtPrintful: null, problem };
 }
 
-/** Newest first, up to MERCH_BOARD_PAGES x 100 orders (Printful's page max is 100). */
+/**
+ * D277: orders Printful rejected never exist at Printful, so they are added
+ * from the shop's alerts (open or acknowledged) and never vanish from the table.
+ */
+async function withRejected(board: MerchBoard): Promise<MerchBoard> {
+  const known = new Set(board.orders.filter((o) => o.ours).map((o) => o.ref));
+  const rejected = rejectedMerchOrders(await listOrderAlertsForBoard(), known);
+  return rejected.length ? { ...board, orders: [...board.orders, ...rejected] } : board;
+}
+
+/** Newest first, up to MERCH_BOARD_PAGES x 100 orders (Printful's page max is 100), plus rejected ones. */
 export async function loadMerchOrderBoard(): Promise<MerchBoard> {
+  return withRejected(await loadPrintfulBoard());
+}
+
+async function loadPrintfulBoard(): Promise<MerchBoard> {
   if (!printfulConfigured()) return emptyMerchBoard();
   const orders: MerchOrder[] = [];
   let totalAtPrintful: number | null = null;
@@ -59,6 +76,11 @@ export async function getMerchOrder(handle: string): Promise<MerchOrderRead> {
   if (!id) return { ok: false, notFound: true, error: "Not a merch order id." };
   if (!printfulConfigured()) return { ok: false, notFound: false, error: "Printful isn't connected: add PRINTFUL_API_TOKEN in Vercel." };
   const res = await printful<unknown>("GET", `/orders/${id}`);
+  if (!res.ok && res.status === 404 && isMerchOrderRef(handle.trim())) {
+    // D277: never reached Printful - show the rejection from the shop's alerts.
+    const [rejected] = rejectedMerchOrders(await listOrderAlertsForBoard({ orderRef: handle.trim() }), new Set());
+    if (rejected) return { ok: true, order: rejected };
+  }
   if (!res.ok) return { ok: false, notFound: res.status === 404, error: res.error };
   const order = parsePrintfulOrder(res.result);
   return order ? { ok: true, order } : { ok: false, notFound: true, error: "Printful returned an unreadable order." };

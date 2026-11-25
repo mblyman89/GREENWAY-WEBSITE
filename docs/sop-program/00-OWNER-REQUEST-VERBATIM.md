@@ -3815,3 +3815,14 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 
 - PR #1911 (D275 Printful print limits, glyph ink box, ratio check, cancel-hold-on-reject) merged to main as f2d949f9.
 - Refund walkthrough delivered in the report (no code change). It covers two routes for test order gm-mwv5yt0q-ea69e590, which was charged and not reversed: (A) Back office → Orders → Merch → the order → "Stripe half" card → "Open this payment in Stripe ↗", or the "Refund the customer in Stripe…" button once MERCH_PAYMENTS_TOKEN is set; (B) dashboard.stripe.com → Payments → search gm-mwv5yt0q-ea69e590 → Refund → full amount → Refund. The bank shows it in 5 to 10 business days. Stripe keeps its original processing fee.
+
+## D277
+
+> I was able to refund the charge on stripe. on the back office though, rejected orders that get acknowledged disappear from the table. please fix the table so it shows rejected orders in the table. follow the standing rules. thank you.
+
+### Status (D277)
+
+- Cause: the merch orders table reads only Printful's order list. A rejected order was never created at Printful, so it existed only as a shop alert, and acknowledging the alert hid it.
+- Fix: `rejectedMerchOrders` (merch-orders-core) builds one row per gm- ref from the merch_alerts rows whose subject means "never reached Printful" (rejected / NOT sent to Printful / out-of-state auto-cancel). It covers open and acknowledged alerts and skips refs that Printful does list. An open alert shows as New (needs a person); an acknowledged one shows as Cancelled, so it stays under Cancelled / All. The label is "Rejected - not sent to Printful".
+- `loadMerchOrderBoard` merges these rows in (new `listOrderAlertsForBoard` in merch-alerts-server). When Printful returns 404 for a gm- ref, `getMerchOrder` falls back to the alert, so Details opens with Printful's reason and the Stripe half card (refund / release).
+- 9 new pure tests (merch-orders-core minimum 40 → 49). Scoped eslint and tsc are clean.
