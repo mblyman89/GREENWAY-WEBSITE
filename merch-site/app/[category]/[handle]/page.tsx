@@ -26,7 +26,7 @@ export const revalidate = 60;
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { handle } = await params;
   const p = await findProduct(handle);
-  return p ? { title: p.title, description: p.description.slice(0, 160) || undefined, alternates: { canonical: `/${p.category}/${p.handle}` }, openGraph: { type: "website", url: `/${p.category}/${p.handle}`, images: p.images.slice(0, 1) } } : {};
+  return p ? { title: p.title, description: p.description.replace(/\s+/g, " ").slice(0, 160) || undefined, alternates: { canonical: `/${p.category}/${p.handle}` }, openGraph: { type: "website", url: `/${p.category}/${p.handle}`, images: p.images.slice(0, 1) } } : {};
 }
 
 export default async function ProductPage({ params }: Params) {

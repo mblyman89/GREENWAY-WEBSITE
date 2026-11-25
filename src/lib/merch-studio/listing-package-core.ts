@@ -44,7 +44,7 @@ export const LISTING_VERSION = 1;
 /** Printful: a sync product holds at most 100 sync variants. */
 export const PRINTFUL_MAX_SYNC_VARIANTS = 100;
 export const LISTING_SELLER = "Greenway Merchandising LLC (dba Greenway Glass & Goods)";
-export const LISTING_LIMITS = { title: 80, description: 1000 } as const;
+export const LISTING_LIMITS = { title: 80, description: 5000 } as const;
 
 export interface ListingInput {
   design: MerchDesign;
@@ -56,6 +56,8 @@ export interface ListingInput {
   retailCents: number;
   /** Add Printful's bigger-size upcharge (e.g. 2XL +$2) on top of retail. */
   passSizeUpcharge: boolean;
+  /** D283: owner-set retail per size, cents (wins over retail + upcharge; 0/missing = default). */
+  sizePrices?: Readonly<Record<string, number>>;
   /** Hosted print-file URLs by plan key (from Proof & Export uploads); may be empty. */
   urls?: Readonly<Record<string, string>>;
   generatedAt: string;
@@ -117,6 +119,29 @@ export interface ListingPackage {
   notes: string[];
 }
 
+/**
+ * D283: descriptions pasted from Printful keep bullets, symbols, emoji and line
+ * breaks. Pasted HTML becomes text (<li> -> "• ", <br>/<p> -> new line, common
+ * entities decoded); invisible/control characters go; a lone < or > stays (the
+ * site renders it as text, never HTML).
+ */
+export function cleanDescription(v: unknown, max: number = LISTING_LIMITS.description): string {
+  const ent: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", bull: "\u2022", middot: "\u00b7", ndash: "\u2013", mdash: "\u2014", hellip: "\u2026", deg: "\u00b0", trade: "\u2122", reg: "\u00ae", copy: "\u00a9", rsquo: "\u2019", lsquo: "\u2018", rdquo: "\u201d", ldquo: "\u201c", times: "\u00d7", frac12: "\u00bd" };
+  return String(typeof v === "string" ? v : "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<\s*li[^>]*>/gi, "\n\u2022 ")
+    .replace(/<\s*br\s*\/?>|<\/\s*(p|div|h[1-6]|ul|ol)\s*>/gi, "\n")
+    .replace(/<\/?[a-z][a-z0-9]*(\s[^<>]*)?\/?>/gi, "")
+    .replace(/&(#x[0-9a-f]{1,6}|#[0-9]{1,7}|[a-z][a-z0-9]{1,7});/gi, (m, e: string) => {
+      const n = e[0] === "#" ? (e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : NaN;
+      if (Number.isFinite(n)) return n > 31 && n < 0x110000 && !(n >= 0xd800 && n < 0xe000) ? String.fromCodePoint(n) : "";
+      return ent[e.toLowerCase()] ?? m;
+    })
+    .replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000\t]/g, " ")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff\ufff9-\ufffb]/g, "")
+    .replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/ {2,}/g, " ")
+    .trim().slice(0, max);
+}
 const cleanText = (v: string, max: number) => v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/g, " ").replace(/[ \t]+/g, " ").trim().slice(0, max);
 export const centsToPrice = (c: number) => `${Math.floor(Math.max(0, Math.round(c)) / 100)}.${String(Math.max(0, Math.round(c)) % 100).padStart(2, "0")}`;
 
@@ -145,7 +170,7 @@ export function buildListingPackage(i: ListingInput): { pkg: ListingPackage | nu
   if (plans.length === 0) issues.push(issue("listing-empty", "blocker", "Nothing to print", "The design has no visible artwork on any placement.", "Add artwork in Design first."));
 
   const title = cleanText(i.title, LISTING_LIMITS.title);
-  const description = cleanText(i.description, LISTING_LIMITS.description);
+  const description = cleanDescription(i.description);
   if (!title) issues.push(issue("listing-title", "blocker", "Add a product title", "The merch site needs a name to list the product under.", "Type a title."));
 
   const knownColors = new Set(colorsFor(b).map((c) => c[0]));
@@ -172,7 +197,8 @@ export function buildListingPackage(i: ListingInput): { pkg: ListingPackage | nu
       if (!v) { missing.push(`${color} ${size}`); continue; }
       const est = basePriceCents(b, size, used, puff);
       if (!est) { missing.push(`${color} ${size}`); continue; }
-      const r = retail + (i.passSizeUpcharge ? Math.max(0, (sizeBase.get(size) ?? minBase) - minBase) : 0);
+      const own = Math.round(i.sizePrices?.[size] ?? 0);
+      const r = own > 0 ? own : retail + (i.passSizeUpcharge ? Math.max(0, (sizeBase.get(size) ?? minBase) - minBase) : 0);
       const e = unitEconomics({ retailCents: r, printfulCents: est.cents, shippingChargedCents: gap ? shipCharged ?? 0 : 0, shippingCostCents: gap ? shipCost ?? 0 : 0 });
       variants.push({ color, size, printfulVariantId: v[2], inStock: v[4], printfulCents: est.cents, retailCents: r, cardFeeCents: e.cardFeeCents, profitCents: e.profitCents, marginBps: e.marginBps });
     }
@@ -292,6 +318,12 @@ export function __runListingPackageTests(): { passed: number; failed: number } {
   ok(r.issues.some((x) => x.id === "listing-urls" && x.level === "warning"), "empty urls warned, not blocked");
   ok(buildListingPackage({ ...base, urls: { [p.printFiles[0].key]: "https://x.example/a.png" } }).pkg!.printFiles[0].url === "https://x.example/a.png", "urls applied");
   ok(buildListingPackage({ ...base, passSizeUpcharge: false }).pkg!.variants.every((v) => v.retailCents === 3500), "flat price");
+  { // D283: per-size prices + pasted descriptions
+    const sp = buildListingPackage({ ...base, sizePrices: { "2XL": 4400, M: 0 } }).pkg!.variants;
+    ok(sp.find((v) => v.size === "2XL")!.retailCents === 4400 && sp.find((v) => v.size === "M")!.retailCents === 3500, "size price overrides, 0 = default");
+    ok(cleanDescription("\u2022 100% cotton\r\n\u2022 6.1 oz/yd\u00b2 \u2265 <3 \u2122 \ud83c\udf3f\u200b\u0007") === "\u2022 100% cotton\n\u2022 6.1 oz/yd\u00b2 \u2265 <3 \u2122 \ud83c\udf3f", "special characters + bullets kept, invisibles dropped");
+    ok(cleanDescription("<ul><li>Soft & light</li><li>Pre&#8209;shrunk</li></ul><p>Fit&nbsp;&mdash; relaxed</p>") === "\u2022 Soft & light\n\u2022 Pre\u2011shrunk\nFit \u2014 relaxed", "pasted HTML -> text bullets");
+  }
   ok(centsToPrice(3599) === "35.99" && centsToPrice(5) === "0.05" && centsToPrice(-1) === "0.00", "price strings");
   ok(buildListingPackage({ ...base, retailCents: 500 }).issues.some((x) => x.id === "listing-loss" && x.level === "blocker"), "loss blocks");
   ok(buildListingPackage({ ...base, retailCents: 0 }).issues.some((x) => x.id === "listing-retail"), "zero retail blocks");

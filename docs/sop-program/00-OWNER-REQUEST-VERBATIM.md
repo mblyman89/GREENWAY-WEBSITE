@@ -3891,3 +3891,11 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 ### Status
 
 Done (branch d282-mockup-media-gallery). Proof & Export mockups: "Save all to Media Library" (published, usage Merch, SEO title/alt/description, tags merch-mockup/blank-/color-/view-/design-) and "Download all (.zip)". Publish: "Auto-attach saved mockups" matches saved mockups to each selected colour by garment + colour (+ design) tags; per-colour or all-colour manual add. Catalog item/feed carry `colorImages`; greenwaymerch.com PDP shows the picked colour's set (first photo large, thumbnails switch it) and swaps sets on colour change. Tests: merch-inventory-core 36, merch-site catalog-core 28.
+
+## D283
+
+"thank you, that works great. i now need a way to price each size individually, or at least charge a different amount if the cost is different per size. also, i want to be able to copy and paste the product description from printful to my site, so i need you to change the product detail description section so it allows special characters, like bullet points and such. any other unusual character that might end up in there needs to work too. follow the standing rules. thank you."
+
+### Status
+
+Done (branch d283-size-prices-description). Publish tab: optional "Price per size" box for every chosen size (shows Printful cost; empty = retail + size upcharge as before; the profit table/margin checks use the set prices). Description: limit 1000 -> 5000, bigger box, and a new cleanDescription (studio + merch site) keeps bullets, symbols, emoji, accents and line breaks; pasted HTML lists become "• " lines, entities decoded, invisible/control characters removed; rendered as plain text (no HTML injection). Tests: listing-package 42, merch-site catalog-core 29.

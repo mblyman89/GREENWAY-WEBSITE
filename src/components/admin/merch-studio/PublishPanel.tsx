@@ -274,6 +274,8 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
   const [retail, setRetail] = useState(() => dollarsOf(lastRetail[designs[0]?.id ?? ""] ?? 0));
   const [ship, setShip] = useState<ShipState | null>(null);
   const [passUp, setPassUp] = useState(true);
+  // D283: optional retail per size (dollars text; empty = retail + upcharge).
+  const [sizeRetail, setSizeRetail] = useState<Record<string, string>>({});
   const [done, setDone] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [newPhoto, setNewPhoto] = useState("");
@@ -314,6 +316,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
 
   const suggested = design ? suggestListingRetailCents({ design, sizes, passSizeUpcharge: passUp, shipping }) : 0;
   const retailCents = retail.trim() ? toCents(retail) : suggested;
+  const sizePrices = Object.fromEntries(sizes.filter((z) => sizeRetail[z]?.trim()).map((z) => [z, toCents(sizeRetail[z])]));
   const gap = shipping && shipping.chargedCents !== null && shipping.costCents !== null ? shippingGapCents(shipping.chargedCents, shipping.costCents) : 0;
 
   // R73 S7: render the print PNGs, upload them to stable public URLs (Printful
@@ -323,7 +326,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
     if (!design) return;
     setPubMsg(null);
     try {
-      const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, generatedAt: new Date().toISOString(), shipping }).pkg;
+      const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, sizePrices, generatedAt: new Date().toISOString(), shipping }).pkg;
       if (!fresh) throw new Error("Fix the blockers first.");
       const { plans } = planPrintFiles(design);
       setBusy("Loading artwork...");
@@ -361,6 +364,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
     setDone(null);
     setPubMsg(null);
     setPhotos([]);
+    setSizeRetail({});
     setColorPhotos({});
     setPhotoFor("");
     setTitle(d?.name ?? "");
@@ -398,7 +402,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
     );
   }
 
-  const built = design ? buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, generatedAt: "", shipping }) : null;
+  const built = design ? buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, sizePrices, generatedAt: "", shipping }) : null;
   const issues: Issue[] = built?.issues ?? [];
   const blocked = issues.some((i) => i.level === "blocker");
   const pkg = built?.pkg ?? null;
@@ -420,7 +424,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
         <div className="space-y-3">
           <Row label="Design"><select className={studioInput} value={designId} onChange={(e) => pick(e.target.value)}>{designs.map((d) => <option key={d.id} value={d.id}>{d.name} - {getBlank(d.blankId)?.brand ?? "?"} {getBlank(d.blankId)?.model ?? ""}</option>)}</select></Row>
           <Row label={`Product title (${LISTING_LIMITS.title})`}><input className={studioInput} value={title} maxLength={LISTING_LIMITS.title} onChange={(e) => { setTitle(e.target.value); setDone(null); }} /></Row>
-          <Row label={`Description (${LISTING_LIMITS.description})`}><textarea className={studioInput} rows={3} value={description} maxLength={LISTING_LIMITS.description} onChange={(e) => { setDescription(e.target.value); setDone(null); }} /></Row>
+          <Row label={`Description (${LISTING_LIMITS.description}) - paste from Printful; bullets, symbols, emoji and line breaks are kept`}><textarea className={studioInput} rows={8} value={description} maxLength={LISTING_LIMITS.description} onChange={(e) => { setDescription(e.target.value); setDone(null); }} /></Row>
           {blank ? (
             <>
               <div>
@@ -460,6 +464,21 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
             </p>
           </div>
           <Toggle label="Add Printful's bigger-size upcharge (e.g. 2XL) to the price" checked={passUp} onChange={(x) => { setPassUp(x); setDone(null); }} />
+          {blank && sizes.length ? (
+            <div>
+              <span className={studioLabel}>Price per size (optional) - empty = the price above{passUp ? " + Printful's size upcharge" : ""}</span>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {sizesFor(blank).filter(([z]) => sizes.includes(z)).map(([z, c]) => {
+                  const dflt = built?.pkg?.variants.find((x) => x.size === z && !(sizePrices[z] > 0))?.retailCents;
+                  return (
+                    <label key={z} className="text-[0.7rem] text-white/70">{z} <span className="text-white/40">cost {formatCents(c)}</span>
+                      <input className={studioInput} inputMode="decimal" aria-label={`Retail price for ${z}`} value={sizeRetail[z] ?? ""} placeholder={dflt ? dollarsOf(dflt) : ""} onChange={(e) => { const val = e.target.value; setSizeRetail((m) => ({ ...m, [z]: val })); setDone(null); }} />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <div className="space-y-2 border-t border-[var(--admin-border)] pt-3">
             <span className={studioLabel}>Product photos on greenwaymerch.com - a set per colour (shoppers see the picked colour&apos;s photos); none = the category photo</span>
             <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!!busy || !design || !colors.length} onClick={autoAttach}>Auto-attach saved mockups to {colors.length} colour{colors.length === 1 ? "" : "s"}</button>
@@ -518,7 +537,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
               onClick={() => {
                 if (!design || !pkg) return;
                 // Rebuild with the real timestamp at click time (render stays pure).
-                const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, generatedAt: new Date().toISOString(), shipping }).pkg;
+                const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents, passSizeUpcharge: passUp, sizePrices, generatedAt: new Date().toISOString(), shipping }).pkg;
                 if (!fresh) return;
                 const name = listingFilename(fresh);
                 downloadBytes(name, JSON.stringify(fresh, null, 2), "application/json");
