@@ -33,7 +33,7 @@
  * writer (PNGs are already compressed) and alpha statistics for the
  * semi-transparency check (Printful "Transparency in DTG printing").
  */
-import { colorsFor, getBlank, METHOD_LABEL, nearestThread, printfileFor, printLimitRect, THREAD_PALETTE, type Blank, type Method, type Placement } from "./garment-catalog-core";
+import { canPuff, colorsFor, getBlank, getPlacement, puffOptionFor, METHOD_LABEL, nearestThread, printfileFor, printLimitRect, THREAD_PALETTE, type Blank, type Method, type Placement } from "./garment-catalog-core";
 import { PRINTFUL_FILE_TYPES, PRINTFUL_OPTION_IDS, PRINTFUL_VARIANTS, type VariantRow } from "./garment-colors-data";
 import { frameRect, type Rect } from "./garment-views-core";
 import { checkSides, elementColors, inkBox, TEXT_BLEED_EM, usedPlacements, type MElement, type MerchDesign, type Side } from "./merch-design-core";
@@ -73,15 +73,27 @@ export function printfulFileType(b: Blank, p: Placement, m: Method): string | nu
  */
 export function threadOptionId(b: Blank, fileType: string, puff = false): string | null {
   const ids = PRINTFUL_OPTION_IDS[b.printfulId] ?? [];
+  if (puff) { const p3 = puffThreadOptionId(b, fileType); if (p3) return p3; }
   let want: string;
-  if (puff) want = "thread_colors_3d";
-  else if (fileType === "embroidery_front") want = "thread_colors";
+  if (fileType === "embroidery_front") want = "thread_colors";
   // D278: Printful's options table maps embroidery_apparel_front -> thread_colors_apparel (sweatpants).
   else if (fileType === "embroidery_apparel_front") want = "thread_colors_apparel";
   else if (fileType.startsWith("embroidery_")) want = `thread_colors_${fileType.slice("embroidery_".length)}`;
   else return null;
   return ids.includes(want) ? want : null;
 }
+
+/**
+ * D280: the 3D-puff thread option for a file, or null when Printful offers no
+ * puff there. Printful lists puff per area: "thread_colors_3d" is the FRONT
+ * (embroidery_front) only, "thread_colors_3d_front_large" the large front. The
+ * 6089M back/sides have no 3D option, so puff there was sent as a SECOND
+ * "thread_colors_3d" (the back's White) - the mockup kept the last one and drew
+ * the gold front logo white/grey, and the order carried a duplicate option.
+ */
+export function puffThreadOptionId(b: Blank, fileType: string): string | null { return puffOptionFor(b, fileType); }
+/** D280: may this placement use 3D puff? (same rule as the design checks - garment-catalog-core canPuff). */
+export function puffAllowed(b: Blank, p: Placement): boolean { return canPuff(b, p); }
 
 // ---------------------------------------------------------------------------
 // Geometry
@@ -193,12 +205,14 @@ export function planPrintFiles(d: MerchDesign, maxPixels = MAX_CANVAS_PIXELS): {
       issues.push({ id: `export-nofile-${p.id}`, level: "blocker", title: `${p.label}: no Printful file for ${METHOD_LABEL[side.method]}`, why: "The Printful catalog snapshot has no print file for this placement + method, so it cannot be ordered.", fix: "Switch the method, or refresh the catalog (R70 doc section 5).", source: "Printful catalog API files[]" });
       continue;
     }
-    const g = groups.get(fileType) ?? { fileType, fileId: p.printfulKey[side.method]!, method: side.method, puff: !!side.puff, members: [] };
+    const g = groups.get(fileType) ?? { fileType, fileId: p.printfulKey[side.method]!, method: side.method, puff: false, members: [] };
     if (g.method !== side.method) {
       issues.push({ id: `export-mixed-${fileType}`, level: "blocker", title: `${p.label} and another side share Printful's "${fileType}" file but use different methods`, why: "One Printful file is printed with one technique.", fix: "Use the same method on both sides.", source: "Printful Orders API (one file per type)" });
       continue;
     }
-    g.puff = g.puff || !!side.puff;
+    // D280: puff only where Printful offers it (hat front); elsewhere the side embroiders flat.
+    if (side.puff && side.method === "embroidery" && !puffThreadOptionId(b, fileType)) issues.push({ id: `export-puff-flat-${p.id}`, level: "warning", title: `${p.label}: 3D puff isn't offered here - it will be flat embroidery`, why: `Printful offers 3D puff only on this cap's front. A puffed ${p.label.toLowerCase()} would reuse the front's thread list (the mockup then drew the front in the wrong thread colour).`, fix: "Turn off 3D puff on this side (Design tab). It is ordered flat either way.", source: "Printful catalog options (thread_colors_3d = front only)" });
+    else g.puff = g.puff || !!side.puff;
     g.members.push({ p, side });
     groups.set(fileType, g);
   }
@@ -274,7 +288,10 @@ export function printfulItemDraft(b: Blank, plans: readonly PrintFilePlan[], url
     const f: PrintfulItemFile = { type: p.fileType, url: urls[p.key] ?? "", position: p.position };
     if (p.method === "embroidery") {
       if (p.puff) puff = true;
-      if (p.threadOption) options.push({ id: p.threadOption, value: p.threads.map((t) => t.hex) });
+      // D280: one value per option id - a duplicate id made Printful keep only the last list (wrong thread colour).
+      const prev = p.threadOption ? options.find((o) => o.id === p.threadOption) : undefined;
+      if (prev) prev.value = [...new Set([...(prev.value as string[]), ...p.threads.map((t) => t.hex)])];
+      else if (p.threadOption) options.push({ id: p.threadOption, value: p.threads.map((t) => t.hex) });
       else { f.options = [{ id: "auto_thread_color", value: true }]; notes.push(`${p.area.label}: threads ${p.threads.map((t) => `${t.code} ${t.name}`).join(", ")}`); }
     }
     files.push(f);
@@ -764,6 +781,21 @@ export function __runPrintExportTests(): { passed: number; failed: number } {
   ok(printfulItemDraft(hat, [p5p], {}).options.some((o) => o.id === "embroidery_type" && o.value === "3d"), "embroidery_type 3d");
   const mb5p = mockupTaskBody(hat, [p5p], { [p5p.key]: "https://x/h.png" }, [colorsFor(hat)[0][0]]);
   ok(!!mb5p && !mb5p.files[0].options && Array.isArray(mb5p.product_options?.thread_colors_3d), "D278: puff uses the listed thread_colors_3d option, no auto flag");
+  // D280: the owner's snapback - gold+old-gold 3D puff front, white "3D puff" back text. Printful has no puff
+  // option for the back, so it became a 2nd thread_colors_3d ([White]) that overwrote the front -> white/grey mockup.
+  const d80 = design(hat, { hat_front: { method: "embroidery", puff: true, elements: [el({ id: "g1", w: 2, h: 1, fill: "#FFCC00" }), el({ id: "g2", x: 3.2, w: 1, h: 1, fill: "#A67843" })] },
+    hat_back: { method: "embroidery", puff: true, elements: [el({ id: "w1", x: 0.5, y: 0.2, w: 1, h: 0.5, fill: "#FFFFFF" })] } });
+  const pl80 = planPrintFiles(d80);
+  const fr80 = pl80.plans.find((p) => p.fileType === "embroidery_front")!; const bk80 = pl80.plans.find((p) => p.fileType === "embroidery_back")!;
+  ok(fr80.puff && fr80.threadOption === "thread_colors_3d" && !bk80.puff && bk80.threadOption === "thread_colors_back", "D280: puff front keeps thread_colors_3d; back goes flat with thread_colors_back");
+  ok(pl80.issues.some((i) => i.id === "export-puff-flat-hat_back" && i.level === "warning"), "D280: puffed back warned (flat)");
+  const it80 = printfulItemDraft(hat, pl80.plans, Object.fromEntries(pl80.plans.map((p) => [p.key, "u"])));
+  ok(new Set(it80.options.map((o) => o.id)).size === it80.options.length, "D280: no duplicate option ids in the order");
+  ok(JSON.stringify(it80.options.find((o) => o.id === "thread_colors_3d")?.value) === JSON.stringify(["#FFCC00", "#A67843"]), "D280: order front puff threads = gold + old gold");
+  const mb80 = mockupTaskBody(hat, pl80.plans, Object.fromEntries(pl80.plans.map((p) => [p.key, "u"])), [colorsFor(hat)[0][0]])!;
+  ok(JSON.stringify(mb80.product_options?.thread_colors_3d) === JSON.stringify(["#FFCC00", "#A67843"]) && JSON.stringify(mb80.product_options?.thread_colors_back) === JSON.stringify(["#FFFFFF"]), "D280: mockup gets gold front + white back");
+  ok(puffAllowed(hat, getPlacement(hat, "hat_front")!) && !puffAllowed(hat, getPlacement(hat, "hat_back")!) && !puffAllowed(tee, tee.placements[0]), "D280: 3D puff toggle only where Printful lists a puff option");
+  ok(puffThreadOptionId(hat, "embroidery_front_large") === "thread_colors_3d_front_large", "D280: large-front puff option");
   const d6 = design(dad, { hat_back: { method: "embroidery", elements: [el({ id: "h2", w: 1, h: 0.5 })] } });
   ok(planPrintFiles(d6).plans[0].threadOption === "thread_colors_back", "dad back thread option");
 

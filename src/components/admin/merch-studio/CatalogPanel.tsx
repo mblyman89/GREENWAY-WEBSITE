@@ -149,7 +149,7 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor, picked = [],
             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
               <div><dt className={studioLabel}>Fabric</dt><dd className="text-white/85">{blank.fabric}</dd></div>
               <div><dt className={studioLabel}>Weight</dt><dd className="text-white/85">{blank.weightOz ? `${blank.weightOz} oz/yd²` : "Not stated (headwear)"}</dd></div>
-              <div><dt className={studioLabel}>Methods</dt><dd className="text-white/85">{methodsFor(blank).map((m) => METHOD_LABEL[m]).join(", ")}{blank.puffAvailable ? " + 3D puff" : ""}</dd></div>
+              <div><dt className={studioLabel}>Methods</dt><dd className="text-white/85">{methodsFor(blank).map((m) => METHOD_LABEL[m]).join(", ")}{blank.puffAvailable ? " + 3D puff (front only)" : ""}</dd></div>
             </dl>
           </div>
 

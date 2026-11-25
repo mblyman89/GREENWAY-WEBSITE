@@ -20,7 +20,7 @@
  * headwear) and `centerXIn` (offset of the frame centre from the garment
  * centre line, + = viewer's right, so the WEARER's left chest is +).
  */
-import { PRINTFUL_COLORS, PRINTFUL_SIZES, PRINTFUL_SNAPSHOT_DATE, type ColorRow, type SizeRow } from "./garment-colors-data";
+import { PRINTFUL_COLORS, PRINTFUL_FILE_TYPES, PRINTFUL_OPTION_IDS, PRINTFUL_SIZES, PRINTFUL_SNAPSHOT_DATE, type ColorRow, type SizeRow } from "./garment-colors-data";
 
 export { PRINTFUL_SNAPSHOT_DATE };
 
@@ -432,6 +432,24 @@ export function printLimitRect(p: Placement, m: Method): { x: number; y: number;
 }
 
 export function getPlacement(b: Blank, id: string): Placement | undefined { return b.placements.find((p) => p.id === id); }
+
+/**
+ * D280/D281: the 3D-puff thread option for an embroidery file type, or null when Printful offers no puff there.
+ * Printful lists puff per AREA ("thread_colors_3d" = the front file, "thread_colors_3d_<rest>" = embroidery_<rest>),
+ * so a hat's back/sides never puff. Single source for design checks, the Design toggle, pricing and the order.
+ */
+export function puffOptionFor(b: Blank, fileType: string): string | null {
+  if (!b.puffAvailable) return null;
+  const ids = PRINTFUL_OPTION_IDS[b.printfulId] ?? [];
+  const want = fileType === "embroidery_front" ? "thread_colors_3d" : fileType.startsWith("embroidery_") ? `thread_colors_3d_${fileType.slice("embroidery_".length)}` : "";
+  return want && ids.includes(want) ? want : null;
+}
+/** May this placement be 3D puff? (embroidery offered + Printful lists a puff thread option for its file). */
+export function canPuff(b: Blank, p: Placement): boolean {
+  const key = p.printfulKey.embroidery;
+  const ft = key ? PRINTFUL_FILE_TYPES[b.printfulId]?.[key] : undefined;
+  return !!ft && !!puffOptionFor(b, ft);
+}
 export function methodsFor(b: Blank): Method[] {
   const s = new Set<Method>(); for (const p of b.placements) for (const m of p.methods) s.add(m);
   return (["dtg", "dtf", "embroidery"] as Method[]).filter((m) => s.has(m));

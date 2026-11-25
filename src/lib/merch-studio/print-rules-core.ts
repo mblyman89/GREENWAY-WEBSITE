@@ -26,7 +26,7 @@
  *   Content themes: WAC 314-55-155(2)(a) (R69 s1.1).
  */
 import { isAllowedWord, ruleLevel } from "@/lib/ai/guardrails-state-core";
-import { type Blank, type Method, type Placement, METHOD_LABEL, contrastRatio, getBlank, getPlacement, isDarkColor, isThreadColor, nearestThread, printLimitRect } from "./garment-catalog-core";
+import { type Blank, type Method, type Placement, BLANKS, METHOD_LABEL, canPuff, contrastRatio, getBlank, getPlacement, isDarkColor, isThreadColor, nearestThread, printLimitRect } from "./garment-catalog-core";
 
 export type Level = "blocker" | "warning" | "tip" | "review";
 export const LEVEL_ORDER: Record<Level, number> = { blocker: 0, warning: 1, review: 2, tip: 3 };
@@ -214,8 +214,10 @@ export function checkDesign(input: RuleInput): Issue[] {
     add({ id: "emb-hoop", level: "tip", title: "Embroidery shrinks slightly when hooped", why: "The garment is stretched in the hoop, so stitched art comes out a touch smaller than the file.", fix: "Size text a little above the minimums and order a sample.", source: "Gelato embroidery guidelines" });
     if (input.puff) {
       if (!blank.puffAvailable) add({ id: "puff-na", level: "blocker", title: "3D puff isn't offered on this blank", why: "Printful only offers 3D puff as a hat embroidery option.", fix: "Turn off 3D puff.", source: SRC.method });
+      // D281: Printful offers puff per area (hat fronts) - a puffed back/side is ordered flat and once reused the front's threads.
+      else if (!canPuff(blank, p)) add({ id: "puff-placement", level: "warning", title: `3D puff isn't offered on the ${p.label.toLowerCase()}`, why: "Printful offers 3D puff only on this hat's front. This side is ordered as flat embroidery.", fix: "Turn off 3D puff here (or move the art to the front).", source: "Printful catalog options (thread_colors_3d = front only)" });
       else add({ id: "puff-bold", level: "tip", title: "3D puff needs chunky shapes", why: "Foam under the stitches only rises cleanly on bold letters and solid shapes; thin lines flatten.", fix: "Use a heavy font and avoid hairlines and outlines.", source: "R69 report s3 (3D puff)" });
-    } else if (blank.puffAvailable && blank.structured) {
+    } else if (blank.structured && canPuff(blank, p)) {
       add({ id: "puff-suggest", level: "tip", title: "Try 3D puff on this structured cap", why: "Structured crowns are the best base for raised puff lettering - a premium look for +$1.50.", fix: "Enable 3D puff for bold logos.", source: "Printful catalog embroidery_type; R69 report s6.2" });
     }
   }
@@ -360,6 +362,12 @@ export function __runPrintRulesTests(): { passed: number; failed: number } {
   ok(has(checkDesign({ blank: snap, placement: side, method: "embroidery", garmentHex: "#000000", elements: [{ id: "s", kind: "text", text: "GREENWAYGLASS", letterHeightIn: 0.3, x: 0, y: 0, w: 2, h: 0.3, colors: ["#FFFFFF"] }] }), "side-chars-s", "warning"), "side chars");
   ok(has(checkDesign({ blank: snap, placement: snap.placements[0], method: "embroidery", garmentHex: "#000000", elements: [] }), "puff-suggest", "tip"), "puff suggestion on structured");
   ok(has(checkDesign({ blank: tee, placement: lc, method: "embroidery", garmentHex: "#000000", puff: true, elements: [] }), "puff-na", "blocker"), "no puff on tee");
+  // D281: 3D puff is per area - every hat front can puff, no back/side can, and no non-hat blank can.
+  const snapBack = getPlacement(snap, "hat_back")!;
+  ok(has(checkDesign({ blank: snap, placement: snapBack, method: "embroidery", garmentHex: "#000000", puff: true, elements: [] }), "puff-placement", "warning"), "D281: puffed hat back warned");
+  ok(!checkDesign({ blank: snap, placement: snapBack, method: "embroidery", garmentHex: "#000000", elements: [] }).some((i) => i.id === "puff-suggest"), "D281: no puff suggestion on the back");
+  ok(!checkDesign({ blank: snap, placement: snap.placements[0], method: "embroidery", garmentHex: "#000000", puff: true, elements: [] }).some((i) => i.id === "puff-placement"), "D281: front puff allowed");
+  ok(BLANKS.every((b) => b.placements.every((p) => canPuff(b, p) === (b.headwear && b.puffAvailable && p.id === "hat_front"))), "D281: canPuff = hat fronts of puff hats only, across the whole catalog");
   ok(has(checkDesign({ ...base, elements: [{ id: "w", kind: "text", text: "Cures everything", letterHeightIn: 1, x: 1, y: 1, w: 5, h: 1, colors: ["#000000"] }] }), "wac-curative-w", "review"), "curative review");
   ok(themeHits("Scarface").length === 0 && themeHits("Drive safe").length === 1, "whole-word themes");
   ok(has(checkDesign({ ...base, elements: [{ id: "c", kind: "shape", x: 1, y: 1, w: 1, h: 1, colors: ["#fafafa"] }] }), "contrast-c", "warning"), "white on white");
