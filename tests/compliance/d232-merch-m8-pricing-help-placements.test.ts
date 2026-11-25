@@ -66,10 +66,10 @@ describe("D232 M-8 G-90: help everywhere", () => {
 });
 
 describe("D232 M-8 G-92: studio-default placements", () => {
-  it("pure rules pass; 8 placements listed", () => {
+  it("pure rules pass; 13 placements listed (8 + 5 D278)", () => {
     expect(__runPrintfileCheckTests().failed).toBe(0);
     expect(__runPrintfileCheckTests().passed).toBeGreaterThanOrEqual(17); // D275: ratio check, all placements, techniques
-    expect(studioDefaultPlacements()).toHaveLength(8);
+    expect(studioDefaultPlacements()).toHaveLength(13);
   });
   it("never claims the estimates are confirmed", () => {
     expect(STUDIO_DEFAULT_STATUS).toContain("not measured");

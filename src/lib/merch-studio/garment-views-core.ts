@@ -37,7 +37,7 @@ export interface GarmentView {
 
 export const VIEW_LABEL: Record<View, string> = { front: "Front", back: "Back", left: "Left", right: "Right", inside: "Inside neck" };
 
-const isLong = (b: Blank) => b.category !== "tee";
+const isLong = (b: Blank) => b.category !== "tee" && b.category !== "buttonshirt";
 
 /** Views this blank actually has placements on, in a stable order. */
 export function viewsFor(b: Blank): View[] {
@@ -52,6 +52,8 @@ function topBody(b: Blank, back: boolean): string {
   const right = long ? "L23 2.2 L29.6 26 L26.9 26.5 L25 10.5" : "L23 2.2 L29 8.8 L25.8 11.2 L25 10";
   const left = long ? "L5 10.5 L3.1 26.5 L0.4 26 L7 2.2" : "L5 10 L4.2 11.2 L1 8.8 L7 2.2";
   const hem = b.category === "jacket" ? "L25 29 Q15 29.6 5 29" : "L25 30 Q15 30.6 5 30";
+  // D278: sleeveless vest.
+  if (b.category === "vest") return `${neck} L23 2.2 Q22.4 7.5 24.6 10.5 L25 29 Q15 29.6 5 29 L5.4 10.5 Q7.6 7.5 7 2.2 Z`;
   return `${neck} ${right} ${hem} ${left} Z`;
 }
 
@@ -68,8 +70,10 @@ function topDetails(b: Blank, back: boolean): ViewDetail[] {
     d.push({ kind: "line", d: "M9 15.7 L21 15.7 L22.5 24 L7.5 24 Z" });
   }
   if ((b.category === "hoodie" || b.category === "zip") && back) d.push({ kind: "shade", d: "M10.5 1.3 Q9.4 9.5 15 10.2 Q20.6 9.5 19.5 1.3 Q15 2.4 10.5 1.3 Z" });
-  if ((b.category === "zip" || b.category === "jacket") && !back) {
-    d.push({ kind: "dash", d: `M15 3.6 L15 ${b.category === "jacket" ? 29.3 : 30.3}` });
+  if (b.category === "quarterzip" && !back) d.push({ kind: "dash", d: "M15 3.6 L15 10" });
+  if (b.category === "buttonshirt" && !back) d.push({ kind: "dash", d: "M15 3.6 L15 30.3" }, { kind: "line", d: "M8.5 11 L12.5 11 L12.5 15.5 L8.5 15.5 Z M17.5 11 L21.5 11 L21.5 15.5 L17.5 15.5 Z" });
+  if ((b.category === "zip" || b.category === "jacket" || b.category === "vest") && !back) {
+    d.push({ kind: "dash", d: `M15 3.6 L15 ${b.category === "zip" ? 30.3 : 29.3}` });
     if (b.category === "zip") {
       d.push({ kind: "shade", d: "M10.5 1.4 Q9.6 -2.6 15 -3.2 Q20.4 -2.6 19.5 1.4 Q15 5.2 10.5 1.4 Z" });
       d.push({ kind: "line", d: "M9 13.5 L14.6 13.5 L14.6 22 L7.8 22 Z M15.4 13.5 L21 13.5 L22.2 22 L15.4 22 Z" });
@@ -92,6 +96,10 @@ function hatView(b: Blank, v: View): GarmentView {
     return { ...base, view: v, label: "Front", h: 10, refY: 9.3, cx: 5, body: "M1.2 6.2 C1.2 -0.4 8.8 -0.4 8.8 6.2 L9 9.3 L1 9.3 Z",
       details: [{ kind: "line", d: "M1.1 6 L8.9 6" }, { kind: "dash", d: "M2 6.8 L2 9 M3 6.8 L3 9 M7 6.8 L7 9 M8 6.8 L8 9" }] };
   }
+  if (b.category === "booney" && v === "front") {
+    return { ...base, view: v, label: "Front", refY: 5, cx: 5, body: "M1.6 5 C1.6 1.2 8.4 1.2 8.4 5 Z",
+      details: [{ kind: "shade", d: "M-0.4 5 Q5 4.3 10.4 5 L10.6 6.6 Q5 7.6 -0.6 6.6 Z" }, { kind: "line", d: "M1.6 4.6 L8.4 4.6" }] };
+  }
   const brim = b.category === "dad" ? "M0.6 5 Q5 4.5 9.4 5 Q9.6 6.5 5 6.7 Q0.4 6.5 0.6 5 Z" : "M0 5 Q5 4.4 10 5 Q10.2 6.9 5 7.1 Q-0.2 6.9 0 5 Z";
   if (v === "front") {
     const crown = b.category === "dad" ? "M1.2 5 C1.2 1.4 8.8 1.4 8.8 5 Z" : "M1 5 C1 0.5 9 0.5 9 5 Z";
@@ -108,9 +116,24 @@ function hatView(b: Blank, v: View): GarmentView {
     body: "M1 5 C0.8 1 7 0.6 7.8 5 Z", details: [{ kind: "shade", d: "M7.5 5 Q9 5.1 10 5.7 L9.7 6.1 Q8.6 5.6 7.3 5.4 Z" }, { kind: "line", d: "M4.4 1.6 L4.4 5" }] };
 }
 
+/** D278: a pair of crew socks, flat (front = outside of both socks, back = inside). Sock centres at cx -/+ 3 in. */
+function socksView(v: View): GarmentView {
+  const body = "M0.6 0.5 L3.4 0.5 L3.4 7.5 L4.6 9.6 Q4.9 10.8 3.6 11 L1.8 11 Q0.6 10.8 0.6 9.5 Z M9.4 0.5 L6.6 0.5 L6.6 7.5 L5.4 9.6 Q5.1 10.8 6.4 11 L8.2 11 Q9.4 10.8 9.4 9.5 Z";
+  return { view: v, label: v === "back" ? "Inside (both socks)" : "Outside (both socks)", minX: 0, minY: 0, w: 10, h: 11.5, refY: 1, above: false, cx: 5, mirror: false,
+    body, details: [{ kind: "line", d: "M0.6 1.6 L3.4 1.6 M6.6 1.6 L9.4 1.6" }] };
+}
+/** D278: sweatpants front, waistband at the top (frames hang below it). */
+function pantsView(v: View): GarmentView {
+  return { view: v, label: v === "back" ? "Back" : "Front", minX: 0, minY: 0, w: 20, h: 32, refY: 1, above: false, cx: 10, mirror: false,
+    body: "M2 1 L18 1 L19.5 31 L11 31 L10 9 L9 31 L0.5 31 Z",
+    details: [{ kind: "line", d: "M2 2.6 L18 2.6 M3 3 Q5 7 3.2 8.5 M17 3 Q15 7 16.8 8.5 M1 29.6 L9 29.6 M11 29.6 L19 29.6" }] };
+}
+
 /** The drawing for one view of a blank (inches). */
 export function garmentView(b: Blank, v: View): GarmentView {
   if (b.headwear) return hatView(b, v);
+  if (b.category === "socks") return socksView(v);
+  if (b.category === "pants") return pantsView(v);
   if (v === "left" || v === "right") return sleeveView(b, v);
   if (v === "inside") {
     return { view: v, label: "Inside back neck", minX: 0, minY: 0, w: 12, h: 8, refY: 2, above: false, cx: 6, mirror: false,

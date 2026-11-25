@@ -37,6 +37,8 @@ const HATS: GoogleCategory = { id: "173", path: "Apparel & Accessories > Clothin
 export const GOOGLE_CATEGORY: Readonly<Record<string, GoogleCategory>> = {
   tees: SHIRTS, "long-sleeves": SHIRTS, hoodies: SHIRTS, sweatshirts: SHIRTS, "zip-hoodies": SHIRTS,
   jackets: JACKETS, hats: HATS, beanies: HATS,
+  sweatpants: { id: "204", path: "Apparel & Accessories > Clothing > Pants" },
+  socks: { id: "209", path: "Apparel & Accessories > Clothing > Underwear & Socks > Socks" },
 };
 
 /** Categories whose Printful blank is titled "Unisex" (see header). */

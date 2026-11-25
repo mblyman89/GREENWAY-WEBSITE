@@ -62,7 +62,9 @@ export async function startPrintFileUploadsAction(input: { designId: string; fil
 
 export type MockupTaskResult = { ok: true; taskKey: string } | { ok: false; error: string; notConfigured?: boolean };
 
-interface MockupFileIn { placement: string; key: string; position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number } }
+interface MockupFileIn { placement: string; key: string; position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number }; options?: { id: string; value: unknown }[] }
+/** D278: the only per-file options the studio sends (Printful "Automatic thread color" / "Unlimited color"); boolean values only. */
+const FILE_OPTION_IDS = new Set(["auto_thread_color", "full_color"]);
 
 export async function createMockupTaskAction(input: { blankId: string; variantIds: number[]; files: MockupFileIn[]; productOptions?: Record<string, unknown> }): Promise<MockupTaskResult> {
   const session = await requirePermission("content.edit");
@@ -77,7 +79,7 @@ export async function createMockupTaskAction(input: { blankId: string; variantId
   if (!filesIn.length) return { ok: false, error: "Export the print files first." };
 
   const admin = createSupabaseAdminClient();
-  const files: { placement: string; image_url: string; position: MockupFileIn["position"] }[] = [];
+  const files: { placement: string; image_url: string; position: MockupFileIn["position"]; options?: { id: string; value: boolean }[] }[] = [];
   for (const f of filesIn) {
     const key = String(f?.key ?? "");
     if (!KEY_RE.test(key)) return { ok: false, error: "Invalid file reference." };
@@ -89,7 +91,8 @@ export async function createMockupTaskAction(input: { blankId: string; variantId
     if (signed.error || !signed.data?.signedUrl) return { ok: false, error: `Couldn't sign a download link: ${signed.error?.message ?? "unknown"}.` };
     const p = f.position;
     const int = (n: unknown) => Math.max(0, Math.round(Number(n) || 0));
-    files.push({ placement: String(f.placement).slice(0, 60), image_url: signed.data.signedUrl, position: { area_width: int(p?.area_width), area_height: int(p?.area_height), width: int(p?.width), height: int(p?.height), top: int(p?.top), left: int(p?.left) } });
+    const options = (Array.isArray(f.options) ? f.options : []).filter((o) => FILE_OPTION_IDS.has(String(o?.id)) && typeof o?.value === "boolean").map((o) => ({ id: String(o.id), value: o.value as boolean }));
+    files.push({ placement: String(f.placement).slice(0, 60), image_url: signed.data.signedUrl, position: { area_width: int(p?.area_width), area_height: int(p?.area_height), width: int(p?.width), height: int(p?.height), top: int(p?.top), left: int(p?.left) }, ...(options.length ? { options } : {}) });
   }
   const body: Record<string, unknown> = { variant_ids: variantIds, format: "jpg", width: 1000, files };
   if (input?.productOptions && typeof input.productOptions === "object") body.product_options = input.productOptions;

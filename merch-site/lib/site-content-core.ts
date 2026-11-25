@@ -41,6 +41,8 @@ export const MERCH_BANNER_CATEGORIES: readonly { slug: string; label: string }[]
   { slug: "jackets", label: "Jackets" },
   { slug: "hats", label: "Hats" },
   { slug: "beanies", label: "Beanies" },
+  { slug: "sweatpants", label: "Sweatpants" },
+  { slug: "socks", label: "Socks" },
 ];
 
 /** Category blurbs before S3 (mirrors catalog-core; parity-tested there). */
@@ -50,9 +52,11 @@ const CATEGORY_BLURBS: Readonly<Record<string, string>> = {
   hoodies: "Heavyweight pullover hoodies for cold Washington mornings.",
   sweatshirts: "Classic garment-dyed crewneck sweatshirts.",
   "zip-hoodies": "Full-zip hoodies you can layer over anything.",
-  jackets: "Lightweight zip windbreakers.",
+  jackets: "Windbreakers, fleece, soft shells and vests.",
   hats: "Snapbacks, dad hats and truckers with embroidered logos.",
   beanies: "Cuffed knit beanies, embroidered.",
+  sweatpants: "Pigment-dyed sweatpants with an embroidered hit.",
+  socks: "Embroidered crew socks, made in the USA.",
 };
 
 const HF = "merch-header-footer" as const;

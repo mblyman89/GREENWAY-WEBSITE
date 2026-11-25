@@ -25,10 +25,12 @@ import { PRINTFUL_COLORS, PRINTFUL_SIZES, PRINTFUL_SNAPSHOT_DATE, type ColorRow,
 export { PRINTFUL_SNAPSHOT_DATE };
 
 export type Method = "dtg" | "dtf" | "embroidery";
-export type Category = "tee" | "longsleeve" | "hoodie" | "crew" | "zip" | "jacket" | "snapback" | "dad" | "trucker" | "beanie";
+export type Category = "tee" | "longsleeve" | "hoodie" | "crew" | "zip" | "jacket" | "snapback" | "dad" | "trucker" | "beanie"
+  // D278: owner-requested additions (Columbia, Under Armour, adidas, Independent sweatpants, SOCCO socks).
+  | "quarterzip" | "vest" | "buttonshirt" | "pants" | "socks" | "booney";
 export type View = "front" | "back" | "left" | "right" | "inside";
 export type ObstacleKind = "zipper" | "pouch" | "hood" | "seam" | "center-seam" | "mesh" | "collar";
-export type DimsSource = "printful-tee-guide" | "printful-hat-guide" | "printful-hoodie-guide" | "industry-chart" | "studio-default";
+export type DimsSource = "printful-tee-guide" | "printful-hat-guide" | "printful-hoodie-guide" | "printful-file-guidelines" | "industry-chart" | "studio-default";
 
 export const METHOD_LABEL: Record<Method, string> = {
   dtg: "DTG (direct-to-garment)",
@@ -96,6 +98,14 @@ export interface Blank {
   structured: boolean | null;
   premiumNote: string;
   placements: Placement[];
+  /**
+   * D278: set when Printful's PUBLIC v1 API (the one our orders use) does not
+   * serve this product's variants - the data was copied from Printful's
+   * logged-in product page (scripts/merch/printful-site-snapshot.json). The
+   * studio still designs + mockups it, but the order may be refused: place a
+   * sample order first.
+   */
+  orderWarning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +173,15 @@ function wrists(): Placement[] {
     pl(`wrist_${side}`, `${side === "left" ? "Left" : "Right"} wrist`, side, 3, 1.25, 20, 0, { embroidery: [`embroidery_wrist_${side}`, 295] }, "studio-default", [], "Small text or icon above the cuff rib.");
   return [mk("left"), mk("right")];
 }
+
+/** D278: wrist embroidery with Printful's File-guidelines size (2" x 3" on every D278 product that lists it). */
+function wristsExact(w: number, h: number, cents: number, src: DimsSource, note?: string): Placement[] {
+  const mk = (side: "left" | "right") =>
+    pl(`wrist_${side}`, `${side === "left" ? "Left" : "Right"} wrist`, side, w, h, 25 - 1.6 - h, 0, { embroidery: [`embroidery_wrist_${side}`, cents] }, src, [], note ?? `Printful file guidelines: ${w}" x ${h}" above the cuff.`);
+  return [mk("left"), mk("right")];
+}
+const FG: DimsSource = "printful-file-guidelines";
+const SITE_ONLY = "Printful's public catalog API (the one Greenway's orders use) doesn't list this product's variants yet - the data was copied from Printful's product page on D278. Designs, proofs and mockups work, but Printful may refuse the order: place ONE sample order before you publish it.";
 
 const POUCH = (w: number, h: number, frameH: number): Obstacle => ({ kind: "pouch", label: "Kangaroo pouch opening", x: (12 - w) / 2, y: frameH - h, w, h, severity: "warning" });
 const ZIPPER = (frameW: number, frameH: number): Obstacle => ({ kind: "zipper", label: "Zipper", x: frameW / 2 - 0.5, y: 0, w: 1, h: frameH, severity: "blocker" });
@@ -263,6 +282,114 @@ export const BLANKS: readonly Blank[] = [
     fabric: "100% Turbo Acrylic knit", cottonPct: 0, weightOz: null, puffAvailable: true, structured: null,
     premiumNote: "Cuff embroidery; knit stretches so text must be bigger (0.25\" lower / 0.3\" upper).",
     placements: [{ ...pl("hat_front", "Cuff front", "front", 5, 1.75, 0.5, 0, { embroidery: ["default", 0] }, "printful-hat-guide", [], "Printful: cuff max 5\" x 1.75\" (print file 1500 x 525 px). Knit stretches - bold shapes only."), printfileIn: { embroidery: [5, 1.75] } }],
+  },
+  // D278 ------------------------------------------------------------------------
+  // Sizes = Printful's "File guidelines" tab for each product (read logged in, D278).
+  {
+    id: "ua-1379757", printfulId: 765, brand: "Under Armour", model: "1379757", title: "Rival Fleece Hoodie", category: "hoodie", headwear: false,
+    fabric: "80% cotton / 20% polyester fleece, brushed inside", cottonPct: 80, weightOz: 8.11, puffAvailable: false, structured: null,
+    premiumNote: "Name-brand athletic hoodie (embroidered UA logo at the top centre). Print or embroider; front pouch.",
+    orderWarning: "Printful's public catalog shows every Under Armour variant as out of stock right now - check stock in Printful before you publish.",
+    placements: [
+      pl("front", "Front (DTG)", "front", 11, 11, 3.5, 0, { dtg: ["default", 0] }, FG, [], "Printful DTG front print 11\" x 11\"."),
+      pl("front_dtf", "Front (DTFlex)", "front", 12, 16, 3.5, 0, { dtf: ["front_dtf", 595] }, FG, [POUCH(9, 7, 16)], "Printful DTFlex front 12\" x 16\" - the lower part sits on the pouch."),
+      pl("large_front_emb", "Large front (embroidery)", "front", 10, 6, 3.5, 0, { embroidery: ["embroidery_large_front", 395] }, FG, [], "Printful embroidery large front 10\" x 6\". Printful's product page offers it, but its public API doesn't list it yet - sample-order first."),
+      { ...pl("back", "Full back", "back", 12, 16, 5, 0, { dtg: ["back", 595], dtf: ["back_dtf", 595] }, FG, [HOOD_DRAPE]), note: "Printful DTG + DTFlex back 12\" x 16\"." },
+      pl("sleeve_left", "Left sleeve (DTG)", "left", 3, 12, 1.5, 0, { dtg: ["sleeve_left", 595] }, FG),
+      pl("sleeve_right", "Right sleeve (DTG)", "right", 3, 12, 1.5, 0, { dtg: ["sleeve_right", 595] }, FG),
+      pl("sleeve_left_dtf", "Left sleeve (DTFlex)", "left", 3, 14, 1.5, 0, { dtf: ["long_sleeve_left_dtf", 595] }, FG),
+      pl("sleeve_right_dtf", "Right sleeve (DTFlex)", "right", 3, 14, 1.5, 0, { dtf: ["long_sleeve_right_dtf", 595] }, FG),
+      ...wristsExact(2, 3, 295, FG),
+      { ...labelOutside(249), dimsSource: FG },
+    ],
+  },
+  {
+    id: "ad-a401", printfulId: 531, brand: "adidas", model: "A401", title: "Quarter-Zip Pullover", category: "quarterzip", headwear: false,
+    fabric: "100% recycled polyester, UPF 50+", cottonPct: 0, weightOz: 6.1, puffAvailable: false, structured: null,
+    premiumNote: "Name-brand performance quarter-zip (contrast adidas logo on the left sleeve). Embroidery only.",
+    placements: [
+      pl("left_chest", "Left chest (embroidery)", "front", 4, 4, 3, 4, { embroidery: ["embroidery_chest_left", 295] }, FG, [], "Printful file guidelines: left chest 4\" x 4\"."),
+      ...wristsExact(2, 3, 295, "studio-default", "Printful offers wrist embroidery here but its file guidelines give no size - 2\" x 3\" like Printful's other wrists. Check the mockup."),
+    ],
+  },
+  {
+    id: "ind-prm50ptpd", printfulId: 541, brand: "Independent Trading Co.", model: "PRM50PTPD", title: "Pigment-Dyed Sweatpants", category: "pants", headwear: false,
+    fabric: "80% ring-spun cotton / 20% polyester, 100% cotton face", cottonPct: 80, weightOz: 9, puffAvailable: false, structured: null,
+    premiumNote: "Washed-out vintage sweatpants - pair with a matching hoodie. One embroidered hit on the front.",
+    placements: [pl("pants_front", "Front (embroidery)", "front", 4, 4, 3, 5, { embroidery: ["default", 0] }, FG, [], "Printful file guidelines: front embroidery 4\" x 4\" (upper left leg on Printful's mockup).")],
+  },
+  {
+    id: "socco-sc200", printfulId: 502, brand: "SOCCO", model: "SC200", title: "Embroidered Crew Socks", category: "socks", headwear: false,
+    fabric: "80% cotton / 17% polyester / 3% spandex, cushioned sole, made in USA", cottonPct: 80, weightOz: null, puffAvailable: false, structured: null,
+    premiumNote: "Small embroidered hit on the sock leg. Printful embroiders a placement on BOTH socks of the pair.",
+    placements: [
+      pl("sock_outside_left", "Outside - left sock", "front", 1.18, 1.96, 1.5, -3, { embroidery: ["embroidery_outside_left", 295] }, FG, [], "Printful: 1.18\" x 1.96\". Tiny - one bold icon or 2-3 letters."),
+      pl("sock_outside_right", "Outside - right sock", "front", 1.18, 1.96, 1.5, 3, { embroidery: ["embroidery_outside_right", 295] }, FG, [], "Printful: 1.18\" x 1.96\"."),
+      pl("sock_inside_left", "Inside - left sock", "back", 1.18, 1.96, 1.5, -3, { embroidery: ["embroidery_inside_left", 295] }, FG, [], "Printful: 1.18\" x 1.96\"."),
+      pl("sock_inside_right", "Inside - right sock", "back", 1.18, 1.96, 1.5, 3, { embroidery: ["embroidery_inside_right", 295] }, FG, [], "Printful: 1.18\" x 1.96\"."),
+    ],
+  },
+  // Columbia (embroidery only). Not in Printful's public v1 product API - see SITE_ONLY.
+  {
+    id: "col-212478", printfulId: 707, brand: "Columbia", model: "212478", title: "Unisex Fleece Jacket", category: "jacket", headwear: false,
+    fabric: "100% polyester MTR filament fleece", cottonPct: 0, weightOz: 7.4, puffAvailable: false, structured: null,
+    premiumNote: "Columbia full-zip fleece, athletic fit. Chest hit + optional large centre and wrists.", orderWarning: SITE_ONLY,
+    placements: [
+      pl("right_chest_emb", "Right chest (embroidery)", "front", 4, 4, 3, -4.5, { embroidery: ["embroidery_chest_right", 295] }, FG),
+      pl("left_chest", "Left chest (embroidery)", "front", 4, 4, 3, 4.5, { embroidery: ["embroidery_chest_left", 295] }, "studio-default", [], "Printful sells left chest here; its file guidelines only size the right chest (4\" x 4\") - same size assumed."),
+      pl("large_center_emb", "Large centre (embroidery)", "back", 10, 6, 4, 0, { embroidery: ["embroidery_large_center", 395] }, FG, [], "Printful: \"Large center\" 10\" x 6\". On a full-zip it can't cross the zipper, so the studio shows it on the back - confirm with Generate mockups."),
+      ...wristsExact(2, 3, 275, FG),
+    ],
+  },
+  {
+    id: "col-212483", printfulId: 790, brand: "Columbia", model: "212483 Ascender", title: "Men's Soft Shell Jacket", category: "jacket", headwear: false,
+    fabric: "100% polyester bonded soft shell, chamois-touch lining; wind and water resistant", cottonPct: 0, weightOz: null, puffAvailable: false, structured: null,
+    premiumNote: "The most premium jacket in the studio (Columbia Ascender). Chest, large back and wrists.", orderWarning: SITE_ONLY,
+    placements: [
+      pl("right_chest_emb", "Right chest (embroidery)", "front", 4, 4, 3, -4.5, { embroidery: ["embroidery_chest_right", 295] }, FG),
+      pl("large_back_emb", "Large back (embroidery)", "back", 10, 6, 4, 0, { embroidery: ["embroidery_large_back", 395] }, FG, [], "Printful: large back 10\" x 6\"."),
+      ...wristsExact(2, 3, 275, FG),
+    ],
+  },
+  {
+    id: "col-212488", printfulId: 625, brand: "Columbia", model: "212488", title: "Men's Fleece Vest", category: "vest", headwear: false,
+    fabric: "100% polyester MTR fleece", cottonPct: 0, weightOz: 7.4, puffAvailable: false, structured: null,
+    premiumNote: "Columbia full-zip fleece vest with zip pockets.", orderWarning: SITE_ONLY,
+    placements: [
+      pl("right_chest_emb", "Right chest (embroidery)", "front", 4, 4, 3, -4.5, { embroidery: ["embroidery_chest_right", 295] }, FG),
+      pl("left_chest", "Left chest (embroidery)", "front", 4, 4, 3, 4.5, { embroidery: ["embroidery_chest_left", 295] }, "studio-default", [], "Printful sells left chest here; its file guidelines only size the right chest (4\" x 4\") - same size assumed."),
+      pl("large_center_emb", "Large centre (embroidery)", "back", 10, 6, 4, 0, { embroidery: ["embroidery_large_center", 395] }, FG, [], "Printful: \"Large center\" 10\" x 6\". On a full-zip it can't cross the zipper, so the studio shows it on the back - confirm with Generate mockups."),
+    ],
+  },
+  {
+    id: "col-212471", printfulId: 626, brand: "Columbia", model: "212471", title: "Women's Fleece Vest", category: "vest", headwear: false,
+    fabric: "100% polyester MTR fleece", cottonPct: 0, weightOz: 7.4, puffAvailable: false, structured: null,
+    premiumNote: "Women's cut Columbia fleece vest (Black only).", orderWarning: SITE_ONLY,
+    placements: [
+      pl("right_chest_emb", "Right chest (embroidery)", "front", 3, 2.5, 3, -4.5, { embroidery: ["embroidery_chest_right", 295] }, FG, [], "Printful file guidelines: right chest 3\" x 2.5\"."),
+      pl("left_chest", "Left chest (embroidery)", "front", 3, 2.5, 3, 4.5, { embroidery: ["embroidery_chest_left", 295] }, "studio-default", [], "Printful sells left chest here; its file guidelines only size the right chest (3\" x 2.5\") - same size assumed."),
+    ],
+  },
+  {
+    id: "col-pfg-tamiami", printfulId: 763, brand: "Columbia", model: "PFG Tamiami", title: "Men's Short Sleeve Button Shirt", category: "buttonshirt", headwear: false,
+    fabric: "Lightweight Omni-Wick / Omni-Shade UPF 40 shirting (Printful does not state the fibre)", cottonPct: null, weightOz: null, puffAvailable: false, structured: null,
+    premiumNote: "Columbia PFG fishing shirt. Light fabric - keep designs minimal (Printful).",
+    placements: [
+      pl("chest_top_right_emb", "Top right chest (embroidery)", "front", 3, 3, 2.5, -4.5, { embroidery: ["embroidery_chest_top_right", 295] }, FG, [], "Printful: top right chest 3\" x 3\" (above the pocket)."),
+      pl("sleeve_right", "Right sleeve (embroidery)", "right", 2, 3, 1.5, 0, { embroidery: ["embroidery_sleeve_right_top", 275] }, FG, [], "Printful: right sleeve 2\" x 3\"."),
+    ],
+  },
+  {
+    id: "col-212477", printfulId: 772, brand: "Columbia", model: "212477 Bora Bora", title: "Booney Hat", category: "booney", headwear: true,
+    fabric: "100% textured nylon poplin, UPF 50", cottonPct: 0, weightOz: null, puffAvailable: false, structured: false,
+    premiumNote: "Columbia sun hat. The fabric is light - Printful suggests minimalist designs.",
+    placements: [{ ...pl("hat_front", "Front", "front", 4, 1.75, 0.5, 0, { embroidery: ["embroidery_front", 0] }, FG, [], "Printful file guidelines: front 4\" x 1.75\". Light fabric - small, simple art."), printfileIn: { embroidery: [4, 1.75] } }],
+  },
+  {
+    id: "col-186210", printfulId: 800, brand: "Columbia", model: "186210 Winter Blur", title: "Pom-Pom Cuffed Beanie", category: "beanie", headwear: true,
+    fabric: "60% acrylic / 25% nylon / 12% polyester / 3% elastane, microfleece lined", cottonPct: 0, weightOz: null, puffAvailable: false, structured: null,
+    premiumNote: "Columbia pom beanie (Chalk only).", orderWarning: `${SITE_ONLY} Printful also shows it OUT OF STOCK right now.`,
+    placements: [{ ...pl("hat_front", "Cuff front", "front", 5, 1.75, 0.5, 0, { embroidery: ["embroidery_front", 0] }, FG, [], "Printful: front 5\" x 1.75\". Knit stretches - bold shapes only."), printfileIn: { embroidery: [5, 1.75] } }],
   },
 ];
 
@@ -381,7 +508,7 @@ export function __runGarmentCatalogTests(): { passed: number; failed: number } {
   let passed = 0, failed = 0;
   const ok = (c: boolean, m: string) => { if (c) passed += 1; else { failed += 1; console.error(`FAIL garment-catalog-core: ${m}`); } };
 
-  ok(BLANKS.length === 11, "11 starter blanks");
+  ok(BLANKS.length === 22, "22 blanks (11 starter + 11 D278)");
   ok(new Set(BLANKS.map((b) => b.id)).size === BLANKS.length, "unique blank ids");
   for (const b of BLANKS) {
     ok(colorsFor(b).length > 0, `${b.id} has colours`);
@@ -410,6 +537,13 @@ export function __runGarmentCatalogTests(): { passed: number; failed: number } {
   const dadF = getPlacement(getBlank("yp-6245cm")!, "hat_front")!;
   ok(dadF.printfileIn!.dtf![0] === 5 && dadF.printfileIn!.embroidery![0] === 5.5, "6245CM DTF 5x2, embroidery 5.5x2");
   ok(BLANKS.filter((b) => b.headwear).every((b) => b.placements.filter((p) => p.id !== "hat_front").every((p) => p.widthIn === 2 && p.heightIn === 1)), "hat sides/back 2x1 (Printful)");
+  // D278: Printful File-guidelines sizes for the owner's additions.
+  const dims = (bid: string, pid: string) => { const p = getPlacement(getBlank(bid)!, pid)!; return `${p.widthIn}x${p.heightIn}`; };
+  ok(dims("socco-sc200", "sock_outside_left") === "1.18x1.96" && getBlank("socco-sc200")!.placements.length === 4, "socks 4 placements 1.18x1.96");
+  ok(dims("ua-1379757", "front") === "11x11" && dims("ua-1379757", "front_dtf") === "12x16" && dims("ua-1379757", "large_front_emb") === "10x6" && dims("ua-1379757", "sleeve_left") === "3x12" && dims("ua-1379757", "sleeve_left_dtf") === "3x14" && dims("ua-1379757", "wrist_left") === "2x3" && dims("ua-1379757", "label_outside") === "3x3", "UA hoodie file guidelines");
+  ok(dims("ad-a401", "left_chest") === "4x4" && dims("ind-prm50ptpd", "pants_front") === "4x4", "adidas chest + sweatpants 4x4");
+  ok(dims("col-212478", "large_center_emb") === "10x6" && dims("col-212483", "large_back_emb") === "10x6" && dims("col-212471", "right_chest_emb") === "3x2.5" && dims("col-pfg-tamiami", "chest_top_right_emb") === "3x3" && dims("col-pfg-tamiami", "sleeve_right") === "2x3" && dims("col-212477", "hat_front") === "4x1.75" && dims("col-186210", "hat_front") === "5x1.75", "Columbia file guidelines");
+  ok(["col-212478", "col-212483", "col-212488", "col-212471", "col-186210"].every((id) => !!getBlank(id)!.orderWarning) && !getBlank("col-212477")!.orderWarning && !getBlank("cc-1717")!.orderWarning, "order warning only where Printful's v1 API lacks the variants");
   const dl = printLimitRect(dadF, "dtf");
   ok(dl.x === 0.25 && dl.w === 5 && dl.h === 2 && printLimitRect(dadF, "embroidery").w === 5.5, "DTF limit 5in centred in the 5.5in frame");
   ok(printfileFor(getPlacement(getBlank("cc-1717")!, "front")!, "dtg").w === 12, "no printfileIn -> frame");

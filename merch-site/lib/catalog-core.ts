@@ -34,9 +34,12 @@ export const MERCH_CATEGORIES: readonly MerchCategory[] = [
   { slug: "hoodies", label: "Hoodies", blurb: "Heavyweight pullover hoodies for cold Washington mornings.", image: "/categories/hoodies.webp" },
   { slug: "sweatshirts", label: "Sweatshirts", blurb: "Classic garment-dyed crewneck sweatshirts.", image: "/categories/sweatshirts.webp" },
   { slug: "zip-hoodies", label: "Zip Hoodies", blurb: "Full-zip hoodies you can layer over anything.", image: "/categories/zip-hoodies.webp" },
-  { slug: "jackets", label: "Jackets", blurb: "Lightweight zip windbreakers.", image: "/categories/jackets.webp" },
+  { slug: "jackets", label: "Jackets", blurb: "Windbreakers, fleece, soft shells and vests.", image: "/categories/jackets.webp" },
   { slug: "hats", label: "Hats", blurb: "Snapbacks, dad hats and truckers with embroidered logos.", image: "/categories/hats.webp" },
   { slug: "beanies", label: "Beanies", blurb: "Cuffed knit beanies, embroidered.", image: "/categories/beanies.webp" },
+  // D278
+  { slug: "sweatpants", label: "Sweatpants", blurb: "Pigment-dyed sweatpants with an embroidered hit.", image: "/categories/sweatpants.webp" },
+  { slug: "socks", label: "Socks", blurb: "Embroidered crew socks, made in the USA.", image: "/categories/socks.webp" },
 ];
 
 export const CATEGORY_SLUGS = MERCH_CATEGORIES.map((c) => c.slug);
@@ -56,12 +59,16 @@ export const CATEGORY_ALIASES: Readonly<Record<string, string>> = {
   jacket: "jackets", windbreaker: "jackets", windbreakers: "jackets",
   hat: "hats", caps: "hats", cap: "hats", snapbacks: "hats", "dad-hats": "hats", truckers: "hats",
   beanie: "beanies", knit: "beanies",
+  pants: "sweatpants", joggers: "sweatpants", sock: "socks", vest: "jackets", vests: "jackets", fleece: "jackets", "quarter-zip": "sweatshirts", "quarter-zips": "sweatshirts",
 };
 
 /** Merch Studio blank id -> catalogue page (mirrors garment-catalog-core BLANKS). */
 export const BLANK_CATEGORY: Readonly<Record<string, string>> = {
   "cc-1717": "tees", "bc-3001": "tees", "cc-6014": "long-sleeves", "ind-4000": "hoodies", "cc-1566": "sweatshirts",
   "l7-14003": "zip-hoodies", "ind-exp54": "jackets", "yp-6089m": "hats", "yp-6245cm": "hats", "rch-112": "hats", "yp-1501kc": "beanies",
+  // D278
+  "ua-1379757": "hoodies", "ad-a401": "sweatshirts", "ind-prm50ptpd": "sweatpants", "socco-sc200": "socks",
+  "col-212478": "jackets", "col-212483": "jackets", "col-212488": "jackets", "col-212471": "jackets", "col-pfg-tamiami": "tees", "col-212477": "hats", "col-186210": "beanies",
 };
 
 // ---------------------------------------------------------------------------

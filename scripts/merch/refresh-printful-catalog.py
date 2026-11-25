@@ -11,7 +11,10 @@ variant price for each size.
 """
 import datetime, json, pathlib, urllib.request
 
-IDS = [586, 71, 753, 1543, 839, 943, 629, 99, 206, 422, 266]  # keep in sync with BLANKS in garment-catalog-core.ts
+IDS = [586, 71, 753, 1543, 839, 943, 629, 99, 206, 422, 266, 765, 531, 541, 502]  # keep in sync with BLANKS in garment-catalog-core.ts
+# D278: products Printful's public v1 API doesn't serve (404) - read from a hand-copied snapshot of Printful's product pages.
+SITE_SNAPSHOT = pathlib.Path(__file__).resolve().parent / "printful-site-snapshot.json"
+SITE_IDS = [772, 626, 707, 763, 790, 625, 800]
 ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "S/M", "L/XL", "One size"]
 OUT = pathlib.Path(__file__).resolve().parents[2] / "src/lib/merch-studio/garment-colors-data.ts"
 
@@ -22,9 +25,28 @@ def fetch(i):
         return json.load(r)["result"]
 
 
+def from_snapshot(snap, i):
+    p = snap["products"][str(i)]
+    return {
+        "product": {"image": p["image"], "files": [{"id": k, "type": v} for k, v in p["files"].items()], "options": [{"id": o} for o in p["options"]]},
+        "variants": [{"color": c, "size": sz, "id": vid, "price": cents / 100, "in_stock": st, "color_code": hx, "image": img} for c, sz, vid, cents, st, hx, img in p["variants"]],
+    }
+
+
 def main():
+    global IDS
     today = datetime.date.today().isoformat()
     data = {i: fetch(i) for i in IDS}
+    snap = json.loads(SITE_SNAPSHOT.read_text())
+    for i in SITE_IDS:
+        data[i] = from_snapshot(snap, i)
+    for k, extra in snap.get("extra", {}).items():
+        pr = data[int(k)]["product"]
+        have = {f["id"] for f in pr["files"]}
+        pr["files"] += [{"id": a, "type": b} for a, b in extra.get("files", {}).items() if a not in have]
+        haveo = {o["id"] for o in pr["options"]}
+        pr["options"] += [{"id": o} for o in extra.get("options", []) if o not in haveo]
+    IDS = IDS + SITE_IDS
     L = [
         "/**",
         " * R70 S1 - garment colours + per-size base prices, GENERATED from Printful's",

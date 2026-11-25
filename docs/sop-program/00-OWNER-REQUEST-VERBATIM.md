@@ -3826,3 +3826,29 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - Fix: `rejectedMerchOrders` (merch-orders-core) builds one row per gm- ref from the merch_alerts rows whose subject means "never reached Printful" (rejected / NOT sent to Printful / out-of-state auto-cancel). It covers open and acknowledged alerts and skips refs that Printful does list. An open alert shows as New (needs a person); an acknowledged one shows as Cancelled, so it stays under Cancelled / All. The label is "Rejected - not sent to Printful".
 - `loadMerchOrderBoard` merges these rows in (new `listOrderAlertsForBoard` in merch-alerts-server). When Printful returns 404 for a gm- ref, `getMerchOrder` falls back to the alert, so Details opens with Printful's reason and the Stripe half card (refund / release).
 - 9 new pure tests (merch-orders-core minimum 40 → 49). Scoped eslint and tsc are clean.
+
+## D278
+
+> thank you. will you help me make sure there is not some sort of bug in the code. before when I used the "photo mockups (printfult)" it showed my logo in color. now it shows it as grey. is this a printful visual issue, or if I publish the hat with the grey mockup logo, will i be buying a grey logo hat? also, sometimes the preview shows the logo broken, is this a visual issue or a printful mockup issue? finally, I am not sure I have a way to save and load garments, please build this in. I want to add to my catalog all Columbia products, under armour rival fleece hoodie, addidas quarter zip pull over, independent trading co sweat pants, and boxer briefs. follow the standing rules. thank you.
+
+> Sorry to stop you. I forgot to add to the list of new products to add to our catalog socks. I want to add the embroidered crew socks, socco sc200. Please continue. Follow the standing rules. Thank you!
+
+> Sorry to stop you again. Please login to my printful dashboard. I'll change the password when you are done. Password: [REDACTED] Username: contact@greenwaymarijuana.com I want to make sure we use the exact design requirements. Make sure all requests are being addressed and fixed. Follow the standing rules. Thank you.
+
+> https://www.printful.com/auth/login Password: [REDACTED] User: contact@greenwaymerch.com Try one more time. If you can't get it, then find the print areas some other way, surely there is specs online somewhere. Follow the standing rules. Thank you.
+
+### Status (D278)
+
+- Grey logo: a bug in the studio's mockup request, not in the order. The Classic Snapback (6089M) front lists no thread-colour option in Printful's public catalog, so the ORDER sends Printful's `auto_thread_color` on the file (the hat is embroidered in colour). The MOCKUP request dropped the per-file options, so Printful's mockup generator drew default grey thread. Fixed: `mockupTaskBody` and `createMockupTaskAction` now pass the same file options as the order (allowed: auto_thread_color, full_color). Tests in print-export-core.
+- Broken image: Printful mockup photos are temporary CDN links. ProofPanel `MockupImg` retries once, then says the preview photo expired and the print file is fine.
+- Garments added. Sizes come from each product's Printful "File guidelines" tab, read while logged in to the owner's Printful account:
+  - Under Armour 1379757 (#765): DTG front 11x11, DTFlex front/back 12x16, sleeves 3x12 / 3x14, embroidery large front 10x6, wrists 2x3, label 3x3.
+  - adidas A401 (#531): left chest 4x4; wrists 2x3 marked as a studio estimate.
+  - Independent PRM50PTPD sweatpants (#541): front 4x4.
+  - SOCCO SC200 socks (#502): four 1.18x1.96 placements.
+  - Columbia: Fleece Jacket 212478, Ascender 212483, Men's Vest 212488, Women's Vest 212471, PFG Tamiami, Bora Bora Booney, Winter Blur beanie.
+  - New merch-site pages: /sweatpants and /socks.
+- Columbia: Printful's public v1 API returns 404 for five Columbia products (Fleece Jacket, Ascender, both vests, Winter Blur beanie), so their data lives in `scripts/merch/printful-site-snapshot.json`. The studio shows an "order warning" on these: place one sample order first. The Booney and the Tamiami are served by v1.
+- Boxer briefs (#428) are not added. They are cut-and-sew all-over print, not a placement on a blank. This is explained on the Garments tab, and they can still be saved to My garments as a shortlist entry.
+- Save/load garments: "My garments" on the Garments tab saves the garment, preview colour and ticked colours. It is stored in site_settings `merch_saved_garments`, so no migration is needed. The Printful browser has "Save to My garments" for shortlist entries.
+- Self-test minimums: garment-catalog 373, garment-views 421, print-export 119, saved-garments 11 (new); printfile-check studio-default count 8 → 13.

@@ -184,7 +184,7 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
       const body = mockupTaskBody(blank, planned.plans, keyFor, pickedMockColors);
       if (!body) throw new Error("Pick at least one colour Printful makes for this garment.");
       setBusy("Asking Printful for mockups...");
-      const task = await createMockupTaskAction({ blankId: blank.id, variantIds: body.variant_ids, files: body.files.map((f) => ({ placement: f.placement, key: f.image_url, position: f.position })), productOptions: body.product_options });
+      const task = await createMockupTaskAction({ blankId: blank.id, variantIds: body.variant_ids, files: body.files.map((f) => ({ placement: f.placement, key: f.image_url, position: f.position, options: f.options })), productOptions: body.product_options });
       if (!task.ok) throw new Error(task.error);
       for (let i = 0; i < 40; i += 1) {
         setBusy(`Printful is generating mockups... (${(i + 1) * 4}s)`);
@@ -280,8 +280,7 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {mocks.flatMap((m) => [{ title: m.placement, url: m.url }, ...m.extra]).map((m, i) => (
               <a key={`${m.url}-${i}`} href={m.url} target="_blank" rel="noreferrer" className="block rounded border border-[var(--admin-border)] p-1 text-center text-[0.7rem] text-white/60">
-                {/* eslint-disable-next-line @next/next/no-img-element -- temporary Printful CDN URL, not a site asset */}
-                <img src={m.url} alt={`Printful mockup - ${m.title}`} className="w-full rounded" loading="lazy" />
+                <MockupImg url={m.url} title={m.title} />
                 {m.title}
               </a>
             ))}
@@ -311,4 +310,17 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
       </section>
     </div>
   );
+}
+
+/**
+ * D278: a Printful mockup photo, or a plain explanation when it won't load.
+ * Mockup links are TEMPORARY files on Printful's CDN (they expire); a broken
+ * picture here is a dead link / slow CDN, not your print file - the order uses
+ * the print files above. Retry once, then say so.
+ */
+function MockupImg({ url, title }: { url: string; title: string }) {
+  const [tries, setTries] = useState(0);
+  if (tries > 1) return <span className="block rounded bg-white/5 p-3 text-[0.7rem] text-amber-200">Printful&apos;s mockup photo didn&apos;t load (its temporary link expired or the CDN was slow). This is only the preview photo - your print file is fine. Click Generate mockups again.</span>;
+  // eslint-disable-next-line @next/next/no-img-element -- temporary Printful CDN URL, not a site asset
+  return <img key={tries} src={url} alt={`Printful mockup - ${title}`} className="w-full rounded" loading="lazy" onError={() => setTries((t) => t + 1)} />;
 }

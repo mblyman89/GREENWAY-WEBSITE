@@ -76,6 +76,8 @@ export function threadOptionId(b: Blank, fileType: string, puff = false): string
   let want: string;
   if (puff) want = "thread_colors_3d";
   else if (fileType === "embroidery_front") want = "thread_colors";
+  // D278: Printful's options table maps embroidery_apparel_front -> thread_colors_apparel (sweatpants).
+  else if (fileType === "embroidery_apparel_front") want = "thread_colors_apparel";
   else if (fileType.startsWith("embroidery_")) want = `thread_colors_${fileType.slice("embroidery_".length)}`;
   else return null;
   return ids.includes(want) ? want : null;
@@ -308,18 +310,22 @@ export function mockupVariantIds(b: Blank, colors: readonly string[]): number[] 
 export const MOCKUP_MAX_COLORS = 6;
 export interface MockupTaskBody {
   variant_ids: number[]; format: "jpg"; width: number;
-  files: { placement: string; image_url: string; position: Omit<PrintfulPosition, "limit_to_print_area"> }[];
+  files: { placement: string; image_url: string; position: Omit<PrintfulPosition, "limit_to_print_area">; options?: { id: string; value: unknown }[] }[];
   product_options?: Record<string, unknown>;
 }
 /** Body for POST /mockup-generator/create-task/{product_id} (Printful API v1, CreateGenerationTask). */
 export function mockupTaskBody(b: Blank, plans: readonly PrintFilePlan[], urls: Readonly<Record<string, string>>, colors: readonly string[], width = 1000): MockupTaskBody | null {
   const variant_ids = mockupVariantIds(b, colors.slice(0, MOCKUP_MAX_COLORS));
+  const item = printfulItemDraft(b, plans, urls);
+  // D278: carry the ORDER's per-file options (auto_thread_color when the catalog has no thread option, e.g. the
+  // 6089M front) into the mockup. Without them Printful's generator draws default grey thread - the order was right.
+  const fileOpts = new Map(item.files.map((f) => [f.type, f.options]));
   const files = plans.filter((p) => urls[p.key]).map((p) => {
     const { limit_to_print_area: _drop, ...position } = p.position; void _drop;
-    return { placement: p.fileType, image_url: urls[p.key], position };
+    const options = fileOpts.get(p.fileType);
+    return { placement: p.fileType, image_url: urls[p.key], position, ...(options?.length ? { options } : {}) };
   });
   if (!variant_ids.length || !files.length) return null;
-  const item = printfulItemDraft(b, plans, urls);
   const product_options: Record<string, unknown> = {};
   for (const o of item.options) if (o.id !== "notes") product_options[o.id] = o.value;
   return { variant_ids, format: "jpg", width: Math.max(50, Math.min(2000, Math.round(width))), files, ...(Object.keys(product_options).length ? { product_options } : {}) };
@@ -636,6 +642,8 @@ export function __runPrintExportTests(): { passed: number; failed: number } {
   ok(threadOptionId(hat, "embroidery_front") === null, "6089M lists no thread_colors (front) -> null, never invented");
   ok(threadOptionId(beanie, "embroidery_front") === "thread_colors", "beanie front thread_colors listed");
   ok(threadOptionId(hat, "embroidery_front", true) === "thread_colors_3d", "puff -> thread_colors_3d");
+  ok(threadOptionId(getBlank("ind-prm50ptpd")!, "embroidery_apparel_front") === "thread_colors_apparel", "D278: sweatpants front -> thread_colors_apparel");
+  ok(threadOptionId(getBlank("socco-sc200")!, "embroidery_inside_right") === "thread_colors_inside_right", "D278: sock thread option");
   ok(threadOptionId(tee, "front") === null, "non-embroidery -> null");
 
   // DPI cap
@@ -745,10 +753,17 @@ export function __runPrintExportTests(): { passed: number; failed: number } {
   ok(draft5.files[0].options?.[0].id === "auto_thread_color", "auto_thread_color file option");
   ok(draft5.options.some((o) => o.id === "embroidery_type" && o.value === "flat"), "embroidery_type flat");
   ok(draft5.options.some((o) => o.id === "notes" && String(o.value).includes("1951 Gold")), "threads in notes");
+  // D278: the grey-logo mockup - the 6089M front's auto_thread_color must reach the mockup generator too.
+  const mb5 = mockupTaskBody(hat, [p5], { [p5.key]: "https://x/h.png" }, [colorsFor(hat)[0][0]]);
+  ok(!!mb5 && mb5.files[0].options?.some((o) => o.id === "auto_thread_color" && o.value === true) === true, "D278: mockup file carries auto_thread_color (was dropped -> grey thread)");
+  ok(JSON.stringify(mb5!.files[0].options) === JSON.stringify(draft5.files[0].options), "D278: mockup file options = order file options");
+  ok(!!mb5 && mb5.product_options?.embroidery_type === "flat" && !("notes" in (mb5.product_options ?? {})), "D278: product options kept, notes not sent to mockups");
   const d5p = design(hat, { hat_front: { method: "embroidery", puff: true, elements: [el({ id: "h1", w: 2, h: 1 })] } });
   const p5p = planPrintFiles(d5p).plans[0];
   ok(p5p.puff && p5p.threadOption === "thread_colors_3d", "puff thread option");
   ok(printfulItemDraft(hat, [p5p], {}).options.some((o) => o.id === "embroidery_type" && o.value === "3d"), "embroidery_type 3d");
+  const mb5p = mockupTaskBody(hat, [p5p], { [p5p.key]: "https://x/h.png" }, [colorsFor(hat)[0][0]]);
+  ok(!!mb5p && !mb5p.files[0].options && Array.isArray(mb5p.product_options?.thread_colors_3d), "D278: puff uses the listed thread_colors_3d option, no auto flag");
   const d6 = design(dad, { hat_back: { method: "embroidery", elements: [el({ id: "h2", w: 1, h: 0.5 })] } });
   ok(planPrintFiles(d6).plans[0].threadOption === "thread_colors_back", "dad back thread option");
 
@@ -826,6 +841,7 @@ export function __runPrintExportTests(): { passed: number; failed: number } {
   const mb = mockupTaskBody(tee, p1.plans, { front: "https://x/f.png", back: "https://x/b.png" }, [black]);
   ok(!!mb && mb.files.length === 2 && mb.files[0].placement === "front" && !("limit_to_print_area" in mb.files[0].position), "mockup body files + position");
   ok(!!mb && mb.width === 1000 && mb.format === "jpg" && !mb.product_options, "mockup defaults, no options for DTG");
+  ok(!!mb && mb.files.every((f) => !f.options), "D278: DTG mockup files get no thread options");
   ok(mockupTaskBody(tee, p1.plans, {}, [black]) === null, "no hosted files -> no task");
   ok(mockupTaskBody(tee, p1.plans, { front: "u" }, [black], 5000)!.width === 2000, "width capped at 2000");
 
