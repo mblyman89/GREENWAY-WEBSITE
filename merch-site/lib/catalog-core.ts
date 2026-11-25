@@ -96,13 +96,15 @@ export interface MerchProduct {
   maxPriceCents: number;
   /** Printful order-item template (files with exact print position + options). Server use only. */
   orderItem: OrderItemTemplate;
+  /** D285: Printful v2 techniques this product prints with (dtg / embroidery / dtfilm). */
+  techniques: string[];
   designId: string;
   order: number;
 }
 
 /** What the browser gets (no print files, no Printful options). */
-export type MerchProductCard = Omit<MerchProduct, "orderItem" | "designId">;
-export const toCard = ({ orderItem: _o, designId: _d, ...card }: MerchProduct): MerchProductCard => card; // eslint-disable-line @typescript-eslint/no-unused-vars
+export type MerchProductCard = Omit<MerchProduct, "orderItem" | "designId" | "techniques">;
+export const toCard = ({ orderItem: _o, designId: _d, techniques: _t, ...card }: MerchProduct): MerchProductCard => card; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v : "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/g, " ").replace(/[ \t]+/g, " ").trim().slice(0, max);
@@ -202,6 +204,7 @@ export function normalizeListing(raw: unknown, o: NormalizeOptions): NormalizeRe
       colors, sizes, variants,
       minPriceCents: Math.min(...prices), maxPriceCents: Math.max(...prices),
       orderItem: { files, options },
+      techniques: printFiles.length ? [...new Set(printFiles.map((pf) => (pf.method === "dtf" ? "dtfilm" : pf.method === "embroidery" ? "embroidery" : "dtg")))].sort() : ["dtg"],
       designId: str(raw.designId, 60),
       order: o.order,
     },
@@ -346,6 +349,7 @@ export function __runMerchCatalogTests(): { passed: number; failed: number } {
   ok(p.variants.length === 3, "duplicate + incomplete variants dropped");
   ok(p.minPriceCents === 3500 && p.maxPriceCents === 3700 && priceLabel(p) === "From $35.00", "price range");
   ok(p.orderItem.files[0].url === "https://greenwaymerch.com/print/logo-tee-front-dtg.png" && !!p.orderItem.files[0].position, "empty print url filled from /print/ + position kept");
+  ok(p.techniques.join() === "dtg" && !("techniques" in toCard(p)), "D285: techniques read from print files, kept server-side");
   ok(!p.description.includes("<"), "angle brackets stripped");
   ok(cleanDescription("\u2022 Soft\r\n\u2022 \u2265 <3 \ud83c\udf3f\u200b") === "\u2022 Soft\n\u2022 \u2265 <3 \ud83c\udf3f", "D283: bullets, symbols, emoji + line breaks kept");
   ok(p.images[0] === "/categories/tees.webp", "falls back to the category photo");

@@ -172,15 +172,16 @@ export function readPrintfulEvent(raw: unknown): PrintfulEventAction {
 }
 
 /**
- * D232 M-6 (G-83): Printful's stock_updated event (docs: data.product_id +
- * data.variant_stock {out[], discontinued[]}). We only take the garment id;
- * the back office re-reads that garment's stock from Printful itself.
+ * D232 M-6 (G-83): Printful's stock_updated event (v1: data.product_id) and
+ * D285 v2 catalog_stock_updated (data[].catalog_product_id). We only take the
+ * garment ids; the back office re-reads their availability from Printful.
  */
-export function readStockEvent(raw: unknown): number | null {
-  const ev = (raw && typeof raw === "object" ? raw : {}) as { type?: unknown; data?: { product_id?: unknown } };
-  if (ev.type !== "stock_updated") return null;
-  const id = Number(ev.data?.product_id);
-  return Number.isInteger(id) && id > 0 ? id : null;
+export function readStockEvent(raw: unknown): number[] {
+  const ev = (raw && typeof raw === "object" ? raw : {}) as { type?: unknown; data?: unknown };
+  const pos = (n: unknown) => { const id = Number(n); return Number.isInteger(id) && id > 0 ? [id] : []; };
+  if (ev.type === "stock_updated") return pos((ev.data as { product_id?: unknown } | undefined)?.product_id);
+  if (ev.type !== "catalog_stock_updated" || !Array.isArray(ev.data)) return [];
+  return [...new Set(ev.data.flatMap((d) => pos((d as { catalog_product_id?: unknown } | null)?.catalog_product_id)))].slice(0, 40);
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -280,7 +281,7 @@ export function __runOrdersCoreTests(): { passed: number; failed: number } {
   const product = {
     handle: "logo-tee", title: "Logo Tee", category: "tees", description: "", blankLabel: "", fabric: "", images: [], colors: ["Black"], sizes: ["M"],
     variants: [{ id: 4012, color: "Black", size: "M", priceCents: 3500, inStock: true }], minPriceCents: 3500, maxPriceCents: 3500,
-    orderItem: { files: [{ type: "front", url: "https://greenwaymerch.com/print/a.png", position: { area_width: 1800, area_height: 2400, width: 1800, height: 1800, top: 0, left: 0 } }], options: [] }, designId: "d", order: 0,
+    orderItem: { files: [{ type: "front", url: "https://greenwaymerch.com/print/a.png", position: { area_width: 1800, area_height: 2400, width: 1800, height: 1800, top: 0, left: 0 } }], options: [] }, techniques: ["dtg"], designId: "d", order: 0,
   } satisfies MerchProduct;
   const session: StripeSessionLike = {
     id: "cs_test_1", payment_status: "paid", client_reference_id: "gm-abc123-xy",
@@ -310,7 +311,8 @@ export function __runOrdersCoreTests(): { passed: number; failed: number } {
   ok(readPrintfulEvent({ type: "package_shipped", data: { shipment: { tracking_url: "javascript:alert(1)" } } }).trackingUrl === "", "non-https tracking url dropped");
   ok(readPrintfulEvent({ type: "order_failed", data: { reason: "Bad address", order: {} } }).kind === "problem", "order_failed -> owner alert");
   ok(readPrintfulEvent({ type: "stock_updated" }).kind === "ignore" && readPrintfulEvent(null).kind === "ignore", "other events ignored");
-  ok(readStockEvent({ type: "stock_updated", data: { product_id: 71, variant_stock: { out: [4012], discontinued: [] } } }) === 71 && readStockEvent({ type: "stock_updated", data: { product_id: "x" } }) === null && readStockEvent({ type: "package_shipped", data: { product_id: 71 } }) === null && readStockEvent(null) === null, "M-6: stock_updated -> garment id only");
+  ok(readStockEvent({ type: "stock_updated", data: { product_id: 71, variant_stock: { out: [4012], discontinued: [] } } }).join() === "71" && readStockEvent({ type: "stock_updated", data: { product_id: "x" } }).length === 0 && readStockEvent({ type: "package_shipped", data: { product_id: 71 } }).length === 0 && readStockEvent(null).length === 0, "M-6: stock_updated -> garment id only");
+  ok(readStockEvent({ type: "catalog_stock_updated", data: [{ catalog_product_id: 71, catalog_variant_id: 4012 }, { catalog_product_id: 71, catalog_variant_id: 4013 }, { catalog_product_id: 12 }, null, { catalog_product_id: -1 }] }).join() === "71,12" && readStockEvent({ type: "catalog_stock_updated", data: {} }).length === 0, "D285: v2 catalog_stock_updated -> distinct garment ids");
   const mail = shippedEmail({ ...shipped, name: "<b>Pat</b> Doe" }, { name: "Greenway Merch", url: "https://greenwaymerch.com", contactEmail: "help@x.com" });
   ok(mail.html.includes("&lt;b&gt;Pat&lt;/b&gt;") && !mail.html.includes("<b>Pat") && mail.html.includes('href="https://tools.usps.com/x?y=1"'), "email escapes names, links tracking");
   ok(mail.subject.includes("gm-abc123-xy") && mail.text.includes("9400"), "email subject + text");

@@ -48,3 +48,23 @@ export async function printful<T>(method: "GET" | "POST" | "PUT" | "DELETE", pat
     clearTimeout(t);
   }
 }
+
+/**
+ * D285: Printful API v2 (body is `{ data, paging }`, not `{ result }`). GET only
+ * for reads; same token / store header / 20 s timeout as v1.
+ */
+export async function printfulV2<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: true; data: T; paging?: { total?: number; offset?: number; limit?: number } } | { ok: false; status: number; error: string }> {
+  const token = process.env.PRINTFUL_API_TOKEN;
+  if (!token) return { ok: false, status: 503, error: "PRINTFUL_API_TOKEN is not set." };
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  if (process.env.PRINTFUL_STORE_ID) headers["X-PF-Store-Id"] = process.env.PRINTFUL_STORE_ID;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  try {
+    const res = await fetch(`${PRINTFUL_API}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" });
+    const json = (await res.json().catch(() => null)) as { data?: unknown; result?: unknown; paging?: { total?: number; offset?: number; limit?: number }; error?: { message?: string }; detail?: string } | null;
+    if (!res.ok || !json) return { ok: false, status: res.status, error: `Printful ${res.status}: ${json?.error?.message ?? json?.detail ?? res.statusText ?? "request failed"}` };
+    return { ok: true, data: (json.data ?? json.result) as T, ...(json.paging ? { paging: json.paging } : {}) };
+  } catch (e) {
+    return { ok: false, status: 504, error: (e as { name?: string })?.name === "TimeoutError" ? "Printful didn't answer within 20 seconds." : "Couldn't reach Printful (network error)." };
+  }
+}

@@ -221,7 +221,7 @@ export function __runSeoCoreTests(): { passed: number; failed: number } {
       { id: 2, color: "White", size: "M", priceCents: 3700, inStock: false },
       { id: 3, color: "White", size: "S", priceCents: 0, inStock: true },
     ],
-    minPriceCents: 3500, maxPriceCents: 3700, orderItem: { files: [], options: [] }, designId: "d", order: 0,
+    minPriceCents: 3500, maxPriceCents: 3700, orderItem: { files: [], options: [] }, techniques: ["dtg"], designId: "d", order: 0,
   };
   ok(absUrl(site.url, "/x.jpg") === "https://greenwaymerch.com/x.jpg" && absUrl(site.url, "//evil.com/x") === "" && absUrl(site.url, "http://x") === "", "absUrl only site paths or https");
   ok(!jsonLdString({ a: "</script><x>" }).includes("<"), "JSON-LD cannot close the script tag");

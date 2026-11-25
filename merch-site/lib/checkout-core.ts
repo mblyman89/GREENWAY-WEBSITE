@@ -126,10 +126,35 @@ export function buildCheckoutForm(i: SessionInput): [string, string][] {
 }
 
 // ---------------------------------------------------------------------------
+/**
+ * D285: live Printful v2 availability at checkout. `answers` maps variant id ->
+ * GET /v2/catalog-variants/{id}/availability `data` (or null when Printful
+ * didn't answer). Only an explicit "out of stock" / "not fulfillable" for the
+ * north_america region and one of the product's techniques blocks; no answer
+ * or "unknown" passes (the 6-hourly + webhook copy already hides those).
+ */
+export function availabilityProblems(lines: readonly { title: string; color: string; size: string; variantId: number; techniques: readonly string[] }[], answers: ReadonlyMap<number, unknown>): string[] {
+  const out: string[] = [];
+  for (const l of lines) {
+    const raw = answers.get(l.variantId);
+    const row = (Array.isArray(raw) ? raw.find((r) => (r as { catalog_variant_id?: unknown })?.catalog_variant_id === l.variantId) : raw) as { techniques?: unknown } | null | undefined;
+    const techs = Array.isArray(row?.techniques) ? (row!.techniques as { technique?: unknown; selling_regions?: unknown }[]) : [];
+    const bad = techs.some((t) => l.techniques.includes(String(t?.technique)) && Array.isArray(t.selling_regions) &&
+      (t.selling_regions as { name?: unknown; availability?: unknown }[]).some((r) => r?.name === "north_america" && (r.availability === "out of stock" || r.availability === "not fulfillable")));
+    if (bad) out.push(`Sorry - ${l.title} (${l.color} / ${l.size}) just sold out at our print partner. Please pick another colour or size.`);
+  }
+  return out;
+}
+
 export function __runCheckoutCoreTests(): { passed: number; failed: number } {
   let passed = 0; let failed = 0;
   const ok = (c: boolean, m: string) => { if (c) passed += 1; else { failed += 1; console.error(`FAIL merch-site checkout-core: ${m}`); } };
 
+  const na = (a: string) => ({ catalog_variant_id: 5, techniques: [{ technique: "dtg", selling_regions: [{ name: "europe", availability: "out of stock" }, { name: "north_america", availability: a }] }] });
+  const L = [{ title: "Tee", color: "Black", size: "M", variantId: 5, techniques: ["dtg"] }];
+  ok(availabilityProblems(L, new Map([[5, na("out of stock")]])).length === 1 && availabilityProblems(L, new Map([[5, [na("not fulfillable")]]])).length === 1, "D285: out of stock / not fulfillable blocks checkout");
+  ok(availabilityProblems(L, new Map([[5, na("in stock")]])).length === 0 && availabilityProblems(L, new Map([[5, na("unknown")]])).length === 0 && availabilityProblems(L, new Map([[5, null]])).length === 0, "D285: in stock / unknown / no answer pass");
+  ok(availabilityProblems([{ ...L[0], techniques: ["embroidery"] }], new Map([[5, na("out of stock")]])).length === 0, "D285: other technique's answer ignored");
   ok(parseShippingConfig({}).config === null && /MERCH_SHIP_FLAT_CENTS/.test(parseShippingConfig({}).problem ?? ""), "no shipping env -> checkout closed, never a guessed price");
   ok(parseShippingConfig({ MERCH_SHIP_FLAT_CENTS: "5.99" }).config === null, "dollars refused (cents only)");
   const cfg = parseShippingConfig({ MERCH_SHIP_FLAT_CENTS: "599", MERCH_SHIP_EXTRA_ITEM_CENTS: "200", MERCH_FREE_SHIP_OVER_CENTS: "10000", MERCH_SHIP_MIN_DAYS: "3", MERCH_SHIP_MAX_DAYS: "8" }).config!;

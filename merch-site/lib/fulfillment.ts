@@ -39,6 +39,21 @@ export async function printful<T = unknown>(path: string, init: { method?: "GET"
   return { ok: true, status: res.status, result: data?.result, paging: data?.paging };
 }
 
+/** D285: Printful API v2 GET -> `data`, or null on any failure / timeout (callers fail open). */
+export async function printfulV2Data(path: string, timeoutMs: number): Promise<unknown> {
+  const token = env("PRINTFUL_API_TOKEN");
+  if (!token) return null;
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (env("PRINTFUL_STORE_ID")) headers["X-PF-Store-Id"] = env("PRINTFUL_STORE_ID");
+  try {
+    const res = await fetch(`${PRINTFUL}${path}`, { headers, cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return null;
+    return ((await res.json().catch(() => null)) as { data?: unknown } | null)?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sendEmail(msg: { to: string; subject: string; html: string; text: string; replyTo?: string }): Promise<{ ok: boolean; error?: string }> {
   const key = env("RESEND_API_KEY");
   const from = env("MERCH_EMAIL_FROM");

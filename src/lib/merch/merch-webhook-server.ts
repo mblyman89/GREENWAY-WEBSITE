@@ -11,10 +11,13 @@
  * Printful: "only one webhook URL can be active for a store, so calling this
  * method disables all existing webhook configuration" - which is why the
  * plan keeps any extra type already registered and the probe runs first.
+ * D285: then also POST /v2/webhooks/catalog_stock_updated (v2, per-event:
+ * replaces only that one event) watching the catalog's garments, so the
+ * shop hears per-variant, per-technique availability changes.
  * Nothing returned contains Token C (only maskWebhookUrl output).
  */
 import "server-only";
-import { printful, printfulConfigured } from "@/lib/merch-studio/printful-client";
+import { printful, printfulConfigured, printfulV2 } from "@/lib/merch-studio/printful-client";
 import { readMerchCatalog } from "./merch-inventory-store";
 import { merchShopOrigin } from "./merch-health-server";
 import { PROBE_EVENT, maskWebhookUrl, planWebhook, probeProblem, readWebhookInfo, type WebhookInfo } from "./merch-webhook-core";
@@ -78,7 +81,9 @@ export async function applyWebhook(): Promise<WebhookApply> {
   if (problem) return { ok: false, error: problem, before };
   const set = await printful<unknown>("POST", "/webhooks", plan.body);
   if (!set.ok) return { ok: false, error: `Printful refused the registration: ${set.error}. Press Check again to see what is registered now.`, before };
+  const hookUrl = plan.url; // sent to Printful only, never returned
+  const v2 = await printfulV2<unknown>("POST", "/v2/webhooks/catalog_stock_updated", { type: "catalog_stock_updated", url: hookUrl, params: [{ name: "products", value: cat.ids.slice(0, 100).map((id) => ({ id })) }] });
   const again = await readCurrent();
   const after = again.info ? shown(again.info) : shown(readWebhookInfo(set.result));
-  return { ok: true, before, after, changes: plan.changes };
+  return { ok: true, before, after, changes: [...plan.changes, v2.ok ? `v2 catalog_stock_updated watching ${Math.min(cat.ids.length, 100)} garment(s)` : `v2 stock watch not registered (${v2.error}); the 6-hour copy still runs`] };
 }

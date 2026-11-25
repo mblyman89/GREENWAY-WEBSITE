@@ -234,43 +234,115 @@ export function merchFeed(c: MerchCatalog): { name: string; data: Record<string,
 // ---------------------------------------------------------------------------
 // Printful stock (GET /products/{id}: variants[].in_stock + availability_status[{region,status}])
 // ---------------------------------------------------------------------------
-export type StockStatus = "in_stock" | "stocked_on_demand" | "out_of_stock" | "discontinued" | "unknown";
+export type StockStatus = "in_stock" | "stocked_on_demand" | "out_of_stock" | "discontinued" | "not_fulfillable" | "unconfirmed" | "unknown";
 export const STOCK_LABELS: Record<StockStatus, string> = {
-  in_stock: "In stock", stocked_on_demand: "Made to order", out_of_stock: "Out of stock", discontinued: "Discontinued", unknown: "Not checked",
+  in_stock: "In stock", stocked_on_demand: "Made to order", out_of_stock: "Out of stock", discontinued: "Discontinued",
+  not_fulfillable: "Not fulfillable", unconfirmed: "Printful unsure", unknown: "Not checked",
 };
+/** D285: only a definite yes sells; Printful's own "unknown" (unconfirmed) is hidden. */
 export const stockSellable = (s: StockStatus) => s === "in_stock" || s === "stocked_on_demand";
+/** Keys: `${variantId}` (any technique, v1) or `${variantId}:${technique}` (v2). */
+export type StockMap = Map<string, StockStatus>;
+
+/** Studio print method -> Printful v2 technique. */
+export const pfTechnique = (method: string) => (method === "dtf" ? "dtfilm" : method === "embroidery" ? "embroidery" : "dtg");
+/** Distinct Printful techniques a package prints with (dtg when it has no files). */
+export function techniquesFor(pkg: { printFiles?: readonly { method: string }[] }): string[] {
+  const t = [...new Set((pkg.printFiles ?? []).map((f) => pfTechnique(f.method)))];
+  return t.length ? t : ["dtg"];
+}
+const WORST: StockStatus[] = ["discontinued", "not_fulfillable", "out_of_stock", "unconfirmed", "stocked_on_demand", "in_stock"];
+/** The variant's status for these techniques: the worst v2 answer when every technique answered, else the v1 answer. */
+export function stockFor(map: ReadonlyMap<string, StockStatus>, variantId: number, techniques: readonly string[]): StockStatus {
+  const v2 = techniques.map((t) => map.get(`${variantId}:${t}`));
+  if (v2.length && v2.every(Boolean)) return WORST.find((w) => v2.includes(w)) ?? "unknown";
+  return map.get(String(variantId)) ?? "unknown";
+}
 
 /** Printful product variants -> variantId -> US status (falls back to the in_stock flag). */
-export function stockFromPrintful(raw: unknown): Map<number, StockStatus> {
-  const out = new Map<number, StockStatus>();
+export function stockFromPrintful(raw: unknown): StockMap {
+  const out: StockMap = new Map();
   const variants = isObj(raw) && Array.isArray(raw.variants) ? raw.variants : [];
   const known: StockStatus[] = ["in_stock", "stocked_on_demand", "out_of_stock", "discontinued"];
   for (const v of variants) {
     if (!isObj(v) || typeof v.id !== "number") continue;
     const us = (Array.isArray(v.availability_status) ? v.availability_status : []).find((a) => isObj(a) && a.region === "US") as Record<string, unknown> | undefined;
     const s = us && known.includes(us.status as StockStatus) ? (us.status as StockStatus) : typeof v.in_stock === "boolean" ? (v.in_stock ? "in_stock" : "out_of_stock") : "unknown";
-    out.set(v.id, s);
+    out.set(String(v.id), s);
   }
   return out;
 }
 
+const V2_STATUS: Record<string, StockStatus> = { "in stock": "in_stock", "out of stock": "out_of_stock", "not fulfillable": "not_fulfillable", unknown: "unconfirmed" };
+/**
+ * D285: Printful v2 availability rows (GET /v2/catalog-products/{id}/availability
+ * or the catalog_stock_updated webhook data[]) -> `${variantId}:${technique}`
+ * for the north_america selling region. Unrecognised answers -> unconfirmed.
+ */
+export function stockFromV2(rows: unknown, region = "north_america"): StockMap {
+  const out: StockMap = new Map();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!isObj(r) || typeof r.catalog_variant_id !== "number") continue;
+    for (const t of Array.isArray(r.techniques) ? r.techniques : []) {
+      if (!isObj(t) || typeof t.technique !== "string") continue;
+      const sr = (Array.isArray(t.selling_regions) ? t.selling_regions : []).find((x) => isObj(x) && x.name === region) as Record<string, unknown> | undefined;
+      if (!sr) continue;
+      out.set(`${r.catalog_variant_id}:${t.technique}`, V2_STATUS[String(sr.availability)] ?? "unconfirmed");
+    }
+  }
+  return out;
+}
+
+export interface WentOut { handle: string; title: string; color: string; size: string; variantId: number; status: StockStatus }
+
 /** Copy Printful's stock onto every variant's inStock (what the merch site shows). */
-export function applyStock(c: MerchCatalog, stock: ReadonlyMap<number, StockStatus>, nowIso: string): { catalog: MerchCatalog; changed: number; checked: number } {
+export function applyStock(c: MerchCatalog, stock: ReadonlyMap<string, StockStatus>, nowIso: string): { catalog: MerchCatalog; changed: number; checked: number; wentOut: WentOut[] } {
   let changed = 0; let checked = 0;
+  const wentOut: WentOut[] = [];
   const items = c.items.map((i) => {
     let touched = false;
+    const tech = techniquesFor(i.pkg);
     const variants = i.pkg.variants.map((v) => {
-      const s = stock.get(v.printfulVariantId);
-      if (!s || s === "unknown") return v;
+      const s = stockFor(stock, v.printfulVariantId, tech);
+      if (s === "unknown") return v;
       checked += 1; touched = true;
       const inStock = stockSellable(s);
       if (inStock === v.inStock) return v;
       changed += 1;
+      if (!inStock && i.status === "live") wentOut.push({ handle: i.handle, title: i.pkg.product.title, color: v.color, size: v.size, variantId: v.printfulVariantId, status: s });
       return { ...v, inStock };
     });
     return touched ? { ...i, stockSyncedAt: nowIso, pkg: { ...i.pkg, variants } } : i;
   });
-  return { catalog: { v: 1, items }, changed, checked };
+  return { catalog: { v: 1, items }, changed, checked, wentOut };
+}
+
+// ---------------------------------------------------------------------------
+// D285 nightly cost check (Printful POST /orders/estimate-costs, free, v1)
+// ---------------------------------------------------------------------------
+/** costs.subtotal ("12.34") of an estimate-costs result -> cents, or null. */
+export function estimateSubtotalCents(raw: unknown): number | null {
+  const c = isObj(raw) && isObj(raw.costs) ? raw.costs : null;
+  const n = c ? Number(c.subtotal) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : null;
+}
+export interface CostCheck { handle: string; title: string; color: string; size: string; variantId: number; retailCents: number; profitCents: number; savedCents: number; nowCents: number }
+export interface CostDrift extends CostCheck { deltaCents: number; newProfitCents: number; newMarginBps: number }
+/** One probe per live product: its priciest variant (size upcharges show up there). */
+export function costProbes(c: MerchCatalog): { handle: string; title: string; v: ListingVariant; files: unknown; options: unknown }[] {
+  return c.items.filter((i) => i.status === "live" && i.pkg.variants.length).map((i) => {
+    const v = [...i.pkg.variants].sort((a, b) => b.printfulCents - a.printfulCents)[0];
+    return { handle: i.handle, title: i.pkg.product.title, v, files: i.pkg.printfulOrderItem?.files ?? [], options: i.pkg.printfulOrderItem?.options ?? [] };
+  });
+}
+/** Printful now charges more (or less) than when published: |delta| >= max(25c, 3%). */
+export function costDrifts(checks: readonly CostCheck[]): CostDrift[] {
+  return checks.flatMap((c) => {
+    const d = c.nowCents - c.savedCents;
+    if (Math.abs(d) < Math.max(25, Math.round(c.savedCents * 0.03))) return [];
+    const np = c.profitCents - d;
+    return [{ ...c, deltaCents: d, newProfitCents: np, newMarginBps: c.retailCents > 0 ? Math.round((np / c.retailCents) * 10000) : 0 }];
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +375,7 @@ export function salesByVariant(orders: readonly SalesOrderLike[]): Map<number, V
 export interface InventoryVariantRow {
   handle: string; title: string; color: string; size: string; variantId: number;
   retailCents: number; printfulCents: number; profitCents: number; marginBps: number;
-  onSite: boolean; stock: StockStatus; mismatch: boolean;
+  onSite: boolean; stock: StockStatus; stockLabel: string; mismatch: boolean;
   units: number; revenueCents: number;
 }
 export interface InventoryProductRow {
@@ -318,16 +390,17 @@ export interface InventoryView {
   totals: { products: number; live: number; hidden: number; variants: number; outOfStock: number; mismatches: number; units: number; revenueCents: number; costCents: number };
 }
 
-export function inventoryView(c: MerchCatalog, stock: ReadonlyMap<number, StockStatus>, sales: ReadonlyMap<number, VariantSales>): InventoryView {
+export function inventoryView(c: MerchCatalog, stock: ReadonlyMap<string, StockStatus>, sales: ReadonlyMap<number, VariantSales>): InventoryView {
   const variants: InventoryVariantRow[] = [];
   const products: InventoryProductRow[] = c.items.map((i) => {
+    const tech = techniquesFor(i.pkg);
     const rows = i.pkg.variants.map((v): InventoryVariantRow => {
-      const s = stock.get(v.printfulVariantId) ?? "unknown";
+      const s = stockFor(stock, v.printfulVariantId, tech);
       const sale = sales.get(v.printfulVariantId);
       return {
         handle: i.handle, title: i.pkg.product.title, color: v.color, size: v.size, variantId: v.printfulVariantId,
         retailCents: v.retailCents, printfulCents: v.printfulCents, profitCents: v.profitCents, marginBps: v.marginBps,
-        onSite: v.inStock, stock: s, mismatch: s !== "unknown" && stockSellable(s) !== v.inStock,
+        onSite: v.inStock, stock: s, stockLabel: s === "not_fulfillable" || s === "unconfirmed" ? `${STOCK_LABELS[s]} (${tech.join(" + ")})` : STOCK_LABELS[s], mismatch: s !== "unknown" && stockSellable(s) !== v.inStock,
         units: sale?.units ?? 0, revenueCents: sale?.revenueCents ?? 0,
       };
     });
@@ -339,7 +412,7 @@ export function inventoryView(c: MerchCatalog, stock: ReadonlyMap<number, StockS
       handle: i.handle, title: i.pkg.product.title, status: i.status, blank: [b.brand, b.model].filter(Boolean).join(" "), image: i.images[0] ?? "",
       colors: new Set(rows.map((r) => r.color)).size, sizes: new Set(rows.map((r) => r.size)).size, variants: rows.length,
       sellable: rows.filter((r) => (r.stock === "unknown" ? r.onSite : stockSellable(r.stock))).length,
-      outOfStock: rows.filter((r) => r.stock === "out_of_stock" || r.stock === "discontinued").length,
+      outOfStock: rows.filter((r) => r.stock !== "unknown" && !stockSellable(r.stock)).length,
       mismatches: rows.filter((r) => r.mismatch).length,
       minRetailCents: prices.length ? Math.min(...prices) : 0, maxRetailCents: prices.length ? Math.max(...prices) : 0,
       units: rows.reduce((n, r) => n + r.units, 0), revenueCents: rows.reduce((n, r) => n + r.revenueCents, 0), costCents,
@@ -367,7 +440,7 @@ const dollars = (c: number) => (c / 100).toFixed(2);
 export function inventoryCsv(v: InventoryView): string {
   const status = new Map(v.products.map((p) => [p.handle, p.status]));
   const head = ["Product", "Handle", "Status", "Colour", "Size", "Printful variant", "Retail", "Printful cost", "Profit / unit", "Margin %", "On website", "Printful stock", "Units sold", "Revenue"];
-  const lines = v.variants.map((r) => [r.title, r.handle, status.get(r.handle) ?? "", r.color, r.size, r.variantId, dollars(r.retailCents), dollars(r.printfulCents), dollars(r.profitCents), (r.marginBps / 100).toFixed(1), r.onSite ? "yes" : "no", STOCK_LABELS[r.stock], r.units, dollars(r.revenueCents)]);
+  const lines = v.variants.map((r) => [r.title, r.handle, status.get(r.handle) ?? "", r.color, r.size, r.variantId, dollars(r.retailCents), dollars(r.printfulCents), dollars(r.profitCents), (r.marginBps / 100).toFixed(1), r.onSite ? "yes" : "no", r.stockLabel, r.units, dollars(r.revenueCents)]);
   return [head, ...lines].map((l) => l.map(csvCell).join(",")).join("\n") + "\n";
 }
 
@@ -448,12 +521,30 @@ export function __runMerchInventoryTests(): { passed: number; failed: number; fa
     { id: "x" },
   ] };
   const st = stockFromPrintful(pf);
-  ok(st.get(1) === "in_stock" && st.get(2) === "discontinued" && st.get(3) === "stocked_on_demand" && st.get(4) === "out_of_stock" && st.size === 4, "US region status read, in_stock fallback");
+  ok(st.get("1") === "in_stock" && st.get("2") === "discontinued" && st.get("3") === "stocked_on_demand" && st.get("4") === "out_of_stock" && st.size === 4, "US region status read, in_stock fallback");
   ok(stockFromPrintful(null).size === 0, "no product -> empty");
   const ap = applyStock(c1, st, now);
   const vs = ap.catalog.items[0].pkg.variants;
   ok(ap.checked === 3 && ap.changed === 2 && vs[1].inStock === false && vs[2].inStock === true && ap.catalog.items[0].stockSyncedAt === now, "stock copied onto variants");
   ok(applyStock(c1, new Map(), now).catalog.items[0].stockSyncedAt === "", "nothing checked -> untouched");
+  const reg = (a: string) => [{ name: "europe", availability: "in stock" }, { name: "north_america", availability: a }];
+  const v2 = stockFromV2([
+    { catalog_variant_id: 1, techniques: [{ technique: "dtg", selling_regions: reg("in stock") }, { technique: "embroidery", selling_regions: reg("not fulfillable") }] },
+    { catalog_variant_id: 2, techniques: [{ technique: "dtg", selling_regions: reg("unknown") }] },
+    { catalog_variant_id: 3, techniques: [{ technique: "dtg", selling_regions: reg("out of stock") }] },
+    { catalog_variant_id: 9, techniques: [{ technique: "dtg", selling_regions: [{ name: "europe", availability: "in stock" }] }] }, { bad: 1 },
+  ]);
+  ok(v2.get("1:dtg") === "in_stock" && v2.get("1:embroidery") === "not_fulfillable" && v2.get("2:dtg") === "unconfirmed" && v2.get("3:dtg") === "out_of_stock" && v2.size === 4, "v2 availability read for north_america per technique");
+  ok(pfTechnique("dtf") === "dtfilm" && techniquesFor({ printFiles: [] }).join() === "dtg" && techniquesFor({ printFiles: [{ method: "embroidery" }, { method: "dtg" }, { method: "dtg" }] }).join() === "embroidery,dtg", "studio method -> Printful technique");
+  ok(stockFor(v2, 1, ["dtg"]) === "in_stock" && stockFor(v2, 1, ["dtg", "embroidery"]) === "not_fulfillable" && stockFor(new Map([["5", "in_stock"]]), 5, ["dtg"]) === "in_stock" && stockFor(v2, 7, ["dtg"]) === "unknown", "worst technique wins, v1 fallback, missing = not checked");
+  const ap2 = applyStock(c1, new Map([["1", "in_stock"], ["2", "unconfirmed"], ["3", "in_stock"]]), now);
+  ok(!stockSellable("unconfirmed") && !stockSellable("not_fulfillable") && ap2.catalog.items[0].pkg.variants[1].inStock === false, "Printful unsure / not fulfillable are hidden");
+  ok(estimateSubtotalCents({ costs: { subtotal: "13.95", total: "20" } }) === 1395 && estimateSubtotalCents({ costs: {} }) === null && estimateSubtotalCents(null) === null, "estimate-costs subtotal -> cents");
+  const base = { handle: "h", title: "T", color: "B", size: "M", variantId: 1, retailCents: 3500, profitCents: 1500 };
+  const dr = costDrifts([{ ...base, savedCents: 1300, nowCents: 1400 }, { ...base, savedCents: 1300, nowCents: 1310 }, { ...base, savedCents: 1300, nowCents: 1200 }]);
+  ok(dr.length === 2 && dr[0].deltaCents === 100 && dr[0].newProfitCents === 1400 && dr[0].newMarginBps === 4000 && dr[1].deltaCents === -100, "cost drift: rises and drops past 25c/3% flagged, noise ignored");
+  ok(costProbes(c1).every((p) => p.v.printfulCents === Math.max(...c1.items.find((i) => i.handle === p.handle)!.pkg.variants.map((v) => v.printfulCents))), "cost probe = priciest variant of each live product");
+  ok(ap2.wentOut.length === (c1.items[0].status === "live" && c1.items[0].pkg.variants[1].inStock ? 1 : 0), "live variants that go out are reported");
   const reSynced = upsertItem(ap.catalog, { pkg: pkg("logo-tee"), images: [], byEmail: null, nowIso: "2026-03-01T00:00:00.000Z" });
   ok(reSynced.ok && reSynced.catalog.items[0].stockSyncedAt === now && reSynced.catalog.items[0].pkg.variants[1].inStock === false && reSynced.catalog.items[0].pkg.variants[2].inStock === true, "re-publish keeps the stock copy and its date (G-82)");
   const pubPre = "https://p.example/storage/v1/object/public/media";

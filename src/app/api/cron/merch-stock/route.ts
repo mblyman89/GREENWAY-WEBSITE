@@ -12,6 +12,11 @@
  * "cron:merch-stock". About one Printful call per garment; a run with no
  * products makes no Printful call.
  *
+ * D285: the 12:40 UTC tick (about 4-5 am Pacific) also runs the nightly
+ * Printful cost check (runMerchCostCheck: free estimate-costs per live
+ * product vs. the saved cost, owner email when it moved; never edits prices),
+ * so no extra cron. ?cost=1 forces it (staff / CRON_SECRET only).
+ *
  * Auth: same fail-closed posture as /api/cron/platform-health (CRON_SECRET
  * Bearer, else a staff session; production with no secret -> 503).
  */
@@ -19,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runMerchStockCopy } from "@/lib/merch/merch-stock-server";
+import { runMerchCostCheck } from "@/lib/merch/merch-cost-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -46,5 +52,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   const r = await runMerchStockCopy({ source: "cron:merch-stock" });
   if (!r.ok) console.error(`[cron/merch-stock] ${r.problem}`);
-  return NextResponse.json(r, { status: r.ok ? 200 : 502 });
+  const cost = new Date().getUTCHours() === 12 || req.nextUrl.searchParams.get("cost") === "1" ? await runMerchCostCheck() : null;
+  if (cost && !cost.ok) console.error(`[cron/merch-stock] cost check: ${cost.problem}`);
+  return NextResponse.json({ ...r, ...(cost ? { cost } : {}) }, { status: r.ok ? 200 : 502 });
 }

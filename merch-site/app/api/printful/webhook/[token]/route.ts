@@ -12,7 +12,7 @@
  *
  * package_shipped -> branded "your order shipped" email with tracking link.
  * order_failed / order_canceled / order_put_hold -> owner alert email.
- * stock_updated (M-6, G-83) -> relayed to the back office's /api/merch-stock
+ * stock_updated (v1) / catalog_stock_updated (v2, D285) -> relayed to the back office's /api/merch-stock
  *   (Bearer MERCH_CATALOG_TOKEN, no redirect follow), which re-reads that
  *   garment's stock from Printful and updates the catalog; the shop sees it
  *   within a minute. The 6-hourly cron is the safety net if this fails.
@@ -32,15 +32,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (!secretMatches(token, process.env.PRINTFUL_WEBHOOK_TOKEN)) return new Response("Not found", { status: 404 });
 
   const raw = await req.json().catch(() => null);
-  const stockProduct = readStockEvent(raw);
-  if (stockProduct) {
+  const stockProducts = readStockEvent(raw);
+  if (stockProducts.length) {
     const token = (process.env.MERCH_CATALOG_TOKEN ?? "").trim();
     let note = "stock relay skipped (MERCH_CATALOG_TOKEN not set)";
     if (token.length >= 32) {
       const url = new URL("/api/merch-stock", catalogSourceUrl()).toString();
-      const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ productId: stockProduct }), redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(20_000) }).catch(() => null);
+      const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ productIds: stockProducts }), redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(20_000) }).catch(() => null);
       note = res ? `stock relay ${res.status}` : "stock relay failed (network)";
-      if (!res || res.status !== 200) console.error(`[merch-stock] ${note} for Printful product ${stockProduct}; the 6-hourly copy will catch it.`);
+      if (!res || res.status !== 200) console.error(`[merch-stock] ${note} for Printful product(s) ${stockProducts.join(", ")}; the 6-hourly copy will catch it.`);
     }
     return Response.json({ ok: true, note });
   }
