@@ -87,6 +87,8 @@ export interface MerchProduct {
   blankLabel: string;
   fabric: string;
   images: string[];
+  /** D282: colour -> photo set (the PDP swaps sets when the shopper picks a colour). */
+  colorImages?: Record<string, string[]>;
   colors: string[];
   sizes: string[];
   variants: MerchVariant[];
@@ -172,13 +174,21 @@ export function normalizeListing(raw: unknown, o: NormalizeOptions): NormalizeRe
   const colors = [...new Set(variants.map((v) => v.color))];
   const sizes = [...new Set(variants.map((v) => v.size))];
   const prices = variants.map((v) => v.priceCents);
+  const ciRaw = isObj(merch.colorImages) ? merch.colorImages : {};
+  const colorImages: Record<string, string[]> = {};
+  for (const c of colors) {
+    const l = (Array.isArray(ciRaw[c]) ? (ciRaw[c] as unknown[]) : []).map(safeImage).filter(Boolean).slice(0, 8);
+    if (l.length) colorImages[c] = [...new Set(l)];
+  }
+  const firstSet = colors.map((c) => colorImages[c]).find(Boolean);
   return {
     product: {
       handle, title, category,
       description: str(p.description, 1000),
       blankLabel: [str(blank.brand, 40), str(blank.model, 20), str(blank.title, 60)].filter(Boolean).join(" "),
       fabric: str(blank.fabric, 200),
-      images: images.length ? images : [cat.image],
+      images: images.length ? images : firstSet ?? [cat.image],
+      ...(Object.keys(colorImages).length ? { colorImages } : {}),
       colors, sizes, variants,
       minPriceCents: Math.min(...prices), maxPriceCents: Math.max(...prices),
       orderItem: { files, options },
@@ -331,6 +341,11 @@ export function __runMerchCatalogTests(): { passed: number; failed: number } {
   ok(normalizeListing({ ...pkg, merch: { active: false } }, { siteUrl: "", order: 0 }).product === null, "merch.active false hides");
   ok(normalizeListing({ ...pkg, merch: { category: "hats", images: ["/products/a.jpg", "javascript:x"] } }, { siteUrl: "", order: 0 }).product!.category === "hats", "category override");
   ok(normalizeListing({ ...pkg, merch: { images: ["/products/a.jpg", "javascript:x"] } }, { siteUrl: "", order: 0 }).product!.images.join() === "/products/a.jpg", "unsafe images dropped");
+  { // D282: per-colour photo sets
+    const c0 = normalizeListing(pkg, { siteUrl: "", order: 0 }).product!.colors[0];
+    const ci = normalizeListing({ ...pkg, merch: { colorImages: { [c0]: ["https://x/1.webp", "javascript:x", "https://x/2.webp"], Nope: ["https://x/9.webp"] } } }, { siteUrl: "", order: 0 }).product!;
+    ok(ci.colorImages?.[c0]?.join() === "https://x/1.webp,https://x/2.webp" && !ci.colorImages?.Nope && ci.images[0] === "https://x/1.webp", "colour photo sets: safe, known colours, default = first set");
+  }
   ok(normalizeListing({ ...pkg, format: "x" }, { siteUrl: "", order: 0 }).product === null, "wrong format refused");
   ok(normalizeListing(pkg, { siteUrl: "", order: 0 }).issues.some((i) => i.includes("no URL")), "no site url -> print-file issue");
   ok(!("orderItem" in toCard(p)) && !("designId" in toCard(p)), "card has no print data");

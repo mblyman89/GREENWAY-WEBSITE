@@ -18,7 +18,7 @@ import { colorsFor, getBlank, PRINTFUL_SNAPSHOT_DATE } from "@/lib/merch-studio/
 import { checkSides, type MerchDesign } from "@/lib/merch-studio/merch-design-core";
 import {
   exportReadme, mockupTaskBody, planPrintFiles, printfulItemDraft, proofRows, proofSheetHtml, sampleChecklist, zipStore, slug, SEMI_ALPHA_WARN,
-  MOCKUP_MAX_COLORS, type PrintFilePlan, type AlphaStats,
+  MOCKUP_MAX_COLORS, variantsFor, type PrintFilePlan, type AlphaStats,
 } from "@/lib/merch-studio/print-export-core";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
 import { IssueList } from "./IssueList";
@@ -26,7 +26,7 @@ import { loadDesigns } from "./merch-assets";
 import { pullDesigns } from "./design-sync";
 import { SampleGate, type SampleRights } from "./SampleGate";
 import { assetDataUrls, downloadBytes, PrintFileSvg, putSignedMerchFile, renderPlanPng, standaloneSvg, type RenderedFile } from "./print-export";
-import { createMockupTaskAction, getMockupTaskAction, startPrintFileUploadsAction } from "@/app/admin/merch-studio/proof-actions";
+import { createMockupTaskAction, getMockupTaskAction, saveMockupsToMediaAction, startPrintFileUploadsAction } from "@/app/admin/merch-studio/proof-actions";
 import type { Issue } from "@/lib/merch-studio/print-rules-core";
 
 const CURRENT_KEY = "gw-merch-current-design";
@@ -71,6 +71,7 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
   const [ticks, setTicks] = useState<Record<string, boolean>>(() => (init.id ? loadTicks(init.id) : {}));
   const [mockColors, setMockColors] = useState<string[]>([]);
   const [mocks, setMocks] = useState<Mock[]>([]);
+  const [savedMocks, setSavedMocks] = useState<{ color: string; view: string; url: string }[]>([]);
   const [showJson, setShowJson] = useState(false);
 
   // Artwork as data: URLs (async; state set in the promise, never synchronously in the effect body).
@@ -94,7 +95,7 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
   const colorName = colors.find((c) => c[1] === design?.colorHex)?.[0] ?? design?.colorHex ?? "";
   const pickedMockColors = mockColors.length ? mockColors : colorName ? [colorName] : [];
 
-  const pick = (id: string) => { setDesignId(id); setTicks(loadTicks(id)); setAlpha({}); setMocks([]); setMockColors([]); setMsg(null); };
+  const pick = (id: string) => { setDesignId(id); setTicks(loadTicks(id)); setAlpha({}); setMocks([]); setSavedMocks([]); setMockColors([]); setMsg(null); };
   const tick = (id: string, v: boolean) => {
     if (!design) return;
     const next = { ...ticks, [id]: v };
@@ -169,7 +170,7 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
 
   const makeMockups = async () => {
     if (!guard() || !design || !blank) return;
-    setMsg(null); setMocks([]);
+    setMsg(null); setMocks([]); setSavedMocks([]);
     try {
       const files = await renderAll();
       setBusy("Uploading print files to private storage...");
@@ -199,6 +200,44 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
       setMsg({ tone: "bad", text: e instanceof Error ? e.message : "Mockups failed." });
     } finally { setBusy(null); }
   };
+
+  // D282: every mockup photo with its colour + view (Printful groups by variant ids).
+  const colorOfVariant = new Map((blank ? variantsFor(blank) : []).map((v) => [v[2], v[0]]));
+  const flatMocks = mocks.flatMap((m) => {
+    const color = m.variantIds.map((id) => colorOfVariant.get(id)).find(Boolean) ?? "";
+    const main = { title: m.placement, url: m.url };
+    const views = [main, ...m.extra.filter((x) => x.url !== m.url)];
+    return views.map((x) => ({ color, view: (x.title || m.placement || "Front").replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()), url: x.url }));
+  });
+  async function saveMocksToMedia() {
+    if (!design || !blank || !flatMocks.length) return;
+    setBusy("savemocks"); setMsg(null);
+    try {
+      const r = await saveMockupsToMediaAction({ blankId: blank.id, designName: design.name, mockups: flatMocks });
+      if (!r.ok) { setMsg({ tone: "bad", text: r.error }); return; }
+      setSavedMocks(r.saved);
+      setMsg({ tone: r.failed ? "bad" : "ok", text: `Saved ${r.saved.length} mockup photo(s) to the Media Library (published, Merch, with title/alt/description/tags).${r.failed ? ` ${r.failed} failed - their temporary links may have expired; generate again.` : ""} Publish will auto-attach them per colour.` });
+    } catch (e) { setMsg({ tone: "bad", text: e instanceof Error ? e.message : "Save failed." }); } finally { setBusy(null); }
+  }
+  async function downloadAllMocks() {
+    if (!design || !flatMocks.length) return;
+    const list = savedMocks.length ? savedMocks : flatMocks;
+    setBusy("dlmocks"); setMsg(null);
+    const files: { name: string; data: Uint8Array }[] = [];
+    const blocked: string[] = [];
+    for (const [i, m] of list.entries()) {
+      try {
+        const res = await fetch(m.url);
+        if (!res.ok) throw new Error();
+        const ext = (res.headers.get("content-type") ?? "").includes("webp") ? "webp" : (res.headers.get("content-type") ?? "").includes("png") ? "png" : "jpg";
+        files.push({ name: `${String(i + 1).padStart(2, "0")}-${slug(m.color || "color")}-${slug(m.view)}.${ext}`, data: new Uint8Array(await res.arrayBuffer()) });
+      } catch { blocked.push(m.url); }
+    }
+    if (files.length) downloadBytes(`${slug(design.name)}-mockups.zip`, zipStore(files), "application/zip");
+    blocked.forEach((u) => window.open(u, "_blank", "noopener"));
+    setMsg({ tone: blocked.length ? "bad" : "ok", text: `Downloaded ${files.length} mockup photo(s) as a zip.${blocked.length ? ` ${blocked.length} opened in new tabs instead (the browser blocked a direct download) - save them from there, or Save to Media Library first.` : ""}` });
+    setBusy(null);
+  }
 
   if (!design || !blank) {
     return <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-4 text-sm text-white/70">No saved designs on this device yet. Make one in the Design tab - it autosaves - then come back here to proof and export it.</p>;
@@ -277,14 +316,20 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
         </div>
         <button type="button" className={`${btn} bg-white/10 text-white`} disabled={!!busy || !artUrls || !planned.plans.length} onClick={makeMockups}>Generate mockups ({pickedMockColors.length} colour{pickedMockColors.length === 1 ? "" : "s"})</button>
         {mocks.length ? (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {mocks.flatMap((m) => [{ title: m.placement, url: m.url }, ...m.extra]).map((m, i) => (
-              <a key={`${m.url}-${i}`} href={m.url} target="_blank" rel="noreferrer" className="block rounded border border-[var(--admin-border)] p-1 text-center text-[0.7rem] text-white/60">
-                <MockupImg url={m.url} title={m.title} />
-                {m.title}
-              </a>
-            ))}
-          </div>
+          <>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!!busy || !flatMocks.length || savedMocks.length > 0} onClick={saveMocksToMedia}>{savedMocks.length ? `Saved ${savedMocks.length} to Media Library` : busy === "savemocks" ? "Saving..." : `Save all ${flatMocks.length} to Media Library`}</button>
+              <button type="button" className={`${btn} bg-white/10 text-white`} disabled={!!busy || !flatMocks.length} onClick={downloadAllMocks}>{busy === "dlmocks" ? "Downloading..." : "Download all (.zip)"}</button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {flatMocks.map((m, i) => (
+                <a key={`${m.url}-${i}`} href={m.url} target="_blank" rel="noreferrer" className="block rounded border border-[var(--admin-border)] p-1 text-center text-[0.7rem] text-white/60">
+                  <MockupImg url={m.url} title={`${m.color} ${m.view}`} />
+                  {m.color} - {m.view}
+                </a>
+              ))}
+            </div>
+          </>
         ) : null}
       </section>
 

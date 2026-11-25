@@ -6,13 +6,16 @@ import { PurchasePanel } from "./PurchasePanel";
 /** Cannabis PDP layout (1.35fr picture / 1fr info) with a thumbnail strip. */
 export function ProductDetail({ product, categoryLabel }: { product: MerchProductCard; categoryLabel: string }) {
   const [active, setActive] = useState(0);
-  const imgs = product.images;
+  // D282: the picked colour's photo set (falls back to the listing photos).
+  const first = product.variants.find((v) => v.inStock) ?? product.variants[0];
+  const [color, setColor] = useState(first?.color ?? "");
+  const imgs = product.colorImages?.[color]?.length ? product.colorImages[color] : product.images;
   return (
     <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:items-start md:gap-10">
       <div>
         <div className="relative flex min-h-[20rem] items-center justify-center overflow-hidden border border-[#4f8f5a] bg-white shadow-[0_22px_45px_rgba(0,0,0,0.32),inset_0_0_0_1px_rgba(0,0,0,0.08)] md:min-h-[40rem]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imgs[active] ?? imgs[0]} alt={product.title} className="h-full max-h-[44rem] w-full object-contain" />
+          <img src={imgs[active] ?? imgs[0]} alt={color ? `${product.title} - ${color}` : product.title} className="h-full max-h-[44rem] w-full object-contain" />
         </div>
         {imgs.length > 1 ? (
           <div className="mt-3 flex gap-2 overflow-x-auto" aria-label="More photos">
@@ -38,7 +41,7 @@ export function ProductDetail({ product, categoryLabel }: { product: MerchProduc
             Printed to order
           </span>
         </div>
-        <PurchasePanel product={product} />
+        <PurchasePanel product={product} onImage={(c) => { setColor(c); setActive(0); }} />
         {product.description ? (
           <div className="mt-8 border-t border-white/10 pt-6">
             <h2 className="text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">Details</h2>

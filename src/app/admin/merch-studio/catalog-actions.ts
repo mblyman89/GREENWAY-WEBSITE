@@ -80,7 +80,7 @@ async function sampleGateFor(pkg: ListingPackage, screenHash: string): Promise<{
   return g.ok ? { ok: true, how: g.how, by: g.by, reason: g.reason } : g;
 }
 
-export async function publishMerchListingAction(input: { pkg: unknown; files: { fileKey: string; key: string }[]; images: string[]; designHash?: string }): Promise<PublishMerchResult> {
+export async function publishMerchListingAction(input: { pkg: unknown; files: { fileKey: string; key: string }[]; images: string[]; colorImages?: Record<string, string[]>; designHash?: string }): Promise<PublishMerchResult> {
   const session = await requirePermission("merch.publish");
   if (!isSupabaseServiceConfigured || !supabaseUrl) return { ok: false, error: "Storage isn't configured on this deployment." };
   if (!isListingPackage(input?.pkg)) return { ok: false, error: "That listing isn't complete. Fix the blockers and try again." };
@@ -118,7 +118,7 @@ export async function publishMerchListingAction(input: { pkg: unknown; files: { 
   let prev: MerchCatalogItem | null = null;
   let item: MerchCatalogItem | null = null;
   const res = await updateMerchCatalog((c) => {
-    const r = upsertItem(c, { pkg, images: Array.isArray(input.images) ? input.images.map(String) : [], byEmail: session.email ?? null, nowIso: new Date().toISOString() });
+    const r = upsertItem(c, { pkg, images: Array.isArray(input.images) ? input.images.map(String) : [], colorImages: input.colorImages, byEmail: session.email ?? null, nowIso: new Date().toISOString() });
     if (!r.ok) return r.error;
     created = r.created;
     prev = r.prev;

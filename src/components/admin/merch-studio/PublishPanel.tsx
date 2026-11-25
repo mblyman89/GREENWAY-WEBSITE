@@ -40,6 +40,7 @@ import { assetDataUrls, downloadBytes, putSignedMerchFile, renderPlanPng } from 
 import { planPrintFiles } from "@/lib/merch-studio/print-export-core";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
 import { publishMerchListingAction, startMerchPublishAction } from "@/app/admin/merch-studio/catalog-actions";
+import { findMockupsAction } from "@/app/admin/merch-studio/proof-actions";
 import { MERCH_ITEM_MAX_IMAGES, safeHttpsUrl } from "@/lib/merch/merch-inventory-core";
 import { publishMerchAdAction, saveMerchAdDraftAction } from "@/app/admin/merch-studio/ad-actions";
 
@@ -276,6 +277,9 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
   const [done, setDone] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [newPhoto, setNewPhoto] = useState("");
+  // D282: colour -> photo set (auto-attached from saved mockups; the PDP swaps sets by colour).
+  const [colorPhotos, setColorPhotos] = useState<Record<string, string[]>>({});
+  const [photoFor, setPhotoFor] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [pubMsg, setPubMsg] = useState<{ tone: "ok" | "bad"; text: string; handle?: string } | null>(null);
   // D232 M-4: designs saved on the server (any computer) and their art.
@@ -337,7 +341,7 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
         files.push({ fileKey: u.fileKey, key: u.key });
       }
       setBusy("Publishing...");
-      const res = await publishMerchListingAction({ pkg: fresh, files, images: photos, designHash: printHash(design) });
+      const res = await publishMerchListingAction({ pkg: fresh, files, images: photos.length ? photos : (colors.map((c) => colorPhotos[c] ?? []).find((l) => l.length) ?? []), colorImages: Object.fromEntries(colors.filter((c) => colorPhotos[c]?.length).map((c) => [c, colorPhotos[c]])), designHash: printHash(design) });
       if (!res.ok) throw new Error(res.error);
       // D232 M-5 (G-82): a Hidden product stays Hidden on re-publish, and the message says so.
       const where = res.status === "hidden"
@@ -357,10 +361,31 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
     setDone(null);
     setPubMsg(null);
     setPhotos([]);
+    setColorPhotos({});
+    setPhotoFor("");
     setTitle(d?.name ?? "");
     const b = d ? getBlank(d.blankId) : undefined;
     setColors(b ? startColors(b.id, colorsFor(b), d!.colorHex) : []);
     setSizes(b ? sizesFor(b).map((s) => s[0]) : []);
+  };
+  const autoAttach = async () => {
+    if (!design || !blank) return;
+    setBusy("Finding saved mockups..."); setPubMsg(null);
+    try {
+      const r = await findMockupsAction({ blankId: blank.id, colors, designName: design.name });
+      if (!r.ok) throw new Error(r.error);
+      setColorPhotos(r.colorImages);
+      const got = colors.filter((c) => r.colorImages[c]?.length);
+      const miss = colors.filter((c) => !r.colorImages[c]?.length);
+      setPubMsg({ tone: miss.length ? "bad" : "ok", text: `Attached mockups to ${got.length} of ${colors.length} colour(s).${miss.length ? ` No saved mockups for: ${miss.join(", ")} - generate them in Proof & Export and click "Save all to Media Library".` : ""}` });
+    } catch (e) { setPubMsg({ tone: "bad", text: e instanceof Error ? e.message : "Couldn't load mockups." }); } finally { setBusy(null); }
+  };
+  const addPhoto = () => {
+    const u = safeHttpsUrl(newPhoto);
+    if (!u) return;
+    if (photoFor) setColorPhotos((m) => ({ ...m, [photoFor]: [...(m[photoFor] ?? []).filter((x) => x !== u), u].slice(0, MERCH_ITEM_MAX_IMAGES) }));
+    else setPhotos((p) => (p.includes(u) ? p : [...p, u]));
+    setNewPhoto("");
   };
   const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
@@ -436,25 +461,43 @@ function ListingBuilder({ mediaChoices, canPublish, rights, lastRetail }: { medi
           </div>
           <Toggle label="Add Printful's bigger-size upcharge (e.g. 2XL) to the price" checked={passUp} onChange={(x) => { setPassUp(x); setDone(null); }} />
           <div className="space-y-2 border-t border-[var(--admin-border)] pt-3">
-            <span className={studioLabel}>Product photos on greenwaymerch.com ({photos.length}/{MERCH_ITEM_MAX_IMAGES}) - mockups or lifestyle shots; none = the category photo</span>
-            {photos.length ? (
-              <ul className="flex flex-wrap gap-2">
-                {photos.map((u, i) => (
-                  <li key={u} className="relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of an owner-picked picture */}
-                    <img src={u} alt="" className="h-14 w-14 rounded object-cover" />
-                    <button type="button" aria-label="Remove photo" className="absolute -right-1 -top-1 rounded-full bg-black px-1 text-[0.6rem] text-white" onClick={() => setPhotos((p) => p.filter((_, n) => n !== i))}>x</button>
-                  </li>
+            <span className={studioLabel}>Product photos on greenwaymerch.com - a set per colour (shoppers see the picked colour&apos;s photos); none = the category photo</span>
+            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!!busy || !design || !colors.length} onClick={autoAttach}>Auto-attach saved mockups to {colors.length} colour{colors.length === 1 ? "" : "s"}</button>
+            {colors.filter((c) => colorPhotos[c]?.length).map((c) => (
+              <div key={c} className="flex flex-wrap items-center gap-2">
+                <span className="w-28 text-[0.7rem] text-white/70">{c} ({colorPhotos[c].length})</span>
+                {colorPhotos[c].map((u, i) => (
+                  <span key={u} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of a Media Library picture */}
+                    <img src={u} alt="" className="h-12 w-12 rounded object-cover" />
+                    <button type="button" aria-label={`Remove ${c} photo`} className="absolute -right-1 -top-1 rounded-full bg-black px-1 text-[0.6rem] text-white" onClick={() => setColorPhotos((m) => ({ ...m, [c]: m[c].filter((_, n) => n !== i) }))}>x</button>
+                  </span>
                 ))}
-              </ul>
-            ) : null}
-            {photos.length < MERCH_ITEM_MAX_IMAGES ? (
-              <div className="space-y-1">
-                <ContentImageField value={newPhoto} onChange={setNewPhoto} mediaChoices={mediaChoices.filter((m) => !m.mimeType || m.mimeType.startsWith("image/"))} />
-                <button type="button" className={`${btn} bg-white/10 text-white`} disabled={!safeHttpsUrl(newPhoto) || photos.includes(newPhoto)} onClick={() => { setPhotos((p) => [...p, safeHttpsUrl(newPhoto)]); setNewPhoto(""); }}>Add photo</button>
-                {newPhoto && !safeHttpsUrl(newPhoto) ? <p className="text-[0.7rem] text-[var(--admin-danger)]">Pick a picture from the Media Library (an https:// address).</p> : null}
+              </div>
+            ))}
+            {photos.length ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-28 text-[0.7rem] text-white/70">All colours ({photos.length})</span>
+                {photos.map((u, i) => (
+                  <span key={u} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of an owner-picked picture */}
+                    <img src={u} alt="" className="h-12 w-12 rounded object-cover" />
+                    <button type="button" aria-label="Remove photo" className="absolute -right-1 -top-1 rounded-full bg-black px-1 text-[0.6rem] text-white" onClick={() => setPhotos((p) => p.filter((_, n) => n !== i))}>x</button>
+                  </span>
+                ))}
               </div>
             ) : null}
+            <div className="space-y-1">
+              <ContentImageField value={newPhoto} onChange={setNewPhoto} mediaChoices={mediaChoices.filter((m) => !m.mimeType || m.mimeType.startsWith("image/"))} />
+              <div className="flex flex-wrap items-center gap-2">
+                <select aria-label="Add the photo to" value={photoFor} onChange={(e) => setPhotoFor(e.target.value)} className="rounded border border-[var(--admin-border)] bg-black/30 px-2 py-1 text-xs text-white">
+                  <option value="">All colours</option>
+                  {colors.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button type="button" className={`${btn} bg-white/10 text-white`} disabled={!safeHttpsUrl(newPhoto) || (photoFor ? (colorPhotos[photoFor]?.length ?? 0) : photos.length) >= MERCH_ITEM_MAX_IMAGES} onClick={addPhoto}>Add photo</button>
+              </div>
+              {newPhoto && !safeHttpsUrl(newPhoto) ? <p className="text-[0.7rem] text-[var(--admin-danger)]">Pick a picture from the Media Library (an https:// address).</p> : null}
+            </div>
           </div>
           {design ? (
             <div>

@@ -36,6 +36,8 @@ export interface MerchCatalogItem {
   status: MerchItemStatus;
   /** Product photos (https) shown on the merch site; empty = category photo. */
   images: string[];
+  /** D282: per-colour photo sets (colour name -> https urls); the PDP swaps sets when the colour changes. */
+  colorImages: Record<string, string[]>;
   publishedAt: string;
   updatedAt: string;
   byEmail: string | null;
@@ -61,6 +63,33 @@ export function isListingPackage(v: unknown): v is ListingPackage {
   return !!p && HANDLE_RE.test(str(p.handle, 60)) && !!str(p.title, 80) && Array.isArray(v.variants) && v.variants.length > 0 && isObj(v.printfulOrderItem);
 }
 
+/** D282: media tags that let Publish auto-match saved mockups to a garment + colour. */
+export const tagSlug = (v: unknown, max = 40): string => String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, max);
+export function mockupTags(blankId: string, color: string, view: string, design: string): string[] {
+  return ["merch-mockup", `blank-${tagSlug(blankId)}`, `color-${tagSlug(color)}`, `view-${tagSlug(view)}`, `design-${tagSlug(design)}`].filter((t) => !/-$/.test(t));
+}
+/** Clean a colour -> photos map: only listed colours, https only, max 8 each. */
+export function cleanColorImages(raw: unknown, colors: readonly string[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!isObj(raw)) return out;
+  for (const c of colors) {
+    const list = Array.isArray(raw[c]) ? (raw[c] as unknown[]).map(safeHttpsUrl).filter(Boolean) : [];
+    const uniq = Array.from(new Set(list)).slice(0, MERCH_ITEM_MAX_IMAGES);
+    if (uniq.length) out[c] = uniq;
+  }
+  return out;
+}
+/** Saved media (newest first) -> colour -> photos for one garment (+ design when tagged), oldest-first within a colour. */
+export function matchMockups(media: readonly { url: string; tags?: readonly string[] | null }[], blankId: string, colors: readonly string[], design?: string): Record<string, string[]> {
+  const blank = `blank-${tagSlug(blankId)}`;
+  const want = design ? `design-${tagSlug(design)}` : "";
+  const pool = media.filter((m) => (m.tags ?? []).includes("merch-mockup") && (m.tags ?? []).includes(blank));
+  const mine = want && pool.some((m) => (m.tags ?? []).includes(want)) ? pool.filter((m) => (m.tags ?? []).includes(want)) : pool;
+  const raw: Record<string, string[]> = {};
+  for (const c of colors) raw[c] = mine.filter((m) => (m.tags ?? []).includes(`color-${tagSlug(c)}`)).map((m) => m.url).reverse();
+  return cleanColorImages(raw, colors);
+}
+
 export function emptyCatalog(): MerchCatalog { return { v: 1, items: [] }; }
 
 /** Anything from the database -> a clean catalog (bad rows dropped, duplicates keep the first). */
@@ -77,6 +106,7 @@ export function normalizeCatalog(raw: unknown): MerchCatalog {
       handle,
       status: r.status === "hidden" ? "hidden" : "live",
       images: (Array.isArray(r.images) ? r.images : []).map(safeHttpsUrl).filter(Boolean).slice(0, MERCH_ITEM_MAX_IMAGES),
+      colorImages: cleanColorImages(r.colorImages, Array.from(new Set(r.pkg.variants.map((x) => x.color)))),
       publishedAt: str(r.publishedAt, 40),
       updatedAt: str(r.updatedAt, 40),
       byEmail: typeof r.byEmail === "string" ? r.byEmail.slice(0, 254) : null,
@@ -94,7 +124,7 @@ export function normalizeCatalog(raw: unknown): MerchCatalog {
  * stock copy: variants that were already synced keep their in-stock flag and
  * stockSyncedAt is kept (D232 M-5, G-82 / F-11-7). `prev` is the item it replaced.
  */
-export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images: readonly string[]; byEmail: string | null; nowIso: string }): { ok: true; catalog: MerchCatalog; created: boolean; prev: MerchCatalogItem | null; item: MerchCatalogItem } | { ok: false; error: string } {
+export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images: readonly string[]; colorImages?: Record<string, string[]>; byEmail: string | null; nowIso: string }): { ok: true; catalog: MerchCatalog; created: boolean; prev: MerchCatalogItem | null; item: MerchCatalogItem } | { ok: false; error: string } {
   if (!isListingPackage(input.pkg)) return { ok: false, error: "That isn't a complete listing package." };
   const handle = input.pkg.product.handle;
   const prev = c.items.find((i) => i.handle === handle);
@@ -109,6 +139,7 @@ export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images
     handle,
     status: prev?.status ?? "live",
     images: input.images.map(safeHttpsUrl).filter(Boolean).slice(0, MERCH_ITEM_MAX_IMAGES),
+    colorImages: cleanColorImages(input.colorImages, Array.from(new Set(pkg.variants.map((x) => x.color)))),
     publishedAt: prev?.publishedAt || input.nowIso,
     updatedAt: input.nowIso,
     byEmail: input.byEmail,
@@ -137,7 +168,7 @@ export function removeItem(c: MerchCatalog, handle: string): MerchCatalog | null
 export function merchFeed(c: MerchCatalog): { name: string; data: Record<string, unknown> }[] {
   return c.items.filter((i) => i.status === "live").map((i) => {
     const { printfulSyncProduct: _s, notes: _n, ...rest } = i.pkg; // eslint-disable-line @typescript-eslint/no-unused-vars
-    return { name: `studio-${i.handle}.json`, data: { ...rest, ...(i.images.length ? { merch: { images: i.images } } : {}) } };
+    return { name: `studio-${i.handle}.json`, data: { ...rest, ...(i.images.length || Object.keys(i.colorImages ?? {}).length ? { merch: { images: i.images, ...(Object.keys(i.colorImages ?? {}).length ? { colorImages: i.colorImages } : {}) } } : {}) } };
   });
 }
 
@@ -396,5 +427,14 @@ export function __runMerchInventoryTests(): { passed: number; failed: number; fa
   const pre = "https://p.supabase.co/storage/v1/object/public/media";
   ok(printKeyFromUrl(`${pre}/${k}`, pre) === k && printKeyFromUrl(`${pre}/other/a.png`, pre) === null && printKeyFromUrl(`https://evil.example/${k}`, pre) === null, "print url -> key only for our prefix");
   ok(safeHttpsUrl("https://a.b/c d") === "" && safeHttpsUrl("https://a.b/c") === "https://a.b/c", "safe https url");
+  // D282: per-colour mockup sets
+  const mt = (c: string, v: string, d = "Logo") => mockupTags("cc-1717", c, v, d);
+  ok(mt("Blue Jean", "Front").join(",") === "merch-mockup,blank-cc-1717,color-blue-jean,view-front,design-logo", "mockup tags");
+  const media = [{ url: "https://m/4", tags: mt("Black", "Back") }, { url: "https://m/3", tags: mt("Black", "Front") }, { url: "https://m/2", tags: mt("White", "Front") }, { url: "https://m/x", tags: mockupTags("other", "Black", "Front", "Logo") }, { url: "https://m/o", tags: mt("Black", "Front", "Old") }];
+  const mm = matchMockups(media, "cc-1717", ["Black", "White", "Red"], "Logo");
+  ok(mm.Black?.join() === "https://m/3,https://m/4" && mm.White?.join() === "https://m/2" && !mm.Red, "match mockups by garment+colour+design, oldest first");
+  ok(Object.keys(cleanColorImages({ Black: ["https://a", "javascript:x", "https://a"], Pink: ["https://b"] }, ["Black"])).join() === "Black" && cleanColorImages({ Black: ["https://a", "https://a"] }, ["Black"]).Black.length === 1, "clean colour images");
+  const up = upsertItem(emptyCatalog(), { pkg: pkg("ci"), images: ["https://m/3"], colorImages: { Black: ["https://m/3"], Green: ["https://g"] }, byEmail: null, nowIso: "t" });
+  ok(up.ok && Object.keys(up.item.colorImages).join() === "Black" && (merchFeed(up.catalog)[0].data.merch as { colorImages?: Record<string, string[]> }).colorImages?.Black[0] === "https://m/3", "colour images upsert + feed");
   return { passed, failed: failures.length, failures };
 }
