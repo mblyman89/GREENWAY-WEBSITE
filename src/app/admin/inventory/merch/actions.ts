@@ -12,7 +12,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { supabaseUrl } from "@/lib/supabase/env";
-import { applyStock, printKeyFromUrl, removeItem, setItemStatus, type MerchItemStatus } from "@/lib/merch/merch-inventory-core";
+import { applyStock, editItem, printKeyFromUrl, removeItem, setItemStatus, type MerchItemStatus } from "@/lib/merch/merch-inventory-core";
 import { readMerchCatalog, updateMerchCatalog } from "@/lib/merch/merch-inventory-store";
 import { loadPrintfulStock } from "@/lib/merch/merch-inventory-server";
 
@@ -61,4 +61,22 @@ export async function syncMerchStockAction(): Promise<void> {
   await recordAudit({ actorId: session.userId, actorEmail: session.email, action: "merch.stock_synced", entityType: "merch_catalog", entityId: "merch_catalog", after: { checked, changed } });
   revalidatePath(PAGE);
   back(`done=${encodeURIComponent(`Checked ${checked} variant${checked === 1 ? "" : "s"} at Printful; ${changed} changed on greenwaymerch.com.${stock.problem ? ` Note: ${stock.problem}` : ""}`)}`);
+}
+
+/** D284: edit a published product (title, description, sizes offered, price per size). */
+export async function editMerchAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const handle = String(formData.get("handle") ?? "");
+  const sizes = formData.getAll("size").map(String).slice(0, 20);
+  const prices: Record<string, number> = {};
+  for (const z of sizes) {
+    const n = Number.parseFloat(String(formData.get(`price:${z}`) ?? "").replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(n) && n > 0) prices[z] = Math.round(n * 100);
+  }
+  const edit = { title: String(formData.get("title") ?? ""), description: String(formData.get("description") ?? ""), sizes, prices };
+  const res = await updateMerchCatalog((c) => editItem(c, handle, edit, new Date().toISOString()));
+  if (!res.ok) back(`error=${encodeURIComponent(res.error)}`);
+  await recordAudit({ actorId: session.userId, actorEmail: session.email, action: "merch.product_edited", entityType: "merch_product", entityId: handle, after: { title: edit.title, sizes, prices } });
+  revalidatePath(PAGE);
+  back(`done=${encodeURIComponent(`${handle} was updated. greenwaymerch.com shows the change within about a minute.`)}`);
 }

@@ -3891,3 +3891,19 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 ### Status
 
 Done (branch d282-mockup-media-gallery). Proof & Export mockups: "Save all to Media Library" (published, usage Merch, SEO title/alt/description, tags merch-mockup/blank-/color-/view-/design-) and "Download all (.zip)". Publish: "Auto-attach saved mockups" matches saved mockups to each selected colour by garment + colour (+ design) tags; per-colour or all-colour manual add. Catalog item/feed carry `colorImages`; greenwaymerch.com PDP shows the picked colour's set (first photo large, thumbnails switch it) and swaps sets on colour change. Tests: merch-inventory-core 36, merch-site catalog-core 28.
+
+## D283
+
+"thank you, that works great. i now need a way to price each size individually, or at least charge a different amount if the cost is different per size. also, i want to be able to copy and paste the product description from printful to my site, so i need you to change the product detail description section so it allows special characters, like bullet points and such. any other unusual character that might end up in there needs to work too. follow the standing rules. thank you."
+
+### Status
+
+Done (branch d283-size-prices-description). Publish tab: optional "Price per size" box for every chosen size (shows Printful cost; empty = retail + size upcharge as before; the profit table/margin checks use the set prices). Description: limit 1000 -> 5000, bigger box, and a new cleanDescription (studio + merch site) keeps bullets, symbols, emoji, accents and line breaks; pasted HTML lists become "• " lines, entities decoded, invisible/control characters removed; rendered as plain text (no HTML injection). Tests: listing-package 42, merch-site catalog-core 29.
+
+## D284
+
+"I have changed the password. Before you merge, will you double check the customer facing product detail page to make sure the different prices update when that size is selected. Also, double check the merch inventory in the back office shows these numbers. Also, I want to be able to update published merch from the merch inventory page. It's details, its price, size options. Then please deep research how to know when a product is unavailable from printful, so our customers don't buy something that will get rejected. Is there a way to update the merch site when something is out of stock. Please research this then get back to me with your strategy to implement it. Follow the standing rules. Thank you."
+
+### Status
+
+Verified: PDP price = the picked colour/size variant's own price (PurchasePanel), checkout re-prices from the fresh feed per variant, Merch Inventory variant table shows each variant's retail/profit/margin and the product's price range. Added: Merch Inventory "Edit details, prices & sizes" (title, description, sizes offered, price per size; loss-making prices refused; audited merch.product_edited). Printful stock research + strategy reported (v2 availability endpoint / catalog_stock_updated webhook; existing 6-hour cron + stock_updated relay + checkout fresh-feed check). Strategy awaiting owner go-ahead. Tests: merch-inventory 38.

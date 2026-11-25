@@ -45,7 +45,7 @@ export function ProductDetail({ product, categoryLabel }: { product: MerchProduc
         {product.description ? (
           <div className="mt-8 border-t border-white/10 pt-6">
             <h2 className="text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">Details</h2>
-            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-zinc-300">{product.description}</p>
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-300">{product.description}</p>
           </div>
         ) : null}
         {product.blankLabel || product.fabric ? (

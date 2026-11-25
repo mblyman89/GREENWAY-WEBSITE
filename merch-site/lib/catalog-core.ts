@@ -106,6 +106,16 @@ export const toCard = ({ orderItem: _o, designId: _d, ...card }: MerchProduct): 
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v : "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/g, " ").replace(/[ \t]+/g, " ").trim().slice(0, max);
+/** D283: product descriptions keep bullets, symbols, emoji and line breaks (rendered as text, never HTML). */
+export function cleanDescription(v: unknown, max = 5000): string {
+  return (typeof v === "string" ? v : "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<\/?[a-z][a-z0-9]*(\s[^<>]*)?\/?>/gi, "")
+    .replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000\t]/g, " ")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff\ufff9-\ufffb]/g, "")
+    .replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/ {2,}/g, " ")
+    .trim().slice(0, max);
+}
 const posInt = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : 0);
 export const safeHandle = (v: unknown) => { const s = str(v, 60).toLowerCase(); return /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/.test(s) ? s : ""; };
 /** A site path (/x) or an https URL with no spaces/quotes. */
@@ -184,7 +194,7 @@ export function normalizeListing(raw: unknown, o: NormalizeOptions): NormalizeRe
   return {
     product: {
       handle, title, category,
-      description: str(p.description, 1000),
+      description: cleanDescription(p.description),
       blankLabel: [str(blank.brand, 40), str(blank.model, 20), str(blank.title, 60)].filter(Boolean).join(" "),
       fabric: str(blank.fabric, 200),
       images: images.length ? images : firstSet ?? [cat.image],
@@ -337,6 +347,7 @@ export function __runMerchCatalogTests(): { passed: number; failed: number } {
   ok(p.minPriceCents === 3500 && p.maxPriceCents === 3700 && priceLabel(p) === "From $35.00", "price range");
   ok(p.orderItem.files[0].url === "https://greenwaymerch.com/print/logo-tee-front-dtg.png" && !!p.orderItem.files[0].position, "empty print url filled from /print/ + position kept");
   ok(!p.description.includes("<"), "angle brackets stripped");
+  ok(cleanDescription("\u2022 Soft\r\n\u2022 \u2265 <3 \ud83c\udf3f\u200b") === "\u2022 Soft\n\u2022 \u2265 <3 \ud83c\udf3f", "D283: bullets, symbols, emoji + line breaks kept");
   ok(p.images[0] === "/categories/tees.webp", "falls back to the category photo");
   ok(normalizeListing({ ...pkg, merch: { active: false } }, { siteUrl: "", order: 0 }).product === null, "merch.active false hides");
   ok(normalizeListing({ ...pkg, merch: { category: "hats", images: ["/products/a.jpg", "javascript:x"] } }, { siteUrl: "", order: 0 }).product!.category === "hats", "category override");
