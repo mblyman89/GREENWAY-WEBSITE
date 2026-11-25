@@ -3907,3 +3907,16 @@ Done (branch d283-size-prices-description). Publish tab: optional "Price per siz
 ### Status
 
 Verified: PDP price = the picked colour/size variant's own price (PurchasePanel), checkout re-prices from the fresh feed per variant, Merch Inventory variant table shows each variant's retail/profit/margin and the product's price range. Added: Merch Inventory "Edit details, prices & sizes" (title, description, sizes offered, price per size; loss-making prices refused; audited merch.product_edited). Printful stock research + strategy reported (v2 availability endpoint / catalog_stock_updated webhook; existing 6-hour cron + stock_updated relay + checkout fresh-feed check). Strategy awaiting owner go-ahead. Tests: merch-inventory 38.
+
+## D285
+
+> Thank you. Please build all features including the optional one. Break it up into a couple slices. Complete all tasks before returning back with a summary report. Please merge when done. Follow the standing rules. Thank you.
+
+### Status
+
+Built in three slices on one branch (`d285-printful-availability`).
+
+- **Slice A: availability.** Stock now comes from Printful API v2: `GET /v2/catalog-products/{id}/availability`, filtered to the `north_america` region and the techniques each product prints with (dtg / embroidery / dtfilm). It reads 100 variants per page and falls back to v1 `/products/{id}` if v2 doesn't answer. Only "in stock" (or the v1 "made to order") is sold. "Out of stock", "not fulfillable" and Printful's own "unknown" are hidden. Merch Inventory shows the exact state, e.g. "Not fulfillable (embroidery)". When a live variant goes from shown to hidden, the owner gets one email, claimed in compliance_reminder_log as `merch-stock:out:<day>:<ids>`.
+- **Slice B: webhook and checkout.** The shop now accepts v2 `catalog_stock_updated` as well as v1 `stock_updated`, and relays the garment ids to `/api/merch-stock`, which now takes `productIds[]`. Merch Health "Register webhook" also calls `POST /v2/webhooks/catalog_stock_updated` (per event, so nothing else is replaced). The 6-hourly cron stays as the safety net. At checkout, right before Stripe, each cart variant is checked live (`GET /v2/catalog-variants/{id}/availability`, 5 s timeout). An explicit "out of stock" or "not fulfillable" returns 409 with "just sold out"; if Printful doesn't answer, checkout goes ahead.
+- **Slice C: nightly cost check.** New cron `/api/cron/merch-cost-check`, running daily at 11:15 UTC. It calls the free Printful `POST /orders/estimate-costs` for each live product's priciest variant, using its real print files and a Washington address. A move of 25c / 3% or more, or a product that can't be priced, sends one owner email with the new profit and margin. Prices are never changed automatically.
+- **Tests.** Pure tests: merch-inventory-core 46, merch-site catalog-core 30, checkout-core 22, orders-core 31. The cron-count guards are now 24.
