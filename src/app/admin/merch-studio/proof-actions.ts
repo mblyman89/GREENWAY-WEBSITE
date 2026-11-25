@@ -117,3 +117,57 @@ export async function getMockupTaskAction(taskKey: string): Promise<MockupPollRe
     mockups: (r.result.mockups ?? []).map((m) => ({ placement: m.placement, variantIds: m.variant_ids ?? [], url: m.mockup_url, extra: (m.extra ?? []).filter((x) => x.url).map((x) => ({ title: x.title ?? "", url: x.url! })) })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// D282: save Printful mockups into the Media Library (published, SEO meta,
+// tagged blank/colour/view/design so Publish can auto-attach them per colour).
+// ---------------------------------------------------------------------------
+const PRINTFUL_IMG_HOST = /(^|\.)printful\.com$|^printful-upload\.s3[a-z0-9.-]*\.amazonaws\.com$/;
+export type SaveMockupsResult = { ok: true; saved: { color: string; view: string; url: string }[]; failed: number } | { ok: false; error: string };
+
+export async function saveMockupsToMediaAction(input: { blankId: string; designName: string; mockups: { url: string; color: string; view: string }[] }): Promise<SaveMockupsResult> {
+  const session = await requirePermission("media.manage");
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Storage isn't configured on this deployment." };
+  const b = getBlank(String(input?.blankId ?? ""));
+  if (!b) return { ok: false, error: "Unknown garment." };
+  const design = String(input?.designName ?? "").trim().slice(0, 60) || "Design";
+  const garment = `${b.brand} ${b.model} ${b.title}`.replace(/\s+/g, " ").trim();
+  const { uploadMedia } = await import("@/lib/media/store");
+  const { mockupTags } = await import("@/lib/merch/merch-inventory-core");
+  const saved: { color: string; view: string; url: string }[] = [];
+  let failed = 0;
+  for (const m of (Array.isArray(input?.mockups) ? input.mockups : []).slice(0, 48)) {
+    const color = String(m?.color ?? "").slice(0, 40), view = String(m?.view ?? "").slice(0, 40) || "Front";
+    try {
+      const u = new URL(String(m?.url ?? ""));
+      if (u.protocol !== "https:" || !PRINTFUL_IMG_HOST.test(u.hostname)) { failed += 1; continue; }
+      const res = await fetch(u, { cache: "no-store" });
+      const type = (res.headers.get("content-type") ?? "").split(";")[0];
+      if (!res.ok || !/^image\/(png|jpeg|webp)$/.test(type)) { failed += 1; continue; }
+      const buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.length > 15 * 1024 * 1024) { failed += 1; continue; }
+      const title = `Greenway ${design} - ${garment} - ${color} - ${view}`.slice(0, 140);
+      const asset = await uploadMedia({
+        buffer, filename: `greenway-${slugPart(design, 30)}-${slugPart(b.id, 20)}-${slugPart(color, 20)}-${slugPart(view, 20)}.${type.split("/")[1].replace("jpeg", "jpg")}`, mimeType: type,
+        title, altText: `${design} ${b.title} in ${color}, ${view.toLowerCase()} view - Greenway merch`.slice(0, 200),
+        description: `Greenway Marijuana "${design}" ${garment} in ${color} (${view} view). Official Greenway merch from greenwaymerch.com.`,
+        usageType: "merch", tags: mockupTags(b.id, color, view, design), uploadedBy: session.userId, status: "published", source: "printful-mockup",
+      });
+      if (asset.public_url) saved.push({ color, view, url: asset.public_url });
+    } catch { failed += 1; }
+  }
+  if (saved.length) await recordAudit({ actorId: session.userId, actorEmail: session.email, action: "media.uploaded", entityType: "media_asset", entityId: b.id, after: { mockups: saved.length, design } }).catch(() => {});
+  return { ok: true, saved, failed };
+}
+
+/** D282: saved mockups for this garment -> colour -> photo urls (matched by tags). */
+export async function findMockupsAction(input: { blankId: string; colors: string[]; designName?: string }): Promise<{ ok: true; colorImages: Record<string, string[]> } | { ok: false; error: string }> {
+  await requirePermission("content.edit");
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Storage isn't configured on this deployment." };
+  const b = getBlank(String(input?.blankId ?? ""));
+  if (!b) return { ok: false, error: "Unknown garment." };
+  const { matchMockups, tagSlug } = await import("@/lib/merch/merch-inventory-core");
+  const { data } = await createSupabaseAdminClient().from("media_assets").select("public_url, tags").eq("status", "published").contains("tags", ["merch-mockup", `blank-${tagSlug(b.id)}`]).order("created_at", { ascending: false }).limit(300);
+  const rows = ((data as { public_url: string | null; tags: string[] | null }[] | null) ?? []).filter((r) => r.public_url).map((r) => ({ url: r.public_url as string, tags: r.tags }));
+  return { ok: true, colorImages: matchMockups(rows, b.id, (input?.colors ?? []).map(String).slice(0, 60), input?.designName) };
+}
