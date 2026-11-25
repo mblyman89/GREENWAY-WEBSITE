@@ -14,12 +14,12 @@ describe("merch studio cores", () => {
   it("garment-catalog-core", () => {
     const r = __runGarmentCatalogTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(150);
+    expect(r.passed).toBeGreaterThanOrEqual(245);
   });
   it("print-rules-core", () => {
     const r = __runPrintRulesTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(29);
+    expect(r.passed).toBeGreaterThanOrEqual(34);
   });
   it("fulfillment-core", () => {
     const r = __runFulfillmentTests();
@@ -34,12 +34,12 @@ describe("merch studio cores", () => {
   it("merch-design-core", () => {
     const r = __runMerchDesignTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(42);
+    expect(r.passed).toBeGreaterThanOrEqual(48);
   });
   it("print-export-core", () => {
     const r = __runPrintExportTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(85);
+    expect(r.passed).toBeGreaterThanOrEqual(112);
   });
   it("listing-package-core (R71 S4)", () => {
     const r = __runListingPackageTests();

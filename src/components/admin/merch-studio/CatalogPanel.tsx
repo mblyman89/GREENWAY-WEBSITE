@@ -192,7 +192,7 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor, picked = [],
 
           <div className="overflow-x-auto">
             <span className={studioLabel}>Print placements</span>
-            {blank.placements.some((p) => p.dimsSource === "studio-default") ? <PrintfileCheck key={blank.id} blankId={blank.id} /> : null}
+            <PrintfileCheck key={blank.id} blankId={blank.id} hasEstimates={blank.placements.some((p) => p.dimsSource === "studio-default")} />
             <table className="w-full min-w-[40rem] text-left text-xs">
               <thead className="text-white/50"><tr><th className="py-1 pr-2">Placement</th><th className="pr-2">Max area</th><th className="pr-2">Methods (Printful key, upcharge)</th><th className="pr-2">Watch out for</th><th>Source</th></tr></thead>
               <tbody>
@@ -294,7 +294,7 @@ function PrintfulBrowser({ ourIds, onOpen }: { ourIds: Set<number>; onOpen: (pri
  * D232 M-8 (G-92): Printful's own print-file size next to each studio-default
  * box (GET /mockup-generator/printfiles/{id}). Read-only; nothing is changed.
  */
-function PrintfileCheck({ blankId }: { blankId: string }) {
+function PrintfileCheck({ blankId, hasEstimates }: { blankId: string; hasEstimates: boolean }) {
   const [rows, setRows] = useState<PlacementCompare[] | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -304,13 +304,13 @@ function PrintfileCheck({ blankId }: { blankId: string }) {
   };
   return (
     <div className="my-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/5 p-2 text-xs text-white/80">
-      <p>Gold rows are studio estimates. {STUDIO_DEFAULT_STATUS}. Measure the sample with a ruler, then tell the developer the real width and height.{" "}
-        <button type="button" disabled={busy} className="text-[var(--admin-accent)] underline disabled:opacity-40" onClick={run}>{busy ? "Asking Printful..." : "Compare with Printful's print files"}</button>
+      <p>{hasEstimates ? <>Gold rows are studio estimates. {STUDIO_DEFAULT_STATUS}. Measure the sample with a ruler, then tell the developer the real width and height. </> : null}Printful rejects an order when the print area&apos;s shape is more than 2% off its print file - run this after Printful changes a product.{" "}
+        <button type="button" disabled={busy} className="text-[var(--admin-accent)] underline disabled:opacity-40" onClick={run}>{busy ? "Asking Printful..." : "Compare every placement with Printful's print files (size + ratio)"}</button>
       </p>
       {msg ? <p className="mt-1 text-[var(--admin-danger)]">{msg}</p> : null}
       {rows ? (
         <ul className="mt-1 space-y-0.5">
-          {rows.map((r) => <li key={r.placementId} className={r.verdict === "bigger" ? "text-[var(--admin-danger)]" : r.verdict === "no-file" ? "text-[var(--admin-gold)]" : "text-white/80"}><b>{r.label}:</b> {r.text}</li>)}
+          {rows.map((r) => <li key={r.placementId} className={r.verdict === "bigger" || r.verdict === "ratio" ? "text-[var(--admin-danger)]" : r.verdict === "no-file" ? "text-[var(--admin-gold)]" : "text-white/80"}><b>{r.label}:</b> {r.text}</li>)}
         </ul>
       ) : null}
     </div>

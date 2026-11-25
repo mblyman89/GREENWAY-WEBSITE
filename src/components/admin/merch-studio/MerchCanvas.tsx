@@ -13,12 +13,12 @@
 import { useId, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import type { Blank, Placement } from "@/lib/merch-studio/garment-catalog-core";
 import { garmentView, frameRect, zoomBox, type Rect } from "@/lib/merch-studio/garment-views-core";
-import { curvedBox, fromPct, resizeRotated, rotatedBox, textLines, toPct, type MElement, type MerchDesign } from "@/lib/merch-studio/merch-design-core";
+import { curvedBox, fromPct, inkBox, resizeRotated, rotatedBox, textLines, toPct, type MElement, type MerchDesign } from "@/lib/merch-studio/merch-design-core";
 import { smartSnap, type GuideLine } from "@/lib/cms/banner-guides-core";
 import { angleFromPointer } from "@/lib/cms/banner-arrange-core";
 import { shapePoints, type ShapeKind } from "@/lib/cms/banner-elements-core";
 import { fontStack } from "@/lib/cms/fonts";
-import { isDarkColor } from "@/lib/merch-studio/garment-catalog-core";
+import { isDarkColor, printLimitRect } from "@/lib/merch-studio/garment-catalog-core";
 
 export type CanvasZoom = "garment" | "frame";
 type Corner = "nw" | "ne" | "sw" | "se";
@@ -122,6 +122,9 @@ export function MerchCanvas({
   const dark = isDarkColor(garmentHex);
   const ink = dark ? "#ffffff" : "#000000";
   const els = design.sides[placement.id]?.elements ?? [];
+  const sideMethod = design.sides[placement.id]?.method;
+  // D275: Printful's print file for this method can be smaller than the frame (6245CM DTF 5" in a 5.5" frame) - shown in gold.
+  const lim = sideMethod && placement.methods.includes(sideMethod) ? printLimitRect(placement, sideMethod) : null;
   const samePlacements = blank.placements.filter((p) => p.view === placement.view);
 
   const toSvg = (ev: { clientX: number; clientY: number }) => {
@@ -288,6 +291,7 @@ export function MerchCanvas({
             </g>
           )) : null}
           {interactive ? <rect x={0} y={0} width={fr.w} height={fr.h} fill="none" stroke="#22c55e" strokeWidth={u * 0.14} strokeDasharray={`${u * 0.7} ${u * 0.45}`} /> : null}
+          {interactive && lim && (lim.w < fr.w - 1e-6 || lim.h < fr.h - 1e-6) ? <rect x={lim.x} y={lim.y} width={lim.w} height={lim.h} fill="none" stroke="#f0b429" strokeWidth={u * 0.1} strokeDasharray={`${u * 0.35} ${u * 0.3}`} /> : null}
           {ticks}
           {showGuides && interactive ? (
             <>
@@ -307,6 +311,11 @@ export function MerchCanvas({
         {interactive && flagged ? els.filter((e) => flagged.has(e.id) && !e.hidden && !selected.includes(e.id)).map((e) => (
           <rect key={`f-${e.id}`} transform={`translate(${fr.x + e.x} ${fr.y + e.y}) rotate(${e.rotate} ${e.w / 2} ${e.h / 2})`} width={e.w} height={e.h} fill="none" stroke="#ef4444" strokeWidth={u * 0.12} strokeDasharray={`${u * 0.4} ${u * 0.3}`} style={{ pointerEvents: "none" }} />
         )) : null}
+        {/* D275: the INK box Printful measures (glyph swashes past the text box) - red when flagged */}
+        {interactive ? els.filter((e) => e.kind === "text" && !e.hidden && (selected.includes(e.id) || flagged?.has(e.id))).map((e) => {
+          const ib = inkBox(e);
+          return <rect key={`i-${e.id}`} x={fr.x + ib.x} y={fr.y + ib.y} width={ib.w} height={ib.h} fill="none" stroke={flagged?.has(e.id) ? "#ef4444" : "#38bdf8"} strokeOpacity={0.8} strokeWidth={u * 0.08} strokeDasharray={`${u * 0.2} ${u * 0.2}`} style={{ pointerEvents: "none" }} />;
+        }) : null}
         {guides ? (
           <g transform={`translate(${fr.x} ${fr.y})`} style={{ pointerEvents: "none" }}>
             {guides.v.map((g, i) => <line key={`v${i}`} x1={(g.at / 100) * fr.w} x2={(g.at / 100) * fr.w} y1={(g.from / 100) * fr.h} y2={(g.to / 100) * fr.h} stroke="#ec4899" strokeWidth={u * 0.1} />)}

@@ -48,6 +48,13 @@ export interface MElement {
   curve?: number;        // -100..100 (single-line only)
   /** Browser-measured width of each line at fontSizeIn (inches). */
   lineWidthsIn?: number[];
+  /**
+   * D275: how far the real glyph ink reaches PAST the text box, in em
+   * [left, top, right, bottom] (canvas measureText actualBoundingBox*). Script
+   * and display fonts draw swashes outside their advance box; Printful counts
+   * that ink, so bounds checks and the print file use it. Missing = estimate.
+   */
+  inkEm?: [number, number, number, number];
   // shape / icon
   shape?: ShapeName;
   iconPath?: string;     // SVG path in a 0 0 256 256 box
@@ -265,9 +272,47 @@ export function elementColors(e: MElement): string[] {
   return [...new Set(out)];
 }
 
+/** Extra room around TEXT (em) when the font's real ink was never measured: italic / script glyphs overhang their advance box. */
+export const TEXT_BLEED_EM = 0.12;
+/** Anti-aliasing margin added to a MEASURED glyph overhang (em). */
+const INK_AA_EM = 0.02;
+
+/** Glyph overhang of a text element beyond its box, inches [l, t, r, b] (measured when known, else the 0.12 em estimate). Non-text = 0. */
+export function textOverhangIn(e: Pick<MElement, "kind" | "fontSizeIn" | "inkEm" | "curve">): [number, number, number, number] {
+  if (e.kind !== "text") return [0, 0, 0, 0];
+  const fs = e.fontSizeIn ?? 0.6;
+  if (!e.inkEm || e.curve) return [fs * TEXT_BLEED_EM, fs * TEXT_BLEED_EM, fs * TEXT_BLEED_EM, fs * TEXT_BLEED_EM];
+  return e.inkEm.map((v) => r4(fs * (Math.max(0, v) + INK_AA_EM))) as [number, number, number, number];
+}
+
+/**
+ * D275: the box the PRINTER sees - element box grown by glyph overhang and
+ * outline, then rotated. This (not the text box) is what Printful checks
+ * against the print area, so the rules, the export and the canvas use it.
+ */
+export function inkBox(e: MElement): Box {
+  const [l, t, r, b] = textOverhangIn(e);
+  const s = e.strokeIn > 0 ? (e.kind === "text" ? e.strokeIn : e.strokeIn / 2) : 0;
+  const x = e.x - l - s; const y = e.y - t - s;
+  const w = e.w + l + r + 2 * s; const h = e.h + t + b + 2 * s;
+  // rotate about the ELEMENT centre (that is how it is drawn)
+  const a = ((e.rotate ?? 0) * Math.PI) / 180;
+  if (!a) return { x: r4(x), y: r4(y), w: r4(w), h: r4(h) };
+  const cx = e.x + e.w / 2; const cy = e.y + e.h / 2;
+  const c = Math.cos(a); const sn = Math.sin(a);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+    const dx = px - cx; const dy = py - cy;
+    const rx = cx + dx * c - dy * sn; const ry = cy + dx * sn + dy * c;
+    x0 = Math.min(x0, rx); y0 = Math.min(y0, ry); x1 = Math.max(x1, rx); y1 = Math.max(y1, ry);
+  }
+  return { x: r4(x0), y: r4(y0), w: r4(x1 - x0), h: r4(y1 - y0) };
+}
+
 /** Convert one design element to the rules engine's view of it. */
 export function toRuleElement(e: MElement): RuleElement {
-  const bb = rotatedBox(e);
+  // D275: text bounds = real ink (swashes included), so "outside the print area" matches Printful.
+  const bb = e.kind === "text" ? inkBox({ ...e, strokeIn: 0 }) : rotatedBox(e);
   const r: RuleElement = {
     id: e.id, kind: e.kind === "icon" ? "shape" : e.kind, name: e.name, x: bb.x, y: bb.y, w: bb.w, h: bb.h,
     colors: elementColors(e), opacity: e.opacity / 100, inkAreaSqIn: inkAreaSqIn(e),
@@ -363,6 +408,7 @@ export function normalizeElement(raw: unknown): MElement | null {
     e.align = o.align === "left" || o.align === "right" ? o.align : "center";
     e.curve = num(o.curve, 0, -100, 100);
     e.lineWidthsIn = Array.isArray(o.lineWidthsIn) ? o.lineWidthsIn.map((x) => num(x, 0, 0, 100)).slice(0, 20) : [e.w];
+    if (Array.isArray(o.inkEm) && o.inkEm.length === 4) e.inkEm = o.inkEm.map((x) => num(x, 0, 0, 3)) as [number, number, number, number];
   }
   if (kind === "shape") { e.shape = typeof o.shape === "string" ? o.shape.slice(0, 24) : "rect"; e.radiusIn = num(o.radiusIn, 0, 0, 10); }
   if (kind === "icon") { if (typeof o.iconPath !== "string" || o.iconPath.length > 8000 || !/^[MmLlHhVvCcSsQqTtAaZz0-9.,\s-]+$/.test(o.iconPath)) return null; e.iconPath = o.iconPath; }
@@ -452,6 +498,17 @@ export function __runMerchDesignTests(): { passed: number; failed: number } {
   ok(near(inkAreaSqIn(sh), sh.w * sh.h * Math.PI / 4), "circle ink area");
   const icon = makeIcon({ w: 4, h: 4 }, "M0 0 L10 10 Z", "Leaf", "#00FF00");
   ok(toRuleElement(icon).kind === "shape", "icon counts as shape");
+  // D275: measured glyph overhang (script fonts) drives the bounds the printer sees
+  const sw: MElement = { ...makeText({ w: 4, h: 2 }, "Swash", [2], 0.5, "#FFFFFF"), x: 1, y: 0.5, inkEm: [0.4, 0, 0.6, 0.3] };
+  const swR = toRuleElement(sw);
+  ok(near(swR.x, 1 - 0.5 * 0.42) && near(swR.w, sw.w + 0.5 * 0.42 + 0.5 * 0.62), "text rule box = measured ink (left + right swash)");
+  ok(near(swR.y, 0.5 - 0.01) && near(swR.h, sw.h + 0.01 + 0.5 * 0.32), "top/bottom ink + AA margin");
+  const est = toRuleElement({ ...sw, inkEm: undefined });
+  ok(near(est.x, 1 - 0.5 * TEXT_BLEED_EM), "unmeasured text falls back to the 0.12 em estimate");
+  const rot90 = inkBox({ ...sw, inkEm: [0, 0, 0, 0], rotate: 90 });
+  ok(near(rot90.w, sw.h + 0.02 * 0.5 * 2) && near(rot90.h, sw.w + 0.02 * 0.5 * 2), "inkBox rotates about the element centre");
+  ok(normalizeElement({ ...sw, inkEm: [9, -1, 0.2, 0.1] })!.inkEm!.join() === "3,0,0.2,0.1", "inkEm sanitised (0..3 em)");
+  ok(normalizeElement({ ...sw, inkEm: [1, 2] })!.inkEm === undefined, "bad inkEm dropped");
 
   // checkSides end to end
   let d = setSide(d0, front.id, { method: "dtg", elements: [t] });

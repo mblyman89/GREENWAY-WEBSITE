@@ -3778,3 +3778,31 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
   - the store selector in Printful (the token's store);
   - Merch Health H-5 and H-16.
 - Ships together with the D273 health fix on branch `d274-merch-order-guide`.
+
+## D275
+
+"thank you. please merge the small code fix for the stores_list. also, I found the order in my online orders panel. it was rejected by prinful. I should have copied the error message it gave, becuase I acknowledged it, then it disappeared, and I can not find it anywhere now. please merge, then visit supabase.com, I will log you in as a read only user. please locate the rejected order, read the reason, then help me fix the merch studio so it respects their limitations more properly. also, I noticed when I use certain fonts that extend beyond its own text box, fail the printful requirements. it says it falls outside the dotted lines, which it does for its own text box, but if you make the text box tiny, it still fails. so it must be due to the font going outside the text box throwing the error, as other fonts do not have this issue. I need to have a better requirements respected system so that I do not send failed products to printful. since it was rejected on printful, does that mean the stripe charge will revert as well? follow the standing rules. thank you."
+
+"you are in. please continue. make sure to deep research printful docs and specs so we can respect their design constraints and requirements and layouts for our merch studio. follow the standing rules. thank you."
+
+### Status (D275)
+
+- PR #1910 (stores_list) merged (main a955f46d).
+- Rejected order found in `merch_alerts`, read-only. The alert was `Printful rejected order gm-mwv5yt0q-ea69e590`. Printful's reason, verbatim: "Aspect ratio for print area …/greenway-classic-snapback/…/embroidery_front.png is invalid. Print area ratio was: 2.75 while specified print area ratio was 2.22. Acceptable aspect ratio relative difference is 2%."
+  - Cause: the studio sent its 5"×2.25" frame (ratio 2.22) as `area_width/area_height`, but Printful's 6089M front print file is 5.5"×2" (1650×600 px, ratio 2.75).
+- Research: Printful product "File guidelines" for each blank, Orders API `position` docs, and the printfiles API with the `technique` parameter. Hat sizes now follow Printful:
+  - 6089M front 5.5×2 (the guide advertises up to 6.3×2.56; the API print file is 5.5×2);
+  - 6245CM front 5.5×2, with DTF 5×2 centred;
+  - Richardson 112 front 5.9×2;
+  - 1501KC cuff 5×1.75;
+  - every hat side and back 2×1.
+- The order area is now Printful's print file for each method (`Placement.printfileIn`). A >2% ratio mismatch is a blocker, and publishing refuses any print-file blocker.
+- Fonts: the studio measures each font's real glyph ink (canvas `measureText` actualBoundingBox, `MElement.inkEm`). The bounds rule, the export spill/trim and a blue/red ink outline on the canvas now use it. Designs saved before this are re-measured automatically. Unmeasured text keeps the 0.12em estimate.
+- Embroidery limits from Printful's file guidelines:
+  - more than 6 thread colours is a blocker;
+  - more than 25K estimated stitches is a blocker, and more than 15K is a warning;
+  - elements closer than 3 mm get a tip.
+- Garments tab: "Compare with Printful's print files" now covers every placement of every blank. It asks Printful per technique and flags ratio mismatches as "ORDERS WILL BE REJECTED".
+- Webhook: Printful now gets the order as a free DRAFT before the card is captured. If Printful rejects it, the authorization is cancelled (not charged) and the owner is alerted. Auto-confirm runs after capture.
+- Stripe answer: the first order was captured before Printful saw it, so the rejection did not reverse the charge. Refund it from the back office (Orders → Merch → the order → Refund in Stripe) or the Stripe dashboard, or fix the design, re-publish and resend the event. Acknowledged alerts are listed under "Recently acknowledged" in the Merch alerts inbox.
+- Self-test minimums: garment-catalog 245, print-rules 34, merch-design 48, print-export 112, printfile-check 17.

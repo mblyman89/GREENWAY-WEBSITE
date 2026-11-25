@@ -35,7 +35,7 @@ import { IssueList } from "./IssueList";
 import { OptimizerPanel, type OptTab } from "./OptimizerPanel";
 import { fixFor } from "@/lib/merch-studio/optimizer-core";
 import type { Issue } from "@/lib/merch-studio/print-rules-core";
-import { getAsset, inspectImage, loadDesigns, measureLinesEm, putAsset, saveDesigns } from "./merch-assets";
+import { getAsset, inspectImage, loadDesigns, measureInkEm, measureLinesEm, putAsset, saveDesigns } from "./merch-assets";
 import { contentHash, parseImport } from "@/lib/merch-studio/merch-design-sync-core";
 import { archiveMerchDesignAction } from "@/app/admin/merch-studio/design-actions";
 import { downloadArt, loadMeta, pushDesign, saveMeta, syncDesigns } from "./design-sync";
@@ -240,10 +240,13 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
     if (e.kind !== "text") return e;
     const fs = e.fontSizeIn ?? 0.6;
     const lines = textLines(e.text);
-    const widths = measureLinesEm(lines, fontStack(e.fontId, "system"), e.weight ?? 700, !!e.italic, e.letterSpacingEm ?? 0).map((w) => r4(w * fs));
+    const stack = fontStack(e.fontId, "system");
+    const widths = measureLinesEm(lines, stack, e.weight ?? 700, !!e.italic, e.letterSpacingEm ?? 0).map((w) => r4(w * fs));
     const box = e.curve && lines.length === 1 ? curvedBox(widths[0], fs, e.curve) : textBox(widths, fs, e.lineHeight ?? 1.1);
+    // D275: the font's real glyph overhang (swashes past the box count against Printful's print area).
+    const inkEm = e.curve ? undefined : measureInkEm(lines, stack, e.weight ?? 700, !!e.italic, e.letterSpacingEm ?? 0, e.align ?? "center", e.lineHeight ?? 1.1);
     const cx = e.x + e.w / 2; const cy = e.y + e.h / 2;
-    return { ...e, lineWidthsIn: widths, w: box.w, h: box.h, x: r4(cx - box.w / 2), y: r4(cy - box.h / 2) };
+    return { ...e, lineWidthsIn: widths, inkEm, w: box.w, h: box.h, x: r4(cx - box.w / 2), y: r4(cy - box.h / 2) };
   };
   const remeasure = (id: string, patch: Partial<MElement>) => {
     const cur = els.find((e) => e.id === id);
@@ -258,7 +261,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
       const live = s.elements.find((e) => e.id === id);
       if (!live) return;
       const again = measured(live);
-      if (Math.abs(again.w - live.w) > 1e-3 || Math.abs(again.h - live.h) > 1e-3) {
+      if (Math.abs(again.w - live.w) > 1e-3 || Math.abs(again.h - live.h) > 1e-3 || (again.inkEm ?? []).join() !== (live.inkEm ?? []).join()) {
         lastPush.current = Date.now();
         commit(setSide(d, placement.id, { ...s, elements: s.elements.map((e) => (e.id === id ? again : e)) }));
       }
@@ -355,6 +358,24 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor, art = [] }
       setBusy(false);
     }
   };
+
+  // D275: designs saved before glyph-ink measurement get it once the fonts are loaded (no undo step).
+  const needInk = els.filter((e) => e.kind === "text" && !e.curve && !e.inkEm).map((e) => e.id).join();
+  useEffect(() => {
+    if (!needInk) return;
+    let gone = false;
+    const done = () => {
+      if (gone) return;
+      const d = designRef.current;
+      const s = sideFor(d, placement);
+      if (!s.elements.some((e) => e.kind === "text" && !e.curve && !e.inkEm)) return;
+      lastPush.current = Date.now();
+      commit(setSide(d, placement.id, { ...s, elements: s.elements.map((e) => (e.kind === "text" && !e.curve && !e.inkEm ? measured(e) : e)) }));
+    };
+    (document.fonts?.ready ?? Promise.resolve()).then(done).catch(done);
+    return () => { gone = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when un-measured text appears on this placement
+  }, [needInk, placement.id]);
 
   // Selection ops ----------------------------------------------------------------------
   const selEls = els.filter((e) => selected.includes(e.id));
