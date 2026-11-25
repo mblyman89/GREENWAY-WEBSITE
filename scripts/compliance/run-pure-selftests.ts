@@ -2879,7 +2879,7 @@ __runLiquidVolumeTests();
   assertRan("print-layers-core", __runPrintLayersTests(), 33); // D271: Print Studio placed images (DPI, enlarge plan, FLUX sizes, prompts)
   assertRan("optimizer-core", __runOptimizerTests(), 30); // D270: Printful Optimizer - recolour preview (threads / custom / remove), flatten, FLUX flat-redraw prompt, one-click Check fixes
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 373); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
-  assertRan("print-rules-core", __runPrintRulesTests(), 34); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
+  assertRan("print-rules-core", __runPrintRulesTests(), 38); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
   assertRan("fulfillment-core", __runFulfillmentTests(), 19); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
   assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 421); // R70 S2: garment views + exact print-frame inches for every blank/placement
   assertRan("merch-design-core", __runMerchDesignTests(), 48); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising

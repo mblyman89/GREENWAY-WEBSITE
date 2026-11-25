@@ -33,7 +33,7 @@
  * writer (PNGs are already compressed) and alpha statistics for the
  * semi-transparency check (Printful "Transparency in DTG printing").
  */
-import { colorsFor, getBlank, getPlacement, METHOD_LABEL, nearestThread, printfileFor, printLimitRect, THREAD_PALETTE, type Blank, type Method, type Placement } from "./garment-catalog-core";
+import { canPuff, colorsFor, getBlank, getPlacement, puffOptionFor, METHOD_LABEL, nearestThread, printfileFor, printLimitRect, THREAD_PALETTE, type Blank, type Method, type Placement } from "./garment-catalog-core";
 import { PRINTFUL_FILE_TYPES, PRINTFUL_OPTION_IDS, PRINTFUL_VARIANTS, type VariantRow } from "./garment-colors-data";
 import { frameRect, type Rect } from "./garment-views-core";
 import { checkSides, elementColors, inkBox, TEXT_BLEED_EM, usedPlacements, type MElement, type MerchDesign, type Side } from "./merch-design-core";
@@ -91,17 +91,9 @@ export function threadOptionId(b: Blank, fileType: string, puff = false): string
  * "thread_colors_3d" (the back's White) - the mockup kept the last one and drew
  * the gold front logo white/grey, and the order carried a duplicate option.
  */
-export function puffThreadOptionId(b: Blank, fileType: string): string | null {
-  if (!b.puffAvailable) return null;
-  const ids = PRINTFUL_OPTION_IDS[b.printfulId] ?? [];
-  const want = fileType === "embroidery_front" ? "thread_colors_3d" : fileType.startsWith("embroidery_") ? `thread_colors_3d_${fileType.slice("embroidery_".length)}` : "";
-  return want && ids.includes(want) ? want : null;
-}
-/** D280: may this placement use 3D puff (Printful lists a puff thread option for its embroidery file)? */
-export function puffAllowed(b: Blank, p: Placement): boolean {
-  const ft = printfulFileType(b, p, "embroidery");
-  return !!ft && !!puffThreadOptionId(b, ft);
-}
+export function puffThreadOptionId(b: Blank, fileType: string): string | null { return puffOptionFor(b, fileType); }
+/** D280: may this placement use 3D puff? (same rule as the design checks - garment-catalog-core canPuff). */
+export function puffAllowed(b: Blank, p: Placement): boolean { return canPuff(b, p); }
 
 // ---------------------------------------------------------------------------
 // Geometry

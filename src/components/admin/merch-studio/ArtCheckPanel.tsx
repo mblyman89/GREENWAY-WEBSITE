@@ -7,7 +7,7 @@
  * and the rules engine reports DPI, bounds, method fit, thread palette etc.
  */
 import { useState } from "react";
-import { getBlank, getPlacement, placementsFor, METHOD_LABEL, METHOD_BLURB, type Method } from "@/lib/merch-studio/garment-catalog-core";
+import { canPuff, getBlank, getPlacement, placementsFor, METHOD_LABEL, METHOD_BLURB, type Method } from "@/lib/merch-studio/garment-catalog-core";
 import { checkDesign, maxInchesAt300, summarize, type RuleElement } from "@/lib/merch-studio/print-rules-core";
 import { NumberSlider, Row, Segmented, Toggle, studioInput } from "@/components/admin/banner-studio/controls";
 import { IssueList } from "./IssueList";
@@ -51,7 +51,7 @@ export function ArtCheckPanel({ blankId, colorHex }: { blankId: string; colorHex
       const w = Math.min(placement.widthIn, text.length * textH * 0.62);
       els.push({ id: "txt", kind: "text", text, letterHeightIn: textH, fontSizeIn: textH / 0.7, x: (placement.widthIn - w) / 2, y: Math.max(0, placement.heightIn - textH - 0.25), w, h: textH, colors: [] });
     }
-    return checkDesign({ blank, placement, method: m, garmentHex: colorHex, elements: els, puff });
+    return checkDesign({ blank, placement, method: m, garmentHex: colorHex, elements: els, puff: puff && canPuff(blank, placement) });
   })();
   const sum = summarize(issues);
 
@@ -80,7 +80,7 @@ export function ArtCheckPanel({ blankId, colorHex }: { blankId: string; colorHex
           <input className={studioInput} value={text} maxLength={60} onChange={(e) => setText(e.target.value)} placeholder="e.g. GREENWAY" />
         </Row>
         {text.trim() ? <NumberSlider label="Letter (cap) height" value={textH} min={0.1} max={3} step={0.05} unit="in" onChange={setTextH} /> : null}
-        {blank.puffAvailable && m === "embroidery" ? <Toggle label="3D puff" checked={puff} onChange={setPuff} /> : null}
+        {placement && canPuff(blank, placement) && m === "embroidery" ? <Toggle label="3D puff" checked={puff} onChange={setPuff} /> : null}
       </div>
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2 text-xs">

@@ -3873,3 +3873,13 @@ Pure optimizer-core.ts (33 self-tests). The art-prep actions now also accept the
 - Fix: new `puffThreadOptionId` / `puffAllowed` (print-export-core). Puff only applies where Printful lists a puff thread option (hat front, large front). A puffed back/side now embroiders flat with its own `thread_colors_back/left/right` and shows a warning. `printfulItemDraft` never emits the same option id twice (merges). The 3D puff toggle in Design shows only on placements that can puff; pricing and the listing package count puff only there.
 - The uploaded gold PNG itself is fine (transparent background, gold pixels); the exported front file was gold.
 - 7 new pure tests reproduce the owner's design (print-export-core minimum 119 -> 126). Scoped eslint and tsc are clean.
+
+## D281
+
+> Thank you. Please check that all garments design constraints have this 3d puff limitation built in so I don't have this problem with the other garments in my catalog. I haven't published anything yet. Once all is confirmed and fixed, please merge. Follow the standing rules. Thank you.
+
+### Status (D281)
+
+- Audit of all 22 blanks against Printful's options (public catalog + the D278 site snapshot): Printful offers 3D puff only on hat FRONTS. Puff-capable fronts: 6089M snapback, 6245CM dad hat, Richardson 112 trucker, 1501KC beanie. 6089M and 6245CM back/left/right have no puff option. No shirt, hoodie, crewneck, jacket, vest, button shirt, sweatpants or socks can puff. The Columbia booney and Winter Blur beanie list a `thread_colors_3d` option on Printful's site, but the studio keeps them flat (puffAvailable false) until a sample proves it.
+- One rule for everything: `puffOptionFor` / `canPuff` in garment-catalog-core (print-export-core's `puffThreadOptionId` / `puffAllowed` now call it). Used by the design checks (new `puff-placement` warning; the "Try 3D puff" tip only shows on puff-able fronts), the Design toggle, the Art check toggle, the Fulfillment estimator (toggle shows only when a puff-able front is embroidered; label "3D puff on the front"), pricing, the listing package and the order/mockup builder (no duplicate thread option ids). The catalog card says "+ 3D puff (front only)".
+- A whole-catalog test asserts canPuff is true exactly for the hat fronts of puff hats (print-rules-core minimum 34 -> 38). Scoped eslint and tsc are clean; merch vitest 14 files / 117 tests pass. Merged with PR #1915 (D280), on the owner's request.

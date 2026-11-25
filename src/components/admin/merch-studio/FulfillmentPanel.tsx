@@ -6,7 +6,7 @@
  * the Printful base price, placement upcharges and Stripe's standard fee.
  */
 import { useState } from "react";
-import { basePriceCents, formatCents, getBlank, sizesFor, placementsFor, METHOD_LABEL, type Method, type UsedPlacement } from "@/lib/merch-studio/garment-catalog-core";
+import { basePriceCents, canPuff, formatCents, getBlank, sizesFor, placementsFor, METHOD_LABEL, type Method, type UsedPlacement } from "@/lib/merch-studio/garment-catalog-core";
 import { JIT_PIPELINE, MIN_MARGIN_BPS, SHIPPED_SLICE, STRIPE_DISPUTE_CENTS, shippingGapCents, suggestRetailCents, unitEconomics } from "@/lib/merch-studio/fulfillment-core";
 import { printfulShippingRateAction } from "@/app/admin/merch-studio/pricing-actions";
 import { NumberSlider, Row, Toggle, studioInput, studioLabel } from "@/components/admin/banner-studio/controls";
@@ -39,7 +39,9 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
   const ship = { chargedCents: toCents(shipCharged), costCents: toCents(shipCost) };
 
   const usedList: UsedPlacement[] = Object.entries(used).filter(([, m]) => m).map(([placementId, m]) => ({ placementId, method: m as Method }));
-  const est = basePriceCents(blank, sz, usedList, puff);
+  // D281: 3D puff only counts when a placement that Printful lets puff (the hat front) is embroidered.
+  const puffOk = usedList.some((u) => { const p = placementsFor(blank).find((x) => x.id === u.placementId); return u.method === "embroidery" && !!p && canPuff(blank, p); });
+  const est = basePriceCents(blank, sz, usedList, puff && puffOk);
   const econ = est ? unitEconomics({ retailCents: toCents(retail), printfulCents: est.cents, shippingChargedCents: toCents(shipCharged), shippingCostCents: toCents(shipCost) }) : null;
 
   return (
@@ -76,7 +78,7 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
               ))}
             </div>
           </div>
-          {blank.puffAvailable ? <Toggle label="3D puff (+$1.50)" checked={puff} onChange={setPuff} /> : null}
+          {puffOk ? <Toggle label="3D puff on the front (+$1.50)" checked={puff} onChange={setPuff} /> : null}
           <Row label="Retail price (USD)"><input className={studioInput} inputMode="decimal" value={retail} onChange={(e) => setRetail(e.target.value)} /></Row>
           <Row label="Shipping charged to customer"><input className={studioInput} inputMode="decimal" value={shipCharged} onChange={(e) => setShipCharged(e.target.value)} /></Row>
           <Row label="Printful shipping cost" hint="Printful charges you its own shipping rate per order. The shop charges the customer your flat MERCH_SHIP_* amount, so enter Printful's US rate for this garment to see the gap."><input className={studioInput} inputMode="decimal" value={shipCost} onChange={(e) => setShipCost(e.target.value)} /></Row>
