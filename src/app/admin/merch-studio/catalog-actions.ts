@@ -69,7 +69,11 @@ async function sampleGateFor(pkg: ListingPackage, screenHash: string): Promise<{
   const r = await readDesignRow(String(pkg.designId ?? ""));
   if (r.error) return { ok: false, reason: `Couldn't check the sample approval, so nothing was published: ${r.error}` };
   if (!r.row) return sampleGate(null, "");
-  if (screenHash !== r.row.designHash || filesShape(planPrintFiles(r.row.design).plans) !== filesShape(pkg.printFiles)) {
+  const planned = planPrintFiles(r.row.design);
+  // D275: never publish a print Printful would reject (spill past its area, wrong area ratio, missing file).
+  const hard = [...planned.issues, ...planned.plans.flatMap((p) => p.issues)].filter((i) => i.level === "blocker");
+  if (hard.length) return { ok: false, reason: `Printful would reject this print, so nothing was published: ${hard.map((i) => i.title).slice(0, 3).join("; ")}. Fix it on the Design tab.` };
+  if (screenHash !== r.row.designHash || filesShape(planned.plans) !== filesShape(pkg.printFiles)) {
     return { ok: false, reason: "The design on this screen is different from the saved one. Wait for \"Saved on the server\" in Design, then reload Publish." };
   }
   const g = sampleGate(r.row, printHash(r.row.design));

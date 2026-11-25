@@ -21,7 +21,7 @@ import { printful, printfulConfigured } from "@/lib/merch-studio/printful-client
 import { getBlank } from "@/lib/merch-studio/garment-catalog-core";
 import { PRINTFUL_VARIANTS } from "@/lib/merch-studio/garment-colors-data";
 import { pickStandardRate, type ShippingRate } from "@/lib/merch-studio/fulfillment-core";
-import { compareBlank, type PlacementCompare } from "@/lib/merch-studio/printfile-check-core";
+import { compareBlank, mergePrintfileResults, printfileTechniques, type PlacementCompare } from "@/lib/merch-studio/printfile-check-core";
 import { flatShippingFromReport } from "@/lib/merch/merch-health-core";
 import { latestMerchHealthReport } from "@/lib/merch/merch-health-server";
 
@@ -56,7 +56,12 @@ export async function printfileSizesAction(input: { blankId: string }): Promise<
   const b = getBlank(String(input?.blankId ?? ""));
   if (!b) return { ok: false, error: "Unknown garment." };
   if (!printfulConfigured()) return { ok: false, error: "Printful isn't connected yet (PRINTFUL_API_TOKEN). Open Printful's file template for this product instead." };
-  const r = await printful<unknown>("GET", `/mockup-generator/printfiles/${b.printfulId}`);
-  if (!r.ok) return { ok: false, error: r.error };
-  return { ok: true, rows: compareBlank(b.id, r.result) };
+  // D275: ask per technique (hats are embroidery-only; Printful's default technique may list a different file).
+  const results: unknown[] = [];
+  for (const t of printfileTechniques(b)) {
+    const r = await printful<unknown>("GET", `/mockup-generator/printfiles/${b.printfulId}?technique=${t}`);
+    if (!r.ok) return { ok: false, error: r.error };
+    results.push(r.result);
+  }
+  return { ok: true, rows: compareBlank(b.id, mergePrintfileResults(results)) };
 }

@@ -26,7 +26,7 @@
  *   Content themes: WAC 314-55-155(2)(a) (R69 s1.1).
  */
 import { isAllowedWord, ruleLevel } from "@/lib/ai/guardrails-state-core";
-import { type Blank, type Method, type Placement, METHOD_LABEL, contrastRatio, getBlank, getPlacement, isDarkColor, isThreadColor, nearestThread } from "./garment-catalog-core";
+import { type Blank, type Method, type Placement, METHOD_LABEL, contrastRatio, getBlank, getPlacement, isDarkColor, isThreadColor, nearestThread, printLimitRect } from "./garment-catalog-core";
 
 export type Level = "blocker" | "warning" | "tip" | "review";
 export const LEVEL_ORDER: Record<Level, number> = { blocker: 0, warning: 1, review: 2, tip: 3 };
@@ -87,6 +87,10 @@ export const PRINT_MIN_LINE_IN = 1 / 72;
 export const EMB_MIN_DETAIL_IN = 1 / 16;
 export const MAX_THREADS = 6;
 export const STITCH_CAP = 15000;
+/** Printful file guidelines: max 15K stitches for regular designs, 25K for large text / clipart. */
+export const STITCH_HARD_CAP = 25000;
+/** Printful file guidelines: "elements less than 3mm apart may connect". */
+export const EMB_MIN_GAP_IN = 3 / 25.4;
 export const LABEL_MIN_FONT_IN = 10 / 72;
 export const SIDE_MAX_CHARS = 10;
 export const CONTRAST_WARN = 1.5;
@@ -171,8 +175,9 @@ const SRC = {
   embLine: "Gelato embroidery guidelines (0.05\" min thickness)",
   printLine: "French Press Custom art prep (lines >= 1 pt)",
   detail: "Printful hat guide (nothing under 1/16\")",
-  thread: "Printful catalog thread palette + hat guide (<= 6 colours typical)",
-  stitch: "JA Digitizing stitch estimates; Printful hat guide (~15k cap)",
+  thread: "Printful product file guidelines (15 thread colours, up to 6 per design; unlimited colour is a paid option)",
+  stitch: "Printful product file guidelines (max 15K stitches, 25K for large text/clipart); JA Digitizing estimates",
+  gap: "Printful product file guidelines (elements under 3mm apart may connect)",
   side: "Gelato / Printful (<= 10 characters per line on side areas)",
   label: "Printful tee guide (inside label fonts >= 10 pt)",
   bounds: "Printful print-file guide (art outside the print area is cropped)",
@@ -218,20 +223,36 @@ export function checkDesign(input: RuleInput): Issue[] {
   // Thread palette / colour count
   if (isEmb) {
     const cols = distinctColors(elements);
-    if (cols.length > MAX_THREADS) add({ id: "thread-count", level: "warning", title: `${cols.length} thread colours`, why: `Embroidery typically tops out around ${MAX_THREADS} colours; each change slows the machine and adds risk.`, fix: "Merge similar colours.", source: SRC.thread });
+    if (cols.length > MAX_THREADS) add({ id: "thread-count", level: "blocker", title: `${cols.length} thread colours - Printful allows ${MAX_THREADS}`, why: `Printful's standard embroidery stitches up to ${MAX_THREADS} of its 15 thread colours per design. More colours are not ordered by the studio (Printful's "unlimited colour" is a separate paid option).`, fix: `Merge similar colours down to ${MAX_THREADS} (Optimizer > Snap to threads helps).`, source: SRC.thread });
     const off = cols.filter((c) => !isThreadColor(c));
     if (off.length) add({ id: "thread-palette", level: "warning", title: `${off.length} colour(s) aren't Printful threads`, why: `Printful stitches only its ${15}-colour palette, so ${off.slice(0, 3).join(", ")} would be swapped for the nearest thread (e.g. ${off[0]} -> ${nearestThread(off[0]).code} ${nearestThread(off[0]).name}).`, fix: "Use the thread swatches, or apply 'Snap to threads'.", source: SRC.thread });
     const textured = blank.category === "beanie" || blank.cottonPct === null || /fleece/i.test(blank.fabric);
     const est = estimateStitches(elements, textured);
-    if (est.mid > STITCH_CAP) add({ id: "stitches", level: "warning", title: `~${est.mid.toLocaleString("en-US")} stitches`, why: `Above ~${STITCH_CAP.toLocaleString("en-US")} stitches embroidery gets stiff, heavy and costly${blank.headwear ? ", and Printful caps hats around there" : ""}.`, fix: "Shrink large filled areas, use outlines, or switch to DTF.", source: SRC.stitch });
+    if (est.mid > STITCH_HARD_CAP) add({ id: "stitches", level: "blocker", title: `~${est.mid.toLocaleString("en-US")} stitches - over Printful's ${STITCH_HARD_CAP.toLocaleString("en-US")} maximum`, why: `Printful caps embroidery at ${STITCH_CAP.toLocaleString("en-US")} stitches (${STITCH_HARD_CAP.toLocaleString("en-US")} for large text or clipart). This estimate is far above both.`, fix: "Shrink large filled areas, use outlines, or switch to DTF.", source: SRC.stitch });
+    else if (est.mid > STITCH_CAP) add({ id: "stitches", level: "warning", title: `~${est.mid.toLocaleString("en-US")} stitches`, why: `Above ~${STITCH_CAP.toLocaleString("en-US")} stitches embroidery gets stiff, heavy and costly${blank.headwear ? ", and Printful caps hats around there" : ""}.`, fix: "Shrink large filled areas, use outlines, or switch to DTF.", source: SRC.stitch });
+  }
+
+  // D275: Printful's print file for THIS method (e.g. 6245CM DTF is 5" inside the 5.5" embroidery frame).
+  const lim = p.methods.includes(method) ? printLimitRect(p, method) : { x: 0, y: 0, w: p.widthIn, h: p.heightIn };
+  if (isEmb && elements.length > 1) {
+    const visible = elements.filter((e) => e.w > 0 && e.h > 0);
+    let close: [RuleElement, RuleElement] | null = null;
+    for (let i = 0; i < visible.length && !close; i += 1) for (let j = i + 1; j < visible.length && !close; j += 1) {
+      const a = visible[i], b = visible[j];
+      const gx = Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w); const gy = Math.max(a.y, b.y) - Math.min(a.y + a.h, b.y + b.h);
+      const gap = Math.max(gx, gy);
+      if (gap > 0 && gap < EMB_MIN_GAP_IN) close = [a, b];
+    }
+    if (close) add({ id: "emb-gap", level: "tip", title: `${name(close[0])} and ${name(close[1])} are under 3mm apart`, why: "Printful: embroidered elements closer than 3mm may stitch together.", fix: "Leave at least 1/8\" between separate pieces, or join them on purpose.", source: SRC.gap });
   }
 
   for (const e of elements) {
-    // Bounds
+    // Bounds (text boxes here already include the font's real glyph overhang - merch-design-core inkBox)
     const eps = 1e-6;
-    if (e.x < -eps || e.y < -eps || e.x + e.w > p.widthIn + eps || e.y + e.h > p.heightIn + eps) {
-      const fully = e.x >= p.widthIn || e.y >= p.heightIn || e.x + e.w <= 0 || e.y + e.h <= 0;
-      add({ id: `bounds-${e.id}`, level: "blocker", elementId: e.id, title: `${name(e)} ${fully ? "is outside" : "crosses the edge of"} the print area`, why: "Anything outside the print area is cut off by the printer.", fix: "Move or shrink it inside the dashed safe zone.", source: SRC.bounds });
+    if (e.x < lim.x - eps || e.y < lim.y - eps || e.x + e.w > lim.x + lim.w + eps || e.y + e.h > lim.y + lim.h + eps) {
+      const fully = e.x >= lim.x + lim.w || e.y >= lim.y + lim.h || e.x + e.w <= lim.x || e.y + e.h <= lim.y;
+      const smaller = lim.w < p.widthIn - eps || lim.h < p.heightIn - eps;
+      add({ id: `bounds-${e.id}`, level: "blocker", elementId: e.id, title: `${name(e)} ${fully ? "is outside" : "crosses the edge of"} the print area`, why: `Printful measures the real ink${e.kind === "text" ? " - including letters that swing past the text box (script and display fonts do)" : ""} - and rejects or crops anything outside its ${Math.round(lim.w * 100) / 100}" x ${Math.round(lim.h * 100) / 100}" ${METHOD_LABEL[method]} area${smaller ? " (smaller than the frame for this method)" : ""}.`, fix: "Move or shrink it until its red outline sits inside the dashed frame.", source: SRC.bounds });
     }
     for (const o of p.obstacles) {
       if (overlap(e, o)) add({ id: `obstacle-${o.kind}-${e.id}`, level: o.severity, elementId: e.id, title: `${name(e)} overlaps the ${o.label.toLowerCase()}`, why: o.severity === "blocker" ? "Ink or thread can't go across this - it will be rejected or ruined." : "It will distort, fold or be hidden when worn.", fix: "Move it clear of the shaded area.", source: SRC.obstacle });
@@ -319,7 +340,15 @@ export function __runPrintRulesTests(): { passed: number; failed: number } {
   ok(has(checkDesign({ ...embBase, elements: [{ id: "l", kind: "shape", strokeIn: 0.02, x: 0, y: 0, w: 1, h: 1, colors: ["#FFFFFF"] }] }), "emb-line-l", "blocker"), "thin emb line");
   const sevenCols = ["#FFFFFF", "#000000", "#96A1A8", "#A67843", "#FFCC00", "#E25C27", "#CC3366"];
   const many = checkDesign({ ...embBase, elements: sevenCols.map((c, i) => ({ id: `c${i}`, kind: "shape" as const, x: 0, y: 0, w: 0.5, h: 0.5, colors: [c] })) });
-  ok(has(many, "thread-count", "warning") && !has(many, "thread-palette"), "7 palette threads -> count warning only");
+  ok(has(many, "thread-count", "blocker") && !has(many, "thread-palette"), "7 palette threads -> Printful 6-colour blocker, no palette warning");
+  ok(!has(checkDesign({ ...embBase, elements: sevenCols.slice(0, 6).map((c, i) => ({ id: `c${i}`, kind: "shape" as const, x: 0, y: 0, w: 0.5, h: 0.5, colors: [c] })) }), "thread-count"), "6 threads ok");
+  ok(has(checkDesign({ ...embBase, elements: [{ id: "huge", kind: "shape", x: 0, y: 0, w: 4, h: 4, colors: ["#FFFFFF"], inkAreaSqIn: 40 }] }), "stitches", "blocker"), "over 25K stitches -> blocker");
+  const gapEls = [{ id: "g1", kind: "shape" as const, x: 0, y: 0, w: 1, h: 1, colors: ["#FFFFFF"] }, { id: "g2", kind: "shape" as const, x: 1.05, y: 0, w: 1, h: 1, colors: ["#FFFFFF"] }];
+  ok(has(checkDesign({ ...embBase, elements: gapEls }), "emb-gap", "tip"), "under 3mm gap tip");
+  ok(!has(checkDesign({ ...embBase, elements: [gapEls[0], { ...gapEls[1], x: 1.5 }] }), "emb-gap"), "0.5in gap fine");
+  const dad = cat.getBlank("yp-6245cm")!, dadF = cat.getPlacement(dad, "hat_front")!;
+  const edge = [{ id: "d", kind: "shape" as const, x: 0.1, y: 0.2, w: 1, h: 1, colors: ["#FFFFFF"] }];
+  ok(has(checkDesign({ blank: dad, placement: dadF, method: "dtf", garmentHex: "#000000", elements: edge }), "bounds-d", "blocker") && !has(checkDesign({ blank: dad, placement: dadF, method: "embroidery", garmentHex: "#000000", elements: edge }), "bounds-d"), "DTF 5in limit inside the 5.5in frame");
   ok(has(checkDesign({ ...embBase, elements: [{ id: "x", kind: "shape", x: 0, y: 0, w: 1, h: 1, colors: ["#123456"] }] }), "thread-palette", "warning"), "off-palette warning");
   ok(has(checkDesign({ ...embBase, elements: [{ id: "big", kind: "shape", x: 0, y: 0, w: 4, h: 4, colors: ["#FFFFFF"], inkAreaSqIn: 16 }] }), "stitches", "warning"), "19,200 stitches warning");
   ok(has(checkDesign({ ...base, method: "embroidery", elements: [] }), "method-unavailable", "blocker"), "emb not on full front");

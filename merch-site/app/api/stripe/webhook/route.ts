@@ -16,7 +16,11 @@
  *      read from the fresh catalog feed; a feed that failed means drafts.
  * R73 S2 - WASHINGTON ONLY: sessions are created with capture_method=manual,
  * so the card is only AUTHORIZED. Here (lib/region-core.ts decidePayment):
- *   WA address      -> check the order plan, POST /v1/payment_intents/{id}/capture, then Printful
+ *   WA address      -> check the order plan, POST it to Printful as a DRAFT (free;
+ *                      D275: Printful validates files + print-area ratio here),
+ *                      then POST /v1/payment_intents/{id}/capture, then confirm
+ *                      (POST /orders/@ref/confirm) when auto-confirm is on.
+ *                      Printful rejects the draft -> cancel the hold (free) + alert.
  *   other address   -> POST /v1/payment_intents/{id}/cancel (hold released, no fee) + email the shopper
  *   plan problems   -> NOT captured; owner alerted (the hold lasts ~7 days, so
  *                      the owner can capture or cancel it in the Stripe dashboard)
@@ -102,21 +106,52 @@ export async function POST(req: Request) {
     await alertOwner(`Order ${plan.orderRef} paid but Printful isn't connected`, [...who, "Set PRINTFUL_API_TOKEN in Vercel, then resend this event from the Stripe dashboard (Developers > Webhooks > event > Resend)."]);
     return Response.json({ error: "Printful not configured." }, { status: 500 });
   }
+  // freshProducts() above just re-read the feed, so the switch is current.
+  const confirm = process.env.MERCH_PRINTFUL_AUTO_CONFIRM === "true" || feedAutoConfirm();
+  const transientStatus = (st: number) => st === 0 || st === 429 || st >= 500;
+
   if (decision.action === "capture") {
+    // D275: Printful checks the order (files, print-area ratio, address) BEFORE the card is charged.
+    // A draft is free ("you are charged only for confirmed orders"); a rejection releases the hold.
+    const draft = await printful<{ id?: number; status?: string }>("/orders?update_existing=true", { method: "POST", body: plan.body });
+    if (!draft.ok) {
+      if (transientStatus(draft.status)) {
+        await alertOwner(`Printful is unreachable for order ${plan.orderRef}`, [...who, `Printful said: ${draft.error ?? draft.status}`, "The card is only AUTHORIZED (not charged). Stripe will retry automatically."]);
+        return Response.json({ error: "Retry." }, { status: 500 });
+      }
+      const cancel = await stripePost(`payment_intents/${pi!.id}/cancel`, `gm-cancel-${pi!.id}`);
+      const released = cancel.ok || cancel.body?.status === "canceled";
+      await alertOwner(`Printful rejected order ${plan.orderRef} - ${released ? "card hold released, NOT charged" : "NOT charged, but the hold could not be released"}`, [
+        ...who, `Printful said: ${draft.error ?? draft.status}`,
+        released ? "The customer's card hold was cancelled for free - nothing was charged. Fix the product in Merch Studio (Design > Print checks), re-publish it, and contact the customer." : `Cancel the payment by hand in the Stripe dashboard (Payments > the order > Cancel). Stripe said: ${cancel.body?.error?.message ?? cancel.status}`,
+      ]);
+      return ok("printful rejected the draft - authorization cancelled, owner alerted");
+    }
     const res = await stripePost(`payment_intents/${pi!.id}/capture`, `gm-capture-${pi!.id}`);
     if (!res.ok && res.body?.status !== "succeeded") {
       if (res.status === 0 || res.status >= 500) return Response.json({ error: "Retry." }, { status: 500 });
-      await alertOwner(`Order ${plan.orderRef} - card capture FAILED, not sent to Printful`, [...who, `Stripe said: ${res.body?.error?.message ?? res.status}`]);
+      await alertOwner(`Order ${plan.orderRef} - card capture FAILED, not sent to production`, [...who, `Stripe said: ${res.body?.error?.message ?? res.status}`, "A Printful DRAFT exists (not charged). Delete it in Printful, or capture by hand in Stripe and confirm the draft."]);
       return ok("capture failed - owner alerted");
     }
+    if (!confirm) {
+      console.log(`[stripe-webhook] ${plan.orderRef} -> Printful draft #${draft.result?.id ?? "?"} (captured)`);
+      return ok("printful draft");
+    }
+    const conf = await printful<{ id?: number; status?: string }>(`/orders/@${encodeURIComponent(plan.orderRef)}/confirm`, { method: "POST" });
+    if (!conf.ok) {
+      const transient = transientStatus(conf.status);
+      await alertOwner(`Printful ${transient ? "is unreachable" : "would not confirm"} order ${plan.orderRef}`, [...who, `Printful said: ${conf.error ?? conf.status}`, "The card IS charged and the order is a Printful draft.", transient ? "Stripe will retry automatically." : `Confirm or fix it in Printful, or review at ${siteUrl()}/admin/orders (refund in Stripe if it can't be made).`]);
+      return transient ? Response.json({ error: "Retry." }, { status: 500 }) : ok("printful confirm failed - owner alerted");
+    }
+    console.log(`[stripe-webhook] ${plan.orderRef} -> Printful #${conf.result?.id ?? draft.result?.id ?? "?"} (${conf.result?.status ?? "?"})`);
+    return ok(`printful ${conf.result?.status ?? "confirmed"}`);
   }
 
-  // freshProducts() above just re-read the feed, so the switch is current.
-  const confirm = process.env.MERCH_PRINTFUL_AUTO_CONFIRM === "true" || feedAutoConfirm();
+  // Already charged before this webhook (e.g. a retry after capture): create/update + confirm in one call.
   const res = await printful<{ id?: number; status?: string }>(`/orders?update_existing=true${confirm ? "&confirm=true" : ""}`, { method: "POST", body: plan.body });
   if (!res.ok) {
-    const transient = res.status === 0 || res.status === 429 || res.status >= 500;
-    await alertOwner(`Printful ${transient ? "is unreachable" : "rejected"} order ${plan.orderRef}`, [...who, `Printful said: ${res.error ?? res.status}`, transient ? "Stripe will retry automatically." : `Fix it in Printful, or review at ${siteUrl()}/admin/orders.`]);
+    const transient = transientStatus(res.status);
+    await alertOwner(`Printful ${transient ? "is unreachable" : "rejected"} order ${plan.orderRef}`, [...who, `Printful said: ${res.error ?? res.status}`, transient ? "Stripe will retry automatically." : `The card WAS charged. Fix the product in Merch Studio and resend this event from Stripe, or refund it (back office: Orders > the order > Refund in Stripe). Review at ${siteUrl()}/admin/orders.`]);
     return transient ? Response.json({ error: "Retry." }, { status: 500 }) : ok("printful rejected - owner alerted");
   }
   console.log(`[stripe-webhook] ${plan.orderRef} -> Printful #${res.result?.id ?? "?"} (${res.result?.status ?? "?"})`);

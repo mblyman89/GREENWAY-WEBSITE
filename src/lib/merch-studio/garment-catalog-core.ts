@@ -68,6 +68,15 @@ export interface Placement {
   obstacles: Obstacle[];
   dimsSource: DimsSource;
   note?: string;
+  /**
+   * D275: Printful's PRINT FILE size (inches) per method when it differs from
+   * (or must be pinned against) the studio frame. Printful rejects an order
+   * when position.area_width/area_height is more than 2% off its print-file
+   * ratio ("Aspect ratio for print area ... is invalid"), so the order's area
+   * is THIS box and the studio frame is centred inside it. Missing = the
+   * frame itself is the print file.
+   */
+  printfileIn?: Partial<Record<Method, [w: number, h: number]>>;
 }
 
 export interface Blank {
@@ -94,9 +103,12 @@ export interface Blank {
 //  tee guide (May 14 2026): left chest 2.5-5" sq, ~3" below neckline;
 //    full front 12x16, 3-4" below collar; emb left chest max 4x4, centre 4x4;
 //    back 10x12 to 12x16; sleeve ~4x3.5; labels 3x3.
-//  hat guide (Sep 4 2026): structured 4-5" x <=2.25"; trucker <=5x2;
-//    dad 3.5-4 x 1.75-2; beanie 5 x 1.75-2; side 2-2.5 x 1-1.25;
-//    back 2.25-3 x 0.75-1; centre 0.5-1" above brim.
+//  hat guide (Sep 4 2026): centre 0.5-1" above brim. D275 - superseded by
+//    each product's Printful "File guidelines" tab (max embroidery area):
+//    6089M front 6.3x2.56 (API print file 5.5x2, see the rejected order),
+//    6245CM front 5.5x2 (DTF 5x2), Richardson 112 front 5.9x2, 1501KC cuff
+//    5x1.75, every side/back 2x1. 15 threads, up to 6 per design (unlimited
+//    colour is a +$3.50 option), max 15K stitches (25K for large text/clipart).
 //  hoodie guide (Jul 27 2026): emb left chest 3-4" wide; printed chest 3-5";
 //    full front/back 10-12" wide; avoid hood, pocket, zipper, seams.
 // ---------------------------------------------------------------------------
@@ -158,14 +170,15 @@ const HOOD_DRAPE: Obstacle = { kind: "hood", label: "Hood drape (covers art when
 
 // Headwear --------------------------------------------------------------------
 const seam = (w: number, h: number): Obstacle => ({ kind: "center-seam", label: "Center front seam (6-panel)", x: w / 2 - 0.06, y: 0, w: 0.12, h, severity: "warning" });
-function hatFront(w: number, h: number, keys: Keys, sixPanel: boolean, note?: string): Placement {
+function hatFront(w: number, h: number, keys: Keys, sixPanel: boolean, note?: string, printfileIn?: Placement["printfileIn"]): Placement {
   // topIn for headwear = distance of frame BOTTOM above the brim, Printful: 0.5-1".
-  return pl("hat_front", "Front", "front", w, h, 0.75, 0, keys, "printful-hat-guide", sixPanel ? [seam(w, h)] : [], note);
+  return { ...pl("hat_front", "Front", "front", w, h, 0.75, 0, keys, "printful-hat-guide", sixPanel ? [seam(w, h)] : [], note), ...(printfileIn ? { printfileIn } : {}) };
 }
+// D275: Printful product "File guidelines" (Sep 2026): side + back embroidery max 2" x 1", print file 2" x 1" (600 x 300 px).
 const hatSide = (side: "left" | "right"): Placement =>
-  pl(`hat_${side}`, `${side === "left" ? "Left" : "Right"} side`, side, 2.5, 1.25, 0.75, 0, { embroidery: [side, 295] }, "printful-hat-guide", [], "<=10 characters per line, minimalist.");
+  pl(`hat_${side}`, `${side === "left" ? "Left" : "Right"} side`, side, 2, 1, 0.75, 0, { embroidery: [side, 295] }, "printful-hat-guide", [], "Printful max 2\" x 1\". <=10 characters per line, minimalist.");
 const hatBack = (): Placement =>
-  pl("hat_back", "Back (above closure)", "back", 3, 1, 0.5, 0, { embroidery: ["back", 295] }, "printful-hat-guide", [], "Arched text suits the back.");
+  pl("hat_back", "Back (above closure)", "back", 2, 1, 0.5, 0, { embroidery: ["back", 295] }, "printful-hat-guide", [], "Printful max 2\" x 1\". Arched text suits the back.");
 
 // The catalog -----------------------------------------------------------------
 export const BLANKS: readonly Blank[] = [
@@ -231,25 +244,25 @@ export const BLANKS: readonly Blank[] = [
     id: "yp-6089m", printfulId: 99, brand: "Yupoong", model: "6089M", title: "Classic Snapback", category: "snapback", headwear: true,
     fabric: "80% acrylic / 20% wool, full buckram", cottonPct: 0, weightOz: null, puffAvailable: true, structured: true,
     premiumNote: "Structured high-profile crown - the best base for 3D puff.",
-    placements: [hatFront(5, 2.25, { embroidery: ["default", 0] }, true, "Use 80-90% of the width (Printful)."), hatSide("left"), hatSide("right"), hatBack()],
+    placements: [hatFront(5.5, 2, { embroidery: ["default", 0] }, true, "Printful's print file for this cap is 5.5\" x 2\" (ratio 2.75 - proven by the rejected order gm-mwv5yt0q; the product page now advertises up to 6.3\" x 2.56\"). Use 80-90% of the width.", { embroidery: [5.5, 2] }), hatSide("left"), hatSide("right"), hatBack()],
   },
   {
     id: "yp-6245cm", printfulId: 206, brand: "Yupoong", model: "6245CM", title: "Classic Dad Hat", category: "dad", headwear: true,
     fabric: "100% chino cotton twill, unstructured", cottonPct: 100, weightOz: null, puffAvailable: true, structured: false,
     premiumNote: "Unstructured low-profile: keep fronts simple; DTF available for full-colour art.",
-    placements: [hatFront(4, 2, { embroidery: ["default", 0], dtf: ["front_dtf_hat", 295] }, true, "Soft crown - simpler designs read better."), hatSide("left"), hatSide("right"), hatBack()],
+    placements: [hatFront(5.5, 2, { embroidery: ["default", 0], dtf: ["front_dtf_hat", 295] }, true, "Printful: embroidery front max 5.5\" x 2\"; DTF front 5\" x 2\" (keep DTF art 0.25\" in from each side). Soft crown - simpler designs read better.", { embroidery: [5.5, 2], dtf: [5, 2] }), hatSide("left"), hatSide("right"), hatBack()],
   },
   {
     id: "rch-112", printfulId: 422, brand: "Richardson", model: "112", title: "Snapback Trucker", category: "trucker", headwear: true,
     fabric: "60% cotton / 40% polyester front, 100% polyester mesh back", cottonPct: 60, weightOz: null, puffAvailable: true, structured: true,
     premiumNote: "The trucker everyone knows. Front only - mesh back can't be embroidered.",
-    placements: [hatFront(5, 2, { embroidery: ["default", 0] }, true, "Front panels only; never the mesh.")],
+    placements: [hatFront(5.9, 2, { embroidery: ["default", 0] }, true, "Printful: front max 5.9\" x 2\". Front panels only; never the mesh.")],
   },
   {
     id: "yp-1501kc", printfulId: 266, brand: "Yupoong", model: "1501KC", title: "Cuffed Beanie", category: "beanie", headwear: true,
     fabric: "100% Turbo Acrylic knit", cottonPct: 0, weightOz: null, puffAvailable: true, structured: null,
     premiumNote: "Cuff embroidery; knit stretches so text must be bigger (0.25\" lower / 0.3\" upper).",
-    placements: [pl("hat_front", "Cuff front", "front", 5, 2, 0.5, 0, { embroidery: ["default", 0] }, "printful-hat-guide", [], "Knit stretches - bold shapes only.")],
+    placements: [{ ...pl("hat_front", "Cuff front", "front", 5, 1.75, 0.5, 0, { embroidery: ["default", 0] }, "printful-hat-guide", [], "Printful: cuff max 5\" x 1.75\" (print file 1500 x 525 px). Knit stretches - bold shapes only."), printfileIn: { embroidery: [5, 1.75] } }],
   },
 ];
 
@@ -275,6 +288,22 @@ export function sizesFor(b: Blank): readonly SizeRow[] { return PRINTFUL_SIZES[b
 export function placementsFor(b: Blank, method?: Method): Placement[] {
   return method ? b.placements.filter((p) => p.methods.includes(method)) : [...b.placements];
 }
+/** Printful's print-file box for a placement + method (inches). Defaults to the studio frame. */
+export function printfileFor(p: Placement, m: Method): { w: number; h: number } {
+  const f = p.printfileIn?.[m];
+  return f ? { w: f[0], h: f[1] } : { w: p.widthIn, h: p.heightIn };
+}
+/**
+ * D275: where ink may go, in FRAME inches = the studio frame clipped to
+ * Printful's print file (centred on the frame). Equals the frame unless the
+ * method's print file is smaller (e.g. 6245CM DTF 5" inside the 5.5" frame).
+ */
+export function printLimitRect(p: Placement, m: Method): { x: number; y: number; w: number; h: number } {
+  const f = printfileFor(p, m);
+  const x = Math.max(0, (p.widthIn - f.w) / 2); const y = Math.max(0, (p.heightIn - f.h) / 2);
+  return { x, y, w: Math.min(p.widthIn, f.w), h: Math.min(p.heightIn, f.h) };
+}
+
 export function getPlacement(b: Blank, id: string): Placement | undefined { return b.placements.find((p) => p.id === id); }
 export function methodsFor(b: Blank): Method[] {
   const s = new Set<Method>(); for (const p of b.placements) for (const m of p.methods) s.add(m);
@@ -372,6 +401,19 @@ export function __runGarmentCatalogTests(): { passed: number; failed: number } {
   ok(getBlank("l7-14003")!.placements[0].obstacles.some((o) => o.kind === "zipper" && o.severity === "blocker"), "zip hoodie zipper blocker");
   ok(placementsFor(getBlank("cc-1717")!, "embroidery").length === 4, "1717 has 4 embroidery placements");
   ok(getBlank("nope") === undefined, "unknown blank");
+  // D275: Printful file guidelines + print-file ratios
+  for (const b of BLANKS) for (const p of b.placements) for (const [m, f] of Object.entries(p.printfileIn ?? {})) {
+    ok(p.methods.includes(m as Method) && f[0] > 0 && f[1] > 0, `${b.id}/${p.id} printfile ${m} sane`);
+  }
+  const snapF = getPlacement(getBlank("yp-6089m")!, "hat_front")!;
+  ok(snapF.widthIn === 5.5 && snapF.heightIn === 2 && Math.abs(snapF.printfileIn!.embroidery![0] / snapF.printfileIn!.embroidery![1] - 2.75) < 1e-9, "6089M front = Printful 5.5x2 print file (ratio 2.75)");
+  const dadF = getPlacement(getBlank("yp-6245cm")!, "hat_front")!;
+  ok(dadF.printfileIn!.dtf![0] === 5 && dadF.printfileIn!.embroidery![0] === 5.5, "6245CM DTF 5x2, embroidery 5.5x2");
+  ok(BLANKS.filter((b) => b.headwear).every((b) => b.placements.filter((p) => p.id !== "hat_front").every((p) => p.widthIn === 2 && p.heightIn === 1)), "hat sides/back 2x1 (Printful)");
+  const dl = printLimitRect(dadF, "dtf");
+  ok(dl.x === 0.25 && dl.w === 5 && dl.h === 2 && printLimitRect(dadF, "embroidery").w === 5.5, "DTF limit 5in centred in the 5.5in frame");
+  ok(printfileFor(getPlacement(getBlank("cc-1717")!, "front")!, "dtg").w === 12, "no printfileIn -> frame");
+  ok(getPlacement(getBlank("rch-112")!, "hat_front")!.widthIn === 5.9 && getPlacement(getBlank("yp-1501kc")!, "hat_front")!.heightIn === 1.75, "trucker 5.9 wide, beanie 1.75 tall");
 
   // Pricing (cents)
   const t = getBlank("cc-1717")!;

@@ -78,6 +78,40 @@ export function measureLinesEm(lines: string[], stack: string, weight: number, i
   return out;
 }
 
+/**
+ * D275: how far the font's real glyph INK reaches past the text box, in em
+ * [left, top, right, bottom]. Script / display fonts draw swashes outside
+ * their advance width and line box - Printful counts that ink against the
+ * print area, so the rules and the print file use these numbers. Matches
+ * MerchCanvas: each line is an em tall, centred ("central" baseline =
+ * canvas "middle"), aligned left / centre / right inside the box.
+ */
+export function measureInkEm(lines: string[], stack: string, weight: number, italic: boolean, letterSpacingEm: number, align: "left" | "center" | "right", lineHeight: number): [number, number, number, number] | undefined {
+  if (typeof document === "undefined") return undefined;
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return undefined;
+  const root = getComputedStyle(document.documentElement);
+  const fam = stack.replace(/var\((--[a-zA-Z0-9-]+)\)/g, (_m, v: string) => root.getPropertyValue(v).trim() || "sans-serif");
+  ctx.font = `${italic ? "italic " : ""}${weight} 100px ${fam}`;
+  const c = ctx as CanvasRenderingContext2D & { letterSpacing?: string };
+  if ("letterSpacing" in c) c.letterSpacing = `${letterSpacingEm * 100}px`;
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  const rows = (lines.length ? lines : [" "]).map((l) => ctx.measureText(l || " "));
+  const widths = rows.map((m) => m.width / 100);
+  const boxW = Math.max(...widths);
+  let l = 0, r = 0, t = 0, b = 0;
+  rows.forEach((m, i) => {
+    const off = align === "left" ? 0 : align === "right" ? boxW - widths[i] : (boxW - widths[i]) / 2;
+    l = Math.max(l, m.actualBoundingBoxLeft / 100 - off);
+    r = Math.max(r, off + m.actualBoundingBoxRight / 100 - boxW);
+    const cy = 0.5 + i * lineHeight; const boxH = 1 + (rows.length - 1) * lineHeight;
+    t = Math.max(t, m.actualBoundingBoxAscent / 100 - cy);
+    b = Math.max(b, cy + m.actualBoundingBoxDescent / 100 - boxH);
+  });
+  const q = (n: number) => Math.round(Math.max(0, Math.min(3, n)) * 1000) / 1000;
+  return [q(l), q(t), q(r), q(b)];
+}
+
 /** Natural size + colour analysis of an image file (downscaled to <= 256 px for speed). */
 export function inspectImage(url: string, isSvg: boolean): Promise<{ w: number; h: number; analysis: PixelAnalysis }> {
   return new Promise((resolve, reject) => {

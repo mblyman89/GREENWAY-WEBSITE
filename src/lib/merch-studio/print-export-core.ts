@@ -33,10 +33,10 @@
  * writer (PNGs are already compressed) and alpha statistics for the
  * semi-transparency check (Printful "Transparency in DTG printing").
  */
-import { colorsFor, getBlank, METHOD_LABEL, nearestThread, THREAD_PALETTE, type Blank, type Method, type Placement } from "./garment-catalog-core";
+import { colorsFor, getBlank, METHOD_LABEL, nearestThread, printfileFor, printLimitRect, THREAD_PALETTE, type Blank, type Method, type Placement } from "./garment-catalog-core";
 import { PRINTFUL_FILE_TYPES, PRINTFUL_OPTION_IDS, PRINTFUL_VARIANTS, type VariantRow } from "./garment-colors-data";
 import { frameRect, type Rect } from "./garment-views-core";
-import { checkSides, elementColors, rotatedBox, usedPlacements, type MElement, type MerchDesign, type Side } from "./merch-design-core";
+import { checkSides, elementColors, inkBox, TEXT_BLEED_EM, usedPlacements, type MElement, type MerchDesign, type Side } from "./merch-design-core";
 import { DPI_MIN, type Issue } from "./print-rules-core";
 
 export const EXPORT_DPI = 300;
@@ -46,8 +46,10 @@ export const MAX_CANVAS_PIXELS = 16_777_216;
 export const TRIM_PAD_IN = 0.05;
 /** Above this share of semi-transparent pixels (of all inked pixels) we warn (estimate; edges are always soft). */
 export const SEMI_ALPHA_WARN = 0.18;
-/** Extra room around TEXT (em): italic / script glyphs overhang their measured advance box. Never clip a letter. */
-export const TEXT_BLEED_EM = 0.12;
+/** Extra room around TEXT (em) when the font's ink wasn't measured (D275: measured overhang wins - merch-design-core inkBox). */
+export { TEXT_BLEED_EM };
+/** Printful: "Acceptable aspect ratio relative difference is 2%" (order rejection text, D275). */
+export const PRINTFUL_RATIO_TOLERANCE = 0.02;
 
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -90,35 +92,33 @@ export function exportDpiFor(wIn: number, hIn: number, maxPixels = MAX_CANVAS_PI
   return Math.max(1, Math.min(EXPORT_DPI, fit));
 }
 
-/** Art bounds of visible elements in FRAME inches (rotation + outline aware), padded and clamped to the frame. null = nothing visible. */
-/** Unclamped ink box (rotation + stroke aware). Used for spill detection. */
+/** Unclamped ink box (rotation, outline and REAL glyph overhang aware - D275). Used for spill detection. */
 export function inkBounds(els: readonly MElement[]): Rect | null {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const e of els) {
     if (e.hidden) continue;
-    const bb = rotatedBox(e);
-    const s = (e.strokeIn > 0 ? (e.kind === "text" ? e.strokeIn : e.strokeIn / 2) : 0) + (e.kind === "text" ? (e.fontSizeIn ?? 0.6) * TEXT_BLEED_EM : 0);
-    x0 = Math.min(x0, bb.x - s); y0 = Math.min(y0, bb.y - s);
-    x1 = Math.max(x1, bb.x + bb.w + s); y1 = Math.max(y1, bb.y + bb.h + s);
+    const bb = inkBox(e);
+    x0 = Math.min(x0, bb.x); y0 = Math.min(y0, bb.y);
+    x1 = Math.max(x1, bb.x + bb.w); y1 = Math.max(y1, bb.y + bb.h);
   }
   if (!Number.isFinite(x0)) return null;
   return { x: r4(x0), y: r4(y0), w: r4(x1 - x0), h: r4(y1 - y0) };
 }
 
-export function artBounds(els: readonly MElement[], frameW: number, frameH: number, pad = TRIM_PAD_IN): Rect | null {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const e of els) {
-    if (e.hidden) continue;
-    const bb = rotatedBox(e);
-    const s = (e.strokeIn > 0 ? (e.kind === "text" ? e.strokeIn : e.strokeIn / 2) : 0) + (e.kind === "text" ? (e.fontSizeIn ?? 0.6) * TEXT_BLEED_EM : 0);
-    x0 = Math.min(x0, bb.x - s); y0 = Math.min(y0, bb.y - s);
-    x1 = Math.max(x1, bb.x + bb.w + s); y1 = Math.max(y1, bb.y + bb.h + s);
-  }
-  if (!Number.isFinite(x0)) return null;
-  const x = clamp(x0 - pad, 0, frameW); const y = clamp(y0 - pad, 0, frameH);
-  const w = clamp(x1 + pad, 0, frameW) - x; const h = clamp(y1 + pad, 0, frameH) - y;
+/** Art bounds of visible elements in FRAME inches, padded and clamped to `limit` (default: the whole frame). null = nothing visible. */
+export function artBounds(els: readonly MElement[], frameW: number, frameH: number, pad = TRIM_PAD_IN, limit: Rect = { x: 0, y: 0, w: frameW, h: frameH }): Rect | null {
+  const raw = inkBounds(els);
+  if (!raw) return null;
+  const x = clamp(raw.x - pad, limit.x, limit.x + limit.w); const y = clamp(raw.y - pad, limit.y, limit.y + limit.h);
+  const w = clamp(raw.x + raw.w + pad, limit.x, limit.x + limit.w) - x; const h = clamp(raw.y + raw.h + pad, limit.y, limit.y + limit.h) - y;
   if (w <= 0 || h <= 0) return null;
   return { x: r4(x), y: r4(y), w: r4(w), h: r4(h) };
+}
+
+/** Relative difference of two aspect ratios (Printful rejects > 2%). */
+export function ratioDiff(a: { w: number; h: number }, b: { w: number; h: number }): number {
+  const ra = a.w / a.h; const rb = b.w / b.h;
+  return Number.isFinite(ra) && Number.isFinite(rb) && rb > 0 ? Math.abs(ra - rb) / rb : Infinity;
 }
 
 /** Printful `position` object (integers, pixels at `dpi`). Area = the print frame. */
@@ -212,16 +212,20 @@ export function planPrintFiles(d: MerchDesign, maxPixels = MAX_CANVAS_PIXELS): {
     const shifted = parts.flatMap((pt) => pt.elements.map((e) => ({ ...e, x: e.x + pt.dx, y: e.y + pt.dy })));
     const raw = inkBounds(shifted);
     const planIssues: Issue[] = [];
-    if (raw && (raw.x < -1e-6 || raw.y < -1e-6 || raw.x + raw.w > owner.p.widthIn + 1e-6 || raw.y + raw.h > owner.p.heightIn + 1e-6)) {
-      const spill = Math.max(-raw.x, -raw.y, raw.x + raw.w - owner.p.widthIn, raw.y + raw.h - owner.p.heightIn);
+    // D275: the order's area is Printful's PRINT FILE for this method (ratio must match within 2%), the frame centred in it.
+    const pf = printfileFor(owner.p, g.method);
+    const lim = printLimitRect(owner.p, g.method);
+    const pfX = r4((owner.p.widthIn - pf.w) / 2); const pfY = r4((owner.p.heightIn - pf.h) / 2);
+    if (raw && (raw.x < lim.x - 1e-6 || raw.y < lim.y - 1e-6 || raw.x + raw.w > lim.x + lim.w + 1e-6 || raw.y + raw.h > lim.y + lim.h + 1e-6)) {
+      const spill = Math.max(lim.x - raw.x, lim.y - raw.y, raw.x + raw.w - lim.x - lim.w, raw.y + raw.h - lim.y - lim.h);
       planIssues.push({
         id: `export-spill-${g.fileType}`, level: "blocker",
         title: `Art spills ${r4(spill)}" outside Printful's ${owner.p.label.toLowerCase()} area`,
-        why: g.members.length > 1 ? `${g.members.map((m) => m.p.label).join(" + ")} print as ONE Printful "${g.fileType}" file. Its area is the ${owner.p.label.toLowerCase()} frame (${owner.p.widthIn}x${owner.p.heightIn}"); anything outside it is cropped.` : "Anything outside the print area is cropped by the printer.",
-        fix: "Move that art inside the dashed frame (for left chest: lower it a little).", source: "Printful Orders API: position + limit_to_print_area",
+        why: g.members.length > 1 ? `${g.members.map((m) => m.p.label).join(" + ")} print as ONE Printful "${g.fileType}" file. Its area is the ${owner.p.label.toLowerCase()} frame (${owner.p.widthIn}x${owner.p.heightIn}"); anything outside it is cropped.` : `Printful measures the real ink (letter swashes and outlines too, not just the text box) against its ${r4(lim.w)}x${r4(lim.h)}" ${METHOD_LABEL[g.method]} area and rejects or crops anything outside it.`,
+        fix: "Move or shrink that art until its red outline is inside the dashed frame (for left chest: lower it a little). Decorative fonts reach past their box - leave room.", source: "Printful Orders API: position + limit_to_print_area; Printful product file guidelines",
       });
     }
-    const art = artBounds(shifted, owner.p.widthIn, owner.p.heightIn);
+    const art = artBounds(shifted, owner.p.widthIn, owner.p.heightIn, TRIM_PAD_IN, lim);
     if (!art) continue;
     const dpi = exportDpiFor(art.w, art.h, maxPixels);
     if (dpi < EXPORT_DPI) planIssues.push({ id: `export-dpi-${g.fileType}`, level: "tip", title: `Exported at ${dpi} DPI (browser canvas limit)`, why: `A ${r4(art.w)}x${r4(art.h)}" file at 300 DPI exceeds the ${MAX_CANVAS_PIXELS.toLocaleString("en-US")}-pixel canvas cap of Safari/iPad.`, fix: `Nothing to do: ${dpi} DPI is well above Printful's ${DPI_MIN} DPI minimum.`, source: "WebKit canvas limit; Printful DTG file guide" });
@@ -234,9 +238,12 @@ export function planPrintFiles(d: MerchDesign, maxPixels = MAX_CANVAS_PIXELS): {
       for (const e of semi) planIssues.push({ id: `export-semi-${e.id}`, level: "warning", elementId: e.id, title: `${e.name || e.kind} is ${e.opacity}% opacity`, why: "DTG/DTF inks are concentrated pigment: semi-transparent areas print with gaps and the shirt shows through (worst on dark garments).", fix: "Use 100% opacity and pick a lighter/darker solid colour instead.", source: "Printful: Transparency in DTG printing" });
     }
     const pxW = Math.max(1, Math.round(art.w * dpi)); const pxH = Math.max(1, Math.round(art.h * dpi));
+    const position = printfulPosition(pf, { ...art, x: r4(art.x - pfX), y: r4(art.y - pfY) }, dpi);
+    const off = ratioDiff({ w: position.area_width, h: position.area_height }, pf);
+    if (off > PRINTFUL_RATIO_TOLERANCE) planIssues.push({ id: `export-ratio-${g.fileType}`, level: "blocker", title: `Print area ratio is ${Math.round(off * 1000) / 10}% off Printful's print file`, why: `Printful rejects the order: "Acceptable aspect ratio relative difference is 2%".`, fix: "Tell the developer - the placement's Printful print-file size needs updating.", source: "Printful Orders API (order rejection gm-mwv5yt0q, D275)" });
     plans.push({
       key: g.fileType, fileType: g.fileType, printfulFileId: g.fileId, method: g.method, puff: g.puff, area: owner.p, areaRect, parts, art, dpi, pxW, pxH,
-      position: printfulPosition({ w: owner.p.widthIn, h: owner.p.heightIn }, art, dpi),
+      position,
       filename: printFileName(d.name, g.fileType, g.method), threads, threadOption, issues: planIssues,
     });
   }
@@ -651,6 +658,27 @@ export function __runPrintExportTests(): { passed: number; failed: number } {
   ok(Math.abs(b4.x - 0.9) < 1e-9 && Math.abs(b4.w - 2.2) < 1e-9, "shape outline half-width");
   const b5 = artBounds([el({ kind: "text", strokeIn: 0.1, text: "A", fontSizeIn: 0.5 })], 12, 16, 0)!;
   ok(Math.abs(b5.x - (1 - 0.1 - 0.5 * TEXT_BLEED_EM)) < 1e-9, "text: full stroke (doubled) + glyph overhang bleed");
+
+  // D275: real glyph overhang decides spill; Printful print-file area + ratio
+  const swash = el({ kind: "text", text: "Swash", fontSizeIn: 1, x: 0.1, y: 0.5, w: 3, h: 1, inkEm: [0.3, 0, 0, 0] });
+  ok(inkBounds([swash])!.x < 0, "measured left swash reaches past the frame edge");
+  ok(Math.abs(inkBounds([{ ...swash, inkEm: undefined }])!.x - (0.1 - TEXT_BLEED_EM)) < 1e-9, "unmeasured text keeps the 0.12em estimate");
+  const snapFront = P(hat, "hat_front");
+  const dSw = design(hat, { hat_front: { method: "embroidery", elements: [{ ...swash, fill: "#FFFFFF" }] } });
+  ok(planPrintFiles(dSw).plans[0].issues.some((i) => i.id === "export-spill-embroidery_front" && i.level === "blocker"), "tiny box + swash outside the area -> spill blocker (the font issue)");
+  const dOk = design(hat, { hat_front: { method: "embroidery", elements: [el({ id: "h1", x: 1, y: 0.5, w: 2, h: 1, fill: "#FFFFFF" })] } });
+  const pOk = planPrintFiles(dOk).plans[0];
+  ok(pOk.position.area_width === 1650 && pOk.position.area_height === 600, "6089M area = Printful print file 1650x600 (the rejected order sent 1500x675)");
+  ok(ratioDiff({ w: pOk.position.area_width, h: pOk.position.area_height }, { w: 1650, h: 600 }) < PRINTFUL_RATIO_TOLERANCE && !pOk.issues.some((i) => i.id.startsWith("export-ratio")), "ratio within 2%, no ratio blocker");
+  ok(Math.abs(ratioDiff({ w: 1500, h: 675 }, { w: 1650, h: 600 }) - 0.1919) < 1e-3, "old 5x2.25 area was 19% off (Printful: 2.22 vs 2.75)");
+  ok(snapFront.widthIn === 5.5, "snapback frame 5.5in");
+  // 6245CM DTF: 5x2 print file centred in the 5.5in frame
+  const dDtf = design(dad, { hat_front: { method: "dtf", elements: [el({ id: "d1", x: 0.3, y: 0.5, w: 2, h: 1 })] } });
+  const pDtf = planPrintFiles(dDtf).plans[0];
+  ok(pDtf.fileType === "front_dtf_hat" && pDtf.position.area_width === 1500 && pDtf.position.area_height === 600, "DTF hat area 1500x600");
+  ok(pDtf.position.left === 0 && !pDtf.issues.some((i) => i.id.startsWith("export-spill")), "left offset measured from the DTF file edge (0.25in in)");
+  const dDtfOut = design(dad, { hat_front: { method: "dtf", elements: [el({ id: "d1", x: 0.1, y: 0.5, w: 2, h: 1 })] } });
+  ok(planPrintFiles(dDtfOut).plans[0].issues.some((i) => i.id === "export-spill-front_dtf_hat"), "art in the 0.25in DTF margin -> spill blocker");
 
   // Position
   const pos = printfulPosition({ w: 12, h: 16 }, { x: 1, y: 2, w: 4, h: 3 }, 300);
