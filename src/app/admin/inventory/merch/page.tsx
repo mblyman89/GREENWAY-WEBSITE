@@ -16,14 +16,15 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux/Breadcrumbs";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge } from "@/components/admin/ui";
-import { formatCents } from "@/lib/merch-studio/garment-catalog-core";
+import { formatCents, getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
+import { LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
 import { MERCH_STATUS_LABELS, STOCK_LABELS, inventoryView, salesByVariant, stockSellable, type StockStatus } from "@/lib/merch/merch-inventory-core";
 import { readMerchCatalog } from "@/lib/merch/merch-inventory-store";
 import { loadPrintfulStock } from "@/lib/merch/merch-inventory-server";
 import { emptyMerchBoard, loadMerchOrderBoard } from "@/lib/orders/merch-orders-server";
 import { withRenderBudget } from "@/lib/supabase/render-budget";
-import { emptyCatalog } from "@/lib/merch/merch-inventory-core";
-import { removeMerchAction, setMerchStatusAction, syncMerchStockAction } from "./actions";
+import { emptyCatalog, type MerchCatalogItem } from "@/lib/merch/merch-inventory-core";
+import { removeMerchAction, setMerchStatusAction, syncMerchStockAction, editMerchAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
                     )}
                   </div>
                 </div>
+                <EditProduct item={catalog.items.find((i) => i.handle === p.handle)} />
                 <details className="border-t border-[var(--admin-border)]">
                   <summary className="cursor-pointer px-4 py-2 text-xs font-bold text-white/80">Variants ({rows.length})</summary>
                   <div className="max-h-96 overflow-auto px-4 pb-4">
@@ -172,5 +174,40 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
         </p>
       </div>
     </div>
+  );
+}
+
+/** D284: edit title, description, sizes offered and price per size (all colours). */
+function EditProduct({ item }: { item: MerchCatalogItem | undefined }) {
+  if (!item) return null;
+  const b = getBlank(item.pkg.product.blank.id);
+  const listed = new Map<string, number>();
+  for (const v of item.pkg.variants) listed.set(v.size, Math.max(listed.get(v.size) ?? 0, v.retailCents));
+  const all = b ? sizesFor(b) : [...listed.keys()].map((z) => [z, 0] as const);
+  const input = "w-full rounded border border-white/15 bg-transparent px-2 py-1 text-sm text-white";
+  return (
+    <details className="border-t border-[var(--admin-border)]">
+      <summary className="cursor-pointer px-4 py-2 text-xs font-bold text-white/80">Edit details, prices & sizes</summary>
+      <form action={editMerchAction} className="space-y-3 px-4 pb-4">
+        <input type="hidden" name="handle" value={item.handle} />
+        <label className="block text-xs text-white/70">Title<input name="title" defaultValue={item.pkg.product.title} maxLength={LISTING_LIMITS.title} className={input} /></label>
+        <label className="block text-xs text-white/70">Description (paste from Printful is fine - bullets and symbols are kept)<textarea name="description" defaultValue={item.pkg.product.description} maxLength={LISTING_LIMITS.description} rows={6} className={input} /></label>
+        <div>
+          <p className="mb-1 text-xs text-white/70">Sizes offered and retail price (every colour). Printful&apos;s size cost shown; empty price = keep the current one.</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {all.map(([z, cost]) => (
+              <label key={z} className="flex items-center gap-1 rounded border border-white/10 p-1.5 text-xs text-white/80">
+                <input type="checkbox" name="size" value={z} defaultChecked={listed.has(z)} aria-label={`Offer ${z}`} />
+                <span className="w-10">{z}</span>
+                <input name={`price:${z}`} inputMode="decimal" placeholder={listed.has(z) ? (listed.get(z)! / 100).toFixed(2) : "price"} aria-label={`Retail price for ${z}`} className="w-20 rounded border border-white/15 bg-transparent px-1 py-0.5 text-white" />
+                {cost ? <span className="text-white/40">{formatCents(cost)}</span> : null}
+              </label>
+            ))}
+          </div>
+        </div>
+        <button type="submit" className={`${btn} bg-[var(--admin-accent)] text-black`}>Save changes</button>
+        <p className="text-[0.7rem] text-white/45">Colours, photos and the print artwork change only by re-publishing from Merch Studio. A loss-making price is refused.</p>
+      </form>
+    </details>
   );
 }

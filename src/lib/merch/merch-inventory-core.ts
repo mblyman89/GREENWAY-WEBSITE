@@ -21,7 +21,10 @@
  * Print-on-demand: Printful makes each item after a sale, so "stock" here is
  * Printful's blank availability (US region), not shelves. Money is cents.
  */
-import { LISTING_FORMAT, LISTING_VERSION, type ListingPackage } from "@/lib/merch-studio/listing-package-core";
+import { LISTING_FORMAT, LISTING_LIMITS, LISTING_VERSION, centsToPrice, cleanDescription, type ListingPackage, type ListingVariant } from "@/lib/merch-studio/listing-package-core";
+import { getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
+import { variantFor } from "@/lib/merch-studio/print-export-core";
+import { unitEconomics } from "@/lib/merch-studio/fulfillment-core";
 
 export const MERCH_CATALOG_KEY = "merch_catalog";
 export const MERCH_CATALOG_LABEL = "Merch catalog - published greenwaymerch.com products (R73 S7)";
@@ -153,6 +156,62 @@ export function upsertItem(c: MerchCatalog, input: { pkg: ListingPackage; images
 export function setItemStatus(c: MerchCatalog, handle: string, status: MerchItemStatus, nowIso: string): MerchCatalog | null {
   if (!c.items.some((i) => i.handle === handle)) return null;
   return { v: 1, items: c.items.map((i) => (i.handle === handle ? { ...i, status, updatedAt: nowIso } : i)) };
+}
+
+/**
+ * D284: edit a published product from Merch Inventory - title, description,
+ * retail per size (every colour), and which sizes are offered. A size can be
+ * added back when the garment makes it in a listed colour; its Printful cost is
+ * the listed colour's cost moved by Printful's size difference. Profit keeps the
+ * shipping gap the package was priced with. The web address (handle), print
+ * files and colours stay. Returns an error string on a bad edit.
+ */
+export interface MerchItemEdit { title: string; description: string; sizes: readonly string[]; prices: Readonly<Record<string, number>> }
+export function editItem(c: MerchCatalog, handle: string, e: MerchItemEdit, nowIso: string): MerchCatalog | string {
+  const item = c.items.find((i) => i.handle === handle);
+  if (!item) return "That product isn't in the catalog any more.";
+  const title = str(e.title, LISTING_LIMITS.title).replace(/[<>]/g, " ");
+  if (!title) return "Add a product title.";
+  const b = getBlank(item.pkg.product.blank.id);
+  const sizeBase = new Map((b ? sizesFor(b) : []).map((z) => [z[0], z[1]] as const));
+  const order = b ? sizesFor(b).map((z) => z[0]) : [...new Set(item.pkg.variants.map((v) => v.size))];
+  const want = order.filter((z) => e.sizes.includes(z));
+  if (!want.length) return "Keep at least one size.";
+  const colors = [...new Set(item.pkg.variants.map((v) => v.color))];
+  const variants: ListingVariant[] = [];
+  const loss: string[] = [];
+  for (const color of colors) {
+    const same = item.pkg.variants.filter((v) => v.color === color);
+    for (const size of want) {
+      const old = same.find((v) => v.size === size);
+      let base: ListingVariant | null = old ?? null;
+      if (!base && b && same.length) {
+        const row = variantFor(b, color, size);
+        const ref = same[0];
+        if (!row) continue;
+        const cost = ref.printfulCents + (sizeBase.get(size) ?? 0) - (sizeBase.get(ref.size) ?? 0);
+        base = { ...ref, size, printfulVariantId: row[2], inStock: row[4], printfulCents: Math.max(0, cost) };
+      }
+      if (!base) continue;
+      const ref = old ?? same[0];
+      const gap = unitEconomics({ retailCents: ref.retailCents, printfulCents: ref.printfulCents, shippingChargedCents: 0, shippingCostCents: 0 }).profitCents - ref.profitCents;
+      const retail = Math.round(e.prices[size] ?? 0) > 0 ? Math.round(e.prices[size]) : base.retailCents;
+      const ec = unitEconomics({ retailCents: retail, printfulCents: base.printfulCents, shippingChargedCents: 0, shippingCostCents: 0 });
+      const profit = ec.profitCents - Math.max(0, gap);
+      if (profit <= 0) loss.push(`${color} ${size}`);
+      variants.push({ ...base, retailCents: retail, cardFeeCents: ec.cardFeeCents, profitCents: profit, marginBps: retail > 0 ? Math.round((profit / retail) * 10000) : 0 });
+    }
+  }
+  if (!variants.length) return "Printful doesn't make those sizes in this product's colours.";
+  if (loss.length) return `That price sells at a loss for ${loss.slice(0, 4).join(", ")}${loss.length > 4 ? "..." : ""}. Raise it above the Printful cost plus the card fee.`;
+  const sv = item.pkg.printfulSyncProduct.sync_variants[0];
+  const pkg: ListingPackage = {
+    ...item.pkg,
+    product: { ...item.pkg.product, title, description: cleanDescription(e.description) },
+    variants,
+    printfulSyncProduct: { sync_product: { name: title }, sync_variants: variants.map((v) => ({ variant_id: v.printfulVariantId, retail_price: centsToPrice(v.retailCents), files: sv?.files ?? [], options: sv?.options ?? [] })) },
+  };
+  return { v: 1, items: c.items.map((i) => (i.handle === handle ? { ...i, pkg, updatedAt: nowIso } : i)) };
 }
 
 export function removeItem(c: MerchCatalog, handle: string): MerchCatalog | null {
@@ -427,6 +486,13 @@ export function __runMerchInventoryTests(): { passed: number; failed: number; fa
   const pre = "https://p.supabase.co/storage/v1/object/public/media";
   ok(printKeyFromUrl(`${pre}/${k}`, pre) === k && printKeyFromUrl(`${pre}/other/a.png`, pre) === null && printKeyFromUrl(`https://evil.example/${k}`, pre) === null, "print url -> key only for our prefix");
   ok(safeHttpsUrl("https://a.b/c d") === "" && safeHttpsUrl("https://a.b/c") === "https://a.b/c", "safe https url");
+  { // D284: edit a published product
+    const c0 = upsertItem(emptyCatalog(), { pkg: pkg("ed"), images: [], byEmail: null, nowIso: "t" });
+    const cat = c0.ok ? c0.catalog : emptyCatalog();
+    const e1 = editItem(cat, "ed", { title: "New Tee", description: "\u2022 Soft", sizes: ["S"], prices: { S: 4000 } }, "t2");
+    ok(typeof e1 !== "string" && e1.items[0].pkg.product.title === "New Tee" && e1.items[0].pkg.variants.every((x) => x.size === "S" && x.retailCents === 4000) && e1.items[0].pkg.printfulSyncProduct.sync_variants[0].retail_price === "40.00" && e1.items[0].pkg.product.description === "\u2022 Soft", "edit title/description/price, drop sizes");
+    ok(editItem(cat, "ed", { title: "X", description: "", sizes: ["S"], prices: { S: 100 } }, "t") === "That price sells at a loss for Black S, White S. Raise it above the Printful cost plus the card fee." && typeof editItem(cat, "ed", { title: "", description: "", sizes: ["S"], prices: {} }, "t") === "string" && typeof editItem(cat, "nope", { title: "X", description: "", sizes: ["S"], prices: {} }, "t") === "string", "edit guards: loss, title, missing");
+  }
   // D282: per-colour mockup sets
   const mt = (c: string, v: string, d = "Logo") => mockupTags("cc-1717", c, v, d);
   ok(mt("Blue Jean", "Front").join(",") === "merch-mockup,blank-cc-1717,color-blue-jean,view-front,design-logo", "mockup tags");

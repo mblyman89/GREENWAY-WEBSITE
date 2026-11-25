@@ -2888,7 +2888,7 @@ __runLiquidVolumeTests();
   assertRan("listing-package-core", __runListingPackageTests(), 42); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
   assertRan("printfile-check-core", __runPrintfileCheckTests(), 17); // D232 M-8 (G-92): studio-default placements vs Printful's print-file sizes
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)
-  assertRan("merch-inventory-core", __runMerchInventoryTests(), 36); // R73 S7: Merch Studio publish -> catalog (site_settings), live feed, Printful stock, sales by variant, CSV
+  assertRan("merch-inventory-core", __runMerchInventoryTests(), 38); // R73 S7: Merch Studio publish -> catalog (site_settings), live feed, Printful stock, sales by variant, CSV
   assertRan("merch-reports-core", __runMerchReportsTests(), 20); // R73 S8: Reports > Merch sales, WA tax by month/place, Vercel traffic parse
   assertRan("merch-site catalog-core", __runMerchCatalogTests(), 29); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
   assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 19); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
