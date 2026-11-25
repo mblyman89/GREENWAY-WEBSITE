@@ -1178,6 +1178,7 @@ import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-co
 import { __runGarmentViewsTests } from "../../src/lib/merch-studio/garment-views-core";
 import { __runMerchDesignTests } from "../../src/lib/merch-studio/merch-design-core";
 import { __runPrintExportTests } from "../../src/lib/merch-studio/print-export-core";
+import { __runSavedGarmentsTests } from "../../src/lib/merch-studio/saved-garments-core";
 import { __runListingPackageTests } from "../../src/lib/merch-studio/listing-package-core";
 import { __runPrintfileCheckTests } from "../../src/lib/merch-studio/printfile-check-core";
 import { __runMerchAdTests } from "../../src/lib/merch/merch-ad-core";
@@ -2877,12 +2878,13 @@ __runLiquidVolumeTests();
   assertRan("art-prep-core", __runArtPrepTests(), 35); // D267: Merch artwork from library (logos first) + Prep for Printful (DPI verdict, 300 DPI upscale plan)
   assertRan("print-layers-core", __runPrintLayersTests(), 33); // D271: Print Studio placed images (DPI, enlarge plan, FLUX sizes, prompts)
   assertRan("optimizer-core", __runOptimizerTests(), 30); // D270: Printful Optimizer - recolour preview (threads / custom / remove), flatten, FLUX flat-redraw prompt, one-click Check fixes
-  assertRan("garment-catalog-core", __runGarmentCatalogTests(), 245); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
+  assertRan("garment-catalog-core", __runGarmentCatalogTests(), 373); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
   assertRan("print-rules-core", __runPrintRulesTests(), 34); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
   assertRan("fulfillment-core", __runFulfillmentTests(), 19); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
-  assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 250); // R70 S2: garment views + exact print-frame inches for every blank/placement
+  assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 421); // R70 S2: garment views + exact print-frame inches for every blank/placement
   assertRan("merch-design-core", __runMerchDesignTests(), 48); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising
-  assertRan("print-export-core", __runPrintExportTests(), 112); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
+  assertRan("print-export-core", __runPrintExportTests(), 119); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
+  assertRan("saved-garments-core", __runSavedGarmentsTests(), 11); // D278: Garments tab "My garments" save/load (site_settings merch_saved_garments)
   assertRan("listing-package-core", __runListingPackageTests(), 39); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
   assertRan("printfile-check-core", __runPrintfileCheckTests(), 17); // D232 M-8 (G-92): studio-default placements vs Printful's print-file sizes
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)

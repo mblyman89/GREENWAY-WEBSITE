@@ -1,0 +1,843 @@
+{
+ "_note": "D278 - Printful products that Printful's PUBLIC v1 catalog API does not serve (GET /products/{id} = 404). Copied from Printful's logged-in product pages (catalog data + File guidelines tab) on 2026 D278. Rows: [colour, size, variant_id, cents, US in stock, colour_code, photo]. files: placement key -> file type. Re-copy by hand when Printful changes them.",
+ "products": {
+  "772": {
+   "title": "Bora Bora Booney Hat | Columbia 212477",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image/47/47005afdbb178ee6005cb6d5e0674b88_l",
+   "files": {
+    "embroidery_front": "embroidery_front"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Collegiate Navy",
+     "One size",
+     19654,
+     3100,
+     true,
+     "#3b4a6b",
+     "https://files.cdn.printful.com/products/772/19654_1717050763.jpg"
+    ],
+    [
+     "Fossil",
+     "One size",
+     19655,
+     3100,
+     true,
+     "#fce9ca",
+     "https://files.cdn.printful.com/products/772/19655_1717050763.jpg"
+    ],
+    [
+     "Grill",
+     "One size",
+     19656,
+     3100,
+     true,
+     "#727574",
+     "https://files.cdn.printful.com/products/772/19656_1717050774.jpg"
+    ],
+    [
+     "Sage",
+     "One size",
+     19657,
+     3100,
+     true,
+     "#a59872",
+     "https://files.cdn.printful.com/products/772/19657_1717050774.jpg"
+    ]
+   ]
+  },
+  "626": {
+   "title": "Women's Columbia Fleece Vest | 212471",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image-jpg/57/570f1a69e0a672493a4f7229cedeed6e_l?v=280e6b6d8e69ea945b1f21ff9efeb340",
+   "files": {
+    "embroidery_chest_right": "embroidery_chest_right",
+    "embroidery_chest_left": "embroidery_chest_left"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "thread_colors_chest_right",
+    "text_thread_colors_chest_right",
+    "thread_colors_chest_left",
+    "text_thread_colors_chest_left",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Black",
+     "M",
+     16014,
+     4826,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/626/16014_1729170064.jpg"
+    ],
+    [
+     "Black",
+     "L",
+     16015,
+     4826,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/626/16015_1729169971.jpg"
+    ],
+    [
+     "Black",
+     "XL",
+     16016,
+     4826,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/626/16016_1729169990.jpg"
+    ],
+    [
+     "Black",
+     "2XL",
+     16017,
+     5026,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/626/16017_1729169969.jpg"
+    ]
+   ]
+  },
+  "707": {
+   "title": "Unisex Columbia Fleece Jacket | 212478",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image-jpg/bc/bc5566b50c0778419359faffe53d4977_l?v=dff3f6ddca821e27acd53a1b64133e0d",
+   "files": {
+    "embroidery_chest_right": "embroidery_chest_right",
+    "embroidery_chest_left": "embroidery_chest_left",
+    "embroidery_wrist_left": "embroidery_wrist_left",
+    "embroidery_wrist_right": "embroidery_wrist_right",
+    "embroidery_large_center": "embroidery_large_center"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "thread_colors_chest_right",
+    "text_thread_colors_chest_right",
+    "thread_colors_chest_left",
+    "text_thread_colors_chest_left",
+    "thread_colors_wrist_left",
+    "text_thread_colors_wrist_left",
+    "thread_colors_wrist_right",
+    "text_thread_colors_wrist_right",
+    "thread_colors_large_center",
+    "text_thread_colors_large_center",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Black",
+     "S",
+     17432,
+     6255,
+     true,
+     "#282c2e",
+     "https://files.cdn.printful.com/products/707/17432_1729498123.jpg"
+    ],
+    [
+     "Black",
+     "M",
+     17433,
+     6255,
+     true,
+     "#282c2e",
+     "https://files.cdn.printful.com/products/707/17433_1729498122.jpg"
+    ],
+    [
+     "Black",
+     "L",
+     17434,
+     6255,
+     true,
+     "#282c2e",
+     "https://files.cdn.printful.com/products/707/17434_1729498116.jpg"
+    ],
+    [
+     "Black",
+     "XL",
+     17435,
+     6255,
+     true,
+     "#282c2e",
+     "https://files.cdn.printful.com/products/707/17435_1729498126.jpg"
+    ],
+    [
+     "Black",
+     "2XL",
+     17436,
+     6455,
+     true,
+     "#282c2e",
+     "https://files.cdn.printful.com/products/707/17436_1729498116.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "S",
+     17437,
+     6255,
+     true,
+     "#3f3e3b",
+     "https://files.cdn.printful.com/products/707/17437_1729498143.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "M",
+     17438,
+     6255,
+     true,
+     "#3f3e3b",
+     "https://files.cdn.printful.com/products/707/17438_1729498136.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "L",
+     17439,
+     6255,
+     true,
+     "#3f3e3b",
+     "https://files.cdn.printful.com/products/707/17439_1729498133.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "XL",
+     17440,
+     6255,
+     true,
+     "#3f3e3b",
+     "https://files.cdn.printful.com/products/707/17440_1729498144.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "2XL",
+     17441,
+     6455,
+     true,
+     "#3f3e3b",
+     "https://files.cdn.printful.com/products/707/17441_1729498133.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "S",
+     17442,
+     6255,
+     true,
+     "#303e49",
+     "https://files.cdn.printful.com/products/707/17442_1729498155.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "M",
+     17443,
+     6255,
+     true,
+     "#303e49",
+     "https://files.cdn.printful.com/products/707/17443_1729498154.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "L",
+     17444,
+     6255,
+     true,
+     "#303e49",
+     "https://files.cdn.printful.com/products/707/17444_1729498147.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "XL",
+     17445,
+     6255,
+     true,
+     "#303e49",
+     "https://files.cdn.printful.com/products/707/17445_1729498155.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "2XL",
+     17446,
+     6455,
+     true,
+     "#303e49",
+     "https://files.cdn.printful.com/products/707/17446_1729498144.jpg"
+    ]
+   ]
+  },
+  "763": {
+   "title": "Men\u2019s Columbia Short Sleeve Button Shirt | PFG Tamiami",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image/b0/b0ece113e8ce628559dc14f3d718fbde_l",
+   "files": {
+    "embroidery_chest_top_right": "embroidery_chest_top_right",
+    "embroidery_sleeve_right_top": "embroidery_sleeve_right_top"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "thread_colors_chest_top_right",
+    "text_thread_colors_chest_top_right",
+    "thread_colors_sleeve_right_top",
+    "text_thread_colors_sleeve_right_top",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Black",
+     "S",
+     19597,
+     5888,
+     true,
+     "#0f0f0f",
+     "https://files.cdn.printful.com/products/763/19597_1717417172.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "S",
+     19598,
+     5888,
+     false,
+     "#293347",
+     "https://files.cdn.printful.com/products/763/19598_1717417192.jpg"
+    ],
+    [
+     "Black",
+     "M",
+     19603,
+     5888,
+     true,
+     "#0f0f0f",
+     "https://files.cdn.printful.com/products/763/19603_1717417171.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "M",
+     19604,
+     5888,
+     true,
+     "#293347",
+     "https://files.cdn.printful.com/products/763/19604_1717417192.jpg"
+    ],
+    [
+     "Black",
+     "XL",
+     19609,
+     5888,
+     true,
+     "#0f0f0f",
+     "https://files.cdn.printful.com/products/763/19609_1717417181.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "XL",
+     19610,
+     5888,
+     true,
+     "#293347",
+     "https://files.cdn.printful.com/products/763/19610_1717417192.jpg"
+    ],
+    [
+     "Black",
+     "2XL",
+     19615,
+     6088,
+     true,
+     "#0f0f0f",
+     "https://files.cdn.printful.com/products/763/19615_1717417170.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "2XL",
+     19616,
+     6088,
+     true,
+     "#293347",
+     "https://files.cdn.printful.com/products/763/19616_1717417181.jpg"
+    ],
+    [
+     "Black",
+     "3XL",
+     19621,
+     6288,
+     true,
+     "#0f0f0f",
+     "https://files.cdn.printful.com/products/763/19621_1717417170.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "3XL",
+     19622,
+     6288,
+     true,
+     "#293347",
+     "https://files.cdn.printful.com/products/763/19622_1717417182.jpg"
+    ],
+    [
+     "Black",
+     "L",
+     19627,
+     5888,
+     true,
+     "#0f0f0f",
+     "https://files.cdn.printful.com/products/763/19627_1717417171.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "L",
+     19628,
+     5888,
+     true,
+     "#293347",
+     "https://files.cdn.printful.com/products/763/19628_1717417192.jpg"
+    ]
+   ]
+  },
+  "790": {
+   "title": "Men's Columbia Soft Shell Jacket | Ascender 212483",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image-jpg/34/3451d6e8f10a620e1149e923e093ee67_l",
+   "files": {
+    "embroidery_chest_right": "embroidery_chest_right",
+    "embroidery_large_back": "embroidery_large_back",
+    "embroidery_wrist_left": "embroidery_wrist_left",
+    "embroidery_wrist_right": "embroidery_wrist_right"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "thread_colors_chest_right",
+    "text_thread_colors_chest_right",
+    "thread_colors_large_back",
+    "text_thread_colors_large_back",
+    "thread_colors_wrist_left",
+    "text_thread_colors_wrist_left",
+    "thread_colors_wrist_right",
+    "text_thread_colors_wrist_right",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Black",
+     "S",
+     20207,
+     9657,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20207_1723886180.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "S",
+     20208,
+     9657,
+     true,
+     "#1e2a36",
+     "https://files.cdn.printful.com/products/790/20208_1723886214.jpg"
+    ],
+    [
+     "Graphite",
+     "S",
+     20209,
+     9657,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20209_1723886236.jpg"
+    ],
+    [
+     "Black",
+     "M",
+     20210,
+     9657,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20210_1723886173.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "M",
+     20211,
+     9657,
+     true,
+     "#1e2a36",
+     "https://files.cdn.printful.com/products/790/20211_1723886201.jpg"
+    ],
+    [
+     "Graphite",
+     "M",
+     20212,
+     9657,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20212_1723886235.jpg"
+    ],
+    [
+     "Black",
+     "L",
+     20213,
+     9657,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20213_1723886170.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "L",
+     20214,
+     9657,
+     true,
+     "#1e2a36",
+     "https://files.cdn.printful.com/products/790/20214_1723886193.jpg"
+    ],
+    [
+     "Graphite",
+     "L",
+     20215,
+     9657,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20215_1723886232.jpg"
+    ],
+    [
+     "Black",
+     "XL",
+     20216,
+     9657,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20216_1723886180.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "XL",
+     20217,
+     9657,
+     true,
+     "#1e2a36",
+     "https://files.cdn.printful.com/products/790/20217_1723886216.jpg"
+    ],
+    [
+     "Graphite",
+     "XL",
+     20218,
+     9657,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20218_1723886242.jpg"
+    ],
+    [
+     "Black",
+     "2XL",
+     20219,
+     9857,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20219_1723886163.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "2XL",
+     20220,
+     9857,
+     true,
+     "#1e2a36",
+     "https://files.cdn.printful.com/products/790/20220_1723886190.jpg"
+    ],
+    [
+     "Graphite",
+     "2XL",
+     20221,
+     9857,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20221_1723886222.jpg"
+    ],
+    [
+     "Black",
+     "3XL",
+     20222,
+     10057,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20222_1723886169.jpg"
+    ],
+    [
+     "Graphite",
+     "3XL",
+     20224,
+     10057,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20224_1723886224.jpg"
+    ],
+    [
+     "Black",
+     "4XL",
+     20225,
+     10257,
+     true,
+     "#000000",
+     "https://files.cdn.printful.com/products/790/20225_1723886170.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "4XL",
+     20226,
+     10257,
+     true,
+     "#1e2a36",
+     "https://files.cdn.printful.com/products/790/20226_1723886191.jpg"
+    ],
+    [
+     "Graphite",
+     "4XL",
+     20227,
+     10257,
+     true,
+     "#4f4f4f",
+     "https://files.cdn.printful.com/products/790/20227_1723886232.jpg"
+    ]
+   ]
+  },
+  "625": {
+   "title": "Men's Columbia Fleece Vest | 212488",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image-jpg/bc/bca48efe05dfc72cad45677f3e27660e_l?v=8c6d96c6d345833fb2281337fad21ef3",
+   "files": {
+    "embroidery_chest_right": "embroidery_chest_right",
+    "embroidery_chest_left": "embroidery_chest_left",
+    "embroidery_large_center": "embroidery_large_center"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "thread_colors_chest_right",
+    "text_thread_colors_chest_right",
+    "thread_colors_chest_left",
+    "text_thread_colors_chest_left",
+    "thread_colors_large_center",
+    "text_thread_colors_large_center",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Black",
+     "S",
+     15994,
+     4825,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/625/15994_1729166938.jpg"
+    ],
+    [
+     "Black",
+     "M",
+     15996,
+     4825,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/625/15996_1729166928.jpg"
+    ],
+    [
+     "Black",
+     "L",
+     15997,
+     4825,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/625/15997_1729166928.jpg"
+    ],
+    [
+     "Black",
+     "XL",
+     15998,
+     4825,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/625/15998_1729166938.jpg"
+    ],
+    [
+     "Black",
+     "2XL",
+     15999,
+     5025,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/625/15999_1729166919.jpg"
+    ],
+    [
+     "Black",
+     "3XL",
+     16000,
+     5225,
+     true,
+     "#020202",
+     "https://files.cdn.printful.com/products/625/16000_1729166928.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "S",
+     16001,
+     4825,
+     true,
+     "#4f4f4e",
+     "https://files.cdn.printful.com/products/625/16001_1729166980.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "M",
+     16002,
+     4825,
+     true,
+     "#4f4f4e",
+     "https://files.cdn.printful.com/products/625/16002_1729166970.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "L",
+     16003,
+     4825,
+     true,
+     "#4f4f4e",
+     "https://files.cdn.printful.com/products/625/16003_1729166970.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "XL",
+     16004,
+     4825,
+     true,
+     "#4f4f4e",
+     "https://files.cdn.printful.com/products/625/16004_1729166981.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "2XL",
+     16005,
+     5025,
+     true,
+     "#4f4f4e",
+     "https://files.cdn.printful.com/products/625/16005_1729166949.jpg"
+    ],
+    [
+     "Charcoal Heather",
+     "3XL",
+     16006,
+     5225,
+     true,
+     "#4f4f4e",
+     "https://files.cdn.printful.com/products/625/16006_1729166959.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "S",
+     16007,
+     4825,
+     true,
+     "#3a4d83",
+     "https://files.cdn.printful.com/products/625/16007_1729167001.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "M",
+     16008,
+     4825,
+     true,
+     "#3a4d83",
+     "https://files.cdn.printful.com/products/625/16008_1729167001.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "L",
+     16009,
+     4825,
+     true,
+     "#3a4d83",
+     "https://files.cdn.printful.com/products/625/16009_1729167001.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "XL",
+     16010,
+     4825,
+     true,
+     "#3a4d83",
+     "https://files.cdn.printful.com/products/625/16010_1729167003.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "2XL",
+     16011,
+     5025,
+     true,
+     "#3a4d83",
+     "https://files.cdn.printful.com/products/625/16011_1729166993.jpg"
+    ],
+    [
+     "Collegiate Navy",
+     "3XL",
+     16012,
+     5225,
+     true,
+     "#3a4d83",
+     "https://files.cdn.printful.com/products/625/16012_1729166994.jpg"
+    ]
+   ]
+  },
+  "800": {
+   "title": "Winter Blur Pom-Pom Cuffed Beanie | Columbia 186210",
+   "image": "https://files.cdn.printful.com/o/upload/variant-image-jpg/9e/9e22c5ab540a61ed9c82ec1e6b6602cb_l?v=ef59dfe72b732ef43b532b16e7487aa3",
+   "files": {
+    "embroidery_front": "embroidery_front"
+   },
+   "options": [
+    "embroidery_type",
+    "thread_colors",
+    "text_thread_colors",
+    "thread_colors_3d",
+    "notes",
+    "license_type"
+   ],
+   "variants": [
+    [
+     "Chalk",
+     "One size",
+     20426,
+     3732,
+     false,
+     "#b5aa92",
+     "https://files.cdn.printful.com/products/800/20426_1725609593.jpg"
+    ]
+   ]
+  }
+ },
+ "extra": {
+  "765": {
+   "files": {
+    "embroidery_large_front": "embroidery_large_front"
+   },
+   "options": [
+    "thread_colors_large_front"
+   ]
+  }
+ }
+}

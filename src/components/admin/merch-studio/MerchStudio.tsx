@@ -70,7 +70,8 @@ export function MerchStudio({ extraTabs = [], initialTab, publish, journey }: {
     setPickedState(loadPickedColors(id, cols.map((c) => c[0])));
     if (!cols.some((c) => c[1] === colorHex)) setColorHex(cols.find((c) => c[0] === "Black")?.[1] ?? cols[0][1]);
   };
-  const setPicked = (names: string[]) => { setPickedState(names); savePickedColors(blankId, names); };
+  // D278: loading a saved garment switches blank AND picks in one click, so the blank id is passed explicitly.
+  const setPicked = (names: string[], forBlank: string = blankId) => { setPickedState(names); savePickedColors(forBlank, names); };
   const all = [...TABS.slice(0, 3), ...extraTabs.map((t) => ({ id: t.id, label: t.label })), ...TABS.slice(3)];
   const blank = getBlank(blankId)!;
   const colorName = colorsFor(blank).find((c) => c[1] === colorHex)?.[0] ?? colorHex;

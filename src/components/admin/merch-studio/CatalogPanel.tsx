@@ -11,7 +11,9 @@
  * multi-colour selection (carried into Publish's colour list) and a browser
  * for Printful's full public catalog.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listSavedGarmentsAction, removeSavedGarmentAction, saveGarmentAction } from "@/app/admin/merch-studio/saved-garments-actions";
+import { defaultGarmentName, type SavedGarment } from "@/lib/merch-studio/saved-garments-core";
 import { STUDIO_DEFAULT_STATUS, type PlacementCompare } from "@/lib/merch-studio/printfile-check-core";
 import { printfileSizesAction } from "@/app/admin/merch-studio/pricing-actions";
 import { printfulCatalogAction, printfulProductColorsAction } from "@/app/admin/merch-studio/printful-catalog-actions";
@@ -28,11 +30,13 @@ import { studioLabel } from "@/components/admin/banner-studio/controls";
 export const CATEGORY_LABEL: Record<Category, string> = {
   tee: "Tee", longsleeve: "Long sleeve", hoodie: "Hoodie", crew: "Crewneck", zip: "Zip hoodie",
   jacket: "Jacket", snapback: "Snapback", dad: "Dad hat", trucker: "Trucker", beanie: "Beanie",
+  quarterzip: "Quarter-zip", vest: "Vest", buttonshirt: "Button shirt", pants: "Sweatpants", socks: "Socks", booney: "Booney hat",
 };
 const SOURCE_LABEL: Record<DimsSource, string> = {
   "printful-tee-guide": "Printful tee placement guide",
   "printful-hat-guide": "Printful hat logo guide",
   "printful-hoodie-guide": "Printful hoodie placement guide",
+  "printful-file-guidelines": "Printful product File guidelines (exact)",
   "industry-chart": "Industry chart (R69)",
   // D232 M-8 (G-92): samples approved (Q-11-6 "Q6: yes."), not measured yet - never "confirmed".
   "studio-default": "Studio estimate - awaiting sample measurement",
@@ -43,12 +47,17 @@ type ToneFilter = "all" | "solid" | "two";
 export function CatalogPanel({ blankId, colorHex, onBlank, onColor, picked = [], onPicked }: {
   blankId: string; colorHex: string; onBlank: (id: string) => void; onColor: (hex: string, name: string) => void;
   /** D266: colour names chosen for the product (multi-select). */
-  picked?: string[]; onPicked?: (names: string[]) => void;
+  picked?: string[]; onPicked?: (names: string[], forBlank?: string) => void;
 }) {
   const blank = BLANKS.find((b) => b.id === blankId) ?? BLANKS[0];
   const groups = useMemo(() => {
-    const g = { Tops: [] as Blank[], Headwear: [] as Blank[] };
-    for (const b of BLANKS) (b.headwear ? g.Headwear : g.Tops).push(b);
+    const g = { Tops: [] as Blank[], "Jackets & vests": [] as Blank[], "Bottoms & socks": [] as Blank[], Headwear: [] as Blank[] };
+    for (const b of BLANKS) {
+      if (b.headwear) g.Headwear.push(b);
+      else if (b.category === "pants" || b.category === "socks") g["Bottoms & socks"].push(b);
+      else if (b.category === "jacket" || b.category === "vest") g["Jackets & vests"].push(b);
+      else g.Tops.push(b);
+    }
     return g;
   }, []);
   const colors = useMemo(() => colorInfoFor(blank.printfulId), [blank.printfulId]);
@@ -68,6 +77,8 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor, picked = [],
 
   return (
     <div className="space-y-5">
+      <SavedGarmentsBar blank={blank} colorHex={active?.hex ?? colorHex} colorName={active?.name ?? ""} picked={picked}
+        onLoad={(g) => { if (!g.blankId) return; onBlank(g.blankId); if (g.colorHex) { const c = colorInfoFor(getBlankPrintfulId(g.blankId)).find((x) => x.hex === g.colorHex); setActiveName(c?.name ?? ""); onColor(g.colorHex, c?.name ?? ""); } const names = new Set(colorInfoFor(getBlankPrintfulId(g.blankId)).map((x) => x.name)); onPicked?.(g.picked.filter((n) => names.has(n)), g.blankId); }} />
       {/* Garment cards */}
       <div className="space-y-3">
         {Object.entries(groups).map(([g, list]) => (
@@ -134,6 +145,7 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor, picked = [],
               <span className="text-xs text-white/50">Printful product #{blank.printfulId}</span>
             </div>
             <p className="mt-1 text-sm text-white/70">{blank.premiumNote}</p>
+            {blank.orderWarning ? <p className="mt-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 p-2 text-xs text-white/85">{"\u26a0"} {blank.orderWarning}</p> : null}
             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
               <div><dt className={studioLabel}>Fabric</dt><dd className="text-white/85">{blank.fabric}</dd></div>
               <div><dt className={studioLabel}>Weight</dt><dd className="text-white/85">{blank.weightOz ? `${blank.weightOz} oz/yd²` : "Not stated (headwear)"}</dd></div>
@@ -213,6 +225,7 @@ export function CatalogPanel({ blankId, colorHex, onBlank, onColor, picked = [],
       </div>
 
       <PrintfulBrowser ourIds={new Set(BLANKS.map((b) => b.printfulId))} onOpen={(id) => { const b = BLANKS.find((x) => x.printfulId === id); if (b) onBlank(b.id); }} />
+      <p className="text-[0.7rem] text-white/45">Not in the studio on purpose: Printful&apos;s All-Over Print Boxer Briefs (#428) are cut-and-sew - the whole fabric is printed edge to edge (legs 49&quot; x 17&quot;, crotch/pouch 13&quot; x 17&quot;, inside label 2.5&quot; x 1&quot;) from full-bleed panel files, not a logo placed on a blank, so the studio&apos;s DTG / DTF / embroidery placement tools can&apos;t make a correct file. Design those in Printful&apos;s own designer. You can still save them to My garments from the catalog below.</p>
     </div>
   );
 }
@@ -226,6 +239,7 @@ function PrintfulBrowser({ ourIds, onOpen }: { ourIds: Set<number>; onOpen: (pri
   const [sel, setSel] = useState<CatalogItem | null>(null);
   const [selColors, setSelColors] = useState<ColorInfo[] | null>(null);
   const [selImg, setSelImg] = useState("");
+  const [saveMsg, setSaveMsg] = useState("");
   const load = () => {
     setOpen(true);
     if (items) return;
@@ -234,7 +248,7 @@ function PrintfulBrowser({ ourIds, onOpen }: { ourIds: Set<number>; onOpen: (pri
   };
   const pick = (it: CatalogItem) => {
     if (ourIds.has(it.id)) { onOpen(it.id); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-    setSel(it); setSelColors(null); setSelImg(it.image);
+    setSel(it); setSelColors(null); setSelImg(it.image); setSaveMsg("");
     printfulProductColorsAction({ id: it.id }).then((r) => setSelColors(r.ok ? r.colors : [])).catch(() => setSelColors([]));
   };
   const list = items ? filterCatalog(items, q, 80) : [];
@@ -256,7 +270,13 @@ function PrintfulBrowser({ ourIds, onOpen }: { ourIds: Set<number>; onOpen: (pri
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-white">{sel.title} <span className="font-normal text-white/50">#{sel.id}</span></p>
                   <p className="text-xs text-white/55">{sel.type} - {sel.variants} variants</p>
-                  <p className="mt-1 text-xs text-[var(--admin-gold)]">Preview only. To design and sell this garment, ask the developer to add it as a studio blank (print areas and placements are measured per garment).</p>
+                  <p className="mt-1 text-xs text-[var(--admin-gold)]">Preview only. To design and sell this garment, ask the developer to add it as a studio blank (print areas and placements are measured per garment). Save it to My garments so it&apos;s on your shortlist.</p>
+                  <button type="button" disabled={saveMsg === "Saving..."} onClick={() => {
+                    setSaveMsg("Saving...");
+                    saveGarmentAction({ id: `pf-${sel.id}`, name: sel.title.slice(0, 80), blankId: null, printfulId: sel.id, colorHex: "", picked: [], title: sel.title, image: sel.image })
+                      .then((r) => setSaveMsg(r.ok ? "Saved to My garments (shortlist) - reload the tab to see it at the top." : r.error)).catch(() => setSaveMsg("Couldn't save."));
+                  }} className="mt-1 mr-3 text-xs text-[var(--admin-accent)] underline disabled:opacity-40">Save to My garments</button>
+                  {saveMsg ? <span className="text-xs text-white/60">{saveMsg}</span> : null}
                   <button type="button" onClick={() => setSel(null)} className="mt-1 text-xs text-white/60 underline">Back to the list</button>
                 </div>
               </div>
@@ -313,6 +333,70 @@ function PrintfileCheck({ blankId, hasEstimates }: { blankId: string; hasEstimat
           {rows.map((r) => <li key={r.placementId} className={r.verdict === "bigger" || r.verdict === "ratio" ? "text-[var(--admin-danger)]" : r.verdict === "no-file" ? "text-[var(--admin-gold)]" : "text-white/80"}><b>{r.label}:</b> {r.text}</li>)}
         </ul>
       ) : null}
+    </div>
+  );
+}
+
+const getBlankPrintfulId = (id: string) => BLANKS.find((b) => b.id === id)?.printfulId ?? 0;
+
+/**
+ * D278 - "My garments": save the garment you're looking at (garment + preview
+ * colour + ticked colours) under a name, and load it again later on any
+ * computer (site_settings, see saved-garments-core).
+ */
+function SavedGarmentsBar({ blank, colorHex, colorName, picked, onLoad }: {
+  blank: Blank; colorHex: string; colorName: string; picked: string[]; onLoad: (g: SavedGarment) => void;
+}) {
+  const [list, setList] = useState<SavedGarment[] | null>(null);
+  const [msg, setMsg] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    listSavedGarmentsAction().then((r) => { if (!live) return; if (r.ok) setList(r.list); else { setList([]); setMsg(r.error); } }).catch(() => { if (live) { setList([]); setMsg("Couldn't load your saved garments."); } });
+    return () => { live = false; };
+  }, []);
+  const done = (r: { ok: true; list: SavedGarment[] } | { ok: false; error: string }, ok: string) => { if (r.ok) { setList(r.list); setMsg(ok); } else setMsg(r.error); };
+  const save = () => {
+    const n = (name.trim() || defaultGarmentName(blank.brand, blank.model, colorName)).slice(0, 80);
+    const same = list?.find((g) => g.name.toLowerCase() === n.toLowerCase());
+    setBusy(true);
+    saveGarmentAction({ id: same?.id ?? `g-${Date.now().toString(36)}`, name: n, blankId: blank.id, printfulId: blank.printfulId, colorHex, picked })
+      .then((r) => { done(r, same ? `Updated "${n}".` : `Saved "${n}".`); if (r.ok) setName(""); }).catch(() => setMsg("Couldn't save.")).finally(() => setBusy(false));
+  };
+  const remove = (g: SavedGarment) => {
+    if (!window.confirm(`Remove "${g.name}" from My garments?`)) return;
+    setBusy(true);
+    removeSavedGarmentAction({ id: g.id }).then((r) => done(r, `Removed "${g.name}".`)).catch(() => setMsg("Couldn't remove.")).finally(() => setBusy(false));
+  };
+  return (
+    <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-white">My garments</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={defaultGarmentName(blank.brand, blank.model, colorName)}
+          className="min-w-[14rem] flex-1 rounded border border-white/15 bg-transparent px-2 py-1 text-sm text-white placeholder:text-white/35" aria-label="Name for this saved garment" />
+        <button type="button" disabled={busy || list === null} onClick={save} className="rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-3 py-1 text-xs font-semibold text-black disabled:opacity-40">Save this garment</button>
+      </div>
+      <p className="mt-1 text-[0.7rem] text-white/45">Saves the garment, the colour you&apos;re previewing and the colours you ticked ({picked.length}). Saved on the server - every computer signed in to the admin sees the same list. Same name = update it.</p>
+      {msg ? <p className="mt-1 text-xs text-white/70">{msg}</p> : null}
+      {list === null ? <p className="mt-1 text-xs text-white/55">Loading...</p> : list.length ? (
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {list.map((g) => {
+            const b = g.blankId ? BLANKS.find((x) => x.id === g.blankId) : undefined;
+            return (
+              <li key={g.id} className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${g.blankId === blank.id ? "border-[var(--admin-accent)]" : "border-white/15"}`}>
+                {g.colorHex ? <span className="inline-block h-3 w-3 rounded-full border border-white/30" style={{ background: g.colorHex }} /> : null}
+                {b ? (
+                  <button type="button" disabled={busy} onClick={() => { onLoad(g); setMsg(`Loaded "${g.name}".`); }} className="text-white hover:underline" title={`${b.brand} ${b.model} - ${g.picked.length} colour(s) ticked`}>{g.name}</button>
+                ) : (
+                  <span className="text-white/60" title={`Printful #${g.printfulId} - not a studio blank yet (ask the developer to add it)`}>{g.name} <span className="text-[var(--admin-gold)]">(shortlist)</span></span>
+                )}
+                <button type="button" disabled={busy} onClick={() => remove(g)} className="text-white/40 hover:text-[var(--admin-danger)]" aria-label={`Remove ${g.name}`}>{"\u00d7"}</button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="mt-1 text-xs text-white/55">Nothing saved yet.</p>}
     </div>
   );
 }
