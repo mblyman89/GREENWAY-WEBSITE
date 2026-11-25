@@ -71,6 +71,7 @@ export const PRINTFUL_STATUS_LABELS: Record<string, string> = {
   partial: "Partly shipped",
   fulfilled: "Shipped",
   canceled: "Cancelled",
+  rejected: "Rejected - not sent to Printful",
 };
 
 /** Printful statuses where a person has to act. */
@@ -164,6 +165,8 @@ export type MerchOrder = {
   marginCents: number | null;
   shipments: MerchShipment[];
   searchTerms: string[];
+  /** D277: set only for an order Printful never accepted (built from the shop's alerts). */
+  rejection?: { subject: string; lines: string[]; open: boolean; seenAt: string };
 };
 
 const iso = (sec: unknown) =>
@@ -369,6 +372,76 @@ export function merchLoadCapNotice(loaded: number, totalAtPrintful: number | nul
 }
 
 // ============================================================================
+// D277 - REJECTED ORDERS (never reached Printful, so Printful can't list them)
+// ============================================================================
+
+/** The shop's alert subjects that mean "this order never became a Printful order". */
+export const MERCH_REJECTED_SUBJECT = /Printful rejected order|NOT sent to Printful|cancelled automatically|could NOT cancel the card hold/i;
+
+export type MerchAlertLike = {
+  subject: string;
+  lines: string[] | null;
+  order_ref: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  acknowledged_at: string | null;
+};
+
+/**
+ * One row per gm- ref whose alerts say the order was rejected (newest alert
+ * wins), skipping refs Printful already lists. Open alert -> New (needs a
+ * person); acknowledged -> Cancelled, so it stays in the table under
+ * Cancelled / All instead of vanishing. Ids are negative (never a Printful id).
+ */
+export function rejectedMerchOrders(alerts: readonly MerchAlertLike[], knownRefs: ReadonlySet<string>): MerchOrder[] {
+  const byRef = new Map<string, MerchAlertLike[]>();
+  for (const a of alerts) {
+    if (!a || !isMerchOrderRef(a.order_ref) || knownRefs.has(a.order_ref) || !MERCH_REJECTED_SUBJECT.test(a.subject ?? "")) continue;
+    byRef.set(a.order_ref, [...(byRef.get(a.order_ref) ?? []), a]);
+  }
+  const t = (s: string | null) => (s && Number.isFinite(Date.parse(s)) ? Date.parse(s) : 0);
+  const out: MerchOrder[] = [];
+  for (const [ref, list] of byRef) {
+    const sorted = [...list].sort((x, y) => t(y.last_seen_at) - t(x.last_seen_at));
+    const top = sorted[0];
+    const lines = (top.lines ?? []).map((l) => clip(l, 500)).filter(Boolean);
+    const open = sorted.some((a) => !a.acknowledged_at);
+    const email = (lines.map((l) => /^Customer:\s*(\S+@\S+)/.exec(l)?.[1] ?? "").find(Boolean) ?? "").slice(0, 254);
+    const first = sorted.reduce((m, a) => (t(a.first_seen_at) && (!m || t(a.first_seen_at) < t(m)) ? a.first_seen_at : m), "");
+    const none: MerchMoney = { subtotal: null, discount: null, shipping: null, tax: null, total: null };
+    out.push({
+      id: 0,
+      ref,
+      ours: true,
+      printfulStatus: "rejected",
+      status: open ? "new" : "cancelled",
+      needsPerson: open,
+      confirmable: false,
+      cancellable: false,
+      placedAt: first ? new Date(t(first)).toISOString() : "",
+      updatedAt: top.last_seen_at ?? "",
+      name: "",
+      firstName: "",
+      email,
+      phone: "",
+      address: { line1: "", line2: "", city: "", state: "", zip: "", country: "" },
+      shippingMethod: "",
+      items: [],
+      itemCount: 0,
+      paid: none,
+      cost: none,
+      marginCents: null,
+      shipments: [],
+      searchTerms: [ref, email, "rejected"].filter(Boolean).map((s) => s.toLowerCase()),
+      rejection: { subject: clip(top.subject, 300), lines, open, seenAt: top.last_seen_at ?? "" },
+    });
+  }
+  out.sort((a, b) => t(b.placedAt) - t(a.placedAt));
+  out.forEach((o, i) => (o.id = -(i + 1)));
+  return out;
+}
+
+// ============================================================================
 // SELF-TESTS
 // ============================================================================
 
@@ -472,6 +545,20 @@ export function __runMerchOrdersPanelTests(): { passed: number; failed: number }
   ok("every ORDER_SORTS column is sortable here", ORDER_SORTS.every((o) => o.columns.every((c) => merchSortColumnSupported(c.column))));
   ok("hidden warning wording", (merchHiddenWarning(1) ?? "").startsWith("1 merch order") && merchHiddenWarning(0) === null);
   ok("cap notice only when clipped", merchLoadCapNotice(500, 800)!.includes("500") && merchLoadCapNotice(3, 3) === null && merchLoadCapNotice(3, null) === null);
+
+  // D277 rejected orders stay on the board after the alert is acknowledged
+  const al = (over: Partial<MerchAlertLike>): MerchAlertLike => ({ subject: "Printful rejected order gm-mwv5yt0q-ea69e590", lines: ["Order gm-mwv5yt0q-ea69e590 - Stripe session cs_x", "Customer: me@example.com", "Printful said: bad area"], order_ref: "gm-mwv5yt0q-ea69e590", first_seen_at: "2026-01-02T00:00:00.000Z", last_seen_at: "2026-01-02T00:00:00.000Z", acknowledged_at: null, ...over });
+  const rj = rejectedMerchOrders([al({})], new Set());
+  ok("rejected alert becomes a row", rj.length === 1 && rj[0].ref === "gm-mwv5yt0q-ea69e590" && rj[0].printfulStatus === "rejected" && rj[0].id < 0);
+  ok("open rejection needs a person (New)", rj[0].status === "new" && rj[0].needsPerson && rj[0].rejection!.open);
+  ok("customer email + reason kept", rj[0].email === "me@example.com" && rj[0].rejection!.lines.some((l) => l.includes("bad area")));
+  const ack = rejectedMerchOrders([al({ acknowledged_at: "2026-01-03T00:00:00.000Z" })], new Set());
+  ok("acknowledged rejection stays, as Cancelled", ack.length === 1 && ack[0].status === "cancelled" && !ack[0].needsPerson);
+  ok("visible on All and Cancelled tabs", buildMerchPanelView(ack, q({ status: "all" })).total === 1 && buildMerchPanelView(ack, q({ status: "cancelled" })).total === 1);
+  ok("skips refs Printful already lists", rejectedMerchOrders([al({})], new Set(["gm-mwv5yt0q-ea69e590"])).length === 0);
+  ok("ignores non-rejection alerts", rejectedMerchOrders([al({ subject: "Printful is unreachable for order gm-mwv5yt0q-ea69e590" })], new Set()).length === 0);
+  ok("one row per ref, negative unique ids", (() => { const r = rejectedMerchOrders([al({}), al({ last_seen_at: "2026-01-04T00:00:00.000Z" }), al({ order_ref: "gm-abc123-xy", subject: "Order gm-abc123-xy needs you - NOT sent to Printful" })], new Set()); return r.length === 2 && new Set(r.map((o) => o.id)).size === 2 && r.every((o) => o.id < 0); })());
+  ok("rejected label", merchStatusLabel("rejected").startsWith("Rejected"));
 
   return { passed, failed };
 }
