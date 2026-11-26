@@ -60,7 +60,7 @@ export async function startPrintFileUploadsAction(input: { designId: string; fil
   return { ok: true, bucket: BUCKET, uploads };
 }
 
-export type MockupTaskResult = { ok: true; taskKey: string } | { ok: false; error: string; notConfigured?: boolean };
+export type MockupTaskResult = { ok: true; taskKey: string } | { ok: false; error: string; notConfigured?: boolean; rateLimited?: boolean };
 
 interface MockupFileIn { placement: string; key: string; position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number }; options?: { id: string; value: unknown }[] }
 /** D278: the only per-file options the studio sends (Printful "Automatic thread color" / "Unlimited color"); boolean values only. */
@@ -97,7 +97,7 @@ export async function createMockupTaskAction(input: { blankId: string; variantId
   const body: Record<string, unknown> = { variant_ids: variantIds, format: "jpg", width: 1000, files };
   if (input?.productOptions && typeof input.productOptions === "object") body.product_options = input.productOptions;
   const r = await printful<{ task_key: string; status: string }>("POST", `/mockup-generator/create-task/${b.printfulId}`, body);
-  if (!r.ok) return { ok: false, error: r.status === 429 ? "Printful's mockup limit was hit (2 per minute for new stores, 10 for established). Wait a minute and try again." : r.error };
+  if (!r.ok) return { ok: false, ...(r.status === 429 ? { rateLimited: true } : {}), error: r.status === 429 ? "Printful's mockup limit was hit (2 per minute for new stores, 10 for established). Wait a minute and try again." : r.error };
   await recordAudit({ actorId: session.userId, actorEmail: session.email, action: "merch.mockup_requested", entityType: "merch_design", entityId: b.id, after: { product: b.printfulId, variantIds, placements: files.map((f) => f.placement) } });
   return { ok: true, taskKey: r.result.task_key };
 }

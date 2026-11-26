@@ -189,7 +189,13 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
       for (const [ti, { method, body }] of tasks.entries()) {
         const label = tasks.length > 1 ? ` (${METHOD_LABEL[method]}, ${ti + 1} of ${tasks.length})` : "";
         setBusy(`Asking Printful for mockups${label}...`);
-        const task = await createMockupTaskAction({ blankId: blank.id, variantIds: body.variant_ids, files: body.files.map((f) => ({ placement: f.placement, key: f.image_url, position: f.position, options: f.options })), productOptions: body.product_options });
+        const ask = () => createMockupTaskAction({ blankId: blank.id, variantIds: body.variant_ids, files: body.files.map((f) => ({ placement: f.placement, key: f.image_url, position: f.position, options: f.options })), productOptions: body.product_options });
+        let task = await ask();
+        // D286: new Printful stores get 2 mockup tasks a minute - wait out the 60 s lockout once, then retry.
+        if (!task.ok && task.rateLimited) {
+          for (let s = 62; s > 0; s -= 1) { setBusy(`Printful's mockup limit - waiting ${s}s${label}...`); await new Promise((r) => window.setTimeout(r, 1000)); }
+          task = await ask();
+        }
         if (!task.ok) throw new Error(task.error);
         let done = false;
         for (let i = 0; i < 40 && !done; i += 1) {
