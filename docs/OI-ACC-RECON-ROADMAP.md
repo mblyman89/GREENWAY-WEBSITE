@@ -64,3 +64,12 @@ Recon + roadmap, round 1 (no code changed). Branch `oi-acc/recon`.
 1. **Card ↔ type mapping.** The current cards and types don't line up one-to-one (F3). My proposal: one card per type, and keep the placeholder copy where the names match (bong→Bongs, pipe→Pipes, bowl→Bowl Pieces, …). Sherlocks, Chillums and Dab Tools would become new types. Each would be hidden until it has stock, or should they always show?
 2. Should a type card with **zero stock** be hidden or shown as "Out of stock"? I propose hidden.
 3. **Removing a type** that still has products: block it, or archive it (hide it everywhere, keep its history)? I propose archive.
+
+## Status (round 2)
+
+- S1 merged (#1920): merch adverts stay at the bottom when other types are also ticked (`menu-collections-core`).
+- S2: Other Inventory names accept any printable character; only empty, control characters and >75 chars are refused. The CCRS cannabis name rule is unchanged (Other Inventory never goes to CCRS).
+- S3: `noncannabis_types` registry (migration 0371), seeded with the 22 built-ins plus sherlock, chillum, dab tool. Add/Archive/Restore on Other Inventory and on Website > Accessory Cards; both read the same table. Archive, never delete.
+- S4: Website > Accessory Cards editor (picture, name, text, order; draft then publish), copied from the Merch Studio card editor.
+- S5: shop accessory cards built from published live non-merch types WITH stock (zero stock hidden), showing the price range; each links to `/accessories/<type>` (name, brand, price only). The old "Also in store" list was removed.
+- S6: Add-to-cart on `/accessories/<type>` held behind the site_settings toggle `online_other_inventory_enabled` (OFF by default; switch on Accessory Cards). Checkout re-checks the toggle, shelf price and stock server-side; `nc-` keys keep lines off CCRS Sale.csv; pickup completion moves On hand (sale-decrement).
