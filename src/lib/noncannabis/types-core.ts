@@ -50,7 +50,6 @@ export function builtinTypeRows(): NcTypeRow[] {
   }));
 }
 
-// eslint-disable-next-line no-control-regex -- refusing control characters
 const CONTROL = /[\u0000-\u001f\u007f]/g;
 
 /** A clean display label: any printable character, collapsed spaces, <= 40. */
