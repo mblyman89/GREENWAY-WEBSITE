@@ -940,6 +940,8 @@ import { __runMenuCardFallbackTests } from "../../src/lib/menu/menu-card-fallbac
 import { __runDuplicateDeliveryGuardTests } from "../../src/lib/inventory/duplicate-delivery-guard-core";
 import { __runNcPosCatalogTests } from "../../src/lib/noncannabis/pos-catalog-core";
 import { __runNcTypesCoreTests } from "../../src/lib/noncannabis/types-core";
+import { __runNcShopCardsTests } from "../../src/lib/noncannabis/shop-cards-core";
+import { __runNcOnlineTests } from "../../src/lib/noncannabis/online-core";
 import { __runMenuCollectionsTests } from "../../src/lib/menu/menu-collections-core";
 import { __runInvoiceAdjustmentsTests } from "../../src/lib/inventory/invoice-adjustments-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
@@ -3089,6 +3091,8 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("grid-defaults-pack-core", __runGridDefaultsPackTests(), 9); // USAGE-10a: /menu grid sends each repeated value once; the client restores it before any reader (exact round-trip)
   assertRan("menu-collections-core", __runMenuCollectionsTests(), 9); // OI-ACC S1: merch adverts stay (at the bottom) when "Greenway Merch" is ticked with other categories
   assertRan("nc-types-core", __runNcTypesCoreTests(), 15); // OI-ACC S3: shared Other Inventory type registry - slug, unique SKU prefix, archive not delete, picker keeps current type, safe card fields
+  assertRan("nc-shop-cards-core", { passed: __runNcShopCardsTests(), failed: 0 }, 12); // OI-ACC S5: one shop card per in-stock live non-merch type, price range in cents, zero stock hidden, public fields only
+  assertRan("nc-online-core", { passed: __runNcOnlineTests(), failed: 0 }, 12); // OI-ACC S6: online accessory orders held OFF by default; shelf price, stock, merch refused; nc- key keeps lines off CCRS
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -155,7 +155,7 @@ export async function readNcUnitCosts(admin: Admin, ids: readonly string[]): Pro
  * Read every row in pages of 1000 (PostgREST caps a single read at 1000, so
  * a bigger .limit() would silently truncate; SLICE 5C rule). Stops at `max`.
  */
-async function readPaged<T>(
+export async function readPaged<T>(
   page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
   max: number,
 ): Promise<{ ok: true; rows: T[] } | { ok: false; error: string }> {

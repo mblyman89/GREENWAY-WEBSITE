@@ -13,6 +13,8 @@ import { listMedia } from "@/lib/media/store";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { readNcTypes } from "@/lib/noncannabis/types-store";
 import { AccessoryCardsEditor } from "./AccessoryCardsEditor";
+import { setOnlineAccessoriesAction } from "./actions";
+import { readOnlineNcEnabled } from "@/lib/noncannabis/online-store";
 import { addNcTypeAction, archiveNcTypeAction, restoreNcTypeAction } from "@/app/admin/inventory/noncannabis/type-actions";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +22,14 @@ export const dynamic = "force-dynamic";
 export default async function AccessoryCardsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; published?: string; typeError?: string; typeAdded?: string }>;
+  searchParams: Promise<{ saved?: string; published?: string; typeError?: string; typeAdded?: string; online?: string }>;
 }) {
   await requirePermission("content.edit");
   const sp = await searchParams;
-  const [typeRead, media] = await Promise.all([
+  const [typeRead, media, onlineOn] = await Promise.all([
     readNcTypes(),
     isSupabaseServiceConfigured ? listMedia({ status: "published", limit: 200 }).catch(() => []) : Promise.resolve([]),
+    readOnlineNcEnabled(),
   ]);
   const mediaChoices: MediaChoice[] = media
     .filter((m) => /^image\//.test(m.mime_type ?? "") && m.public_url)
@@ -34,7 +37,7 @@ export default async function AccessoryCardsPage({
   const cardTypes = typeRead.rows.filter((r) => r.menu_group !== "merch").sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label));
   const live = cardTypes.filter((r) => !r.archived_at);
   const archived = cardTypes.filter((r) => r.archived_at);
-  const msg = sp.published ? "Published - the shop shows these cards now." : sp.saved ? "Draft saved. Press Publish to show it on the shop." : sp.typeAdded ? "Type added - it is on the Other Inventory page too." : null;
+  const msg = sp.published ? "Published - the shop shows these cards now." : sp.saved ? "Draft saved. Press Publish to show it on the shop." : sp.typeAdded ? "Type added - it is on the Other Inventory page too." : sp.online === "on" ? "Online ordering of accessories is ON." : sp.online === "off" ? "Online ordering of accessories is OFF." : null;
 
   return (
     <div>
@@ -47,6 +50,19 @@ export default async function AccessoryCardsPage({
         {typeRead.error ? <p className="text-sm font-semibold text-[var(--admin-danger)]">{typeRead.error}</p> : null}
         {sp.typeError ? <p className="text-sm font-semibold text-[var(--admin-danger)]">{sp.typeError}</p> : null}
         {msg ? <p className="text-sm font-semibold text-[var(--admin-accent)]">{msg}</p> : null}
+
+        <form action={setOnlineAccessoriesAction} className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--admin-border)] p-3">
+          <input type="hidden" name="enabled" value={onlineOn ? "0" : "1"} />
+          <span className="text-sm font-semibold text-[var(--admin-text)]">
+            Customers can add accessories to online orders: {onlineOn ? "ON" : "OFF"}
+          </span>
+          <Button type="submit" size="sm" variant={onlineOn ? "neutral" : "primary"}>
+            {onlineOn ? "Turn OFF" : "Turn ON"}
+          </Button>
+          <span className="text-xs text-[var(--admin-text-faint)]">
+            While OFF the shop shows stock and prices only, and checkout refuses accessory items.
+          </span>
+        </form>
 
         <form action={addNcTypeAction} className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="back" value="cards" />

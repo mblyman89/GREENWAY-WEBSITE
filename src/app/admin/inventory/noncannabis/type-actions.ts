@@ -29,6 +29,7 @@ function refresh(): void {
   revalidatePath(PAGES.inventory);
   revalidatePath(PAGES.cards);
   revalidatePath("/menu");
+  revalidatePath("/accessories/[type]", "page");
   revalidatePath("/menu/[category]", "page");
 }
 

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import type { MerchAdCardView } from "@/lib/merch/merch-ad-core";
 import { decideCollections } from "@/lib/menu/menu-collections-core";
+import { formatPriceRange, type AccessoryShopCard } from "@/lib/noncannabis/shop-cards-core";
+import Link from "@/components/site/IntentLink";
 import { unpackGridItems, type PackedGridItems } from "@/lib/menu/grid-defaults-pack-core";
 // SLICE 78: owner-managed category labels. The server passes the DB-backed
 // value→label map; categoryLabel() prefers it and falls back to the hardcoded
@@ -144,29 +146,10 @@ type MenuItemGroup = {
   items: GreenwayMenuItem[];
 };
 
-type AccessorySectionCard = {
-  key: string;
-  label: string;
-  description: string;
-  imageUrl: string;
-};
-
-const accessorySectionCards: AccessorySectionCard[] = [
-  { key: "bongs", label: "Bongs", description: "Big, smooth, water-cooled hits without the harshness. Premium borosilicate beakers and straight tubes with built-in percs filter every pull so your flower tastes cleaner and hits easier — the centerpiece your sessions deserve.", imageUrl: "/accessories/bongs.webp" },
-  { key: "pipes", label: "Pipes", description: "Grab, pack, and go. Hand-blown glass spoons in bold colors that fit perfectly in your palm and your pocket — the everyday classic that's ready whenever you are, no water or setup required.", imageUrl: "/accessories/pipes.webp" },
-  { key: "papers", label: "Papers", description: "Roll the perfect joint every time. Slow-burning papers, ready-to-fill cones, and tips that keep ash even and flavor pure. Stock up — the difference between a good roll and a great one starts here.", imageUrl: "/accessories/papers.webp" },
-  { key: "bowl-pieces", label: "Bowl Pieces", description: "Upgrade your rip or replace a lost slide in seconds. Thick glass bowls in standard joint sizes with easy-grip handles and built-in screens — pack bigger, pull cleaner, and breathe new life into the piece you already love.", imageUrl: "/accessories/bowl-pieces.webp" },
-  { key: "rolling-trays", label: "Rolling Trays", description: "Keep every session tidy and stash-free. Sleek metal trays with raised edges corral your flower, papers, and grinder so nothing spills and nothing's lost — the clean, organized home base every roller wants on the table.", imageUrl: "/accessories/rolling-trays.webp" },
-  { key: "grinders", label: "Grinders", description: "Fluffy, even grind and zero waste. Precision-milled aluminum teeth break down flower effortlessly while the mesh screen collects every speck of potent kief in the bottom chamber — more flavor, easier packing, nothing left behind.", imageUrl: "/accessories/grinders.webp" },
-  { key: "vape-batteries", label: "Vape Batteries", description: "Power any 510-thread cart with one reliable click. Long-lasting batteries with draw-activated ease or adjustable voltage to dial in your hit, plus fast USB charging — consistent clouds, pocket-ready, all day long.", imageUrl: "/accessories/vape-batteries.webp" },
-  { key: "dab-tools", label: "Dab Tools", description: "Handle your concentrates like a pro. Rust-proof stainless steel tools, precision carb caps, and a non-stick silicone container keep every dab clean, mess-free, and exactly where it belongs — no sticky fingers, no wasted wax.", imageUrl: "/accessories/dab-tools.webp" },
-  { key: "dab-rigs", label: "Dab Rigs", description: "Flavor-first dabs with maximum vapor. Compact glass rigs paired with quartz bangers and water percolation deliver smooth, terpene-rich hits that hit hard and taste incredible — built for concentrate lovers who want every drop to count.", imageUrl: "/accessories/dab-rigs.webp" },
-  { key: "down-stems", label: "Down Stems", description: "The perfect-fit upgrade your bong's been missing. Diffused glass down stems in multiple lengths break smoke into tiny bubbles for cooler, smoother pulls — match your joint size and instantly level up filtration.", imageUrl: "/accessories/down-stems.webp" },
-  { key: "bubblers", label: "Bubblers", description: "Bong-smooth hits in a piece that fits your hand. Hand-held glass bubblers add water filtration and a built-in perc to a portable frame — the best of both worlds for sessions that travel without sacrificing a single smooth pull.", imageUrl: "/accessories/bubblers.webp" },
-  { key: "sherlocks", label: "Sherlocks", description: "Timeless style meets a cooler hit. The signature gooseneck curve on these striped glass Sherlocks keeps smoke away from your hand and the flame at a comfortable distance — a collector-worthy classic that feels as good as it looks.", imageUrl: "/accessories/sherlocks.webp" },
-  { key: "chillums", label: "Chillums", description: "One-hit, one-and-done discretion. Slim swirl-glass chillums load a quick bowl and stash anywhere — the low-profile, easy-to-clean pick for a fast, flavorful pull on the move with zero fuss.", imageUrl: "/accessories/chillums.webp" },
-  { key: "lighters", label: "Lighters", description: "Never get caught without a flame. Refillable torches that fire up dabs and bowls, classic flip lighters for everyday carry, and natural hemp wick for a cleaner-tasting light — the dependable essentials no session should start without.", imageUrl: "/accessories/lighters.webp" },
-];
+// OI-ACC S5: the accessory cards are now DATA - one per in-stock Other
+// Inventory type from the 0371 registry (Website > Accessory Cards edits the
+// picture and words). Built server-side in ShopPage; zero-stock types hidden.
+type AccessorySectionCard = AccessoryShopCard;
 
 function MenuSearchIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
@@ -324,17 +307,22 @@ function groupedByActiveFilter(activeCategory: GreenwayCategory, filteredItems: 
 
 function AccessoryCard({ card }: { card: AccessorySectionCard }) {
   return (
-    <article className="group overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45">
+    <Link
+      href={card.href}
+      className="group block overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45"
+    >
       <div className="aspect-[4/3] overflow-hidden bg-zinc-900">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={card.imageUrl} alt="" className="h-full w-full object-cover opacity-82 transition duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
       </div>
       <div className="p-5">
-        <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Accessory section</p>
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">In stock</p>
         <h3 className="mt-2 text-2xl font-black text-white">{card.label}</h3>
-        <p className="mt-3 text-sm leading-6 text-zinc-300">{card.description}</p>
+        <p className="mt-1 text-sm font-semibold text-white/90">{formatPriceRange(card.minPriceMinor, card.maxPriceMinor)}</p>
+        {card.description ? <p className="mt-3 text-sm leading-6 text-zinc-300">{card.description}</p> : null}
+        <p className="mt-4 text-xs font-black uppercase tracking-[0.14em] text-white transition group-hover:text-[var(--orange)]">See what&apos;s in stock &rarr;</p>
       </div>
-    </article>
+    </Link>
   );
 }
 
@@ -725,9 +713,12 @@ type InteractiveMenuBrowserProps = {
    * bar offers "Greenway Merch" and picking it shows these cards.
    */
   merchAdCards?: MerchAdCardView[];
+  /** OI-ACC S5: in-stock accessory type cards (server-built). */
+  accessoryCards?: AccessoryShopCard[];
 };
 
-export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialSearchParams = {}, categoryLabels, saleFilters = [], merchAdCards }: InteractiveMenuBrowserProps) {
+export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialSearchParams = {}, categoryLabels, saleFilters = [], merchAdCards, accessoryCards }: InteractiveMenuBrowserProps) {
+  const accessorySectionCards: AccessorySectionCard[] = accessoryCards ?? [];
   // SLICE 78: register the owner's labels BEFORE any lookup below runs. This
   // happens during render on both server and client with the same map, so
   // hydration stays consistent; an absent map = hardcoded behavior.
@@ -1046,7 +1037,7 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
       selectedCategories,
       categoryLabel,
     );
-  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, merchAdCards, selectedCategories]);
+  }, [accessorySectionCards.length, cannabinoidBounds, criteria, items, maxAvailablePrice, merchAdCards, selectedCategories]);
 
   const strainOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice, cannabinoidBounds));
