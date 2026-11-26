@@ -939,6 +939,7 @@ import { __runImageSeoCoreTests } from "../../src/lib/seo/image-seo-core";
 import { __runMenuCardFallbackTests } from "../../src/lib/menu/menu-card-fallback-core";
 import { __runDuplicateDeliveryGuardTests } from "../../src/lib/inventory/duplicate-delivery-guard-core";
 import { __runNcPosCatalogTests } from "../../src/lib/noncannabis/pos-catalog-core";
+import { __runMenuCollectionsTests } from "../../src/lib/menu/menu-collections-core";
 import { __runInvoiceAdjustmentsTests } from "../../src/lib/inventory/invoice-adjustments-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
@@ -3085,6 +3086,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("footer-glyph-core", __runFooterGlyphTests(), 9); // USAGE-9e: the 14 footer glyph buttons take their class + default message from the client component instead of ~4.9 KB of repeated props per page
   assertRan("purchase-panel-projection-core", __runPurchasePanelProjectionTests(), 6); // USAGE-9f: the PDP purchase panel (client) gets the trimmed projection; every add-to-cart / deal-price field is kept, the page text keeps the full item
   assertRan("grid-defaults-pack-core", __runGridDefaultsPackTests(), 9); // USAGE-10a: /menu grid sends each repeated value once; the client restores it before any reader (exact round-trip)
+  assertRan("menu-collections-core", __runMenuCollectionsTests(), 9); // OI-ACC S1: merch adverts stay (at the bottom) when "Greenway Merch" is ticked with other categories
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

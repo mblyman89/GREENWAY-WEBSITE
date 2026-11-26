@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import type { MerchAdCardView } from "@/lib/merch/merch-ad-core";
+import { decideCollections } from "@/lib/menu/menu-collections-core";
 import { unpackGridItems, type PackedGridItems } from "@/lib/menu/grid-defaults-pack-core";
 // SLICE 78: owner-managed category labels. The server passes the DB-backed
 // value→label map; categoryLabel() prefers it and falls back to the hardcoded
@@ -1139,9 +1140,6 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
     "preroll-pack",
     "infused-preroll-pack",
   ].includes(activeSectionCategory);
-  const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
-  // R72 S5: "Greenway Merch" alone -> the category adverts (never products).
-  const showMerchAds = Boolean(merchAdCards?.length) && selectedCategories.length === 1 && selectedCategories[0] === "merch";
   // R71 S4: there is no merch collection on the cannabis shop any more (only
   // the Greenway Goods redirect ad, rendered by ShopPage below this grid).
 
@@ -1149,7 +1147,6 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
   // the BOTTOM of the grid when (a) the list is unfiltered, or (b) they are
   // multi-selected alongside other categories — not just when each is the lone
   // selection. This prevents the "No products match" dead-end on mixed selects.
-  const noCategoryFilter = selectedCategories.length === 0;
   const hasOtherFiltersActive =
     query.trim().length > 0 ||
     selectedStrains.length > 0 ||
@@ -1164,20 +1161,15 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
     activeSpecialId !== null ||
     activeDohId !== null ||
     activeClassificationId !== null;
-  // Accessories/merch are catalog collections (not filterable by THC/strain/etc),
-  // so only surface them at the bottom when no narrowing filters are applied.
-  const surfaceBottomCollections = !hasOtherFiltersActive;
-  const accessoriesSelectedWithOthers = selectedCategories.includes("accessories") && selectedCategories.length > 1;
-  const showAccessoryBottom =
-    surfaceBottomCollections && !showAccessorySections && (noCategoryFilter || accessoriesSelectedWithOthers);
-
-  // The empty state should ONLY show when there are truly no products to render
-  // anywhere — including the bottom accessory/merch collections.
-  const showEmptyState =
-    !showAccessorySections &&
-    !showMerchAds &&
-    filteredItems.length === 0 &&
-    !showAccessoryBottom;
+  // OI-ACC S1: one pure decision for every non-cannabis collection (merch
+  // adverts now stay, at the bottom, when ticked with other categories).
+  const { showAccessorySections, showMerchAds, showAccessoryBottom, showMerchBottom, showEmptyState } = decideCollections({
+    selectedCategories,
+    hasMerchCards: Boolean(merchAdCards?.length),
+    hasAccessoryCards: accessorySectionCards.length > 0,
+    hasOtherFiltersActive,
+    filteredCount: filteredItems.length,
+  });
 
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
     if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
@@ -1691,6 +1683,20 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                   {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
                 </div>
+              </section>
+            ) : null}
+
+            {showMerchBottom && merchAdCards ? (
+              <section id="greenway-merch" className="scroll-mt-32">
+                <div className="mb-4 min-w-0">
+                  <h2 className="text-3xl font-black text-white">Greenway Merch</h2>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                  {merchAdCards.map((card) => <MerchAdCardTile key={card.href} card={card} />)}
+                </div>
+                <p className="mt-5 text-[0.68rem] leading-5 text-zinc-500">
+                  Apparel is sold and shipped by Greenway Merchandising LLC (dba Greenway Glass & Goods) on its own website. Each card opens it in a new tab. It is not sold, delivered or rung up by this cannabis store.
+                </p>
               </section>
             ) : null}
 
