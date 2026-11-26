@@ -17,7 +17,6 @@
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
-import { NONCANNABIS_TYPES } from "@/lib/naming/noncannabis-core";
 import { submitNonCannabisInvoiceAction, type InvoiceSubmitResult } from "./actions";
 
 export type InvoiceProductOption = {
@@ -59,7 +58,7 @@ function usd(cents: number): string {
   return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-export function InvoiceBuilderForm({ products }: { products: InvoiceProductOption[] }) {
+export function InvoiceBuilderForm({ products, types }: { products: InvoiceProductOption[]; types: { value: string; label: string }[] }) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [rows, setRows] = useState<Row[]>([blankRow(1)]);
   const [nextId, setNextId] = useState(2);
@@ -196,7 +195,7 @@ export function InvoiceBuilderForm({ products }: { products: InvoiceProductOptio
                         value={row.type}
                         onChange={(e) => setRow(row.id, { type: e.target.value })}
                       >
-                        {NONCANNABIS_TYPES.map((t) => (
+                        {types.map((t) => (
                           <option key={t.value} value={t.value}>
                             {t.label}
                           </option>

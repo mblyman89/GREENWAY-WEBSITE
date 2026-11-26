@@ -11,18 +11,19 @@ import { useMemo, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { createNonCannabisDraftAction } from "./actions";
 import {
-  NONCANNABIS_TYPES,
   buildNonCannabisName,
   buildSku,
   validateNonCannabisName,
-  type NonCannabisType,
   type Gender,
 } from "@/lib/naming/noncannabis-core";
 import { validateRetailBarcode } from "@/lib/noncannabis/merch-intel-core";
 
-export function NonCannabisIntakeForm() {
+export type NcTypeOption = { value: string; label: string; prefix: string };
+
+export function NonCannabisIntakeForm({ types }: { types: NcTypeOption[] }) {
   const [brand, setBrand] = useState("");
-  const [type, setType] = useState<NonCannabisType>("pipe");
+  const [type, setType] = useState<string>(types.some((t) => t.value === "pipe") ? "pipe" : (types[0]?.value ?? "other"));
+  const typeRow = types.find((t) => t.value === type);
   const [size, setSize] = useState("");
   const [gender, setGender] = useState<Gender>("");
   const [color, setColor] = useState("");
@@ -36,13 +37,13 @@ export function NonCannabisIntakeForm() {
   }, [barcode]);
 
   const preview = useMemo(() => {
-    const built = buildNonCannabisName({ brand, type, size, gender, color });
+    const built = buildNonCannabisName({ brand, type, size, gender, color, typeLabel: typeRow?.label });
     const name = nameOverride.trim() || built;
     const v = validateNonCannabisName(name);
     // Preview SKU with seq 1 (server assigns the real next sequence).
-    const sku = buildSku({ type, size, color, gender }, 1);
+    const sku = buildSku({ type, size, color, gender, prefix: typeRow?.prefix }, 1);
     return { name, sku, ok: v.ok, issues: v.issues };
-  }, [brand, type, size, gender, color, nameOverride]);
+  }, [brand, type, size, gender, color, nameOverride, typeRow]);
 
   return (
     <form action={createNonCannabisDraftAction} className="space-y-4">
@@ -61,9 +62,9 @@ export function NonCannabisIntakeForm() {
             id="type"
             name="type"
             value={type}
-            onChange={(e) => setType(e.target.value as NonCannabisType)}
+            onChange={(e) => setType(e.target.value)}
           >
-            {NONCANNABIS_TYPES.map((t) => (
+            {types.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>

@@ -310,6 +310,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "pos_sale_events",
   "pricing_settings",
   "print_designs",
+  "noncannabis_types",
   "product_classification_overrides",
   "product_enrichments",
   "product_fact_provenance",
