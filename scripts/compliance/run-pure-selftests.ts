@@ -939,6 +939,7 @@ import { __runImageSeoCoreTests } from "../../src/lib/seo/image-seo-core";
 import { __runMenuCardFallbackTests } from "../../src/lib/menu/menu-card-fallback-core";
 import { __runDuplicateDeliveryGuardTests } from "../../src/lib/inventory/duplicate-delivery-guard-core";
 import { __runNcPosCatalogTests } from "../../src/lib/noncannabis/pos-catalog-core";
+import { __runNcTypesCoreTests } from "../../src/lib/noncannabis/types-core";
 import { __runMenuCollectionsTests } from "../../src/lib/menu/menu-collections-core";
 import { __runInvoiceAdjustmentsTests } from "../../src/lib/inventory/invoice-adjustments-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
@@ -3087,6 +3088,7 @@ assertRan("ad-check-core", __runAdCheckCoreTests(), 30); // D234 C-8 (G-104, G-1
   assertRan("purchase-panel-projection-core", __runPurchasePanelProjectionTests(), 6); // USAGE-9f: the PDP purchase panel (client) gets the trimmed projection; every add-to-cart / deal-price field is kept, the page text keeps the full item
   assertRan("grid-defaults-pack-core", __runGridDefaultsPackTests(), 9); // USAGE-10a: /menu grid sends each repeated value once; the client restores it before any reader (exact round-trip)
   assertRan("menu-collections-core", __runMenuCollectionsTests(), 9); // OI-ACC S1: merch adverts stay (at the bottom) when "Greenway Merch" is ticked with other categories
+  assertRan("nc-types-core", __runNcTypesCoreTests(), 15); // OI-ACC S3: shared Other Inventory type registry - slug, unique SKU prefix, archive not delete, picker keeps current type, safe card fields
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -1373,7 +1373,8 @@ describe("D-65 — the connections survive the reset", () => {
     // D250 S3: +2 KEEP ccrs_delivery_loads, ccrs_delivery_stage (0368; examiner delivery loads, State records, stage emptied by the load).
     // D253: +3 KEEP ccrs_uploader_devices, ccrs_upload_runs, ccrs_upload_run_files (0369; assisted CCRS uploader, record of what was sent to the State; FKs only to ccrs_files KEEP).
     // D263 S8: +1 KEEP print_designs (0370; Print Studio pieces + templates, no FK).
-    expect(plan.keep.length).toBe(226);
+    // OI-ACC S3: +1 KEEP noncannabis_types (0371; Other Inventory type list + accessory card copy, no FK to wiped data).
+    expect(plan.keep.length).toBe(227);
     expect(plan.wipe.length).toBe(139);
   });
 

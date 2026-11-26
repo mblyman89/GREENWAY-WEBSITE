@@ -70,6 +70,8 @@ export type NonCannabisNameParts = {
   size?: string | null;
   gender?: Gender;
   color?: string | null;
+  /** OI-ACC S3: registry label (noncannabis_types) for types not built in. */
+  typeLabel?: string | null;
 };
 
 /** Normalize a size token: keep digits + unit, e.g. "12 in" -> "12in". */
@@ -88,7 +90,7 @@ export function normalizeSize(raw?: string | null): string {
 /** Build the non-cannabis display name from parts. */
 export function buildNonCannabisName(parts: NonCannabisNameParts): string {
   const brand = collapseWhitespace(parts.brand ?? "");
-  const typeLabel = nonCannabisTypeLabel(parts.type);
+  const typeLabel = (parts.typeLabel ?? "").trim() || nonCannabisTypeLabel(parts.type);
   const size = normalizeSize(parts.size);
   const gender =
     parts.gender === "male" ? "Male" : parts.gender === "female" ? "Female" : "";
@@ -147,7 +149,14 @@ export type SkuParts = {
   size?: string | null;
   color?: string | null;
   gender?: Gender;
+  /** OI-ACC S3: registry SKU prefix (noncannabis_types) for types not built in. */
+  prefix?: string | null;
 };
+
+function prefixOf(parts: { type: string; prefix?: string | null }): string {
+  const p = (parts.prefix ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+  return p.length >= 2 ? p : nonCannabisTypePrefix(parts.type);
+}
 
 /**
  * Build a human-readable, deterministic SKU:
@@ -157,7 +166,7 @@ export type SkuParts = {
  * function is pure so it is fully testable.
  */
 export function buildSku(parts: SkuParts, seq: number): string {
-  const prefix = nonCannabisTypePrefix(parts.type);
+  const prefix = prefixOf(parts);
   const seqStr = String(Math.max(1, Math.floor(seq))).padStart(4, "0");
   const bits = [`${prefix}-${seqStr}`];
   const size = skuToken(normalizeSize(parts.size).replace(/\s+/g, ""), 5);
@@ -186,7 +195,7 @@ export function nextAvailableSku(
     seq += 1;
   }
   // Extremely unlikely fallback.
-  return `${nonCannabisTypePrefix(parts.type)}-${Date.now()}`;
+  return `${prefixOf(parts)}-${Date.now()}`;
 }
 
 /**
@@ -196,8 +205,9 @@ export function nextAvailableSku(
 export function nextSeqForType(
   type: NonCannabisType | string,
   existing: Iterable<string>,
+  prefixOverride?: string | null,
 ): number {
-  const prefix = nonCannabisTypePrefix(type);
+  const prefix = prefixOf({ type, prefix: prefixOverride });
   let max = 0;
   const re = new RegExp(`^${prefix}-(\\d{1,})`);
   for (const sku of existing) {

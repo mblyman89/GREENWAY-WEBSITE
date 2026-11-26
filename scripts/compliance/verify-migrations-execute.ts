@@ -124,6 +124,7 @@ export function explainRelationError(message: string): string | null {
 export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] = [
   { file: "scripts/recon/ccrs-auto-upload-0369-pg-check.sql", mustPrint: "CCRS 0369 CHECK PASSED" }, // D253 assisted CCRS uploader (one active run, one file in flight, key hashes only)
   { file: "scripts/recon/print-designs-0370-pg-check.sql", mustPrint: "PRINT 0370 CHECK PASSED" }, // D263 S8 Print Studio saved designs (service role only, rev compare-and-set)
+  { file: "scripts/recon/noncannabis-types-0371-pg-check.sql", mustPrint: "NCTYPES 0371 CHECK PASSED" }, // OI-ACC S3 shared Other Inventory type registry (service role only, archive never delete)
   { file: "scripts/recon/ccrs-delivery-loads-0368-pg-check.sql", mustPrint: "CCRS 0368 CHECK PASSED" }, // D250 S3 examiner delivery load (guarded, per-write source)
   { file: "scripts/recon/media-embeddings-0365-pg-check.sql", mustPrint: "MEDIA EMBEDDINGS 0365 CHECK PASSED" }, // D244 R-4 hybrid semantic photo search (with and without pgvector)
   { file: "scripts/recon/budalerts-menus-0364-pg-check.sql", mustPrint: "BUDALERTS MENUS 0364 CHECK PASSED" }, // D242 Budalerts brand menus (internal use only)

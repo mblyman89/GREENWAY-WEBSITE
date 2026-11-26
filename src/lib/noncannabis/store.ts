@@ -13,6 +13,8 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { escapeLikeWildcards } from "@/lib/supabase/postgrest-escape";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { applyNcDelta } from "@/lib/noncannabis/register-stock";
+import { readNcTypes } from "@/lib/noncannabis/types-store";
+import { typeRowByValue } from "@/lib/noncannabis/types-core";
 import {
   buildNonCannabisName,
   buildSku,
@@ -206,9 +208,11 @@ export async function previewSkuAndName(input: NonCannabisDraftInput): Promise<{
   skuBaseComplete: boolean;
 }> {
   const { skus: existing, complete: skuBaseComplete } = await listExistingSkusChecked();
-  const startSeq = nextSeqForType(input.type, existing);
+  // OI-ACC S3: prefix + label come from the shared type registry (0371).
+  const reg = typeRowByValue((await readNcTypes()).rows, input.type);
+  const startSeq = nextSeqForType(input.type, existing, reg?.sku_prefix);
   const sku = nextAvailableSku(
-    { type: input.type, size: input.size, color: input.color, gender: input.gender },
+    { type: input.type, size: input.size, color: input.color, gender: input.gender, prefix: reg?.sku_prefix },
     existing,
     startSeq,
   );
@@ -220,6 +224,7 @@ export async function previewSkuAndName(input: NonCannabisDraftInput): Promise<{
       size: input.size,
       gender: input.gender,
       color: input.color,
+      typeLabel: reg?.label,
     });
   const v = validateNonCannabisName(name);
   return { sku, name, nameOk: v.ok, nameIssues: v.issues, skuBaseComplete };
@@ -244,11 +249,13 @@ export async function mintSkusForNewItems(
   }
   const taken = new Set(existing);
   const minted: { sku: string; name: string }[] = [];
+  const typeRows = (await readNcTypes()).rows;
   for (const it of items) {
-    const parts = { type: it.type, size: null, color: null, gender: null };
-    const sku = nextAvailableSku(parts, taken, nextSeqForType(it.type, taken));
+    const reg = typeRowByValue(typeRows, it.type);
+    const parts = { type: it.type, size: null, color: null, gender: null, prefix: reg?.sku_prefix };
+    const sku = nextAvailableSku(parts, taken, nextSeqForType(it.type, taken, reg?.sku_prefix));
     taken.add(sku);
-    const name = it.nameOverride.trim() || buildNonCannabisName({ brand: null, ...parts });
+    const name = it.nameOverride.trim() || buildNonCannabisName({ brand: null, ...parts, typeLabel: reg?.label });
     const v = validateNonCannabisName(name);
     if (!v.ok) return { ok: false, error: `Name invalid ("${name}"): ${v.issues.join(" ")}` };
     minted.push({ sku, name });

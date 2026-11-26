@@ -36,6 +36,9 @@ import {
   type MerchItem,
 } from "@/lib/noncannabis/merch-intel-core";
 import { nonCannabisTypeLabel } from "@/lib/naming/noncannabis-core";
+import { readNcTypes } from "@/lib/noncannabis/types-store";
+import { liveTypes, typeRowByValue } from "@/lib/noncannabis/types-core";
+import { addNcTypeAction, archiveNcTypeAction, restoreNcTypeAction } from "./type-actions";
 import { listNonCannabisInvoicePayables } from "@/lib/noncannabis/invoice-store";
 import { NonCannabisIntakeForm } from "./NonCannabisIntakeForm";
 import { InvoiceBuilderForm, type InvoiceProductOption } from "./InvoiceBuilderForm";
@@ -83,6 +86,7 @@ export default async function NonCannabisInventoryPage({
 }: {
   searchParams: Promise<{
     error?: string;
+    typeError?: string;
     created?: string;
     activated?: string;
     archived?: string;
@@ -99,7 +103,7 @@ export default async function NonCannabisInventoryPage({
   const canFillCost = can(session.profile.role, "inventory.cost.fill");
   const sp = await searchParams;
 
-  const [products, adjustments, invoices, ncSales] = await Promise.all([
+  const [products, adjustments, invoices, ncSales, typeRead] = await Promise.all([
     listNonCannabisProducts(),
     listNonCannabisAdjustments({ days: 30 }),
     listNonCannabisInvoicePayables({ includePaid: true, limit: 12 }),
@@ -108,7 +112,13 @@ export default async function NonCannabisInventoryPage({
       ok: false as const,
       error: e instanceof Error ? e.message : String(e),
     })),
+    readNcTypes(),
   ]);
+  // OI-ACC S3: the shared type registry (also edited on Website > Accessory Cards).
+  const typeLabelOf = (v: string) => typeRowByValue(typeRead.rows, v)?.label ?? nonCannabisTypeLabel(v);
+  const typeChoices = liveTypes(typeRead.rows).map((t) => ({ value: t.value, label: t.label, prefix: t.sku_prefix }));
+  const typeCounts = new Map<string, number>();
+  for (const p of products) if (p.status !== "archived") typeCounts.set(p.type, (typeCounts.get(p.type) ?? 0) + 1);
 
   const items = products.map(toMerchItem);
   const valuation = valuateMerch(items);
@@ -129,7 +139,7 @@ export default async function NonCannabisInventoryPage({
     sku: p.sku,
     name: p.name,
     type: p.type,
-    typeLabel: nonCannabisTypeLabel(p.type),
+    typeLabel: typeLabelOf(p.type),
     status: p.status,
     qtyOnHand: p.qty_on_hand ?? 0,
     priceMinorUnits: p.price_minor_units ?? 0,
@@ -478,7 +488,7 @@ export default async function NonCannabisInventoryPage({
             </p>
           </div>
           <div className="p-5">
-            <InvoiceBuilderForm products={invoiceProducts} />
+            <InvoiceBuilderForm products={invoiceProducts} types={typeChoices} />
           </div>
         </Card>
 
@@ -553,6 +563,40 @@ export default async function NonCannabisInventoryPage({
           </Card>
         ) : null}
 
+        {/* OI-ACC S3: product types (shared with Website > Accessory Cards) */}
+        <Card>
+          <div className="border-b border-[var(--admin-border)] px-5 py-4">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">Product types</h2>
+            <p className="text-xs text-[var(--admin-text-faint)]">
+              The same list as Website &rarr; Accessory Cards: a type added or archived here shows up there too, and every
+              type (except Apparel) is a card on the shop. Archive hides a type from the pickers and the website; its
+              products keep their type and history. Any characters are fine.
+            </p>
+            {typeRead.error ? <p className="mt-2 text-xs font-semibold text-[var(--admin-danger)]">{typeRead.error}</p> : null}
+            {sp.typeError ? <p className="mt-2 text-xs font-semibold text-[var(--admin-danger)]">{sp.typeError}</p> : null}
+          </div>
+          <div className="space-y-3 p-5">
+            <form action={addNcTypeAction} className="flex flex-wrap items-end gap-2">
+              <input name="label" maxLength={40} required placeholder="New type, e.g. Hemp Wick" className="min-w-[14rem] rounded-md border border-[var(--admin-border)] bg-transparent px-3 py-2 text-sm text-[var(--admin-text)]" />
+              <Button type="submit" size="sm" disabled={!typeRead.fromRegistry}>Add type</Button>
+            </form>
+            <ul className="flex flex-wrap gap-2">
+              {[...typeRead.rows].sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label)).map((t) => (
+                <li key={t.value} className="flex items-center gap-2 rounded-md border border-[var(--admin-border)] px-2 py-1 text-xs">
+                  <span className={t.archived_at ? "text-[var(--admin-text-faint)] line-through" : "text-[var(--admin-text)]"}>{t.label}</span>
+                  <span className="text-[var(--admin-text-faint)]">{t.sku_prefix} &middot; {typeCounts.get(t.value) ?? 0}</span>
+                  {typeRead.fromRegistry ? (
+                    <form action={t.archived_at ? restoreNcTypeAction : archiveNcTypeAction}>
+                      <input type="hidden" name="value" value={t.value} />
+                      <button type="submit" className="underline text-[var(--admin-text-muted)]">{t.archived_at ? "Restore" : "Archive"}</button>
+                    </form>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+
         {/* Intake */}
         <Card>
           <div className="border-b border-[var(--admin-border)] px-5 py-4">
@@ -563,7 +607,7 @@ export default async function NonCannabisInventoryPage({
             </p>
           </div>
           <div className="p-5">
-            <NonCannabisIntakeForm />
+            <NonCannabisIntakeForm types={typeChoices} />
           </div>
         </Card>
 
@@ -610,7 +654,7 @@ export default async function NonCannabisInventoryPage({
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
-                        {nonCannabisTypeLabel(p.type)}
+                        {typeLabelOf(p.type)}
                       </td>
                       <td className="px-4 py-3 text-center text-[var(--admin-text-muted)]">{p.qty_on_hand}</td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
