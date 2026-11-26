@@ -928,6 +928,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   // print_designs (0370, D263 S8): Print Studio pieces and templates (banners,
   // flyers, signs, business cards). Artwork only: no money, stock or customer
   // data, no foreign key. KEEP with the media, like merch_designs.
+  // noncannabis_types (0371, OI-ACC S3): the Other Inventory type list and its
+  // shop card words/pictures. Setup, not activity: no money, stock or customer data.
+  { table: "noncannabis_types", disposition: "KEEP", because: "Your Other Inventory product types and the accessory card words and pictures on the shop." },
   { table: "print_designs", disposition: "KEEP", because: "The banners, flyers, signs and business cards you made in Print Studio, and your print templates." },
   // merch_alerts (0361, D232 M-7): greenwaymerch.com owner alerts and who
   // acknowledged them. An operations record of the separate merch LLC's shop,

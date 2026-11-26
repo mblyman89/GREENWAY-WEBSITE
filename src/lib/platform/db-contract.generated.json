@@ -230,6 +230,7 @@
     "noncannabis_invoice_lines",
     "noncannabis_invoices",
     "noncannabis_products",
+    "noncannabis_types",
     "obligation_waivers",
     "ofac_match_reviews",
     "ofac_screening_results",
