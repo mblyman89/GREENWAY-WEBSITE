@@ -19,9 +19,7 @@
  */
 
 import {
-  DISALLOWED_NAME_CHARS,
   collapseWhitespace,
-  stripDisallowedChars,
   toTitleCase,
   NAME_MAX_LEN,
 } from "./convention-core";
@@ -103,7 +101,18 @@ export function buildNonCannabisName(parts: NonCannabisNameParts): string {
   return name;
 }
 
-/** Validate a non-cannabis name (same char/casing rules as the cannabis one). */
+/**
+ * OI-ACC S2 - validate an Other Inventory name. Owner (verbatim): "please
+ * allow us to add any inventory items with whatever characters we need
+ * included." Other Inventory never reaches CCRS (ccrs-sales.ts skips nc-
+ * lines; ccrs-batch.ts skips NonCannabis returns), so the CCRS product-name
+ * character rule (convention-core DISALLOWED_NAME_CHARS) does NOT apply here
+ * and stays unchanged for cannabis. Only refused: empty, control characters
+ * (they break labels, receipts and CSV rows), and longer than NAME_MAX_LEN
+ * (label + receipt width).
+ */
+// eslint-disable-next-line no-control-regex -- control characters are exactly what we refuse
+const NC_CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 export function validateNonCannabisName(raw: string | null | undefined): {
   ok: boolean;
   issues: string[];
@@ -112,18 +121,15 @@ export function validateNonCannabisName(raw: string | null | undefined): {
   const issues: string[] = [];
   if (!name) issues.push("Name is required.");
   if (name.length > NAME_MAX_LEN) issues.push(`Name exceeds ${NAME_MAX_LEN} chars.`);
-  if (DISALLOWED_NAME_CHARS.test(name)) issues.push("Contains a disallowed character.");
-  if (/^[^A-Za-z0-9]/.test(name)) issues.push("Must start with a letter or number.");
+  if (NC_CONTROL_CHARS.test(name)) issues.push("Contains a hidden control character (tab / line break).");
   return { ok: issues.length === 0, issues };
 }
 
-/** Draft-clean a messy non-cannabis name (staff confirm). */
+/** Draft-clean a messy non-cannabis name (staff confirm). Keeps every printable character. */
 export function suggestNonCannabisName(raw: string | null | undefined): string {
-  let s = collapseWhitespace(stripDisallowedChars((raw ?? "").trim()));
-  s = s.replace(/^[^A-Za-z0-9]+/, "").trim();
-  s = toTitleCase(s);
+  let s = collapseWhitespace((raw ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim());
   if (s.length > NAME_MAX_LEN) s = s.slice(0, NAME_MAX_LEN).trim();
-  return collapseWhitespace(s);
+  return s;
 }
 
 /* ------------------------------------------------------------------ *
@@ -233,7 +239,15 @@ export function __runNonCannabisTests(): void {
 
   // validate
   assert(validateNonCannabisName("12in Bong Male Blue").ok === true, "valid name");
-  assert(validateNonCannabisName("- bong / blue").ok === false, "invalid name");
+  // OI-ACC S2: any printable character is allowed for Other Inventory.
+  for (const t of NONCANNABIS_TYPES) {
+    assert(validateNonCannabisName(buildNonCannabisName({ type: t.value })).ok, `type ${t.value} builds a valid name`);
+  }
+  for (const n of ["RAW 1 1/4", "Zig-Zag & Co", "Bong #2", 'Glass "Hammer"', "(Clear) Jar", "Pipe, Blue", "Wow! $5 @Home | 50%"]) {
+    assert(validateNonCannabisName(n).ok === true, `allowed: ${n}`);
+  }
+  assert(validateNonCannabisName("Bad\tName").ok === false, "control char refused");
+  assert(validateNonCannabisName("   ").ok === false, "empty refused");
 
   // SKU
   assert(buildSku({ type: "bong", size: "12in", color: "blue", gender: "male" }, 1) === "BONG-0001-12IN-BLUE-M", "sku: " + buildSku({ type: "bong", size: "12in", color: "blue", gender: "male" }, 1));
