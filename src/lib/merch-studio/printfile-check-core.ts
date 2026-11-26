@@ -146,7 +146,7 @@ export function __runPrintfileCheckTests(): { passed: number; failed: number } {
   const ok = (c: boolean, m: string) => { if (c) passed += 1; else { failed += 1; console.error("FAIL printfile-check-core:", m); } };
   const rows = studioDefaultPlacements();
   // D278 +5: adidas A401 wrists (Printful gives no size) + Columbia left chests (only the right chest is sized).
-  ok(rows.length === 13, "13 studio-default placements (8 + 5 D278)");
+  ok(rows.length === 11, "11 studio-default placements (8 + 5 D278 - 2 IND4000 wrists confirmed 2x3 in D286)");
   ok(rows.some((r) => r.blankId === "ind-exp54" && r.placementId === "back") && rows.some((r) => r.blankId === "l7-14003" && r.placementId === "front"), "windbreaker back + zip-hoodie front listed");
   ok(rows.every((r) => r.keys.length > 0 && r.printfulId > 0), "each has a Printful key and product id");
   const res = {

@@ -76,13 +76,14 @@ export const FLAT_MIN = 1;
 export const FLAT_MAX = 8;
 /** FLUX Kontext ask: flat, print-ready redraw on magenta (cut out after). */
 export function flatPrompt(o: { colors: number; method: Method; palette?: string[]; extra?: string }): string {
-  const n = Math.max(FLAT_MIN, Math.min(FLAT_MAX, Math.round(o.colors) || 4));
+  // D286: Printful stitches at most 6 thread colours per placement.
+  const n = Math.max(FLAT_MIN, Math.min(o.method === "embroidery" ? 6 : FLAT_MAX, Math.round(o.colors) || 4));
   const pal = (o.palette ?? []).filter((h) => /^#[0-9a-f]{6}$/i.test(h)).slice(0, FLAT_MAX);
   const parts = [
     "Redraw this exact logo as clean, print-ready vector-style artwork for apparel printing.",
     "Keep the same design, layout, proportions, text and lettering - do not add, remove or reword anything.",
     `Use only ${n} solid flat colour${n > 1 ? "s" : ""}${pal.length ? ` (${pal.join(", ")})` : ""}: no gradients, no shading, no shadows, no glow, no photo texture, no noise.`,
-    o.method === "embroidery" ? "Bold simple shapes with thick lines (embroidery thread), tiny details merged or removed." : "Crisp sharp edges, smooth curves, solid fills.",
+    o.method === "embroidery" ? "Embroidery-ready (Printful digitizing rules): bold simple flat shapes, every line and detail at least 0.05 inch thick at print size, letters at least 0.25 inch tall, open spaces at least 0.25 inch wide, no distressed, grunge, worn or halftone texture, no tiny dots or speckles - merge or remove details that are too small." : "Crisp sharp edges, smooth curves, solid fills.",
     "Put the artwork on one perfectly flat solid pure magenta (#FF00FF) background, edge to edge, with no border or frame.",
   ];
   const extra = String(o.extra ?? "").trim().slice(0, 400);
@@ -151,7 +152,7 @@ export function __runOptimizerTests(): { passed: number; failed: number; failure
   const fp = flatPrompt({ colors: 3, method: "embroidery", palette: ["#FFFFFF", "bad"], extra: "make the text bolder" });
   t("prompt colours", fp.includes("only 3 solid flat colours") && fp.includes("#FFFFFF") && !fp.includes("bad"));
   t("prompt magenta", fp.includes("#FF00FF"));
-  t("prompt emb", fp.includes("embroidery"));
+  t("prompt emb", fp.includes("Embroidery-ready") && flatPrompt({ colors: 8, method: "embroidery" }).includes("only 6 solid") && fp.includes("0.05 inch") && fp.includes("no distressed"));
   t("prompt extra", fp.includes("make the text bolder"));
   t("prompt clamp", flatPrompt({ colors: 99, method: "dtg" }).includes(`only ${FLAT_MAX} solid`));
   t("toHex", toHex([255, 0, 16]) === "#FF0010");

@@ -19,7 +19,7 @@ describe("merch studio cores", () => {
   it("print-rules-core", () => {
     const r = __runPrintRulesTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(34);
+    expect(r.passed).toBeGreaterThanOrEqual(45); // D286 embroidery hardening
   });
   it("fulfillment-core", () => {
     const r = __runFulfillmentTests();
@@ -39,7 +39,7 @@ describe("merch studio cores", () => {
   it("print-export-core", () => {
     const r = __runPrintExportTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(112);
+    expect(r.passed).toBeGreaterThanOrEqual(129); // D286 mockup per technique
   });
   it("listing-package-core (R71 S4)", () => {
     const r = __runListingPackageTests();

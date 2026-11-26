@@ -347,6 +347,15 @@ export function mockupTaskBody(b: Blank, plans: readonly PrintFilePlan[], urls: 
   for (const o of item.options) if (o.id !== "notes") product_options[o.id] = o.value;
   return { variant_ids, format: "jpg", width: Math.max(50, Math.min(2000, Math.round(width))), files, ...(Object.keys(product_options).length ? { product_options } : {}) };
 }
+/**
+ * D286: one mockup task PER TECHNIQUE. A v1 create-task runs one technique; sending left-chest embroidery with a
+ * DTG back made Printful answer 400 "One or more provided placements are not allowed for product technique
+ * EMBROIDERY". Orders still carry every file in one item - only the mockup preview is split.
+ */
+export function mockupTaskBodies(b: Blank, plans: readonly PrintFilePlan[], urls: Readonly<Record<string, string>>, colors: readonly string[], width = 1000): { method: Method; body: MockupTaskBody }[] {
+  const methods = [...new Set(plans.filter((p) => urls[p.key]).map((p) => p.method))];
+  return methods.flatMap((m) => { const body = mockupTaskBody(b, plans.filter((p) => p.method === m), urls, colors, width); return body ? [{ method: m, body }] : []; });
+}
 
 // ---------------------------------------------------------------------------
 // Proof sheet + sample checklist
@@ -400,6 +409,7 @@ export function sampleChecklist(d: MerchDesign): ChecklistItem[] {
   if (methods.has("embroidery")) out.push(
     { id: "stitch", label: "Inspect small text and thin lines for gaps, puckering or thread breaks; check the backing on the inside.", why: "Embroidery is digitized by Printful - the sample is the first time you see their digitizing." },
     { id: "threads", label: "Compare thread colours to the thread chart codes on the proof sheet.", why: "Thread colours can't be custom-mixed." },
+    { id: "hold", label: "If Printful puts the order on hold with a digitized proof, compare it to this proof: thickened lines (0.05\" min), closed-up gaps, removed texture, puff changed to flat. Approve or fix the file.", why: "D286: Printful digitizes every embroidery file by hand and holds the order when it must change the art." },
   );
   if (b && (b.category === "hoodie" || b.category === "zip" || b.category === "crew")) out.push({ id: "ribs", label: "Stretch any print near ribbing, pockets or the zipper and look for gaps.", why: "Printful: ribbed garments are printed unstretched and can show gaps when worn." });
   out.push({ id: "photo", label: "Photograph the sample on a person and flat - use these as the shop photos.", why: "Real photos convert better than mockups." });
@@ -876,6 +886,14 @@ export function __runPrintExportTests(): { passed: number; failed: number } {
   ok(!!mb && mb.files.every((f) => !f.options), "D278: DTG mockup files get no thread options");
   ok(mockupTaskBody(tee, p1.plans, {}, [black]) === null, "no hosted files -> no task");
   ok(mockupTaskBody(tee, p1.plans, { front: "u" }, [black], 5000)!.width === 2000, "width capped at 2000");
+  // D286: IND4000 left-chest embroidery + DTG back -> two tasks, never mixed.
+  const hood = getBlank("ind-4000")!;
+  const mix = planPrintFiles(design(hood, { left_chest: { method: "embroidery", elements: [el({ w: 2, h: 2, x: 1, y: 1 })] }, back: { method: "dtg", elements: [el({})] } }));
+  const mixUrls = Object.fromEntries(mix.plans.map((p) => [p.key, "u"]));
+  const tasks = mockupTaskBodies(hood, mix.plans, mixUrls, [colorsFor(hood)[0][0]]);
+  ok(tasks.length === 2 && tasks.every((t) => t.body.files.every((f) => mix.plans.find((p) => p.fileType === f.placement)?.method === t.method)), "D286: mixed techniques -> one mockup task each");
+  ok(tasks.find((t) => t.method === "embroidery")!.body.files.every((f) => f.placement.startsWith("embroidery_")) && tasks.find((t) => t.method === "dtg")!.body.files.every((f) => !f.placement.startsWith("embroidery_")), "D286: embroidery task holds only embroidery files");
+  ok(mockupTaskBodies(tee, p1.plans, { front: "u" }, [black]).length === 1, "D286: single technique -> one task");
 
   // Proof sheet
   const html = proofSheetHtml(d1, { front: "<svg viewBox='0 0 1 1'><script>x</script><rect onclick=\"evil()\"/></svg>", back: "not svg" }, { generatedAt: "2026-10-17", snapshotDate: "2026-10-17", colorName: "Black", seller: "Greenway Merchandising LLC (dba Greenway Glass & Goods)" });

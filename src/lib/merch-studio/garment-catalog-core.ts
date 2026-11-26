@@ -224,12 +224,12 @@ export const BLANKS: readonly Blank[] = [
     fabric: "Cotton/polyester blend fleece (Printful does not state the ratio)", cottonPct: null, weightOz: 10, puffAvailable: false, structured: null,
     premiumNote: "10 oz heavyweight streetwear hoodie, wrist embroidery available.",
     placements: [
-      { ...frontFull("front_dtf", 595, [POUCH(9, 2, 11)], 11, "studio-default"), note: "Printful hoodie guide: full front 10-12\" wide; height kept above the pouch (studio default - confirm in Printful's file template)." },
+      { ...frontFull("front_dtf", 595, [POUCH(9, 2, 11)], 11, "studio-default"), note: "Printful hoodie guide: full front 10-12\" wide; height kept above the pouch (studio default - confirm in Printful's file template). Print only (DTG/DTF): Printful embroiders this hoodie only at the chest (4\" x 4\" left/right/center) and wrists (2\" x 3\")." },
       leftChest(),
       pl("right_chest_emb", "Right chest (embroidery)", "front", 4, 4, 3, -4, { embroidery: ["embroidery_chest_right", 295] }, "printful-hoodie-guide"),
       centerChestEmb(),
       { ...backFull(true, 5), obstacles: [HOOD_DRAPE], dimsSource: "printful-hoodie-guide", note: "Back art sits below the hood seam (Printful hoodie guide)." },
-      ...sleeves(true, false), ...wrists(), labelOutside(), labelInside(false, true),
+      ...sleeves(true, false), ...wristsExact(2, 3, 295, FG, "Printful wrist guideline: 2\" x 3\" above the cuff - small icon or short word."), labelOutside(), labelInside(false, true),
     ],
   },
   {
