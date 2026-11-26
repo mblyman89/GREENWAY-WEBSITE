@@ -281,6 +281,9 @@ describe("THE WIRING — the real component must actually use the cap", () => {
     // carries no merch product data at all (pure redirect ad instead).
     expect(source).not.toContain("merchProductDefs");
     expect(source).not.toContain("showMerchBottom");
+    // OI-ACC S1: the merch ADVERTS (links to greenwaymerch.com, no product
+    // data) stay at the bottom when "Greenway Merch" is ticked with others.
+    expect(source).toContain("showMerchAdsBottom");
     expect(source).not.toContain("merch-catalog");
   });
 

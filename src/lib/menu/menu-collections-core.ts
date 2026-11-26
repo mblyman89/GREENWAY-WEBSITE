@@ -23,7 +23,7 @@ export interface CollectionsView {
   showAccessorySections: boolean;
   showMerchAds: boolean;
   showAccessoryBottom: boolean;
-  showMerchBottom: boolean;
+  showMerchAdsBottom: boolean;
   showEmptyState: boolean;
 }
 
@@ -38,10 +38,10 @@ export function decideCollections(i: CollectionsInput): CollectionsView {
     i.hasAccessoryCards && surface && !showAccessorySections && (sel.length === 0 || withOthers("accessories"));
   // Merch adverts are a shortcut that appears only when merch is ticked (never
   // on the unfiltered list, R72 S5), so the bottom mode is "ticked with others".
-  const showMerchBottom = i.hasMerchCards && surface && withOthers("merch");
+  const showMerchAdsBottom = i.hasMerchCards && surface && withOthers("merch");
   const showEmptyState =
-    !showAccessorySections && !showMerchAds && i.filteredCount === 0 && !showAccessoryBottom && !showMerchBottom;
-  return { showAccessorySections, showMerchAds, showAccessoryBottom, showMerchBottom, showEmptyState };
+    !showAccessorySections && !showMerchAds && i.filteredCount === 0 && !showAccessoryBottom && !showMerchAdsBottom;
+  return { showAccessorySections, showMerchAds, showAccessoryBottom, showMerchAdsBottom, showEmptyState };
 }
 
 export function __runMenuCollectionsTests(): { passed: number; failed: number } {
@@ -56,19 +56,19 @@ export function __runMenuCollectionsTests(): { passed: number; failed: number } 
   };
   const base = { hasMerchCards: true, hasAccessoryCards: true, hasOtherFiltersActive: false, filteredCount: 5 };
   const a = decideCollections({ ...base, selectedCategories: ["merch"] });
-  ok(a.showMerchAds && !a.showMerchBottom, "merch alone -> ads");
+  ok(a.showMerchAds && !a.showMerchAdsBottom, "merch alone -> ads");
   const b = decideCollections({ ...base, selectedCategories: ["merch", "flower"] });
-  ok(!b.showMerchAds && b.showMerchBottom, "merch + flower -> merch stays (bottom)");
+  ok(!b.showMerchAds && b.showMerchAdsBottom, "merch + flower -> merch stays (bottom)");
   const c = decideCollections({ ...base, selectedCategories: ["merch", "edibles"], filteredCount: 0 });
-  ok(c.showMerchBottom && !c.showEmptyState, "merch + empty category -> no empty state");
+  ok(c.showMerchAdsBottom && !c.showEmptyState, "merch + empty category -> no empty state");
   const d = decideCollections({ ...base, selectedCategories: ["merch", "accessories"] });
-  ok(d.showMerchBottom && d.showAccessoryBottom, "merch + accessories -> both");
+  ok(d.showMerchAdsBottom && d.showAccessoryBottom, "merch + accessories -> both");
   const e = decideCollections({ ...base, selectedCategories: [] });
-  ok(e.showAccessoryBottom && !e.showMerchBottom, "unfiltered -> accessories bottom only");
+  ok(e.showAccessoryBottom && !e.showMerchAdsBottom, "unfiltered -> accessories bottom only");
   const f = decideCollections({ ...base, selectedCategories: ["merch", "flower"], hasMerchCards: false });
-  ok(!f.showMerchBottom, "no merch cards -> nothing");
+  ok(!f.showMerchAdsBottom, "no merch cards -> nothing");
   const g = decideCollections({ ...base, selectedCategories: ["merch", "flower"], hasOtherFiltersActive: true });
-  ok(!g.showMerchBottom, "narrowing filter hides bottom collections");
+  ok(!g.showMerchAdsBottom, "narrowing filter hides bottom collections");
   const h = decideCollections({ ...base, selectedCategories: ["flower"], filteredCount: 0 });
   ok(h.showEmptyState, "flower with nothing -> empty state");
   const k = decideCollections({ ...base, selectedCategories: ["accessories"] });
