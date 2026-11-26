@@ -83,7 +83,9 @@ describe("SLICE 116 — 4-up product grids at desktop", () => {
     // on the separate Greenway Goods website. Accessory x2 + product groups remain.
     // R72 S5: 3 -> 4. + the Greenway Merch category-ADVERT grid (links to
     // greenwaymerch.com/<category>, shown only while the merch ad is on).
-    expect(fourUp).toBe(4);
+    // OI-ACC S1: 4 -> 5. + the same advert grid at the bottom when
+    // "Greenway Merch" is ticked together with other categories.
+    expect(fourUp).toBe(5);
   });
 
   it("the old 3-up (lg:grid-cols-3 2xl:grid-cols-4) is fully removed", () => {

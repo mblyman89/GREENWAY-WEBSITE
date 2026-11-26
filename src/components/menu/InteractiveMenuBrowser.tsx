@@ -1163,7 +1163,7 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
     activeClassificationId !== null;
   // OI-ACC S1: one pure decision for every non-cannabis collection (merch
   // adverts now stay, at the bottom, when ticked with other categories).
-  const { showAccessorySections, showMerchAds, showAccessoryBottom, showMerchBottom, showEmptyState } = decideCollections({
+  const { showAccessorySections, showMerchAds, showAccessoryBottom, showMerchAdsBottom, showEmptyState } = decideCollections({
     selectedCategories,
     hasMerchCards: Boolean(merchAdCards?.length),
     hasAccessoryCards: accessorySectionCards.length > 0,
@@ -1686,7 +1686,7 @@ export function InteractiveMenuBrowser({ items: itemsProp, packedItems, initialS
               </section>
             ) : null}
 
-            {showMerchBottom && merchAdCards ? (
+            {showMerchAdsBottom && merchAdCards ? (
               <section id="greenway-merch" className="scroll-mt-32">
                 <div className="mb-4 min-w-0">
                   <h2 className="text-3xl font-black text-white">Greenway Merch</h2>
