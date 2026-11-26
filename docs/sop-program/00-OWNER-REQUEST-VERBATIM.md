@@ -3920,3 +3920,70 @@ Built in three slices on one branch (`d285-printful-availability`).
 - **Slice B: webhook and checkout.** The shop now accepts v2 `catalog_stock_updated` as well as v1 `stock_updated`, and relays the garment ids to `/api/merch-stock`, which now takes `productIds[]`. Merch Health "Register webhook" also calls `POST /v2/webhooks/catalog_stock_updated` (per event, so nothing else is replaced). The 6-hourly cron stays as the safety net. At checkout, right before Stripe, each cart variant is checked live (`GET /v2/catalog-variants/{id}/availability`, 5 s timeout). An explicit "out of stock" or "not fulfillable" returns 409 with "just sold out"; if Printful doesn't answer, checkout goes ahead.
 - **Slice C: nightly cost check.** No new cron: it runs on the existing `/api/cron/merch-stock` tick at 12:40 UTC (about 4–5 am Pacific); `?cost=1` forces a run. It calls the free Printful `POST /orders/estimate-costs` for each live product's priciest variant, using its real print files and a Washington address. A move of 25c / 3% or more, or a product that can't be priced, sends one owner email with the new profit and margin. Prices are never changed automatically.
 - **Tests.** Pure tests: merch-inventory-core 46, merch-site catalog-core 30, checkout-core 22, orders-core 31. The cron count is unchanged at 23.
+
+## D286
+
+> thank you. I am having trouble making a heavy weight hoodie, this one: Independent Trading Co. IND4000 - Heavyweight Hoodie. I will upload the mockup, proof sheet, and what the design container shows for the placement. maybe it is just the mockup, or maybe there is something wrong with our hoodie logic. when I try to set the front to embroidery, it rejects the mockup request, saying, "Printful 400: One or more provided placements are not allowed for product technique "EMBROIDERY"." Finally, my first order with printful was put on hold and I needed to approve a change to the design. I am uploading the embroidery design requirements for you to use to tune our merch studio so it respects these constraints. we can use flux or gemini or gpt to get the results we want that satisfy their design requirements. I am also pasting in their reason for the hold. "We’ve made some adjustments to your design to give the best possible embroidered outcome. Please see the embroidery preview above, which represents the size and position in the print area. The adjustments we made to the design are: 
+>
+> Embroidery type changes
+> We switched your embroidery type from 3D puff to flat. 
+>
+> 3D puff needs every line between 0.2″–0.5″ thick so the foam stays contained — thinner or thicker lines can't reliably hold the 3D foam. When creating designs, we recommend making sure all lines and letters stay between 0.2″ and 0.5″ thick if you want them produced in 3D puff.
+>
+> Line thickness changes (flat)
+> We increased the thickness of some thin lines in your design. 
+>
+> Thread can't hold a clean shape below 0.05″ — for the best outcome, we increased the lines to 0.05", which is the minimum line thickness for a high-quality outcome. When creating designs, please make sure that all lines and outlines are at least 0.05″ thick at the embroidered size.
+>
+> Distressed textures
+> We replaced a distressed texture with a solid shape. 
+>
+> Fine texture details smaller than 0.05" can't be embroidered, and negative spaces (gaps in the design) below 0.25″ close up once stitched — distressed textures rely on both. When creating your designs, avoid distressed or grunge textures; use solid shapes for the best possible embroidered outcome.
+>
+> Run stitch used in the digitization
+> We digitized some smaller elements and/or small text using run-stitch (a single row of stitches) to keep them in your design
+>
+> Run-stitch is only used as a last resort, as an alternative to removing them entirely. Lines below 0.05″ thick can't be embroidered with high-quality satin stitch, and run-stitch can produce low-quality, inconsistent results. Text that is printed using run-stitch can become illegible. When creating your designs, keep all lines at least 0.05″ thick (and text at least 0.25″ tall) so we can use a higher-quality stitch type.
+>
+> If you would like to proceed with these changes, select Approve design from your Printful dashboard. Once approved, the hold will be removed, and the changes will be sent into production.
+>
+> If you would like to request minor adjustments (e.g., thread color/size change, remove elements, etc.), select Request changes from your Printful dashboard, describe your change requests in the text box on the next screen, and click Submit.
+> If you would like to replace your design, open your order and select Change order to update the order directly from your Printful account.
+> For the best results, make sure your new graphic meets our Embroidery Guidelines before you submit it.
+> After you update the order, you may need to request a hold removal. To do this, go to the order’s Holds and order history tab and click Request hold removal.
+> If you have any issues updating the order, such as if the order is locked for updates, please select Request changes to send a message to our Graphics Support team, who will guide you through the next steps".
+> "We’ve made some adjustments to your design to give the best possible embroidered outcome. Please see the embroidery preview above, which represents the size and position in the print area. The adjustments we made to the design are: 
+>
+> Line thickness changes (flat)
+> We increased the thickness of some thin lines in your design. 
+>
+> Thread can't hold a clean shape below 0.05″ — for the best outcome, we increased the lines to 0.05", which is the minimum line thickness for a high-quality outcome. When creating designs, please make sure that all lines and outlines are at least 0.05″ thick at the embroidered size.
+>
+> If you would like to proceed with these changes, select Approve design from your Printful dashboard. Once approved, the hold will be removed, and the changes will be sent into production.
+>
+> If you would like to request minor adjustments (e.g., thread color/size change, remove elements, etc.), select Request changes from your Printful dashboard, describe your change requests in the text box on the next screen, and click Submit.
+> If you would like to replace your design, open your order and select Change order to update the order directly from your Printful account.
+> For the best results, make sure your new graphic meets our Embroidery Guidelines before you submit it.
+> After you update the order, you may need to request a hold removal. To do this, go to the order’s Holds and order history tab and click Request hold removal.
+> If you have any issues updating the order, such as if the order is locked for updates, please select Request changes to send a message to our Graphics Support team, who will guide you through the next steps"
+> please visit this website and learn all you can from this resource so you can enhance and harden our system so it works better with printful. "https://www.printful.com/creating-embroidery-file"
+> follow the standing rules. thank you.
+
+> sorry to stop you. please look at these as well. please continue. thank you. *(attached: Printful approval sheets, order #PF189521779, Yupoong 6089M front + back)*
+
+### Status
+
+- **The diagnosis.** The IND4000 (Printful 1543) has no embroidered full front. Printful's catalog lists embroidery only at `embroidery_chest_left/right/center` (4″ × 4″) and `embroidery_wrist_left/right`; the full front (`default`) is DTG and `front_dtf` is DTF. The studio already blocked embroidery on the full front. The 400 came from the mockup request: one v1 mockup task carried the embroidered left chest and the DTG back together, and a v1 task runs only one technique.
+- **The fix: mockups per technique.** `mockupTaskBodies()` now sends one Printful mockup task per technique, and ProofPanel runs them in turn and shows every mockup together. Orders still go to Printful as one item.
+- **Placements.** The IND4000 wrists are now 2″ × 3″, from Printful's wrist guideline (they were a 3″ × 1.25″ estimate), which leaves 11 studio-default placements. The full-front note now says the front is print-only. The "method isn't offered" blocker now names the placements that do offer the method and suggests moving the art there.
+- **Embroidery rules learned from the holds.** A puffed line outside 0.2–0.5″ now gets a warning that Printful will switch it to flat; small puff text and pictures are warned too. Uploaded pictures sent to embroidery now get a hand-digitizing warning listing the four things Printful changes: lines under 0.05″ are thickened, gaps under 0.25″ close, distressed texture is replaced, and small text is run-stitched. The existing checks for lines ≥ 0.05″, letters ≥ 0.25″, at most 6 threads and no gradients are unchanged.
+- **AI.** The FLUX flat redraw's embroidery prompt now spells out Printful's digitizing rules (0.05″ lines, 0.25″ letters and gaps, no distressed or grunge texture) and is capped at 6 colours.
+- **Proof checklist.** A new item explains how to compare a Printful hold proof with the studio proof.
+- **Tests.** print-rules 45, print-export 129, optimizer 33 (the "prompt emb" check covers the new embroidery wording) and printfile-check 17 all pass; the assertRan minimums are bumped. The cron count is unchanged.
+
+> thank you. I tried the mockup again with out anything on the back of the sweatshirt and it worked with embroidery set for the front emblem. the old design I was using, the ones i uploaded to you in the last request was not an embroidery on the back, at least it is not what I had it set to, I had it set to "DTG". both it and "DTF" do not allow me to generate a mockup. are you saying that, to use the mockup feature, I have to add one design at a time, mockup, delete it, then add a design to some other part of the garment, then do a mockup to see it, so on? that cant be right, or is that how it works? before you merge, please recon the code again to see what is going on if there is a problem. maybe the editor is not respecting the choice made for the method to apply the design on the back?  once this is done, please merge, it is safe to do so. follow the standing rules. thank you.
+
+- **Recon.** The editor does follow the back's method. On the IND4000, an embroidered left chest plus a DTG back plans as `embroidery_chest_left` (embroidery) and `back` (DTG); with a DTF back the second file is `back_dtf` (DTF). Before D286, both files went into one Printful v1 mockup task, and a v1 task renders a single technique, so any mix of embroidery with DTG or DTF was refused. A design using only one method always worked, which is why removing the back fixed it.
+- **The fix (no one-at-a-time workflow needed).** The studio now sends one mockup task per technique automatically and shows every mockup together. You design every side at once and press Generate once.
+- **Rate limit.** New Printful stores are allowed 2 mockup tasks a minute. If Printful answers 429, the studio now waits out the 60-second lockout once, with a countdown, and then retries.
+

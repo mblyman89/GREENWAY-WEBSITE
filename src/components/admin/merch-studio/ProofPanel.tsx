@@ -14,10 +14,10 @@
  *  - The exact Printful order-item JSON the merch site will send (Slice 6).
  */
 import { useEffect, useState } from "react";
-import { colorsFor, getBlank, PRINTFUL_SNAPSHOT_DATE } from "@/lib/merch-studio/garment-catalog-core";
+import { colorsFor, getBlank, METHOD_LABEL, PRINTFUL_SNAPSHOT_DATE } from "@/lib/merch-studio/garment-catalog-core";
 import { checkSides, type MerchDesign } from "@/lib/merch-studio/merch-design-core";
 import {
-  exportReadme, mockupTaskBody, planPrintFiles, printfulItemDraft, proofRows, proofSheetHtml, sampleChecklist, zipStore, slug, SEMI_ALPHA_WARN,
+  exportReadme, mockupTaskBodies, planPrintFiles, printfulItemDraft, proofRows, proofSheetHtml, sampleChecklist, zipStore, slug, SEMI_ALPHA_WARN,
   MOCKUP_MAX_COLORS, variantsFor, type PrintFilePlan, type AlphaStats,
 } from "@/lib/merch-studio/print-export-core";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
@@ -182,20 +182,33 @@ export function ProofPanel({ rights = { canApprove: false, isOwner: false } }: {
         await putSignedMerchFile(supabaseUrl, supabaseAnonKey, start.bucket, u.key, u.token, f.png);
         keyFor[u.fileKey] = u.key;
       }
-      const body = mockupTaskBody(blank, planned.plans, keyFor, pickedMockColors);
-      if (!body) throw new Error("Pick at least one colour Printful makes for this garment.");
-      setBusy("Asking Printful for mockups...");
-      const task = await createMockupTaskAction({ blankId: blank.id, variantIds: body.variant_ids, files: body.files.map((f) => ({ placement: f.placement, key: f.image_url, position: f.position, options: f.options })), productOptions: body.product_options });
-      if (!task.ok) throw new Error(task.error);
-      for (let i = 0; i < 40; i += 1) {
-        setBusy(`Printful is generating mockups... (${(i + 1) * 4}s)`);
-        await new Promise((r) => window.setTimeout(r, 4000));
-        const poll = await getMockupTaskAction(task.taskKey);
-        if (!poll.ok) throw new Error(poll.error);
-        if (poll.status === "failed") throw new Error(`Printful couldn't make mockups: ${poll.error ?? "unknown reason"}`);
-        if (poll.status === "completed") { setMocks(poll.mockups); setMsg({ tone: "ok", text: `${poll.mockups.length} mockup(s) ready. Printful's mockup links are temporary - save the ones you want to keep.` }); return; }
+      // D286: one Printful task per technique (embroidery + DTG in one v1 task -> 400 "not allowed for technique").
+      const tasks = mockupTaskBodies(blank, planned.plans, keyFor, pickedMockColors);
+      if (!tasks.length) throw new Error("Pick at least one colour Printful makes for this garment.");
+      const all: typeof mocks = [];
+      for (const [ti, { method, body }] of tasks.entries()) {
+        const label = tasks.length > 1 ? ` (${METHOD_LABEL[method]}, ${ti + 1} of ${tasks.length})` : "";
+        setBusy(`Asking Printful for mockups${label}...`);
+        const ask = () => createMockupTaskAction({ blankId: blank.id, variantIds: body.variant_ids, files: body.files.map((f) => ({ placement: f.placement, key: f.image_url, position: f.position, options: f.options })), productOptions: body.product_options });
+        let task = await ask();
+        // D286: new Printful stores get 2 mockup tasks a minute - wait out the 60 s lockout once, then retry.
+        if (!task.ok && task.rateLimited) {
+          for (let s = 62; s > 0; s -= 1) { setBusy(`Printful's mockup limit - waiting ${s}s${label}...`); await new Promise((r) => window.setTimeout(r, 1000)); }
+          task = await ask();
+        }
+        if (!task.ok) throw new Error(task.error);
+        let done = false;
+        for (let i = 0; i < 40 && !done; i += 1) {
+          setBusy(`Printful is generating mockups${label}... (${(i + 1) * 4}s)`);
+          await new Promise((r) => window.setTimeout(r, 4000));
+          const poll = await getMockupTaskAction(task.taskKey);
+          if (!poll.ok) throw new Error(poll.error);
+          if (poll.status === "failed") throw new Error(`Printful couldn't make mockups${label}: ${poll.error ?? "unknown reason"}`);
+          if (poll.status === "completed") { all.push(...poll.mockups); done = true; }
+        }
+        if (!done) throw new Error("Printful is still working after 160 seconds. Try again in a minute.");
       }
-      throw new Error("Printful is still working after 160 seconds. Try again in a minute.");
+      setMocks(all); setMsg({ tone: "ok", text: `${all.length} mockup(s) ready${tasks.length > 1 ? " (one Printful mockup set per technique)" : ""}. Printful's mockup links are temporary - save the ones you want to keep.` });
     } catch (e) {
       setMsg({ tone: "bad", text: e instanceof Error ? e.message : "Mockups failed." });
     } finally { setBusy(null); }

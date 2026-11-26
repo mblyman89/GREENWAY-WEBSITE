@@ -86,6 +86,13 @@ export const EMB_MIN_LINE_IN = 0.05;
 export const PRINT_MIN_LINE_IN = 1 / 72;
 export const EMB_MIN_DETAIL_IN = 1 / 16;
 export const MAX_THREADS = 6;
+/** D286: Printful puts 3D-puff jobs on hold (switched to flat) unless lines are 0.2-0.5" thick. */
+export const PUFF_MIN_LINE_IN = 0.2;
+export const PUFF_MAX_LINE_IN = 0.5;
+/** D286: open spaces inside embroidered art under 1/4" close up (Printful hold notice). */
+export const EMB_MIN_NEGATIVE_IN = 0.25;
+/** Studio heuristic: bold caps have ~18% stroke, so 0.2" puff strokes need ~1.1" letters. */
+export const PUFF_TEXT_MIN_IN = 1.1;
 export const STITCH_CAP = 15000;
 /** Printful file guidelines: max 15K stitches for regular designs, 25K for large text / clipart. */
 export const STITCH_HARD_CAP = 25000;
@@ -187,6 +194,8 @@ const SRC = {
   contrast: "WCAG 2.x SC 1.4.11 (3:1 non-text contrast)",
   wac: "WAC 314-55-155(2)(a) themes - acknowledge, a person decides",
   emb: "Printful / Gelato embroidery guidelines (no gradients or photos)",
+  puff: "Printful hold notice + embroidery guidelines (3D puff lines 0.2-0.5\" thick)",
+  digitize: "Printful embroidery file guide + hold notices (lines >= 0.05\", text >= 0.25\", no distressed texture, gaps >= 0.25\")",
   heuristic: "Studio heuristic (R70 doc) - not a published limit",
 };
 
@@ -198,7 +207,9 @@ export function checkDesign(input: RuleInput): Issue[] {
   const name = (e: RuleElement) => e.name || (e.kind === "text" ? `"${(e.text || "").slice(0, 18)}"` : e.kind);
 
   if (!p.methods.includes(method)) {
-    add({ id: "method-unavailable", level: "blocker", title: `${METHOD_LABEL[method]} isn't offered on ${p.label}`, why: `Printful only offers ${p.methods.map((m) => METHOD_LABEL[m]).join(", ")} here for the ${blank.brand} ${blank.model}.`, fix: "Switch the method or pick another placement.", source: SRC.method });
+    // D286: say WHERE this method is offered (IND4000 embroidery = chest 4x4 + wrists only, never the full front).
+    const where = blank.placements.filter((q) => q.methods.includes(method)).map((q) => `${q.label} (${q.widthIn}" x ${q.heightIn}")`);
+    add({ id: "method-unavailable", level: "blocker", title: `${METHOD_LABEL[method]} isn't offered on ${p.label}`, why: `Printful only offers ${p.methods.map((m) => METHOD_LABEL[m]).join(", ")} here for the ${blank.brand} ${blank.model}${where.length ? `. ${METHOD_LABEL[method]} is offered on: ${where.join(", ")}` : ""}. Printful answers "placements are not allowed for technique" otherwise.`, fix: where.length ? `Move the art to ${where[0].replace(/ \(.*/, "")} (resize to fit), or keep this placement and switch the method.` : "Switch the method or pick another placement.", source: SRC.method });
   }
   if (elements.length === 0) {
     add({ id: "empty", level: "tip", title: "Nothing on this placement yet", why: "Empty placements are fine - they simply aren't printed (and cost nothing).", fix: "Add text, art or a shape, or leave it blank.", source: SRC.heuristic });
@@ -216,7 +227,15 @@ export function checkDesign(input: RuleInput): Issue[] {
       if (!blank.puffAvailable) add({ id: "puff-na", level: "blocker", title: "3D puff isn't offered on this blank", why: "Printful only offers 3D puff as a hat embroidery option.", fix: "Turn off 3D puff.", source: SRC.method });
       // D281: Printful offers puff per area (hat fronts) - a puffed back/side is ordered flat and once reused the front's threads.
       else if (!canPuff(blank, p)) add({ id: "puff-placement", level: "warning", title: `3D puff isn't offered on the ${p.label.toLowerCase()}`, why: "Printful offers 3D puff only on this hat's front. This side is ordered as flat embroidery.", fix: "Turn off 3D puff here (or move the art to the front).", source: "Printful catalog options (thread_colors_3d = front only)" });
-      else add({ id: "puff-bold", level: "tip", title: "3D puff needs chunky shapes", why: "Foam under the stitches only rises cleanly on bold letters and solid shapes; thin lines flatten.", fix: "Use a heavy font and avoid hairlines and outlines.", source: "R69 report s3 (3D puff)" });
+      else {
+        add({ id: "puff-bold", level: "tip", title: "3D puff needs chunky shapes", why: "Foam under the stitches only rises cleanly on bold letters and solid shapes; thin lines flatten.", fix: "Use a heavy font and avoid hairlines and outlines.", source: "R69 report s3 (3D puff)" });
+        // D286: Printful held a 6089M order and switched puff to flat - every puffed line must be 0.2-0.5" thick.
+        for (const e of elements) {
+          const t = e.strokeIn && e.strokeIn > 0 ? e.strokeIn : e.minFeatureIn;
+          const thinText = e.kind === "text" && (e.letterHeightIn ?? 0) > 0 && (e.letterHeightIn ?? 0) < PUFF_TEXT_MIN_IN;
+          if ((t !== undefined && t > 0 && (t < PUFF_MIN_LINE_IN || t > PUFF_MAX_LINE_IN)) || thinText || e.kind === "image") add({ id: `puff-line-${e.id}`, level: "warning", elementId: e.id, title: `${name(e)} may be switched to flat embroidery`, why: e.kind === "image" ? `Printful only puffs lines ${PUFF_MIN_LINE_IN}-${PUFF_MAX_LINE_IN}" thick; detailed or textured artwork is put on hold and changed to flat.` : thinText ? `Puff letters need strokes of at least ${PUFF_MIN_LINE_IN}" - roughly ${PUFF_TEXT_MIN_IN}" tall in a bold font.` : `Its lines are ${t!.toFixed(2)}" - Printful only puffs ${PUFF_MIN_LINE_IN}-${PUFF_MAX_LINE_IN}" lines and changes the rest to flat.`, fix: "Use bold block shapes/letters for the puff part, or turn 3D puff off.", source: SRC.puff });
+        }
+      }
     } else if (blank.structured && canPuff(blank, p)) {
       add({ id: "puff-suggest", level: "tip", title: "Try 3D puff on this structured cap", why: "Structured crowns are the best base for raised puff lettering - a premium look for +$1.50.", fix: "Enable 3D puff for bold logos.", source: "Printful catalog embroidery_type; R69 report s6.2" });
     }
@@ -272,6 +291,7 @@ export function checkDesign(input: RuleInput): Issue[] {
       if (e.hasGradient || e.isPhoto) add({ id: `emb-gradient-${e.id}`, level: "blocker", elementId: e.id, title: `${name(e)} has ${e.isPhoto ? "photo detail" : "a gradient"}`, why: "Thread is a solid colour - gradients and photos can't be stitched.", fix: "Use flat colours, or switch to DTF (Printful DTFlex).", source: SRC.emb });
       if (typeof e.opacity === "number" && e.opacity < 1) add({ id: `emb-opacity-${e.id}`, level: "warning", elementId: e.id, title: `${name(e)} is semi-transparent`, why: "Thread can't be see-through; it stitches at full colour.", fix: "Set opacity to 100% and pick the thread you want.", source: SRC.emb });
       if (e.strokeIn && e.strokeIn > 0 && e.strokeIn < EMB_MIN_LINE_IN) add({ id: `emb-line-${e.id}`, level: "blocker", elementId: e.id, title: `${name(e)} has ${e.strokeIn.toFixed(3)}" lines`, why: `Embroidery can't sew lines thinner than ${EMB_MIN_LINE_IN}".`, fix: `Thicken to >= ${EMB_MIN_LINE_IN}" or remove the outline.`, source: SRC.embLine });
+      if (e.kind === "image" && !e.isPhoto && !e.hasGradient) add({ id: `emb-digitize-${e.id}`, level: "warning", elementId: e.id, title: `${name(e)}: Printful will hand-digitize this picture`, why: `The studio can't measure lines inside a picture. Printful's digitizer thickens lines under ${EMB_MIN_LINE_IN}", closes gaps under ${EMB_MIN_NEGATIVE_IN}", replaces distressed/grunge texture and run-stitches small text - and puts the order on hold until you approve.`, fix: "Optimizer > AI flat redraw (embroidery) at this size, then check: no texture, lines >= 0.05\", letters >= 0.25\" tall, gaps >= 0.25\", <= 6 thread colours, transparent background.", source: SRC.digitize });
       if (e.minFeatureIn !== undefined && e.minFeatureIn < EMB_MIN_DETAIL_IN) add({ id: `emb-detail-${e.id}`, level: "blocker", elementId: e.id, title: `${name(e)} has detail under 1/16"`, why: "Features smaller than 1/16\" disappear in thread.", fix: "Enlarge or simplify it.", source: SRC.detail });
     } else {
       if (e.strokeIn && e.strokeIn > 0 && e.strokeIn < PRINT_MIN_LINE_IN) add({ id: `print-line-${e.id}`, level: "warning", elementId: e.id, title: `${name(e)} has hairline strokes`, why: "Lines under 1 pt can break up or vanish after washing.", fix: "Thicken strokes to at least 1 pt (0.014\").", source: SRC.printLine });
@@ -354,6 +374,19 @@ export function __runPrintRulesTests(): { passed: number; failed: number } {
   ok(has(checkDesign({ ...embBase, elements: [{ id: "x", kind: "shape", x: 0, y: 0, w: 1, h: 1, colors: ["#123456"] }] }), "thread-palette", "warning"), "off-palette warning");
   ok(has(checkDesign({ ...embBase, elements: [{ id: "big", kind: "shape", x: 0, y: 0, w: 4, h: 4, colors: ["#FFFFFF"], inkAreaSqIn: 16 }] }), "stitches", "warning"), "19,200 stitches warning");
   ok(has(checkDesign({ ...base, method: "embroidery", elements: [] }), "method-unavailable", "blocker"), "emb not on full front");
+  // D286: IND4000 - embroidery only on the chest + wrists; the blocker names them.
+  const hood = getBlank("ind-4000")!, hf = getPlacement(hood, "front")!;
+  const hEmb = checkDesign({ blank: hood, placement: hf, method: "embroidery", garmentHex: "#000000", elements: [] }).find((i) => i.id === "method-unavailable");
+  ok(!!hEmb && hEmb.why.includes("Left chest") && hEmb.why.includes("wrist") && hEmb.fix.startsWith("Move the art to"), "D286: hoodie front embroidery blocker lists where embroidery is offered");
+  ok(!hf.methods.includes("embroidery") && ["left_chest", "right_chest_emb", "center_chest_emb", "wrist_left", "wrist_right"].every((id) => getPlacement(hood, id)?.methods.includes("embroidery")), "D286: IND4000 embroidery placements = chest x3 + wrists");
+  ok(getPlacement(hood, "wrist_left")!.widthIn === 2 && getPlacement(hood, "wrist_left")!.heightIn === 3, "D286: IND4000 wrist 2x3 (Printful wrist guideline)");
+  const rast = checkDesign({ ...embBase, elements: [{ id: "r", kind: "image", x: 0, y: 0, w: 2, h: 2, pxW: 1200, pxH: 1200, colors: [] }] });
+  ok(has(rast, "emb-digitize-r", "warning"), "D286: raster embroidery art -> hand-digitizing warning");
+  const snapP = getBlank("yp-6089m")!;
+  const puffed = (els: RuleElement[]) => checkDesign({ blank: snapP, placement: snapP.placements[0], method: "embroidery", garmentHex: "#000000", puff: true, elements: els });
+  ok(has(puffed([{ id: "p", kind: "shape", strokeIn: 0.1, x: 0, y: 0, w: 1, h: 1, colors: ["#FFFFFF"] }]), "puff-line-p", "warning"), "D286: 0.1in puff line -> flat warning");
+  ok(!has(puffed([{ id: "p", kind: "shape", strokeIn: 0.3, x: 0, y: 0, w: 1, h: 1, colors: ["#FFFFFF"] }]), "puff-line-p"), "D286: 0.3in puff line ok");
+  ok(has(puffed([{ id: "q", kind: "text", text: "GREENWAY", letterHeightIn: 0.5, x: 0, y: 0, w: 3, h: 0.5, colors: ["#FFFFFF"] }]), "puff-line-q", "warning"), "D286: small puff text warned");
   const zip = cat.getBlank("l7-14003")!;
   ok(has(checkDesign({ blank: zip, placement: zip.placements[0], method: "dtg", garmentHex: "#1a1a1a", elements: [{ id: "z", kind: "shape", x: 5, y: 2, w: 2, h: 2, colors: ["#FFFFFF"] }] }), "obstacle-zipper-z", "blocker"), "zipper blocker");
   const beanie = cat.getBlank("yp-1501kc")!;
