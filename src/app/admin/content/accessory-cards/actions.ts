@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { saveNcTypeCards } from "@/lib/noncannabis/types-store";
+import { saveOnlineNcEnabled } from "@/lib/noncannabis/online-store";
 
 const BACK = "/admin/content/accessory-cards";
 
@@ -47,6 +48,7 @@ async function cardsAction(formData: FormData, publish: boolean): Promise<void> 
   if (publish) {
     revalidatePath("/menu");
     revalidatePath("/menu/[category]", "page");
+    revalidatePath("/accessories/[type]", "page");
   }
   redirect(`${BACK}?${publish ? "published=1" : "saved=1"}`);
 }
@@ -56,4 +58,26 @@ export async function saveAccessoryCardsAction(formData: FormData): Promise<void
 }
 export async function publishAccessoryCardsAction(formData: FormData): Promise<void> {
   await cardsAction(formData, true);
+}
+
+/**
+ * OI-ACC S6 - the owner's hold on online accessory orders. OFF by default;
+ * checkout re-reads it on every order, so OFF refuses nc lines server-side.
+ */
+export async function setOnlineAccessoriesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("content.edit");
+  const enabled = String(formData.get("enabled") ?? "") === "1";
+  const res = await saveOnlineNcEnabled(enabled, session.userId);
+  if (res.error) redirect(`${BACK}?typeError=${encodeURIComponent(`Could not save the online setting: ${res.error}`)}`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "settings.update",
+    entityType: "site_settings",
+    entityId: "online_other_inventory_enabled",
+    after: { enabled },
+  });
+  revalidatePath(BACK);
+  revalidatePath("/accessories/[type]", "page");
+  redirect(`${BACK}?online=${enabled ? "on" : "off"}`);
 }

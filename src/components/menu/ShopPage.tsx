@@ -25,7 +25,7 @@ import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
 import { packGridItems } from "@/lib/menu/grid-defaults-pack-core";
 import { ShopBannerSkeleton, ShopBrowserSkeleton } from "@/components/menu/MenuSkeleton";
-import { InStoreGoods } from "@/components/menu/InStoreGoods";
+import { loadAccessoryShopCards } from "@/lib/noncannabis/shop-store";
 
 /**
  * SLICE H — ONE SHOP RENDERER, TWO ROUTES.
@@ -92,6 +92,9 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
   // overlaps the menu chain; awaited after the batch below. Kept out of the
   // SLICE D Promise.all on purpose - that batch's shape is pinned by tests.
   const merchAdPromise = loadMerchAdView();
+  // OI-ACC S5: one accessory card per in-stock Other Inventory type (0371),
+  // started alongside the menu read; a failure yields no cards, never an error.
+  const accessoryCardsPromise = loadAccessoryShopCards().catch(() => []);
   // D224: + withMenuCardFallbacks on the very outside - the owner's picture
   // for the card's FINAL website category (after the re-file above), only on
   // cards with no photo of their own. Snapshot-cached; identity when unset.
@@ -123,6 +126,7 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
   // R72 S5: null when the ad is off/invalid -> no "Greenway Merch" filter, no
   // cards, no bottom ad. Only words, pictures and category links cross over.
   const merchAd = await merchAdPromise;
+  const accessoryCards = await accessoryCardsPromise;
 
   return (
     <>
@@ -165,6 +169,7 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
           categoryLabels={categoryLabels}
           saleFilters={saleFilters}
           merchAdCards={merchAd?.cards.length ? merchAd.cards : undefined}
+          accessoryCards={accessoryCards}
         />
       </section>
 
@@ -212,11 +217,8 @@ export function ShopPage({ initialCategory, breadcrumbs, heading, subheading }: 
         <ShopContent initialCategory={initialCategory} />
       </Suspense>
 
-      {/* Phase 4 (G-29 item 7): display-only "Also in store" Other Inventory
-          list, in its own boundary so it never delays the cannabis menu. */}
-      <Suspense fallback={null}>
-        <InStoreGoods />
-      </Suspense>
+      {/* OI-ACC S5: the old "Also in store" list moved into the accessory
+          cards (one per type) and their /accessories/<type> pages. */}
 
       <Footer />
     </main>

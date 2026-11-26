@@ -47,6 +47,8 @@ import {
   type OrderTotals,
 } from "@/lib/orders/order-pricing-core";
 import type { NewOrderLineInput, OrderLineRow } from "@/lib/orders/types";
+import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
+import { priceNcOnlineLines } from "@/lib/noncannabis/online-store";
 // AN-1 — pure per-variant grams helpers (label → grams; stored numeric → grams).
 import {
   gramsFromVariantLabel,
@@ -148,6 +150,33 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
   if (!rawLines.length) {
     return { ok: false, status: 400, error: "The order has no items.", problems: [] };
   }
+
+  // OI-ACC S6: Other Inventory (`nc-<uuid>`) lines are priced from the
+  // catalog behind the owner's online toggle (OFF = refused). They keep the
+  // nc- key, so CCRS Sale.csv skips them and pickup moves On hand.
+  const ncRaw = rawLines.filter((l) => isNonCannabisProductId(l.variantId) || isNonCannabisProductId(l.productId));
+  let ncPriced: PricedOrderLine[] = [];
+  if (ncRaw.length > 0) {
+    const nc = await priceNcOnlineLines(
+      ncRaw.map((l) => ({ key: (isNonCannabisProductId(l.variantId) ? l.variantId : l.productId) as string, quantity: l.quantity })),
+    );
+    if (!nc.ok) {
+      return { ok: false, status: 409, error: "Some items changed while you were shopping. Please review your cart.", problems: nc.problems };
+    }
+    ncPriced = nc.lines.map((l) => ({
+      ...l,
+      variantLabel: null,
+      regularPriceMinorUnits: l.priceMinorUnits,
+      unitGrams: null,
+      unitVolumeMl: null,
+      lowThcLiquid: null,
+      unitThcMg: null,
+      otherwiseTaken: null,
+      unitsPerPackage: null,
+    }));
+    rawLines = rawLines.filter((l) => !ncRaw.includes(l));
+  }
+  if (rawLines.length === 0) return finishPricing(ncPriced);
 
   const menu = await loadLiveMenuAll();
   if (!menu.length) {
@@ -326,6 +355,11 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     };
   }
 
+  return finishPricing([...priced, ...ncPriced]);
+}
+
+/** Totals + sales-limit lines for the final priced set (cannabis + nc). */
+function finishPricing(priced: PricedOrderLine[]): RepriceSuccess {
   const totals = computeOrderTotals(
     priced.map((l) => ({
       category: l.category,
