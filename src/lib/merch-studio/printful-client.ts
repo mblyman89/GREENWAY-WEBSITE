@@ -38,7 +38,7 @@ export async function printful<T>(method: "GET" | "POST" | "PUT" | "DELETE", pat
     const json = (await res.json().catch(() => null)) as { code?: number; result?: unknown; error?: { message?: string }; paging?: { total?: number; offset?: number; limit?: number } } | null;
     if (!res.ok || !json || (typeof json.code === "number" && json.code >= 400)) {
       const msg = json?.error?.message ?? (typeof json?.result === "string" ? json.result : res.statusText);
-      return { ok: false, status: res.status, code: "http", error: `Printful ${res.status}: ${msg || "request failed"}` };
+      return { ok: false, status: res.status, code: "http", error: `Printful ${res.status}: ${msg || "request failed"}${/placements are not available/i.test(msg ?? "") ? " (Printful doesn't offer one of these spots on this product for your store - remove that side, or switch it to a method Printful lists, then try again)" : ""}` };
     }
     return { ok: true, status: res.status, result: json.result as T, ...(json.paging && typeof json.paging === "object" ? { paging: json.paging } : {}) };
   } catch (e) {

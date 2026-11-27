@@ -181,6 +181,9 @@ function wristsExact(w: number, h: number, cents: number, src: DimsSource, note?
   return [mk("left"), mk("right")];
 }
 const FG: DimsSource = "printful-file-guidelines";
+/** D287: renamed/removed placements -> where saved designs move (method falls back to what's offered there). */
+const MOVED: Record<string, Record<string, string>> = { "ua-1379757": { large_front_emb: "large_center_emb" } };
+export function movedPlacement(b: Blank, placementId: string): string | null { return MOVED[b.id]?.[placementId] ?? null; }
 const SITE_ONLY = "Printful's public catalog API (the one Greenway's orders use) doesn't list this product's variants yet - the data was copied from Printful's product page on D278. Designs, proofs and mockups work, but Printful may refuse the order: place ONE sample order before you publish it.";
 
 const POUCH = (w: number, h: number, frameH: number): Obstacle => ({ kind: "pouch", label: "Kangaroo pouch opening", x: (12 - w) / 2, y: frameH - h, w, h, severity: "warning" });
@@ -288,12 +291,12 @@ export const BLANKS: readonly Blank[] = [
   {
     id: "ua-1379757", printfulId: 765, brand: "Under Armour", model: "1379757", title: "Rival Fleece Hoodie", category: "hoodie", headwear: false,
     fabric: "80% cotton / 20% polyester fleece, brushed inside", cottonPct: 80, weightOz: 8.11, puffAvailable: false, structured: null,
-    premiumNote: "Name-brand athletic hoodie (embroidered UA logo at the top centre). Print or embroider; front pouch.",
+    premiumNote: "Name-brand athletic hoodie (embroidered UA logo at the top centre). Print (DTG/DTFlex) or embroider (large centre front 10\" x 6\", wrists); front pouch.",
     orderWarning: "Printful's public catalog shows every Under Armour variant as out of stock right now - check stock in Printful before you publish.",
     placements: [
       pl("front", "Front (DTG)", "front", 11, 11, 3.5, 0, { dtg: ["default", 0] }, FG, [], "Printful DTG front print 11\" x 11\"."),
+      pl("large_center_emb", "Large centre (embroidery)", "front", 10, 6, 3.5, 0, { embroidery: ["embroidery_large_center", 395] }, FG, [], "Printful \"Large Center Embroidery\" guideline: 10\" x 6\" front, flat only, details 0.05\"+, letters 0.25\"+, max 6 thread colours, transparent background. D287: was sent as \"embroidery_large_front\" (not a Printful placement). Printful's public API lists only the wrists for this hoodie - sample-order first."),
       pl("front_dtf", "Front (DTFlex)", "front", 12, 16, 3.5, 0, { dtf: ["front_dtf", 595] }, FG, [POUCH(9, 7, 16)], "Printful DTFlex front 12\" x 16\" - the lower part sits on the pouch."),
-      pl("large_front_emb", "Large front (embroidery)", "front", 10, 6, 3.5, 0, { embroidery: ["embroidery_large_front", 395] }, FG, [], "Printful embroidery large front 10\" x 6\". Printful's product page offers it, but its public API doesn't list it yet - sample-order first."),
       { ...pl("back", "Full back", "back", 12, 16, 5, 0, { dtg: ["back", 595], dtf: ["back_dtf", 595] }, FG, [HOOD_DRAPE]), note: "Printful DTG + DTFlex back 12\" x 16\"." },
       pl("sleeve_left", "Left sleeve (DTG)", "left", 3, 12, 1.5, 0, { dtg: ["sleeve_left", 595] }, FG),
       pl("sleeve_right", "Right sleeve (DTG)", "right", 3, 12, 1.5, 0, { dtg: ["sleeve_right", 595] }, FG),
@@ -558,7 +561,13 @@ export function __runGarmentCatalogTests(): { passed: number; failed: number } {
   // D278: Printful File-guidelines sizes for the owner's additions.
   const dims = (bid: string, pid: string) => { const p = getPlacement(getBlank(bid)!, pid)!; return `${p.widthIn}x${p.heightIn}`; };
   ok(dims("socco-sc200", "sock_outside_left") === "1.18x1.96" && getBlank("socco-sc200")!.placements.length === 4, "socks 4 placements 1.18x1.96");
-  ok(dims("ua-1379757", "front") === "11x11" && dims("ua-1379757", "front_dtf") === "12x16" && dims("ua-1379757", "large_front_emb") === "10x6" && dims("ua-1379757", "sleeve_left") === "3x12" && dims("ua-1379757", "sleeve_left_dtf") === "3x14" && dims("ua-1379757", "wrist_left") === "2x3" && dims("ua-1379757", "label_outside") === "3x3", "UA hoodie file guidelines");
+  ok(dims("ua-1379757", "front") === "11x11" && dims("ua-1379757", "front_dtf") === "12x16" && dims("ua-1379757", "sleeve_left") === "3x12" && dims("ua-1379757", "sleeve_left_dtf") === "3x14" && dims("ua-1379757", "wrist_left") === "2x3" && dims("ua-1379757", "label_outside") === "3x3", "UA hoodie file guidelines");
+  // D287: "Large center" per Printful's guideline PDF; the old key "embroidery_large_front" isn't a Printful placement.
+  const ua = getBlank("ua-1379757")!;
+  ok(dims("ua-1379757", "large_center_emb") === "10x6" && getPlacement(ua, "large_center_emb")!.view === "front" && getPlacement(ua, "large_center_emb")!.printfulKey.embroidery === "embroidery_large_center" && !getPlacement(ua, "large_front_emb"), "D287: UA large centre = embroidery_large_center 10x6 front");
+  ok(movedPlacement(ua, "large_front_emb") === "large_center_emb" && movedPlacement(ua, "front") === null, "D287: saved large-front designs move to large centre");
+  ok(BLANKS.every((b) => b.placements.every((p) => Object.values(p.printfulKey).every((k) => k !== "embroidery_large_front"))), "D287: no placement sends embroidery_large_front");
+  ok(BLANKS.every((b) => b.placements.every((p) => Object.values(p.printfulKey).every((k) => !k || !!PRINTFUL_FILE_TYPES[b.printfulId]?.[k]))), "D287: every placement key is a Printful file of its product");
   ok(dims("ad-a401", "left_chest") === "4x4" && dims("ind-prm50ptpd", "pants_front") === "4x4", "adidas chest + sweatpants 4x4");
   ok(dims("col-212478", "large_center_emb") === "10x6" && dims("col-212483", "large_back_emb") === "10x6" && dims("col-212471", "right_chest_emb") === "3x2.5" && dims("col-pfg-tamiami", "chest_top_right_emb") === "3x3" && dims("col-pfg-tamiami", "sleeve_right") === "2x3" && dims("col-212477", "hat_front") === "4x1.75" && dims("col-186210", "hat_front") === "5x1.75", "Columbia file guidelines");
   ok(["col-212478", "col-212483", "col-212488", "col-212471", "col-186210"].every((id) => !!getBlank(id)!.orderWarning) && !getBlank("col-212477")!.orderWarning && !getBlank("cc-1717")!.orderWarning, "order warning only where Printful's v1 API lacks the variants");

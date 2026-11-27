@@ -3987,3 +3987,16 @@ Built in three slices on one branch (`d285-printful-availability`).
 - **The fix (no one-at-a-time workflow needed).** The studio now sends one mockup task per technique automatically and shows every mockup together. You design every side at once and press Generate once.
 - **Rate limit.** New Printful stores are allowed 2 mockup tasks a minute. If Printful answers 429, the studio now waits out the 60-second lockout once, with a countdown, and then retries.
 
+
+## D287
+
+> thank you. I am having trouble with the under armour hoodie. I am getting an error when I try to generate a mockup with an embroidered front. "Printful 400: One or more provided placements are not available for product". I am uploading the proof and the full front embroidery rules. please help me fix what is wrong. follow the standing rules. thank you.
+
+> it doesnt look like you looked at the uploaded pdf I gave you. it is directly from printfuls website. please make sure you have all the facts before you begin. please continue.
+
+### Status
+- Cause: the UA Rival Fleece Hoodie (Printful 765) front embroidery was sent as `embroidery_large_front`. That isn't a Printful placement name; the proof shows it. Printful's "Large Center Embroidery Guidelines" PDF (uploaded) names the spot "Large Center", 10" x 6" on the front. Printful's API key for that is `embroidery_large_center`, with thread option `thread_colors_large_center`; Columbia blanks already use the same key.
+- Fix: the placement is now `large_center_emb` "Large centre (embroidery)", 10" x 6" on the front, sending `embroidery_large_center` + `thread_colors_large_center`. Saved designs on the old `large_front_emb` move to it automatically. The note lists the PDF rules (flat only, details 0.05"+, letters 0.25"+, max 6 colours, transparent background).
+- The Printful "placements are not available" error now adds a plain-English hint.
+- Caveat: Printful's public API for 765 still lists only the wrists for embroidery. If the mockup still refuses Large center, Printful hasn't enabled it for the store's API yet; sample-order first.
+- Tests: garment catalog 377, merch-design 49 (minimums bumped). Scoped tsc/eslint clean.

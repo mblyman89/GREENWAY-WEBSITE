@@ -14,7 +14,7 @@ describe("merch studio cores", () => {
   it("garment-catalog-core", () => {
     const r = __runGarmentCatalogTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(245);
+    expect(r.passed).toBeGreaterThanOrEqual(377); // D287
   });
   it("print-rules-core", () => {
     const r = __runPrintRulesTests();
@@ -34,7 +34,7 @@ describe("merch studio cores", () => {
   it("merch-design-core", () => {
     const r = __runMerchDesignTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(48);
+    expect(r.passed).toBeGreaterThanOrEqual(49); // D287
   });
   it("print-export-core", () => {
     const r = __runPrintExportTests();
