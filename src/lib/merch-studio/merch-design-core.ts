@@ -15,7 +15,7 @@
  * itself stays small enough for localStorage drafts (server-saved designs
  * are planned as SOP-11 M-4).
  */
-import { BLANKS, colorsFor, getBlank, getPlacement, nearestThread, type Blank, type Method, type Placement } from "./garment-catalog-core";
+import { BLANKS, colorsFor, getBlank, getPlacement, movedPlacement, nearestThread, type Blank, type Method, type Placement } from "./garment-catalog-core";
 import { checkDesign, type Issue, type RuleElement } from "./print-rules-core";
 import { curveGeometry } from "@/lib/cms/banner-curve-core";
 
@@ -430,12 +430,13 @@ export function normalizeDesign(raw: unknown): MerchDesign | null {
   const sides: Record<string, Side> = {};
   const rawSides = (o.sides && typeof o.sides === "object" ? o.sides : {}) as Record<string, unknown>;
   for (const [pid, sv] of Object.entries(rawSides)) {
-    const p = getPlacement(b, pid);
-    if (!p || !sv || typeof sv !== "object") continue;
+    // D287: a renamed placement - move its art instead of dropping it.
+    const p = getPlacement(b, pid) ?? getPlacement(b, movedPlacement(b, pid) ?? "");
+    if (!p || !sv || typeof sv !== "object" || (p.id !== pid && rawSides[p.id])) continue;
     const s = sv as Record<string, unknown>;
     const method = p.methods.includes(s.method as Method) ? (s.method as Method) : p.methods[0];
     const elements = (Array.isArray(s.elements) ? s.elements : []).map(normalizeElement).filter((e): e is MElement => !!e).slice(0, MAX_ELEMENTS_PER_SIDE);
-    sides[pid] = { method, puff: s.puff === true, elements };
+    sides[p.id] = { method, puff: s.puff === true, elements };
   }
   return {
     v: 1, id: o.id.slice(0, 40), name: typeof o.name === "string" && o.name.trim() ? o.name.slice(0, 80) : "Untitled design", blankId: b.id, colorHex, sides,
@@ -457,6 +458,9 @@ export function __runMerchDesignTests(): { passed: number; failed: number } {
   const tee = getBlank("cc-1717")!;
   const front = getPlacement(tee, "front")!;
   const lc = getPlacement(tee, "left_chest")!;
+  // D287: a saved UA large-front embroidery side moves to large centre (art + method kept).
+  const uaD = normalizeDesign({ v: 1, id: "u", blankId: "ua-1379757", colorHex: "#1b1b1b", sides: { large_front_emb: { method: "embroidery", elements: [{ id: "a", kind: "shape", shape: "rect", x: 1, y: 1, w: 2, h: 2, rotate: 0, opacity: 100, fill: "#FFFFFF", strokeIn: 0, strokeColor: "#000000" }] } } });
+  ok(!!uaD && Object.keys(uaD.sides).join() === "large_center_emb" && uaD.sides.large_center_emb.method === "embroidery" && uaD.sides.large_center_emb.elements.length === 1, "D287: renamed placement's art moves, not dropped");
   const d0 = newDesign(tee, "#000000");
   ok(d0.blankId === "cc-1717" && Object.keys(d0.sides).length === 0, "new design empty");
   ok(sideFor(d0, front).method === "dtg", "default method = first offered");
