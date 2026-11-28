@@ -933,6 +933,7 @@ import { __runGrowFlowInvoiceTests } from "../../src/lib/inventory/pdf-growflow-
 import { __runManifestSiblingTests } from "../../src/lib/inventory/manifest-sibling-core";
 import { __runSameEmailGuardTests } from "../../src/lib/inbound-email/same-email-guard-core";
 import { __runMediaDescribeTests } from "../../src/lib/media/media-describe-core";
+import { __runAiCostCoreTests } from "../../src/lib/ai/ai-cost-core";
 import { __runMediaReviewTests } from "../../src/lib/media/media-review-core";
 import { __runLibraryV2CoreTests } from "../../src/lib/media/library-v2-core";
 import { __runImageSeoCoreTests } from "../../src/lib/seo/image-seo-core";
@@ -3001,6 +3002,7 @@ __runLiquidVolumeTests();
   assertRan("atm-forecast-core", __runAtmForecastTests(), 34); // D210f ("how much the atm goes through on average, a forecaster for when it will be empty"): settled-day throughput, weekday profile p25/p75, depletion walk with a planning range, share of the day still to trade
   assertRan("same-email-guard-core", __runSameEmailGuardTests(), 9); // D215 ("It's a duplicate, please remove it. Then build 1-3"): the same email (same Message-ID) already staged by another path is never staged twice
   assertRan("duplicate-delivery-guard-core", __runDuplicateDeliveryGuardTests(), 8); // D215: a suspected duplicate delivery's lots are never made Active / finalized without the owner's "NOT a duplicate" tick
+  assertRan("ai-cost-core", __runAiCostCoreTests(), 24); // AI-$ ("include dollars spent for all the credits I've used"): per-row pricing, Pacific months, never guess an unknown model
   assertRan("media-describe-core", __runMediaDescribeTests(), 42); // D221 M4 ("the closer look"): gpt-6-luna detail high describe + SEO; AI never overwrites a human value, doubtful -> needs_review, budget stop before the crossing call, lease verdict
   assertRan("media-review-core", __runMediaReviewTests(), 22); // D221 M3: the review queue decisions (accept / product photo / logo / reject); reject un-publishes only AUTO-published pictures, never deletes; reviewer stamped
   assertRan("library-v2-core", __runLibraryV2CoreTests(), 60); // D221 M7: library facets, AI/human badges, bulk steps (never overwrite human values, attach stays human), health tiles, collections, search log

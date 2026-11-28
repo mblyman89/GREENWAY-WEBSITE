@@ -15,6 +15,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { summarizeSpend, type CostRow, type SpendReport } from "./ai-cost-core";
 
 /**
  * SLICE 5C — memory ceiling for AI usage/accept-rate report scans. NOT a row
@@ -346,4 +347,41 @@ export async function getAcceptRateReport(days = 90): Promise<AcceptRateReport> 
       .map(finalizeRate)
       .sort((a, b) => bandOrder.indexOf(a.key) - bandOrder.indexOf(b.key)),
   };
+}
+
+// ===========================================================================
+// AI-$: dollars spent (owner: "include dollars spent for all the credits I've
+// used"). Prices each ledger row through the pure ai-cost-core. Reads from the
+// earlier of the window start and the first of LAST month (UTC, a day early so
+// the Pacific month is whole), only the columns the pricing needs, paged with a
+// unique tiebreak. A partial read is reported on the page, never hidden.
+// ===========================================================================
+
+export type AiSpendResult = { report: SpendReport; complete: boolean; message: string | null };
+
+export async function getAiSpendReport(days = 30): Promise<AiSpendResult> {
+  const now = new Date();
+  const empty = summarizeSpend([], now.toISOString(), days);
+  if (!isSupabaseServiceConfigured) return { report: empty, complete: true, message: null };
+  const admin = createSupabaseAdminClient();
+  const lastMonthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1) - 86_400_000;
+  const since = new Date(Math.min(lastMonthStart, now.getTime() - days * 86_400_000)).toISOString();
+  const { rows, verdict } = await pagedAllChecked<CostRow>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("ai_usage")
+        .select("id, feature, model, prompt_tokens, completion_tokens, total_tokens, estimated, ok, error_note, actor_email, created_at")
+        .gte("created_at", since)
+        // Unique tiebreak - required for deterministic paging.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        console.warn(`[ai/usage] spend read failed (${error.code ?? "?"}): ${error.message}`);
+        return { rows: [], ok: false };
+      }
+      return { rows: (data as CostRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: AI_USAGE_REPORT_MAX_ROWS },
+  );
+  return { report: summarizeSpend(rows, now.toISOString(), days), complete: verdict.complete, message: verdict.complete ? null : verdict.message };
 }
