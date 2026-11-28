@@ -45,3 +45,27 @@ export function AiFeatureDonut({
   }));
   return <DonutChart data={segments} title="Tokens by feature" height={240} />;
 }
+
+/** AI-$: dollars per Pacific day (cents in, dollars drawn - the display boundary, rule 8). */
+export function AiSpendTrend({ byDay }: { byDay: { date: string; cents: number; calls: number }[] }) {
+  const data = byDay.map((p) => ({ name: shortDay(p.date), Dollars: Math.round(p.cents) / 100 }));
+  return (
+    <AreaChart
+      data={data}
+      areas={[{ key: "Dollars", label: "Dollars", color: CHART_COLORS.gold }]}
+      xKey="name"
+      title="Dollars spent per day"
+      subtitle="Pacific days. Vendor-reported cost where we have it, list price otherwise"
+      height={220}
+    />
+  );
+}
+
+/** AI-$: dollars by provider. */
+export function AiSpendDonut({ byProvider }: { byProvider: { key: string; cents: number }[] }) {
+  const segments: DonutDatum[] = byProvider
+    .filter((p) => p.cents > 0)
+    .slice(0, 8)
+    .map((p, i) => ({ name: p.key, value: Math.round(p.cents) / 100, color: paletteAt(i) }));
+  return <DonutChart data={segments} title="Dollars by provider" height={240} />;
+}
